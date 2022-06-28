@@ -87,10 +87,10 @@
 |<font size=2> [PP-YOLO_ResNet50vd](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Detection | 188.5|✅ |✅ |✅ |✅ |✅ |✅|✅|✅|
 |<font size=2>  [PP-YOLOv2_ResNet50vd](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Detection | 218.7 |✅|✅|✅|✅|✅ |✅|✅|✅|
 |<font size=2>  [PP-YOLO_crn_l_300e_coco](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Detection | 209.1 |✅|✅|✅|✅|✅|✅|✅|✅|
-|<font size=2> [YOLOv5s](https://github.com/Sharpiless/PaddleDetection-Yolov5) |Detection | 29.3|✅|✅|✅|✅|✅|✅|✅|✅|
+|<font size=2> [YOLOv5s](https://github.com/ultralytics/yolov5) |Detection | 29.3|✅|✅|✅|✅|✅|✅|✅|✅|
 |<font size=2>  [Faster R-CNN_r50_fpn_1x_coco](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Detection | 167.2 |❌|❌|❌|✅|✅|✅|✅|✅|
 |<font size=2> [BlazeFace](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Face Detection |1.5|✅|✅|✅|✅|✅|✅|✅|✅|
-|<font size=2> [RetinaFace](https://github.com/GuoQuanhao/RetinaFace-Paddle) |Face Localisation |1.7| ✅|❌|❌|✅|✅|✅|✅|✅|
+|<font size=2> [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) |Face Localisation |1.7| ✅|❌|❌|✅|✅|✅|✅|✅|
 |<font size=2>  [PP-TinyPose](https://github.com/PaddlePaddle/PaddleDetection/blob/develop/docs/tutorials/GETTING_STARTED_cn.md) |Keypoint Detection| 5.5 |✅|✅|✅|✅|✅|✅|✅|✅|
 |<font size=2> [PP-LiteSeg(STDC1)](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/configs/pp_liteseg/README.md)|Segmentation | 32.2|✅|✅|✅|✅|✅|✅|✅|✅|
 |<font size=2>  [PP-HumanSeg-Lite](https://github.com/PaddlePaddle/PaddleSeg/blob/develop/contrib/PP-HumanSeg/README_cn.md) |Segmentation | 0.556|✅|✅|✅|✅|✅|✅|✅|✅|
