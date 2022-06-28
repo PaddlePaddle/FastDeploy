@@ -28,17 +28,20 @@
 
 ## News 📢
 
-* 🔥 2022.6.30 B站[飞桨直播课](https://space.bilibili.com/476867757)，FastDeploy天使用户邀测沟通会，与开发者共同讨论推理部署痛点问题。
+* 🔥 2022.6.30 晚20:30，FastDeploy天使用户邀测沟通会，与开发者共同讨论推理部署痛点问题，欢迎大家扫码报名入群获取会议链接。
+<div align="center">
+<img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "150" height = "200" />
+</div>
 
-* 🔥 2022.6.27 [**FastDeploy v0.1**](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v0.1)邀测版发布！🎉
-  * 💎 第一批发布对于40个重点模型在8种重点软硬件环境的支持的SDK
+* 🔥 2022.6.27 [**FastDeploy v0.1.0**](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.1.0)测试版发布！🎉
+  * 💎 发布40个重点模型在8种重点软硬件环境的支持的SDK
   * 😊 支持网页端、pip包两种下载使用方式
 
 
 ## 特性
 
 
-### 📦开箱即用的推理部署工具链，支持云边端、多硬件、多平台部署
+### 📦**开箱即用的推理部署工具链，支持云边端、多硬件、多平台部署**
 - 网页端点选下载、PIP 安装一行命令，快速下载多种类型SDK安装包
 - 云端（含服务器、数据中心）：
     - 支持一行命令启动 Serving 服务（含网页图形化展示）
@@ -55,12 +58,12 @@
     - 支持 ARM CPU 全系（含高通、MTK、RK等）
     - 支持 NVIDIA GPU 全系（含 V100、T4、Jetson 等）
 
-### 🤗丰富的预训练模型，轻松下载SDK搞定推理部署
+### 🤗**丰富的预训练模型，轻松下载SDK搞定推理部署**
 
 
 <font size=0.5>
 
-|<font size=2>   模型| <font size=2> 任务  |<font size=2>  大小(MB)  | <font size=2>端侧 | <font size=2>移动端 |<font size=2> 移动端 |<font size=2>边缘端 |<font size=2>服务器+云端 | <font size=2>服务器+云端 |<font size=2> 服务器+云端 |<font size=2> 服务器+云端 | 
+|<font size=2>   模型| <font size=2> 任务  |<font size=2>  大小(MB)  | <font size=2>端侧 | <font size=2>移动端 |<font size=2> 移动端 |<font size=2>边缘端 |<font size=2>服务器+云端 | <font size=2>服务器+云端 |<font size=2> 服务器+云端 |<font size=2> 服务器+云端 |
 |---|---|---|---|---|---|---|---|---|---|---|
 |----- | ---- |----- |<font size=2>  Linux | <font size=2> Android |<font size=2>  iOS | <font size=2> Linux |<font size=2> Linux |<font size=2> Linux |<font size=2>  Windows  |<font size=2>  Windows  |
 |----- | ---- |--- | <font size=2> ARM CPU |<font size=2>  ARM CPU | <font size=2> ARM CPU |<font size=2> Jetson |<font size=2> X86 CPU |<font size=2>  GPU  |<font size=2> X86 CPU |<font size=2>  GPU  |
@@ -107,25 +110,25 @@
 
 
 ## SDK安装
-    
+
 ### 方式1：网页版下载安装
-    
-- 可以登录[EasyEdge网页端](https://ai.baidu.com/easyedge/app/openSource)下载SDK 
-    
+
+- 可以登录[EasyEdge网页端](https://ai.baidu.com/easyedge/app/openSource)下载SDK
+
 ### 方式2：pip安装
 
 开发者可以通过pip安装`fastdeploy-python`来获取最新的下载链接
 
 - 环境依赖
-  
-    python >= 3.6    
+
+    python >= 3.6  
 
 - 安装方式
-    
+
 ```
 pip install fastdeploy-python --upgrade
 ```
-    
+
 - 使用方式
 
     - 列出FastDeploy当前支持的所有模型
@@ -137,7 +140,7 @@ pip install fastdeploy-python --upgrade
     fastdeploy --download_sdk \
                --model PP-PicoDet-s_320 \
                --platform Linux \
-               --soc x86-NVIDIA-GPU \
+               --soc Intel-x86_64 \
                --save_dir .
     ```
 
@@ -168,28 +171,28 @@ pip install fastdeploy-python --upgrade
       - [C++ 服务化部署](./docs/Jetson-Linux-CPP-SDK-Serving.md)
 
 ### 3 端侧部署
-   - ArmLinux 系统(ARM CPU)    
+   - ArmLinux 系统(ARM CPU)  
       - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
       - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
       - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
       - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
- 
+
 ### 4 移动端部署
    - [iOS 系统部署](./docs/iOS-SDK.md)
-   - [Android 系统部署](./docs/Android-SDK.md)   
-    
+   - [Android 系统部署](./docs/Android-SDK.md)  
+
 ### 5 自定义模型部署
    - [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
-    
+
 ## 社区交流
    - **加入社区👬：** 微信扫描二维码后，填写问卷加入交流群，与开发者共同讨论推理部署痛点问题
-    
+
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "200" height = "200" />
 </div>
-    
-    
-    
+
+
+
 ## Acknowledge
 
 本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，再次表示感谢。
