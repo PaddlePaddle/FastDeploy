@@ -1,4 +1,4 @@
-# FastDeploy
+# ⚡️FastDeploy
 
 </p>
 
@@ -24,16 +24,16 @@
   <a href=#社区交流> 社区交流 </a>
 </h4>
 
-**FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
+**⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
 ## News 📢
 
-* 🔥 2022.6.30 晚20:30，FastDeploy天使用户邀测沟通会，与开发者共同讨论推理部署痛点问题，欢迎大家扫码报名入群获取会议链接。
+* 🔥 2022.6.30 晚20:30，⚡️FastDeploy天使用户邀测沟通会，与开发者共同讨论推理部署痛点问题，欢迎大家扫码报名入群获取会议链接。
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "150" height = "150" />
 </div>
 
-* 🔥 2022.6.27 [**FastDeploy v0.1.0**](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.1.0)测试版发布！🎉
+* 🔥 2022.6.27 [**⚡️FastDeploy v0.1.0**](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.1.0)测试版发布！🎉
   * 💎 发布40个重点模型在8种重点软硬件环境的支持的SDK
   * 😊 支持网页端、pip包两种下载使用方式
 
