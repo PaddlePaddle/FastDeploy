@@ -87,13 +87,13 @@ NVIDIA GPU平台的详细安装教程可以参考[官网Paddle安装教程](http
 在`python`目录下，安装特定Python版本的EasyEdge Wheel包。对`x86_64 CPU` 或 `x86_64 Nvidia GPU平台 `可以使用如下命令进行安装，具体名称以 Python SDK 包中的 whl 为准。
 
 ```shell
-python3 -m pip install -U BaiduAI_EasyEdge_SDK-{SDK版本号}-cp{Python版本号}-cp{Python版本号}m-linux_x86_64.whl
+python3 -m pip install -U BaiduAI_EasyEdge_SDK-1.3.1-cp{Python版本号}-cp{Python版本号}m-linux_x86_64.whl
 ```
 
 `armv8 CPU平台`可以使用如下命令进行安装：
 
 ```shell
-python3 -m pip install -U BaiduAI_EasyEdge_SDK-{版本号}-cp36-cp36m-linux_aarch64.whl
+python3 -m pip install -U BaiduAI_EasyEdge_SDK-1.3.1-cp36-cp36m-linux_aarch64.whl
 ```
 
 # 快速开始
