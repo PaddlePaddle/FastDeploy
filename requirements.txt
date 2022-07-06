@@ -1,1 +1,2 @@
 opencv-python
+tqdm
