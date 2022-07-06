@@ -14,16 +14,16 @@
 
 from __future__ import absolute_import
 import logging
-import fastdeploy as fd
-from fastdeploy import C
+from ... import FastDeployModel, Frontend
+from ... import fastdeploy_main as C
 
 
-class YOLOv5(fd.FastDeployModel):
+class YOLOv5(FastDeployModel):
     def __init__(self,
                  model_file,
-                 params_file=None,
+                 params_file="",
                  runtime_option=None,
-                 model_format=fd.Frontend.ONNX):
+                 model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(YOLOv5, self).__init__(runtime_option)
