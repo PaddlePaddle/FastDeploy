@@ -13,15 +13,15 @@
 // limitations under the License.
 #pragma once
 
-#include "fastdeploy/backends/backend.h"
-#include "fastdeploy/utils/perf.h"
 #include <map>
 #include <vector>
+#include "fastdeploy/backends/backend.h"
+#include "fastdeploy/utils/perf.h"
 
 namespace fastdeploy {
 
-enum class Backend { UNKNOWN, ORT, TRT, PDRT };
-enum class Frontend { PADDLE, ONNX };
+enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
+enum FASTDEPLOY_DECL Frontend { PADDLE, ONNX };
 
 FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
@@ -63,9 +63,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
 
-  std::string model_file = "";  // Path of model file
-  std::string params_file = ""; // Path of parameters file, can be empty
-  Frontend model_format = Frontend::PADDLE; // format of input model
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+  Frontend model_format = Frontend::PADDLE;  // format of input model
 };
 
 struct FASTDEPLOY_DECL Runtime {
@@ -91,4 +91,4 @@ struct FASTDEPLOY_DECL Runtime {
  private:
   BaseBackend* backend_;
 };
-} // namespace fastdeploy
+}  // namespace fastdeploy

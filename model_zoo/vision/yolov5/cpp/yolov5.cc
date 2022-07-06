@@ -15,35 +15,26 @@
 #include "fastdeploy/vision.h"
 
 int main() {
-  auto model = fastdeploy::vision::ultralytics::YOLOv5("yolov5s.onnx");
-  model.EnableDebug();
+  namespace vis = fastdeploy::vision;
+  auto model = vis::ultralytics::YOLOv5("yolov5s.onnx");
   if (!model.Initialized()) {
-    std::cout << "Init Failed." << std::endl;
+    std::cerr << "Init Failed." << std::endl;
     return -1;
   }
   cv::Mat im = cv::imread("bus.jpg");
+  cv::Mat vis_im = im.clone();
 
-  for (size_t i = 0; i < 10; ++i) {
-    auto im1 = im.clone();
-    fastdeploy::vision::DetectionResult res;
-    if (!model.Predict(&im1, &res)) {
-      std::cout << "Predict Failed." << std::endl;
-      return -1;
-    }
+  vis::DetectionResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Prediction Failed." << std::endl;
+    return -1;
   }
 
-  {
-    fastdeploy::vision::DetectionResult res;
-    auto vis_im = im.clone();
-    if (!model.Predict(&im, &res)) {
-      std::cout << "Predict Failed." << std::endl;
-      return -1;
-    }
+  // 输出预测框结果
+  std::cout << res.Str() << std::endl;
 
-    fastdeploy::vision::Visualize::VisDetection(&vis_im, res);
-    cv::imwrite("vis.jpg", vis_im);
-    // Print Detection Result
-    std::cout << res.Str() << std::endl;
-  }
-    return 0;
+  // 可视化预测结果
+  vis::Visualize::VisDetection(&vis_im, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  return 0;
 }

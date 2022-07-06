@@ -22,11 +22,11 @@
 
 namespace fastdeploy {
 
-enum class Device { DEFAULT, CPU, GPU };
+enum FASTDEPLOY_DECL Device { DEFAULT, CPU, GPU };
 
 FASTDEPLOY_DECL std::string Str(Device& d);
 
-enum class FDDataType {
+enum FASTDEPLOY_DECL FDDataType {
   BOOL,
   INT16,
   INT32,
@@ -56,4 +56,4 @@ FASTDEPLOY_DECL std::string Str(FDDataType& fdt);
 FASTDEPLOY_DECL int32_t FDDataTypeSize(FDDataType data_dtype);
 
 FASTDEPLOY_DECL std::string FDDataTypeStr(FDDataType data_dtype);
-} // namespace fastdeploy
+}  // namespace fastdeploy
