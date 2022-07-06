@@ -22,19 +22,14 @@ class YOLOv5(fd.FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file=None,
-                 backend_option=None,
+                 runtime_option=None,
                  model_format=fd.Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._option
-        super(YOLOv5, self).__init__(backend_option)
+        # 初始化后的option保存在self._runtime_option
+        super(YOLOv5, self).__init__(runtime_option)
 
-        if model_format == fd.Frontend.ONNX:
-            # 加载的模型需要保存在成员变量self._model中
-            self._model = C.vision.ultralytics.YOLOv5(
-                model_file, self._runtime_option, model_format)
-        elif model_format == fd.Frontend.PADDLE:
-            self._model = C.vision.ultralytics.YOLOv5(
-                model_file, params_file, self._runtime_option, model_format)
+        self._model = C.vision.ultralytics.YOLOv5(
+            model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOv5 initialize failed."
 
