@@ -192,12 +192,6 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-# Build demo cpp
-if(ENABLE_VISION)
-  add_executable(yolov5_exe ${PROJECT_SOURCE_DIR}/demo/cpp/vision/yolov5.cc)
-  target_link_libraries(yolov5_exe PUBLIC fastdeploy)
-endif()
-
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
   if("${PY_EXT_SUFFIX}" STREQUAL "")

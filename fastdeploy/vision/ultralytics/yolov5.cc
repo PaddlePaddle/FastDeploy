@@ -44,10 +44,10 @@ void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
 YOLOv5::YOLOv5(const std::string& model_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
-  valid_cpu_backends = {Backend::ORT}; // 指定可用的CPU后端
-  valid_gpu_backends = {Backend::ORT}; // 指定可用的GPU后端
+  valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
+  valid_gpu_backends = {Backend::ORT};  // 指定可用的GPU后端
   runtime_option = custom_option;
-  runtime_option.model_format = model_format; // 指定模型格式
+  runtime_option.model_format = model_format;  // 指定模型格式
   runtime_option.model_file = model_file;
   // initialized用于标记模型是否初始化成功
   // C++或Python中可调用YOLOv5.Intialized() /
@@ -58,8 +58,8 @@ YOLOv5::YOLOv5(const std::string& model_file,
 YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
-  valid_cpu_backends = {Backend::PDRT}; // 指定可用的CPU后端
-  valid_gpu_backends = {Backend::PDRT}; // 指定可用的GPU后端
+  valid_cpu_backends = {Backend::PDINFER};  // 指定可用的CPU后端
+  valid_gpu_backends = {Backend::PDINFER};  // 指定可用的GPU后端
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -102,7 +102,7 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1); // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
 }
 
@@ -166,7 +166,6 @@ bool YOLOv5::Postprocess(
 
 bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                      float nms_iou_threshold) {
-
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif
@@ -217,6 +216,6 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-} // namespace ultralytics
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace ultralytics
+}  // namespace vision
+}  // namespace fastdeploy

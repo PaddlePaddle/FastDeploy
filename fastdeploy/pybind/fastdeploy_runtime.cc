@@ -82,7 +82,7 @@ void BindRuntime(pybind11::module& m) {
       .value("UNKOWN", Backend::UNKNOWN)
       .value("ORT", Backend::ORT)
       .value("TRT", Backend::TRT)
-      .value("PDRT", Backend::PDRT);
+      .value("PDINFER", Backend::PDINFER);
   pybind11::enum_<Frontend>(m, "Frontend", pybind11::arithmetic(),
                             "Frontend for inference.")
       .value("PADDLE", Frontend::PADDLE)
@@ -111,4 +111,4 @@ void BindRuntime(pybind11::module& m) {
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

@@ -17,10 +17,15 @@
 
 namespace fastdeploy {
 namespace vision {
-enum ResultType { UNKNOWN, CLASSIFY, DETECTION, SEGMENTATION };
+enum FASTDEPLOY_DECL ResultType {
+  UNKNOWN_RESULT,
+  CLASSIFY,
+  DETECTION,
+  SEGMENTATION
+};
 
 struct FASTDEPLOY_DECL BaseResult {
-  ResultType type = ResultType::UNKNOWN;
+  ResultType type = ResultType::UNKNOWN_RESULT;
 };
 
 struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
@@ -53,5 +58,5 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
