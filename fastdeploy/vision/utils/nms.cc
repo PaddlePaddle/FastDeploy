@@ -22,13 +22,13 @@ namespace utils {
 // The implementation refers to
 // https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/cpp/src/utils.cc
 void NMS(DetectionResult* result, float iou_threshold) {
-  result->Sort();
+  utils::SortDetectionResult(result);
 
   std::vector<float> area_of_boxes(result->boxes.size());
   std::vector<int> suppressed(result->boxes.size(), 0);
   for (size_t i = 0; i < result->boxes.size(); ++i) {
-    area_of_boxes[i] = (result->boxes[i][2] - result->boxes[i][0] + 1) *
-                       (result->boxes[i][3] - result->boxes[i][1] + 1);
+    area_of_boxes[i] = (result->boxes[i][2] - result->boxes[i][0]) *
+                       (result->boxes[i][3] - result->boxes[i][1]);
   }
 
   for (size_t i = 0; i < result->boxes.size(); ++i) {
@@ -43,12 +43,11 @@ void NMS(DetectionResult* result, float iou_threshold) {
       float ymin = std::max(result->boxes[i][1], result->boxes[j][1]);
       float xmax = std::min(result->boxes[i][2], result->boxes[j][2]);
       float ymax = std::min(result->boxes[i][3], result->boxes[j][3]);
-      float overlap_w = std::max(0.0f, xmax - xmin + 1);
-      float overlap_h = std::max(0.0f, ymax - ymin + 1);
+      float overlap_w = std::max(0.0f, xmax - xmin);
+      float overlap_h = std::max(0.0f, ymax - ymin);
       float overlap_area = overlap_w * overlap_h;
       float overlap_ratio =
-          overlap_area /
-          (area_of_boxes[i] + area_of_boxes[j] - overlap_area + 1e-06);
+          overlap_area / (area_of_boxes[i] + area_of_boxes[j] - overlap_area);
       if (overlap_ratio > iou_threshold) {
         suppressed[j] = 1;
       }
@@ -67,6 +66,6 @@ void NMS(DetectionResult* result, float iou_threshold) {
   }
 }
 
-} // namespace utils
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace utils
+}  // namespace vision
+}  // namespace fastdeploy

@@ -53,8 +53,6 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
 
   void Resize(int size);
 
-  void Sort();
-
   std::string Str();
 };
 
