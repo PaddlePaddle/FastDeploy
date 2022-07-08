@@ -79,6 +79,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   bool is_scale_up;
   // padding stride, for is_mini_pad
   int stride;
+  // for offseting the boxes by classes when using NMS
+  float max_wh;
 };
 }  // namespace ultralytics
 }  // namespace vision

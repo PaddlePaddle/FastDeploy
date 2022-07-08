@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include <set>
+#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
-#include <set>
-#include <vector>
 
 namespace fastdeploy {
 namespace vision {
@@ -53,6 +53,9 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
 
 void NMS(DetectionResult* output, float iou_threshold = 0.5);
 
-} // namespace utils
-} // namespace vision
-} // namespace fastdeploy
+// MergeSort
+void SortDetectionResult(DetectionResult* output);
+
+}  // namespace utils
+}  // namespace vision
+}  // namespace fastdeploy
