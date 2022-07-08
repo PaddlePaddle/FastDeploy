@@ -23,7 +23,7 @@ set(PADDLE2ONNX_INC_DIR
     CACHE PATH "paddle2onnx include directory." FORCE)
 set(PADDLE2ONNX_LIB_DIR
     "${PADDLE2ONNX_INSTALL_DIR}/lib/"
-    CACHE PATH "onnxruntime lib directory." FORCE)
+    CACHE PATH "paddle2onnx lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLE2ONNX_LIB_DIR}")
 
@@ -53,7 +53,11 @@ elseif(APPLE)
     set(PADDLE2ONNX_FILE "paddle2onnx-osx-x86_64-${PADDLE2ONNX_VERSION}.tgz")
   endif()
 else()
-  set(PADDLE2ONNX_FILE "paddle2onnx-linux-x64-${PADDLE2ONNX_VERSION}.tgz")
+  if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(PADDLE2ONNX_FILE "paddle2onnx-linux-aarch64-${PADDLE2ONNX_VERSION}.tgz")
+  else()
+    set(PADDLE2ONNX_FILE "paddle2onnx-linux-x64-${PADDLE2ONNX_VERSION}.tgz")
+  endif()
 endif()
 set(PADDLE2ONNX_URL "${PADDLE2ONNX_URL_BASE}${PADDLE2ONNX_FILE}")
 
