@@ -58,6 +58,8 @@ bool TrtBackend::InitFromTrt(const std::string& trt_engine_file) {
             << std::endl;
     return false;
   }
+  cudaSetDevice(option.gpu_id);
+
   std::ifstream fin(trt_engine_file, std::ios::binary | std::ios::in);
   if (!fin) {
     FDERROR << "Failed to open TensorRT Engine file " << trt_engine_file
@@ -182,7 +184,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
   AllocateBufferInDynamicShape(inputs, outputs);
   std::vector<void*> input_binds(inputs.size());
   for (size_t i = 0; i < inputs.size(); ++i) {
-    if (inputs[0].dtype == FDDataType::INT64) {
+    if (inputs[i].dtype == FDDataType::INT64) {
       int64_t* data = static_cast<int64_t*>(inputs[i].Data());
       std::vector<int32_t> casted_data(data, data + inputs[i].Numel());
       FDASSERT(cudaMemcpyAsync(inputs_buffer_[inputs[i].name].data(),
@@ -196,10 +198,6 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                                cudaMemcpyHostToDevice, stream_) == 0,
                "[ERROR] Error occurs while copy memory from CPU to GPU.");
     }
-    //    FDASSERT(cudaMemcpy(inputs_buffer_[inputs[i].name].data(),
-    //                           inputs[i].GetData(), inputs[i].Nbytes(),
-    //                           cudaMemcpyHostToDevice) == 0,
-    //           "[ERROR] Error occurs while copy memory from CPU to GPU.");
   }
   if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
     FDERROR << "Failed to Infer with TensorRT." << std::endl;
@@ -211,14 +209,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                              (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
                              stream_) == 0,
              "[ERROR] Error occurs while copy memory from GPU to CPU.");
-    //    FDASSERT(cudaMemcpy((*outputs)[i].data.data(),
-    //                           outputs_buffer_[(*outputs)[i].name].data(),
-    //                           (*outputs)[i].Nbytes(),
-    //                           cudaMemcpyDeviceToHost) == 0,
-    //           "[ERROR] Error occurs while copy memory from GPU to CPU.");
   }
-  //  FDASSERT(cudaStreamSynchronize(stream_) == 0,
-  //         "[ERROR] Error occurs while calling cudaStreamSynchronize().");
   return true;
 }
 
@@ -450,4 +441,4 @@ TensorInfo TrtBackend::GetOutputInfo(int index) {
   info.dtype = GetFDDataType(outputs_desc_[index].dtype);
   return info;
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy
