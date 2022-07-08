@@ -22,7 +22,7 @@ namespace utils {
 // The implementation refers to
 // https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/cpp/src/utils.cc
 void NMS(DetectionResult* result, float iou_threshold) {
-  utils::Sort(result);
+  utils::SortDetectionResult(result);
 
   std::vector<float> area_of_boxes(result->boxes.size());
   std::vector<int> suppressed(result->boxes.size(), 0);
