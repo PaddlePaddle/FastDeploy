@@ -78,8 +78,8 @@ bool YOLOv5::Initialize() {
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
-  double ratio = (size[0] * 1.0) / std::max((*im_info)["input_shape"][0],
-                                            (*im_info)["input_shape"][1]);
+  double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
+                                            static_cast<float>(mat->Width()));
   if (ratio != 1.0) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
