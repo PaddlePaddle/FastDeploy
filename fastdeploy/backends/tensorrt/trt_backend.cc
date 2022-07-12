@@ -52,7 +52,8 @@ std::vector<int> toVec(const nvinfer1::Dims& dim) {
   return out;
 }
 
-bool TrtBackend::InitFromTrt(const std::string& trt_engine_file) {
+bool TrtBackend::InitFromTrt(const std::string& trt_engine_file, 
+                             const TrtBackendOption& option) {
   if (initialized_) {
     FDERROR << "TrtBackend is already initlized, cannot initialize again."
             << std::endl;
