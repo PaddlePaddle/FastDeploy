@@ -36,6 +36,7 @@ void BindUltralytics(pybind11::module& m) {
       .def_readwrite("is_no_pad", &vision::ultralytics::YOLOv5::is_no_pad)
       .def_readwrite("is_scale_up", &vision::ultralytics::YOLOv5::is_scale_up)
       .def_readwrite("stride", &vision::ultralytics::YOLOv5::stride)
-      .def_readwrite("max_wh", &vision::ultralytics::YOLOv5::max_wh);
+      .def_readwrite("max_wh", &vision::ultralytics::YOLOv5::max_wh)
+      .def_readwrite("multi_label", &vision::ultralytics::YOLOv5::multi_label);
 }
 }  // namespace fastdeploy
