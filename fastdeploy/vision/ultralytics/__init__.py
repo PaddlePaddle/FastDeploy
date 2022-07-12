@@ -41,31 +41,35 @@ class YOLOv5(FastDeployModel):
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
-        return self.model.size
+        return self._model.size
 
     @property
     def padding_value(self):
-        return self.model.padding_value
+        return self._model.padding_value
 
     @property
     def is_no_pad(self):
-        return self.model.is_no_pad
+        return self._model.is_no_pad
 
     @property
     def is_mini_pad(self):
-        return self.model.is_mini_pad
+        return self._model.is_mini_pad
 
     @property
     def is_scale_up(self):
-        return self.model.is_scale_up
+        return self._model.is_scale_up
 
     @property
     def stride(self):
-        return self.model.stride
+        return self._model.stride
 
     @property
     def max_wh(self):
-        return self.model.max_wh
+        return self._model.max_wh
+
+    @property
+    def multi_label(self):
+        return self._model.multi_label
 
     @size.setter
     def size(self, wh):
@@ -74,43 +78,50 @@ class YOLOv5(FastDeployModel):
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
             len(wh))
-        self.model.size = wh
+        self._model.size = wh
 
     @padding_value.setter
     def padding_value(self, value):
         assert isinstance(
             value,
             list), "The value to set `padding_value` must be type of list."
-        self.model.padding_value = value
+        self._model.padding_value = value
 
     @is_no_pad.setter
     def is_no_pad(self, value):
         assert isinstance(
             value, bool), "The value to set `is_no_pad` must be type of bool."
-        self.model.is_no_pad = value
+        self._model.is_no_pad = value
 
     @is_mini_pad.setter
     def is_mini_pad(self, value):
         assert isinstance(
             value,
             bool), "The value to set `is_mini_pad` must be type of bool."
-        self.model.is_mini_pad = value
+        self._model.is_mini_pad = value
 
     @is_scale_up.setter
     def is_scale_up(self, value):
         assert isinstance(
             value,
             bool), "The value to set `is_scale_up` must be type of bool."
-        self.model.is_scale_up = value
+        self._model.is_scale_up = value
 
     @stride.setter
     def stride(self, value):
         assert isinstance(
             value, int), "The value to set `stride` must be type of int."
-        self.model.stride = value
+        self._model.stride = value
 
     @max_wh.setter
     def max_wh(self, value):
         assert isinstance(
             value, float), "The value to set `max_wh` must be type of float."
-        self.model.max_wh = value
+        self._model.max_wh = value
+
+    @multi_label.setter
+    def multi_label(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `multi_label` must be type of bool."
+        self._model.multi_label = value
