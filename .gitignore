@@ -1,1 +1,12 @@
 fastdeploy/libs/lib*
+build
+cmake-build-debug
+cmake-build-release
+.vscode
+FastDeploy.cmake
+fastdeploy/core/config.h
+build-debug.sh
+*dist
+fastdeploy.egg-info
+.setuptools-cmake-build
+fastdeploy/version.py

@@ -69,7 +69,8 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool InitFromTrt(const std::string& trt_engine_file);
+  bool InitFromTrt(const std::string& trt_engine_file, 
+                   const TrtBackendOption& option = TrtBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 

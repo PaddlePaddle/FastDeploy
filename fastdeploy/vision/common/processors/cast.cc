@@ -18,30 +18,40 @@ namespace fastdeploy {
 namespace vision {
 
 bool Cast::CpuRun(Mat* mat) {
-  if (mat->layout != Layout::CHW) {
-    FDERROR << "Cast: The input data must be Layout::HWC format!" << std::endl;
-    return false;
-  }
   cv::Mat* im = mat->GetCpuMat();
+  int c = im->channels();
   if (dtype_ == "float") {
-    im->convertTo(*im, CV_32FC(im->channels()));
+    if (im->type() != CV_32FC(c)) {
+      im->convertTo(*im, CV_32FC(c));
+    }
   } else if (dtype_ == "double") {
-    im->convertTo(*im, CV_64FC(im->channels()));
+    if (im->type() != CV_64FC(c)) {
+      im->convertTo(*im, CV_64FC(c));
+    }
+  } else {
+    FDLogger() << "[WARN] Cast not support for " << dtype_ 
+               << " now! will skip this operation."
+               << std::endl;
   }
   return true;
 }
 
 #ifdef ENABLE_OPENCV_CUDA
 bool Cast::GpuRun(Mat* mat) {
-  if (mat->layout != Layout::CHW) {
-    FDERROR << "Cast: The input data must be Layout::HWC format!" << std::endl;
-    return false;
-  }
   cv::cuda::GpuMat* im = mat->GetGpuMat();
+  int c = im->channels();
   if (dtype_ == "float") {
-    im->convertTo(*im, CV_32FC(im->channels()));
+    if (im->type() != CV_32FC(c)) {
+      im->convertTo(*im, CV_32FC(c));
+    }
   } else if (dtype_ == "double") {
-    im->convertTo(*im, CV_64FC(im->channels()));
+    if (im->type() != CV_64FC(c)) {
+      im->convertTo(*im, CV_64FC(c));
+    }
+  } else {
+    FDLogger() << "[WARN] Cast not support for " << dtype_ 
+               << " now! will skip this operation."
+               << std::endl;
   }
   return true;
 }

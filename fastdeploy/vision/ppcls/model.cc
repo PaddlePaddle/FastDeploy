@@ -44,7 +44,7 @@ bool Model::BuildPreprocessPipelineFromConfig() {
     return false;
   }
   auto preprocess_cfg = cfg["PreProcess"]["transform_ops"];
-  processors_.push_back(std::make_shared<RGB2BGR>());
+  processors_.push_back(std::make_shared<BGR2RGB>());
   for (const auto& op : preprocess_cfg) {
     FDASSERT(op.IsMap(),
              "Require the transform information in yaml be Map type.");
