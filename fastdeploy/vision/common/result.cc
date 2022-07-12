@@ -59,31 +59,6 @@ void DetectionResult::Resize(int size) {
   label_ids.resize(size);
 }
 
-void DetectionResult::Sort() {
-  for (size_t i = 0; i < scores.size(); ++i) {
-    float max_score = scores[i];
-    float index = i;
-    for (size_t j = i + 1; j < scores.size(); ++j) {
-      if (max_score < scores[j]) {
-        max_score = scores[j];
-        index = j;
-      }
-    }
-    if (i == index) {
-      continue;
-    }
-    float tmp_score = scores[i];
-    scores[i] = scores[index];
-    scores[index] = tmp_score;
-    int32_t tmp_label_id = label_ids[i];
-    label_ids[i] = label_ids[index];
-    label_ids[index] = tmp_label_id;
-    std::array<float, 4> tmp_box = boxes[i];
-    boxes[i] = boxes[index];
-    boxes[index] = tmp_box;
-  }
-}
-
 std::string DetectionResult::Str() {
   std::string out;
   out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
@@ -97,5 +72,5 @@ std::string DetectionResult::Str() {
   return out;
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

@@ -14,20 +14,20 @@
 
 from __future__ import absolute_import
 import logging
-import fastdeploy as fd
-from fastdeploy import C
+from ... import FastDeployModel, Frontend
+from ... import fastdeploy_main as C
 
 
-class Model(fd.FastDeployModel):
+class Model(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
                  config_file,
                  backend_option=None,
-                 model_format=fd.Frontend.PADDLE):
+                 model_format=Frontend.PADDLE):
         super(Model, self).__init__(backend_option)
 
-        assert model_format == fd.Frontend.PADDLE, "PaddleClas only support model format of Frontend.Paddle now."
+        assert model_format == Frontend.PADDLE, "PaddleClas only support model format of Frontend.Paddle now."
         self._model = C.vision.ppcls.Model(model_file, params_file,
                                            config_file, self._runtime_option,
                                            model_format)

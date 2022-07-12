@@ -41,25 +41,16 @@ void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
   }
 }
 
-YOLOv5::YOLOv5(const std::string& model_file,
-               const RuntimeOption& custom_option,
-               const Frontend& model_format) {
-  valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
-  valid_gpu_backends = {Backend::ORT};  // 指定可用的GPU后端
-  runtime_option = custom_option;
-  runtime_option.model_format = model_format;  // 指定模型格式
-  runtime_option.model_file = model_file;
-  // initialized用于标记模型是否初始化成功
-  // C++或Python中可调用YOLOv5.Intialized() /
-  // YOLOv5.initialized()判断模型是否初始化成功
-  initialized = Initialize();
-}
-
 YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
-  valid_cpu_backends = {Backend::PDINFER};  // 指定可用的CPU后端
-  valid_gpu_backends = {Backend::PDINFER};  // 指定可用的GPU后端
+  if (model_format == Frontend::ONNX) {
+    valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+  } else {
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+  }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -73,8 +64,9 @@ bool YOLOv5::Initialize() {
   padding_value = {114.0, 114.0, 114.0};
   is_mini_pad = false;
   is_no_pad = false;
-  is_scale_up = true;
+  is_scale_up = false;
   stride = 32;
+  max_wh = 7680.0;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -85,6 +77,18 @@ bool YOLOv5::Initialize() {
 
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info) {
+  // process after image load
+  double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
+                                            static_cast<float>(mat->Width()));
+  if (ratio != 1.0) {
+    int interp = cv::INTER_AREA;
+    if (ratio > 1.0) {
+      interp = cv::INTER_LINEAR;
+    }
+    int resize_h = int(mat->Height() * ratio);
+    int resize_w = int(mat->Width() * ratio);
+    Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
+  }
   // yolov5's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -128,11 +132,14 @@ bool YOLOv5::Postprocess(
     if (confidence <= conf_threshold) {
       continue;
     }
+    int32_t label_id = std::distance(data + s + 5, max_class_score);
     // convert from [x, y, w, h] to [x1, y1, x2, y2]
     result->boxes.emplace_back(std::array<float, 4>{
-        data[s] - data[s + 2] / 2, data[s + 1] - data[s + 3] / 2,
-        data[s + 0] + data[s + 2] / 2, data[s + 1] + data[s + 3] / 2});
-    result->label_ids.push_back(std::distance(data + s + 5, max_class_score));
+        data[s] - data[s + 2] / 2.0f + label_id * max_wh,
+        data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
+        data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
+        data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
+    result->label_ids.push_back(label_id);
     result->scores.push_back(confidence);
   }
   utils::NMS(result, nms_iou_threshold);
@@ -150,8 +157,12 @@ bool YOLOv5::Postprocess(
   for (size_t i = 0; i < result->boxes.size(); ++i) {
     float pad_h = (out_h - ipt_h * scale) / 2;
     float pad_w = (out_w - ipt_w * scale) / 2;
-
+    int32_t label_id = (result->label_ids)[i];
     // clip box
+    result->boxes[i][0] = result->boxes[i][0] - max_wh * label_id;
+    result->boxes[i][1] = result->boxes[i][1] - max_wh * label_id;
+    result->boxes[i][2] = result->boxes[i][2] - max_wh * label_id;
+    result->boxes[i][3] = result->boxes[i][3] - max_wh * label_id;
     result->boxes[i][0] = std::max((result->boxes[i][0] - pad_w) / scale, 0.0f);
     result->boxes[i][1] = std::max((result->boxes[i][1] - pad_h) / scale, 0.0f);
     result->boxes[i][2] = std::max((result->boxes[i][2] - pad_w) / scale, 0.0f);
@@ -192,13 +203,11 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 #endif
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_END(1, "Inference")
   TIMERECORD_START(2)

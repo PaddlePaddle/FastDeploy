@@ -14,8 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -23,15 +23,11 @@ namespace ultralytics {
 
 class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
  public:
-  // 支持ONNX格式模型的输入
-  YOLOv5(const std::string& model_file,
-         const RuntimeOption& option = RuntimeOption(),
-         const Frontend& model_format = Frontend::ONNX);
-
-  // 在X2Paddle转成Paddle后，支持Paddle格式模型的输入
-  YOLOv5(const std::string& model_file, const std::string& params_file,
+  // 当model_format为ONNX时，无需指定params_file
+  // 当model_format为Paddle时，则需同时指定model_file & params_file
+  YOLOv5(const std::string& model_file, const std::string& params_file = "",
          const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::PADDLE);
+         const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
   virtual std::string ModelName() const { return "ultralytics/yolov5"; }
@@ -52,10 +48,10 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  virtual bool
-  Postprocess(FDTensor& infer_result, DetectionResult* result,
-              const std::map<std::string, std::array<float, 2>>& im_info,
-              float conf_threshold, float nms_iou_threshold);
+  virtual bool Postprocess(
+      FDTensor& infer_result, DetectionResult* result,
+      const std::map<std::string, std::array<float, 2>>& im_info,
+      float conf_threshold, float nms_iou_threshold);
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
@@ -83,7 +79,9 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   bool is_scale_up;
   // padding stride, for is_mini_pad
   int stride;
+  // for offseting the boxes by classes when using NMS
+  float max_wh;
 };
-} // namespace ultralytics
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace ultralytics
+}  // namespace vision
+}  // namespace fastdeploy

@@ -2,10 +2,9 @@
 
 ## 编译C++
 ```
-git clone https://gitee.com/jiangjiajun/FastDeploy.git
+git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
-git submodule init
-git submodule update
+git checkout develop
 mkdir build & cd build
 cmake .. -DENABLE_ORT_BACKEND=ON \
          -DENABLE_VISION=ON \
@@ -19,8 +18,7 @@ make install
 ```
 git clone https://gitee.com/jiangjiajun/FastDeploy.git
 cd FastDeploy
-git submodule init
-git submodule update
+git checkout develop
 # Python通过export环境变量设置编译选项
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_VISION=ON

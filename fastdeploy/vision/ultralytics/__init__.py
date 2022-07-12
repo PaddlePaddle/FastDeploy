@@ -14,27 +14,22 @@
 
 from __future__ import absolute_import
 import logging
-import fastdeploy as fd
-from fastdeploy import C
+from ... import FastDeployModel, Frontend
+from ... import fastdeploy_main as C
 
 
-class YOLOv5(fd.FastDeployModel):
+class YOLOv5(FastDeployModel):
     def __init__(self,
                  model_file,
-                 params_file=None,
-                 backend_option=None,
-                 model_format=fd.Frontend.ONNX):
+                 params_file="",
+                 runtime_option=None,
+                 model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._option
-        super(YOLOv5, self).__init__(backend_option)
+        # 初始化后的option保存在self._runtime_option
+        super(YOLOv5, self).__init__(runtime_option)
 
-        if model_format == fd.Frontend.ONNX:
-            # 加载的模型需要保存在成员变量self._model中
-            self._model = C.vision.ultralytics.YOLOv5(
-                model_file, self._runtime_option, model_format)
-        elif model_format == fd.Frontend.PADDLE:
-            self._model = C.vision.ultralytics.YOLOv5(
-                model_file, params_file, self._runtime_option, model_format)
+        self._model = C.vision.ultralytics.YOLOv5(
+            model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOv5 initialize failed."
 
@@ -57,6 +52,10 @@ class YOLOv5(fd.FastDeployModel):
         return self.model.is_no_pad
 
     @property
+    def is_mini_pad(self):
+        return self.model.is_mini_pad
+
+    @property
     def is_scale_up(self):
         return self.model.is_scale_up
 
@@ -64,14 +63,16 @@ class YOLOv5(fd.FastDeployModel):
     def stride(self):
         return self.model.stride
 
+    @property
+    def max_wh(self):
+        return self.model.max_wh
+
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [
-            list, tuple
-        ]), "The value to set `size` must be type of tuple or list."
-        assert len(
-            wh
-        ) == 2, "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
+        assert isinstance(wh, [list, tuple]),\
+            "The value to set `size` must be type of tuple or list."
+        assert len(wh) == 2,\
+            "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
             len(wh))
         self.model.size = wh
 
@@ -88,6 +89,13 @@ class YOLOv5(fd.FastDeployModel):
             value, bool), "The value to set `is_no_pad` must be type of bool."
         self.model.is_no_pad = value
 
+    @is_mini_pad.setter
+    def is_mini_pad(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_mini_pad` must be type of bool."
+        self.model.is_mini_pad = value
+
     @is_scale_up.setter
     def is_scale_up(self, value):
         assert isinstance(
@@ -100,3 +108,9 @@ class YOLOv5(fd.FastDeployModel):
         assert isinstance(
             value, int), "The value to set `stride` must be type of int."
         self.model.stride = value
+
+    @max_wh.setter
+    def max_wh(self, value):
+        assert isinstance(
+            value, float), "The value to set `max_wh` must be type of float."
+        self.model.max_wh = value

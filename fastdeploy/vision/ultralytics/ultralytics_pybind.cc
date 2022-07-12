@@ -20,7 +20,6 @@ void BindUltralytics(pybind11::module& m) {
       m.def_submodule("ultralytics", "https://github.com/ultralytics/yolov5");
   pybind11::class_<vision::ultralytics::YOLOv5, FastDeployModel>(
       ultralytics_module, "YOLOv5")
-      .def(pybind11::init<std::string, RuntimeOption, Frontend>())
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
            [](vision::ultralytics::YOLOv5& self, pybind11::array& data,
@@ -35,6 +34,8 @@ void BindUltralytics(pybind11::module& m) {
                      &vision::ultralytics::YOLOv5::padding_value)
       .def_readwrite("is_mini_pad", &vision::ultralytics::YOLOv5::is_mini_pad)
       .def_readwrite("is_no_pad", &vision::ultralytics::YOLOv5::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::ultralytics::YOLOv5::stride);
+      .def_readwrite("is_scale_up", &vision::ultralytics::YOLOv5::is_scale_up)
+      .def_readwrite("stride", &vision::ultralytics::YOLOv5::stride)
+      .def_readwrite("max_wh", &vision::ultralytics::YOLOv5::max_wh);
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy
