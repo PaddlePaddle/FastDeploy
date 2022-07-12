@@ -10,7 +10,7 @@
 | 选项 | 作用 | 备注 |
 |:---- | :--- | :--- |
 | ENABLE_ORT_BACKEND | 启用ONNXRuntime推理后端，默认ON | - |
-| WIGH_GPU | 是否开启GPU使用，默认OFF | 当设为TRUE时，须通过CUDA_DIRECTORY指定cuda目录，如/usr/local/cuda; Mac上不支持设为ON |
+| WITH_GPU | 是否开启GPU使用，默认OFF | 当设为TRUE时，须通过CUDA_DIRECTORY指定cuda目录，如/usr/local/cuda; Mac上不支持设为ON |
 | ENABLE_TRT_BACKEND | 启用TensorRT推理后端，默认OFF | 当设为TRUE时，需通过TRT_DIRECTORY指定tensorrt目录，如/usr/downloads/TensorRT-8.4.0.1; Mac上不支持设为ON|
 | ENABLE_VISION | 编译集成视觉模型模块，包括OpenCV的编译集成，默认OFF | - |
 | ENABLE_PADDLE_FRONTEND | 编译集成Paddle2ONNX，默认ON | - |

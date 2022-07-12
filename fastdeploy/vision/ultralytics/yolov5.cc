@@ -67,6 +67,7 @@ bool YOLOv5::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 7680.0;
+  multi_label = true;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -113,10 +114,14 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
 bool YOLOv5::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
-    float conf_threshold, float nms_iou_threshold) {
+    float conf_threshold, float nms_iou_threshold, bool multi_label) {
   FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
   result->Clear();
-  result->Reserve(infer_result.shape[1]);
+  if (multi_label) {
+    result->Reserve(infer_result.shape[1] * (infer_result.shape[2] - 5));
+  } else {
+    result->Reserve(infer_result.shape[1]);
+  }
   if (infer_result.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
@@ -125,22 +130,44 @@ bool YOLOv5::Postprocess(
   for (size_t i = 0; i < infer_result.shape[1]; ++i) {
     int s = i * infer_result.shape[2];
     float confidence = data[s + 4];
-    float* max_class_score =
-        std::max_element(data + s + 5, data + s + infer_result.shape[2]);
-    confidence *= (*max_class_score);
-    // filter boxes by conf_threshold
-    if (confidence <= conf_threshold) {
-      continue;
+    if (multi_label) {
+      for (size_t j = 5; j < infer_result.shape[2]; ++j) {
+        confidence = data[s + 4];
+        float* class_score = data + s + j;
+        confidence *= (*class_score);
+        // filter boxes by conf_threshold
+        if (confidence <= conf_threshold) {
+          continue;
+        }
+        int32_t label_id = std::distance(data + s + 5, class_score);
+
+        // convert from [x, y, w, h] to [x1, y1, x2, y2]
+        result->boxes.emplace_back(std::array<float, 4>{
+            data[s] - data[s + 2] / 2.0f + label_id * max_wh,
+            data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
+            data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
+            data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
+        result->label_ids.push_back(label_id);
+        result->scores.push_back(confidence);
+      }
+    } else {
+      float* max_class_score =
+          std::max_element(data + s + 5, data + s + infer_result.shape[2]);
+      confidence *= (*max_class_score);
+      // filter boxes by conf_threshold
+      if (confidence <= conf_threshold) {
+        continue;
+      }
+      int32_t label_id = std::distance(data + s + 5, max_class_score);
+      // convert from [x, y, w, h] to [x1, y1, x2, y2]
+      result->boxes.emplace_back(std::array<float, 4>{
+          data[s] - data[s + 2] / 2.0f + label_id * max_wh,
+          data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
+          data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
+          data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
+      result->label_ids.push_back(label_id);
+      result->scores.push_back(confidence);
     }
-    int32_t label_id = std::distance(data + s + 5, max_class_score);
-    // convert from [x, y, w, h] to [x1, y1, x2, y2]
-    result->boxes.emplace_back(std::array<float, 4>{
-        data[s] - data[s + 2] / 2.0f + label_id * max_wh,
-        data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
-        data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
-        data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
-    result->label_ids.push_back(label_id);
-    result->scores.push_back(confidence);
   }
   utils::NMS(result, nms_iou_threshold);
 
@@ -214,7 +241,7 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 #endif
 
   if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
-                   nms_iou_threshold)) {
+                   nms_iou_threshold, multi_label)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
