@@ -172,15 +172,13 @@ install(
   TARGETS fastdeploy
   LIBRARY DESTINATION lib
 )
-if (DEFINED CMAKE_INSTALL_INCLUDEDIR)
-  install(
-    DIRECTORY ${PROJECT_SOURCE_DIR}/fastdeploy
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING
-    PATTERN "*.h"
-    PATTERN "${PROJECT_SOURCE_DIR}/fastdeploy/backends/*/*.h"
-  )
-endif()
+install(
+  DIRECTORY ${PROJECT_SOURCE_DIR}/fastdeploy
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+  FILES_MATCHING
+  PATTERN "*.h"
+  PATTERN "${PROJECT_SOURCE_DIR}/fastdeploy/backends/*/*.h"
+)
 install(
   DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
   DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
