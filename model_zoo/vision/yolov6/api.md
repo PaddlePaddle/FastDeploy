@@ -1,12 +1,12 @@
-# YOLOv5 API说明
+# YOLOv6 API说明
 
 ## Python API
 
-### YOLOv5类
+### YOLOv6类
 ```
-fastdeploy.vision.ultralytics.YOLOv5(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
+fastdeploy.vision.meituan.YOLOv6(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
 ```
-YOLOv5模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov5s.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
+YOLOv6模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov6s.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -17,7 +17,7 @@ YOLOv5模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 
 #### predict函数
 > ```
-> YOLOv5.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> YOLOv6.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 > 模型预测结口，输入图像直接输出检测结果。
 >
@@ -27,20 +27,20 @@ YOLOv5模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
-示例代码参考[yolov5.py](./yolov5.py)
+示例代码参考[yolov6.py](./yolov6.py)
 
 
 ## C++ API
 
-### YOLOv5类
+### YOLOv6类
 ```
-fastdeploy::vision::ultralytics::YOLOv5(
+fastdeploy::vision::meituan::YOLOv6(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
-YOLOv5模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov5s.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
+YOLOv6模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov6s.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -51,7 +51,7 @@ YOLOv5模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 
 #### Predict函数
 > ```
-> YOLOv5::Predict(cv::Mat* im, DetectionResult* result,
+> YOLOv6::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -64,7 +64,7 @@ YOLOv5模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
-示例代码参考[cpp/yolov5.cc](cpp/yolov5.cc)
+示例代码参考[cpp/yolov6.cc](cpp/yolov6.cc)
 
 ## 其它API使用
 

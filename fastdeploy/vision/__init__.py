@@ -16,4 +16,5 @@ from __future__ import absolute_import
 from . import evaluation
 from . import ppcls
 from . import ultralytics
+from . import meituan
 from . import visualize

@@ -18,6 +18,7 @@ import shutil
 import requests
 import time
 import zipfile
+import tarfile
 import hashlib
 import tqdm
 import logging
