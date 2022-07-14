@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/fastdeploy_model.h"
 
 namespace fastdeploy {
 
