@@ -17,3 +17,4 @@ from . import evaluation
 from . import ppcls
 from . import ultralytics
 from . import visualize
+from . import wongkinyiu

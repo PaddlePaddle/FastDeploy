@@ -28,7 +28,7 @@ class YOLOv7(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(YOLOv7, self).__init__(runtime_option)
 
-        self._model = C.vision.yongkinyiu.YOLOv7(
+        self._model = C.vision.wongkinyiu.YOLOv7(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOv7 initialize failed."

@@ -17,6 +17,7 @@
 namespace fastdeploy {
 
 void BindPpClsModel(pybind11::module& m);
+void BindWongkinyiu(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
@@ -40,6 +41,7 @@ void BindVision(pybind11::module& m) {
 
   BindPpClsModel(m);
   BindUltralytics(m);
+  BindWongkinyiu(m);
   BindVisualize(m);
 }
 } // namespace fastdeploy

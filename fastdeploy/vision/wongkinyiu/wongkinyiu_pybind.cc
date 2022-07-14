@@ -16,26 +16,26 @@
 
 namespace fastdeploy {
 void BindWongkinyiu(pybind11::module& m) {
-  auto yongkinyiu_module =
-      m.def_submodule("WongKinYiu", "https://github.com/WongKinYiu/yolov7");
-  pybind11::class_<vision::yongkinyiu::YOLOv7, FastDeployModel>(
-      yongkinyiu_module, "YOLOv7")
+  auto wongkinyiu_module =
+      m.def_submodule("wongkinyiu", "https://github.com/WongKinYiu/yolov7");
+  pybind11::class_<vision::wongkinyiu::YOLOv7, FastDeployModel>(
+      wongkinyiu_module, "YOLOv7")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::yongkinyiu::YOLOv7& self, pybind11::array& data,
+           [](vision::wongkinyiu::YOLOv7& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::yongkinyiu::YOLOv7::size)
+      .def_readwrite("size", &vision::wongkinyiu::YOLOv7::size)
       .def_readwrite("padding_value",
-                     &vision::yongkinyiu::YOLOv7::padding_value)
-      .def_readwrite("is_mini_pad", &vision::yongkinyiu::YOLOv7::is_mini_pad)
-      .def_readwrite("is_no_pad", &vision::yongkinyiu::YOLOv7::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::yongkinyiu::YOLOv7::is_scale_up)
-      .def_readwrite("stride", &vision::yongkinyiu::YOLOv7::stride)
-      .def_readwrite("max_wh", &vision::yongkinyiu::YOLOv7::max_wh);
+                     &vision::wongkinyiu::YOLOv7::padding_value)
+      .def_readwrite("is_mini_pad", &vision::wongkinyiu::YOLOv7::is_mini_pad)
+      .def_readwrite("is_no_pad", &vision::wongkinyiu::YOLOv7::is_no_pad)
+      .def_readwrite("is_scale_up", &vision::wongkinyiu::YOLOv7::is_scale_up)
+      .def_readwrite("stride", &vision::wongkinyiu::YOLOv7::stride)
+      .def_readwrite("max_wh", &vision::wongkinyiu::YOLOv7::max_wh);
 }
 }  // namespace fastdeploy
