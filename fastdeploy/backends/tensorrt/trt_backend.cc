@@ -157,7 +157,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   }
 
   // This part of code will record the original outputs order
-  // because the converted tensorrt network may exists wrong order of outputs
+  // because the converted tensorrt network may exist wrong order of outputs
   outputs_order_.clear();
   auto onnx_reader =
       paddle2onnx::OnnxReader(onnx_content.c_str(), onnx_content.size());
