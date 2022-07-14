@@ -51,5 +51,5 @@ class FastDeployModel:
     @property
     def initialized(self):
         if self._model is None:
-            return false
+            return False
         return self._model.initialized()

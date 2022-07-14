@@ -17,6 +17,7 @@
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision/ppcls/model.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
+#include "fastdeploy/vision/meituan/yolov6.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

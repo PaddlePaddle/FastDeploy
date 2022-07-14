@@ -10,3 +10,5 @@ build-debug.sh
 fastdeploy.egg-info
 .setuptools-cmake-build
 fastdeploy/version.py
+fastdeploy/LICENSE*
+fastdeploy/ThirdPartyNotices*
