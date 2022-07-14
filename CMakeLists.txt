@@ -38,8 +38,8 @@ option(ENABLE_VISION_VISUALIZE "if to enable visualize vision model result toolb
 option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
 
-# Wheter to build fastdeply with vision/text/... examples, only for testings.
-option(WTIH_VISION_EXAMPLES "wheter to build fastdeply with vision examples" ON)
+# Whether to build fastdeply with vision/text/... examples, only for testings.
+option(WTIH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
 
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
