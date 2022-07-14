@@ -52,7 +52,7 @@ std::vector<int> toVec(const nvinfer1::Dims& dim) {
   return out;
 }
 
-bool TrtBackend::InitFromTrt(const std::string& trt_engine_file, 
+bool TrtBackend::InitFromTrt(const std::string& trt_engine_file,
                              const TrtBackendOption& option) {
   if (initialized_) {
     FDERROR << "TrtBackend is already initlized, cannot initialize again."
@@ -139,17 +139,6 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   }
   cudaSetDevice(option.gpu_id);
 
-  if (option.serialize_file != "") {
-    std::ifstream fin(option.serialize_file, std::ios::binary | std::ios::in);
-    if (fin) {
-      FDLogger() << "Detect serialized TensorRT Engine file in "
-                 << option.serialize_file << ", will load it directly."
-                 << std::endl;
-      fin.close();
-      return InitFromTrt(option.serialize_file);
-    }
-  }
-
   std::string onnx_content = "";
   if (!from_memory_buffer) {
     std::ifstream fin(model_file.c_str(), std::ios::binary | std::ios::in);
@@ -165,6 +154,29 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
     fin.close();
   } else {
     onnx_content = model_file;
+  }
+
+  // This part of code will record the original outputs order
+  // because the converted tensorrt network may exist wrong order of outputs
+  outputs_order_.clear();
+  auto onnx_reader =
+      paddle2onnx::OnnxReader(onnx_content.c_str(), onnx_content.size());
+  for (int i = 0; i < onnx_reader.NumOutputs(); ++i) {
+    std::string name(
+        onnx_reader.output_names[i],
+        onnx_reader.output_names[i] + strlen(onnx_reader.output_names[i]));
+    outputs_order_[name] = i;
+  }
+
+  if (option.serialize_file != "") {
+    std::ifstream fin(option.serialize_file, std::ios::binary | std::ios::in);
+    if (fin) {
+      FDLogger() << "Detect serialized TensorRT Engine file in "
+                 << option.serialize_file << ", will load it directly."
+                 << std::endl;
+      fin.close();
+      return InitFromTrt(option.serialize_file);
+    }
   }
 
   if (!CreateTrtEngine(onnx_content, option)) {
@@ -251,13 +263,20 @@ void TrtBackend::AllocateBufferInDynamicShape(
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto idx = engine_->getBindingIndex(outputs_desc_[i].name.c_str());
     auto output_dims = context_->getBindingDimensions(idx);
-    (*outputs)[i].dtype = GetFDDataType(outputs_desc_[i].dtype);
-    (*outputs)[i].shape.assign(output_dims.d,
-                               output_dims.d + output_dims.nbDims);
-    (*outputs)[i].name = outputs_desc_[i].name;
-    (*outputs)[i].data.resize(volume(output_dims) *
-                              TrtDataTypeSize(outputs_desc_[i].dtype));
-    if ((*outputs)[i].Nbytes() >
+
+    // find the original index of output
+    auto iter = outputs_order_.find(outputs_desc_[i].name);
+    FDASSERT(iter != outputs_order_.end(),
+             "Cannot find output:" + outputs_desc_[i].name +
+                 " of tensorrt network from the original model.");
+    auto ori_idx = iter->second;
+    (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
+    (*outputs)[ori_idx].shape.assign(output_dims.d,
+                                     output_dims.d + output_dims.nbDims);
+    (*outputs)[ori_idx].name = outputs_desc_[i].name;
+    (*outputs)[ori_idx].data.resize(volume(output_dims) *
+                                    TrtDataTypeSize(outputs_desc_[i].dtype));
+    if ((*outputs)[ori_idx].Nbytes() >
         outputs_buffer_[outputs_desc_[i].name].nbBytes()) {
       outputs_buffer_[outputs_desc_[i].name].resize(output_dims);
       bindings_[idx] = outputs_buffer_[outputs_desc_[i].name].data();
