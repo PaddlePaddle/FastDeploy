@@ -1,4 +1,4 @@
-#include "fastdeploy/vision/WongKinYiu/yolov7.h"
+#include "fastdeploy/vision/wongkinyiu/yolov7.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 

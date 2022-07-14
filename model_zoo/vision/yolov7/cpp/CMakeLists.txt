@@ -5,7 +5,7 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
 # add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 # 指定下载解压后的fastdeploy库路径
-set(FASTDEPLOY_INSTALL_DIR /home/fastdeploy/FastDeploy/build/fastdeploy-0.0.3/)
+set(FASTDEPLOY_INSTALL_DIR /home/fastdeploy/FastDeploy/build/fastdeploy-0.0.3)
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
@@ -15,4 +15,3 @@ include_directories(${FASTDEPLOY_INCS})
 add_executable(yolov7_demo ${PROJECT_SOURCE_DIR}/yolov7.cc)
 # 添加FastDeploy库依赖
 target_link_libraries(yolov7_demo ${FASTDEPLOY_LIBS})
-
