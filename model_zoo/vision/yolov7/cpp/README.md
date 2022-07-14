@@ -12,11 +12,11 @@ cmake ..
 make -j
 
 # 下载模型和图片
-wget https://github.com/ultralytics/yolov5/releases/download/v6.0/yolov5s.onnx
-wget https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg
+wget "TODO"
+wget https://github.com/WongKinYiu/yolov7/blob/main/inference/images/horses.jpg
 
 # 执行
-./yolov5_demo
+./yolov7_demo
 ```
 
 执行完后可视化的结果保存在本地`vis_result.jpg`，同时会将检测框输出在终端，如下所示
