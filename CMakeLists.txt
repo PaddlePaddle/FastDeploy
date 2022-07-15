@@ -49,9 +49,9 @@ if(NOT CUDA_DIRECTORY)
 endif()
 
 option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
-
+asdfasd
 include_directories(${PROJECT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})fasdfasdfas
 
 if (WTIH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   # ENABLE_VISION and ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
