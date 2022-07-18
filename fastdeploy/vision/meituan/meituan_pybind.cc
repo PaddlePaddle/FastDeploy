@@ -29,10 +29,6 @@ void BindMeituan(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def("is_dynamic_shape",
-           [](vision::meituan::YOLOv6& self) {
-             return self.IsDynamicShape();
-           })     
       .def_readwrite("size", &vision::meituan::YOLOv6::size)
       .def_readwrite("padding_value",
                      &vision::meituan::YOLOv6::padding_value)

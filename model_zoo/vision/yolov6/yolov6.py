@@ -9,7 +9,6 @@ fd.download(test_jpg_url, ".", show_progress=True)
 
 # 加载模型
 model = fd.vision.meituan.YOLOv6("yolov6s.onnx")
-print(model.is_dynamic_shape())
 
 # 预测图片
 im = cv2.imread("bus.jpg")

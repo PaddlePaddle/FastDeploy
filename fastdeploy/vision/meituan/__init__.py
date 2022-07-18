@@ -37,10 +37,6 @@ class YOLOv6(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # BOOL: 查看输入的模型是否为动态维度的 
-    def is_dynamic_shape(self):
-        return self._model.is_dynamic_shape()                               
-
     # 一些跟YOLOv6模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
