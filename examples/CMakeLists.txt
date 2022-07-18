@@ -17,6 +17,7 @@ endfunction()
 if (WTIH_VISION_EXAMPLES)
   add_fastdeploy_executable(vision ultralytics yolov5)
   add_fastdeploy_executable(vision meituan yolov6)
+  add_fastdeploy_executable(vision wongkinyiu yolov7)
 endif()
 
 # other examples ...
