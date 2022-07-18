@@ -16,7 +16,8 @@
 
 namespace fastdeploy {
 
-void BindPpClsModel(pybind11::module& m);
+void BindPPCls(pybind11::module& m);
+void BindPPDet(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 void BindMeituan(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
@@ -39,7 +40,7 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
-  BindPpClsModel(m);
+  BindPPCls(m);
   BindUltralytics(m);
   BindMeituan(m);
 #ifdef ENABLE_VISION_VISUALIZE
