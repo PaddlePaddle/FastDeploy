@@ -15,8 +15,6 @@
   # 导出onnx格式文件
   python models/export.py --grid --dynamic --weights PATH/TO/yolo7.pt
 
-  # 移动onnx文件到demo目录
-  cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolov7/
   ```
 
   
@@ -34,6 +32,9 @@ tar xvf fastdeploy-linux-x64-0.0.3.tgz
 mkdir build & cd build
 cmake ..
 make -j
+
+# 移动onnx文件到demo目录
+cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolov7/cpp/build/
 
 # 下载图片
 wget https://github.com/WongKinYiu/yolov7/blob/main/inference/images/horses.jpg
