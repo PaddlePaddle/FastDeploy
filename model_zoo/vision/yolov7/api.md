@@ -49,7 +49,7 @@ YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(Frontend): 模型格式
 
-#### predict函数
+#### Predict函数
 > ```
 > YOLOv7::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
