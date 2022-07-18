@@ -28,32 +28,33 @@ struct YOLOXAnchor {
   int stride;
 };
 
-void GenerateYOLOXAnchors(const std::vector<int> &size, 
-                          const std::vector<int> &downsample_strides, 
-                          std::vector<YOLOXAnchor> &anchors) {
-  // size: tuple of input (width, height) 
+void GenerateYOLOXAnchors(const std::vector<int>& size,
+                          const std::vector<int>& downsample_strides,
+                          std::vector<YOLOXAnchor>* anchors) {
+  // size: tuple of input (width, height)
   // downsample_strides: downsample strides in YOLOX, e.g (8,16,32)
   const int width = size[0];
   const int height = size[1];
-  for (const auto &ds: downsample_strides) {
+  for (const auto& ds : downsample_strides) {
     int num_grid_w = width / ds;
     int num_grid_h = height / ds;
     for (int g1 = 0; g1 < num_grid_h; ++g1) {
       for (int g0 = 0; g0 < num_grid_w; ++g0) {
-        anchors.emplace_back(YOLOXAnchor{g0, g1, ds});
-      }  
+        (*anchors).emplace_back(YOLOXAnchor{g0, g1, ds});
+      }
     }
   }
 }
 
-void PreProc(Mat* mat, std::vector<int> size, std::vector<float> color) {
+void LetterBoxWithRightBottomPad(Mat* mat, std::vector<int> size,
+                                 std::vector<float> color) {
   // specific pre process for YOLOX, not the same as YOLOv5
   // reference: YOLOX/yolox/data/data_augment.py#L142
-  float r = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()), 
-                     size[0] * 1.0f / static_cast<float>(mat->Width()));       
-  
+  float r = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
+                     size[0] * 1.0f / static_cast<float>(mat->Width()));
+
   int resize_h = int(round(static_cast<float>(mat->Height()) * r));
-  int resize_w = int(round(static_cast<float>(mat->Width())  * r));
+  int resize_w = int(round(static_cast<float>(mat->Width()) * r));
 
   if (resize_h != mat->Height() || resize_w != mat->Width()) {
     Resize::Run(mat, resize_w, resize_h);
@@ -72,8 +73,7 @@ void PreProc(Mat* mat, std::vector<int> size, std::vector<float> color) {
 }
 
 YOLOX::YOLOX(const std::string& model_file, const std::string& params_file,
-             const RuntimeOption& custom_option,
-             const Frontend& model_format) {
+             const RuntimeOption& custom_option, const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
@@ -119,7 +119,7 @@ bool YOLOX::Preprocess(Mat* mat, FDTensor* output,
   // 1. preproc
   // 2. HWC->CHW
   // 3. NO!!! BRG2GRB and Normalize needed in YOLOX
-  PreProc(mat, size, padding_value);
+  LetterBoxWithRightBottomPad(mat, size, padding_value);
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
@@ -207,7 +207,7 @@ bool YOLOX::PostprocessWithDecode(
   }
   // generate anchors with dowmsample strides
   std::vector<YOLOXAnchor> anchors;
-  GenerateYOLOXAnchors(size, downsample_strides, anchors);
+  GenerateYOLOXAnchors(size, downsample_strides, &anchors);
 
   // infer_result shape might look like (1,n,85=5+80)
   float* data = static_cast<float*>(infer_result.Data());
@@ -239,11 +239,9 @@ bool YOLOX::PostprocessWithDecode(
 
     // convert from [x, y, w, h] to [x1, y1, x2, y2]
     result->boxes.emplace_back(std::array<float, 4>{
-        x - w / 2.0f + label_id * max_wh,
-        y - h / 2.0f + label_id * max_wh,
-        x + w / 2.0f + label_id * max_wh,
-        y + h / 2.0f + label_id * max_wh}); 
-    // label_id * max_wh for multi classes NMS    
+        x - w / 2.0f + label_id * max_wh, y - h / 2.0f + label_id * max_wh,
+        x + w / 2.0f + label_id * max_wh, y + h / 2.0f + label_id * max_wh});
+    // label_id * max_wh for multi classes NMS
     result->label_ids.push_back(label_id);
     result->scores.push_back(confidence);
   }
@@ -299,7 +297,7 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
-  
+
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_END(0, "Preprocess")
   TIMERECORD_START(1)
@@ -315,7 +313,7 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   TIMERECORD_END(1, "Inference")
   TIMERECORD_START(2)
 #endif
-  
+
   if (is_decode_exported) {
     if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
                      nms_iou_threshold)) {
@@ -323,13 +321,13 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
       return false;
     }
   } else {
-    if (!PostprocessWithDecode(output_tensors[0], result, im_info, conf_threshold,
-                               nms_iou_threshold)) {
+    if (!PostprocessWithDecode(output_tensors[0], result, im_info,
+                               conf_threshold, nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
   }
-  
+
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_END(2, "Postprocess")
 #endif
