@@ -77,9 +77,9 @@ option = fd.RuntimeOption()
 option.backend = fd.Backend.TRT
 # 当使用TRT后端，且为动态输入shape时
 # 需配置输入shape信息
-option.trt_min_shape = {"images": [1, 3, 224, 224]}
-option.trt_opt_shape = {"images": [4, 3, 224, 224]}
-option.trt_max_shape = {"images": [8, 3, 224, 224]}
+option.trt_min_shape = {"x": [1, 3, 224, 224]}
+option.trt_opt_shape = {"x": [4, 3, 224, 224]}
+option.trt_max_shape = {"x": [8, 3, 224, 224]}
 
 model = fd.vision.ppcls.Model("resnet50/inference.pdmodel",
                               "resnet50/inference.pdiparams",
@@ -117,9 +117,9 @@ model = fd.vision.ppcls.Model("resnet50/inference.pdmodel",
 
 int main() {
   auto option = fastdeploy::RuntimeOption();
-  option.trt_min_shape["images"] = {1, 3, 224, 224};
-  option.trt_opt_shape["images"] = {4, 3, 224, 224};
-  option.trt_max_shape["images"] = {8, 3, 224, 224};
+  option.trt_min_shape["x"] = {1, 3, 224, 224};
+  option.trt_opt_shape["x"] = {4, 3, 224, 224};
+  option.trt_max_shape["x"] = {8, 3, 224, 224};
 
   auto model = fastdeploy::vision::ppcls.Model(
                            "resnet50/inference.pdmodel",

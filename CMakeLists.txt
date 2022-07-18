@@ -38,6 +38,9 @@ option(ENABLE_VISION_VISUALIZE "if to enable visualize vision model result toolb
 option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
 
+# Whether to build fastdeply with vision/text/... examples, only for testings.
+option(WTIH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
+
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
 endif()
@@ -49,6 +52,13 @@ option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+if (WTIH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  # ENABLE_VISION and ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
+  message(STATUS "Found WTIH_VISION_EXAMPLES ON, so, force ENABLE_VISION and ENABLE_VISION_VISUALIZE ON")
+  set(ENABLE_VISION ON CACHE BOOL "force to enable vision models usage" FORCE)
+  set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
+endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/*.cc)
@@ -131,6 +141,11 @@ if(ENABLE_VISION)
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
   endif()
+else()
+  if(ENABLE_VISION_VISUALIZE)
+    message("While ENABLE_VISION=OFF, will force ENABLE_VISION_VISUALIZE=OFF.")
+    set(ENABLE_VISION_VISUALIZE OFF)
+  endif()
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/fastdeploy/core/config.h)
@@ -164,6 +179,13 @@ if(OpenMP_CXX_FOUND)
 endif()
 set_target_properties(fastdeploy PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 target_link_libraries(fastdeploy ${DEPEND_LIBS})
+
+# add examples after prepare include paths for third-parties
+if (WTIH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  add_definitions(-DWTIH_VISION_EXAMPLES)
+  set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
+  add_subdirectory(examples)
+endif()
 
 include(external/summary.cmake)
 fastdeploy_summary()
@@ -211,6 +233,10 @@ if(BUILD_FASTDEPLOY_PYTHON)
     set(CMAKE_NO_SYSTEM_FROM_IMPORTED 1)
   endif()
 
+  if(NOT ENABLE_VISION)
+    file(GLOB_RECURSE VISION_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*_pybind.cc)
+    list(REMOVE_ITEM DEPLOY_PYBIND_SRCS ${VISION_PYBIND_SRCS})
+  endif()
   add_library(fastdeploy_main MODULE ${DEPLOY_PYBIND_SRCS})
   redefine_file_macro(fastdeploy_main)
   set_target_properties(fastdeploy_main PROPERTIES PREFIX "")

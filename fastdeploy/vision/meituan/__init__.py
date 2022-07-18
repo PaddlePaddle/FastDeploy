@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import fastdeploy_main as C
 
 
-class YOLOv5(FastDeployModel):
+class YOLOv6(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,18 +26,22 @@ class YOLOv5(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(YOLOv5, self).__init__(runtime_option)
+        super(YOLOv6, self).__init__(runtime_option)
 
-        self._model = C.vision.ultralytics.YOLOv5(
+        self._model = C.vision.meituan.YOLOv6(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOv5 initialize failed."
+        assert self.initialized, "YOLOv6 initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟YOLOv5模型有关的属性封装
+    # BOOL: 查看输入的模型是否为动态维度的 
+    def is_dynamic_shape(self):
+        return self._model.is_dynamic_shape()                               
+
+    # 一些跟YOLOv6模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
@@ -66,10 +70,6 @@ class YOLOv5(FastDeployModel):
     @property
     def max_wh(self):
         return self._model.max_wh
-
-    @property
-    def multi_label(self):
-        return self._model.multi_label
 
     @size.setter
     def size(self, wh):
@@ -118,10 +118,3 @@ class YOLOv5(FastDeployModel):
         assert isinstance(
             value, float), "The value to set `max_wh` must be type of float."
         self._model.max_wh = value
-
-    @multi_label.setter
-    def multi_label(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `multi_label` must be type of bool."
-        self._model.multi_label = value

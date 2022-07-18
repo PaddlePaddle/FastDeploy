@@ -28,8 +28,8 @@
 #include "fastdeploy/backends/tensorrt/common/parserOnnxConfig.h"
 #include "fastdeploy/backends/tensorrt/common/sampleUtils.h"
 
-#include "NvInfer.h"
 #include <cuda_runtime_api.h>
+#include "NvInfer.h"
 
 namespace fastdeploy {
 using namespace samplesCommon;
@@ -69,7 +69,7 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool InitFromTrt(const std::string& trt_engine_file, 
+  bool InitFromTrt(const std::string& trt_engine_file,
                    const TrtBackendOption& option = TrtBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
@@ -89,6 +89,13 @@ class TrtBackend : public BaseBackend {
   std::map<std::string, DeviceBuffer> inputs_buffer_;
   std::map<std::string, DeviceBuffer> outputs_buffer_;
 
+  // Sometimes while the number of outputs > 1
+  // the output order of tensorrt may not be same
+  // with the original onnx model
+  // So this parameter will record to origin outputs
+  // order, to help recover the rigt order
+  std::map<std::string, int> outputs_order_;
+
   void GetInputOutputInfo();
   void AllocateBufferInDynamicShape(const std::vector<FDTensor>& inputs,
                                     std::vector<FDTensor>* outputs);
@@ -96,4 +103,4 @@ class TrtBackend : public BaseBackend {
                        const TrtBackendOption& option);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
