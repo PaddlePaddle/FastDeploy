@@ -1,4 +1,4 @@
-function(add_fastdeploy_executable field url model)   
+function(add_fastdeploy_executable field url model)
   # temp target name/file var in function scope
   set(TEMP_TARGET_FILE ${PROJECT_SOURCE_DIR}/examples/${field}/${url}_${model}.cc)
   set(TEMP_TARGET_NAME ${field}_${url}_${model})
@@ -7,7 +7,7 @@ function(add_fastdeploy_executable field url model)
     target_link_libraries(${TEMP_TARGET_NAME} PUBLIC fastdeploy)
     message(STATUS "Found source file: [${field}/${url}_${model}.cc], ADD!!! fastdeploy executable: [${TEMP_TARGET_NAME}] !")
   else ()
-    message(WARNING "Can not found source file: [${field}/${url}_${model}.cc], SKIP!!! fastdeploy executable: [${TEMP_TARGET_NAME}] !")          
+    message(WARNING "Can not found source file: [${field}/${url}_${model}.cc], SKIP!!! fastdeploy executable: [${TEMP_TARGET_NAME}] !")
   endif()
   unset(TEMP_TARGET_FILE)
   unset(TEMP_TARGET_NAME)
@@ -17,6 +17,7 @@ endfunction()
 if (WTIH_VISION_EXAMPLES)
   add_fastdeploy_executable(vision ultralytics yolov5)
   add_fastdeploy_executable(vision meituan yolov6)
+  add_fastdeploy_executable(vision ppdet ppyoloe)
 endif()
 
 # other examples ...

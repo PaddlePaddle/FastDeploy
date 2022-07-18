@@ -41,10 +41,11 @@ void BindVision(pybind11::module& m) {
       .def("__str__", &vision::DetectionResult::Str);
 
   BindPPCls(m);
+  BindPPDet(m);
   BindUltralytics(m);
   BindMeituan(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
-#endif  
+#endif
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy
