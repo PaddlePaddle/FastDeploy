@@ -39,7 +39,7 @@ option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow proces
 option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
-option(WTIH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
+option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
 
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
@@ -181,8 +181,8 @@ set_target_properties(fastdeploy PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 target_link_libraries(fastdeploy ${DEPEND_LIBS})
 
 # add examples after prepare include paths for third-parties
-if (WTIH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  add_definitions(-DWTIH_VISION_EXAMPLES)
+if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  add_definitions(-DWITH_VISION_EXAMPLES)
   set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
   add_subdirectory(examples)
 endif()
