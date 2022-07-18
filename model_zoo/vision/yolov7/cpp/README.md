@@ -37,7 +37,7 @@ make -j
 cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolov7/cpp/build/
 
 # 下载图片
-wget https://github.com/WongKinYiu/yolov7/blob/main/inference/images/horses.jpg
+wget hhttps://raw.githubusercontent.com/WongKinYiu/yolov7/main/inference/images/horses.jpg
 
 # 执行
 ./yolov7_demo
