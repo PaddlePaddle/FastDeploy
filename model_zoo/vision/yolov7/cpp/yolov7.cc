@@ -21,7 +21,7 @@ int main() {
     std::cerr << "Init Failed." << std::endl;
     return -1;
   }
-  cv::Mat im = cv::imread("bus.jpg");
+  cv::Mat im = cv::imread("horses.jpg");
   cv::Mat vis_im = im.clone();
 
   vis::DetectionResult res;
