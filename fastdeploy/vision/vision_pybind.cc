@@ -42,12 +42,9 @@ void BindVision(pybind11::module& m) {
 
   BindPpClsModel(m);
   BindUltralytics(m);
-<<<<<<< HEAD
   BindWongkinyiu(m);
-=======
   BindMeituan(m);
 #ifdef ENABLE_VISION_VISUALIZE
->>>>>>> PaddlePaddle-develop
   BindVisualize(m);
 #endif  
 }

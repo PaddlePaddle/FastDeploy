@@ -17,11 +17,8 @@
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision/ppcls/model.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
-<<<<<<< HEAD
 #include "fastdeploy/vision/wongkinyiu/yolov7.h"
-=======
 #include "fastdeploy/vision/meituan/yolov6.h"
->>>>>>> PaddlePaddle-develop
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"
