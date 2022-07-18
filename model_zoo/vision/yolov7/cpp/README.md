@@ -1,5 +1,7 @@
 # 编译YOLOv7示例
 
+当前支持模型版本为：[YOLOv7](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)
+
 ## 获取ONNX文件
 
 - 手动获取

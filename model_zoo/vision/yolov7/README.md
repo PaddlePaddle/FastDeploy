@@ -1,5 +1,7 @@
 # 编译YOLOv7示例
 
+当前支持模型版本为：[YOLOv7](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)
+
 本文档说明如何进行[YOLOv7](https://github.com/WongKinYiu/yolov7)的快速部署推理。本目录结构如下
 
 ```
