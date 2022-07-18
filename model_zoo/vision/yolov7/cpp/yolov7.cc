@@ -16,7 +16,7 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-  auto model = vis::wongkinyiu::YOLOv7("/home/fastdeploy/yolov7/onnxfiles/yolov7.onnx");
+  auto model = vis::wongkinyiu::YOLOv7("yolov7.onnx");
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;

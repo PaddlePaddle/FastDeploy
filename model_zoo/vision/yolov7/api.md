@@ -4,9 +4,9 @@
 
 ### YOLOv7类
 ```
-fastdeploy.vision.ultralytics.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
+fastdeploy.vision.wongkinyiu.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
 ```
-YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov7s.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
+YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov7.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -34,13 +34,13 @@ YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 
 ### YOLOv7类
 ```
-fastdeploy::vision::ultralytics::YOLOv7(
+fastdeploy::vision::wongkinyiu::YOLOv7(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
-YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov7s.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
+YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov7.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
