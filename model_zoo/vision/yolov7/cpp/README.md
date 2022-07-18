@@ -4,7 +4,7 @@
 
 - 手动获取
 
-  访问[YOLOv7](https://github.com/WongKinYiu/yolov7)官方github库，按照指引下载安装，下载`yolov7.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。
+  访问[YOLOv7](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)官方github库，按照指引下载安装，下载`yolov7.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。
 
   
 
