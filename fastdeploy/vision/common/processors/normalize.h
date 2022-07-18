@@ -24,6 +24,9 @@ class Normalize : public Processor {
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
+
+  Normalize(const float* alpha, const float* beta, size_t size);
+
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
@@ -45,6 +48,11 @@ class Normalize : public Processor {
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV_CPU);
+
+  // compute `result = mat * alpha + beta` directly
+  static bool Run(Mat* mat, const float* alpha, 
+                  const float* beta, size_t size,
+                  ProcLib lib = ProcLib::OPENCV_CPU);                
 
  private:
   std::vector<float> alpha_;

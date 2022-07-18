@@ -52,6 +52,11 @@ Normalize::Normalize(const std::vector<float>& mean,
   }
 }
 
+Normalize::Normalize(const float* alpha, const float* beta, size_t size) {
+  alpha_.assign(alpha, alpha + size);
+  beta_.assign(beta, beta + size);
+}
+
 bool Normalize::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   std::vector<cv::Mat> split_im;
@@ -81,6 +86,13 @@ bool Normalize::Run(Mat* mat, const std::vector<float>& mean,
                     const std::vector<float>& min,
                     const std::vector<float>& max, ProcLib lib) {
   auto n = Normalize(mean, std, is_scale, min, max);
+  return n(mat, lib);
+}
+
+bool Normalize::Run(Mat* mat, const float* alpha, 
+                    const float* beta, size_t size,
+                    ProcLib lib) {
+  auto n = Normalize(alpha, beta, size);
   return n(mat, lib);
 }
 
