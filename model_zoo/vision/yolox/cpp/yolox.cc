@@ -16,29 +16,18 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-
-  std::string model_file = "../resources/models/yolov6s.onnx";
-  std::string img_path = "../resources/images/bus.jpg";
-  std::string vis_path  = "../resources/outputs/meituan_yolov6_vis_result.jpg";
-
-  auto model = vis::meituan::YOLOv6(model_file);
+  auto model = vis::megvii::YOLOX("yolox_s.onnx");
   if (!model.Initialized()) {
-    std::cerr << "Init Failed! Model: " << model_file << std::endl;
+    std::cerr << "Init Failed." << std::endl;
     return -1;
-  } else {
-    std::cout << "Init Done! Model:" << model_file << std::endl; 
   }
-  model.EnableDebug();
-  
-  cv::Mat im = cv::imread(img_path);
+  cv::Mat im = cv::imread("bus.jpg");
   cv::Mat vis_im = im.clone();
 
   vis::DetectionResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Prediction Failed." << std::endl;
     return -1;
-  } else {
-    std::cout << "Prediction Done!" << std::endl; 
   }
 
   // 输出预测框结果
@@ -46,7 +35,6 @@ int main() {
 
   // 可视化预测结果
   vis::Visualize::VisDetection(&vis_im, res);
-  cv::imwrite(vis_path, vis_im);
-  std::cout << "Detect Done! Saved: " << vis_path << std::endl;
+  cv::imwrite("vis_result.jpg", vis_im);
   return 0;
 }
