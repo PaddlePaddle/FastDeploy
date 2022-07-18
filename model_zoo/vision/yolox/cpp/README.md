@@ -1,5 +1,6 @@
 # 编译YOLOX示例
 
+当前支持模型版本为：[YOLOX v0.1.1](https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0)
 
 ```
 # 下载和解压预测库

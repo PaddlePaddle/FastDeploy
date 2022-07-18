@@ -1,5 +1,7 @@
 # YOLOX部署示例
 
+当前支持模型版本为：[YOLOX v0.1.1](https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0)
+
 本文档说明如何进行[YOLOX](https://github.com/Megvii-BaseDetection/YOLOX)的快速部署推理。本目录结构如下
 ```
 .
