@@ -51,7 +51,7 @@ YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 
 #### predict函数
 > ```
-> YOLOv7::predict(cv::Mat* im, DetectionResult* result,
+> YOLOv7::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -59,7 +59,7 @@ YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 >
 > **参数**
 >
-> > * **im**: 输入图像，注意需为HWC，RGB格式
+> > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
