@@ -32,27 +32,6 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   // 定义模型的名称
   virtual std::string ModelName() const { return "WongKinYiu/yolov7"; }
 
-  // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
-  virtual bool Initialize();
-
-  // 输入图像预处理操作
-  // Mat为FastDeploy定义的数据结构
-  // FDTensor为预处理后的Tensor数据，传给后端进行推理
-  // im_info为预处理过程保存的数据，在后处理中需要用到
-  virtual bool Preprocess(Mat* mat, FDTensor* outputs,
-                          std::map<std::string, std::array<float, 2>>* im_info);
-
-  // 后端推理结果后处理，输出给用户
-  // infer_result 为后端推理后的输出Tensor
-  // result 为模型预测的结果
-  // im_info 为预处理记录的信息，后处理用于还原box
-  // conf_threshold 后处理时过滤box的置信度阈值
-  // nms_iou_threshold 后处理时NMS设定的iou阈值
-  virtual bool Postprocess(
-      FDTensor& infer_result, DetectionResult* result,
-      const std::map<std::string, std::array<float, 2>>& im_info,
-      float conf_threshold, float nms_iou_threshold);
-
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
   // result 为模型预测的输出结构体
@@ -81,6 +60,28 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   int stride;
   // for offseting the boxes by classes when using NMS
   float max_wh;
+
+ private:
+  // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
+  virtual bool Initialize();
+
+  // 输入图像预处理操作
+  // Mat为FastDeploy定义的数据结构
+  // FDTensor为预处理后的Tensor数据，传给后端进行推理
+  // im_info为预处理过程保存的数据，在后处理中需要用到
+  virtual bool Preprocess(Mat* mat, FDTensor* outputs,
+                          std::map<std::string, std::array<float, 2>>* im_info);
+
+  // 后端推理结果后处理，输出给用户
+  // infer_result 为后端推理后的输出Tensor
+  // result 为模型预测的结果
+  // im_info 为预处理记录的信息，后处理用于还原box
+  // conf_threshold 后处理时过滤box的置信度阈值
+  // nms_iou_threshold 后处理时NMS设定的iou阈值
+  virtual bool Postprocess(
+      FDTensor& infer_result, DetectionResult* result,
+      const std::map<std::string, std::array<float, 2>>& im_info,
+      float conf_threshold, float nms_iou_threshold);
 };
 }  // namespace wongkinyiu
 }  // namespace vision
