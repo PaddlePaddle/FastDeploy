@@ -63,13 +63,13 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
 
  private:
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
-  virtual bool Initialize();
+  bool Initialize();
 
   // 输入图像预处理操作
   // Mat为FastDeploy定义的数据结构
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
-  virtual bool Preprocess(Mat* mat, FDTensor* outputs,
+  bool Preprocess(Mat* mat, FDTensor* outputs,
                           std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户
@@ -78,7 +78,7 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  virtual bool Postprocess(
+  bool Postprocess(
       FDTensor& infer_result, DetectionResult* result,
       const std::map<std::string, std::array<float, 2>>& im_info,
       float conf_threshold, float nms_iou_threshold);
