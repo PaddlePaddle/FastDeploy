@@ -16,12 +16,12 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-  auto model = vis::wongkinyiu::YOLOv7("../yolov7.onnx");
+  auto model = vis::wongkinyiu::YOLOv7("yolov7.onnx");
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;
   }
-  cv::Mat im = cv::imread("../horses.jpg");
+  cv::Mat im = cv::imread("horses.jpg");
   cv::Mat vis_im = im.clone();
 
   vis::DetectionResult res;

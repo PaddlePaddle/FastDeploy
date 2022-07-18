@@ -1,5 +1,29 @@
 # 编译YOLOv7示例
 
+## 生成ONNX文件
+
+- 手动获取
+
+  访问[YOLOv7](https://github.com/WongKinYiu/yolov7)官方github库，按照指引下载安装，下载`yolov7.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。
+
+  
+
+  ```
+  #下载yolov7模型文件
+  wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
+  
+  # 导出onnx格式文件
+  python models/export.py --grid --dynamic --weights PATH/TO/yolo7.pt
+
+  # 移动onnx文件到demo目录
+  cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolov7/
+  ```
+
+  
+
+- 从PaddlePaddle获取
+
+
 
 ```
 # 下载和解压预测库
@@ -11,8 +35,7 @@ mkdir build & cd build
 cmake ..
 make -j
 
-# 下载模型和图片
-wget "TODO"
+# 下载图片
 wget https://github.com/WongKinYiu/yolov7/blob/main/inference/images/horses.jpg
 
 # 执行
