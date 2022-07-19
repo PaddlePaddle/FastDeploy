@@ -83,8 +83,8 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
                    float conf_threshold, float nms_iou_threshold);
 
   // 对图片进行LetterBox处理
-  // mat 为输入图片
-  // size 为输入图片的size
+  // mat 为读取到的原图
+  // size 为输入模型的图像尺寸
   void LetterBox(Mat* mat, const std::vector<int>& size,
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
