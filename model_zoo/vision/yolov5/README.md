@@ -1,5 +1,7 @@
 # YOLOv5部署示例
 
+当前支持模型版本为：[YOLOv5 v6.0](https://github.com/ultralytics/yolov5/releases/download/v6.0)
+
 本文档说明如何进行[YOLOv5](https://github.com/ultralytics/yolov5)的快速部署推理。本目录结构如下
 ```
 .

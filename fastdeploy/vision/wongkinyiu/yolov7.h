@@ -19,18 +19,18 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ultralytics {
+namespace wongkinyiu {
 
-class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
+class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  YOLOv5(const std::string& model_file, const std::string& params_file = "",
+  YOLOv7(const std::string& model_file, const std::string& params_file = "",
          const RuntimeOption& custom_option = RuntimeOption(),
          const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  std::string ModelName() const { return "ultralytics/yolov5"; }
+  virtual std::string ModelName() const { return "WongKinYiu/yolov7"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
@@ -39,7 +39,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // nms_iou_threshold 为后处理的参数
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.25,
-                       float nms_iou_threshold = 0.5);               
+                       float nms_iou_threshold = 0.5);
 
   // 以下为模型在预测时的一些参数，基本是前后处理所需
   // 用户在创建模型后，可根据模型的要求，以及自己的需求
@@ -60,8 +60,6 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   int stride;
   // for offseting the boxes by classes when using NMS
   float max_wh;
-  // for different strategies to get boxes when postprocessing
-  bool multi_label;
 
  private:
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
@@ -72,7 +70,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
   bool Preprocess(Mat* mat, FDTensor* outputs,
-                  std::map<std::string, std::array<float, 2>>* im_info);
+                          std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户
   // infer_result 为后端推理后的输出Tensor
@@ -80,22 +78,11 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  // multi_label 后处理时box选取是否采用多标签方式
   bool Postprocess(
       FDTensor& infer_result, DetectionResult* result,
       const std::map<std::string, std::array<float, 2>>& im_info,
-      float conf_threshold, float nms_iou_threshold, bool multi_label);
-
-  // 查看输入是否为动态维度的 不建议直接使用 不同模型的逻辑可能不一致
-  bool IsDynamicInput() const { return is_dynamic_input_; }        
-
-  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape or not.)
-  // YOLOv5 official 'export_onnx.py' script will export dynamic ONNX by default.
-  // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This value will
-  // auto check by fastdeploy after the internal Runtime already initialized. 
-  bool is_dynamic_input_;
+      float conf_threshold, float nms_iou_threshold);
 };
-
-}  // namespace ultralytics
+}  // namespace wongkinyiu
 }  // namespace vision
 }  // namespace fastdeploy

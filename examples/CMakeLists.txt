@@ -14,9 +14,11 @@ function(add_fastdeploy_executable field url model)
 endfunction()
 
 # vision examples
-if (WTIH_VISION_EXAMPLES)
+if (WITH_VISION_EXAMPLES)
   add_fastdeploy_executable(vision ultralytics yolov5)
   add_fastdeploy_executable(vision meituan yolov6)
+  add_fastdeploy_executable(vision wongkinyiu yolov7)
+  add_fastdeploy_executable(vision megvii yolox)
 endif()
 
 # other examples ...

@@ -17,11 +17,11 @@
 int main() {
   namespace vis = fastdeploy::vision;
 
-  std::string model_file = "../resources/models/yolov6s.onnx";
+  std::string model_file = "../resources/models/yolox_s.onnx";
   std::string img_path = "../resources/images/bus.jpg";
-  std::string vis_path  = "../resources/outputs/meituan_yolov6_vis_result.jpg";
+  std::string vis_path  = "../resources/outputs/megvii_yolox_vis_result.jpg";
 
-  auto model = vis::meituan::YOLOv6(model_file);
+  auto model = vis::megvii::YOLOX(model_file);
   if (!model.Initialized()) {
     std::cerr << "Init Failed! Model: " << model_file << std::endl;
     return -1;
