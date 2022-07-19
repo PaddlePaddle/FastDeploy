@@ -40,12 +40,15 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("trt_max_batch_size", &RuntimeOption::trt_max_batch_size)
       .def_readwrite("trt_max_workspace_size",
                      &RuntimeOption::trt_max_workspace_size);
+
+  pybind11::class_<TensorInfo>(m, "TensorInfo")
+      .def_readwrite("name", &TensorInfo::name)
+      .def_readwrite("shape", &TensorInfo::shape)
+      .def_readwrite("dtype", &TensorInfo::dtype);
+
   pybind11::class_<Runtime>(m, "Runtime")
-      .def(pybind11::init([](RuntimeOption& option) {
-        Runtime* runtime = new Runtime();
-        runtime->Init(option);
-        return runtime;
-      }))
+      .def(pybind11::init())
+      .def("init", &Runtime::Init)
       .def("infer", [](Runtime& self,
                        std::map<std::string, pybind11::array>& data) {
         std::vector<FDTensor> inputs(data.size());
@@ -75,7 +78,12 @@ void BindRuntime(pybind11::module& m) {
                  outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
         }
         return results;
-      });
+      })
+     .def("num_inputs", &Runtime::NumInputs)
+     .def("num_outputs", &Runtime::NumOutputs)
+     .def("get_input_info", &Runtime::GetInputInfo)
+     .def("get_output_info", &Runtime::GetOutputInfo)
+     .def_readonly("option", &Runtime::option);
 
   pybind11::enum_<Backend>(m, "Backend", pybind11::arithmetic(),
                            "Backend for inference.")
@@ -102,11 +110,6 @@ void BindRuntime(pybind11::module& m) {
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
-
-  pybind11::class_<TensorInfo>(m, "TensorInfo")
-      .def_readwrite("name", &TensorInfo::name)
-      .def_readwrite("shape", &TensorInfo::shape)
-      .def_readwrite("dtype", &TensorInfo::dtype);
 
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }

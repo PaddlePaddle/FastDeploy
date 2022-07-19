@@ -1,5 +1,6 @@
 # 编译YOLOv5示例
 
+当前支持模型版本为：[YOLOv5 v6.0](https://github.com/ultralytics/yolov5/releases/download/v6.0)
 
 ```
 # 下载和解压预测库

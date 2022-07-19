@@ -43,7 +43,7 @@ else()
 endif(WIN32)
 
 set(PADDLE2ONNX_URL_BASE "https://bj.bcebos.com/paddle2onnx/libs/")
-set(PADDLE2ONNX_VERSION "0.9.9")
+set(PADDLE2ONNX_VERSION "1.0.0rc1")
 if(WIN32)
   set(PADDLE2ONNX_FILE "paddle2onnx-win-x64-${PADDLE2ONNX_VERSION}.zip")
 elseif(APPLE)
