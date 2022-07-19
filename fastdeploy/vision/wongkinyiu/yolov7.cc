@@ -20,9 +20,9 @@ namespace fastdeploy {
 namespace vision {
 namespace wongkinyiu {
 
-void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
-               bool _auto, bool scale_fill = false, bool scale_up = true,
-               int stride = 32) {
+void LetterBox(Mat* mat, const std::vector<int>& size,
+               const std::vector<float>& color, bool _auto,
+               bool scale_fill = false, bool scale_up = true, int stride = 32) {
   float scale =
       std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
