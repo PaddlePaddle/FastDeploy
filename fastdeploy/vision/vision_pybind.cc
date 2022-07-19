@@ -44,19 +44,15 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
-<<<<<<< Updated upstream
-  BindPPCls(m);
-  BindPPDet(m);
-=======
   pybind11::class_<vision::SegmentationResult>(m, "SegmentationResult")
       .def(pybind11::init())
       .def_readwrite("masks", &vision::SegmentationResult::masks)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 
+  BindPPDet(m);
   BindPpClsModel(m);
   BindPpSegModel(m);
->>>>>>> Stashed changes
   BindUltralytics(m);
   BindWongkinyiu(m);
   BindMeituan(m);
