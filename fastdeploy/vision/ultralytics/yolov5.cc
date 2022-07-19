@@ -202,6 +202,11 @@ bool YOLOv5::Postprocess(
       result->scores.push_back(confidence);
     }
   }
+
+  if (result->boxes.size() == 0) {
+    return  true;
+  }
+ 
   utils::NMS(result, nms_iou_threshold);
 
   // scale the boxes to the origin image shape
