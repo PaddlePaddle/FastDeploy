@@ -72,5 +72,25 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+void SegmentationResult::Clear() {
+  std::vector<std::vector<int64_t>>().swap(masks);
+}
+
+void SegmentationResult::Resize(int64_t height, int64_t width) {
+  masks.resize(height, std::vector<int64_t>(width));
+}
+
+std::string SegmentationResult::Str() {
+  std::string out;
+  out = "SegmentationResult(\nImage masks: ";
+  for (size_t i = 0; i < masks.size(); ++i) {
+    for (size_t j = 0; j < masks[0].size(); ++j) {
+      out = out + std::to_string(masks[i][j]) + ", ";
+    }
+  }
+  out += "\n)";
+  return out;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

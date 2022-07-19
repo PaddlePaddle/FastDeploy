@@ -56,5 +56,18 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  // mask
+  std::vector<std::vector<int64_t>> masks;
+
+  ResultType type = ResultType::SEGMENTATION;
+
+  void Clear();
+
+  void Resize(int64_t height, int64_t width);
+
+  std::string Str();
+};
+
 }  // namespace vision
 }  // namespace fastdeploy
