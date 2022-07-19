@@ -53,3 +53,29 @@ class FastDeployModel:
         if self._model is None:
             return False
         return self._model.initialized()
+
+
+class FastDeployRuntime:
+    def __init__(self, runtime_option):
+        self._runtime = C.Runtime();
+        assert self._runtime.init(runtime_option), "Initialize FastDeployRuntime Failed!"
+
+    def infer(self, data):
+        assert isinstance(data, dict), "The input data should be type of dict."
+        return self._runtime.infer(data)
+
+    def num_inputs(self):
+        return self._runtime.num_inputs();
+
+    def num_outputs(self):
+        return self._runtime.num_outputs();
+
+    def get_input_info(self, index):
+        assert isinstance(index, int), "The input parameter index should be type of int."
+        assert index < self.num_inputs(), "The input parameter index:{} should less than number of inputs:{}.".format(index, self.num_inputs)
+        return self._runtime.get_input_info(index)
+
+    def get_output_info(self, index):
+        assert isinstance(index, int), "The input parameter index should be type of int."
+        assert index < self.num_outputs(), "The input parameter index:{} should less than number of outputs:{}.".format(index, self.num_outputs)
+        return self._runtime.get_output_info(index)

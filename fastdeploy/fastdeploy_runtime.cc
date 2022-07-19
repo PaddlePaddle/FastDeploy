@@ -75,8 +75,10 @@ bool ModelFormatCheck(const std::string& model_file,
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.backend == Backend::ORT) {
+    FDASSERT(option.device == Device::CPU || option.device == Device::GPU, "Backend::TRT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
   } else if (option.backend == Backend::TRT) {
+    FDASSERT(option.device == Device::GPU, "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
   } else {
     FDERROR << "Runtime only support Backend::ORT/Backend::TRT as backend now."
