@@ -14,17 +14,19 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPCls(pybind11::module& m) {
-  auto ppcls_module = m.def_submodule("ppcls", "Module to deploy PaddleClas.");
-  pybind11::class_<vision::ppcls::Model, FastDeployModel>(ppcls_module, "Model")
+void BindPPDet(pybind11::module& m) {
+  auto ppdet_module =
+      m.def_submodule("ppdet", "Module to deploy PaddleDetection.");
+  pybind11::class_<vision::ppdet::PPYOLOE, FastDeployModel>(ppdet_module,
+                                                            "PPYOLOE")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
-      .def("predict",
-           [](vision::ppcls::Model& self, pybind11::array& data, int topk = 1) {
-             auto mat = PyArrayToCvMat(data);
-             vision::ClassifyResult res;
-             self.Predict(&mat, &res, topk);
-             return res;
-           });
+      .def("predict", [](vision::ppdet::PPYOLOE& self, pybind11::array& data,
+                         float conf_threshold, float nms_iou_threshold) {
+        auto mat = PyArrayToCvMat(data);
+        vision::DetectionResult res;
+        self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
+        return res;
+      });
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy
