@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import fastdeploy_main as C
 
 
-class YOLOv6(FastDeployModel):
+class YOLOv7(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,18 +26,18 @@ class YOLOv6(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(YOLOv6, self).__init__(runtime_option)
+        super(YOLOv7, self).__init__(runtime_option)
 
-        self._model = C.vision.meituan.YOLOv6(
+        self._model = C.vision.wongkinyiu.YOLOv7(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOv6 initialize failed."
+        assert self.initialized, "YOLOv7 initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟YOLOv6模型有关的属性封装
+    # 一些跟YOLOv7模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):

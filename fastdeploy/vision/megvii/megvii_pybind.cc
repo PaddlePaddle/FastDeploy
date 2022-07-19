@@ -15,27 +15,27 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindMeituan(pybind11::module& m) {
-  auto meituan_module =
-      m.def_submodule("meituan", "https://github.com/meituan/YOLOv6");
-  pybind11::class_<vision::meituan::YOLOv6, FastDeployModel>(
-      meituan_module, "YOLOv6")
+void BindMegvii(pybind11::module& m) {
+  auto megvii_module =
+      m.def_submodule("megvii", "https://github.com/megvii/YOLOX");
+  pybind11::class_<vision::megvii::YOLOX, FastDeployModel>(
+      megvii_module, "YOLOX")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::meituan::YOLOv6& self, pybind11::array& data,
+           [](vision::megvii::YOLOX& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::meituan::YOLOv6::size)
+      .def_readwrite("size", &vision::megvii::YOLOX::size)
       .def_readwrite("padding_value",
-                     &vision::meituan::YOLOv6::padding_value)
-      .def_readwrite("is_mini_pad", &vision::meituan::YOLOv6::is_mini_pad)
-      .def_readwrite("is_no_pad", &vision::meituan::YOLOv6::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::meituan::YOLOv6::is_scale_up)
-      .def_readwrite("stride", &vision::meituan::YOLOv6::stride)
-      .def_readwrite("max_wh", &vision::meituan::YOLOv6::max_wh);
+                     &vision::megvii::YOLOX::padding_value)
+      .def_readwrite("is_decode_exported", 
+                     &vision::megvii::YOLOX::is_decode_exported)
+      .def_readwrite("downsample_strides",
+                     &vision::megvii::YOLOX::downsample_strides)
+      .def_readwrite("max_wh", &vision::megvii::YOLOX::max_wh);
 }
 }  // namespace fastdeploy

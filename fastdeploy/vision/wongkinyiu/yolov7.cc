@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ultralytics/yolov5.h"
+#include "fastdeploy/vision/wongkinyiu/yolov7.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ultralytics {
+namespace wongkinyiu {
 
-void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
-               bool _auto, bool scale_fill = false, bool scale_up = true,
-               int stride = 32) {
+void LetterBox(Mat* mat, const std::vector<int>& size,
+               const std::vector<float>& color, bool _auto,
+               bool scale_fill = false, bool scale_up = true, int stride = 32) {
   float scale =
       std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
@@ -55,7 +55,7 @@ void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
   }
 }
 
-YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
+YOLOv7::YOLOv7(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
@@ -72,7 +72,7 @@ YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool YOLOv5::Initialize() {
+bool YOLOv7::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -81,31 +81,15 @@ bool YOLOv5::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 7680.0;
-  multi_label = true;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-  // Check if the input shape is dynamic after Runtime already initialized, 
-  // Note that, We need to force is_mini_pad 'false' to keep static 
-  // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
-  is_dynamic_input_ = false;
-  auto shape = InputInfoOfRuntime(0).shape;
-  for (int i = 0; i < shape.size(); ++i) {
-    // if height or width is dynamic
-    if (i >= 2 && shape[i] <= 0) {
-      is_dynamic_input_ = true;
-      break;
-    }
-  }
-  if (!is_dynamic_input_) {  
-    is_mini_pad = false;
-  }
   return true;
 }
 
-bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
+bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
   double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
@@ -119,7 +103,7 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-  // yolov5's preprocess steps
+  // yolov7's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
@@ -140,17 +124,13 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOv5::Postprocess(
+bool YOLOv7::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
-    float conf_threshold, float nms_iou_threshold, bool multi_label) {
+    float conf_threshold, float nms_iou_threshold) {
   FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
   result->Clear();
-  if (multi_label) {
-    result->Reserve(infer_result.shape[1] * (infer_result.shape[2] - 5));
-  } else {
-    result->Reserve(infer_result.shape[1]);
-  }
+  result->Reserve(infer_result.shape[1]);
   if (infer_result.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
@@ -159,44 +139,22 @@ bool YOLOv5::Postprocess(
   for (size_t i = 0; i < infer_result.shape[1]; ++i) {
     int s = i * infer_result.shape[2];
     float confidence = data[s + 4];
-    if (multi_label) {
-      for (size_t j = 5; j < infer_result.shape[2]; ++j) {
-        confidence = data[s + 4];
-        float* class_score = data + s + j;
-        confidence *= (*class_score);
-        // filter boxes by conf_threshold
-        if (confidence <= conf_threshold) {
-          continue;
-        }
-        int32_t label_id = std::distance(data + s + 5, class_score);
-
-        // convert from [x, y, w, h] to [x1, y1, x2, y2]
-        result->boxes.emplace_back(std::array<float, 4>{
-            data[s] - data[s + 2] / 2.0f + label_id * max_wh,
-            data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
-            data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
-            data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
-        result->label_ids.push_back(label_id);
-        result->scores.push_back(confidence);
-      }
-    } else {
-      float* max_class_score =
-          std::max_element(data + s + 5, data + s + infer_result.shape[2]);
-      confidence *= (*max_class_score);
-      // filter boxes by conf_threshold
-      if (confidence <= conf_threshold) {
-        continue;
-      }
-      int32_t label_id = std::distance(data + s + 5, max_class_score);
-      // convert from [x, y, w, h] to [x1, y1, x2, y2]
-      result->boxes.emplace_back(std::array<float, 4>{
-          data[s] - data[s + 2] / 2.0f + label_id * max_wh,
-          data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
-          data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
-          data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
-      result->label_ids.push_back(label_id);
-      result->scores.push_back(confidence);
+    float* max_class_score =
+        std::max_element(data + s + 5, data + s + infer_result.shape[2]);
+    confidence *= (*max_class_score);
+    // filter boxes by conf_threshold
+    if (confidence <= conf_threshold) {
+      continue;
     }
+    int32_t label_id = std::distance(data + s + 5, max_class_score);
+    // convert from [x, y, w, h] to [x1, y1, x2, y2]
+    result->boxes.emplace_back(std::array<float, 4>{
+        data[s] - data[s + 2] / 2.0f + label_id * max_wh,
+        data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
+        data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
+        data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
+    result->label_ids.push_back(label_id);
+    result->scores.push_back(confidence);
   }
   utils::NMS(result, nms_iou_threshold);
 
@@ -231,7 +189,7 @@ bool YOLOv5::Postprocess(
   return true;
 }
 
-bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
+bool YOLOv7::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                      float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
@@ -270,7 +228,7 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 #endif
 
   if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
-                   nms_iou_threshold, multi_label)) {
+                   nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
@@ -281,6 +239,6 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace ultralytics
+}  // namespace wongkinyiu
 }  // namespace vision
 }  // namespace fastdeploy

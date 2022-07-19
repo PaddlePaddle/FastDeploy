@@ -17,11 +17,11 @@
 int main() {
   namespace vis = fastdeploy::vision;
 
-  std::string model_file = "../resources/models/yolov6s.onnx";
-  std::string img_path = "../resources/images/bus.jpg";
-  std::string vis_path  = "../resources/outputs/meituan_yolov6_vis_result.jpg";
+  std::string model_file = "../resources/models/yolov7.onnx";
+  std::string img_path = "../resources/images/horses.jpg";
+  std::string vis_path  = "../resources/outputs/wongkinyiu_yolov7_vis_result.jpg";
 
-  auto model = vis::meituan::YOLOv6(model_file);
+  auto model = vis::wongkinyiu::YOLOv7(model_file);
   if (!model.Initialized()) {
     std::cerr << "Init Failed! Model: " << model_file << std::endl;
     return -1;
@@ -29,7 +29,7 @@ int main() {
     std::cout << "Init Done! Model:" << model_file << std::endl; 
   }
   model.EnableDebug();
-  
+
   cv::Mat im = cv::imread(img_path);
   cv::Mat vis_im = im.clone();
 
