@@ -43,7 +43,7 @@ void Visualize::VisDetection(cv::Mat* im, const DetectionResult& result,
     }
     std::string text = id + "," + score;
     int font = cv::FONT_HERSHEY_SIMPLEX;
-    cv::Size text_size = cv::getTextSize(text, font, font_size, 0.5, nullptr);
+    cv::Size text_size = cv::getTextSize(text, font, font_size, 1, nullptr);
     cv::Point origin;
     origin.x = rect.x;
     origin.y = rect.y;
@@ -52,7 +52,7 @@ void Visualize::VisDetection(cv::Mat* im, const DetectionResult& result,
                  text_size.width, text_size.height);
     cv::rectangle(*im, rect, rect_color, line_size);
     cv::putText(*im, text, origin, font, font_size, cv::Scalar(255, 255, 255),
-                0.5);
+                1);
   }
 }
 
