@@ -1,5 +1,6 @@
 # 编译YOLOv6示例
 
+当前支持模型版本为：[YOLOv6 v0.1.0](https://github.com/meituan/YOLOv6/releases/download/0.1.0)
 
 ```
 # 下载和解压预测库
