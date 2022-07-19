@@ -49,7 +49,8 @@ setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
-setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY", "/usr/local/cuda")
+setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
+                                            "/usr/local/cuda")
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, "fastdeploy")
@@ -325,17 +326,32 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy("LICENSE", "fastdeploy")
     depend_libs = list()
 
-    # modify the search path of libraries
-    command = "patchelf --set-rpath '$ORIGIN/libs/' .setuptools-cmake-build/fastdeploy_main.cpython-36m-x86_64-linux-gnu.so"
-    # The sw_64 not suppot patchelf, so we just disable that.
-    if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
-        assert os.system(command) == 0, "patch fastdeploy_main.cpython-36m-x86_64-linux-gnu.so failed, the command: {}".format(command)
+    if platform.system().lower() == "linux":
+        for f in os.listdir(".setuptools-cmake-build"):
+            full_name = os.path.join(".setuptools-cmake-build", f)
+            if not os.path.isfile(full_name):
+                continue
+            if not full_name.count("fastdeploy_main.cpython-"):
+                continue
+            if not full_name.endswith(".so"):
+                continue
+            # modify the search path of libraries
+            command = "patchelf --set-rpath '$ORIGIN/libs/' {}".format(
+                full_name)
+            # The sw_64 not suppot patchelf, so we just disable that.
+            if platform.machine() != 'sw_64' and platform.machine(
+            ) != 'mips64':
+                assert os.system(
+                    command
+                ) == 0, "patch fastdeploy_main.cpython-36m-x86_64-linux-gnu.so failed, the command: {}".format(
+                    command)
 
     for f in os.listdir(".setuptools-cmake-build"):
         if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):
             continue
         if f.count("libfastdeploy") > 0:
-            shutil.copy(os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
+            shutil.copy(
+                os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
     for dirname in os.listdir(".setuptools-cmake-build/third_libs/install"):
         for lib in os.listdir(
                 os.path.join(".setuptools-cmake-build/third_libs/install",
