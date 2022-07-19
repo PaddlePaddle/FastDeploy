@@ -117,11 +117,11 @@ if(ENABLE_TRT_BACKEND)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB})
 
   # copy tensorrt libraries to third lib
-  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
-    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-  endif()
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-  file(COPY ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib" FOLLOW_SYMLINK_CHAIN)
+#  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+#    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+#  endif()
+#  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+#  file(COPY ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib" FOLLOW_SYMLINK_CHAIN)
 endif()
 
 if(ENABLE_VISION)
@@ -278,4 +278,5 @@ if(BUILD_FASTDEPLOY_PYTHON)
                                    ${EXTRA_FLAGS})
     target_compile_options(fastdeploy_main PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
   endif()
+
 endif(BUILD_FASTDEPLOY_PYTHON)
