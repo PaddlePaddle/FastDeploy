@@ -70,7 +70,7 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
   bool Preprocess(Mat* mat, FDTensor* outputs,
-                          std::map<std::string, std::array<float, 2>>* im_info);
+                  std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户
   // infer_result 为后端推理后的输出Tensor
@@ -78,10 +78,17 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  bool Postprocess(
-      FDTensor& infer_result, DetectionResult* result,
-      const std::map<std::string, std::array<float, 2>>& im_info,
-      float conf_threshold, float nms_iou_threshold);
+  bool Postprocess(FDTensor& infer_result, DetectionResult* result,
+                   const std::map<std::string, std::array<float, 2>>& im_info,
+                   float conf_threshold, float nms_iou_threshold);
+
+  // 对图片进行LetterBox处理
+  // mat 为输入图片
+  // size 为输入图片的size
+  void LetterBox(Mat* mat, const std::vector<int>& size,
+                 const std::vector<float>& color, bool _auto,
+                 bool scale_fill = false, bool scale_up = true,
+                 int stride = 32);
 };
 }  // namespace wongkinyiu
 }  // namespace vision
