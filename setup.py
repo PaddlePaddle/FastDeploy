@@ -324,11 +324,18 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy("ThirdPartyNotices.txt", "fastdeploy")
     shutil.copy("LICENSE", "fastdeploy")
     depend_libs = list()
+
+    # modify the search path of libraries
+    command = "patchelf --set-rpath '$ORIGIN/libs/' .setuptools-cmake-build/fastdeploy_main.cpython-36m-x86_64-linux-gnu.so"
+    # The sw_64 not suppot patchelf, so we just disable that.
+    if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
+        assert os.system(command) == 0, "patch fastdeploy_main.cpython-36m-x86_64-linux-gnu.so failed, the command: {}".format(command)
+
     for f in os.listdir(".setuptools-cmake-build"):
         if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):
             continue
         if f.count("libfastdeploy") > 0:
-            depend_libs.append(os.path.join(".setuptools-cmake-build", f))
+            shutil.copy(os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
     for dirname in os.listdir(".setuptools-cmake-build/third_libs/install"):
         for lib in os.listdir(
                 os.path.join(".setuptools-cmake-build/third_libs/install",
