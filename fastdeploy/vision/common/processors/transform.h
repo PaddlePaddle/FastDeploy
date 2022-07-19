@@ -17,6 +17,7 @@
 #include "fastdeploy/vision/common/processors/cast.h"
 #include "fastdeploy/vision/common/processors/center_crop.h"
 #include "fastdeploy/vision/common/processors/color_space_convert.h"
+#include "fastdeploy/vision/common/processors/convert.h"
 #include "fastdeploy/vision/common/processors/hwc2chw.h"
 #include "fastdeploy/vision/common/processors/normalize.h"
 #include "fastdeploy/vision/common/processors/pad.h"

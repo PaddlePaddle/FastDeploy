@@ -87,8 +87,8 @@ bool YOLOv5::Initialize() {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-  // Check if the input shape is dynamic after Runtime already initialized, 
-  // Note that, We need to force is_mini_pad 'false' to keep static 
+  // Check if the input shape is dynamic after Runtime already initialized,
+  // Note that, We need to force is_mini_pad 'false' to keep static
   // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
   is_dynamic_input_ = false;
   auto shape = InputInfoOfRuntime(0).shape;
@@ -99,7 +99,7 @@ bool YOLOv5::Initialize() {
       break;
     }
   }
-  if (!is_dynamic_input_) {  
+  if (!is_dynamic_input_) {
     is_mini_pad = false;
   }
   return true;
@@ -126,8 +126,12 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up,
             stride);
   BGR2RGB::Run(mat);
-  Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-                 std::vector<float>(mat->Channels(), 1.0));
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
+  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
