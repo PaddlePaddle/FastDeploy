@@ -20,6 +20,7 @@ void BindPpClsModel(pybind11::module& m);
 void BindWongkinyiu(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 void BindMeituan(pybind11::module& m);
+void BindMegvii(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -44,6 +45,7 @@ void BindVision(pybind11::module& m) {
   BindUltralytics(m);
   BindWongkinyiu(m);
   BindMeituan(m);
+  BindMegvii(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif  

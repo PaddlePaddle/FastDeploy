@@ -45,7 +45,6 @@ class Normalize : public Processor {
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV_CPU);
-
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;

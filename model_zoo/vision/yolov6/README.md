@@ -1,5 +1,7 @@
 # YOLOv6部署示例
 
+当前支持模型版本为：[YOLOv6 v0.1.0](https://github.com/meituan/YOLOv6/releases/download/0.1.0)
+
 本文档说明如何进行[YOLOv6](https://github.com/meituan/YOLOv6)的快速部署推理。本目录结构如下
 ```
 .

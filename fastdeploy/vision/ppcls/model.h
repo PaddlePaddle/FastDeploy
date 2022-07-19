@@ -16,6 +16,10 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
 
   std::string ModelName() const { return "ppclas-classify"; }
 
+  // TODO(jiangjiajun) Batch is on the way
+  virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
+
+ private:
   bool Initialize();
 
   bool BuildPreprocessPipelineFromConfig();
@@ -25,10 +29,6 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
   bool Postprocess(const FDTensor& infer_result, ClassifyResult* result,
                    int topk = 1);
 
-  // TODO(jiangjiajun) Batch is on the way
-  virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
-
- private:
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
 };
