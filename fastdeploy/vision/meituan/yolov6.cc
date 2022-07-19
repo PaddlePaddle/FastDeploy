@@ -25,14 +25,14 @@ namespace meituan {
 void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
                bool _auto, bool scale_fill = false, bool scale_up = true,
                int stride = 32) {
-  float scale = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()), 
-                         size[0] * 1.0f / static_cast<float>(mat->Width()));       
+  float scale = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
+                         size[0] * 1.0f / static_cast<float>(mat->Width()));
   if (!scale_up) {
     scale = std::min(scale, 1.0f);
   }
 
   int resize_h = int(round(static_cast<float>(mat->Height()) * scale));
-  int resize_w = int(round(static_cast<float>(mat->Width())  * scale));
+  int resize_w = int(round(static_cast<float>(mat->Width()) * scale));
 
   int pad_w = size[0] - resize_w;
   int pad_h = size[1] - resize_h;
@@ -85,13 +85,13 @@ bool YOLOv6::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 4096.0f;
-  
+
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-  // Check if the input shape is dynamic after Runtime already initialized, 
-  // Note that, We need to force is_mini_pad 'false' to keep static 
+  // Check if the input shape is dynamic after Runtime already initialized,
+  // Note that, We need to force is_mini_pad 'false' to keep static
   // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
   is_dynamic_input_ = false;
   auto shape = InputInfoOfRuntime(0).shape;
@@ -102,7 +102,7 @@ bool YOLOv6::Initialize() {
       break;
     }
   }
-  if (!is_dynamic_input_) {  
+  if (!is_dynamic_input_) {
     is_mini_pad = false;
   }
   return true;
@@ -111,15 +111,15 @@ bool YOLOv6::Initialize() {
 bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
-  float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()), 
-                         size[0] * 1.0f / static_cast<float>(mat->Width()));                                          
+  float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
+                         size[0] * 1.0f / static_cast<float>(mat->Width()));
   if (ratio != 1.0) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
     }
     int resize_h = int(round(static_cast<float>(mat->Height()) * ratio));
-    int resize_w = int(round(static_cast<float>(mat->Width())  * ratio));
+    int resize_w = int(round(static_cast<float>(mat->Width()) * ratio));
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
   // yolov6's preprocess steps
@@ -129,8 +129,12 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
   LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up,
             stride);
   BGR2RGB::Run(mat);
-  Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-                 std::vector<float>(mat->Channels(), 1.0));
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
+  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
