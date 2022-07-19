@@ -23,7 +23,7 @@ YOLOv5模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 >
 > **参数**
 >
-> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，RGB格式
+> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
@@ -49,9 +49,9 @@ YOLOv5模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(Frontend): 模型格式
 
-#### predict函数
+#### Predict函数
 > ```
-> YOLOv5::predict(cv::Mat* im, DetectionResult* result,
+> YOLOv5::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -59,7 +59,7 @@ YOLOv5模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 >
 > **参数**
 >
-> > * **im**: 输入图像，注意需为HWC，RGB格式
+> > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值

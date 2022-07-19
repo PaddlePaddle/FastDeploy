@@ -15,5 +15,9 @@ from __future__ import absolute_import
 
 from . import evaluation
 from . import ppcls
+from . import ppdet
 from . import ultralytics
+from . import meituan
+from . import megvii
 from . import visualize
+from . import wongkinyiu

@@ -14,7 +14,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPpClsModel(pybind11::module& m) {
+void BindPPCls(pybind11::module& m) {
   auto ppcls_module = m.def_submodule("ppcls", "Module to deploy PaddleClas.");
   pybind11::class_<vision::ppcls::Model, FastDeployModel>(ppcls_module, "Model")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
