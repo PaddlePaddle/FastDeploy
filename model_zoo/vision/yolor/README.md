@@ -1,7 +1,7 @@
 # 编译YOLOR示例
 
 当前支持模型版本为：[YOLOR weights](https://github.com/WongKinYiu/yolor/releases/tag/weights)
-(tips: 如果使用 `git clone` 的方式下载仓库代码，请将分支切换(checkout)到 `paper` 分支).
+(tips: 如果使用 `git clone` 的方式下载仓库代码，请将分支切换`checkout`到 `paper` 分支).
 
 本文档说明如何进行[YOLOR](https://github.com/WongKinYiu/yolor)的快速部署推理。本目录结构如下
 
