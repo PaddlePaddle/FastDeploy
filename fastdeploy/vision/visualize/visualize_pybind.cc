@@ -27,10 +27,11 @@ void BindVisualize(pybind11::module& m) {
                   })
       .def_static("vis_segmentation", [](pybind11::array& im_data,
                                          vision::SegmentationResult& result,
-                                         cv::Mat vis_img,
+                                         pybind11::array& vis_im_data,
                                          const int& num_classes) {
         cv::Mat im = PyArrayToCvMat(im_data);
-        vision::Visualize::VisSegmentation(im, result, &vis_img, num_classes);
+        cv::Mat vis_im = PyArrayToCvMat(vis_im_data);
+        vision::Visualize::VisSegmentation(im, result, &vis_im, num_classes);
       });
 }
 }  // namespace fastdeploy
