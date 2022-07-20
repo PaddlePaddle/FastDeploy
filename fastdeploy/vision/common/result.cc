@@ -82,13 +82,15 @@ void SegmentationResult::Resize(int64_t height, int64_t width) {
 
 std::string SegmentationResult::Str() {
   std::string out;
-  out = "SegmentationResult(\nImage masks: ";
-  for (size_t i = 0; i < masks.size(); ++i) {
-    for (size_t j = 0; j < masks[0].size(); ++j) {
+  out = "SegmentationResult Image masks 10 rows x 10 cols: \n";
+  for (size_t i = 0; i < 10; ++i) {
+    out += "[";
+    for (size_t j = 0; j < 10; ++j) {
       out = out + std::to_string(masks[i][j]) + ", ";
     }
+    out += ".....]\n";
   }
-  out += "\n)";
+  out += "...........\n";
   return out;
 }
 

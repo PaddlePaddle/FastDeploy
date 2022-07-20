@@ -53,6 +53,12 @@ bool Model::BuildPreprocessPipelineFromConfig() {
       if (op["type"].as<std::string>() == "Normalize") {
         std::vector<float> mean = {0.5, 0.5, 0.5};
         std::vector<float> std = {0.5, 0.5, 0.5};
+        if (op["mean"]) {
+          mean = op["mean"].as<std::vector<float>>();
+        }
+        if (op["std"]) {
+          std = op["std"].as<std::vector<float>>();
+        }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
 
       } else if (op["type"].as<std::string>() == "Resize") {

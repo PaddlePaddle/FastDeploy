@@ -19,3 +19,7 @@ from ... import fastdeploy_main as C
 
 def vis_detection(im_data, det_result, line_size=1, font_size=0.5):
     C.vision.Visualize.vis_detection(im_data, det_result, line_size, font_size)
+
+
+def vis_segmentation(im_data, seg_result, vis_img, num_classes=19):
+    C.vision.Visualize.vis_segmentation(im, seg_result, vis_img, num_classes)
