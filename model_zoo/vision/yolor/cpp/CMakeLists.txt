@@ -1,4 +1,4 @@
-PROJECT(ppyoloe_demo C CXX)
+PROJECT(yolor_demo C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
 
 # 在低版本ABI环境中，通过如下代码进行兼容性编译
@@ -12,6 +12,6 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(ppyoloe_demo ${PROJECT_SOURCE_DIR}/ppyoloe.cc)
+add_executable(yolor_demo ${PROJECT_SOURCE_DIR}/yolor.cc)
 # 添加FastDeploy库依赖
-target_link_libraries(ppyoloe_demo ${FASTDEPLOY_LIBS})
+target_link_libraries(yolor_demo ${FASTDEPLOY_LIBS})

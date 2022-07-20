@@ -16,28 +16,18 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-
-  std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
-  std::string params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
-  std::string config_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  std::string img_path = "000000014439_640x640.jpg";
-  std::string vis_path = "vis.jpeg";
-
-  auto model = vis::ppdet::PPYOLOE(model_file, params_file, config_file);
+  auto model = vis::wongkinyiu::YOLOR("yolor.onnx");
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;
   }
-
-  cv::Mat im = cv::imread(img_path);
+  cv::Mat im = cv::imread("horses.jpg");
   cv::Mat vis_im = im.clone();
 
   vis::DetectionResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Prediction Failed." << std::endl;
     return -1;
-  } else {
-    std::cout << "Prediction Done!" << std::endl;
   }
 
   // 输出预测框结果
@@ -45,7 +35,6 @@ int main() {
 
   // 可视化预测结果
   vis::Visualize::VisDetection(&vis_im, res);
-  cv::imwrite(vis_path, vis_im);
-  std::cout << "Detect Done! Saved: " << vis_path << std::endl;
+  cv::imwrite("vis_result.jpg", vis_im);
   return 0;
 }

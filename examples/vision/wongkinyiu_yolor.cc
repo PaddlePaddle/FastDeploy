@@ -17,17 +17,18 @@
 int main() {
   namespace vis = fastdeploy::vision;
 
-  std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
-  std::string params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
-  std::string config_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  std::string img_path = "test.jpeg";
-  std::string vis_path = "vis.jpeg";
+  std::string model_file = "../resources/models/yolor.onnx";
+  std::string img_path = "../resources/images/horses.jpg";
+  std::string vis_path = "../resources/outputs/wongkinyiu_yolor_vis_result.jpg";
 
-  auto model = vis::ppdet::PPYOLOE(model_file, params_file, config_file);
+  auto model = vis::wongkinyiu::YOLOR(model_file);
   if (!model.Initialized()) {
-    std::cerr << "Init Failed." << std::endl;
+    std::cerr << "Init Failed! Model: " << model_file << std::endl;
     return -1;
+  } else {
+    std::cout << "Init Done! Model:" << model_file << std::endl;
   }
+  model.EnableDebug();
 
   cv::Mat im = cv::imread(img_path);
   cv::Mat vis_im = im.clone();

@@ -156,7 +156,7 @@ def decompress(fname):
 
 def url2dir(url, path, rename=None):
     full_name = download(url, path, rename, show_progress=True)
-    print("File is donwloaded, now extracting...")
+    print("SDK is donwloaded, now extracting...")
     if url.count(".tgz") > 0 or url.count(".tar") > 0 or url.count("zip") > 0:
         return decompress(full_name)
 

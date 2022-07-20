@@ -326,25 +326,14 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy("LICENSE", "fastdeploy")
     depend_libs = list()
 
-    if platform.system().lower() == "linux":
-        for f in os.listdir(".setuptools-cmake-build"):
-            full_name = os.path.join(".setuptools-cmake-build", f)
-            if not os.path.isfile(full_name):
-                continue
-            if not full_name.count("fastdeploy_main.cpython-"):
-                continue
-            if not full_name.endswith(".so"):
-                continue
-            # modify the search path of libraries
-            command = "patchelf --set-rpath '$ORIGIN/libs/' {}".format(
-                full_name)
-            # The sw_64 not suppot patchelf, so we just disable that.
-            if platform.machine() != 'sw_64' and platform.machine(
-            ) != 'mips64':
-                assert os.system(
-                    command
-                ) == 0, "patch fastdeploy_main.cpython-36m-x86_64-linux-gnu.so failed, the command: {}".format(
-                    command)
+    # modify the search path of libraries
+    command = "patchelf --set-rpath '$ORIGIN/libs/' .setuptools-cmake-build/fastdeploy_main.cpython-37m-x86_64-linux-gnu.so"
+    # The sw_64 not suppot patchelf, so we just disable that.
+    if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
+        assert os.system(
+            command
+        ) == 0, "patch fastdeploy_main.cpython-37m-x86_64-linux-gnu.so failed, the command: {}".format(
+            command)
 
     for f in os.listdir(".setuptools-cmake-build"):
         if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):

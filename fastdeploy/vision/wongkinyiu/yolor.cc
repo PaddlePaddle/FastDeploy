@@ -12,27 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/meituan/yolov6.h"
+#include "fastdeploy/vision/wongkinyiu/yolor.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
-
 namespace vision {
+namespace wongkinyiu {
 
-namespace meituan {
-
-void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
-               bool _auto, bool scale_fill = false, bool scale_up = true,
-               int stride = 32) {
-  float scale = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
-                         size[0] * 1.0f / static_cast<float>(mat->Width()));
+void YOLOR::LetterBox(Mat* mat, const std::vector<int>& size,
+                      const std::vector<float>& color, bool _auto,
+                      bool scale_fill, bool scale_up, int stride) {
+  float scale =
+      std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
     scale = std::min(scale, 1.0f);
   }
 
-  int resize_h = int(round(static_cast<float>(mat->Height()) * scale));
-  int resize_w = int(round(static_cast<float>(mat->Width()) * scale));
+  int resize_h = int(round(mat->Height() * scale));
+  int resize_w = int(round(mat->Width() * scale));
 
   int pad_w = size[0] - resize_w;
   int pad_h = size[1] - resize_h;
@@ -45,9 +43,7 @@ void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
     resize_h = size[1];
     resize_w = size[0];
   }
-  if (resize_h != mat->Height() || resize_w != mat->Width()) {
-    Resize::Run(mat, resize_w, resize_h);
-  }
+  Resize::Run(mat, resize_w, resize_h);
   if (pad_h > 0 || pad_w > 0) {
     float half_h = pad_h * 1.0 / 2;
     int top = int(round(half_h - 0.1));
@@ -59,9 +55,8 @@ void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
   }
 }
 
-YOLOv6::YOLOv6(const std::string& model_file, const std::string& params_file,
-               const RuntimeOption& custom_option,
-               const Frontend& model_format) {
+YOLOR::YOLOR(const std::string& model_file, const std::string& params_file,
+             const RuntimeOption& custom_option, const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
@@ -76,7 +71,7 @@ YOLOv6::YOLOv6(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool YOLOv6::Initialize() {
+bool YOLOR::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -84,50 +79,35 @@ bool YOLOv6::Initialize() {
   is_no_pad = false;
   is_scale_up = false;
   stride = 32;
-  max_wh = 4096.0f;
+  max_wh = 7680.0;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-  // Check if the input shape is dynamic after Runtime already initialized,
-  // Note that, We need to force is_mini_pad 'false' to keep static
-  // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
-  is_dynamic_input_ = false;
-  auto shape = InputInfoOfRuntime(0).shape;
-  for (int i = 0; i < shape.size(); ++i) {
-    // if height or width is dynamic
-    if (i >= 2 && shape[i] <= 0) {
-      is_dynamic_input_ = true;
-      break;
-    }
-  }
-  if (!is_dynamic_input_) {
-    is_mini_pad = false;
-  }
   return true;
 }
 
-bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
-                        std::map<std::string, std::array<float, 2>>* im_info) {
+bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
+                       std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
-  float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
-                         size[0] * 1.0f / static_cast<float>(mat->Width()));
+  double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
+                                            static_cast<float>(mat->Width()));
   if (ratio != 1.0) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
     }
-    int resize_h = int(round(static_cast<float>(mat->Height()) * ratio));
-    int resize_w = int(round(static_cast<float>(mat->Width()) * ratio));
+    int resize_h = int(mat->Height() * ratio);
+    int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-  // yolov6's preprocess steps
+  // yolor's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up,
-            stride);
+  YOLOR::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+                   is_scale_up, stride);
   BGR2RGB::Run(mat);
   Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
                  std::vector<float>(mat->Channels(), 1.0));
@@ -143,7 +123,7 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOv6::Postprocess(
+bool YOLOR::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -200,16 +180,16 @@ bool YOLOv6::Postprocess(
     result->boxes[i][1] = std::max((result->boxes[i][1] - pad_h) / scale, 0.0f);
     result->boxes[i][2] = std::max((result->boxes[i][2] - pad_w) / scale, 0.0f);
     result->boxes[i][3] = std::max((result->boxes[i][3] - pad_h) / scale, 0.0f);
-    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w - 1.0f);
-    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h - 1.0f);
-    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w - 1.0f);
-    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
+    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w);
+    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h);
+    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w);
+    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h);
   }
   return true;
 }
 
-bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
-                     float nms_iou_threshold) {
+bool YOLOR::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
+                    float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif
@@ -258,6 +238,6 @@ bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace meituan
+}  // namespace wongkinyiu
 }  // namespace vision
 }  // namespace fastdeploy

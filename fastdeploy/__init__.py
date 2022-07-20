@@ -17,7 +17,7 @@ from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, RuntimeO
 from .fastdeploy_runtime import *
 from . import fastdeploy_main as C
 from . import vision
-from .download import download, download_and_decompress
+from .download import download
 
 
 def TensorInfoStr(tensor_info):
