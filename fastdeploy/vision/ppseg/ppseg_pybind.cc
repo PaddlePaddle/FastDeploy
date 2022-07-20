@@ -14,7 +14,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPpSegModel(pybind11::module& m) {
+void BindPPSeg(pybind11::module& m) {
   auto ppseg_module =
       m.def_submodule("ppseg", "Module to deploy PaddleSegmentation.");
   pybind11::class_<vision::ppseg::Model, FastDeployModel>(ppseg_module, "Model")

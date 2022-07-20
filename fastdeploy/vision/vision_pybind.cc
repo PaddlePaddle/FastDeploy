@@ -49,8 +49,8 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 
-  BindPPDet(m);
   BindPPCls(m);
+  BindPPDet(m);
   BindPPSeg(m);
   BindUltralytics(m);
   BindWongkinyiu(m);
