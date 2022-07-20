@@ -1,7 +1,7 @@
 # 编译YOLOR示例
 
 当前支持模型版本为：[YOLOR weights](https://github.com/WongKinYiu/yolor/releases/tag/weights)
-
+(tips: 如果使用 `git clone` 的方式下载仓库代码，请将分支切换(checkout)到 `paper` 分支).
 ## 获取ONNX文件
 
 - 手动获取
