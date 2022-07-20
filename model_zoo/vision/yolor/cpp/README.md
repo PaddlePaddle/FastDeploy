@@ -6,7 +6,7 @@
 
 - 手动获取
 
-  访问[YOLOR](https://github.com/WongKinYiu/yolor)官方github库，按照指引下载安装，下载`yolor.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。
+  访问[YOLOR](https://github.com/WongKinYiu/yolor)官方github库，按照指引下载安装，下载`yolor.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。如果您在导出的`onnx`模型出现精度不达标或者是数据维度的问题，可以参考[@DefTruth](https://github.com/DefTruth/lite.ai.toolkit/blob/main/docs/ort/ort_yolor.zh.md)的解决办法
 
   ```
   #下载yolor模型文件
@@ -14,8 +14,6 @@
 
   # 导出onnx格式文件
   python models/export.py  --weights PATH/TO/yolor-xx-xx-xx.pt --img-size 640
-
-  # 如果您在导出的`onnx`模型出现精度不达标或者是数据维度的问题，可以参考 [DefTruth](https://github.com/DefTruth/lite.ai.toolkit/blob/main/docs/ort/ort_yolor.zh.md) 的解决办法
 
   # 移动onnx文件到demo目录
   cp PATH/TO/yolor.onnx PATH/TO/model_zoo/vision/yolor/
