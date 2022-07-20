@@ -129,8 +129,12 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
   LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up,
             stride);
   BGR2RGB::Run(mat);
-  Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-                 std::vector<float>(mat->Channels(), 1.0));
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
+  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),

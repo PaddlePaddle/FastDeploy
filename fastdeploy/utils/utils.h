@@ -65,6 +65,10 @@ class FASTDEPLOY_DECL FDLogger {
   bool verbose_ = true;
 };
 
+#ifndef __REL_FILE__
+#define __REL_FILE__ __FILE__
+#endif
+
 #define FDERROR                                                \
   FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
                             << ")::" << __FUNCTION__ << "\t"
