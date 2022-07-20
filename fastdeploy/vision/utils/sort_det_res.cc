@@ -70,7 +70,7 @@ void SortDetectionResult(DetectionResult* result) {
   size_t low = 0;
   size_t high = result->scores.size();
   if (high == 0) {
-    return;
+      return;
   }
   high = high - 1;
   MergeSort(result, low, high);

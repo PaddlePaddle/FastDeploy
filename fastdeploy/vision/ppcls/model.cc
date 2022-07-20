@@ -148,6 +148,6 @@ bool Model::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   return true;
 }
 
-}  // namespace ppcls
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace ppcls
+} // namespace vision
+} // namespace fastdeploy
