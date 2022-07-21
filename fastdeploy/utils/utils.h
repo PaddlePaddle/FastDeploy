@@ -26,10 +26,10 @@
 #define FASTDEPLOY_DECL __declspec(dllexport)
 #else
 #define FASTDEPLOY_DECL __declspec(dllimport)
-#endif // FASTDEPLOY_LIB
+#endif  // FASTDEPLOY_LIB
 #else
 #define FASTDEPLOY_DECL __attribute__((visibility("default")))
-#endif // _WIN32
+#endif  // _WIN32
 
 namespace fastdeploy {
 
@@ -42,7 +42,8 @@ class FASTDEPLOY_DECL FDLogger {
   }
   explicit FDLogger(bool verbose, const std::string& prefix = "[FastDeploy]");
 
-  template <typename T> FDLogger& operator<<(const T& val) {
+  template <typename T>
+  FDLogger& operator<<(const T& val) {
     if (!verbose_) {
       return *this;
     }
@@ -72,10 +73,14 @@ class FASTDEPLOY_DECL FDLogger {
   FDLogger(true, "[ERROR]")                                                    \
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
-#define FDASSERT(condition, message)                                           \
-  if (!(condition)) {                                                          \
-    FDERROR << message << std::endl;                                           \
-    std::abort();                                                              \
+#define FDERROR                                                \
+  FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
+                            << ")::" << __FUNCTION__ << "\t"
+
+#define FDASSERT(condition, message) \
+  if (!(condition)) {                \
+    FDERROR << message << std::endl; \
+    std::abort();                    \
   }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
