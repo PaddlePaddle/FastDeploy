@@ -21,6 +21,7 @@
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/rangilyu/nanodet_plus.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
+#include "fastdeploy/vision/wongkinyiu/yolor.h"
 #include "fastdeploy/vision/wongkinyiu/yolov7.h"
 #endif
 
