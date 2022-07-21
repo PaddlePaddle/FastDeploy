@@ -289,3 +289,10 @@ if(BUILD_FASTDEPLOY_PYTHON)
   endif()
 
 endif(BUILD_FASTDEPLOY_PYTHON)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.4.0")
+    string(STRIP "${CMAKE_CXX_COMPILER_VERSION}" CMAKE_CXX_COMPILER_VERSION)
+    message(WARNING "[WARNING] FastDeploy require g++ version >= 5.4.0, but now your g++ version is ${CMAKE_CXX_COMPILER_VERSION}, this may cause failure! Use -DCMAKE_CXX_COMPILER to define path of your compiler.")
+  endif()
+endif()
