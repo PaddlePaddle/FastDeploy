@@ -5,17 +5,8 @@ import tarfile
 # 下载模型和测试图片
 model_url = "https://github.com/felixhjh/Fastdeploy-Models/raw/main/unet_Cityscapes.tar.gz"
 test_jpg_url = "https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png"
-fd.download(model_url, ".", show_progress=True)
+fd.download_and_decompress(model_url, ".")
 fd.download(test_jpg_url, ".", show_progress=True)
-
-try:
-    tar = tarfile.open("unet_Cityscapes.tar.gz", "r:gz")
-    file_names = tar.getnames()
-    for file_name in file_names:
-        tar.extract(file_name, ".")
-    tar.close()
-except Exception as e:
-    raise Exception(e)
 
 # 加载模型
 model = fd.vision.ppseg.Model("./unet_Cityscapes/model.pdmodel",
