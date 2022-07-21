@@ -20,9 +20,9 @@ namespace fastdeploy {
 namespace vision {
 namespace wongkinyiu {
 
-void LetterBox(Mat* mat, const std::vector<int>& size,
-               const std::vector<float>& color, bool _auto,
-               bool scale_fill = false, bool scale_up = true, int stride = 32) {
+void YOLOv7::LetterBox(Mat* mat, const std::vector<int>& size,
+                       const std::vector<float>& color, bool _auto,
+                       bool scale_fill, bool scale_up, int stride) {
   float scale =
       std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
@@ -107,8 +107,8 @@ bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up,
-            stride);
+  YOLOv7::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+                    is_scale_up, stride);
   BGR2RGB::Run(mat);
   Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
                  std::vector<float>(mat->Channels(), 1.0));
