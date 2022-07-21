@@ -22,6 +22,10 @@
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
 #endif
 
+#ifdef ENABLE_PADDLE_BACKEND
+#include "fastdeploy/backends/paddle/paddle_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -31,6 +35,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_TRT_BACKEND
   backends.push_back(Backend::TRT);
+#endif
+#ifdef ENABLE_PADDLE_BACKEND
+  backends.push_back(Backend::PDINFER);
 #endif
   return backends;
 }
@@ -43,6 +50,26 @@ bool IsBackendAvailable(const Backend& backend) {
     }
   }
   return false;
+}
+
+std::string Str(Backend& b) {
+  if (b == Backend::ORT) {
+    return "Backend::ORT";
+  } else if (b == Backend::TRT) {
+    return "Backend::TRT";
+  } else if (b == Backend::PDINFER) {
+    return "Backend::PDINFER";
+  }
+  return "UNKNOWN-Backend";
+}
+
+std::string Str(Frontend& f) {
+  if (f == Frontend::PADDLE) {
+    return "Frontend::PADDLE";
+  } else if (f == Frontend::ONNX) {
+    return "Frontend::ONNX";
+  }
+  return "UNKNOWN-Frontend";
 }
 
 bool ModelFormatCheck(const std::string& model_file,
@@ -75,13 +102,20 @@ bool ModelFormatCheck(const std::string& model_file,
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.backend == Backend::ORT) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::GPU, "Backend::TRT only supports Device::CPU/Device::GPU.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
+             "Backend::TRT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
   } else if (option.backend == Backend::TRT) {
-    FDASSERT(option.device == Device::GPU, "Backend::TRT only supports Device::GPU.");
+    FDASSERT(option.device == Device::GPU,
+             "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
+  } else if (option.backend == Backend::PDINFER) {
+    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
+             "Backend::TRT only supports Device::CPU/Device::GPU.");
+    CreatePaddleBackend();
   } else {
-    FDERROR << "Runtime only support Backend::ORT/Backend::TRT as backend now."
+    FDERROR << "Runtime only support "
+               "Backend::ORT/Backend::TRT/Backend::PDINFER as backend now."
             << std::endl;
     return false;
   }
@@ -99,6 +133,25 @@ TensorInfo Runtime::GetOutputInfo(int index) {
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
   return backend_->Infer(input_tensors, output_tensors);
+}
+
+void Runtime::CreatePaddleBackend() {
+#ifdef ENABLE_PADDLE_BACKEND
+  auto pd_option = PaddleBackendOption();
+  pd_option.enable_mkldnn = option.pd_enable_mkldnn;
+  pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
+  FDASSERT(option.model_format == Frontend::PADDLE,
+           "PaddleBackend only support model format of Frontend::PADDLE.");
+  backend_ = new PaddleBackend();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(backend_);
+  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
+                                          pd_option),
+           "Load model from Paddle failed while initliazing PaddleBackend.");
+#else
+  FDASSERT(false,
+           "OrtBackend is not available, please compiled with "
+           "ENABLE_ORT_BACKEND=ON.");
+#endif
 }
 
 void Runtime::CreateOrtBackend() {
@@ -125,8 +178,9 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OrtBackend is not available, please compiled with "
-                  "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false,
+           "OrtBackend is not available, please compiled with "
+           "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -158,8 +212,9 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false, "TrtBackend is not available, please compiled with "
-                  "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false,
+           "TrtBackend is not available, please compiled with "
+           "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

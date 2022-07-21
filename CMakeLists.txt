@@ -22,6 +22,7 @@ include(external/utils.cmake)
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -o3 -fopenmp -std=c++11")
 endif(NOT MSVC)
 
 #############################CMAKE FOR FASTDEPLOY################################
@@ -29,6 +30,7 @@ option(ENABLE_PADDLE_FRONTEND "if to enable PaddlePaddle frontend to support loa
 option(WITH_GPU "if WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
 option(ENABLE_ORT_BACKEND "if to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "if to enable tensorrt backend." OFF)
+option(ENABLE_PADDLE_BACKEND "if to enable paddle backend." OFF)
 option(CUDA_DIRECTORY "if build tensorrt backend, need to define path of cuda library.")
 option(TRT_DIRECTORY "if build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "if to enable vision models usage." OFF)
@@ -39,7 +41,7 @@ option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow proces
 option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
-option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
+option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
 
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
@@ -63,10 +65,11 @@ endif()
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/*.cc)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/backends/ort/*.cc)
+file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -85,6 +88,13 @@ if(ENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
   include(external/onnxruntime.cmake)
   list(APPEND DEPEND_LIBS external_onnxruntime)
+endif()
+
+if(ENABLE_PADDLE_BACKEND)
+  add_definitions(-DENABLE_PADDLE_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
+  include(external/paddle_inference.cmake)
+  list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
 endif()
 
 if(WITH_GPU)
