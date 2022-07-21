@@ -23,8 +23,8 @@ namespace fastdeploy {
 enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
 enum FASTDEPLOY_DECL Frontend { PADDLE, ONNX };
 
-FASTDEPLOY_DECL std::string Str(Backend& b);
-FASTDEPLOY_DECL std::string Str(Frontend& f);
+FASTDEPLOY_DECL std::string Str(const Backend& b);
+FASTDEPLOY_DECL std::string Str(const Frontend& f);
 FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);

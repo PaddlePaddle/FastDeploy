@@ -85,10 +85,7 @@ bool FastDeployModel::CreateCpuBackend() {
 
   for (size_t i = 0; i < valid_cpu_backends.size(); ++i) {
     if (!IsBackendAvailable(valid_cpu_backends[i])) {
-      FDERROR << Str(valid_cpu_backends[i])
-              << " is not complied with current FastDeploy library."
-              << std::endl;
-      return false;
+      continue;
     }
     runtime_option.backend = valid_cpu_backends[i];
     runtime_ = new Runtime();
@@ -111,12 +108,9 @@ bool FastDeployModel::CreateGpuBackend() {
 
   for (size_t i = 0; i < valid_gpu_backends.size(); ++i) {
     if (!IsBackendAvailable(valid_gpu_backends[i])) {
-      FDERROR << Str(valid_gpu_backends[i])
-              << " is not complied with current FastDeploy library."
-              << std::endl;
-      return false;
+      continue;
     }
-    runtime_option.backend = valid_cpu_backends[i];
+    runtime_option.backend = valid_gpu_backends[i];
     runtime_ = new Runtime();
     if (!runtime_->Init(runtime_option)) {
       return false;

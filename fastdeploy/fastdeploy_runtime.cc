@@ -52,7 +52,7 @@ bool IsBackendAvailable(const Backend& backend) {
   return false;
 }
 
-std::string Str(Backend& b) {
+std::string Str(const Backend& b) {
   if (b == Backend::ORT) {
     return "Backend::ORT";
   } else if (b == Backend::TRT) {
@@ -63,7 +63,7 @@ std::string Str(Backend& b) {
   return "UNKNOWN-Backend";
 }
 
-std::string Str(Frontend& f) {
+std::string Str(const Frontend& f) {
   if (f == Frontend::PADDLE) {
     return "Frontend::PADDLE";
   } else if (f == Frontend::ONNX) {
