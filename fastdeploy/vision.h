@@ -19,6 +19,7 @@
 #include "fastdeploy/vision/meituan/yolov6.h"
 #include "fastdeploy/vision/ppcls/model.h"
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/ppseg/model.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
 #include "fastdeploy/vision/wongkinyiu/yolor.h"
 #include "fastdeploy/vision/wongkinyiu/yolov7.h"
