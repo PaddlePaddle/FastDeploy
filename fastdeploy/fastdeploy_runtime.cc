@@ -101,6 +101,18 @@ bool ModelFormatCheck(const std::string& model_file,
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
+  if (option.backend == Backend::UNKNOWN) {
+    if (IsBackendAvailable(Backend::ORT)) {
+      option.backend = Backend::ORT;
+    } else if (IsBackendAvailable(Backend::PDINFER)) {
+      option.backend = Backend::PDINFER;
+    } else {
+      FDERROR << "Please define backend in RuntimeOption, current it's "
+                 "Backend::UNKNOWN."
+              << std::endl;
+      return false;
+    }
+  }
   if (option.backend == Backend::ORT) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
@@ -140,6 +152,8 @@ void Runtime::CreatePaddleBackend() {
   auto pd_option = PaddleBackendOption();
   pd_option.enable_mkldnn = option.pd_enable_mkldnn;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
+  pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
+  pd_option.gpu_id = option.device_id;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
   backend_ = new PaddleBackend();

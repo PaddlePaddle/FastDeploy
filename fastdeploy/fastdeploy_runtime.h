@@ -33,7 +33,7 @@ bool ModelFormatCheck(const std::string& model_file,
                       const Frontend& model_format);
 
 struct FASTDEPLOY_DECL RuntimeOption {
-  Backend backend = Backend::ORT;
+  Backend backend = Backend::UNKNOWN;
 
   // for cpu inference and preprocess
   int cpu_thread_num = 8;
