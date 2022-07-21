@@ -27,4 +27,4 @@ void BindPPCls(pybind11::module& m) {
              return res;
            });
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

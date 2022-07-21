@@ -21,16 +21,16 @@ namespace fastdeploy {
 namespace vision {
 namespace wongkinyiu {
 
-class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
+class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  YOLOv7(const std::string& model_file, const std::string& params_file = "",
-         const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::ONNX);
+  YOLOR(const std::string& model_file, const std::string& params_file = "",
+        const RuntimeOption& custom_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  virtual std::string ModelName() const { return "WongKinYiu/yolov7"; }
+  virtual std::string ModelName() const { return "WongKinYiu/yolor"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
