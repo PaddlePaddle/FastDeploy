@@ -27,10 +27,10 @@
   wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 
   # 导出onnx格式文件
-  python models/export.py --grid --dynamic --weights PATH/TO/yolo7.pt
+  python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
   # 移动onnx文件到demo目录
-  cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolov7/
+  cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
   ```
 
 ## 安装FastDeploy

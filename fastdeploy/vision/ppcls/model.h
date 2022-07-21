@@ -46,6 +46,6 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
 };
-} // namespace ppcls
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace ppcls
+}  // namespace vision
+}  // namespace fastdeploy
