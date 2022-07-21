@@ -82,17 +82,18 @@ bool Model::Preprocess(Mat* mat, FDTensor* output) {
       return false;
     }
   }
-  int channel = mat->Channels();
-  int width = mat->Width();
-  int height = mat->Height();
+  mat->ShareWithTensor(output);
+  output->shape.insert(output->shape.begin(), 1);
   output->name = InputInfoOfRuntime(0).name;
-  output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
-                          mat->GetCpuMat()->ptr());
   return true;
 }
 
 bool Model::Postprocess(const FDTensor& infer_result,
                         SegmentationResult* result) {
+  FDASSERT(infer_result.dtype == FDDataType::INT64,
+           "Require the data type of output is int64, but now it's " +
+               Str(const_cast<fastdeploy::FDDataType&>(infer_result.dtype)) +
+               ".");
   result->Clear();
   std::vector<int64_t> output_shape = infer_result.shape;
   int out_num = std::accumulate(output_shape.begin(), output_shape.end(), 1,

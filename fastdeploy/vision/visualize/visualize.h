@@ -29,7 +29,7 @@ class FASTDEPLOY_DECL Visualize {
                            int line_size = 2, float font_size = 0.5f);
   static void VisSegmentation(const cv::Mat& im,
                               const SegmentationResult& result,
-                              cv::Mat* vis_img, const int& num_classes = 19);
+                              cv::Mat* vis_img, const int& num_classes = 1000);
 };
 
 }  // namespace vision
