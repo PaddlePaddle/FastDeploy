@@ -56,6 +56,6 @@ void Visualize::VisDetection(cv::Mat* im, const DetectionResult& result,
   }
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
 #endif
