@@ -1,20 +1,22 @@
 # 编译YOLOR示例
 
-当前支持模型版本为：[YOLOR v0.1](https://github.com/WongKinYiu/yolor/releases/tag/weights)
-
+当前支持模型版本为：[YOLOR weights](https://github.com/WongKinYiu/yolor/releases/tag/weights)
+(tips: 如果使用 `git clone` 的方式下载仓库代码，请将分支切换(checkout)到 `paper` 分支).
 ## 获取ONNX文件
 
 - 手动获取
 
-  访问[YOLOR](https://github.com/WongKinYiu/yolor/releases/tag/weights)官方github库，按照指引下载安装，下载`yolor.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。
+  访问[YOLOR](https://github.com/WongKinYiu/yolor)官方github库，按照指引下载安装，下载`yolor.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。如果您导出的`onnx`模型出现精度不达标或者是数据维度的问题，可以参考[yolor#32](https://github.com/WongKinYiu/yolor/issues/32)的解决办法
 
   ```
   #下载yolor模型文件
-  wget https://github.com/WongKinYiu/yolor/releases/download/v0.1/yolor.pt
+  wget https://github.com/WongKinYiu/yolor/releases/download/weights/yolor-d6-paper-570.pt
 
   # 导出onnx格式文件
-  python models/export.py --grid --dynamic --weights PATH/TO/yolo7.pt
+  python models/export.py  --weights PATH/TO/yolor-xx-xx-xx.pt --img-size 640
 
+  # 移动onnx文件到demo目录
+  cp PATH/TO/yolor.onnx PATH/TO/model_zoo/vision/yolor/
   ```
 
 
@@ -31,7 +33,7 @@ cmake ..
 make -j
 
 # 移动onnx文件到demo目录
-cp PATH/TO/yolo7.onnx PATH/TO/model_zoo/vision/yolor/cpp/build/
+cp PATH/TO/yolor.onnx PATH/TO/model_zoo/vision/yolor/cpp/build/
 
 # 下载图片
 wget https://raw.githubusercontent.com/WongKinYiu/yolor/paper/inference/images/horses.jpg
