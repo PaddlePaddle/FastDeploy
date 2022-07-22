@@ -1,12 +1,12 @@
-# YOLOR API说明
+# ScaledYOLOv4 API说明
 
 ## Python API
 
-### YOLOR类
+### ScaledYOLOv4类
 ```
-fastdeploy.vision.wongkinyiu.YOLOR(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
+fastdeploy.vision.wongkinyiu.ScaledYOLOv4(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
 ```
-YOLOR模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolor.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
+ScaledYOLOv4模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`scaledyolov4.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -17,7 +17,7 @@ YOLOR模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需
 
 #### predict函数
 > ```
-> YOLOR.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> ScaledYOLOv4.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 > 模型预测结口，输入图像直接输出检测结果。
 >
@@ -27,20 +27,20 @@ YOLOR模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
-示例代码参考[yolor.py](./yolor.py)
+示例代码参考[scaledyolov4.py](./scaledyolov4.py)
 
 
 ## C++ API
 
-### YOLOR类
+### ScaledYOLOv4类
 ```
-fastdeploy::vision::wongkinyiu::YOLOR(
+fastdeploy::vision::wongkinyiu::ScaledYOLOv4(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
-YOLOR模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolor.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
+ScaledYOLOv4模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`scaledyolov4.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -51,7 +51,7 @@ YOLOR模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 
 #### Predict函数
 > ```
-> YOLOR::Predict(cv::Mat* im, DetectionResult* result,
+> ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -64,7 +64,7 @@ YOLOR模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
-示例代码参考[cpp/yolor.cc](cpp/yolor.cc)
+示例代码参考[cpp/scaledyolov4.cc](cpp/scaledyolov4.cc)
 
 ## 其它API使用
 
