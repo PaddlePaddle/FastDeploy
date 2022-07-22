@@ -110,8 +110,12 @@ bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
   YOLOv7::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
                     is_scale_up, stride);
   BGR2RGB::Run(mat);
-  Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-                 std::vector<float>(mat->Channels(), 1.0));
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
+  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
@@ -181,10 +185,10 @@ bool YOLOv7::Postprocess(
     result->boxes[i][1] = std::max((result->boxes[i][1] - pad_h) / scale, 0.0f);
     result->boxes[i][2] = std::max((result->boxes[i][2] - pad_w) / scale, 0.0f);
     result->boxes[i][3] = std::max((result->boxes[i][3] - pad_h) / scale, 0.0f);
-    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w);
-    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h);
-    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w);
-    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h);
+    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w - 1.0f);
+    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h - 1.0f);
+    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w - 1.0f);
+    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
   }
   return true;
 }
