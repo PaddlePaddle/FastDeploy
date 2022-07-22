@@ -36,12 +36,21 @@ bool FastDeployModel::InitRuntime() {
     } else if (runtime_option.backend == Backend::TRT) {
       if (!IsBackendAvailable(Backend::TRT)) {
         FDERROR
-            << "Backend:TRT is not complied with current FastDeploy library."
+            << "Backend::TRT is not complied with current FastDeploy library."
             << std::endl;
         return false;
       }
+    } else if (runtime_option.backend == Backend::PDINFER) {
+      if (!IsBackendAvailable(Backend::PDINFER)) {
+        FDERROR << "Backend::PDINFER is not compiled with current FastDeploy "
+                   "library."
+                << std::endl;
+        return false;
+      }
     } else {
-      FDERROR << "Only support Backend::ORT / Backend::TRT now." << std::endl;
+      FDERROR
+          << "Only support Backend::ORT / Backend::TRT / Backend::PDINFER now."
+          << std::endl;
       return false;
     }
     runtime_ = new Runtime();
@@ -74,29 +83,19 @@ bool FastDeployModel::CreateCpuBackend() {
     return false;
   }
 
-  for (auto& b : valid_cpu_backends) {
-    if (b == Backend::ORT) {
-      if (!IsBackendAvailable(Backend::ORT)) {
-        FDERROR << "OrtBackend is not complied with current FastDeploy library."
-                << std::endl;
-        continue;
-      }
-      runtime_option.backend = b;
-      runtime_ = new Runtime();
-      if (!runtime_->Init(runtime_option)) {
-        return false;
-      }
-      runtime_initialized_ = true;
-      return true;
-    } else {
-      FDERROR << "Only Backend::ORT as cpu backend is supported now."
-              << std::endl;
+  for (size_t i = 0; i < valid_cpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_cpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_cpu_backends[i];
+    runtime_ = new Runtime();
+    if (!runtime_->Init(runtime_option)) {
       return false;
     }
+    runtime_initialized_ = true;
+    return true;
   }
-
-  FDERROR << "Cannot find an available cpu backend to load this model."
-          << std::endl;
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
   return false;
 }
 
@@ -107,40 +106,18 @@ bool FastDeployModel::CreateGpuBackend() {
     return false;
   }
 
-  for (auto& b : valid_gpu_backends) {
-    if (b == Backend::ORT) {
-      if (!IsBackendAvailable(Backend::ORT)) {
-        FDERROR << "OrtBackend is not complied with current FastDeploy library."
-                << std::endl;
-        continue;
-      }
-      runtime_option.backend = b;
-      runtime_ = new Runtime();
-      if (!runtime_->Init(runtime_option)) {
-        return false;
-      }
-      runtime_initialized_ = true;
-      return true;
-    } else if (b == Backend::TRT) {
-      if (!IsBackendAvailable(Backend::TRT)) {
-        FDERROR << "TrtBackend is not complied with current FastDeploy library."
-                << std::endl;
-        continue;
-      }
-      runtime_option.backend = b;
-      runtime_ = new Runtime();
-      if (!runtime_->Init(runtime_option)) {
-        return false;
-      }
-      return true;
-    } else {
-      FDERROR << "Only Backend::ORT / Backend::TRT as gpu backends are "
-                 "supported now."
-              << std::endl;
+  for (size_t i = 0; i < valid_gpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_gpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_gpu_backends[i];
+    runtime_ = new Runtime();
+    if (!runtime_->Init(runtime_option)) {
       return false;
     }
+    runtime_initialized_ = true;
+    return true;
   }
-
   FDERROR << "Cannot find an available gpu backend to load this model."
           << std::endl;
   return false;
@@ -164,4 +141,4 @@ void FastDeployModel::EnableDebug() {
 
 bool FastDeployModel::DebugEnabled() { return debug_; }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

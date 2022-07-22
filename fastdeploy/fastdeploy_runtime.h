@@ -23,6 +23,8 @@ namespace fastdeploy {
 enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
 enum FASTDEPLOY_DECL Frontend { PADDLE, ONNX };
 
+FASTDEPLOY_DECL std::string Str(const Backend& b);
+FASTDEPLOY_DECL std::string Str(const Frontend& f);
 FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
@@ -31,7 +33,7 @@ bool ModelFormatCheck(const std::string& model_file,
                       const Frontend& model_format);
 
 struct FASTDEPLOY_DECL RuntimeOption {
-  Backend backend = Backend::ORT;
+  Backend backend = Backend::UNKNOWN;
 
   // for cpu inference and preprocess
   int cpu_thread_num = 8;
@@ -51,6 +53,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int ort_inter_op_num_threads = -1;
   // 0: ORT_SEQUENTIAL 1: ORT_PARALLEL
   int ort_execution_mode = -1;
+
+  // ======Only for Paddle Backend=====
+  bool pd_enable_mkldnn = true;
+  int pd_mkldnn_cache_size = 1;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_fixed_shape;
@@ -78,6 +84,8 @@ struct FASTDEPLOY_DECL Runtime {
              std::vector<FDTensor>* output_tensors);
 
   void CreateOrtBackend();
+
+  void CreatePaddleBackend();
 
   void CreateTrtBackend();
 
