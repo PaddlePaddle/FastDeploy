@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import fastdeploy_main as C
 
 
-class YOLOX(FastDeployModel):
+class NanoDetPlus(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,19 +26,19 @@ class YOLOX(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(YOLOX, self).__init__(runtime_option)
+        super(NanoDetPlus, self).__init__(runtime_option)
 
-        self._model = C.vision.megvii.YOLOX(model_file, params_file,
-                                            self._runtime_option, model_format)
+        self._model = C.vision.rangilyu.NanoDetPlus(
+            model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOX initialize failed."
+        assert self.initialized, "NanoDetPlus initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟YOLOX模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
+    # 一些跟NanoDetPlus模型有关的属性封装
+    # 多数是预处理相关，可通过修改如model.size = [416, 416]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
         return self._model.size
@@ -48,8 +48,8 @@ class YOLOX(FastDeployModel):
         return self._model.padding_value
 
     @property
-    def is_decode_exported(self):
-        return self._model.is_decode_exported
+    def keep_ratio(self):
+        return self._model.keep_ratio
 
     @property
     def downsample_strides(self):
@@ -58,6 +58,10 @@ class YOLOX(FastDeployModel):
     @property
     def max_wh(self):
         return self._model.max_wh
+
+    @property
+    def reg_max(self):
+        return self._model.reg_max
 
     @size.setter
     def size(self, wh):
@@ -75,12 +79,11 @@ class YOLOX(FastDeployModel):
             list), "The value to set `padding_value` must be type of list."
         self._model.padding_value = value
 
-    @is_decode_exported.setter
-    def is_decode_exported(self, value):
+    @keep_ratio.setter
+    def keep_ratio(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `is_decode_exported` must be type of bool."
-        self._model.is_decode_exported = value
+            value, bool), "The value to set `keep_ratio` must be type of bool."
+        self._model.keep_ratio = value
 
     @downsample_strides.setter
     def downsample_strides(self, value):
@@ -94,3 +97,9 @@ class YOLOX(FastDeployModel):
         assert isinstance(
             value, float), "The value to set `max_wh` must be type of float."
         self._model.max_wh = value
+
+    @reg_max.setter
+    def reg_max(self, value):
+        assert isinstance(
+            value, int), "The value to set `reg_max` must be type of int."
+        self._model.reg_max = value
