@@ -17,21 +17,19 @@
 int main() {
   namespace vis = fastdeploy::vision;
 
-  std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
-  std::string params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
-  std::string config_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  std::string img_path = "000000014439_640x640.jpg";
-  std::string vis_path = "vis.jpeg";
+  std::string model_file = "../resources/models/nanodet-plus-m_320.onnx";
+  std::string img_path = "../resources/images/bus.jpg";
+  std::string vis_path =
+      "../resources/outputs/rangilyu_nanodet_plus_vis_result.jpg";
 
-  auto option = fastdeploy::RuntimeOption();
-  option.device = fastdeploy::Device::CPU;
-  option.backend = fastdeploy::Backend::PDINFER;
-  auto model =
-      vis::ppdet::PPYOLOE(model_file, params_file, config_file, option);
+  auto model = vis::rangilyu::NanoDetPlus(model_file);
   if (!model.Initialized()) {
-    std::cerr << "Init Failed." << std::endl;
+    std::cerr << "Init Failed! Model: " << model_file << std::endl;
     return -1;
+  } else {
+    std::cout << "Init Done! Model:" << model_file << std::endl;
   }
+  model.EnableDebug();
 
   cv::Mat im = cv::imread(img_path);
   cv::Mat vis_im = im.clone();
