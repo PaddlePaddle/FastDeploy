@@ -27,7 +27,7 @@ ScaledYOLOv4模型加载和初始化，当model_format为`fd.Frontend.ONNX`时�
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
-示例代码参考[scaledyolov4.py](./scaledyolov4.py)
+示例代码参考[scaled_yolov4.py](./scaled_yolov4.py)
 
 
 ## C++ API

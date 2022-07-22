@@ -11,7 +11,7 @@
 │   ├── README.md
 │   └── scaledyolov4.cc
 ├── README.md
-└── scaledyolov4.py
+└── scaled_yolov4.py
 ```
 
 ## 获取ONNX文件
@@ -46,7 +46,7 @@ fastdeploy install vision-cpu
 
 执行如下代码即会自动下载测试图片
 ```
-python scaledyolov4.py
+python scaled_yolov4.py
 ```
 
 执行完成后会将可视化结果保存在本地`vis_result.jpg`，同时输出检测结果如下
