@@ -21,7 +21,9 @@
 namespace fastdeploy {
 
 enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
-enum FASTDEPLOY_DECL Frontend { PADDLE, ONNX };
+// AUTOREC will according to the name of model file
+// to decide which Frontend is
+enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const Frontend& f);
@@ -29,8 +31,9 @@ FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
 
-bool ModelFormatCheck(const std::string& model_file,
+bool CheckModelFormat(const std::string& model_file,
                       const Frontend& model_format);
+Frontend GuessModelFormat(const std::string& model_file);
 
 struct FASTDEPLOY_DECL RuntimeOption {
   Backend backend = Backend::UNKNOWN;
@@ -71,7 +74,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
-  Frontend model_format = Frontend::PADDLE;  // format of input model
+  Frontend model_format = Frontend::AUTOREC;  // format of input model
 };
 
 struct FASTDEPLOY_DECL Runtime {
