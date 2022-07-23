@@ -72,7 +72,7 @@ std::string Str(const Frontend& f) {
   return "UNKNOWN-Frontend";
 }
 
-bool ModelFormatCheck(const std::string& model_file,
+bool CheckModelFormat(const std::string& model_file,
                       const Frontend& model_format) {
   if (model_format == Frontend::PADDLE) {
     if (model_file.size() < 8 ||
@@ -99,8 +99,28 @@ bool ModelFormatCheck(const std::string& model_file,
   return true;
 }
 
+Frontend GuessModelFormat(const std::string& model_file) {
+  if (model_file.size() > 8 &&
+      model_file.substr(model_file.size() - 8, 8) == ".pdmodel") {
+    FDLogger() << "Model Format: PaddlePaddle." << std::endl;
+    return Frontend::PADDLE;
+  } else if (model_file.size() > 5 &&
+             model_file.substr(model_file.size() - 5, 5) == ".onnx") {
+    FDLogger() << "Model Format: ONNX." << std::endl;
+    return Frontend::ONNX;
+  }
+
+  FDERROR << "Cannot guess which model format you are using, please set "
+             "RuntimeOption::model_format manually."
+          << std::endl;
+  return Frontend::PADDLE;
+}
+
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
+  if (option.model_format == Frontend::AUTOREC) {
+    option.model_format = GuessModelFormat(_option.model_file);
+  }
   if (option.backend == Backend::UNKNOWN) {
     if (IsBackendAvailable(Backend::ORT)) {
       option.backend = Backend::ORT;
@@ -124,6 +144,9 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::PDINFER) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
+    FDASSERT(
+        option.model_format == Frontend::PADDLE,
+        "Backend::PDINFER only supports model format of Frontend::PADDLE.");
     CreatePaddleBackend();
   } else {
     FDERROR << "Runtime only support "
@@ -163,8 +186,8 @@ void Runtime::CreatePaddleBackend() {
            "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
   FDASSERT(false,
-           "OrtBackend is not available, please compiled with "
-           "ENABLE_ORT_BACKEND=ON.");
+           "PaddleBackend is not available, please compiled with "
+           "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 

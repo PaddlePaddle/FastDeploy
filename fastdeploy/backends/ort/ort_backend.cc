@@ -13,14 +13,18 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/ort/ort_backend.h"
+#include <memory>
+#include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/backends/ort/utils.h"
 #include "fastdeploy/utils/utils.h"
-#include <memory>
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
 
 namespace fastdeploy {
+
+std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =
+    std::vector<OrtCustomOp*>();
 
 ONNXTensorElementDataType GetOrtDtype(FDDataType fd_dtype) {
   if (fd_dtype == FDDataType::FP32) {
@@ -131,7 +135,9 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
             << std::endl;
     return false;
   }
+
   BuildOption(option);
+  InitCustomOperators();
   if (from_memory_buffer) {
     session_ = {env_, model_file.data(), model_file.size(), session_options_};
   } else {
@@ -275,4 +281,15 @@ TensorInfo OrtBackend::GetOutputInfo(int index) {
   return info;
 }
 
-} // namespace fastdeploy
+void OrtBackend::InitCustomOperators() {
+  if (custom_operators_.size() == 0) {
+    MultiClassNmsOp* custom_op = new MultiClassNmsOp{};
+    custom_operators_.push_back(custom_op);
+  }
+  for (size_t i = 0; i < custom_operators_.size(); ++i) {
+    custom_op_domain_.Add(custom_operators_[i]);
+  }
+  session_options_.Add(custom_op_domain_);
+}
+
+}  // namespace fastdeploy
