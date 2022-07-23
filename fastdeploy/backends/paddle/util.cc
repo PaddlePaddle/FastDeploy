@@ -17,6 +17,7 @@
 namespace fastdeploy {
 void ShareTensorFromCpu(paddle_infer::Tensor* tensor, FDTensor& fd_tensor) {
   std::vector<int> shape(fd_tensor.shape.begin(), fd_tensor.shape.end());
+  tensor->Reshape(shape);
   if (fd_tensor.dtype == FDDataType::FP32) {
     tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
                               shape, paddle_infer::PlaceType::kCPU);
