@@ -36,6 +36,14 @@ bool CheckModelFormat(const std::string& model_file,
 Frontend GuessModelFormat(const std::string& model_file);
 
 struct FASTDEPLOY_DECL RuntimeOption {
+  // set path of model file and params file
+  // for onnx, only need to define model_file, but also need to
+  // define model_format
+  // model_format support 'paddle' / 'onnx' now.
+  void SetModelPath(const std::string& model_path,
+                    const std::string& params_path = "",
+                    const std::string& _model_format = "paddle");
+
   // set model inference in GPU
   void UseCpu();
 

@@ -116,6 +116,21 @@ Frontend GuessModelFormat(const std::string& model_file) {
   return Frontend::PADDLE;
 }
 
+void RuntimeOption::SetModelPath(const std::string& model_path,
+                                 const std::string& params_path,
+                                 const std::string& _model_format) {
+  if (_model_format == "paddle") {
+    model_file = model_path;
+    params_file = params_path;
+    model_format = _model_format;
+  } else if (_model_format == "onnx") {
+    model_file = model_path;
+    model_format = _model_format;
+  } else {
+    FDASSERT << "The model format only can be 'paddle' or 'onnx'." << std::endl;
+  }
+}
+
 void RuntimeOption::UseGpu(int gpu_id) {
 #ifdef WITH_GPU
   device = Device::GPU;

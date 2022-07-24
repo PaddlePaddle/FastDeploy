@@ -16,9 +16,6 @@
 
 namespace fastdeploy {
 
-bool DISABLE_WARNING = false;
-bool DISABLE_INFO = false;
-
 FDLogger::FDLogger(bool verbose, const std::string& prefix) {
   verbose_ = verbose;
   line_ = "";

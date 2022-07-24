@@ -8,9 +8,7 @@ fd.download(model_url, ".", show_progress=True)
 fd.download(test_jpg_url, ".", show_progress=True)
 
 # 加载模型
-option = fd.RuntimeOption()
-option.use_trt_backend()
-model = fd.vision.megvii.YOLOX("yolox_s.onnx", runtime_option=option)
+model = fd.vision.megvii.YOLOX("yolox_s.onnx")
 
 # 预测图片
 im = cv2.imread("bus.jpg")

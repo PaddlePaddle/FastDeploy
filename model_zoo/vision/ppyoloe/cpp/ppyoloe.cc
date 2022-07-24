@@ -23,10 +23,7 @@ int main() {
   std::string img_path = "000000014439_640x640.jpg";
   std::string vis_path = "vis.jpeg";
 
-  auto option = fastdeploy::RuntimeOption();
-  option.backend = fastdeploy::Backend::TRT;
-  auto model =
-      vis::ppdet::PPYOLOE(model_file, params_file, config_file, option);
+  auto model = vis::ppdet::PPYOLOE(model_file, params_file, config_file);
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;

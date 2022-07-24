@@ -33,9 +33,6 @@
 
 namespace fastdeploy {
 
-extern bool DISABLE_WARNING;
-extern bool DISABLE_INFO;
-
 class FASTDEPLOY_DECL FDLogger {
  public:
   FDLogger() {

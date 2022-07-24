@@ -19,6 +19,7 @@ namespace fastdeploy {
 void BindRuntime(pybind11::module& m) {
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())
+      .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)

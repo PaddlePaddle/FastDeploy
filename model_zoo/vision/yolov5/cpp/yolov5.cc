@@ -16,11 +16,7 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-  auto option = fastdeploy::RuntimeOption();
-  option.UseTrtBackend();
-  option.SetTrtInputShape("images", {1, 3, 320, 320}, {1, 3, 640, 640},
-                          {1, 3, 1280, 1280});
-  auto model = vis::ultralytics::YOLOv5("yolov5s.onnx", "", option);
+  auto model = vis::ultralytics::YOLOv5("yolov5s.onnx");
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;
