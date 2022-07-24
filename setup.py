@@ -353,23 +353,22 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     if os.path.exists("fastdeploy/libs/third_libs"):
         shutil.rmtree("fastdeploy/libs/third_libs")
-    shutil.copytree(
-        ".setuptools-cmake-build/third_libs/install",
-        "fastdeploy/libs/third_libs",
-        symlinks=True)
-
-    all_files = get_all_files("fastdeploy/libs")
-    for f in all_files:
-        package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
+#    shutil.copytree(
+#        ".setuptools-cmake-build/third_libs/install",
+#        "fastdeploy/libs/third_libs",
+#        symlinks=True)
 
     if platform.system().lower() == "linux":
         rpaths = ["${ORIGIN}"]
-        for root, dirs, files in os.walk("fastdeploy/libs/third_libs"):
+        for root, dirs, files in os.walk(
+                ".setuptools-cmake-build/third_libs/install"):
             for d in dirs:
                 if d == "lib":
                     path = os.path.relpath(
-                        os.path.join(root, d), "fastdeploy/libs")
-                    rpaths.append("${ORIGIN}/" + format(path))
+                        os.path.join(root, d),
+                        ".setuptools-cmake-build/third_libs/install")
+                    rpaths.append("${ORIGIN}/" + os.path.join(
+                        "libs/third_libs", path))
         rpaths = ":".join(rpaths)
         command = "patchelf --set-rpath '{}' ".format(rpaths) + os.path.join(
             "fastdeploy/libs", pybind_so_file)
@@ -378,6 +377,12 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             assert os.system(
                 command) == 0, "patchelf {} failed, the command: {}".format(
                     command, pybind_so_file)
+
+    all_files = get_all_files("fastdeploy/libs")
+    for f in all_files:
+        if f.count("third_libs") > 0:
+            continue
+        package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
 
 setuptools.setup(
     name=PACKAGE_NAME,
