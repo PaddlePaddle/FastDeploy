@@ -122,10 +122,10 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
   if (_model_format == "paddle") {
     model_file = model_path;
     params_file = params_path;
-    model_format = _model_format;
+    model_format = Frontend::PADDLE;
   } else if (_model_format == "onnx") {
     model_file = model_path;
-    model_format = _model_format;
+    model_format = Frontend::ONNX;
   } else {
     FDASSERT << "The model format only can be 'paddle' or 'onnx'." << std::endl;
   }
