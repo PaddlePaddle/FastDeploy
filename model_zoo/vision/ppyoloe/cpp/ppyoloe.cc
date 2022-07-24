@@ -24,8 +24,7 @@ int main() {
   std::string vis_path = "vis.jpeg";
 
   auto option = fastdeploy::RuntimeOption();
-  option.device = fastdeploy::Device::CPU;
-  option.backend = fastdeploy::Backend::PDINFER;
+  option.backend = fastdeploy::Backend::TRT;
   auto model =
       vis::ppdet::PPYOLOE(model_file, params_file, config_file, option);
   if (!model.Initialized()) {

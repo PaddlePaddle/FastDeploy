@@ -33,6 +33,9 @@
 
 namespace fastdeploy {
 
+extern bool DISABLE_WARNING;
+extern bool DISABLE_INFO;
+
 class FASTDEPLOY_DECL FDLogger {
  public:
   FDLogger() {
@@ -69,13 +72,17 @@ class FASTDEPLOY_DECL FDLogger {
 #define __REL_FILE__ __FILE__
 #endif
 
-#define FDERROR                                                                \
-  FDLogger(true, "[ERROR]")                                                    \
+#define FDERROR             \
+  FDLogger(true, "[ERROR]") \
       << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
 
-#define FDERROR                                                \
-  FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
-                            << ")::" << __FUNCTION__ << "\t"
+#define FDWARNING             \
+  FDLogger(true, "[WARNING]") \
+      << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+
+#define FDINFO                                                \
+  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
+                           << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, message) \
   if (!(condition)) {                \

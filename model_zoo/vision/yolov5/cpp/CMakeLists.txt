@@ -5,7 +5,8 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
 # add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
 # 指定下载解压后的fastdeploy库路径
-set(FASTDEPLOY_INSTALL_DIR ${PROJECT_SOURCE_DIR}/fastdeploy-linux-x64-0.3.0/)
+set(FASTDEPLOY_INSTALL_DIR  /fastdeploy/CustomOp/FastDeploy/build1/fastdeploy-linux-x64-gpu-0.3.0)
+
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 

@@ -19,6 +19,19 @@ namespace fastdeploy {
 void BindRuntime(pybind11::module& m) {
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())
+      .def("use_gpu", &RuntimeOption::UseGpu)
+      .def("use_cpu", &RuntimeOption::UseCpu)
+      .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
+      .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
+      .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
+      .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
+      .def("enable_paddle_mkldnn", &RuntimeOption::EnablePaddleMKLDNN)
+      .def("disable_paddle_mkldnn", &RuntimeOption::DisablePaddleMKLDNN)
+      .def("set_paddle_mkldnn_cache_size",
+           &RuntimeOption::SetPaddleMKLDNNCacheSize)
+      .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
+      .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
+      .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
@@ -30,7 +43,6 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("ort_inter_op_num_threads",
                      &RuntimeOption::ort_inter_op_num_threads)
       .def_readwrite("ort_execution_mode", &RuntimeOption::ort_execution_mode)
-      .def_readwrite("trt_fixed_shape", &RuntimeOption::trt_fixed_shape)
       .def_readwrite("trt_max_shape", &RuntimeOption::trt_max_shape)
       .def_readwrite("trt_opt_shape", &RuntimeOption::trt_opt_shape)
       .def_readwrite("trt_min_shape", &RuntimeOption::trt_min_shape)
@@ -49,41 +61,43 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<Runtime>(m, "Runtime")
       .def(pybind11::init())
       .def("init", &Runtime::Init)
-      .def("infer", [](Runtime& self,
-                       std::map<std::string, pybind11::array>& data) {
-        std::vector<FDTensor> inputs(data.size());
-        int index = 0;
-        for (auto iter = data.begin(); iter != data.end(); ++iter) {
-          inputs[index].dtype = NumpyDataTypeToFDDataType(iter->second.dtype());
-          inputs[index].shape.insert(
-              inputs[index].shape.begin(), iter->second.shape(),
-              iter->second.shape() + iter->second.ndim());
-          // TODO(jiangjiajun) Maybe skip memory copy is a better choice
-          // use SetExternalData
-          inputs[index].data.resize(iter->second.nbytes());
-          memcpy(inputs[index].data.data(), iter->second.mutable_data(),
-                 iter->second.nbytes());
-          inputs[index].name = iter->first;
-        }
+      .def("infer",
+           [](Runtime& self, std::map<std::string, pybind11::array>& data) {
+             std::vector<FDTensor> inputs(data.size());
+             int index = 0;
+             for (auto iter = data.begin(); iter != data.end(); ++iter) {
+               inputs[index].dtype =
+                   NumpyDataTypeToFDDataType(iter->second.dtype());
+               inputs[index].shape.insert(
+                   inputs[index].shape.begin(), iter->second.shape(),
+                   iter->second.shape() + iter->second.ndim());
+               // TODO(jiangjiajun) Maybe skip memory copy is a better choice
+               // use SetExternalData
+               inputs[index].data.resize(iter->second.nbytes());
+               memcpy(inputs[index].data.data(), iter->second.mutable_data(),
+                      iter->second.nbytes());
+               inputs[index].name = iter->first;
+             }
 
-        std::vector<FDTensor> outputs(self.NumOutputs());
-        self.Infer(inputs, &outputs);
+             std::vector<FDTensor> outputs(self.NumOutputs());
+             self.Infer(inputs, &outputs);
 
-        std::vector<pybind11::array> results;
-        results.reserve(outputs.size());
-        for (size_t i = 0; i < outputs.size(); ++i) {
-          auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
-          results.emplace_back(pybind11::array(numpy_dtype, outputs[i].shape));
-          memcpy(results[i].mutable_data(), outputs[i].data.data(),
-                 outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
-        }
-        return results;
-      })
-     .def("num_inputs", &Runtime::NumInputs)
-     .def("num_outputs", &Runtime::NumOutputs)
-     .def("get_input_info", &Runtime::GetInputInfo)
-     .def("get_output_info", &Runtime::GetOutputInfo)
-     .def_readonly("option", &Runtime::option);
+             std::vector<pybind11::array> results;
+             results.reserve(outputs.size());
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
+               results.emplace_back(
+                   pybind11::array(numpy_dtype, outputs[i].shape));
+               memcpy(results[i].mutable_data(), outputs[i].data.data(),
+                      outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
+             }
+             return results;
+           })
+      .def("num_inputs", &Runtime::NumInputs)
+      .def("num_outputs", &Runtime::NumOutputs)
+      .def("get_input_info", &Runtime::GetInputInfo)
+      .def("get_output_info", &Runtime::GetOutputInfo)
+      .def_readonly("option", &Runtime::option);
 
   pybind11::enum_<Backend>(m, "Backend", pybind11::arithmetic(),
                            "Backend for inference.")

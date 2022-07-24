@@ -16,7 +16,11 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-  auto model = vis::megvii::YOLOX("yolox_s.onnx");
+  auto option = fastdeploy::RuntimeOption();
+  option.device = fastdeploy::Device::GPU;
+  option.backend = fastdeploy::Backend::TRT;
+  option.trt_fixed_shape["images"] = {1, 3, 640, 640};
+  auto model = vis::megvii::YOLOX("yolox_s.onnx", "", option);
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;

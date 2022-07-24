@@ -16,6 +16,9 @@
 
 namespace fastdeploy {
 
+bool DISABLE_WARNING = false;
+bool DISABLE_INFO = false;
+
 FDLogger::FDLogger(bool verbose, const std::string& prefix) {
   verbose_ = verbose;
   line_ = "";
@@ -31,4 +34,4 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   return *this;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

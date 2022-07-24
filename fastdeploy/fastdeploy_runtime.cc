@@ -77,23 +77,23 @@ bool CheckModelFormat(const std::string& model_file,
   if (model_format == Frontend::PADDLE) {
     if (model_file.size() < 8 ||
         model_file.substr(model_file.size() - 8, 8) != ".pdmodel") {
-      FDLogger() << "With model format of Frontend::PADDLE, the model file "
-                    "should ends with `.pdmodel`, but now it's "
-                 << model_file << std::endl;
+      FDERROR << "With model format of Frontend::PADDLE, the model file "
+                 "should ends with `.pdmodel`, but now it's "
+              << model_file << std::endl;
       return false;
     }
   } else if (model_format == Frontend::ONNX) {
     if (model_file.size() < 5 ||
         model_file.substr(model_file.size() - 5, 5) != ".onnx") {
-      FDLogger() << "With model format of Frontend::ONNX, the model file "
-                    "should ends with `.onnx`, but now it's "
-                 << model_file << std::endl;
+      FDERROR << "With model format of Frontend::ONNX, the model file "
+                 "should ends with `.onnx`, but now it's "
+              << model_file << std::endl;
       return false;
     }
   } else {
-    FDLogger() << "Only support model format with frontend Frontend::PADDLE / "
-                  "Frontend::ONNX."
-               << std::endl;
+    FDERROR << "Only support model format with frontend Frontend::PADDLE / "
+               "Frontend::ONNX."
+            << std::endl;
     return false;
   }
   return true;
@@ -115,6 +115,86 @@ Frontend GuessModelFormat(const std::string& model_file) {
           << std::endl;
   return Frontend::PADDLE;
 }
+
+void RuntimeOption::UseGpu(int gpu_id) {
+#ifdef WITH_GPU
+  device = Device::GPU;
+  device_id = gpu_id;
+#else
+  FDWARNING << "The FastDeploy didn't compile with GPU, will force to use CPU."
+            << std::endl;
+  device = Device::CPU;
+#endif
+}
+
+void RuntimeOption::UseCpu() { device = Device::CPU; }
+
+void RuntimeOption::SetCpuThreadNum(int thread_num) {
+  FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
+  cpu_thread_num = thread_num;
+}
+
+// use paddle inference backend
+void RuntimeOption::UsePaddleBackend() {
+#ifdef ENABLE_PADDLE_BACKEND
+  backend = Backend::PDINFER;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with Paddle Inference.");
+#endif
+}
+
+// use onnxruntime backend
+void RuntimeOption::UseOrtBackend() {
+#ifdef ENABLE_ORT_BACKEND
+  backend = Backend::ORT;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with OrtBackend.");
+#endif
+}
+
+void RuntimeOption::UseTrtBackend() {
+#ifdef ENABLE_TRT_BACKEND
+  backend = Backend::TRT;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with TrtBackend.");
+#endif
+}
+
+void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
+
+void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
+
+void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
+  FDASSERT(size > 0, "Parameter size must greater than 0.");
+  pd_mkldnn_cache_size = size;
+}
+
+void RuntimeOption::SetTrtInputShape(const std::string& input_name,
+                                     const std::vector<int32_t>& min_shape,
+                                     const std::vector<int32_t>& opt_shape,
+                                     const std::vector<int32_t>& max_shape) {
+  trt_min_shape[input_name].clear();
+  trt_max_shape[input_name].clear();
+  trt_opt_shape[input_name].clear();
+  trt_min_shape[input_name].assign(min_shape.begin(), min_shape.end());
+  if (opt_shape.size() == 0) {
+    trt_opt_shape[input_name].assign(min_shape.begin(), min_shape.end());
+  } else {
+    trt_opt_shape[input_name].assign(opt_shape.begin(), opt_shape.end());
+  }
+  if (max_shape.size() == 0) {
+    trt_max_shape[input_name].assign(min_shape.begin(), min_shape.end());
+  } else {
+    trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
+  }
+  FDINFO << trt_min_shape[input_name].size() << " "
+         << trt_opt_shape[input_name].size() << " "
+         << trt_max_shape[input_name].size() << std::endl;
+}
+
+void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
+
+void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
@@ -229,7 +309,6 @@ void Runtime::CreateTrtBackend() {
   trt_option.enable_int8 = option.trt_enable_int8;
   trt_option.max_batch_size = option.trt_max_batch_size;
   trt_option.max_workspace_size = option.trt_max_workspace_size;
-  trt_option.fixed_shape = option.trt_fixed_shape;
   trt_option.max_shape = option.trt_max_shape;
   trt_option.min_shape = option.trt_min_shape;
   trt_option.opt_shape = option.trt_opt_shape;

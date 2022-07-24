@@ -132,9 +132,9 @@ void FastDeployModel::EnableDebug() {
 #ifdef FASTDEPLOY_DEBUG
   debug_ = true;
 #else
-  FDLogger() << "The compile FastDeploy is not with -DENABLE_DEBUG=ON, so "
-                "cannot enable debug mode."
-             << std::endl;
+  FDWARNING << "The compile FastDeploy is not with -DENABLE_DEBUG=ON, so "
+               "cannot enable debug mode."
+            << std::endl;
   debug_ = false;
 #endif
 }

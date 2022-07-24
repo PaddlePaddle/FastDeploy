@@ -1,5 +1,5 @@
 import fastdeploy as fd
-import cv2 
+import cv2
 
 # 下载模型和测试图片
 model_url = "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx"
@@ -8,7 +8,9 @@ fd.download(model_url, ".", show_progress=True)
 fd.download(test_jpg_url, ".", show_progress=True)
 
 # 加载模型
-model = fd.vision.megvii.YOLOX("yolox_s.onnx")
+option = fd.RuntimeOption()
+option.use_trt_backend()
+model = fd.vision.megvii.YOLOX("yolox_s.onnx", runtime_option=option)
 
 # 预测图片
 im = cv2.imread("bus.jpg")
@@ -20,4 +22,3 @@ cv2.imwrite("vis_result.jpg", im)
 
 # 输出预测结果
 print(result)
-print(model.runtime_option)

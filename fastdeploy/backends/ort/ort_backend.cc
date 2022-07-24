@@ -81,10 +81,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
       }
     }
     if (!support_cuda) {
-      FDLogger() << "[WARN] Compiled fastdeploy with onnxruntime doesn't "
-                    "support GPU, the available providers are "
-                 << providers_msg << "will fallback to CPUExecutionProvider."
-                 << std::endl;
+      FDWARNING << "Compiled fastdeploy with onnxruntime doesn't "
+                   "support GPU, the available providers are "
+                << providers_msg << "will fallback to CPUExecutionProvider."
+                << std::endl;
       option_.use_gpu = false;
     } else {
       FDASSERT(option.gpu_id == 0, "Requires gpu_id == 0, but now gpu_id = " +

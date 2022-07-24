@@ -126,7 +126,7 @@ class ONNXCommand(setuptools.Command):
         pass
 
 
-def GetAllFiles(dirname):
+def get_all_files(dirname):
     files = list()
     for root, dirs, filenames in os.walk(dirname):
         for f in filenames:
@@ -358,7 +358,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         "fastdeploy/libs/third_libs",
         symlinks=True)
 
-    all_files = GetAllFiles("fastdeploy/libs")
+    all_files = get_all_files("fastdeploy/libs")
     for f in all_files:
         package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
 
