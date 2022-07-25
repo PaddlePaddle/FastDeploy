@@ -29,9 +29,8 @@ bool Cast::CpuRun(Mat* mat) {
       im->convertTo(*im, CV_64FC(c));
     }
   } else {
-    FDLogger() << "[WARN] Cast not support for " << dtype_ 
-               << " now! will skip this operation."
-               << std::endl;
+    FDWARNING << "Cast not support for " << dtype_
+              << " now! will skip this operation." << std::endl;
   }
   return true;
 }
@@ -49,9 +48,8 @@ bool Cast::GpuRun(Mat* mat) {
       im->convertTo(*im, CV_64FC(c));
     }
   } else {
-    FDLogger() << "[WARN] Cast not support for " << dtype_ 
-               << " now! will skip this operation."
-               << std::endl;
+    FDWARNING << "Cast not support for " << dtype_
+              << " now! will skip this operation." << std::endl;
   }
   return true;
 }
@@ -62,5 +60,5 @@ bool Cast::Run(Mat* mat, const std::string& dtype, ProcLib lib) {
   return c(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
