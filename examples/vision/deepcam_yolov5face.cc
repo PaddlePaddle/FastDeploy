@@ -17,7 +17,7 @@
 int main() {
   namespace vis = fastdeploy::vision;
 
-  std::string model_file = "../resources/models/yolov5s-face.onnx.onnx";
+  std::string model_file = "../resources/models/yolov5s-face.onnx";
   std::string img_path = "../resources/images/test_face_det.jpg";
   std::string vis_path =
       "../resources/outputs/deepcam_yolov5face_vis_result.jpg";
