@@ -7,7 +7,6 @@ model_url = "https://github.com/felixhjh/Fastdeploy-Models/raw/main/unet_Citysca
 test_jpg_url = "https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png"
 fd.download_and_decompress(model_url, ".")
 fd.download(test_jpg_url, ".", show_progress=True)
-
 # 加载模型
 model = fd.vision.ppseg.Model("./unet_Cityscapes/model.pdmodel",
                               "./unet_Cityscapes/model.pdiparams",
