@@ -19,3 +19,8 @@ from ... import fastdeploy_main as C
 
 def vis_detection(im_data, det_result, line_size=1, font_size=0.5):
     C.vision.Visualize.vis_detection(im_data, det_result, line_size, font_size)
+
+
+def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
+    C.vision.Visualize.vis_face_detection(im_data, face_det_result, line_size,
+                                          font_size)

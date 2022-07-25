@@ -22,6 +22,7 @@ void BindWongkinyiu(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 void BindMeituan(pybind11::module& m);
 void BindMegvii(pybind11::module& m);
+void BindDeepCam(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -42,12 +43,23 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
+  pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
+      .def(pybind11::init())
+      .def_readwrite("boxes", &vision::FaceDetectionResult::boxes)
+      .def_readwrite("scores", &vision::FaceDetectionResult::scores)
+      .def_readwrite("landmarks", &vision::FaceDetectionResult::landmarks)
+      .def_readwrite("landmarks_per_face",
+                     &vision::FaceDetectionResult::landmarks_per_face)
+      .def("__repr__", &vision::FaceDetectionResult::Str)
+      .def("__str__", &vision::FaceDetectionResult::Str);
+
   BindPPCls(m);
   BindPPDet(m);
   BindUltralytics(m);
   BindWongkinyiu(m);
   BindMeituan(m);
   BindMegvii(m);
+  BindDeepCam(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

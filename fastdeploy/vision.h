@@ -15,6 +15,7 @@
 
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
+#include "fastdeploy/vision/deepcam/yolov5face.h"
 #include "fastdeploy/vision/megvii/yolox.h"
 #include "fastdeploy/vision/meituan/yolov6.h"
 #include "fastdeploy/vision/ppcls/model.h"
