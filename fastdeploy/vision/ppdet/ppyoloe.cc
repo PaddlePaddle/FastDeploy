@@ -11,8 +11,8 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const RuntimeOption& custom_option,
                  const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
-  valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -22,12 +22,12 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
 
 bool PPYOLOE::Initialize() {
   if (!BuildPreprocessPipelineFromConfig()) {
-    std::cout << "Failed to build preprocess pipeline from configuration file."
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
               << std::endl;
     return false;
   }
   if (!InitRuntime()) {
-    std::cout << "Failed to initialize fastdeploy backend." << std::endl;
+    FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
   return true;
@@ -39,13 +39,13 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
   try {
     cfg = YAML::LoadFile(config_file_);
   } catch (YAML::BadFile& e) {
-    std::cout << "Failed to load yaml file " << config_file_
+    FDERROR << "Failed to load yaml file " << config_file_
               << ", maybe you should check this file." << std::endl;
     return false;
   }
 
   if (cfg["arch"].as<std::string>() != "YOLO") {
-    std::cout << "Require the arch of model is YOLO, but arch defined in "
+    FDERROR << "Require the arch of model is YOLO, but arch defined in "
                  "config file is "
               << cfg["arch"].as<std::string>() << "." << std::endl;
     return false;
@@ -76,7 +76,7 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     } else if (op_name == "Permute") {
       processors_.push_back(std::make_shared<HWC2CHW>());
     } else {
-      std::cout << "Unexcepted preprocess operator: " << op_name << "."
+      FDERROR << "Unexcepted preprocess operator: " << op_name << "."
                 << std::endl;
       return false;
     }
@@ -89,7 +89,7 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_h = mat->Height();
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
-      std::cout << "Failed to process image data in " << processors_[i]->Name()
+      FDERROR << "Failed to process image data in " << processors_[i]->Name()
                 << "." << std::endl;
       return false;
     }

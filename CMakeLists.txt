@@ -15,8 +15,20 @@
 PROJECT(fastdeploy C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
 
+option(CSRCS_DIR_NAME "Name of source code directory")
+option(LIBRARY_NAME "Name of build library name")
+option(PY_LIBRARY_NAME "Name of build python library name")
+if(NOT CSRCS_DIR_NAME)
+  set(CSRCS_DIR_NAME "./")
+endif()
+if(NOT LIBRARY_NAME)
+  set(LIBRARY_NAME "fastdeploy")
+endif()
+if(NOT PY_LIBRARY_NAME)
+  set(PY_LIBRARY_NAME "fastdeploy_main")
+endif()
 include(ExternalProject)
-add_subdirectory(fastdeploy)
+add_subdirectory(${CSRCS_DIR_NAME}/fastdeploy)
 include(external/utils.cmake)
 
 # Set C++11 as standard for the whole project
@@ -29,6 +41,7 @@ option(ENABLE_PADDLE_FRONTEND "if to enable PaddlePaddle frontend to support loa
 option(WITH_GPU "if WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
 option(ENABLE_ORT_BACKEND "if to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "if to enable tensorrt backend." OFF)
+option(ENABLE_PADDLE_BACKEND "if to enable paddle backend." OFF)
 option(CUDA_DIRECTORY "if build tensorrt backend, need to define path of cuda library.")
 option(TRT_DIRECTORY "if build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "if to enable vision models usage." OFF)
@@ -39,7 +52,7 @@ option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow proces
 option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
-option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" ON)
+option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
 
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
@@ -50,7 +63,8 @@ endif()
 
 option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 
-include_directories(${PROJECT_SOURCE_DIR})
+set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
+include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
@@ -61,12 +75,13 @@ if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
 endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
-file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/*.cc)
-file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/backends/ort/*.cc)
-file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/fastdeploy/backends/tensorrt/*.cpp)
-file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*.cc)
-file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS})
+file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
+file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
+file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
+file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
+file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
+file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -85,6 +100,13 @@ if(ENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
   include(external/onnxruntime.cmake)
   list(APPEND DEPEND_LIBS external_onnxruntime)
+endif()
+
+if(ENABLE_PADDLE_BACKEND)
+  add_definitions(-DENABLE_PADDLE_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
+  include(external/paddle_inference.cmake)
+  list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
 endif()
 
 if(WITH_GPU)
@@ -108,7 +130,7 @@ if(ENABLE_TRT_BACKEND)
   endif()
   add_definitions(-DENABLE_TRT_BACKEND)
   include_directories(${TRT_DIRECTORY}/include)
-  include_directories(${PROJECT_SOURCE_DIR}/fastdeploy/backends/tensorrt/common)
+  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/common)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
   find_library(TRT_INFER_LIB nvinfer ${TRT_DIRECTORY}/lib)
   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_DIRECTORY}/lib)
@@ -116,12 +138,16 @@ if(ENABLE_TRT_BACKEND)
   find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_DIRECTORY}/lib)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB})
 
-  # copy tensorrt libraries to third lib
-#  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
-#    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-#  endif()
-#  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-#  file(COPY ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib" FOLLOW_SYMLINK_CHAIN)
+  if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+  endif()
+  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+  endif()
+  find_package(Python COMPONENTS Interpreter Development REQUIRED)
+  message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
+  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
+
 endif()
 
 if(ENABLE_VISION)
@@ -148,37 +174,37 @@ else()
   endif()
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/fastdeploy/core/config.h)
+configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
-add_library(fastdeploy SHARED ${ALL_DEPLOY_SRCS})
-redefine_file_macro(fastdeploy)
-set_target_properties(fastdeploy PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
+redefine_file_macro(${LIBRARY_NAME})
+set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 if(NOT APPLE)
-  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS "-Wl,--start-group,--exclude-libs,ALL")
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-Wl,--start-group,--exclude-libs,ALL")
 endif()
-set_target_properties(fastdeploy PROPERTIES LINK_FLAGS_RELEASE -s)
+set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 if (APPLE)
 #  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
-  set_target_properties(fastdeploy PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+  set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 elseif(MSVC)
 else()
-  set_target_properties(fastdeploy PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS "-Wl,--exclude-libs,ALL")
-  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS_RELEASE -s)
+  set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-Wl,--exclude-libs,ALL")
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
   list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
 endif()
-set_target_properties(fastdeploy PROPERTIES VERSION ${FASTDEPLOY_VERSION})
-target_link_libraries(fastdeploy ${DEPEND_LIBS})
+set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
+target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 # add examples after prepare include paths for third-parties
 if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
@@ -191,15 +217,15 @@ include(external/summary.cmake)
 fastdeploy_summary()
 
 install(
-  TARGETS fastdeploy
+  TARGETS ${LIBRARY_NAME}
   LIBRARY DESTINATION lib
 )
 install(
-  DIRECTORY ${PROJECT_SOURCE_DIR}/fastdeploy
+  DIRECTORY ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy
   DESTINATION ${CMAKE_INSTALL_PREFIX}/include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "${PROJECT_SOURCE_DIR}/fastdeploy/backends/*/*.h"
+  PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/*/*.h"
 )
 install(
   DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
@@ -234,40 +260,34 @@ if(BUILD_FASTDEPLOY_PYTHON)
   endif()
 
   if(NOT ENABLE_VISION)
-    file(GLOB_RECURSE VISION_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/fastdeploy/vision/*_pybind.cc)
+    file(GLOB_RECURSE VISION_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*_pybind.cc)
     list(REMOVE_ITEM DEPLOY_PYBIND_SRCS ${VISION_PYBIND_SRCS})
   endif()
-  add_library(fastdeploy_main MODULE ${DEPLOY_PYBIND_SRCS})
-  redefine_file_macro(fastdeploy_main)
-  set_target_properties(fastdeploy_main PROPERTIES PREFIX "")
-  set_target_properties(fastdeploy_main
+  add_library(${PY_LIBRARY_NAME} MODULE ${DEPLOY_PYBIND_SRCS})
+  redefine_file_macro(${PY_LIBRARY_NAME})
+  set_target_properties(${PY_LIBRARY_NAME} PROPERTIES PREFIX "")
+  set_target_properties(${PY_LIBRARY_NAME}
                         PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-  set_target_properties(fastdeploy_main PROPERTIES SUFFIX ${PY_EXT_SUFFIX})
-  set_target_properties(fastdeploy_main
+  set_target_properties(${PY_LIBRARY_NAME} PROPERTIES SUFFIX ${PY_EXT_SUFFIX})
+  set_target_properties(${PY_LIBRARY_NAME}
                         PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-  target_include_directories(fastdeploy_main PRIVATE
+  target_include_directories(${PY_LIBRARY_NAME} PRIVATE
                              $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
                              $<INSTALL_INTERFACE:include>
                              ${PYTHON_INCLUDE_DIR})
 
-  target_include_directories(fastdeploy_main PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
 
   if(APPLE)
-    set_target_properties(fastdeploy_main
+    set_target_properties(${PY_LIBRARY_NAME}
                           PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   endif()
 
-  if(APPLE)
-    target_link_libraries(fastdeploy_main PUBLIC fastdeploy)
-  elseif(WIN32)
-    target_link_libraries(fastdeploy_main PUBLIC fastdeploy)
-  else()
-    target_link_libraries(fastdeploy_main PUBLIC fastdeploy)
-  endif()
+  target_link_libraries(${PY_LIBRARY_NAME} PUBLIC ${LIBRARY_NAME})
 
   if(MSVC)
-    target_link_libraries(fastdeploy_main PRIVATE ${PYTHON_LIBRARIES})
-    target_compile_options(fastdeploy_main
+    target_link_libraries(${PY_LIBRARY_NAME} PRIVATE ${PYTHON_LIBRARIES})
+    target_compile_options(${PY_LIBRARY_NAME}
                            PRIVATE /MP
                                    /wd4244 # 'argument': conversion from 'google::
                                            # protobuf::uint64' to 'int', possible
@@ -276,7 +296,14 @@ if(BUILD_FASTDEPLOY_PYTHON)
                                            # possible loss of data
                                    /wd4996 # The second parameter is ignored.
                                    ${EXTRA_FLAGS})
-    target_compile_options(fastdeploy_main PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
+    target_compile_options(${PY_LIBRARY_NAME} PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
   endif()
 
 endif(BUILD_FASTDEPLOY_PYTHON)
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.4.0")
+    string(STRIP "${CMAKE_CXX_COMPILER_VERSION}" CMAKE_CXX_COMPILER_VERSION)
+    message(WARNING "[WARNING] FastDeploy require g++ version >= 5.4.0, but now your g++ version is ${CMAKE_CXX_COMPILER_VERSION}, this may cause failure! Use -DCMAKE_CXX_COMPILER to define path of your compiler.")
+  endif()
+endif()

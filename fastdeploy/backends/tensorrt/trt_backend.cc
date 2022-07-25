@@ -52,6 +52,61 @@ std::vector<int> toVec(const nvinfer1::Dims& dim) {
   return out;
 }
 
+bool CheckDynamicShapeConfig(const paddle2onnx::OnnxReader& reader,
+                             const TrtBackendOption& option) {
+  paddle2onnx::ModelTensorInfo inputs[reader.NumInputs()];
+  std::string input_shapes[reader.NumInputs()];
+  for (int i = 0; i < reader.NumInputs(); ++i) {
+    reader.GetInputInfo(i, &inputs[i]);
+
+    // change 0 to -1, when input_dim is a string, onnx will make it to zero
+    for (int j = 0; j < inputs[i].rank; ++j) {
+      if (inputs[i].shape[j] <= 0) {
+        inputs[i].shape[j] = -1;
+      }
+    }
+
+    input_shapes[i] = "";
+    for (int j = 0; j < inputs[i].rank; ++j) {
+      if (j != inputs[i].rank - 1) {
+        input_shapes[i] += (std::to_string(inputs[i].shape[j]) + ", ");
+      } else {
+        input_shapes[i] += std::to_string(inputs[i].shape[j]);
+      }
+    }
+  }
+
+  bool all_check_passed = true;
+  for (int i = 0; i < reader.NumInputs(); ++i) {
+    bool contain_unknown_dim = false;
+    for (int j = 0; j < inputs[i].rank; ++j) {
+      if (inputs[i].shape[j] < 0) {
+        contain_unknown_dim = true;
+      }
+    }
+
+    std::string name(inputs[i].name, strlen(inputs[i].name));
+    FDINFO << "The loaded model's input tensor:" << name
+           << " has shape [" + input_shapes[i] << "]." << std::endl;
+    if (contain_unknown_dim) {
+      auto iter1 = option.min_shape.find(name);
+      auto iter2 = option.max_shape.find(name);
+      auto iter3 = option.opt_shape.find(name);
+      if (iter1 == option.min_shape.end() || iter2 == option.max_shape.end() ||
+          iter3 == option.opt_shape.end()) {
+        FDERROR << "The loaded model's input tensor:" << name
+                << " has dynamic shape [" + input_shapes[i] +
+                       "], but didn't configure it's shape for tensorrt with "
+                       "SetTrtInputShape correctly."
+                << std::endl;
+        all_check_passed = false;
+      }
+    }
+  }
+
+  return all_check_passed;
+}
+
 bool TrtBackend::InitFromTrt(const std::string& trt_engine_file,
                              const TrtBackendOption& option) {
   if (initialized_) {
@@ -167,13 +222,17 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
         onnx_reader.output_names[i] + strlen(onnx_reader.output_names[i]));
     outputs_order_[name] = i;
   }
+  if (!CheckDynamicShapeConfig(onnx_reader, option)) {
+    FDERROR << "TrtBackend::CheckDynamicShapeConfig failed." << std::endl;
+    return false;
+  }
 
   if (option.serialize_file != "") {
     std::ifstream fin(option.serialize_file, std::ios::binary | std::ios::in);
     if (fin) {
-      FDLogger() << "Detect serialized TensorRT Engine file in "
-                 << option.serialize_file << ", will load it directly."
-                 << std::endl;
+      FDINFO << "Detect serialized TensorRT Engine file in "
+             << option.serialize_file << ", will load it directly."
+             << std::endl;
       fin.close();
       return InitFromTrt(option.serialize_file);
     }
@@ -311,9 +370,9 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
 
   if (option.enable_fp16) {
     if (!builder->platformHasFastFp16()) {
-      FDLogger() << "[WARN] Detected FP16 is not supported in the current GPU, "
-                    "will use FP32 instead."
-                 << std::endl;
+      FDWARNING << "Detected FP16 is not supported in the current GPU, "
+                   "will use FP32 instead."
+                << std::endl;
     } else {
       config->setFlag(nvinfer1::BuilderFlag::kFP16);
     }
@@ -330,33 +389,13 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
     return false;
   }
 
-  FDLogger() << "Start to building TensorRT Engine..." << std::endl;
+  FDINFO << "Start to building TensorRT Engine..." << std::endl;
   bool fp16 = builder->platformHasFastFp16();
   builder->setMaxBatchSize(option.max_batch_size);
 
   config->setMaxWorkspaceSize(option.max_workspace_size);
 
-  if (option.fixed_shape.size() > 0) {
-    auto profile = builder->createOptimizationProfile();
-    for (auto& item : option.fixed_shape) {
-      FDASSERT(profile->setDimensions(item.first.c_str(),
-                                      nvinfer1::OptProfileSelector::kMIN,
-                                      sample::toDims(item.second)),
-               "[TrtBackend] Failed to set min_shape for input: " + item.first +
-                   " in TrtBackend.");
-      FDASSERT(profile->setDimensions(item.first.c_str(),
-                                      nvinfer1::OptProfileSelector::kOPT,
-                                      sample::toDims(item.second)),
-               "[TrtBackend] Failed to set min_shape for input: " + item.first +
-                   " in TrtBackend.");
-      FDASSERT(profile->setDimensions(item.first.c_str(),
-                                      nvinfer1::OptProfileSelector::kMAX,
-                                      sample::toDims(item.second)),
-               "[TrtBackend] Failed to set min_shape for input: " + item.first +
-                   " in TrtBackend.");
-    }
-    config->addOptimizationProfile(profile);
-  } else if (option.max_shape.size() > 0) {
+  if (option.max_shape.size() > 0) {
     auto profile = builder->createOptimizationProfile();
     FDASSERT(option.max_shape.size() == option.min_shape.size() &&
                  option.min_shape.size() == option.opt_shape.size(),
@@ -416,10 +455,10 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
     return false;
   }
 
-  FDLogger() << "TensorRT Engine is built succussfully." << std::endl;
+  FDINFO << "TensorRT Engine is built succussfully." << std::endl;
   if (option.serialize_file != "") {
-    FDLogger() << "Serialize TensorRTEngine to local file "
-               << option.serialize_file << "." << std::endl;
+    FDINFO << "Serialize TensorRTEngine to local file " << option.serialize_file
+           << "." << std::endl;
     std::ofstream engine_file(option.serialize_file.c_str());
     if (!engine_file) {
       FDERROR << "Failed to open " << option.serialize_file << " to write."
@@ -428,11 +467,11 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
     }
     engine_file.write(static_cast<char*>(plan->data()), plan->size());
     engine_file.close();
-    FDLogger() << "TensorRTEngine is serialized to local file "
-               << option.serialize_file
-               << ", we can load this model from the seralized engine "
-                  "directly next time."
-               << std::endl;
+    FDINFO << "TensorRTEngine is serialized to local file "
+           << option.serialize_file
+           << ", we can load this model from the seralized engine "
+              "directly next time."
+           << std::endl;
   }
   return true;
 }
