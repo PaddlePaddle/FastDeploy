@@ -32,6 +32,8 @@ def RuntimeOptionStr(runtime_option):
     for attr in attrs:
         if attr.startswith("__"):
             continue
+        if hasattr(getattr(runtime_option, attr), "__call__"):
+            continue
         message += "  {} : {}\t\n".format(attr, getattr(runtime_option, attr))
     message.strip("\n")
     message += ")"
