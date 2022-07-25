@@ -29,6 +29,10 @@
 #cmakedefine ENABLE_ORT_BACKEND
 #endif
 
+#ifndef ENABLE_PADDLE_BACKEND
+#cmakedefine ENABLE_PADDLE_BACKEND
+#endif
+
 #ifndef WITH_GPU
 #cmakedefine WITH_GPU
 #endif

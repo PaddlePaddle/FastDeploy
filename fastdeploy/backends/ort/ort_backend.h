@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
-#include "onnxruntime_cxx_api.h" // NOLINT
+#include "onnxruntime_cxx_api.h"  // NOLINT
 
 namespace fastdeploy {
 
@@ -68,6 +68,8 @@ class OrtBackend : public BaseBackend {
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
+  static std::vector<OrtCustomOp*> custom_operators_;
+  void InitCustomOperators();
 
  private:
   Ort::Env env_;
@@ -76,9 +78,8 @@ class OrtBackend : public BaseBackend {
   std::shared_ptr<Ort::IoBinding> binding_;
   std::vector<OrtValueInfo> inputs_desc_;
   std::vector<OrtValueInfo> outputs_desc_;
-
+  Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
   OrtBackendOption option_;
-
   void CopyToCpu(const Ort::Value& value, FDTensor* tensor);
 };
-} // namespace fastdeploy
+}  // namespace fastdeploy

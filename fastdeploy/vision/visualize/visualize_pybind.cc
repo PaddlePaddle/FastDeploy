@@ -25,11 +25,21 @@ void BindVisualize(pybind11::module& m) {
                     vision::Visualize::VisDetection(&im, result, line_size,
                                                     font_size);
                   })
-      .def_static("vis_face_detection", [](pybind11::array& im_data,
-                                           vision::FaceDetectionResult& result,
-                                           int line_size, float font_size) {
-        auto im = PyArrayToCvMat(im_data);
-        vision::Visualize::VisFaceDetection(&im, result, line_size, font_size);
+      .def_static(
+          "vis_face_detection",
+          [](pybind11::array& im_data, vision::FaceDetectionResult& result,
+             int line_size, float font_size) {
+            auto im = PyArrayToCvMat(im_data);
+            vision::Visualize::VisFaceDetection(&im, result, line_size,
+                                                font_size);
+          })
+      .def_static("vis_segmentation", [](pybind11::array& im_data,
+                                         vision::SegmentationResult& result,
+                                         pybind11::array& vis_im_data,
+                                         const int& num_classes) {
+        cv::Mat im = PyArrayToCvMat(im_data);
+        cv::Mat vis_im = PyArrayToCvMat(vis_im_data);
+        vision::Visualize::VisSegmentation(im, result, &vis_im, num_classes);
       });
 }
 }  // namespace fastdeploy

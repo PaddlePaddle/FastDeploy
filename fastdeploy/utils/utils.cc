@@ -31,4 +31,4 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   return *this;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
