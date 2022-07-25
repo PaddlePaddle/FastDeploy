@@ -353,10 +353,10 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     if os.path.exists("fastdeploy/libs/third_libs"):
         shutil.rmtree("fastdeploy/libs/third_libs")
-#    shutil.copytree(
-#        ".setuptools-cmake-build/third_libs/install",
-#        "fastdeploy/libs/third_libs",
-#        symlinks=True)
+    shutil.copytree(
+        ".setuptools-cmake-build/third_libs/install",
+        "fastdeploy/libs/third_libs",
+        symlinks=True)
 
     if platform.system().lower() == "linux":
         rpaths = ["${ORIGIN}"]
@@ -380,8 +380,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     all_files = get_all_files("fastdeploy/libs")
     for f in all_files:
-        if f.count("third_libs") > 0:
-            continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
 
 setuptools.setup(
