@@ -126,6 +126,15 @@ class ONNXCommand(setuptools.Command):
         pass
 
 
+def get_all_files(dirname):
+    files = list()
+    for root, dirs, filenames in os.walk(dirname):
+        for f in filenames:
+            fullname = os.path.join(root, f)
+            files.append(fullname)
+    return files
+
+
 class create_version(ONNXCommand):
     def run(self):
         with open(os.path.join(SRC_DIR, 'version.py'), 'w') as f:
@@ -326,50 +335,54 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy("LICENSE", "fastdeploy")
     depend_libs = list()
 
-    if platform.system().lower() == "linux":
-        for f in os.listdir(".setuptools-cmake-build"):
-            full_name = os.path.join(".setuptools-cmake-build", f)
-            if not os.path.isfile(full_name):
-                continue
-            if not full_name.count("fastdeploy_main.cpython-"):
-                continue
-            if not full_name.endswith(".so"):
-                continue
-            # modify the search path of libraries
-            command = "patchelf --set-rpath '$ORIGIN/libs/' {}".format(
-                full_name)
-            # The sw_64 not suppot patchelf, so we just disable that.
-            if platform.machine() != 'sw_64' and platform.machine(
-            ) != 'mips64':
-                assert os.system(
-                    command
-                ) == 0, "patch fastdeploy_main.cpython-36m-x86_64-linux-gnu.so failed, the command: {}".format(
-                    command)
-
+    # copy fastdeploy library
+    pybind_so_file = None
     for f in os.listdir(".setuptools-cmake-build"):
         if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):
             continue
-        if f.count("libfastdeploy") > 0:
+        if f.count("fastdeploy") > 0:
             shutil.copy(
                 os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
-    for dirname in os.listdir(".setuptools-cmake-build/third_libs/install"):
-        for lib in os.listdir(
-                os.path.join(".setuptools-cmake-build/third_libs/install",
-                             dirname, "lib")):
-            if lib.count(".so") == 0 and lib.count(
-                    ".dylib") == 0 and lib.count(".a") == 0:
-                continue
-            if not os.path.isfile(
-                    os.path.join(".setuptools-cmake-build/third_libs/install",
-                                 dirname, "lib", lib)):
-                continue
-            shutil.copy(
-                os.path.join(".setuptools-cmake-build/third_libs/install",
-                             dirname, "lib", lib), "fastdeploy/libs")
+        if f.count("fastdeploy_main.cpython-"):
+            pybind_so_file = f
 
-    all_libs = os.listdir("fastdeploy/libs")
-    for lib in all_libs:
-        package_data[PACKAGE_NAME].append(os.path.join("libs", lib))
+    if not os.path.exists(".setuptools-cmake-build/third_libs/install"):
+        raise Exception(
+            "Cannot find directory third_libs/install in .setuptools-cmake-build."
+        )
+
+    if os.path.exists("fastdeploy/libs/third_libs"):
+        shutil.rmtree("fastdeploy/libs/third_libs")
+#    shutil.copytree(
+#        ".setuptools-cmake-build/third_libs/install",
+#        "fastdeploy/libs/third_libs",
+#        symlinks=True)
+
+    if platform.system().lower() == "linux":
+        rpaths = ["${ORIGIN}"]
+        for root, dirs, files in os.walk(
+                ".setuptools-cmake-build/third_libs/install"):
+            for d in dirs:
+                if d == "lib":
+                    path = os.path.relpath(
+                        os.path.join(root, d),
+                        ".setuptools-cmake-build/third_libs/install")
+                    rpaths.append("${ORIGIN}/" + os.path.join(
+                        "libs/third_libs", path))
+        rpaths = ":".join(rpaths)
+        command = "patchelf --set-rpath '{}' ".format(rpaths) + os.path.join(
+            "fastdeploy/libs", pybind_so_file)
+        # The sw_64 not suppot patchelf, so we just disable that.
+        if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
+            assert os.system(
+                command) == 0, "patchelf {} failed, the command: {}".format(
+                    command, pybind_so_file)
+
+    all_files = get_all_files("fastdeploy/libs")
+    for f in all_files:
+        if f.count("third_libs") > 0:
+            continue
+        package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
 
 setuptools.setup(
     name=PACKAGE_NAME,
@@ -382,9 +395,9 @@ setuptools.setup(
     include_package_data=True,
     setup_requires=setup_requires,
     extras_require=extras_require,
-    author='paddle-infer',
-    author_email='paddle-infer@baidu.com',
-    url='https://github.com/PaddlePaddle/Paddle2ONNX.git',
+    author='fastdeploy',
+    author_email='fastdeploy@baidu.com',
+    url='https://github.com/PaddlePaddle/FastDeploy.git',
     install_requires=REQUIRED_PACKAGES,
     classifiers=[
         "Programming Language :: Python :: 3",

@@ -18,7 +18,7 @@ namespace fastdeploy {
 
 bool FastDeployModel::InitRuntime() {
   FDASSERT(
-      ModelFormatCheck(runtime_option.model_file, runtime_option.model_format),
+      CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
       "ModelFormatCheck Failed.");
   if (runtime_initialized_) {
     FDERROR << "The model is already initialized, cannot be initliazed again."
@@ -132,9 +132,9 @@ void FastDeployModel::EnableDebug() {
 #ifdef FASTDEPLOY_DEBUG
   debug_ = true;
 #else
-  FDLogger() << "The compile FastDeploy is not with -DENABLE_DEBUG=ON, so "
-                "cannot enable debug mode."
-             << std::endl;
+  FDWARNING << "The compile FastDeploy is not with -DENABLE_DEBUG=ON, so "
+               "cannot enable debug mode."
+            << std::endl;
   debug_ = false;
 #endif
 }
