@@ -44,6 +44,7 @@ setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
+setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "OFF")
 setup_configs["BUILD_DEMO"] = os.getenv("BUILD_DEMO", "ON")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
@@ -353,10 +354,10 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     if os.path.exists("fastdeploy/libs/third_libs"):
         shutil.rmtree("fastdeploy/libs/third_libs")
-#    shutil.copytree(
-#        ".setuptools-cmake-build/third_libs/install",
-#        "fastdeploy/libs/third_libs",
-#        symlinks=True)
+    shutil.copytree(
+        ".setuptools-cmake-build/third_libs/install",
+        "fastdeploy/libs/third_libs",
+        symlinks=True)
 
     if platform.system().lower() == "linux":
         rpaths = ["${ORIGIN}"]
@@ -380,8 +381,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     all_files = get_all_files("fastdeploy/libs")
     for f in all_files:
-        if f.count("third_libs") > 0:
-            continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
 
 setuptools.setup(
