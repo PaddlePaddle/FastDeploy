@@ -18,27 +18,28 @@
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
-namespace vision {
-namespace wongkinyiu {
 
-class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
+namespace vision {
+
+namespace deepcam {
+
+class FASTDEPLOY_DECL YOLOv5Face : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  ScaledYOLOv4(const std::string& model_file,
-               const std::string& params_file = "",
-               const RuntimeOption& custom_option = RuntimeOption(),
-               const Frontend& model_format = Frontend::ONNX);
+  YOLOv5Face(const std::string& model_file, const std::string& params_file = "",
+             const RuntimeOption& custom_option = RuntimeOption(),
+             const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  virtual std::string ModelName() const { return "WongKinYiu/ScaledYOLOv4"; }
+  std::string ModelName() const { return "deepcam-cn/yolov5-face"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
   // result 为模型预测的输出结构体
   // conf_threshold 为后处理的参数
   // nms_iou_threshold 为后处理的参数
-  virtual bool Predict(cv::Mat* im, DetectionResult* result,
+  virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25,
                        float nms_iou_threshold = 0.5);
 
@@ -59,8 +60,10 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
   bool is_scale_up;
   // padding stride, for is_mini_pad
   int stride;
-  // for offseting the boxes by classes when using NMS
-  float max_wh;
+  // setup the number of landmarks for per face (if have), default 5 in
+  // official yolov5face note that, the outupt tensor's shape must be:
+  // (1,n,4+1+2*landmarks_per_face+1=box+obj+landmarks+cls)
+  int landmarks_per_face;
 
  private:
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
@@ -79,18 +82,16 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  bool Postprocess(FDTensor& infer_result, DetectionResult* result,
+  bool Postprocess(FDTensor& infer_result, FaceDetectionResult* result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
 
-  // 对图片进行LetterBox处理
-  // mat 为读取到的原图
-  // size 为输入模型的图像尺寸
-  void LetterBox(Mat* mat, const std::vector<int>& size,
-                 const std::vector<float>& color, bool _auto,
-                 bool scale_fill = false, bool scale_up = true,
-                 int stride = 32);
+  // 查看输入是否为动态维度的 不建议直接使用 不同模型的逻辑可能不一致
+  bool IsDynamicInput() const { return is_dynamic_input_; }
+
+  bool is_dynamic_input_;
 };
-}  // namespace wongkinyiu
+
+}  // namespace deepcam
 }  // namespace vision
 }  // namespace fastdeploy
