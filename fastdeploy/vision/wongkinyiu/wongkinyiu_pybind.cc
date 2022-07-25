@@ -56,5 +56,24 @@ void BindWongkinyiu(pybind11::module& m) {
       .def_readwrite("is_scale_up", &vision::wongkinyiu::YOLOR::is_scale_up)
       .def_readwrite("stride", &vision::wongkinyiu::YOLOR::stride)
       .def_readwrite("max_wh", &vision::wongkinyiu::YOLOR::max_wh);
+
+  pybind11::class_<vision::wongkinyiu::ScaledYOLOv4, FastDeployModel>(
+      wongkinyiu_module, "ScaledYOLOv4")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::wongkinyiu::ScaledYOLOv4& self, pybind11::array& data,
+              float conf_threshold, float nms_iou_threshold) {
+             auto mat = PyArrayToCvMat(data);
+             vision::DetectionResult res;
+             self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
+             return res;
+           })
+      .def_readwrite("size", &vision::wongkinyiu::ScaledYOLOv4::size)
+      .def_readwrite("padding_value", &vision::wongkinyiu::ScaledYOLOv4::padding_value)
+      .def_readwrite("is_mini_pad", &vision::wongkinyiu::ScaledYOLOv4::is_mini_pad)
+      .def_readwrite("is_no_pad", &vision::wongkinyiu::ScaledYOLOv4::is_no_pad)
+      .def_readwrite("is_scale_up", &vision::wongkinyiu::ScaledYOLOv4::is_scale_up)
+      .def_readwrite("stride", &vision::wongkinyiu::ScaledYOLOv4::stride)
+      .def_readwrite("max_wh", &vision::wongkinyiu::ScaledYOLOv4::max_wh);
 }
 }  // namespace fastdeploy
