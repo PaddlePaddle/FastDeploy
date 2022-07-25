@@ -44,7 +44,7 @@ setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
-setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "ON")
+setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "OFF")
 setup_configs["BUILD_DEMO"] = os.getenv("BUILD_DEMO", "ON")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
