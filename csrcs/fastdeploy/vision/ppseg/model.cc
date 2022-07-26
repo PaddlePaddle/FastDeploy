@@ -90,12 +90,6 @@ bool Model::Preprocess(Mat* mat, FDTensor* output) {
 
 bool Model::Postprocess(const FDTensor& infer_result,
                         SegmentationResult* result) {
-
-  if (need_resize) {
-    Mat mat(cv::Mat(infer_result[0].Data()));
-    Resize::Run(mat, (500, 1000), 2);
-    
-  }
   FDASSERT(infer_result.dtype == FDDataType::INT64,
            "Require the data type of output is int64, but now it's " +
                Str(const_cast<fastdeploy::FDDataType&>(infer_result.dtype)) +
