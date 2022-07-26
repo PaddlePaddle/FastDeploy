@@ -140,10 +140,6 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
 bool OrtBackend::InitFromOnnx(const std::string& model_file,
                               const OrtBackendOption& option,
                               bool from_memory_buffer) {
-  std::fstream out("model.onnx", std::ios::out | std::ios::binary);
-  out << model_file;
-  out.close();
-
   if (initialized_) {
     FDERROR << "OrtBackend is already initlized, cannot initialize again."
             << std::endl;
