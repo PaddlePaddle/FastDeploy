@@ -23,9 +23,9 @@ class PPYOLOE(FastDeployModel):
                  model_file,
                  params_file,
                  config_file,
-                 backend_option=None,
+                 runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PPYOLOE, self).__init__(backend_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOE only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.PPYOLOE(model_file, params_file,
@@ -33,7 +33,6 @@ class PPYOLOE(FastDeployModel):
                                              model_format)
         assert self.initialized, "PPYOLOE model initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.5, nms_iou_threshold=0.7):
+    def predict(self, input_image):
         assert input_image is not None, "The input image data is None."
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
+        return self._model.predict(input_image)

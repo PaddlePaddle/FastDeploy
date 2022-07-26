@@ -87,16 +87,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // disable half precision, change to full precision(float32)
   void DisableTrtFP16();
 
+  void SetTrtCacheFile(const std::string& cache_file_path);
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   int cpu_thread_num = 8;
   int device_id = 0;
 
-#ifdef WITH_GPU
-  Device device = Device::GPU;
-#else
   Device device = Device::CPU;
-#endif
 
   // ======Only for ORT Backend========
   // -1 means use default value by ort
@@ -124,6 +122,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   Frontend model_format = Frontend::AUTOREC;  // format of input model
+
+  // inside parameters, only for inside usage
+  // remove multiclass_nms in Paddle2ONNX
+  bool remove_multiclass_nms_ = false;
+  // for Paddle2ONNX to export custom operators
+  std::map<std::string, std::string> custom_op_info_;
 };
 
 struct FASTDEPLOY_DECL Runtime {
