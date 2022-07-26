@@ -372,7 +372,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                         "libs/third_libs", path))
         rpaths = ":".join(rpaths)
         command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
-        print(command, "--------")
         # The sw_64 not suppot patchelf, so we just disable that.
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
             assert os.system(
