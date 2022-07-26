@@ -124,6 +124,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   Frontend model_format = Frontend::AUTOREC;  // format of input model
+
+  // inside parameters, only for inside usage
+  // remove multiclass_nms in Paddle2ONNX
+  bool remove_multiclass_nms_ = false;
+  // for Paddle2ONNX to export custom operators
+  std::map<std::string, std::string> custom_op_info_;
 };
 
 struct FASTDEPLOY_DECL Runtime {

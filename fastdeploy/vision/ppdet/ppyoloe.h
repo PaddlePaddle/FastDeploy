@@ -25,8 +25,7 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
-                           DetectionResult* result, float conf_threshold,
-                           float nms_threshold);
+                           DetectionResult* result);
 
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.5, float nms_threshold = 0.7);
@@ -34,10 +33,15 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
  private:
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
-  // PaddleDetection can export model without nms
-  // This flag will help us to handle the different
-  // situation
-  bool has_nms_;
+  // configuration for nms
+  int64_t background_label = -1;
+  int64_t keep_top_k = 300;
+  float nms_eta = 1.0;
+  float nms_threshold = 0.7;
+  float score_threshold = 0.01;
+  int64_t nms_top_k = 10000;
+  bool normalized = true;
+  bool has_nms_ = false;
 };
 }  // namespace ppdet
 }  // namespace vision

@@ -107,16 +107,26 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
 #ifdef ENABLE_PADDLE_FRONTEND
   char* model_content_ptr;
   int model_content_size = 0;
+
+  std::vector<paddle2onnx::CustomOp> custom_ops;
+  for (auto& item : option.custom_op_info_) {
+    paddle2onnx::CustomOp op;
+    strcpy(op.op_name, item.first.c_str());
+    strcpy(op.export_op_name, item.second.c_str());
+    custom_ops.emplace_back(op);
+  }
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true)) {
+                           verbose, true, true, true, custom_ops.data(),
+                           custom_ops.size())) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
   }
+
   std::string onnx_model_proto(model_content_ptr,
                                model_content_ptr + model_content_size);
-  delete model_content_ptr;
+  delete[] model_content_ptr;
   model_content_ptr = nullptr;
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
@@ -130,6 +140,10 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
 bool OrtBackend::InitFromOnnx(const std::string& model_file,
                               const OrtBackendOption& option,
                               bool from_memory_buffer) {
+  std::fstream out("model.onnx", std::ios::out | std::ios::binary);
+  out << model_file;
+  out.close();
+
   if (initialized_) {
     FDERROR << "OrtBackend is already initlized, cannot initialize again."
             << std::endl;
