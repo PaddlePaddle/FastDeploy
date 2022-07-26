@@ -19,9 +19,10 @@ from . import fastdeploy_main as C
 class FastDeployModel:
     def __init__(self, option):
         self._model = None
-        self._runtime_option = option._option
-        if self._runtime_option is None:
+        if option is None:
             self._runtime_option = C.RuntimeOption()
+        else:
+            self._runtime_option = option._option
 
     def model_name(self):
         return self._model.model_name()
