@@ -14,6 +14,7 @@
 
 #ifdef ENABLE_VISION_VISUALIZE
 
+#include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -24,15 +25,33 @@ namespace vision {
 void Visualize::VisSegmentation(const cv::Mat& im,
                                 const SegmentationResult& result,
                                 cv::Mat* vis_img, const int& num_classes) {
+  int origin_h = im.rows;
+  int origin_w = im.cols;
   auto color_map = GetColorMap(num_classes);
-  int64_t height = result.masks.size();
-  int64_t width = result.masks[1].size();
-  *vis_img = cv::Mat::zeros(height, width, CV_8UC3);
+  int mask_h = result.masks.size();
+  int mask_w = result.masks[0].size();
+  *vis_img = cv::Mat::zeros(origin_h, origin_w, CV_8UC3);
+  cv::Mat mask_mat(mask_h, mask_w, CV_32FC1);
+
+  for (int i = 0; i < mask_h; ++i) {
+    for (int j = 0; j < mask_w; ++j) {
+      mask_mat.at<float>(i, j) = static_cast<float>(result.masks[i][j]);
+    }
+  }
+  Mat mat(mask_mat);
+  if (origin_h != mask_h || origin_w != mask_w) {
+    Resize::Run(&mat, origin_w, origin_h);
+  }
+#ifdef ENABLE_OPENCV_CUDA
+  cv::cuda::GpuMat* im_mask = mat.GetGpuMat();
+#else
+  cv::Mat* im_mask = mat.GetCpuMat();
+#endif
 
   int64_t index = 0;
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      int category_id = static_cast<int>(result.masks[i][j]);
+  for (int i = 0; i < origin_h; i++) {
+    for (int j = 0; j < origin_w; j++) {
+      int category_id = static_cast<int>((*im_mask).at<float>(i, j));
       vis_img->at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
       vis_img->at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
       vis_img->at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
