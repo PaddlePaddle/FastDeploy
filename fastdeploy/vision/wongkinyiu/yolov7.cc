@@ -43,7 +43,9 @@ void YOLOv7::LetterBox(Mat* mat, const std::vector<int>& size,
     resize_h = size[1];
     resize_w = size[0];
   }
-  Resize::Run(mat, resize_w, resize_h);
+  if (resize_h != mat->Height() || resize_w != mat->Width()) {
+    Resize::Run(mat, resize_w, resize_h);
+  }
   if (pad_h > 0 || pad_w > 0) {
     float half_h = pad_h * 1.0 / 2;
     int top = int(round(half_h - 0.1));
@@ -92,8 +94,8 @@ bool YOLOv7::Initialize() {
 bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
-  double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
-                                            static_cast<float>(mat->Width()));
+  float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
+                         size[0] * 1.0f / static_cast<float>(mat->Width()));
   if (ratio != 1.0) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
@@ -110,8 +112,12 @@ bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
   YOLOv7::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
                     is_scale_up, stride);
   BGR2RGB::Run(mat);
-  Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-                 std::vector<float>(mat->Channels(), 1.0));
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
+  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
@@ -168,9 +174,14 @@ bool YOLOv7::Postprocess(
   float ipt_h = iter_ipt->second[0];
   float ipt_w = iter_ipt->second[1];
   float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+  float pad_h = (out_h - ipt_h * scale) / 2.0f;
+  float pad_w = (out_w - ipt_w * scale) / 2.0f;
+  if (is_mini_pad) {
+    // 和 LetterBox中_auto=true的处理逻辑对应 
+    pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
+    pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
+  }
   for (size_t i = 0; i < result->boxes.size(); ++i) {
-    float pad_h = (out_h - ipt_h * scale) / 2;
-    float pad_w = (out_w - ipt_w * scale) / 2;
     int32_t label_id = (result->label_ids)[i];
     // clip box
     result->boxes[i][0] = result->boxes[i][0] - max_wh * label_id;
@@ -181,10 +192,10 @@ bool YOLOv7::Postprocess(
     result->boxes[i][1] = std::max((result->boxes[i][1] - pad_h) / scale, 0.0f);
     result->boxes[i][2] = std::max((result->boxes[i][2] - pad_w) / scale, 0.0f);
     result->boxes[i][3] = std::max((result->boxes[i][3] - pad_h) / scale, 0.0f);
-    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w);
-    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h);
-    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w);
-    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h);
+    result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w - 1.0f);
+    result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h - 1.0f);
+    result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w - 1.0f);
+    result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
   }
   return true;
 }
