@@ -13,3 +13,4 @@
 # limitations under the License.
 from __future__ import absolute_import
 from .classify import eval_classify
+from .detection import eval_detection
