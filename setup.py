@@ -345,7 +345,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             shutil.copy(
                 os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
         if f.count("fastdeploy_main.cpython-"):
-            pybind_so_file = f
+            pybind_so_file = os.path.join(".setuptools-cmake-build", f)
 
     if not os.path.exists(".setuptools-cmake-build/third_libs/install"):
         raise Exception(
@@ -360,7 +360,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         symlinks=True)
 
     if platform.system().lower() == "linux":
-        rpaths = ["${ORIGIN}"]
+        rpaths = ["$ORIGIN:$ORIGIN/libs"]
         for root, dirs, files in os.walk(
                 ".setuptools-cmake-build/third_libs/install"):
             for d in dirs:
@@ -368,11 +368,10 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                     path = os.path.relpath(
                         os.path.join(root, d),
                         ".setuptools-cmake-build/third_libs/install")
-                    rpaths.append("${ORIGIN}/" + os.path.join(
+                    rpaths.append("$ORIGIN/" + os.path.join(
                         "libs/third_libs", path))
         rpaths = ":".join(rpaths)
-        command = "patchelf --set-rpath '{}' ".format(rpaths) + os.path.join(
-            "fastdeploy/libs", pybind_so_file)
+        command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
         # The sw_64 not suppot patchelf, so we just disable that.
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
             assert os.system(

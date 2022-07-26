@@ -208,6 +208,11 @@ void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
 
 void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
 
+void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
+  trt_serialize_file = cache_file_path;
+}
+
+
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.model_format == Frontend::AUTOREC) {
