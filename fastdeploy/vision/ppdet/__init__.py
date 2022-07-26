@@ -33,7 +33,6 @@ class PPYOLOE(FastDeployModel):
                                              model_format)
         assert self.initialized, "PPYOLOE model initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.5, nms_iou_threshold=0.7):
+    def predict(self, input_image):
         assert input_image is not None, "The input image data is None."
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
+        return self._model.predict(input_image)

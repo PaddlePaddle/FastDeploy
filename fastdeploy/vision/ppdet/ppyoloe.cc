@@ -1,6 +1,9 @@
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
+#ifdef ENABLE_PADDLE_FRONTEND
+#include "paddle2onnx/converter.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -21,14 +24,37 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
 }
 
 bool PPYOLOE::Initialize() {
+#ifdef ENABLE_PADDLE_FRONTEND
+  // remove multiclass_nms3 now
+  // this is a trick operation for ppyoloe while inference on trt
+  if (runtime_option.model_format == Frontend::PADDLE) {
+    std::string contents;
+    if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
+      return false;
+    }
+    auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+    if (reader.has_nms) {
+      has_nms_ = true;
+    }
+  }
+  runtime_option.remove_multiclass_nms_ = true;
+  runtime_option.custom_op_info_["multiclass_nms3"] = "MultiClassNMS";
+#endif
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
-              << std::endl;
+            << std::endl;
     return false;
   }
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
+  }
+
+  if (has_nms_ && runtime_option.backend == Backend::TRT) {
+    FDINFO << "Detected operator multiclass_nms3 in your model, will replace "
+              "it with fastdeploy::backend::MultiClassNMS replace it."
+           << std::endl;
+    has_nms_ = false;
   }
   return true;
 }
@@ -40,14 +66,14 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     cfg = YAML::LoadFile(config_file_);
   } catch (YAML::BadFile& e) {
     FDERROR << "Failed to load yaml file " << config_file_
-              << ", maybe you should check this file." << std::endl;
+            << ", maybe you should check this file." << std::endl;
     return false;
   }
 
   if (cfg["arch"].as<std::string>() != "YOLO") {
     FDERROR << "Require the arch of model is YOLO, but arch defined in "
-                 "config file is "
-              << cfg["arch"].as<std::string>() << "." << std::endl;
+               "config file is "
+            << cfg["arch"].as<std::string>() << "." << std::endl;
     return false;
   }
   processors_.push_back(std::make_shared<BGR2RGB>());
@@ -77,7 +103,7 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       processors_.push_back(std::make_shared<HWC2CHW>());
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
-                << std::endl;
+              << std::endl;
       return false;
     }
   }
@@ -90,7 +116,7 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
-                << "." << std::endl;
+              << "." << std::endl;
       return false;
     }
   }
@@ -110,32 +136,70 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
 }
 
 bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
-                          DetectionResult* result, float conf_threshold,
-                          float nms_threshold) {
+                          DetectionResult* result) {
   FDASSERT(infer_result[1].shape[0] == 1,
            "Only support batch = 1 in FastDeploy now.");
-  int box_num = 0;
-  if (infer_result[1].dtype == FDDataType::INT32) {
-    box_num = *(static_cast<int32_t*>(infer_result[1].Data()));
-  } else if (infer_result[1].dtype == FDDataType::INT64) {
-    box_num = *(static_cast<int64_t*>(infer_result[1].Data()));
-  } else {
-    FDASSERT(
-        false,
-        "The output box_num of PPYOLOE model should be type of int32/int64.");
-  }
-  result->Reserve(box_num);
-  float* box_data = static_cast<float*>(infer_result[0].Data());
-  for (size_t i = 0; i < box_num; ++i) {
-    if (box_data[i * 6 + 1] < conf_threshold) {
-      continue;
+
+  if (!has_nms_) {
+    int boxes_index = 0;
+    int scores_index = 1;
+    if (infer_result[0].shape[1] == infer_result[1].shape[2]) {
+      boxes_index = 0;
+      scores_index = 1;
+    } else if (infer_result[0].shape[2] == infer_result[1].shape[1]) {
+      boxes_index = 1;
+      scores_index = 0;
+    } else {
+      FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
+                 "4], [batch, classes_num, boxes_num]"
+              << std::endl;
+      return false;
     }
-    result->label_ids.push_back(box_data[i * 6]);
-    result->scores.push_back(box_data[i * 6 + 1]);
-    result->boxes.emplace_back(
-        std::array<float, 4>{box_data[i * 6 + 2], box_data[i * 6 + 3],
-                             box_data[i * 6 + 4] - box_data[i * 6 + 2],
-                             box_data[i * 6 + 5] - box_data[i * 6 + 3]});
+
+    backend::MultiClassNMS nms;
+    nms.background_label = background_label;
+    nms.keep_top_k = keep_top_k;
+    nms.nms_eta = nms_eta;
+    nms.nms_threshold = nms_threshold;
+    nms.score_threshold = score_threshold;
+    nms.nms_top_k = nms_top_k;
+    nms.normalized = normalized;
+    nms.Compute(static_cast<float*>(infer_result[boxes_index].Data()),
+                static_cast<float*>(infer_result[scores_index].Data()),
+                infer_result[boxes_index].shape,
+                infer_result[scores_index].shape);
+    if (nms.out_num_rois_data[0] > 0) {
+      result->Reserve(nms.out_num_rois_data[0]);
+    }
+    for (size_t i = 0; i < nms.out_num_rois_data[0]; ++i) {
+      result->label_ids.push_back(nms.out_box_data[i * 6]);
+      result->scores.push_back(nms.out_box_data[i * 6 + 1]);
+      result->boxes.emplace_back(std::array<float, 4>{
+          nms.out_box_data[i * 6 + 2], nms.out_box_data[i * 6 + 3],
+          nms.out_box_data[i * 6 + 4] - nms.out_box_data[i * 6 + 2],
+          nms.out_box_data[i * 6 + 5] - nms.out_box_data[i * 6 + 3]});
+    }
+  } else {
+    int box_num = 0;
+    if (infer_result[1].dtype == FDDataType::INT32) {
+      box_num = *(static_cast<int32_t*>(infer_result[1].Data()));
+    } else if (infer_result[1].dtype == FDDataType::INT64) {
+      box_num = *(static_cast<int64_t*>(infer_result[1].Data()));
+    } else {
+      FDASSERT(
+          false,
+          "The output box_num of PPYOLOE model should be type of int32/int64.");
+    }
+    result->Reserve(box_num);
+    float* box_data = static_cast<float*>(infer_result[0].Data());
+    for (size_t i = 0; i < box_num; ++i) {
+      result->label_ids.push_back(box_data[i * 6]);
+      result->scores.push_back(box_data[i * 6 + 1]);
+      result->boxes.emplace_back(
+          std::array<float, 4>{box_data[i * 6 + 2], box_data[i * 6 + 3],
+                               box_data[i * 6 + 4] - box_data[i * 6 + 2],
+                               box_data[i * 6 + 5] - box_data[i * 6 + 3]});
+    }
   }
   return true;
 }
@@ -157,7 +221,7 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
-  if (!Postprocess(infer_result, result, conf_threshold, iou_threshold)) {
+  if (!Postprocess(infer_result, result)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

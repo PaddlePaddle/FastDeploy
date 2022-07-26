@@ -202,9 +202,6 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
   } else {
     trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
   }
-  FDINFO << trt_min_shape[input_name].size() << " "
-         << trt_opt_shape[input_name].size() << " "
-         << trt_max_shape[input_name].size() << std::endl;
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
@@ -295,6 +292,11 @@ void Runtime::CreateOrtBackend() {
   ort_option.execution_mode = option.ort_execution_mode;
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
+
+  // TODO(jiangjiajun): inside usage, maybe remove this later
+  ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
+  ort_option.custom_op_info_ = option.custom_op_info_;
+
   FDASSERT(option.model_format == Frontend::PADDLE ||
                option.model_format == Frontend::ONNX,
            "OrtBackend only support model format of Frontend::PADDLE / "
@@ -328,6 +330,11 @@ void Runtime::CreateTrtBackend() {
   trt_option.min_shape = option.trt_min_shape;
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
+
+  // TODO(jiangjiajun): inside usage, maybe remove this later
+  trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
+  trt_option.custom_op_info_ = option.custom_op_info_;
+
   FDASSERT(option.model_format == Frontend::PADDLE ||
                option.model_format == Frontend::ONNX,
            "TrtBackend only support model format of Frontend::PADDLE / "
