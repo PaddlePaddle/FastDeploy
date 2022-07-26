@@ -24,6 +24,7 @@
 #include "fastdeploy/vision/ultralytics/yolov5.h"
 #include "fastdeploy/vision/wongkinyiu/yolor.h"
 #include "fastdeploy/vision/wongkinyiu/yolov7.h"
+#include "fastdeploy/vision/wongkinyiu/scaledyolov4.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

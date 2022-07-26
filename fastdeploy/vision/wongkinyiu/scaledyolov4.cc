@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/wongkinyiu/yolor.h"
+#include "fastdeploy/vision/wongkinyiu/scaledyolov4.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -20,7 +20,7 @@ namespace fastdeploy {
 namespace vision {
 namespace wongkinyiu {
 
-void YOLOR::LetterBox(Mat* mat, const std::vector<int>& size,
+void ScaledYOLOv4::LetterBox(Mat* mat, const std::vector<int>& size,
                       const std::vector<float>& color, bool _auto,
                       bool scale_fill, bool scale_up, int stride) {
   float scale =
@@ -57,7 +57,7 @@ void YOLOR::LetterBox(Mat* mat, const std::vector<int>& size,
   }
 }
 
-YOLOR::YOLOR(const std::string& model_file, const std::string& params_file,
+ScaledYOLOv4::ScaledYOLOv4(const std::string& model_file, const std::string& params_file,
              const RuntimeOption& custom_option, const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
@@ -73,7 +73,7 @@ YOLOR::YOLOR(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool YOLOR::Initialize() {
+bool ScaledYOLOv4::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -90,7 +90,7 @@ bool YOLOR::Initialize() {
   return true;
 }
 
-bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
+bool ScaledYOLOv4::Preprocess(Mat* mat, FDTensor* output,
                        std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
@@ -104,11 +104,11 @@ bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-  // yolor's preprocess steps
+  // ScaledYOLOv4's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  YOLOR::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+  ScaledYOLOv4::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
                    is_scale_up, stride);
   BGR2RGB::Run(mat);
   // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
@@ -129,7 +129,7 @@ bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOR::Postprocess(
+bool ScaledYOLOv4::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -199,7 +199,7 @@ bool YOLOR::Postprocess(
   return true;
 }
 
-bool YOLOR::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
+bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                     float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
