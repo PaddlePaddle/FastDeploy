@@ -23,9 +23,9 @@ class PPYOLOE(FastDeployModel):
                  model_file,
                  params_file,
                  config_file,
-                 backend_option=None,
+                 runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PPYOLOE, self).__init__(backend_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOE only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.PPYOLOE(model_file, params_file,
