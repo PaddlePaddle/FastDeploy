@@ -65,6 +65,9 @@ class FASTDEPLOY_DECL FDLogger {
   bool verbose_ = true;
 };
 
+FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
+                                        std::string* contents);
+
 #ifndef __REL_FILE__
 #define __REL_FILE__ __FILE__
 #endif

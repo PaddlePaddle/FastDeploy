@@ -253,8 +253,5 @@ void MultiClassNmsKernel::GetAttribute(const OrtKernelInfo* info) {
   nms_top_k = ort_.KernelInfoGetAttribute<int64_t>(info, "nms_top_k");
   normalized = ort_.KernelInfoGetAttribute<int64_t>(info, "normalized");
   score_threshold = ort_.KernelInfoGetAttribute<float>(info, "score_threshold");
-  std::cout << background_label << " " << keep_top_k << " " << nms_eta << " "
-            << nms_threshold << " " << nms_top_k << " " << normalized << " "
-            << score_threshold << " " << std::endl;
 }
 }  // namespace fastdeploy

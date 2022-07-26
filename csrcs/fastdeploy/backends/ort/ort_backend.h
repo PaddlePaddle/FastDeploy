@@ -44,6 +44,10 @@ struct OrtBackendOption {
   int execution_mode = -1;
   bool use_gpu = false;
   int gpu_id = 0;
+
+  // inside parameter, maybe remove next version
+  bool remove_multiclass_nms_ = false;
+  std::map<std::string, std::string> custom_op_info_;
 };
 
 class OrtBackend : public BaseBackend {

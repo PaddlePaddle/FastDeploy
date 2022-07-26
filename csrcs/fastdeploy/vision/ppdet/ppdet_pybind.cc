@@ -21,11 +21,10 @@ void BindPPDet(pybind11::module& m) {
                                                             "PPYOLOE")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
-      .def("predict", [](vision::ppdet::PPYOLOE& self, pybind11::array& data,
-                         float conf_threshold, float nms_iou_threshold) {
+      .def("predict", [](vision::ppdet::PPYOLOE& self, pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         vision::DetectionResult res;
-        self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
+        self.Predict(&mat, &res);
         return res;
       });
 }

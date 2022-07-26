@@ -27,7 +27,7 @@ set(ONNXRUNTIME_LIB_DIR
     CACHE PATH "onnxruntime lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${ONNXRUNTIME_LIB_DIR}")
 
-set(ONNXRUNTIME_VERSION "1.11.1")
+set(ONNXRUNTIME_VERSION "1.12.0")
 set(ONNXRUNTIME_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs/")
 
 if(WIN32)

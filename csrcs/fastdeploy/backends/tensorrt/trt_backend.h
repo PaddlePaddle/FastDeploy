@@ -50,6 +50,10 @@ struct TrtBackendOption {
   std::map<std::string, std::vector<int32_t>> min_shape;
   std::map<std::string, std::vector<int32_t>> opt_shape;
   std::string serialize_file = "";
+
+  // inside parameter, maybe remove next version
+  bool remove_multiclass_nms_ = false;
+  std::map<std::string, std::string> custom_op_info_;
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);

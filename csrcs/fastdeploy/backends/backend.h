@@ -18,7 +18,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-
+#include "fastdeploy/backends/common/multiclass_nms.h"
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
@@ -45,4 +45,4 @@ class BaseBackend {
                      std::vector<FDTensor>* outputs) = 0;
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

@@ -31,4 +31,19 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   return *this;
 }
 
+bool ReadBinaryFromFile(const std::string& file, std::string* contents) {
+  std::ifstream fin(file, std::ios::in | std::ios::binary);
+  if (!fin.is_open()) {
+    FDERROR << "Failed to open file: " << file << " to read." << std::endl;
+    return false;
+  }
+  fin.seekg(0, std::ios::end);
+  contents->clear();
+  contents->resize(fin.tellg());
+  fin.seekg(0, std::ios::beg);
+  fin.read(&(contents->at(0)), contents->size());
+  fin.close();
+  return true;
+}
+
 }  // namespace fastdeploy
