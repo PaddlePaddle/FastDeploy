@@ -21,7 +21,8 @@ enum FASTDEPLOY_DECL ResultType {
   UNKNOWN_RESULT,
   CLASSIFY,
   DETECTION,
-  SEGMENTATION
+  SEGMENTATION,
+  FACE_DETECTION
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -52,6 +53,44 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   void Reserve(int size);
 
   void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
+  // box: xmin, ymin, xmax, ymax
+  std::vector<std::array<float, 4>> boxes;
+  // landmark: x, y, landmarks may empty if the
+  // model don't detect face with landmarks.
+  // Note, one face might have multiple landmarks,
+  // such as 5/19/21/68/98/..., etc.
+  std::vector<std::array<float, 2>> landmarks;
+  std::vector<float> scores;
+  ResultType type = ResultType::FACE_DETECTION;
+  // set landmarks_per_face manually in your post processes.
+  int landmarks_per_face;
+
+  FaceDetectionResult() { landmarks_per_face = 0; }
+  FaceDetectionResult(const FaceDetectionResult& res);
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  // mask
+  std::vector<std::vector<int64_t>> masks;
+
+  ResultType type = ResultType::SEGMENTATION;
+
+  void Clear();
+
+  void Resize(int64_t height, int64_t width);
 
   std::string Str();
 };

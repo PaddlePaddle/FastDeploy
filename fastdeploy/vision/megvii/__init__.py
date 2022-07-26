@@ -28,8 +28,8 @@ class YOLOX(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(YOLOX, self).__init__(runtime_option)
 
-        self._model = C.vision.megvii.YOLOX(
-            model_file, params_file, self._runtime_option, model_format)
+        self._model = C.vision.megvii.YOLOX(model_file, params_file,
+                                            self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOX initialize failed."
 
@@ -53,8 +53,8 @@ class YOLOX(FastDeployModel):
 
     @property
     def downsample_strides(self):
-        return self._model.downsample_strides        
-    
+        return self._model.downsample_strides
+
     @property
     def max_wh(self):
         return self._model.max_wh
@@ -78,16 +78,16 @@ class YOLOX(FastDeployModel):
     @is_decode_exported.setter
     def is_decode_exported(self, value):
         assert isinstance(
-            value, 
+            value,
             bool), "The value to set `is_decode_exported` must be type of bool."
-        self._model.max_wh = value
+        self._model.is_decode_exported = value
 
     @downsample_strides.setter
     def downsample_strides(self, value):
         assert isinstance(
             value,
             list), "The value to set `downsample_strides` must be type of list."
-        self._model.downsample_strides = value          
+        self._model.downsample_strides = value
 
     @max_wh.setter
     def max_wh(self, value):
