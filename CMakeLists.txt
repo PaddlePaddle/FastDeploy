@@ -37,8 +37,7 @@ if(NOT MSVC)
 endif(NOT MSVC)
 
 #############################CMAKE FOR FASTDEPLOY################################
-#option(ENABLE_PADDLE_FRONTEND "if to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
-set(ENABLE_PADDLE_FRONTEND ON)
+option(ENABLE_PADDLE_FRONTEND "if to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "if WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
 option(ENABLE_ORT_BACKEND "if to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "if to enable tensorrt backend." OFF)

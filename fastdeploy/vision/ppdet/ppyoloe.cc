@@ -1,7 +1,7 @@
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
-#ifdef ENABLE_PADDLE_BACKEND
+#ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
 
