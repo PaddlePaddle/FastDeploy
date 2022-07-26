@@ -12,3 +12,5 @@ fastdeploy.egg-info
 fastdeploy/version.py
 fastdeploy/LICENSE*
 fastdeploy/ThirdPartyNotices*
+*.so*
+fastdeploy/libs/third_libs

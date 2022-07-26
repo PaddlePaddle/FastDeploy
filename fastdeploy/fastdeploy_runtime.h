@@ -21,7 +21,9 @@
 namespace fastdeploy {
 
 enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
-enum FASTDEPLOY_DECL Frontend { PADDLE, ONNX };
+// AUTOREC will according to the name of model file
+// to decide which Frontend is
+enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const Frontend& f);
@@ -29,12 +31,63 @@ FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
 
-bool ModelFormatCheck(const std::string& model_file,
+bool CheckModelFormat(const std::string& model_file,
                       const Frontend& model_format);
+Frontend GuessModelFormat(const std::string& model_file);
 
 struct FASTDEPLOY_DECL RuntimeOption {
-  Backend backend = Backend::UNKNOWN;
+  // set path of model file and params file
+  // for onnx, only need to define model_file, but also need to
+  // define model_format
+  // model_format support 'paddle' / 'onnx' now.
+  void SetModelPath(const std::string& model_path,
+                    const std::string& params_path = "",
+                    const std::string& _model_format = "paddle");
 
+  // set model inference in GPU
+  void UseCpu();
+
+  // set model inference in CPU
+  void UseGpu(int gpu_id = 0);
+
+  // set number of thread while inference in CPU
+  void SetCpuThreadNum(int thread_num);
+
+  // use paddle inference backend
+  void UsePaddleBackend();
+
+  // use onnxruntime backend
+  void UseOrtBackend();
+
+  // use tensorrt backend
+  void UseTrtBackend();
+
+  // enable mkldnn while use paddle inference in CPU
+  void EnablePaddleMKLDNN();
+  // disable mkldnn while use paddle inference in CPU
+  void DisablePaddleMKLDNN();
+
+  // set size of cached shape while enable mkldnn with paddle inference backend
+  void SetPaddleMKLDNNCacheSize(int size);
+
+  // set tensorrt shape while the inputs of model contain dynamic shape
+  // min_shape: the minimum shape
+  // opt_shape: the most common shape while inference, default be empty
+  // max_shape: the maximum shape, default be empty
+
+  // if opt_shape, max_shape are empty, they will keep same with the min_shape
+  // which means the shape will be fixed as min_shape while inference
+  void SetTrtInputShape(
+      const std::string& input_name, const std::vector<int32_t>& min_shape,
+      const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
+      const std::vector<int32_t>& max_shape = std::vector<int32_t>());
+
+  // enable half precision while use tensorrt backend
+  void EnableTrtFP16();
+  // disable half precision, change to full precision(float32)
+  void DisableTrtFP16();
+
+  Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   int cpu_thread_num = 8;
   int device_id = 0;
@@ -59,7 +112,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int pd_mkldnn_cache_size = 1;
 
   // ======Only for Trt Backend=======
-  std::map<std::string, std::vector<int32_t>> trt_fixed_shape;
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
   std::map<std::string, std::vector<int32_t>> trt_min_shape;
   std::map<std::string, std::vector<int32_t>> trt_opt_shape;
@@ -71,7 +123,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
-  Frontend model_format = Frontend::PADDLE;  // format of input model
+  Frontend model_format = Frontend::AUTOREC;  // format of input model
 };
 
 struct FASTDEPLOY_DECL Runtime {

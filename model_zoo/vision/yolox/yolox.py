@@ -1,5 +1,5 @@
 import fastdeploy as fd
-import cv2 
+import cv2
 
 # 下载模型和测试图片
 model_url = "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx"
@@ -20,4 +20,3 @@ cv2.imwrite("vis_result.jpg", im)
 
 # 输出预测结果
 print(result)
-print(model.runtime_option)

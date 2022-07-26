@@ -22,4 +22,5 @@ from . import meituan
 from . import megvii
 from . import visualize
 from . import wongkinyiu
+from . import deepcam
 from . import rangilyu
