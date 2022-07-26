@@ -1,8 +1,7 @@
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
-#if defined(ENABLE_ORT_BACKEND) || defined(ENABLE_TRT_BACKEND) || \
-    defined(ENABLE_PADDLE_BACKEND)
+#ifdef ENABLE_PADDLE_BACKEND
 #include "paddle2onnx/converter.h"
 #endif
 
