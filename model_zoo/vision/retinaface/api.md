@@ -32,7 +32,7 @@ RetinaFace模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，�
 
 ## C++ API
 
-### UltraFace类
+### RetinaFace 类
 ```
 fastdeploy::vision::biubug6::RetinaFace(
         const string& model_file,
