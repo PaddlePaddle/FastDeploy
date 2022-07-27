@@ -11,17 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
 
-from . import evaluation
-from . import ppcls
-from . import ppdet
-from . import ppseg
-from . import ultralytics
-from . import meituan
-from . import megvii
-from . import visualize
-from . import wongkinyiu
-from . import deepcam
-from . import rangilyu
-from . import linzaer
+import platform
+import multiprocessing as mp
+
+
+def is_pic(img_name):
+    valid_suffix = ['JPEG', 'jpeg', 'JPG', 'jpg', 'BMP', 'bmp', 'PNG', 'png']
+    suffix = img_name.split('.')[-1]
+    if suffix not in valid_suffix:
+        return False
+    return True
+
+
+def get_num_workers(num_workers):
+    if not platform.system() == 'Linux':
+        # Dataloader with multi-process model is not supported
+        # on MacOS and Windows currently.
+        return 0
+    if num_workers == 'auto':
+        num_workers = mp.cpu_count() // 2 if mp.cpu_count() // 2 < 2 else 2
+    return num_workers

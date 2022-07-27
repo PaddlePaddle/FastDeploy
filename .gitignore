@@ -14,3 +14,4 @@ fastdeploy/LICENSE*
 fastdeploy/ThirdPartyNotices*
 *.so*
 fastdeploy/libs/third_libs
+csrcs/fastdeploy/core/config.h
