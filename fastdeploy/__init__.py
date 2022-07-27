@@ -13,12 +13,16 @@
 # limitations under the License.
 from __future__ import absolute_import
 import logging
-from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, Device
-from .fastdeploy_runtime import *
 from . import fastdeploy_main as C
+from .fastdeploy_runtime import *
 from . import vision
 from .download import download, download_and_decompress
 
+Frontend = C.Frontend
+Backend = C.Backend
+FDDataType = C.FDDataType
+TensorInfo = C.TensorInfo
+Device = C.Device
 
 def TensorInfoStr(tensor_info):
     message = "TensorInfo(name : '{}', dtype : '{}', shape : '{}')".format(
@@ -103,5 +107,6 @@ def RuntimeOptionStr(runtime_option):
     message.strip("\n")
     message += ")"
     return message
+
 C.TensorInfo.__repr__ = TensorInfoStr
 C.RuntimeOption.__repr__ = RuntimeOptionStr
