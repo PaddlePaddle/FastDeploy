@@ -18,10 +18,9 @@ from __future__ import print_function
 
 import sys
 import numpy as np
-import itertools
 from .map_utils import draw_pr_curve
 from .json_results import get_det_res, get_det_poly_res, get_seg_res, get_solov2_segm_res
-import logging as logging
+import .fd_logging as logging
 import copy
 
 
@@ -202,6 +201,8 @@ def cocoapi_eval(anns,
                 file_name='{}_precision_recall_curve.jpg'.format(nm["name"]))
 
         num_columns = min(6, len(results_per_category) * 2)
+
+        import itertools
         results_flatten = list(itertools.chain(*results_per_category))
         headers = ['category', 'AP'] * (num_columns // 2)
         results_2d = itertools.zip_longest(

@@ -19,4 +19,3 @@ from .json_results import *
 from .map_utils import *
 from .coco_utils import *
 from .coco import *
-from .cityscapes import Cityscapes
