@@ -20,7 +20,7 @@ import sys
 import numpy as np
 from .map_utils import draw_pr_curve
 from .json_results import get_det_res, get_det_poly_res, get_seg_res, get_solov2_segm_res
-import .fd_logging as logging
+from . import fd_logging as logging
 import copy
 
 
