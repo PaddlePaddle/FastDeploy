@@ -11,17 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
 
-from . import evaluation
-from . import ppcls
-from . import ppdet
-from . import ppseg
-from . import ultralytics
-from . import meituan
-from . import megvii
-from . import visualize
-from . import wongkinyiu
-from . import deepcam
-from . import rangilyu
-from . import linzaer
+from . import fd_logging
+from .util import *
+from .metrics import *
+from .json_results import *
+from .map_utils import *
+from .coco_utils import *
+from .coco import *
+from .cityscapes import Cityscapes
