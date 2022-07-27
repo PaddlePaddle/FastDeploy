@@ -26,8 +26,11 @@
   #下载yolov7模型文件
   wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 
-  # 导出onnx格式文件
+  # 导出onnx格式文件 (Tips: 对应 YOLOv7 release v0.1 代码)
   python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
+
+  # 如果您的代码版本中有支持NMS的ONNX文件导出，请使用如下命令导出ONNX文件(请暂时不要使用 "--end2end"，我们后续将支持带有NMS的ONNX模型的部署)
+  python export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
   # 移动onnx文件到demo目录
   cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/

@@ -15,7 +15,6 @@
 from __future__ import absolute_import
 import copy
 import os.path as osp
-import six
 import sys
 import numpy as np
 from . import fd_logging as logging
