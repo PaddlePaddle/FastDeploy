@@ -1,2 +1,5 @@
 opencv-python
 tqdm
+numpy
+pycocotools
+colorama
