@@ -130,8 +130,8 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
 
   (*outputs)[1].Allocate({1, 2}, FDDataType::FP32, InputInfoOfRuntime(1).name);
   float* ptr = static_cast<float*>((*outputs)[1].MutableData());
-  ptr[0] = mat->Height() * 1.0 / mat->Height();
-  ptr[1] = mat->Width() * 1.0 / mat->Width();
+  ptr[0] = mat->Height() * 1.0 / origin_h;
+  ptr[1] = mat->Width() * 1.0 / origin_w;
   return true;
 }
 
