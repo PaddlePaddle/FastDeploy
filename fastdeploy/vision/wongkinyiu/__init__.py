@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 import logging
 from ... import FastDeployModel, Frontend
-from ... import fastdeploy_main as C
+from ... import as C
 
 
 class YOLOv7(FastDeployModel):
