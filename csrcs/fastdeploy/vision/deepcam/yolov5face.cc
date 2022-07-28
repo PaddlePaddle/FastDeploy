@@ -155,14 +155,16 @@ bool YOLOv5Face::Postprocess(
     float conf_threshold, float nms_iou_threshold) {
   // infer_result: (1,n,16) 16=4+1+10+1
   FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
-  result->Clear();
-  // must be setup landmarks_per_face before reserve
-  result->landmarks_per_face = landmarks_per_face;
-  result->Reserve(infer_result.shape[1]);
   if (infer_result.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
   }
+
+  result->Clear();
+  // must be setup landmarks_per_face before reserve
+  result->landmarks_per_face = landmarks_per_face;
+  result->Reserve(infer_result.shape[1]);
+
   float* data = static_cast<float*>(infer_result.Data());
   for (size_t i = 0; i < infer_result.shape[1]; ++i) {
     float* reg_cls_ptr = data + (i * infer_result.shape[2]);

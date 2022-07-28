@@ -15,6 +15,7 @@
 
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
+#include "fastdeploy/vision/biubug6/retinaface.h"
 #include "fastdeploy/vision/deepcam/yolov5face.h"
 #include "fastdeploy/vision/linzaer/ultraface.h"
 #include "fastdeploy/vision/megvii/yolox.h"
