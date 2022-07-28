@@ -176,8 +176,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
       result->scores.push_back(nms.out_box_data[i * 6 + 1]);
       result->boxes.emplace_back(std::array<float, 4>{
           nms.out_box_data[i * 6 + 2], nms.out_box_data[i * 6 + 3],
-          nms.out_box_data[i * 6 + 4] - nms.out_box_data[i * 6 + 2],
-          nms.out_box_data[i * 6 + 5] - nms.out_box_data[i * 6 + 3]});
+          nms.out_box_data[i * 6 + 4], nms.out_box_data[i * 6 + 5]});
     }
   } else {
     int box_num = 0;
@@ -197,8 +196,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
       result->scores.push_back(box_data[i * 6 + 1]);
       result->boxes.emplace_back(
           std::array<float, 4>{box_data[i * 6 + 2], box_data[i * 6 + 3],
-                               box_data[i * 6 + 4] - box_data[i * 6 + 2],
-                               box_data[i * 6 + 5] - box_data[i * 6 + 3]});
+                               box_data[i * 6 + 4], box_data[i * 6 + 5]});
     }
   }
   return true;
