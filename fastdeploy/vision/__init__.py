@@ -25,3 +25,4 @@ from . import wongkinyiu
 from . import deepcam
 from . import rangilyu
 from . import linzaer
+from . import biubug6

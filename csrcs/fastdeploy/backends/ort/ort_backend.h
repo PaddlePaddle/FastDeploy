@@ -82,7 +82,9 @@ class OrtBackend : public BaseBackend {
   std::shared_ptr<Ort::IoBinding> binding_;
   std::vector<OrtValueInfo> inputs_desc_;
   std::vector<OrtValueInfo> outputs_desc_;
+#ifndef NON_64_PLATFORM
   Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
+#endif
   OrtBackendOption option_;
   void CopyToCpu(const Ort::Value& value, FDTensor* tensor);
 };

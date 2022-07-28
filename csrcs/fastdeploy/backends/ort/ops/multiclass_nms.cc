@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef NON_64_PLATFORM
+
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include <algorithm>
 #include "fastdeploy/core/fd_tensor.h"
@@ -255,3 +257,5 @@ void MultiClassNmsKernel::GetAttribute(const OrtKernelInfo* info) {
   score_threshold = ort_.KernelInfoGetAttribute<float>(info, "score_threshold");
 }
 }  // namespace fastdeploy
+
+#endif

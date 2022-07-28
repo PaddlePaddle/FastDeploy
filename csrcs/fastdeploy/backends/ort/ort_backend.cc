@@ -292,6 +292,7 @@ TensorInfo OrtBackend::GetOutputInfo(int index) {
 }
 
 void OrtBackend::InitCustomOperators() {
+#ifndef NON_64_PLATFORM
   if (custom_operators_.size() == 0) {
     MultiClassNmsOp* custom_op = new MultiClassNmsOp{};
     custom_operators_.push_back(custom_op);
@@ -300,6 +301,7 @@ void OrtBackend::InitCustomOperators() {
     custom_op_domain_.Add(custom_operators_[i]);
   }
   session_options_.Add(custom_op_domain_);
+#endif
 }
 
 }  // namespace fastdeploy
