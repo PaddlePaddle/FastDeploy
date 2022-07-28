@@ -46,6 +46,7 @@ option(CUDA_DIRECTORY "if build tensorrt backend, need to define path of cuda li
 option(TRT_DIRECTORY "if build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "if to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "if to enable visualize vision model result toolbox." ON)
+option(ENABLE_TEXT "whether to enable text models usage." OFF)
 
 # Please don't open this flag now, some bugs exists.
 option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow process image with GPU." OFF)
@@ -53,6 +54,7 @@ option(ENABLE_DEBUG "if to enable print debug information, this may reduce perfo
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
+option(WITH_TEXT_EXAMPLES "Whether to build fastdeply with text examples" OFF)
 
 # Check for 32bit system
 if(WIN32)
@@ -98,14 +100,21 @@ if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
 endif()
 
+if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  # ENABLE_TEXT must be ON if enable text examples.
+  message(STATUS "Found WITH_TEXT_EXAMPLES ON, so, force ENABLE_TEXT ON")
+  set(ENABLE_TEXT ON CACHE BOOL "force to enable text models usage" FORCE)
+endif()
+
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
+file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -205,6 +214,11 @@ else()
     message("While ENABLE_VISION=OFF, will force ENABLE_VISION_VISUALIZE=OFF.")
     set(ENABLE_VISION_VISUALIZE OFF)
   endif()
+endif()
+
+if(ENABLE_TEXT)
+  add_definitions(-DENABLE_TEXT)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
@@ -307,6 +321,12 @@ if(BUILD_FASTDEPLOY_PYTHON)
     file(GLOB_RECURSE VISION_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*_pybind.cc)
     list(REMOVE_ITEM DEPLOY_PYBIND_SRCS ${VISION_PYBIND_SRCS})
   endif()
+
+  if (NOT ENABLE_TEXT)
+    file(GLOB_RECURSE TEXT_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*_pybind.cc)
+    list(REMOVE_ITEM DEPLOY_PYBIND_SRCS ${TEXT_PYBIND_SRCS})
+  endif()
+
   add_library(${PY_LIBRARY_NAME} MODULE ${DEPLOY_PYBIND_SRCS})
   redefine_file_macro(${PY_LIBRARY_NAME})
   set_target_properties(${PY_LIBRARY_NAME} PROPERTIES PREFIX "")
