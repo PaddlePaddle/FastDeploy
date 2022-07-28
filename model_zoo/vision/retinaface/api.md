@@ -1,12 +1,12 @@
-# YOLOv5Face API说明
+# RetinaFace API说明
 
 ## Python API
 
-### YOLOv5Face类
+### RetinaFace类
 ```
-fastdeploy.vision.deepcam.YOLOv5Face(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
+fastdeploy.vision.biubug6.RetinaFace(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
 ```
-YOLOv5Face模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov5s-face.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
+RetinaFace模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`Pytorch_RetinaFace_mobile0.25-640-640.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -17,7 +17,7 @@ YOLOv5Face模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，�
 
 #### predict函数
 > ```
-> YOLOv5Face.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> RetinaFace.predict(image_data, conf_threshold=0.7, nms_iou_threshold=0.3)
 > ```
 > 模型预测结口，输入图像直接输出检测结果。
 >
@@ -27,20 +27,20 @@ YOLOv5Face模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，�
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
-示例代码参考[yolov5face.py](./yolov5face.py)
+示例代码参考[retinaface.py](./retinaface.py)
 
 
 ## C++ API
 
-### YOLOv5Face类
+### RetinaFace 类
 ```
-fastdeploy::vision::deepcam::YOLOv5Face(
+fastdeploy::vision::biubug6::RetinaFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
-YOLOv5Face模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov5s-face.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
+RetinaFace模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`Pytorch_RetinaFace_mobile0.25-640-640.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -51,9 +51,9 @@ YOLOv5Face模型加载和初始化，当model_format为`Frontend::ONNX`时，只
 
 #### Predict函数
 > ```
-> YOLOv5Face::Predict(cv::Mat* im, FaceDetectionResult* result,
->                     float conf_threshold = 0.25,
->                     float nms_iou_threshold = 0.5)
+> RetinaFace::Predict(cv::Mat* im, FaceDetectionResult* result,
+>                     float conf_threshold = 0.7,
+>                     float nms_iou_threshold = 0.3)
 > ```
 > 模型预测接口，输入图像直接输出检测结果。
 >
@@ -64,7 +64,7 @@ YOLOv5Face模型加载和初始化，当model_format为`Frontend::ONNX`时，只
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
-示例代码参考[cpp/yolov5face.cc](cpp/yolov5face.cc)
+示例代码参考[cpp/retinaface.cc](cpp/retinaface.cc)
 
 ## 其它API使用
 

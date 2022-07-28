@@ -14,7 +14,7 @@ model = fd.vision.ppdet.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
 
 # 预测图片
 im = cv2.imread("000000014439_640x640.jpg")
-result = model.predict(im, conf_threshold=0.5)
+result = model.predict(im)
 
 # 可视化结果
 fd.vision.visualize.vis_detection(im, result)

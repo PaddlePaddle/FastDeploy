@@ -130,8 +130,8 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
 
   (*outputs)[1].Allocate({1, 2}, FDDataType::FP32, InputInfoOfRuntime(1).name);
   float* ptr = static_cast<float*>((*outputs)[1].MutableData());
-  ptr[0] = mat->Height() * 1.0 / mat->Height();
-  ptr[1] = mat->Width() * 1.0 / mat->Width();
+  ptr[0] = mat->Height() * 1.0 / origin_h;
+  ptr[1] = mat->Width() * 1.0 / origin_w;
   return true;
 }
 
@@ -176,8 +176,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
       result->scores.push_back(nms.out_box_data[i * 6 + 1]);
       result->boxes.emplace_back(std::array<float, 4>{
           nms.out_box_data[i * 6 + 2], nms.out_box_data[i * 6 + 3],
-          nms.out_box_data[i * 6 + 4] - nms.out_box_data[i * 6 + 2],
-          nms.out_box_data[i * 6 + 5] - nms.out_box_data[i * 6 + 3]});
+          nms.out_box_data[i * 6 + 4], nms.out_box_data[i * 6 + 5]});
     }
   } else {
     int box_num = 0;
@@ -197,8 +196,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
       result->scores.push_back(box_data[i * 6 + 1]);
       result->boxes.emplace_back(
           std::array<float, 4>{box_data[i * 6 + 2], box_data[i * 6 + 3],
-                               box_data[i * 6 + 4] - box_data[i * 6 + 2],
-                               box_data[i * 6 + 5] - box_data[i * 6 + 3]});
+                               box_data[i * 6 + 4], box_data[i * 6 + 5]});
     }
   }
   return true;
