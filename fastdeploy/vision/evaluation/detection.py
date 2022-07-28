@@ -20,8 +20,6 @@ from .utils import COCOMetric
 import copy
 import collections
 
-nms_include = ['PaddleDetection/PPYOLOE']
-
 
 def eval_detection(model,
                    data_dir,
