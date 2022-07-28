@@ -106,11 +106,6 @@ bool UltraFace::Postprocess(
   FDTensor& boxes_tensor = infer_result.at(1);   // (1,4420,4)
   FDASSERT((scores_tensor.shape[0] == 1), "Only support batch =1 now.");
   FDASSERT((boxes_tensor.shape[0] == 1), "Only support batch =1 now.");
-
-  result->Clear();
-  // must be setup landmarks_per_face before reserve.
-  // ultraface detector does not detect landmarks by default.
-  result->landmarks_per_face = 0;
   if (scores_tensor.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
@@ -119,6 +114,12 @@ bool UltraFace::Postprocess(
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
   }
+
+  result->Clear();
+  // must be setup landmarks_per_face before reserve.
+  // ultraface detector does not detect landmarks by default.
+  result->landmarks_per_face = 0;
+  result->Reserve(boxes_tensor.shape[1]);
 
   float* scores_ptr = static_cast<float*>(scores_tensor.Data());
   float* boxes_ptr = static_cast<float*>(boxes_tensor.Data());

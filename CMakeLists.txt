@@ -54,6 +54,23 @@ option(ENABLE_DEBUG "if to enable print debug information, this may reduce perfo
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
 
+# Check for 32bit system
+if(WIN32)
+  if(NOT CMAKE_CL_64)
+    message("***********************Compile on non 64-bit system now**********************")
+    add_definitions(-DNON_64_PLATFORM)
+    if(WITH_GPU)
+      message(FATAL_ERROR "-DWITH_GPU=ON doesn't support on non 64-bit system now.")
+    endif()
+    if(ENABLE_PADDLE_BACKEND)
+      message(FATAL_ERROR "-DENABLE_PADDLE_BACKEND=ON doesn't support on non 64-bit system now.")
+    endif()
+    if(ENABLE_VISION)
+      message(FATAL_ERROR "-DENABLE_VISION=ON doesn't support on non 64-bit system now.")
+    endif()
+  endif()
+endif()
+
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
 endif()

@@ -28,7 +28,7 @@ fastdeploy install vision-cpu
 
 ## Python部署
 
-执行如下代码即会自动下载YOLOv5Face模型和测试图片
+执行如下代码即会自动下载UltraFace模型和测试图片
 ```bash
 python ultraface.py
 ```
