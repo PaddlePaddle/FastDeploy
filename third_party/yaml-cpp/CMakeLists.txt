@@ -168,20 +168,12 @@ configure_file(yaml-cpp.pc.in yaml-cpp.pc @ONLY)
 if (YAML_CPP_INSTALL)
   install(TARGETS yaml-cpp
     EXPORT yaml-cpp-targets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/yaml-cpp/lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/yaml-cpp/lib
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/yaml-cpp/lib)
   install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs/install/yaml-cpp/include
                 FILES_MATCHING PATTERN "*.h")
-  install(EXPORT yaml-cpp-targets
-    DESTINATION "${CONFIG_EXPORT_DIR}")
-  install(FILES
-      "${PROJECT_BINARY_DIR}/yaml-cpp-config.cmake"
-      "${PROJECT_BINARY_DIR}/yaml-cpp-config-version.cmake"
-    DESTINATION "${CONFIG_EXPORT_DIR}")
-  install(FILES "${PROJECT_BINARY_DIR}/yaml-cpp.pc"
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/pkgconfig)
 endif()
 unset(CONFIG_EXPORT_DIR)
 
