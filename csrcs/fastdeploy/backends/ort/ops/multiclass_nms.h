@@ -13,7 +13,10 @@
 // limitations under the License.
 
 #pragma once
+
 #include <map>
+
+#ifndef NON_64_PLATFORM
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
 namespace fastdeploy {
@@ -74,3 +77,5 @@ struct MultiClassNmsOp
 };
 
 }  // namespace fastdeploy
+
+#endif
