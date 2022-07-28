@@ -20,6 +20,10 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
 
+#include "opencv2/core.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+
 namespace fastdeploy {
 namespace vision {
 namespace utils {
@@ -31,7 +35,7 @@ namespace utils {
 // Do not use this function on array which topk contains value less than
 // -99999999
 template <typename T>
-std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
+std::vector<int32_t> TopKIndices(const T *array, int array_size, int topk) {
   topk = std::min(array_size, topk);
   std::vector<int32_t> res(topk);
   std::set<int32_t> searched;
@@ -51,14 +55,25 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
   return res;
 }
 
-void NMS(DetectionResult* output, float iou_threshold = 0.5);
+void NMS(DetectionResult *output, float iou_threshold = 0.5);
 
-void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
+void NMS(FaceDetectionResult *result, float iou_threshold = 0.5);
 
 // MergeSort
-void SortDetectionResult(DetectionResult* output);
+void SortDetectionResult(DetectionResult *output);
 
-void SortDetectionResult(FaceDetectionResult* result);
+// PaddleOCR-DET-mid_process-REC
+cv::Mat GetRotateCropImage(const cv::Mat &srcimage,
+                           std::vector<std::vector<int>> box);
+
+void OcrDetectorResizeImage(const cv::Mat &img, cv::Mat &resize_img,
+                            int max_size_len, float &ratio_h, float &ratio_w);
+
+void OcrNormalize(cv::Mat *im, const std::vector<float> &mean,
+                  const std::vector<float> &scale, const bool is_scale);
+
+void OcrPermute(const cv::Mat *im, float *data);
+void SortDetectionResult(FaceDetectionResult *result);
 
 }  // namespace utils
 }  // namespace vision

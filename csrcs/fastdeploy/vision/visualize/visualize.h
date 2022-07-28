@@ -27,6 +27,9 @@ class FASTDEPLOY_DECL Visualize {
   static const std::vector<int>& GetColorMap(int num_classes = 1000);
   static void VisDetection(cv::Mat* im, const DetectionResult& result,
                            int line_size = 2, float font_size = 0.5f);
+  static void VisOcrBoxes(cv::Mat& srcimg,
+                          const std::vector<OCRPredictResult>& ocr_result);
+
   static void VisFaceDetection(cv::Mat* im, const FaceDetectionResult& result,
                                int line_size = 2, float font_size = 0.5f);
   static void VisSegmentation(const cv::Mat& im,
