@@ -60,7 +60,7 @@ void YOLOv5Lite::LetterBox(Mat* mat, const std::vector<int>& size,
 void YOLOv5Lite::GenerateAnchors(const std::vector<int>& size,
                                  const std::vector<int>& downsample_strides,
                                  std::vector<Anchor>* anchors,
-                                 const int num_anchors) {
+                                 int num_anchors) {
   // size: tuple of input (width, height)
   // downsample_strides: downsample strides in YOLOv5Lite, e.g (8,16,32)
   const int width = size[0];
@@ -70,8 +70,8 @@ void YOLOv5Lite::GenerateAnchors(const std::vector<int>& size,
     int num_grid_w = width / ds;
     int num_grid_h = height / ds;
     for (int an = 0; an < num_anchors; ++an) {
-      const float anchor_w = this->anchors[i][an * 2];
-      const float anchor_h = this->anchors[i][an * 2 + 1];
+      float anchor_w = anchor_config[i][an * 2];
+      float anchor_h = anchor_config[i][an * 2 + 1];
       for (int g1 = 0; g1 < num_grid_h; ++g1) {
         for (int g0 = 0; g0 < num_grid_w; ++g0) {
           (*anchors).emplace_back(Anchor{g0, g1, ds, anchor_w, anchor_h});
@@ -110,6 +110,9 @@ bool YOLOv5Lite::Initialize() {
   stride = 32;
   max_wh = 7680.0;
   is_decode_exported = false;
+  anchor_config = {{10.0, 13.0, 16.0, 30.0, 33.0, 23.0},
+                   {30.0, 61.0, 62.0, 45.0, 59.0, 119.0},
+                   {116.0, 90.0, 156.0, 198.0, 373.0, 326.0}};
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -171,7 +174,8 @@ bool YOLOv5Lite::PostprocessWithDecode(
   }
   // generate anchors with dowmsample strides
   std::vector<YOLOv5Lite::Anchor> anchors;
-  GenerateAnchors(size, downsample_strides, &anchors);
+  int num_anchors = anchor_config[0].size() / 2;
+  GenerateAnchors(size, downsample_strides, &anchors, num_anchors);
 
   // infer_result shape might look like (1,n,85=5+80)
   float* data = static_cast<float*>(infer_result.Data());

@@ -52,8 +52,8 @@ YOLOv5Lite模型加载和初始化，当model_format为`Frontend::ONNX`时，只
 #### Predict函数
 > ```
 > YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
->                 float conf_threshold = 0.25,
->                 float nms_iou_threshold = 0.5)
+>                     float conf_threshold = 0.25,
+>                     float nms_iou_threshold = 0.5)
 > ```
 > 模型预测接口，输入图像直接输出检测结果。
 >

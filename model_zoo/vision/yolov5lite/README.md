@@ -11,7 +11,7 @@
 │   ├── README.md
 │   └── yolov5lite.cc
 ├── README.md
-└── yolov5_lite.py
+└── yolov5lite.py
 ```
 
 ## 获取ONNX文件
@@ -71,7 +71,7 @@ fastdeploy install vision-cpu
 
 ## 设置ONNX文件处理方式
 
-如果ONNX文件是含有decode模块的，设置`model.is_decode_exported = True`(解除yolov5_lite.py第12行注释)
+如果ONNX文件是含有decode模块的，设置`model.is_decode_exported = True`(解除yolov5lite.py第12行注释)
 
 如果ONNX文件是无decode模块的，不用做任何处理，默认是`model.is_decode_exported = False`
 
@@ -79,7 +79,7 @@ fastdeploy install vision-cpu
 
 执行如下代码即会自动下载测试图片
 ```
-python yolov5_lite.py
+python yolov5lite.py
 ```
 
 执行完成后会将可视化结果保存在本地`vis_result.jpg`，同时输出检测结果如下

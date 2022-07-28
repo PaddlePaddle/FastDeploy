@@ -36,6 +36,7 @@ void BindPpogg(pybind11::module& m) {
       .def_readwrite("is_scale_up", &vision::ppogg::YOLOv5Lite::is_scale_up)
       .def_readwrite("stride", &vision::ppogg::YOLOv5Lite::stride)
       .def_readwrite("max_wh", &vision::ppogg::YOLOv5Lite::max_wh)
+      .def_readwrite("anchor_config", &vision::ppogg::YOLOv5Lite::anchor_config)
       .def_readwrite("is_decode_exported",
                      &vision::ppogg::YOLOv5Lite::is_decode_exported);
 }

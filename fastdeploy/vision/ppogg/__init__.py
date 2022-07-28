@@ -71,6 +71,10 @@ class YOLOv5Lite(FastDeployModel):
     def is_decode_exported(self):
         return self._model.is_decode_exported
 
+    @property
+    def anchor_config(self):
+        return self._model.anchor_config
+
     @size.setter
     def size(self, wh):
         assert isinstance(wh, [list, tuple]),\
@@ -122,5 +126,14 @@ class YOLOv5Lite(FastDeployModel):
     @is_decode_exported.setter
     def is_decode_exported(self, value):
         assert isinstance(
-            value, bool), "The value to set `max_wh` must be type of float."
+            value,
+            bool), "The value to set `is_decode_exported` must be type of bool."
         self._model.is_decode_exported = value
+
+    @anchor_config.setter
+    def anchor_config(self, anchor_config_val):
+        assert isinstance(anchor_config_val, list),\
+            "The value to set `anchor_config` must be type of tuple or list."
+        assert isinstance(anchor_config_val[0], list),\
+            "The value to set `anchor_config` must be 2-dimensions tuple or list"
+        self._model.anchor_config = anchor_config_val

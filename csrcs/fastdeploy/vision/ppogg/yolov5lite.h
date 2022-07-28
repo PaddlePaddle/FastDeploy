@@ -65,9 +65,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   std::vector<int> downsample_strides;
   // anchors parameters, downsample_strides will take
   // (8,16,32), each stride has three anchors with width and hight.
-  float anchors[3][6] = {{10.0, 13.0, 16.0, 30.0, 33.0, 23.0},
-                         {30.0, 61.0, 62.0, 45.0, 59.0, 119.0},
-                         {116.0, 90.0, 156.0, 198.0, 373.0, 326.0}};
+  std::vector<std::vector<float>> anchor_config;
   // whether the model_file was exported with decode module. The official
   // YOLOv5Lite/export.py script will export ONNX file without
   // decode module. Please set it 'true' manually if the model file
@@ -94,7 +92,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   // Mat为FastDeploy定义的数据结构
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
-  bool Preprocess(Mat* mat, FDTensor* outputs,
+  bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户
