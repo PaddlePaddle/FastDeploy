@@ -411,7 +411,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             except:
                 print("Skip execute command: " + command)
         for command in commands:
-            print("========", command)
             assert os.system(
                 command) == 0, "command execute failed! command: {}".format(
                     command)
