@@ -23,6 +23,7 @@ void BindPPSeg(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 void BindMeituan(pybind11::module& m);
 void BindMegvii(pybind11::module& m);
+void BindPPOCR(pybind11::module& m);
 void BindDeepCam(pybind11::module& m);
 void BindRangiLyu(pybind11::module& m);
 void BindLinzaer(pybind11::module& m);
@@ -48,6 +49,15 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
+  pybind11::class_<vision::OCRPredictResult>(m, "OCRPredictResult")
+      .def(pybind11::init())
+      .def_readwrite("boxes", &vision::OCRPredictResult::boxes)
+      .def_readwrite("text", &vision::OCRPredictResult::text)
+      .def_readwrite("score", &vision::OCRPredictResult::score)
+      .def_readwrite("cls_score", &vision::OCRPredictResult::cls_score)
+      .def_readwrite("cls_label", &vision::OCRPredictResult::cls_label)
+      .def("__repr__", &vision::OCRPredictResult::Str)
+      .def("__str__", &vision::OCRPredictResult::Str);
   pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::FaceDetectionResult::boxes)
@@ -70,6 +80,7 @@ void BindVision(pybind11::module& m) {
   BindWongkinyiu(m);
   BindMeituan(m);
   BindMegvii(m);
+  BindPPOCR(m);
   BindDeepCam(m);
   BindRangiLyu(m);
   BindLinzaer(m);

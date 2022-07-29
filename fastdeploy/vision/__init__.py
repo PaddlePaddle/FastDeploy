@@ -22,6 +22,7 @@ from . import meituan
 from . import megvii
 from . import visualize
 from . import wongkinyiu
+from . import ppocr
 from . import deepcam
 from . import rangilyu
 from . import linzaer
