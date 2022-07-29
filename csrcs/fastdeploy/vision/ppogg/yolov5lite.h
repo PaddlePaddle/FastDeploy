@@ -19,19 +19,18 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace wongkinyiu {
+namespace ppogg {
 
-class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
+class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  ScaledYOLOv4(const std::string& model_file,
-               const std::string& params_file = "",
-               const RuntimeOption& custom_option = RuntimeOption(),
-               const Frontend& model_format = Frontend::ONNX);
+  YOLOv5Lite(const std::string& model_file, const std::string& params_file = "",
+             const RuntimeOption& custom_option = RuntimeOption(),
+             const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  virtual std::string ModelName() const { return "WongKinYiu/ScaledYOLOv4"; }
+  virtual std::string ModelName() const { return "ppogg/YOLOv5-Lite"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
@@ -39,8 +38,8 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
   // conf_threshold 为后处理的参数
   // nms_iou_threshold 为后处理的参数
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
-                       float conf_threshold = 0.25,
-                       float nms_iou_threshold = 0.5);
+                       float conf_threshold = 0.45,
+                       float nms_iou_threshold = 0.25);
 
   // 以下为模型在预测时的一些参数，基本是前后处理所需
   // 用户在创建模型后，可根据模型的要求，以及自己的需求
@@ -61,8 +60,31 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
   int stride;
   // for offseting the boxes by classes when using NMS
   float max_wh;
+  // downsample strides for YOLOv5Lite to generate anchors, will take
+  // (8,16,32) as default values, might have stride=64.
+  std::vector<int> downsample_strides;
+  // anchors parameters, downsample_strides will take
+  // (8,16,32), each stride has three anchors with width and hight.
+  std::vector<std::vector<float>> anchor_config;
+  // whether the model_file was exported with decode module. The official
+  // YOLOv5Lite/export.py script will export ONNX file without
+  // decode module. Please set it 'true' manually if the model file
+  // was exported with decode module.
+  // false : ONNX files without decode module.
+  // true : ONNX file with decode module.
+  bool is_decode_exported;
 
  private:
+  // necessary parameters for GenerateAnchors to generate anchors when ONNX file
+  // without decode module.
+  struct Anchor {
+    int grid0;
+    int grid1;
+    int stride;
+    float anchor_w;
+    float anchor_h;
+  };
+
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
   bool Initialize();
 
@@ -83,6 +105,16 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
 
+  // YOLOv5Lite的官方脚本默认导出不带decode模块的模型文件 需要在后处理进行decode
+  // the official YOLOv5Lite/export.py will export ONNX file without decode
+  // module.
+  // this fuction support the postporocess for ONNX file without decode module.
+  // set the `is_decode_exported = false`, this function will work.
+  bool PostprocessWithDecode(
+      FDTensor& infer_result, DetectionResult* result,
+      const std::map<std::string, std::array<float, 2>>& im_info,
+      float conf_threshold, float nms_iou_threshold);
+
   // 对图片进行LetterBox处理
   // mat 为读取到的原图
   // size 为输入模型的图像尺寸
@@ -90,7 +122,11 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
+  // generate anchors for decodeing when ONNX file without decode module.
+  void GenerateAnchors(const std::vector<int>& size,
+                       const std::vector<int>& downsample_strides,
+                       std::vector<Anchor>* anchors, const int num_anchors = 3);
 };
-}  // namespace wongkinyiu
+}  // namespace ppogg
 }  // namespace vision
 }  // namespace fastdeploy

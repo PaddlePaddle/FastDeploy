@@ -16,7 +16,7 @@ make install
 
 ## 编译Python安装包
 ```
-git clone https://gitee.com/jiangjiajun/FastDeploy.git
+git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop
 # Python通过export环境变量设置编译选项
