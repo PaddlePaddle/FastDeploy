@@ -18,9 +18,10 @@
 
 namespace fastdeploy {
 namespace text {
+namespace ernie {
 
-class FASTDEPLOY_DECL ErnieForSequenceClassification : public FastDeployModel {
-};
+class FASTDEPLOY_DECL SequenceClassification : public FastDeployModel {};
 
+}  // namespace ernie
 }  // namespace text
 }  // namespace fastdeploy

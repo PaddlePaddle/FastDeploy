@@ -15,5 +15,7 @@
 #include "fastdeploy/text/ernie/sequence_classification.h"
 
 namespace fastdeploy {
-namespace text {}  // namespace text
+namespace text {
+namespace ernie {}  // namespace ernie
+}  // namespace text
 }  // namespace fastdeploy
