@@ -11,3 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include "fastdeploy/pybind/main.h"
+
+namespace fastdeploy {
+void BindErnie(pybind11::module& m) {
+  auto ernie_module =
+      m.def_submodule("ernie",
+                      "https://github.com/PaddlePaddle/PaddleNLP/tree/develop/"
+                      "paddlenlp/transformers/ernie");
+  pybind11::class_<text::ernie::SequenceClassification, FastDeployModel>(
+      ernie, "SequenceClassification");
+}
+}  // namespace fastdeploy
