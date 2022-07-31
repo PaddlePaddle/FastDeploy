@@ -13,12 +13,30 @@
 # limitations under the License.
 from __future__ import absolute_import
 import logging
+import os
+import sys
+
+def add_dll_search_dir(dir_path):
+    os.environ["path"] = dir_path + ";" + os.environ["path"]
+    sys.path.insert(0, dir_path)
+    if sys.version_info[:2] >= (3, 8):
+        os.add_dll_directory(dir_path)
+
+if os.name == "nt":
+    current_path = os.path.abspath(__file__)
+    dirname = os.path.dirname(current_path)
+    third_libs_dir = os.path.join(dirname, "libs")
+    add_dll_search_dir(third_libs_dir)
+    for root, dirs, filenames in os.walk(third_libs_dir):
+        for d in dirs:
+            if d == "lib":
+                add_dll_search_dir(os.path.join(dirname, root, d))
+
 from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, Device
 from .fastdeploy_runtime import *
 from . import fastdeploy_main as C
 from . import vision
 from .download import download, download_and_decompress
-
 
 def TensorInfoStr(tensor_info):
     message = "TensorInfo(name : '{}', dtype : '{}', shape : '{}')".format(
@@ -28,7 +46,7 @@ def TensorInfoStr(tensor_info):
 
 class RuntimeOption:
     def __init__(self):
-    	self._option = C.RuntimeOption()
+        self._option = C.RuntimeOption()
     
     def set_model_path(self, model_path, params_path="", model_format="paddle"):
         return self._option.set_model_path(model_path, params_path, model_format)
@@ -103,5 +121,6 @@ def RuntimeOptionStr(runtime_option):
     message.strip("\n")
     message += ")"
     return message
+
 C.TensorInfo.__repr__ = TensorInfoStr
 C.RuntimeOption.__repr__ = RuntimeOptionStr
