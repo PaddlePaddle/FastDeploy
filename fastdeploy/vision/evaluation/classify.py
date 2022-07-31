@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
-import cv2
 import os
 import re
-from tqdm import trange
 
 
 def topk_accuracy(topk_list, label_list):
@@ -25,6 +23,9 @@ def topk_accuracy(topk_list, label_list):
 
 
 def eval_classify(model, image_file_path, label_file_path, topk=5):
+    from tqdm import trange
+    import cv2
+
     result_list = []
     label_list = []
     image_label_dict = {}
