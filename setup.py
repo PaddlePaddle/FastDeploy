@@ -44,7 +44,8 @@ setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
-setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "OFF")
+setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
+                                                   "OFF")
 setup_configs["BUILD_DEMO"] = os.getenv("BUILD_DEMO", "ON")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
@@ -370,8 +371,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                     path = os.path.relpath(
                         os.path.join(root, d),
                         ".setuptools-cmake-build/third_libs/install")
-                    rpaths.append("$ORIGIN/" + os.path.join(
-                        "libs/third_libs", path))
+                    rpaths.append("$ORIGIN/" + os.path.join("libs/third_libs",
+                                                            path))
         rpaths = ":".join(rpaths)
         command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
         # The sw_64 not suppot patchelf, so we just disable that.
@@ -379,6 +380,40 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             assert os.system(
                 command) == 0, "patchelf {} failed, the command: {}".format(
                     command, pybind_so_file)
+    elif platform.system().lower() == "darwin":
+        pre_commands = [
+            "install_name_tool -delete_rpath '@loader_path/libs' " +
+            pybind_so_file
+        ]
+        commands = [
+            "install_name_tool -id '@loader_path/libs' " + pybind_so_file
+        ]
+        commands.append("install_name_tool -add_rpath '@loader_path/libs' " +
+                        pybind_so_file)
+        for root, dirs, files in os.walk(
+                ".setuptools-cmake-build/third_libs/install"):
+            for d in dirs:
+                if d == "lib":
+                    path = os.path.relpath(
+                        os.path.join(root, d),
+                        ".setuptools-cmake-build/third_libs/install")
+                    pre_commands.append(
+                        "install_name_tool -delete_rpath '@loader_path/{}' ".
+                        format(os.path.join("libs/third_libs",
+                                            path)) + pybind_so_file)
+                    commands.append(
+                        "install_name_tool -add_rpath '@loader_path/{}' ".
+                        format(os.path.join("libs/third_libs",
+                                            path)) + pybind_so_file)
+        for command in pre_commands:
+            try:
+                os.system(command)
+            except:
+                print("Skip execute command: " + command)
+        for command in commands:
+            assert os.system(
+                command) == 0, "command execute failed! command: {}".format(
+                    command)
 
     all_files = get_all_files("fastdeploy/libs")
     for f in all_files:

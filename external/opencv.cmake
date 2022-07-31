@@ -12,8 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+set(OPENCV_INSTALL_DIR ${THIRD_PARTY_PATH}/install/)
+
 if(WIN32)
+    set(OPENCV_URL https://bj.bcebos.com/paddle2onnx/libs/opencv-win-x64-3.4.16.zip)
+    download_and_decompress(${OPENCV_URL} ${CMAKE_CURRENT_BINARY_DIR}/opencv-win-x64-3.4.16.zip ${THIRD_PARTY_PATH}/install/)
+    set(OpenCV_DIR ${THIRD_PARTY_PATH}/install/opencv-win-x64-3.4.16/build)
     find_package(OpenCV REQUIRED PATHS ${OpenCV_DIR})
+    include_directories(${OpenCV_INCLUDE_DIRS})
     list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 else()
 

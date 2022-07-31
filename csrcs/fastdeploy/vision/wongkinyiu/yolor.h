@@ -69,7 +69,7 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
   // Mat为FastDeploy定义的数据结构
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
-  bool Preprocess(Mat* mat, FDTensor* outputs,
+  bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户

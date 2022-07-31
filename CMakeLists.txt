@@ -71,6 +71,13 @@ if(WIN32)
   endif()
 endif()
 
+if(WIN32 AND ENABLE_VISION)
+  add_definitions(-DYAML_CPP_DLL)
+  set(YAML_BUILD_SHARED_LIBS ON)
+  set(YAML_CPP_INSTALL ON)
+  set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+endif()
+
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
 endif()
@@ -180,6 +187,7 @@ if(ENABLE_VISION)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(external/opencv.cmake)
+  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
@@ -207,7 +215,6 @@ set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 if (APPLE)
-#  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 elseif(MSVC)
 else()
@@ -221,6 +228,10 @@ endif()
 #  list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
 #endif()
 set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
+if(MSVC)
+  # disable warnings for dll export
+  target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
+endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 # add examples after prepare include paths for third-parties
@@ -232,11 +243,19 @@ endif()
 
 include(external/summary.cmake)
 fastdeploy_summary()
-
-install(
-  TARGETS ${LIBRARY_NAME}
-  LIBRARY DESTINATION lib
-)
+if(WIN32)
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION lib
+  )
+else()
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib
+  )
+endif()
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy
   DESTINATION ${CMAKE_INSTALL_PREFIX}/include
