@@ -362,6 +362,16 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         "fastdeploy/libs/third_libs",
         symlinks=True)
 
+    if platform.system().lower() == "windows":
+        release_dir = os.path.join(".setuptools-cmake-build", "Release")
+        for f in os.listdir(release_dir):
+            filename = os.path.join(release_dir, f)
+            if not os.path.isfile(filename):
+                continue
+            if filename.endswith(".pyd"):
+                continue
+            shutil.copy(filename, "fastdeploy/libs")
+
     if platform.system().lower() == "linux":
         rpaths = ["$ORIGIN:$ORIGIN/libs"]
         for root, dirs, files in os.walk(
