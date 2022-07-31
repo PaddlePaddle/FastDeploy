@@ -29,7 +29,7 @@ if os.name == "nt":
     add_dll_search_dir(third_libs_dir)
     for root, dirs, filenames in os.walk(third_libs_dir):
         for d in dirs:
-            if d == "lib":
+            if d == "lib" or d == "bin":
                 add_dll_search_dir(os.path.join(dirname, root, d))
 
 from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, Device
