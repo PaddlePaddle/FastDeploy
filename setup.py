@@ -362,6 +362,19 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         "fastdeploy/libs/third_libs",
         symlinks=True)
 
+    third_party_path = os.path.join(".setuptools-cmake-build", "third_party")
+    if os.path.exists(third_party_path):
+        for f in os.listdir(third_party_path):
+            lib_dir_name = os.path.join(third_party_path, f)
+            if os.path.isfile(lib_dir_name):
+                continue
+            for f1 in os.listdir(lib_dir_name):
+                release_dir = os.path.join(lib_dir_name, f1)
+                if f1 == "Release" and not os.path.isfile(release_dir):
+                    if os.path.exists(os.path.join("fastdeploy/libs/third_libs", f)):
+                        shutil.rmtree(os.path.join("fastdeploy/libs/third_libs", f))
+                    shutil.copytree(release_dir, os.path.join("fastdeploy/libs/third_libs", f, "lib"))
+
     if platform.system().lower() == "windows":
         release_dir = os.path.join(".setuptools-cmake-build", "Release")
         for f in os.listdir(release_dir):
@@ -428,7 +441,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     all_files = get_all_files("fastdeploy/libs")
     for f in all_files:
         package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
-
 setuptools.setup(
     name=PACKAGE_NAME,
     version=VersionInfo.version,
