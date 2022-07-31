@@ -15,6 +15,7 @@
 
 #include <map>
 #include <vector>
+
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
 
@@ -152,7 +153,14 @@ struct FASTDEPLOY_DECL Runtime {
 
   RuntimeOption option;
 
+  ~Runtime() {
+    if (backend_ != nullptr) {
+      delete backend_;
+      backend_ = nullptr;
+    }
+  }
+
  private:
-  BaseBackend* backend_;
+  BaseBackend* backend_ = nullptr;
 };
 }  // namespace fastdeploy
