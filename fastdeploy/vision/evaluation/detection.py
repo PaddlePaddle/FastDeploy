@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tqdm import trange
-import cv2
 import numpy as np
-from .utils import CocoDetection
-from .utils import COCOMetric
 import copy
 import collections
 
@@ -27,6 +23,11 @@ def eval_detection(model,
                    data_dir,
                    ann_file,
                    plot=False):
+    from .utils import CocoDetection
+    from .utils import COCOMetric
+    import cv2
+    from tqdm import trange 
+
     assert isinstance(conf_threshold, (
         float, int
     )), "The conf_threshold:{} need to be int or float".format(conf_threshold)
