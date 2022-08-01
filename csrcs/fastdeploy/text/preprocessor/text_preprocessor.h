@@ -11,15 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
-#include "fastdeploy/utils/utils.h"
 
+#pragma once
+#include <vector>
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
 namespace fastdeploy {
 namespace text {
 
-struct FASTDEPLOY_DECL TextResult {};
-
-struct FASTDEPLOY_DECL BatchTextResult : public TextResult {};
+class TextPreprocessor {
+ public:
+  virtual bool Encode(const std::string& raw_text,
+                      std::vector<FDTensor>* encoded_tensor) const;
+  virtual bool EncodeBatch(const std::vector<std::string>& raw_texts,
+                           std::vector<FDTensor>* encoded_tensor) const;
+};
 
 }  // namespace text
 }  // namespace fastdeploy

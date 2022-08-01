@@ -24,16 +24,17 @@ namespace text {
 class TextPreprocessor;
 class TextPostprocessor;
 class TextResult;
+class BatchTextResult;
 class PredictionOption;
 
 class FASTDEPLOY_DECL TextModel : public FastDeployModel {
  public:
   virtual std::string ModelName() const { return "TextModel"; }
   virtual bool Predict(const std::string& raw_text, TextResult* result,
-                       const PredictionOption& option) const;
+                       const PredictionOption& option);
   virtual bool PredictBatch(const std::vector<std::string>& raw_text_array,
-                            std::vector<TextResult>* results,
-                            const PredictionOption& option) const;
+                            BatchTextResult* results,
+                            const PredictionOption& option);
   template <typename T, typename... Args>
   void SetPreprocessor(Args&&... args) {
     preprocessor_ = utils::make_unique<T>(std::forward<Args>(args)...);

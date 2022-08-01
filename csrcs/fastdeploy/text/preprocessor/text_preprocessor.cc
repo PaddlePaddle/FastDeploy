@@ -1,3 +1,4 @@
+
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,15 +12,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
-#include "fastdeploy/utils/utils.h"
+
+#include "fastdeploy/text/preprocessor/text_preprocessor.h"
 
 namespace fastdeploy {
 namespace text {
 
-struct FASTDEPLOY_DECL TextResult {};
+bool TextPreprocessor::Encode(const std::string& raw_text,
+                              FDTensor* encoded_tensor) const {
+  return true;
+}
 
-struct FASTDEPLOY_DECL BatchTextResult : public TextResult {};
+bool TextPreprocessor::EncodeBatch(const std::vector<std::string>& raw_texts,
+                                   FDTensor* encoded_tensor) const {
+  return true;
+}
 
 }  // namespace text
 }  // namespace fastdeploy

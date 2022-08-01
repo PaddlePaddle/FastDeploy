@@ -13,18 +13,65 @@
 // limitations under the License.
 
 #include "fastdeploy/text/text_model.h"
+#include "fastdeploy/text/common/result.h"
+#include "fastdeploy/text/postprocessor/text_postprocessor.h"
+#include "fastdeploy/text/preprocessor/text_preprocessor.h"
 
 namespace fastdeploy {
 namespace text {
 
 bool TextModel::Predict(const std::string& raw_text, TextResult* result,
-                        const PredictionOption& option) const {
+                        const PredictionOption& option) {
+  // Preprocess
+  std::vector<FDTensor> input_tensor;
+  std::vector<FDTensor> output_tensor;
+  if (!preprocessor_->Encode(raw_text, &input_tensor)) {
+    FDERROR << "Failed to preprocess input data while using model:"
+            << ModelName() << "." << std::endl;
+    return false;
+  }
+
+  // Inference Runtime
+  if (!Infer(input_tensor, &output_tensor)) {
+    FDERROR << "Failed to inference while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
+  }
+
+  // Postprocess
+  if (postprocessor_->Decode(output_tensor, result)) {
+    FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
+  }
   return true;
 }
 
 bool TextModel::PredictBatch(const std::vector<std::string>& raw_text_array,
-                             std::vector<TextResult>* results,
-                             const PredictionOption& option) const {
+                             BatchTextResult* results,
+                             const PredictionOption& option) {
+  // Preprocess
+  std::vector<FDTensor> input_tensor;
+  std::vector<FDTensor> output_tensor;
+  if (!preprocessor_->EncodeBatch(raw_text_array, &input_tensor)) {
+    FDERROR << "Failed to preprocess input data while using model:"
+            << ModelName() << "." << std::endl;
+    return false;
+  }
+
+  // Inference Runtime
+  if (!Infer(input_tensor, &output_tensor)) {
+    FDERROR << "Failed to inference while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
+  }
+
+  // Postprocess
+  if (postprocessor_->DecodeBatch(output_tensor, results)) {
+    FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
+  }
   return true;
 }
 
