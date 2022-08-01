@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/text/ernie/sequence_classification.h"
+#include "fastdeploy/text/text_model.h"
 
 namespace fastdeploy {
 namespace text {
-namespace ernie {}  // namespace ernie
+
+bool TextModel::Predict(const std::string& raw_text, TextResult* result,
+                        const PredictionOption& option) const {
+  return true;
+}
+
+bool TextModel::PredictBatch(const std::vector<std::string>& raw_text_array,
+                             std::vector<TextResult>* results,
+                             const PredictionOption& option) const {
+  return true;
+}
+
 }  // namespace text
 }  // namespace fastdeploy
