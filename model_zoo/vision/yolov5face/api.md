@@ -51,7 +51,7 @@ YOLOv5Face模型加载和初始化，当model_format为`Frontend::ONNX`时，只
 
 #### Predict函数
 > ```
-> YOLOv5Face::Predict(cv::Mat* im, DetectionResult* result,
+> YOLOv5Face::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                     float conf_threshold = 0.25,
 >                     float nms_iou_threshold = 0.5)
 > ```

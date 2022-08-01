@@ -27,7 +27,7 @@ set(ONNXRUNTIME_LIB_DIR
     CACHE PATH "onnxruntime lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${ONNXRUNTIME_LIB_DIR}")
 
-set(ONNXRUNTIME_VERSION "1.11.1")
+set(ONNXRUNTIME_VERSION "1.12.0")
 set(ONNXRUNTIME_URL_PREFIX "https://bj.bcebos.com/paddle2onnx/libs/")
 
 if(WIN32)
@@ -35,6 +35,9 @@ if(WIN32)
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-gpu-${ONNXRUNTIME_VERSION}.zip")
   else()
     set(ONNXRUNTIME_FILENAME "onnxruntime-win-x64-${ONNXRUNTIME_VERSION}.zip")
+  endif()
+  if(NOT CMAKE_CL_64)
+    set(ONNXRUNTIME_FILENAME "onnxruntime-win-x86-${ONNXRUNTIME_VERSION}.zip")
   endif()
 elseif(APPLE)
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")

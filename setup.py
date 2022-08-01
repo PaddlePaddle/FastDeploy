@@ -44,7 +44,8 @@ setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
-setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND", "OFF")
+setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
+                                                   "OFF")
 setup_configs["BUILD_DEMO"] = os.getenv("BUILD_DEMO", "ON")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
@@ -52,6 +53,8 @@ setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
                                             "/usr/local/cuda")
+if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
+    setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, "fastdeploy")
@@ -345,7 +348,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             shutil.copy(
                 os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
         if f.count("fastdeploy_main.cpython-"):
-            pybind_so_file = f
+            pybind_so_file = os.path.join(".setuptools-cmake-build", f)
 
     if not os.path.exists(".setuptools-cmake-build/third_libs/install"):
         raise Exception(
@@ -359,8 +362,31 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         "fastdeploy/libs/third_libs",
         symlinks=True)
 
+    third_party_path = os.path.join(".setuptools-cmake-build", "third_party")
+    if os.path.exists(third_party_path):
+        for f in os.listdir(third_party_path):
+            lib_dir_name = os.path.join(third_party_path, f)
+            if os.path.isfile(lib_dir_name):
+                continue
+            for f1 in os.listdir(lib_dir_name):
+                release_dir = os.path.join(lib_dir_name, f1)
+                if f1 == "Release" and not os.path.isfile(release_dir):
+                    if os.path.exists(os.path.join("fastdeploy/libs/third_libs", f)):
+                        shutil.rmtree(os.path.join("fastdeploy/libs/third_libs", f))
+                    shutil.copytree(release_dir, os.path.join("fastdeploy/libs/third_libs", f, "lib"))
+
+    if platform.system().lower() == "windows":
+        release_dir = os.path.join(".setuptools-cmake-build", "Release")
+        for f in os.listdir(release_dir):
+            filename = os.path.join(release_dir, f)
+            if not os.path.isfile(filename):
+                continue
+            if filename.endswith(".pyd"):
+                continue
+            shutil.copy(filename, "fastdeploy/libs")
+
     if platform.system().lower() == "linux":
-        rpaths = ["${ORIGIN}"]
+        rpaths = ["$ORIGIN:$ORIGIN/libs"]
         for root, dirs, files in os.walk(
                 ".setuptools-cmake-build/third_libs/install"):
             for d in dirs:
@@ -368,21 +394,53 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                     path = os.path.relpath(
                         os.path.join(root, d),
                         ".setuptools-cmake-build/third_libs/install")
-                    rpaths.append("${ORIGIN}/" + os.path.join(
-                        "libs/third_libs", path))
+                    rpaths.append("$ORIGIN/" + os.path.join("libs/third_libs",
+                                                            path))
         rpaths = ":".join(rpaths)
-        command = "patchelf --set-rpath '{}' ".format(rpaths) + os.path.join(
-            "fastdeploy/libs", pybind_so_file)
+        command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
         # The sw_64 not suppot patchelf, so we just disable that.
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
             assert os.system(
                 command) == 0, "patchelf {} failed, the command: {}".format(
                     command, pybind_so_file)
+    elif platform.system().lower() == "darwin":
+        pre_commands = [
+            "install_name_tool -delete_rpath '@loader_path/libs' " +
+            pybind_so_file
+        ]
+        commands = [
+            "install_name_tool -id '@loader_path/libs' " + pybind_so_file
+        ]
+        commands.append("install_name_tool -add_rpath '@loader_path/libs' " +
+                        pybind_so_file)
+        for root, dirs, files in os.walk(
+                ".setuptools-cmake-build/third_libs/install"):
+            for d in dirs:
+                if d == "lib":
+                    path = os.path.relpath(
+                        os.path.join(root, d),
+                        ".setuptools-cmake-build/third_libs/install")
+                    pre_commands.append(
+                        "install_name_tool -delete_rpath '@loader_path/{}' ".
+                        format(os.path.join("libs/third_libs",
+                                            path)) + pybind_so_file)
+                    commands.append(
+                        "install_name_tool -add_rpath '@loader_path/{}' ".
+                        format(os.path.join("libs/third_libs",
+                                            path)) + pybind_so_file)
+        for command in pre_commands:
+            try:
+                os.system(command)
+            except:
+                print("Skip execute command: " + command)
+        for command in commands:
+            assert os.system(
+                command) == 0, "command execute failed! command: {}".format(
+                    command)
 
     all_files = get_all_files("fastdeploy/libs")
     for f in all_files:
         package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
-
 setuptools.setup(
     name=PACKAGE_NAME,
     version=VersionInfo.version,
