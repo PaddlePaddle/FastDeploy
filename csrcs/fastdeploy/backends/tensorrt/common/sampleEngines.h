@@ -20,7 +20,7 @@
 #include <iostream>
 #include <vector>
 
-#include "NvCaffeParser.h"
+//#include "NvCaffeParser.h"
 #include "NvInfer.h"
 #include "NvInferConsistency.h"
 #include "NvInferSafeRuntime.h"
@@ -31,10 +31,10 @@
 namespace sample {
 
 struct Parser {
-  TrtUniquePtr<nvcaffeparser1::ICaffeParser> caffeParser;
+//  TrtUniquePtr<nvcaffeparser1::ICaffeParser> caffeParser;
   TrtUniquePtr<nvonnxparser::IParser> onnxParser;
 
-  operator bool() const { return caffeParser || onnxParser; }
+  operator bool() const { return false || onnxParser; }
 };
 
 struct BuildEnvironment {

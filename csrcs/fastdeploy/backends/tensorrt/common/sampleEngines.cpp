@@ -25,7 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "NvCaffeParser.h"
+//#include "NvCaffeParser.h"
 #include "NvInfer.h"
 #include "NvOnnxParser.h"
 
@@ -47,9 +47,9 @@ namespace sample {
 
 namespace {
 
-struct CaffeBufferShutter {
-  ~CaffeBufferShutter() { nvcaffeparser1::shutdownProtobufLibrary(); }
-};
+//struct CaffeBufferShutter {
+//  ~CaffeBufferShutter() { nvcaffeparser1::shutdownProtobufLibrary(); }
+//};
 
 std::map<std::string, float>
 readScalesFromCalibrationCache(const std::string& calibrationFile) {
@@ -121,6 +121,7 @@ Parser modelToNetwork(const ModelOptions& model,
   Parser parser;
   const std::string& modelName = model.baseModel.model;
   switch (model.baseModel.format) {
+/*
   case ModelFormat::kCAFFE: {
     using namespace nvcaffeparser1;
     parser.caffeParser.reset(createCaffeParser());
@@ -145,6 +146,7 @@ Parser modelToNetwork(const ModelOptions& model,
     }
     break;
   }
+*/
   case ModelFormat::kONNX: {
     using namespace nvonnxparser;
     parser.onnxParser.reset(
