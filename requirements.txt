@@ -1,5 +1,2 @@
-opencv-python
+requests
 tqdm
-numpy
-pycocotools
-colorama

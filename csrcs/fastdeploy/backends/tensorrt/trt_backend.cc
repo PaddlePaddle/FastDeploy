@@ -54,8 +54,10 @@ std::vector<int> toVec(const nvinfer1::Dims& dim) {
 
 bool CheckDynamicShapeConfig(const paddle2onnx::OnnxReader& reader,
                              const TrtBackendOption& option) {
-  paddle2onnx::ModelTensorInfo inputs[reader.NumInputs()];
-  std::string input_shapes[reader.NumInputs()];
+  //paddle2onnx::ModelTensorInfo inputs[reader.NumInputs()];
+  //std::string input_shapes[reader.NumInputs()];
+  std::vector<paddle2onnx::ModelTensorInfo> inputs(reader.NumInputs());
+  std::vector<std::string> input_shapes(reader.NumInputs());
   for (int i = 0; i < reader.NumInputs(); ++i) {
     reader.GetInputInfo(i, &inputs[i]);
 
