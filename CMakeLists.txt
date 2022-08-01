@@ -19,7 +19,7 @@ option(CSRCS_DIR_NAME "Name of source code directory")
 option(LIBRARY_NAME "Name of build library name")
 option(PY_LIBRARY_NAME "Name of build python library name")
 if(NOT CSRCS_DIR_NAME)
-  set(CSRCS_DIR_NAME "./")
+  set(CSRCS_DIR_NAME "csrcs")
 endif()
 if(NOT LIBRARY_NAME)
   set(LIBRARY_NAME "fastdeploy")
@@ -53,6 +53,30 @@ option(ENABLE_DEBUG "if to enable print debug information, this may reduce perfo
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
+
+# Check for 32bit system
+if(WIN32)
+  if(NOT CMAKE_CL_64)
+    message("***********************Compile on non 64-bit system now**********************")
+    add_definitions(-DNON_64_PLATFORM)
+    if(WITH_GPU)
+      message(FATAL_ERROR "-DWITH_GPU=ON doesn't support on non 64-bit system now.")
+    endif()
+    if(ENABLE_PADDLE_BACKEND)
+      message(FATAL_ERROR "-DENABLE_PADDLE_BACKEND=ON doesn't support on non 64-bit system now.")
+    endif()
+    if(ENABLE_VISION)
+      message(FATAL_ERROR "-DENABLE_VISION=ON doesn't support on non 64-bit system now.")
+    endif()
+  endif()
+endif()
+
+if(WIN32 AND ENABLE_VISION)
+  add_definitions(-DYAML_CPP_DLL)
+  set(YAML_BUILD_SHARED_LIBS ON)
+  set(YAML_CPP_INSTALL ON)
+  set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+endif()
 
 if(ENABLE_DEBUG)
   add_definitions(-DFASTDEPLOY_DEBUG)
@@ -116,7 +140,11 @@ if(WITH_GPU)
   else()
     add_definitions(-DWITH_GPU)
     include_directories(${CUDA_DIRECTORY}/include)
-    find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib64)
+    if(WIN32)
+      find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib/x64)
+    else()
+      find_library(CUDA_LIB cudart ${CUDA_DIRECTORY}/lib64)
+    endif()
     list(APPEND DEPEND_LIBS ${CUDA_LIB})
   endif()
 endif()
@@ -134,7 +162,11 @@ if(ENABLE_TRT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
   find_library(TRT_INFER_LIB nvinfer ${TRT_DIRECTORY}/lib)
   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_DIRECTORY}/lib)
-  find_library(TRT_CAFFE_LIB nvcaffe_parser ${TRT_DIRECTORY}/lib)
+  if(NOT WIN32)
+    find_library(TRT_CAFFE_LIB nvcaffe_parser ${TRT_DIRECTORY}/lib)
+  else()
+     set(TRT_CAFFE_LIB "")
+  endif()
   find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_DIRECTORY}/lib)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_CAFFE_LIB} ${TRT_PLUGIN_LIB})
 
@@ -163,6 +195,7 @@ if(ENABLE_VISION)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(external/opencv.cmake)
+  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
@@ -190,7 +223,6 @@ set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 if (APPLE)
-#  set_target_properties(fastdeploy PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 elseif(MSVC)
 else()
@@ -199,11 +231,15 @@ else()
   set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
-find_package(OpenMP)
-if(OpenMP_CXX_FOUND)
-  list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
-endif()
+#find_package(OpenMP)
+#if(OpenMP_CXX_FOUND)
+#  list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
+#endif()
 set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
+if(MSVC)
+  # disable warnings for dll export
+  target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
+endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 # add examples after prepare include paths for third-parties
@@ -215,11 +251,19 @@ endif()
 
 include(external/summary.cmake)
 fastdeploy_summary()
-
-install(
-  TARGETS ${LIBRARY_NAME}
-  LIBRARY DESTINATION lib
-)
+if(WIN32)
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION lib
+  )
+else()
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib
+  )
+endif()
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy
   DESTINATION ${CMAKE_INSTALL_PREFIX}/include

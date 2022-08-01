@@ -13,8 +13,30 @@
 # limitations under the License.
 from __future__ import absolute_import
 import logging
-from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, RuntimeOption, Device
-from .fastdeploy_runtime import *
+import os
+import sys
+
+
+def add_dll_search_dir(dir_path):
+    os.environ["path"] = dir_path + ";" + os.environ["path"]
+    sys.path.insert(0, dir_path)
+    if sys.version_info[:2] >= (3, 8):
+        os.add_dll_directory(dir_path)
+
+
+if os.name == "nt":
+    current_path = os.path.abspath(__file__)
+    dirname = os.path.dirname(current_path)
+    third_libs_dir = os.path.join(dirname, "libs")
+    add_dll_search_dir(third_libs_dir)
+    for root, dirs, filenames in os.walk(third_libs_dir):
+        for d in dirs:
+            if d == "lib" or d == "bin":
+                add_dll_search_dir(os.path.join(dirname, root, d))
+
+from .fastdeploy_main import Frontend, Backend, FDDataType, TensorInfo, Device
+from .runtime import Runtime, RuntimeOption
+from .model import FastDeployModel
 from . import fastdeploy_main as C
 from . import vision
 from .download import download, download_and_decompress
