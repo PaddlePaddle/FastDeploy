@@ -35,3 +35,14 @@ class Model(FastDeployModel):
 
     def predict(self, input_image):
         return self._model.predict(input_image)
+
+    @property
+    def with_softmax(self):
+        return self._model.with_softmax
+
+    @with_softmax.setter
+    def with_softmax(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `with_softmax` must be type of bool."
+        self._model.with_softmax = value

@@ -146,10 +146,6 @@ void SegmentationResult::Clear() {
   contain_score_map = false;
 }
 
-void SegmentationResult::Resize(int64_t height, int64_t width) {
-  masks.resize(height, std::vector<int64_t>(width));
-}
-
 std::string SegmentationResult::Str() {
   std::string out;
   out = "SegmentationResult Image masks 10 rows x 10 cols: \n";
@@ -170,8 +166,8 @@ std::string SegmentationResult::Str() {
       }
       out += ".....]\n";
     }
+    out += "...........\n";
   }
-  out += "...........\n";
   return out;
 }
 

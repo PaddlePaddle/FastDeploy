@@ -86,7 +86,7 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   // mask
   std::vector<uint8_t> label_map;
   std::vector<float> score_map;
-  td::vector<int64_t> shape;
+  std::vector<int64_t> shape;
   bool contain_score_map = false;
 
   ResultType type = ResultType::SEGMENTATION;
