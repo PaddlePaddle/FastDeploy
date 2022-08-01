@@ -79,6 +79,7 @@ void BindRuntime(pybind11::module& m) {
                memcpy(inputs[index].data.data(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;
+               index += 1;
              }
 
              std::vector<FDTensor> outputs(self.NumOutputs());
