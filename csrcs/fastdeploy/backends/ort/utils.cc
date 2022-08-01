@@ -27,8 +27,8 @@ ONNXTensorElementDataType GetOrtDtype(const FDDataType& fd_dtype) {
   } else if (fd_dtype == FDDataType::INT64) {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
   }
-  FDERROR << "Unrecognized fastdeply data type:" << FDDataTypeStr(fd_dtype)
-          << "." << std::endl;
+  FDERROR << "Unrecognized fastdeply data type:" << Str(fd_dtype) << "."
+          << std::endl;
   return ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
 }
 
@@ -64,4 +64,4 @@ Ort::Value CreateOrtValue(FDTensor& tensor, bool is_backend_cuda) {
   return ort_value;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
