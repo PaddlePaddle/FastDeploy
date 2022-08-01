@@ -18,14 +18,20 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
 
   virtual bool Predict(cv::Mat* im, SegmentationResult* result);
 
+  bool with_softmax = false;
+
  private:
   bool Initialize();
 
   bool BuildPreprocessPipelineFromConfig();
 
-  bool Preprocess(Mat* mat, FDTensor* outputs);
+  bool Preprocess(Mat* mat, FDTensor* outputs,
+                  std::map<std::string, std::array<int, 2>>* im_info);
 
-  bool Postprocess(const FDTensor& infer_result, SegmentationResult* result);
+  bool Postprocess(FDTensor& infer_result, SegmentationResult* result,
+                   std::map<std::string, std::array<int, 2>>* im_info);
+
+  bool is_resized = false;
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;

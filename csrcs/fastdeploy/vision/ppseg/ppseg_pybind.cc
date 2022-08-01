@@ -20,11 +20,14 @@ void BindPPSeg(pybind11::module& m) {
   pybind11::class_<vision::ppseg::Model, FastDeployModel>(ppseg_module, "Model")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
-      .def("predict", [](vision::ppseg::Model& self, pybind11::array& data) {
-        auto mat = PyArrayToCvMat(data);
-        vision::SegmentationResult res;
-        self.Predict(&mat, &res);
-        return res;
-      });
+      .def("predict",
+           [](vision::ppseg::Model& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::SegmentationResult* res = new vision::SegmentationResult();
+             // self.Predict(&mat, &res);
+             self.Predict(&mat, res);
+             return res;
+           })
+      .def_readwrite("with_softmax", &vision::ppseg::Model::with_softmax);
 }
 }  // namespace fastdeploy

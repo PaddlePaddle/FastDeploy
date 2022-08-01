@@ -11,8 +11,8 @@ Model::Model(const std::string& model_file, const std::string& params_file,
              const std::string& config_file, const RuntimeOption& custom_option,
              const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
-  valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -65,6 +65,7 @@ bool Model::BuildPreprocessPipelineFromConfig() {
         const auto& target_size = op["target_size"];
         int resize_width = target_size[0].as<int>();
         int resize_height = target_size[1].as<int>();
+        is_resized = true;
         processors_.push_back(
             std::make_shared<Resize>(resize_width, resize_height));
       }
@@ -74,7 +75,8 @@ bool Model::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool Model::Preprocess(Mat* mat, FDTensor* output) {
+bool Model::Preprocess(Mat* mat, FDTensor* output,
+                       std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
@@ -82,41 +84,128 @@ bool Model::Preprocess(Mat* mat, FDTensor* output) {
       return false;
     }
   }
+
+  // Record output shape of preprocessed image
+  (*im_info)["output_shape"] = {static_cast<int>(mat->Height()),
+                                static_cast<int>(mat->Width())};
+
   mat->ShareWithTensor(output);
+  for (auto& i : output->shape) {
+    std::cout << "Preprocess before shape: " << i << std::endl;
+  }
   output->shape.insert(output->shape.begin(), 1);
+  for (auto& i : output->shape) {
+    std::cout << "Preprocess After shape: " << i << std::endl;
+  }
   output->name = InputInfoOfRuntime(0).name;
   return true;
 }
 
-bool Model::Postprocess(const FDTensor& infer_result,
-                        SegmentationResult* result) {
-  FDASSERT(infer_result.dtype == FDDataType::INT64,
-           "Require the data type of output is int64, but now it's " +
+bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
+                        std::map<std::string, std::array<int, 2>>* im_info) {
+  FDASSERT(infer_result.dtype == FDDataType::INT64 ||
+               infer_result.dtype == FDDataType::FP32,
+           "Require the data type of output is int64 or fp32, but now it's " +
                Str(const_cast<fastdeploy::FDDataType&>(infer_result.dtype)) +
                ".");
   result->Clear();
-  std::vector<int64_t> output_shape = infer_result.shape;
-  int out_num = std::accumulate(output_shape.begin(), output_shape.end(), 1,
-                                std::multiplies<int>());
-  const int64_t* infer_result_buffer =
-      reinterpret_cast<const int64_t*>(infer_result.data.data());
-  int64_t height = output_shape[1];
-  int64_t width = output_shape[2];
-  result->Resize(height, width);
-  for (int64_t i = 0; i < height; i++) {
-    int64_t begin = i * width;
-    int64_t end = (i + 1) * width - 1;
-    std::copy(infer_result_buffer + begin, infer_result_buffer + end,
-              result->masks[i].begin());
+  if (infer_result.shape.size() == 4) {
+    result->contain_score_map = true;
+    float_t* infer_result_buffer =
+        reinterpret_cast<float_t*>(infer_result.data.data());
+    // NCHW to NHWC
+    int num = infer_result.shape[0];
+    int channel = infer_result.shape[1];
+    int height = infer_result.shape[2];
+    int width = infer_result.shape[3];
+    int chw = channel * height * width;
+    int wc = width * channel;
+    int wh = width * height;
+    std::vector<float_t> hwc_data(chw);
+    int index = 0;
+    for (int n = 0; n < num; n++) {
+      for (int c = 0; c < channel; c++) {
+        for (int h = 0; h < height; h++) {
+          for (int w = 0; w < width; w++) {
+            hwc_data[n * chw + h * wc + w * channel + c] =
+                *(infer_result_buffer + index);
+            index++;
+          }
+        }
+      }
+    }
+    uint8_t* hwc_data_buffer = reinterpret_cast<uint8_t*>(hwc_data.data());
+    std::copy(hwc_data_buffer, hwc_data_buffer + infer_result.data.size() - 1,
+              infer_result.data.begin());
+    infer_result.shape = {num, height, width, channel};
   }
+  result->shape = infer_result.shape;
+  for (auto& i : result->shape) {
+    std::cout << "result->shape---" << i << std::endl;
+  }
+  int out_num =
+      std::accumulate(result->shape.begin(), result->shape.begin() + 3, 1,
+                      std::multiplies<int>());
+  std::cout << "out_num---" << out_num << std::endl;
+  result->shape.erase(result->shape.begin());
+  result->label_map.reserve(out_num);
+  if (result->contain_score_map) {
+    float_t* infer_result_buffer =
+        reinterpret_cast<float_t*>(infer_result.Data());
+    int64_t height = result->shape[0];
+    int64_t width = result->shape[1];
+    int64_t num_classes = result->shape[2];
+    result->shape.erase(result->shape.begin() + 2);
 
+    result->score_map.reserve(out_num);
+    int index = 0;
+    for (size_t i = 0; i < height; ++i) {
+      for (size_t j = 0; j < width; ++j) {
+        int64_t s = (i * width + j) * num_classes;
+        float_t* max_class_score = std::max_element(
+            infer_result_buffer + s, infer_result_buffer + s + num_classes);
+
+        auto label_id = std::distance(infer_result_buffer + s, max_class_score);
+
+        result->label_map[index] = (static_cast<uint8_t>(label_id));
+
+        if (with_softmax) {
+          double_t total = 0;
+          for (int k = 0; k < num_classes; k++) {
+            total += exp(*(infer_result_buffer + s + k) - *max_class_score);
+          }
+          double_t softmax_class_score = 1 / total;
+          result->score_map[index] = static_cast<float>(softmax_class_score);
+
+        } else {
+          result->score_map[index] = *max_class_score;
+        }
+        index++;
+      }
+    }
+  } else {
+    for (int i = 0; i < out_num; i++) {
+      const int64_t* infer_result_buffer =
+          reinterpret_cast<const int64_t*>(infer_result.Data());
+      result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+    }
+  }
   return true;
 }
 
 bool Model::Predict(cv::Mat* im, SegmentationResult* result) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
-  if (!Preprocess(&mat, &(processed_data[0]))) {
+
+  std::map<std::string, std::array<int, 2>> im_info;
+
+  // Record the shape of image and the shape of preprocessed image
+  im_info["input_shape"] = {static_cast<int>(mat.Height()),
+                            static_cast<int>(mat.Width())};
+  im_info["output_shape"] = {static_cast<int>(mat.Height()),
+                             static_cast<int>(mat.Width())};
+
+  if (!Preprocess(&mat, &(processed_data[0]), &im_info)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
@@ -127,7 +216,7 @@ bool Model::Predict(cv::Mat* im, SegmentationResult* result) {
             << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result[0], result)) {
+  if (!Postprocess(infer_result[0], result, &im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

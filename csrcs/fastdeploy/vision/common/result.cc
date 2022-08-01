@@ -140,7 +140,10 @@ std::string FaceDetectionResult::Str() {
 }
 
 void SegmentationResult::Clear() {
-  std::vector<std::vector<int64_t>>().swap(masks);
+  std::vector<uint8_t>().swap(label_map);
+  std::vector<float>().swap(score_map);
+  std::vector<int64_t>().swap(shape);
+  contain_score_map = false;
 }
 
 void SegmentationResult::Resize(int64_t height, int64_t width) {
@@ -153,9 +156,20 @@ std::string SegmentationResult::Str() {
   for (size_t i = 0; i < 10; ++i) {
     out += "[";
     for (size_t j = 0; j < 10; ++j) {
-      out = out + std::to_string(masks[i][j]) + ", ";
+      out = out + std::to_string(label_map[i * 10 + j]) + ", ";
     }
     out += ".....]\n";
+  }
+  out += "...........\n";
+  if (contain_score_map) {
+    out += "SegmentationResult Score map 10 rows x 10 cols: \n";
+    for (size_t i = 0; i < 10; ++i) {
+      out += "[";
+      for (size_t j = 0; j < 10; ++j) {
+        out = out + std::to_string(score_map[i * 10 + j]) + ", ";
+      }
+      out += ".....]\n";
+    }
   }
   out += "...........\n";
   return out;
