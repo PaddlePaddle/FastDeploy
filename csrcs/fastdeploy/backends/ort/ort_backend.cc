@@ -26,35 +26,6 @@ namespace fastdeploy {
 std::vector<OrtCustomOp*> OrtBackend::custom_operators_ =
     std::vector<OrtCustomOp*>();
 
-ONNXTensorElementDataType GetOrtDtype(FDDataType fd_dtype) {
-  if (fd_dtype == FDDataType::FP32) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
-  } else if (fd_dtype == FDDataType::FP64) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE;
-  } else if (fd_dtype == FDDataType::INT32) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
-  } else if (fd_dtype == FDDataType::INT64) {
-    return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
-  }
-  FDERROR << "Unrecognized fastdeply data type:" << FDDataTypeStr(fd_dtype)
-          << "." << std::endl;
-  return ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
-}
-
-FDDataType GetFdDtype(ONNXTensorElementDataType ort_dtype) {
-  if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-    return FDDataType::FP32;
-  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
-    return FDDataType::FP64;
-  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-    return FDDataType::INT32;
-  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-    return FDDataType::INT64;
-  }
-  FDERROR << "Unrecognized ort data type:" << ort_dtype << "." << std::endl;
-  return FDDataType::FP32;
-}
-
 void OrtBackend::BuildOption(const OrtBackendOption& option) {
   option_ = option;
   if (option.graph_optimization_level >= 0) {
@@ -263,6 +234,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
     (*outputs)[i].name = outputs_desc_[i].name;
     CopyToCpu(ort_outputs[i], &((*outputs)[i]));
   }
+
   return true;
 }
 

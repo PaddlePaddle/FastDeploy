@@ -32,7 +32,7 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
     dt = pybind11::dtype::of<double>();
   } else {
     FDASSERT(false, "The function doesn't support data type of " +
-                        FDDataTypeStr(fd_dtype) + ".");
+                        Str(fd_dtype) + ".");
   }
   return dt;
 }
@@ -47,8 +47,9 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype) {
   } else if (np_dtype.is(pybind11::dtype::of<double>())) {
     return FDDataType::FP64;
   }
-  FDASSERT(false, "NumpyDataTypeToFDDataType() only support "
-                  "int32/int64/float32/float64 now.");
+  FDASSERT(false,
+           "NumpyDataTypeToFDDataType() only support "
+           "int32/int64/float32/float64 now.");
   return FDDataType::FP32;
 }
 
@@ -112,4 +113,4 @@ PYBIND11_MODULE(fastdeploy_main, m) {
 #endif
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

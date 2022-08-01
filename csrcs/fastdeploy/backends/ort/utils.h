@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
-#include "onnxruntime_cxx_api.h" // NOLINT
+#include "onnxruntime_cxx_api.h"  // NOLINT
 
 namespace fastdeploy {
 
@@ -28,7 +28,7 @@ namespace fastdeploy {
 ONNXTensorElementDataType GetOrtDtype(const FDDataType& fd_dtype);
 
 // Convert OrtDataType to FDDataType
-FDDataType GetFdDtype(const ONNXTensorElementDataType* ort_dtype);
+FDDataType GetFdDtype(const ONNXTensorElementDataType& ort_dtype);
 
 // Create Ort::Value
 // is_backend_cuda specify if the onnxruntime use CUDAExectionProvider
@@ -36,4 +36,4 @@ FDDataType GetFdDtype(const ONNXTensorElementDataType* ort_dtype);
 // Will directly share the cuda data in tensor to OrtValue
 Ort::Value CreateOrtValue(FDTensor& tensor, bool is_backend_cuda = false);
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
