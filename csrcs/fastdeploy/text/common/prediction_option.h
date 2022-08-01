@@ -13,15 +13,12 @@
 // limitations under the License.
 
 #pragma once
-
-#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace text {
-namespace ernie {
 
-class FASTDEPLOY_DECL SequenceClassification : public FastDeployModel {};
+struct FASTDEPLOY_DECL PredictionOption {};
 
-}  // namespace ernie
 }  // namespace text
 }  // namespace fastdeploy
