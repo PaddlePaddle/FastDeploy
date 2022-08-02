@@ -1,3 +1,4 @@
+
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,23 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/text/common/result.h"
-#include "fastdeploy/utils/utils.h"
+#include "fastdeploy/text/preprocessor/preprocessor.h"
 
 namespace fastdeploy {
 namespace text {
 
-class TextPostprocessor {
- public:
-  virtual bool Decode(const std::vector<FDTensor>& model_result,
-                      TextResult* decoded_result) const;
-  virtual bool DecodeBatch(const std::vector<FDTensor>& model_result,
-                           BatchTextResult* decoded_result) const;
-};
+bool Preprocessor::Encode(const std::string& raw_text,
+                          std::vector<FDTensor>* encoded_tensor) const {
+  return true;
+}
+
+bool Preprocessor::EncodeBatch(const std::vector<std::string>& raw_texts,
+                               std::vector<FDTensor>* encoded_tensor) const {
+  return true;
+}
 
 }  // namespace text
 }  // namespace fastdeploy

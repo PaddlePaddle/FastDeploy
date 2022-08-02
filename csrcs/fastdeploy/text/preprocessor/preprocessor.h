@@ -1,4 +1,3 @@
-
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/text/preprocessor/text_preprocessor.h"
+#pragma once
+
+#include <memory>
+#include <vector>
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace text {
 
-bool TextPreprocessor::Encode(const std::string& raw_text,
-                              FDTensor* encoded_tensor) const {
-  return true;
-}
-
-bool TextPreprocessor::EncodeBatch(const std::vector<std::string>& raw_texts,
-                                   FDTensor* encoded_tensor) const {
-  return true;
-}
+class Preprocessor {
+ public:
+  virtual bool Encode(const std::string& raw_text,
+                      std::vector<FDTensor>* encoded_tensor) const;
+  virtual bool EncodeBatch(const std::vector<std::string>& raw_texts,
+                           std::vector<FDTensor>* encoded_tensor) const;
+};
 
 }  // namespace text
 }  // namespace fastdeploy
