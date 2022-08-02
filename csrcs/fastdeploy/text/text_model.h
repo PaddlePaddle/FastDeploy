@@ -21,20 +21,18 @@
 namespace fastdeploy {
 namespace text {
 
-class TextPreprocessor;
-class TextPostprocessor;
-class TextResult;
-class BatchTextResult;
+class Preprocessor;
+class Postprocessor;
+class Result;
 class PredictionOption;
 
 class FASTDEPLOY_DECL TextModel : public FastDeployModel {
  public:
   virtual std::string ModelName() const { return "TextModel"; }
-  virtual bool Predict(const std::string& raw_text, TextResult* result,
+  virtual bool Predict(const std::string& raw_text, Result* result,
                        const PredictionOption& option);
   virtual bool PredictBatch(const std::vector<std::string>& raw_text_array,
-                            BatchTextResult* results,
-                            const PredictionOption& option);
+                            Result* result, const PredictionOption& option);
   template <typename T, typename... Args>
   void SetPreprocessor(Args&&... args) {
     preprocessor_ = utils::make_unique<T>(std::forward<Args>(args)...);
@@ -45,8 +43,8 @@ class FASTDEPLOY_DECL TextModel : public FastDeployModel {
   }
 
  private:
-  std::unique_ptr<TextPreprocessor> preprocessor_;
-  std::unique_ptr<TextPostprocessor> postprocessor_;
+  std::unique_ptr<Preprocessor> preprocessor_;
+  std::unique_ptr<Postprocessor> postprocessor_;
 };
 
 }  // namespace text

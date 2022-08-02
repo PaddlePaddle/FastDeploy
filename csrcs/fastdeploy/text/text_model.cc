@@ -13,14 +13,15 @@
 // limitations under the License.
 
 #include "fastdeploy/text/text_model.h"
+#include "fastdeploy/text/common/option.h"
 #include "fastdeploy/text/common/result.h"
-#include "fastdeploy/text/postprocessor/text_postprocessor.h"
-#include "fastdeploy/text/preprocessor/text_preprocessor.h"
+#include "fastdeploy/text/postprocessor/postprocessor.h"
+#include "fastdeploy/text/preprocessor/preprocessor.h"
 
 namespace fastdeploy {
 namespace text {
 
-bool TextModel::Predict(const std::string& raw_text, TextResult* result,
+bool TextModel::Predict(const std::string& raw_text, Result* result,
                         const PredictionOption& option) {
   // Preprocess
   std::vector<FDTensor> input_tensor;
@@ -48,8 +49,7 @@ bool TextModel::Predict(const std::string& raw_text, TextResult* result,
 }
 
 bool TextModel::PredictBatch(const std::vector<std::string>& raw_text_array,
-                             BatchTextResult* results,
-                             const PredictionOption& option) {
+                             Result* results, const PredictionOption& option) {
   // Preprocess
   std::vector<FDTensor> input_tensor;
   std::vector<FDTensor> output_tensor;

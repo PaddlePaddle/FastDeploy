@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
+#include "fastdeploy/text/postprocessor/text_postprocessor.h"
+
 namespace fastdeploy {
 namespace text {
 
-class TextPreprocessor {
- public:
-  virtual bool Encode(const std::string& raw_text,
-                      std::vector<FDTensor>* encoded_tensor) const;
-  virtual bool EncodeBatch(const std::vector<std::string>& raw_texts,
-                           std::vector<FDTensor>* encoded_tensor) const;
+bool Postprocessor::Decode(const std::vector<FDTensor>& model_result,
+                           Result* decoded_result) const {
+  return true;
+}
+
+bool Postprocessor::DecodeBatch(const std::vector<FDTensor>& model_result,
+                                Result* decoded_result) const {
+  return true;
+}
 };
 
 }  // namespace text

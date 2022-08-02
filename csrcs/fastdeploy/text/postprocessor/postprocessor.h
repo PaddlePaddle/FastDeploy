@@ -13,12 +13,22 @@
 // limitations under the License.
 
 #pragma once
+
+#include <vector>
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/text/common/result.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace text {
 
-struct FASTDEPLOY_DECL PredictionOption {};
+class Postprocessor {
+ public:
+  virtual bool Decode(const std::vector<FDTensor>& model_result,
+                      Result* decoded_result) const;
+  virtual bool DecodeBatch(const std::vector<FDTensor>& model_result,
+                           Result* decoded_result) const;
+};
 
 }  // namespace text
 }  // namespace fastdeploy

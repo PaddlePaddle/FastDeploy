@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/text/postprocessor/text_postprocessor.h"
+#pragma once
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace text {
 
-bool TextPostprocessor::Decode(const std::vector<FDTensor>& model_result,
-                               TextResult* decoded_result) const {
-  return true;
-}
-
-bool TextPostprocessor::DecodeBatch(const std::vector<FDTensor>& model_result,
-                                    BatchTextResult* decoded_result) const {
-  return true;
-}
-};
+struct FASTDEPLOY_DECL TextPreprocessOption {};
+struct FASTDEPLOY_DECL TextPostprocessOption {};
+struct FASTDEPLOY_DECL PredictionOption {};
 
 }  // namespace text
 }  // namespace fastdeploy

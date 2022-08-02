@@ -17,9 +17,7 @@
 namespace fastdeploy {
 namespace text {
 
-struct FASTDEPLOY_DECL TextResult {};
-
-struct FASTDEPLOY_DECL BatchTextResult : public TextResult {};
+struct FASTDEPLOY_DECL Result {};
 
 }  // namespace text
 }  // namespace fastdeploy
