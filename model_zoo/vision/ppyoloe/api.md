@@ -4,7 +4,7 @@
 
 ### PPYOLOE类
 ```
-fastdeploy.vision.ultralytics.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=fd.Frontend.PADDLE)
+fastdeploy.vision.ppdet.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=fd.Frontend.PADDLE)
 ```
 PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当前仅支持model_format为Paddle格式
 
@@ -18,15 +18,13 @@ PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当�
 
 #### predict函数
 > ```
-> PPYOLOE.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> PPYOLOE.predict(image_data)
 > ```
 > 模型预测结口，输入图像直接输出检测结果。
 >
 > **参数**
 >
 > > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **conf_threshold**(float): 检测框置信度过滤阈值
-> > * **nms_iou_threshold**(float): NMS处理过程中iou阈值（当模型中包含nms处理时，此参数自动无效）
 
 示例代码参考[ppyoloe.py](./ppyoloe.py)
 
@@ -35,12 +33,12 @@ PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当�
 
 ### PPYOLOE类
 ```
-fastdeploy::vision::ultralytics::PPYOLOE(
+fastdeploy::vision::ppdet::PPYOLOE(
         const string& model_file,
         const string& params_file,
         const string& config_file,
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const Frontend& model_format = Frontend::PADDLE)
 ```
 PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当前仅支持model_format为Paddle格式
 
@@ -54,9 +52,7 @@ PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当�
 
 #### Predict函数
 > ```
-> YOLOv5::Predict(cv::Mat* im, DetectionResult* result,
->                 float conf_threshold = 0.25,
->                 float nms_iou_threshold = 0.5)
+> PPYOLOE::Predict(cv::Mat* im, DetectionResult* result)
 > ```
 > 模型预测接口，输入图像直接输出检测结果。
 >
@@ -64,10 +60,8 @@ PPYOLOE模型加载和初始化，需同时提供model_file和params_file, 当�
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度
-> > * **conf_threshold**: 检测框置信度过滤阈值
-> > * **nms_iou_threshold**: NMS处理过程中iou阈值(当模型中包含nms处理时，此参数自动无效）
 
-示例代码参考[cpp/yolov5.cc](cpp/yolov5.cc)
+示例代码参考[cpp/ppyoloe.cc](cpp/ppyoloe.cc)
 
 ## 其它API使用
 

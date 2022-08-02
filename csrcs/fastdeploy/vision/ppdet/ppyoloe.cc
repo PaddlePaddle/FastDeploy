@@ -85,12 +85,6 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     return false;
   }
 
-  if (cfg["arch"].as<std::string>() != "YOLO") {
-    FDERROR << "Require the arch of model is YOLO, but arch defined in "
-               "config file is "
-            << cfg["arch"].as<std::string>() << "." << std::endl;
-    return false;
-  }
   processors_.push_back(std::make_shared<BGR2RGB>());
 
   for (const auto& op : cfg["Preprocess"]) {
@@ -128,12 +122,14 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
 bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
+  mat->PrintInfo("Origin");
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
+    mat->PrintInfo(processors_[i]->Name());
   }
 
   outputs->resize(2);
@@ -217,8 +213,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
   return true;
 }
 
-bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result,
-                      float conf_threshold, float iou_threshold) {
+bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
@@ -227,6 +222,9 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
+  processed_data[0].PrintInfo("Before infer");
+  float* tmp = static_cast<float*>(processed_data[1].Data());
+  std::cout << "==== " << tmp[0] << " " << tmp[1] << std::endl;
   std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
@@ -234,6 +232,8 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
+  infer_result[0].PrintInfo("Boxes");
+  infer_result[1].PrintInfo("Num");
   if (!Postprocess(infer_result, result)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
