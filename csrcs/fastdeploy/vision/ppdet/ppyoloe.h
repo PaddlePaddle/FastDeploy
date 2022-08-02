@@ -16,7 +16,7 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
           const RuntimeOption& custom_option = RuntimeOption(),
           const Frontend& model_format = Frontend::PADDLE);
 
-  std::string ModelName() const { return "PaddleDetection/PPYOLOE"; }
+  virtual std::string ModelName() const { return "PaddleDetection/PPYOLOE"; }
 
   virtual bool Initialize();
 
@@ -27,10 +27,14 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result);
 
-  virtual bool Predict(cv::Mat* im, DetectionResult* result,
-                       float conf_threshold = 0.5, float nms_threshold = 0.7);
+  virtual bool Predict(cv::Mat* im, DetectionResult* result);
 
- private:
+ protected:
+  PPYOLOE() {}
+  // This function will used to check if this model contains multiclass_nms
+  // and get parameters from the operator
+  void GetNmsInfo();
+
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
   // configuration for nms
@@ -42,10 +46,6 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   int64_t nms_top_k = 10000;
   bool normalized = true;
   bool has_nms_ = false;
-
-  // This function will used to check if this model contains multiclass_nms
-  // and get parameters from the operator
-  void GetNmsInfo();
 };
 }  // namespace ppdet
 }  // namespace vision
