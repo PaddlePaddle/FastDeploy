@@ -90,13 +90,7 @@ bool Model::Preprocess(Mat* mat, FDTensor* output,
                                 static_cast<int>(mat->Width())};
 
   mat->ShareWithTensor(output);
-  for (auto& i : output->shape) {
-    std::cout << "Preprocess before shape: " << i << std::endl;
-  }
   output->shape.insert(output->shape.begin(), 1);
-  for (auto& i : output->shape) {
-    std::cout << "Preprocess After shape: " << i << std::endl;
-  }
   output->name = InputInfoOfRuntime(0).name;
   return true;
 }
@@ -143,14 +137,6 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   FDTensor new_infer_result;
   Mat* mat = nullptr;
   if (is_resized) {
-    FDASSERT(infer_result.dtype == FDDataType::FP32,
-             "Require the data type of output is fp32, but now it's " +
-                 Str(const_cast<fastdeploy::FDDataType&>(infer_result.dtype)) +
-                 ". Please export PaddleSeg model without argmax and with "
-                 "softmax refer to "
-                 "https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/"
-                 "docs/model_export_cn.md");
-
     int channel = 1;
     int height = infer_result.shape[1];
     int width = infer_result.shape[2];
@@ -158,8 +144,23 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     if (result->contain_score_map) {
       channel = infer_result.shape[3];
     }
-    cv::Mat temp_mat =
-        cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
+    cv::Mat temp_mat;
+    if (infer_result.dtype == FDDataType::INT64) {
+      int64_t chw = channel * height * width;
+      int64_t* infer_result_buffer = static_cast<int64_t*>(infer_result.Data());
+      std::vector<float_t> float_result_buffer(chw);
+      temp_mat = cv::Mat(height, width, CV_32FC(channel));
+      int index = 0;
+      for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+          temp_mat.at<float_t>(i, j) =
+              static_cast<float_t>(infer_result_buffer[index++]);
+        }
+      }
+    } else if (infer_result.dtype == FDDataType::FP32) {
+      temp_mat = cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
+    }
+
     auto iter_ipt = (*im_info).find("input_shape");
     FDASSERT(iter_ipt != im_info->end(),
              "Cannot find input_shape from im_info.");
@@ -222,10 +223,18 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
       }
     }
   } else {
-    for (int i = 0; i < out_num; i++) {
+    if (is_resized) {
+      float_t* infer_result_buffer =
+          static_cast<float_t*>(new_infer_result.Data());
+      for (int i = 0; i < out_num; i++) {
+        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+      }
+    } else {
       const int64_t* infer_result_buffer =
           reinterpret_cast<const int64_t*>(infer_result.Data());
-      result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+      for (int i = 0; i < out_num; i++) {
+        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+      }
     }
   }
   std::free(mat);
