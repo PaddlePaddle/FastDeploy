@@ -11,21 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <iostream>
 
-#include "fastdeploy/text/postprocessor/postprocessor.h"
+#include "fastdeploy/text.h"
 
-namespace fastdeploy {
-namespace text {
-
-bool Postprocessor::Decode(const std::vector<FDTensor>& model_result,
-                           Result* decoded_result) const {
-  return true;
+int main() {
+  std::cout << "Hello World!" << std::endl;
+  return 0;
 }
-
-bool Postprocessor::DecodeBatch(const std::vector<FDTensor>& model_result,
-                                Result* decoded_result) const {
-  return true;
-}
-
-}  // namespace text
-}  // namespace fastdeploy
