@@ -23,20 +23,31 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool PPYOLOE::Initialize() {
-#ifdef ENABLE_PADDLE_FRONTEND
-  // remove multiclass_nms3 now
-  // this is a trick operation for ppyoloe while inference on trt
+void PPYOLOE::GetNmsInfo() {
   if (runtime_option.model_format == Frontend::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
-      return false;
+      return;
     }
     auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
     if (reader.has_nms) {
       has_nms_ = true;
+      background_label = reader.nms_params.background_label;
+      keep_top_k = reader.nms_params.keep_top_k;
+      nms_eta = reader.nms_params.nms_eta;
+      nms_threshold = reader.nms_params.nms_threshold;
+      score_threshold = reader.nms_params.score_threshold;
+      nms_top_k = reader.nms_params.nms_top_k;
+      normalized = reader.nms_params.normalized;
     }
   }
+}
+
+bool PPYOLOE::Initialize() {
+#ifdef ENABLE_PADDLE_FRONTEND
+  // remove multiclass_nms3 now
+  // this is a trick operation for ppyoloe while inference on trt
+  GetNmsInfo();
   runtime_option.remove_multiclass_nms_ = true;
   runtime_option.custom_op_info_["multiclass_nms3"] = "MultiClassNMS";
 #endif
@@ -52,8 +63,12 @@ bool PPYOLOE::Initialize() {
 
   if (has_nms_ && runtime_option.backend == Backend::TRT) {
     FDINFO << "Detected operator multiclass_nms3 in your model, will replace "
-              "it with fastdeploy::backend::MultiClassNMS replace it."
-           << std::endl;
+              "it with fastdeploy::backend::MultiClassNMS(background_label="
+           << background_label << ", keep_top_k=" << keep_top_k
+           << ", nms_eta=" << nms_eta << ", nms_threshold=" << nms_threshold
+           << ", score_threshold=" << score_threshold
+           << ", nms_top_k=" << nms_top_k << ", normalized=" << normalized
+           << ")." << std::endl;
     has_nms_ = false;
   }
   return true;

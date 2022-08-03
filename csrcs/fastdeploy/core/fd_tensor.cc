@@ -119,9 +119,9 @@ void FDTensor::PrintInfo(const std::string& prefix) {
   for (int i = 0; i < shape.size(); ++i) {
     std::cout << shape[i] << " ";
   }
-  std::cout << ", dtype=" << FDDataTypeStr(dtype) << ", mean=" << mean
-            << ", max=" << max << ", min=" << min << std::endl;
+  std::cout << ", dtype=" << Str(dtype) << ", mean=" << mean << ", max=" << max
+            << ", min=" << min << std::endl;
 }
 
 FDTensor::FDTensor(const std::string& tensor_name) { name = tensor_name; }
-} // namespace fastdeploy
+}  // namespace fastdeploy
