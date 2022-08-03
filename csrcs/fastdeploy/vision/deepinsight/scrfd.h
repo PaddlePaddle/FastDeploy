@@ -111,14 +111,14 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
   bool center_points_is_update_;
 
   // feature map count
-  unsigned int fmc;
+  unsigned int fmc_;
 
   typedef struct {
     float cx;
     float cy;
   } SCRFDPoint;
 
-  std::unordered_map<int, std::vector<SCRFDPoint>> center_points;
+  std::unordered_map<int, std::vector<SCRFDPoint>> center_points_;
 };
 }  // namespace deepinsight
 }  // namespace vision
