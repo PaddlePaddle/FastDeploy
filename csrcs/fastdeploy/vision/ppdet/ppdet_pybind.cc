@@ -27,5 +27,21 @@ void BindPPDet(pybind11::module& m) {
         self.Predict(&mat, &res);
         return res;
       });
+  pybind11::class_<vision::ppdet::PPYOLO, vision::ppdet::PPYOLOE>(ppdet_module,
+                                                                  "PPYOLO")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>());
+  pybind11::class_<vision::ppdet::PicoDet, vision::ppdet::PPYOLOE>(ppdet_module,
+                                                                   "PicoDet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>());
+  pybind11::class_<vision::ppdet::YOLOX, vision::ppdet::PPYOLOE>(ppdet_module,
+                                                                 "YOLOX")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>());
+  pybind11::class_<vision::ppdet::FasterRCNN, vision::ppdet::PPYOLOE>(
+      ppdet_module, "FasterRCNN")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>());
 }
 }  // namespace fastdeploy

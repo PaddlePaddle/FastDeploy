@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppdet/ppyolo.h"
+#include "fastdeploy/vision/ppdet/rcnn.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ppdet {
 
-PPYOLO::PPYOLO(const std::string& model_file, const std::string& params_file,
-               const std::string& config_file,
-               const RuntimeOption& custom_option,
-               const Frontend& model_format) {
+FasterRCNN::FasterRCNN(const std::string& model_file,
+                       const std::string& params_file,
+                       const std::string& config_file,
+                       const RuntimeOption& custom_option,
+                       const Frontend& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER};
   valid_gpu_backends = {Backend::PDINFER};
@@ -33,7 +34,7 @@ PPYOLO::PPYOLO(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool PPYOLO::Initialize() {
+bool FasterRCNN::Initialize() {
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -46,15 +47,20 @@ bool PPYOLO::Initialize() {
   return true;
 }
 
-bool PPYOLO::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
+bool FasterRCNN::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
   mat->PrintInfo("Origin");
+  float scale[2] = {1.0, 1.0};
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
+    }
+    if (processors_[i]->Name().find("Resize") != std::string::npos) {
+      scale[0] = mat->Height() * 1.0 / origin_h;
+      scale[1] = mat->Width() * 1.0 / origin_w;
     }
     mat->PrintInfo(processors_[i]->Name());
   }
@@ -66,12 +72,15 @@ bool PPYOLO::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   ptr0[0] = mat->Height();
   ptr0[1] = mat->Width();
   float* ptr2 = static_cast<float*>((*outputs)[2].MutableData());
-  ptr2[0] = mat->Height() * 1.0 / origin_h;
-  ptr2[1] = mat->Width() * 1.0 / origin_w;
+  ptr2[0] = scale[0];
+  ptr2[1] = scale[1];
   (*outputs)[1].name = "image";
   mat->ShareWithTensor(&((*outputs)[1]));
   // reshape to [1, c, h, w]
   (*outputs)[1].shape.insert((*outputs)[1].shape.begin(), 1);
+  (*outputs)[0].PrintInfo("im_shape");
+  (*outputs)[1].PrintInfo("image");
+  (*outputs)[2].PrintInfo("scale_factor");
   return true;
 }
 

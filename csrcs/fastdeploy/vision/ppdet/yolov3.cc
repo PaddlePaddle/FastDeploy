@@ -1,3 +1,17 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "fastdeploy/vision/ppdet/yolov3.h"
 
 namespace fastdeploy {
@@ -34,20 +48,16 @@ bool YOLOv3::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   outputs->resize(3);
   (*outputs)[0].Allocate({1, 2}, FDDataType::FP32, "im_shape");
   (*outputs)[2].Allocate({1, 2}, FDDataType::FP32, "scale_factor");
-  std::cout << "111111111" << std::endl;
   float* ptr0 = static_cast<float*>((*outputs)[0].MutableData());
   ptr0[0] = mat->Height();
   ptr0[1] = mat->Width();
-  std::cout << "090909" << std::endl;
   float* ptr2 = static_cast<float*>((*outputs)[2].MutableData());
   ptr2[0] = mat->Height() * 1.0 / origin_h;
   ptr2[1] = mat->Width() * 1.0 / origin_w;
-  std::cout << "88888" << std::endl;
   (*outputs)[1].name = "image";
   mat->ShareWithTensor(&((*outputs)[1]));
   // reshape to [1, c, h, w]
   (*outputs)[1].shape.insert((*outputs)[1].shape.begin(), 1);
-  std::cout << "??????" << std::endl;
   return true;
 }
 

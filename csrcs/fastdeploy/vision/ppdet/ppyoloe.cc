@@ -101,21 +101,38 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       FDASSERT(target_size.size(),
                "Require size of target_size be 2, but now it's " +
                    std::to_string(target_size.size()) + ".");
-      FDASSERT(!keep_ratio,
-               "Only support keep_ratio is false while deploy "
-               "PaddleDetection model.");
-      int width = target_size[1];
-      int height = target_size[0];
-      processors_.push_back(
-          std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
+      if (!keep_ratio) {
+        int width = target_size[1];
+        int height = target_size[0];
+        processors_.push_back(
+            std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
+      } else {
+        int min_target_size = std::min(target_size[0], target_size[1]);
+        int max_target_size = std::max(target_size[0], target_size[1]);
+        processors_.push_back(std::make_shared<ResizeByShort>(
+            min_target_size, interp, true, max_target_size));
+      }
     } else if (op_name == "Permute") {
-      processors_.push_back(std::make_shared<HWC2CHW>());
+      // Do nothing, do permute as the last operation
+      continue;
+      // processors_.push_back(std::make_shared<HWC2CHW>());
+    } else if (op_name == "Pad") {
+      auto size = op["size"].as<std::vector<int>>();
+      auto value = op["fill_value"].as<std::vector<float>>();
+      processors_.push_back(std::make_shared<Cast>("float"));
+      processors_.push_back(
+          std::make_shared<PadToSize>(size[1], size[0], value));
+    } else if (op_name == "PadStride") {
+      auto stride = op["stride"].as<int>();
+      processors_.push_back(
+          std::make_shared<StridePad>(stride, std::vector<float>(3, 0)));
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
               << std::endl;
       return false;
     }
   }
+  processors_.push_back(std::make_shared<HWC2CHW>());
   return true;
 }
 
@@ -224,7 +241,6 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
 
   processed_data[0].PrintInfo("Before infer");
   float* tmp = static_cast<float*>(processed_data[1].Data());
-  std::cout << "==== " << tmp[0] << " " << tmp[1] << std::endl;
   std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
