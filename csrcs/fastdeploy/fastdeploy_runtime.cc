@@ -212,7 +212,6 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
 
-
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.model_format == Frontend::AUTOREC) {
@@ -274,6 +273,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;
+  pd_option.cpu_thread_num = option.cpu_thread_num;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
   backend_ = new PaddleBackend();
