@@ -166,8 +166,8 @@ void SCRFD::GeneratePoints() {
         // num_anchors, col major
         for (unsigned int k = 0; k < num_anchors; ++k) {
           SCRFDPoint point;
-          point.cx = static_cast<float>j;
-          point.cy = static_cast<float>i;
+          point.cx = static_cast<float>(j);
+          point.cy = static_cast<float>(i);
           center_points[local_stride].push_back(point);
         }
       }
@@ -244,13 +244,13 @@ bool SCRFD::Postprocess(
       float b = offsets[3];  // bottom
 
       float x1 =
-          ((cx - l) * static_cast<float>current_stride - static_cast<float>pad_w) / scale;  // cx - l x1
+          ((cx - l) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) / scale;  // cx - l x1
       float y1 =
-          ((cy - t) * static_cast<float>current_stride - static_cast<float>pad_h) / scale;  // cy - t y1
+          ((cy - t) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) / scale;  // cy - t y1
       float x2 =
-          ((cx + r) * static_cast<float>current_stride - static_cast<float>pad_w) / scale;  // cx + r x2
+          ((cx + r) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) / scale;  // cx + r x2
       float y2 =
-          ((cy + b) * static_cast<float>current_stride - static_cast<float>pad_h) / scale;  // cy + b y2
+          ((cy + b) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) / scale;  // cy + b y2
       result->boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
       result->scores.push_back(cls_conf);
       if (use_kps) {
@@ -261,9 +261,9 @@ bool SCRFD::Postprocess(
         for (unsigned int j = 0; j < landmarks_per_face * 2; j += 2) {
           float kps_l = kps_offsets[j];
           float kps_t = kps_offsets[j + 1];
-          float kps_x = ((cx + kps_l) * static_cast<float>current_stride - static_cast<float>pad_w) /
+          float kps_x = ((cx + kps_l) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) /
                         scale;  // cx + l x
-          float kps_y = ((cy + kps_t) * static_cast<float>current_stride - static_cast<float>pad_h) /
+          float kps_y = ((cy + kps_t) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) /
                         scale;  // cy + t y
           result->landmarks.emplace_back(std::array<float, 2>{kps_x, kps_y});
         }
