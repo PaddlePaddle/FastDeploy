@@ -1,12 +1,12 @@
-# YOLOv7 API说明
+# SCRFD API说明
 
 ## Python API
 
-### YOLOv7类
+### SCRFD类
 ```
-fastdeploy.vision.wongkinyiu.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
+fastdeploy.vision.deepinsight.SCRFD(model_file, params_file=None, runtime_option=None, model_format=fd.Frontend.ONNX)
 ```
-YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`yolov7.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
+SCRFD模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只需提供model_file，如`SCRFD.onnx`；当model_format为`fd.Frontend.PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -17,7 +17,7 @@ YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 
 #### predict函数
 > ```
-> YOLOv7.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> SCRFD.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 > 模型预测结口，输入图像直接输出检测结果。
 >
@@ -27,20 +27,20 @@ YOLOv7模型加载和初始化，当model_format为`fd.Frontend.ONNX`时，只�
 > > * **conf_threshold**(float): 检测框置信度过滤阈值
 > > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
-示例代码参考[yolov7.py](./yolov7.py)
+示例代码参考[scrfd.py](./scrfd.py)
 
 
 ## C++ API
 
-### YOLOv7类
+### SCRFD类
 ```
-fastdeploy::vision::wongkinyiu::YOLOv7(
+fastdeploy::vision::deepinsight::SCRFD(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
-YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`yolov7.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
+SCRFD模型加载和初始化，当model_format为`Frontend::ONNX`时，只需提供model_file，如`SCRFD.onnx`；当model_format为`Frontend::PADDLE`时，则需同时提供model_file和params_file。
 
 **参数**
 
@@ -51,9 +51,9 @@ YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 
 #### Predict函数
 > ```
-> YOLOv7::Predict(cv::Mat* im, DetectionResult* result,
->                 float conf_threshold = 0.25,
->                 float nms_iou_threshold = 0.5)
+> SCRFD::Predict(cv::Mat* im, DetectionResult* result,
+>                float conf_threshold = 0.25,
+>                float nms_iou_threshold = 0.5)
 > ```
 > 模型预测接口，输入图像直接输出检测结果。
 >
@@ -64,7 +64,7 @@ YOLOv7模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
-示例代码参考[cpp/yolov7.cc](cpp/yolov7.cc)
+示例代码参考[cpp/scrfd.cc](cpp/scrfd.cc)
 
 ## 其它API使用
 

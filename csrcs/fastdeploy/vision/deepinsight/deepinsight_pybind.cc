@@ -17,7 +17,7 @@
 namespace fastdeploy {
 void BindDeepinsight(pybind11::module& m) {
   auto deepinsight_module = m.def_submodule(
-      "deepinsight", "https://github.com/deepinsight/Pytorch_Retinaface");
+      "deepinsight", "https://github.com/deepinsight");
   pybind11::class_<vision::deepinsight::SCRFD, FastDeployModel>(
       deepinsight_module, "SCRFD")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())

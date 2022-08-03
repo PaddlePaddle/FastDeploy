@@ -16,15 +16,19 @@
 
 int main() {
   namespace vis = fastdeploy::vision;
-  auto model = vis::deepinsight::SCRFD("scrfd.onnx");
+  auto model = vis::deepinsight::SCRFD("SCRFD.onnx");
   if (!model.Initialized()) {
     std::cerr << "Init Failed." << std::endl;
     return -1;
   }
-  cv::Mat im = cv::imread("horses.jpg");
+  cv::Mat im = cv::imread("test_lite_face_detector_3.jpg");
   cv::Mat vis_im = im.clone();
 
-  vis::DetectionResult res;
+// 如果导入不带有关键点预测的模型，请修改模型参数 use_kps 和 landmarks_per_face，示例如下
+  // model.landmarks_per_face = 0;
+  // model.use_kps = false;
+
+  vis::FaceDetectionResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Prediction Failed." << std::endl;
     return -1;
