@@ -302,10 +302,6 @@ bool SCRFD::Postprocess(
   FDASSERT((iter_ipt != im_info.end()),
            "Cannot find input_shape from im_info.");
 
-  // generate anchors with dowmsample strides
-
-  // decode bounding boxes
-
   if (result->boxes.size() == 0) {
     return true;
   }
