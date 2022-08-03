@@ -24,7 +24,7 @@ int main() {
   cv::Mat im = cv::imread("test_lite_face_detector_3.jpg");
   cv::Mat vis_im = im.clone();
 
-// 如果导入不带有关键点预测的模型，请修改模型参数 use_kps 和 landmarks_per_face，示例如下
+  // 如果导入不带有关键点预测的模型，请修改模型参数 use_kps 和 landmarks_per_face，示例如下
   // model.landmarks_per_face = 0;
   // model.use_kps = false;
 

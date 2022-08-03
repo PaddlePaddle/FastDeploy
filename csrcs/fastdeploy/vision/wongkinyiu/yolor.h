@@ -90,9 +90,6 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
 
-  // 查看输入是否为动态维度的 不建议直接使用 不同模型的逻辑可能不一致
-  bool IsDynamicInput() const { return is_dynamic_input_; }
-
   // whether to inference with dynamic shape (e.g ONNX export with dynamic shape
   // or not.)
   // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This

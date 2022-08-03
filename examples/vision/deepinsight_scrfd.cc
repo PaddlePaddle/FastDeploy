@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
-using namespace std;
 int main() {
   namespace vis = fastdeploy::vision;
 
@@ -33,27 +32,6 @@ int main() {
 
   cv::Mat im = cv::imread(img_path);
   cv::Mat vis_im = im.clone();
-  /*
-    use_kps = true;
-  size = {640, 640};
-  padding_value = {0.0, 0.0, 0.0};
-  is_mini_pad = false;
-  is_no_pad = false;
-  is_scale_up = false;
-  stride = 32;
-  downsample_strides = {8, 16, 32};
-  num_anchors = 2;
-  landmarks_per_face = 5;
-  fmc = downsample_strides.size();
-  center_points_is_update = false;
-  max_nms = 30000;
-  */
-  cout << "size: " << model.size[0] << endl;
-  cout << "padding_value: " << model.padding_value[0] << endl;
-  cout << "downsample_strides: " << model.downsample_strides[0] << endl;
-  cout << "num_anchors: " << model.num_anchors << endl;
-  cout << "landmarks_per_face: " << model.landmarks_per_face << endl;
-  cout << "max_nms: " << model.max_nms << endl;
   vis::FaceDetectionResult res;
   if (!model.Predict(&im, &res, 0.3f, 0.3f)) {
     std::cerr << "Prediction Failed." << std::endl;

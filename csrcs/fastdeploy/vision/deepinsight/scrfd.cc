@@ -75,31 +75,6 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-// bool SCRFD::Initialize() {
-//   // parameters for preprocess
-//   size = {640, 640};
-//   variance = {0.1f, 0.2f};
-//   downsample_strides = {8, 16, 32};
-//   min_sizes = {{16, 32}, {64, 128}, {256, 512}};
-//   landmarks_per_face = 5;
-
-//   if (!InitRuntime()) {
-//     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
-//     return false;
-//   }
-//   // Check if the input shape is dynamic after Runtime already initialized,
-//   is_dynamic_input_ = false;
-//   auto shape = InputInfoOfRuntime(0).shape;
-//   for (int i = 0; i < shape.size(); ++i) {
-//     // if height or width is dynamic
-//     if (i >= 2 && shape[i] <= 0) {
-//       is_dynamic_input_ = true;
-//       break;
-//     }
-//   }
-//   return true;
-// }
-
 bool SCRFD::Initialize() {
   // parameters for preprocess
   use_kps = true;
@@ -113,7 +88,7 @@ bool SCRFD::Initialize() {
   num_anchors = 2;
   landmarks_per_face = 5;
   fmc = downsample_strides.size();
-  center_points_is_update = false;
+  center_points_is_update_ = false;
   max_nms = 30000;
   // num_outputs = use_kps ? 9 : 6;
   if (!InitRuntime()) {
@@ -178,8 +153,8 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-void SCRFD::generate_points() {
-  if (center_points_is_update) return;
+void SCRFD::GeneratePoints() {
+  if (center_points_is_update_ && !is_dynamic_input_) return;
   // 8, 16, 32
   for (auto local_stride : downsample_strides) {
     unsigned int num_grid_w = size[0] / local_stride;
@@ -191,22 +166,22 @@ void SCRFD::generate_points() {
         // num_anchors, col major
         for (unsigned int k = 0; k < num_anchors; ++k) {
           SCRFDPoint point;
-          point.cx = (float)j;
-          point.cy = (float)i;
+          point.cx = static_cast<float>j;
+          point.cy = static_cast<float>i;
           center_points[local_stride].push_back(point);
         }
       }
     }
   }
 
-  center_points_is_update = true;
+  center_points_is_update_ = true;
 }
 
 bool SCRFD::Postprocess(
     std::vector<FDTensor>& infer_result, FaceDetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
-  // scrfd has 3 output tensors, boxes & conf & landmarks
+  // scrfd has 6,9,10,15 output tensors
   FDASSERT((infer_result.size() == 9 || infer_result.size() == 6 ||
             infer_result.size() == 10 || infer_result.size() == 15),
            "The default number of output tensor must be 6, 9, 10, or 15 "
@@ -224,7 +199,7 @@ bool SCRFD::Postprocess(
   for (int f = 0; f < fmc; ++f) {
     total_num_boxes += infer_result.at(f).shape[1];
   };
-  generate_points();
+  GeneratePoints();
   result->Clear();
   // scale the boxes to the origin image shape
   auto iter_out = im_info.find("output_shape");
@@ -269,13 +244,13 @@ bool SCRFD::Postprocess(
       float b = offsets[3];  // bottom
 
       float x1 =
-          ((cx - l) * current_stride - (float)pad_w) / scale;  // cx - l x1
+          ((cx - l) * static_cast<float>current_stride - static_cast<float>pad_w) / scale;  // cx - l x1
       float y1 =
-          ((cy - t) * current_stride - (float)pad_h) / scale;  // cy - t y1
+          ((cy - t) * static_cast<float>current_stride - static_cast<float>pad_h) / scale;  // cy - t y1
       float x2 =
-          ((cx + r) * current_stride - (float)pad_w) / scale;  // cx + r x2
+          ((cx + r) * static_cast<float>current_stride - static_cast<float>pad_w) / scale;  // cx + r x2
       float y2 =
-          ((cy + b) * current_stride - (float)pad_h) / scale;  // cy + b y2
+          ((cy + b) * static_cast<float>current_stride - static_cast<float>pad_h) / scale;  // cy + b y2
       result->boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
       result->scores.push_back(cls_conf);
       if (use_kps) {
@@ -283,18 +258,20 @@ bool SCRFD::Postprocess(
             static_cast<float*>(infer_result.at(f + 2 * fmc).Data());
         // landmarks
         const float* kps_offsets = landmarks_ptr + i * 10;
-        for (unsigned int j = 0; j < 10; j += 2) {
+        for (unsigned int j = 0; j < landmarks_per_face * 2; j += 2) {
           float kps_l = kps_offsets[j];
           float kps_t = kps_offsets[j + 1];
-          float kps_x = ((cx + kps_l) * current_stride - (float)pad_w) /
+          float kps_x = ((cx + kps_l) * static_cast<float>current_stride - static_cast<float>pad_w) /
                         scale;  // cx + l x
-          float kps_y = ((cy + kps_t) * current_stride - (float)pad_h) /
+          float kps_y = ((cy + kps_t) * static_cast<float>current_stride - static_cast<float>pad_h) /
                         scale;  // cy + t y
           result->landmarks.emplace_back(std::array<float, 2>{kps_x, kps_y});
         }
       }
       count += 1;  // limit boxes for nms.
-      if (count > max_nms) break;
+      if (count > max_nms) {
+        break;
+      }
     }
   }
 

@@ -96,10 +96,7 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
 
-  // 查看输入是否为动态维度的 不建议直接使用 不同模型的逻辑可能不一致
-  bool IsDynamicInput() const { return is_dynamic_input_; }
-
-  void generate_points();
+  void GeneratePoints();
 
   // 对图片进行LetterBox处理
   // mat 为读取到的原图
@@ -111,7 +108,7 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
 
   bool is_dynamic_input_;
 
-  bool center_points_is_update;
+  bool center_points_is_update_;
 
   // feature map count
   unsigned int fmc;
