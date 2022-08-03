@@ -45,13 +45,13 @@ cmake ..
 make -j
 
 # 移动onnx文件到demo目录
-cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/cpp/build/
+cp PATH/TO/SCRFD.onnx PATH/TO/model_zoo/vision/scrfd/cpp/build/
 
 # 下载图片
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 # 执行
-./yolov7_demo
+./scrfd_demo
 ```
 
 执行完后可视化的结果保存在本地`vis_result.jpg`，同时会将检测框输出在终端，如下所示
