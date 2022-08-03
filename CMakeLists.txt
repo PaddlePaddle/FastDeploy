@@ -219,6 +219,7 @@ endif()
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
+  include(external/faster_tokenizer.cmake)
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
@@ -261,6 +262,15 @@ if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   add_definitions(-DWITH_VISION_EXAMPLES)
   set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
   add_subdirectory(examples)
+endif()
+
+if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  add_definitions(-DWITH_TEXT_EXAMPLES)
+  set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
+  # Avoid to add_subdirectory repeatedly
+  if (NOT WITH_VISION_EXAMPLES)
+    add_subdirectory(examples)
+  endif()
 endif()
 
 include(external/summary.cmake)
