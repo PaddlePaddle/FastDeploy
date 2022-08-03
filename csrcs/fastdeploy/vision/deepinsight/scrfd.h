@@ -110,9 +110,6 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
 
   bool center_points_is_update_;
 
-  // feature map count
-  unsigned int fmc_;
-
   typedef struct {
     float cx;
     float cy;

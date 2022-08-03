@@ -87,7 +87,6 @@ bool SCRFD::Initialize() {
   downsample_strides = {8, 16, 32};
   num_anchors = 2;
   landmarks_per_face = 5;
-  fmc_ = downsample_strides.size();
   center_points_is_update_ = false;
   max_nms = 30000;
   // num_outputs = use_kps ? 9 : 6;
@@ -183,14 +182,16 @@ bool SCRFD::Postprocess(
     std::vector<FDTensor>& infer_result, FaceDetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
+  // number of downsample_strides
+  int fmc = downsample_strides.size();
   // scrfd has 6,9,10,15 output tensors
   FDASSERT((infer_result.size() == 9 || infer_result.size() == 6 ||
             infer_result.size() == 10 || infer_result.size() == 15),
            "The default number of output tensor must be 6, 9, 10, or 15 "
            "according to scrfd.");
-  FDASSERT((fmc_ == 3 || fmc_ == 5), "The fmc_ must be 3 or 5");
+  FDASSERT((fmc == 3 || fmc == 5), "The fmc must be 3 or 5");
   FDASSERT((infer_result.at(0).shape[0] == 1), "Only support batch =1 now.");
-  for (int i = 0; i < fmc_; ++i) {
+  for (int i = 0; i < fmc; ++i) {
     if (infer_result.at(i).dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
@@ -198,7 +199,7 @@ bool SCRFD::Postprocess(
   }
   int total_num_boxes = 0;
   // compute the reserve space.
-  for (int f = 0; f < fmc_; ++f) {
+  for (int f = 0; f < fmc; ++f) {
     total_num_boxes += infer_result.at(f).shape[1];
   };
   GeneratePoints();
@@ -223,12 +224,12 @@ bool SCRFD::Postprocess(
   // must be setup landmarks_per_face before reserve
   result->landmarks_per_face = landmarks_per_face;
   result->Reserve(total_num_boxes);
+  unsigned int count = 0;
   // loop each stride
-  for (int f = 0; f < fmc_; ++f) {
+  for (int f = 0; f < fmc; ++f) {
     float* score_ptr = static_cast<float*>(infer_result.at(f).Data());
-    float* bbox_ptr = static_cast<float*>(infer_result.at(f + fmc_).Data());
+    float* bbox_ptr = static_cast<float*>(infer_result.at(f + fmc).Data());
     const unsigned int num_points = infer_result.at(f).shape[1];
-    unsigned int count = 0;
     int current_stride = downsample_strides[f];
     auto& stride_points = center_points_[current_stride];
     // loop each anchor
@@ -257,7 +258,7 @@ bool SCRFD::Postprocess(
       result->scores.push_back(cls_conf);
       if (use_kps) {
         float* landmarks_ptr =
-            static_cast<float*>(infer_result.at(f + 2 * fmc_).Data());
+            static_cast<float*>(infer_result.at(f + 2 * fmc).Data());
         // landmarks
         const float* kps_offsets = landmarks_ptr + i * (landmarks_per_face * 2);
         for (unsigned int j = 0; j < landmarks_per_face * 2; j += 2) {
