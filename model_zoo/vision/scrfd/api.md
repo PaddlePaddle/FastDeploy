@@ -51,7 +51,7 @@ SCRFD模型加载和初始化，当model_format为`Frontend::ONNX`时，只需�
 
 #### Predict函数
 > ```
-> SCRFD::Predict(cv::Mat* im, DetectionResult* result,
+> SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                float conf_threshold = 0.25,
 >                float nms_iou_threshold = 0.5)
 > ```
