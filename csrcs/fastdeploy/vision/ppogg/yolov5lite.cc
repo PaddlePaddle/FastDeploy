@@ -328,7 +328,6 @@ bool YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif
-  std::cout << nms_iou_threshold << nms_iou_threshold << std::endl;
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 

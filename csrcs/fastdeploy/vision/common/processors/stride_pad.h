@@ -13,23 +13,32 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
+
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
 
-class FASTDEPLOY_DECL YOLOv3 : public PPYOLOE {
+class StridePad : public Processor {
  public:
-  YOLOv3(const std::string& model_file, const std::string& params_file,
-         const std::string& config_file,
-         const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::PADDLE);
+  // only support pad with left-top padding mode
+  StridePad(int stride, const std::vector<float>& value) {
+    stride_ = stride;
+    value_ = value;
+  }
+  bool CpuRun(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool GpuRun(Mat* mat);
+#endif
+  std::string Name() { return "StridePad"; }
 
-  virtual std::string ModelName() const { return "PaddleDetection/YOLOv3"; }
+  static bool Run(Mat* mat, int stride,
+                  const std::vector<float>& value = std::vector<float>(),
+                  ProcLib lib = ProcLib::OPENCV_CPU);
 
-  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
+ private:
+  int stride_ = 32;
+  std::vector<float> value_;
 };
-}  // namespace ppdet
 }  // namespace vision
 }  // namespace fastdeploy

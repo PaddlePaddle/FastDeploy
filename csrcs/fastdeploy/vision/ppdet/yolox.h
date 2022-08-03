@@ -19,16 +19,16 @@ namespace fastdeploy {
 namespace vision {
 namespace ppdet {
 
-class FASTDEPLOY_DECL YOLOv3 : public PPYOLOE {
+class FASTDEPLOY_DECL YOLOX : public PPYOLOE {
  public:
-  YOLOv3(const std::string& model_file, const std::string& params_file,
-         const std::string& config_file,
-         const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::PADDLE);
-
-  virtual std::string ModelName() const { return "PaddleDetection/YOLOv3"; }
+  YOLOX(const std::string& model_file, const std::string& params_file,
+        const std::string& config_file,
+        const RuntimeOption& custom_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::PADDLE);
 
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
+
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOX"; }
 };
 }  // namespace ppdet
 }  // namespace vision
