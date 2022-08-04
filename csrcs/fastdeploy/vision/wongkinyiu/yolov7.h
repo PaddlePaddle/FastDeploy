@@ -89,6 +89,13 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
+
+  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape
+  // or not.)
+  // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This
+  // value will
+  // auto check by fastdeploy after the internal Runtime already initialized.
+  bool is_dynamic_input_;
 };
 }  // namespace wongkinyiu
 }  // namespace vision

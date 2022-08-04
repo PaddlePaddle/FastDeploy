@@ -13,39 +13,44 @@
 // limitations under the License.
 
 #pragma once
+#include <unordered_map>
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
 namespace fastdeploy {
-namespace vision {
-namespace wongkinyiu {
 
-class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
+namespace vision {
+
+namespace deepinsight {
+
+class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  YOLOR(const std::string& model_file, const std::string& params_file = "",
+  SCRFD(const std::string& model_file, const std::string& params_file = "",
         const RuntimeOption& custom_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  virtual std::string ModelName() const { return "WongKinYiu/yolor"; }
+  std::string ModelName() const { return "deepinsight/scrfd"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
   // result 为模型预测的输出结构体
   // conf_threshold 为后处理的参数
   // nms_iou_threshold 为后处理的参数
-  virtual bool Predict(cv::Mat* im, DetectionResult* result,
-                       float conf_threshold = 0.25,
-                       float nms_iou_threshold = 0.5);
+  virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
+                       float conf_threshold = 0.25f,
+                       float nms_iou_threshold = 0.4f);
 
   // 以下为模型在预测时的一些参数，基本是前后处理所需
   // 用户在创建模型后，可根据模型的要求，以及自己的需求
   // 对参数进行修改
-  // tuple of (width, height)
+  // tuple of (width, height), default (640, 640)
   std::vector<int> size;
+  // downsample strides (namely, steps) for SCRFD to
+  // generate anchors, will take (8,16,32) as default values.
   // padding value, size should be same with Channels
   std::vector<float> padding_value;
   // only pad to the minimum rectange which height and width is times of stride
@@ -59,7 +64,15 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
   // padding stride, for is_mini_pad
   int stride;
   // for offseting the boxes by classes when using NMS
-  float max_wh;
+  std::vector<int> downsample_strides;
+  // landmarks_per_face, default 5 in SCRFD
+  int landmarks_per_face;
+  // are the outputs of onnx file with key points features or not
+  bool use_kps;
+  // the upperbond number of boxes processed by nms.
+  int max_nms;
+  // number anchors of each stride
+  unsigned int num_anchors;
 
  private:
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
@@ -78,9 +91,12 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  bool Postprocess(FDTensor& infer_result, DetectionResult* result,
+  bool Postprocess(std::vector<FDTensor>& infer_result,
+                   FaceDetectionResult* result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
+
+  void GeneratePoints();
 
   // 对图片进行LetterBox处理
   // mat 为读取到的原图
@@ -90,13 +106,17 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
 
-  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape
-  // or not.)
-  // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This
-  // value will
-  // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+
+  bool center_points_is_update_;
+
+  typedef struct {
+    float cx;
+    float cy;
+  } SCRFDPoint;
+
+  std::unordered_map<int, std::vector<SCRFDPoint>> center_points_;
 };
-}  // namespace wongkinyiu
+}  // namespace deepinsight
 }  // namespace vision
 }  // namespace fastdeploy
