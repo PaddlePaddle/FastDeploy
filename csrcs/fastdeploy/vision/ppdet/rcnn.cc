@@ -50,7 +50,6 @@ bool FasterRCNN::Initialize() {
 bool FasterRCNN::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
-  mat->PrintInfo("Origin");
   float scale[2] = {1.0, 1.0};
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
@@ -62,7 +61,6 @@ bool FasterRCNN::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
       scale[0] = mat->Height() * 1.0 / origin_h;
       scale[1] = mat->Width() * 1.0 / origin_w;
     }
-    mat->PrintInfo(processors_[i]->Name());
   }
 
   outputs->resize(3);
@@ -78,9 +76,6 @@ bool FasterRCNN::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   mat->ShareWithTensor(&((*outputs)[1]));
   // reshape to [1, c, h, w]
   (*outputs)[1].shape.insert((*outputs)[1].shape.begin(), 1);
-  (*outputs)[0].PrintInfo("im_shape");
-  (*outputs)[1].PrintInfo("image");
-  (*outputs)[2].PrintInfo("scale_factor");
   return true;
 }
 

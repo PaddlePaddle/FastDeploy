@@ -54,8 +54,8 @@ std::vector<int> toVec(const nvinfer1::Dims& dim) {
 
 bool CheckDynamicShapeConfig(const paddle2onnx::OnnxReader& reader,
                              const TrtBackendOption& option) {
-  //paddle2onnx::ModelTensorInfo inputs[reader.NumInputs()];
-  //std::string input_shapes[reader.NumInputs()];
+  // paddle2onnx::ModelTensorInfo inputs[reader.NumInputs()];
+  // std::string input_shapes[reader.NumInputs()];
   std::vector<paddle2onnx::ModelTensorInfo> inputs(reader.NumInputs());
   std::vector<std::string> input_shapes(reader.NumInputs());
   for (int i = 0; i < reader.NumInputs(); ++i) {
@@ -374,27 +374,27 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
       1U << static_cast<uint32_t>(
           nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 
-  auto builder = SampleUniquePtr<nvinfer1::IBuilder>(
+  builder_ = SampleUniquePtr<nvinfer1::IBuilder>(
       nvinfer1::createInferBuilder(sample::gLogger.getTRTLogger()));
-  if (!builder) {
+  if (!builder_) {
     FDERROR << "Failed to call createInferBuilder()." << std::endl;
     return false;
   }
-  auto network = SampleUniquePtr<nvinfer1::INetworkDefinition>(
-      builder->createNetworkV2(explicitBatch));
-  if (!network) {
+  network_ = SampleUniquePtr<nvinfer1::INetworkDefinition>(
+      builder_->createNetworkV2(explicitBatch));
+  if (!network_) {
     FDERROR << "Failed to call createNetworkV2()." << std::endl;
     return false;
   }
-  auto config =
-      SampleUniquePtr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
+  auto config = SampleUniquePtr<nvinfer1::IBuilderConfig>(
+      builder_->createBuilderConfig());
   if (!config) {
     FDERROR << "Failed to call createBuilderConfig()." << std::endl;
     return false;
   }
 
   if (option.enable_fp16) {
-    if (!builder->platformHasFastFp16()) {
+    if (!builder_->platformHasFastFp16()) {
       FDWARNING << "Detected FP16 is not supported in the current GPU, "
                    "will use FP32 instead."
                 << std::endl;
@@ -403,25 +403,25 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
     }
   }
 
-  auto parser = SampleUniquePtr<nvonnxparser::IParser>(
-      nvonnxparser::createParser(*network, sample::gLogger.getTRTLogger()));
-  if (!parser) {
+  parser_ = SampleUniquePtr<nvonnxparser::IParser>(
+      nvonnxparser::createParser(*network_, sample::gLogger.getTRTLogger()));
+  if (!parser_) {
     FDERROR << "Failed to call createParser()." << std::endl;
     return false;
   }
-  if (!parser->parse(onnx_model.data(), onnx_model.size())) {
+  if (!parser_->parse(onnx_model.data(), onnx_model.size())) {
     FDERROR << "Failed to parse ONNX model by TensorRT." << std::endl;
     return false;
   }
 
   FDINFO << "Start to building TensorRT Engine..." << std::endl;
-  bool fp16 = builder->platformHasFastFp16();
-  builder->setMaxBatchSize(option.max_batch_size);
+  bool fp16 = builder_->platformHasFastFp16();
+  builder_->setMaxBatchSize(option.max_batch_size);
 
   config->setMaxWorkspaceSize(option.max_workspace_size);
 
   if (option.max_shape.size() > 0) {
-    auto profile = builder->createOptimizationProfile();
+    auto profile = builder_->createOptimizationProfile();
     FDASSERT(option.max_shape.size() == option.min_shape.size() &&
                  option.min_shape.size() == option.opt_shape.size(),
              "[TrtBackend] Size of max_shape/opt_shape/min_shape in "
@@ -459,7 +459,7 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
   }
 
   SampleUniquePtr<IHostMemory> plan{
-      builder->buildSerializedNetwork(*network, *config)};
+      builder_->buildSerializedNetwork(*network_, *config)};
   if (!plan) {
     FDERROR << "Failed to call buildSerializedNetwork()." << std::endl;
     return false;

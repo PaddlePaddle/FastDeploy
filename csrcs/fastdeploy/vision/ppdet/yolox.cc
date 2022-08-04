@@ -42,14 +42,12 @@ bool YOLOX::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
   float scale[2] = {1.0, 1.0};
-  mat->PrintInfo("Origin");
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-    mat->PrintInfo(processors_[i]->Name());
     if (processors_[i]->Name().find("Resize") != std::string::npos) {
       scale[0] = mat->Height() * 1.0 / origin_h;
       scale[1] = mat->Width() * 1.0 / origin_w;

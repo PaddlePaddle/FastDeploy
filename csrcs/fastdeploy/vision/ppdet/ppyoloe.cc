@@ -139,14 +139,12 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
 bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
-  mat->PrintInfo("Origin");
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-    mat->PrintInfo(processors_[i]->Name());
   }
 
   outputs->resize(2);
@@ -239,7 +237,6 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
     return false;
   }
 
-  processed_data[0].PrintInfo("Before infer");
   float* tmp = static_cast<float*>(processed_data[1].Data());
   std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
@@ -248,8 +245,6 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
     return false;
   }
 
-  infer_result[0].PrintInfo("Boxes");
-  infer_result[1].PrintInfo("Num");
   if (!Postprocess(infer_result, result)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;

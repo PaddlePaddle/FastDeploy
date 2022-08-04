@@ -27,21 +27,60 @@ void BindPPDet(pybind11::module& m) {
         self.Predict(&mat, &res);
         return res;
       });
-  pybind11::class_<vision::ppdet::PPYOLO, vision::ppdet::PPYOLOE>(ppdet_module,
-                                                                  "PPYOLO")
+
+  pybind11::class_<vision::ppdet::PPYOLO, FastDeployModel>(ppdet_module,
+                                                           "PPYOLO")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>());
-  pybind11::class_<vision::ppdet::PicoDet, vision::ppdet::PPYOLOE>(ppdet_module,
-                                                                   "PicoDet")
+                          Frontend>())
+      .def("predict", [](vision::ppdet::PPYOLO& self, pybind11::array& data) {
+        auto mat = PyArrayToCvMat(data);
+        vision::DetectionResult res;
+        self.Predict(&mat, &res);
+        return res;
+      });
+
+  pybind11::class_<vision::ppdet::PicoDet, FastDeployModel>(ppdet_module,
+                                                            "PicoDet")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>());
-  pybind11::class_<vision::ppdet::YOLOX, vision::ppdet::PPYOLOE>(ppdet_module,
-                                                                 "YOLOX")
+                          Frontend>())
+      .def("predict", [](vision::ppdet::PicoDet& self, pybind11::array& data) {
+        auto mat = PyArrayToCvMat(data);
+        vision::DetectionResult res;
+        self.Predict(&mat, &res);
+        return res;
+      });
+
+  pybind11::class_<vision::ppdet::YOLOX, FastDeployModel>(ppdet_module, "YOLOX")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>());
-  pybind11::class_<vision::ppdet::FasterRCNN, vision::ppdet::PPYOLOE>(
-      ppdet_module, "FasterRCNN")
+                          Frontend>())
+      .def("predict", [](vision::ppdet::YOLOX& self, pybind11::array& data) {
+        auto mat = PyArrayToCvMat(data);
+        vision::DetectionResult res;
+        self.Predict(&mat, &res);
+        return res;
+      });
+
+  pybind11::class_<vision::ppdet::FasterRCNN, FastDeployModel>(ppdet_module,
+                                                               "FasterRCNN")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>());
+                          Frontend>())
+      .def("predict",
+           [](vision::ppdet::FasterRCNN& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::DetectionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           });
+
+  pybind11::class_<vision::ppdet::YOLOv3, FastDeployModel>(ppdet_module,
+                                                           "YOLOv3")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>())
+      .def("predict", [](vision::ppdet::YOLOv3& self, pybind11::array& data) {
+        auto mat = PyArrayToCvMat(data);
+        vision::DetectionResult res;
+        self.Predict(&mat, &res);
+        return res;
+      });
 }
 }  // namespace fastdeploy
