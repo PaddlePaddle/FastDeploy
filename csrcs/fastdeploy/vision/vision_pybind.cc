@@ -28,7 +28,7 @@ void BindRangiLyu(pybind11::module& m);
 void BindLinzaer(pybind11::module& m);
 void BindBiubug6(pybind11::module& m);
 void BindPpogg(pybind11::module& m);
-void BindDeepinsight(pybind11::module& m);
+void BindDeepInsight(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -58,11 +58,18 @@ void BindVision(pybind11::module& m) {
                      &vision::FaceDetectionResult::landmarks_per_face)
       .def("__repr__", &vision::FaceDetectionResult::Str)
       .def("__str__", &vision::FaceDetectionResult::Str);
+
   pybind11::class_<vision::SegmentationResult>(m, "SegmentationResult")
       .def(pybind11::init())
       .def_readwrite("masks", &vision::SegmentationResult::masks)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
+
+  pybind11::class_<vision::FaceRecognitionResult>(m, "FaceRecognitionResult")
+      .def(pybind11::init())
+      .def_readwrite("embedding", &vision::FaceRecognitionResult::embedding)
+      .def("__repr__", &vision::FaceRecognitionResult::Str)
+      .def("__str__", &vision::FaceRecognitionResult::Str);
 
   BindPPCls(m);
   BindPPDet(m);
@@ -76,7 +83,7 @@ void BindVision(pybind11::module& m) {
   BindLinzaer(m);
   BindBiubug6(m);
   BindPpogg(m);
-  BindDeepinsight(m);
+  BindDeepInsight(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

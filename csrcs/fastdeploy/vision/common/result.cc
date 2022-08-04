@@ -161,5 +161,43 @@ std::string SegmentationResult::Str() {
   return out;
 }
 
+FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
+  embedding.assign(res.embedding.begin(), res.embedding.end());
+}
+
+void FaceRecognitionResult::Clear() { std::vector<float>().swap(embedding); }
+
+void FaceRecognitionResult::Reserve(int size) { embedding.reserve(size); }
+
+void FaceRecognitionResult::Resize(int size) { embedding.resize(size); }
+
+std::string FaceRecognitionResult::Str() {
+  std::string out;
+  out = "FaceRecognitionResult: [";
+  size_t numel = embedding.size();
+  if (numel <= 0) {
+    return out + "Empty Result]";
+  }
+  // max, min, mean
+  float min_val = embedding.at(0);
+  float max_val = embedding.at(0);
+  float total_val = embedding.at(0);
+  for (size_t i = 1; i < numel; ++i) {
+    float val = embedding.at(i);
+    total_val += val;
+    if (val < min_val) {
+      min_val = val;
+    }
+    if (val > max_val) {
+      max_val = val;
+    }
+  }
+  float mean_val = total_val / static_cast<float>(numel);
+  out = out + "Dim(" + std::to_string(numel) + "), " + "Min(" +
+        std::to_string(min_val) + "), " + "Max(" + std::to_string(max_val) +
+        "), " + "Mean(" + std::to_string(mean_val) + ")]\n";
+  return out;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy
