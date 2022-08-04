@@ -7,11 +7,9 @@ namespace fastdeploy {
 namespace vision {
 namespace ppseg {
 
-// NCHW2NHWC
 void NCHW2NHWC(FDTensor& infer_result) {
   float_t* infer_result_buffer =
       reinterpret_cast<float_t*>(infer_result.MutableData());
-  // NCHW to NHWC
   int num = infer_result.shape[0];
   int channel = infer_result.shape[1];
   int height = infer_result.shape[2];
@@ -39,6 +37,7 @@ void NCHW2NHWC(FDTensor& infer_result) {
 
 void Cast2FP32Mat(cv::Mat& mat, FDTensor& infer_result,
                   bool contain_score_map) {
+  // output with argmax channel is 1
   int channel = 1;
   int height = infer_result.shape[1];
   int width = infer_result.shape[2];
@@ -47,8 +46,8 @@ void Cast2FP32Mat(cv::Mat& mat, FDTensor& infer_result,
     // output without argmax and convent to NHWC
     channel = infer_result.shape[3];
   }
+  // create FP32 cvmat
   if (infer_result.dtype == FDDataType::INT64) {
-    // output with argmax
     FDWARNING << "The PaddleSeg model is exported with argmax. Inference "
                  "result type is " +
                      Str(infer_result.dtype) +
@@ -209,6 +208,18 @@ bool Model::Preprocess(Mat* mat, FDTensor* output,
 
 bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
                         std::map<std::string, std::array<int, 2>>* im_info) {
+  // PaddleSeg has three types of inference output:
+  //     1. output with argmax and without softmax. 3-D matrix CHW, Channel
+  //     always 1, the element in matrix is classified label_id INT64 Type.
+  //     2. output without argmax and without softmax. 4-D matrix NCHW, N always
+  //     1, Channel is the num of classes. The element is the logits of classes
+  //     FP32
+  //     3. output without argmax and with softmax. 4-D matrix NCHW, the result
+  //     of 2 with softmax layer
+  // Fastdeploy output:
+  //     1. label_map
+  //     2. score_map(optional)
+  //     3. shape: 2-D HW
   FDASSERT(infer_result.dtype == FDDataType::INT64 ||
                infer_result.dtype == FDDataType::FP32,
            "Require the data type of output is int64 or fp32, but now it's " +
@@ -216,12 +227,13 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   result->Clear();
 
   if (infer_result.shape.size() == 4) {
-    // output without argmax
     FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
+    // output without argmax
     result->contain_score_map = true;
     NCHW2NHWC(infer_result);
   }
 
+  // for resize mat below
   FDTensor new_infer_result;
   Mat* mat = nullptr;
   if (is_resized) {
@@ -236,6 +248,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     int ipt_w = iter_ipt->second[1];
 
     mat = new Mat(temp_mat);
+
     Resize::Run(mat, ipt_w, ipt_h, -1, -1, 1);
     mat->ShareWithTensor(&new_infer_result);
     new_infer_result.shape.insert(new_infer_result.shape.begin(), 1);
@@ -246,10 +259,11 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   int out_num =
       std::accumulate(result->shape.begin(), result->shape.begin() + 3, 1,
                       std::multiplies<int>());
-
+  // NCHW remove N or CHW remove C
   result->shape.erase(result->shape.begin());
   result->Resize(out_num);
   if (result->contain_score_map) {
+    // output with label_map and score_map
     float_t* infer_result_buffer = nullptr;
     if (is_resized) {
       infer_result_buffer = static_cast<float_t*>(new_infer_result.Data());
@@ -260,6 +274,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     ArgmaxScoreMap(infer_result_buffer, result, with_softmax);
     result->shape.erase(result->shape.begin() + 2);
   } else {
+    // output only with label_map
     if (is_resized) {
       float_t* infer_result_buffer =
           static_cast<float_t*>(new_infer_result.Data());
