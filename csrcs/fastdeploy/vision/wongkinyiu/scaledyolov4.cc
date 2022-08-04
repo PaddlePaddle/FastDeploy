@@ -89,6 +89,21 @@ bool ScaledYOLOv4::Initialize() {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
+  // Check if the input shape is dynamic after Runtime already initialized,
+  // Note that, We need to force is_mini_pad 'false' to keep static
+  // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
+  is_dynamic_input_ = false;
+  auto shape = InputInfoOfRuntime(0).shape;
+  for (int i = 0; i < shape.size(); ++i) {
+    // if height or width is dynamic
+    if (i >= 2 && shape[i] <= 0) {
+      is_dynamic_input_ = true;
+      break;
+    }
+  }
+  if (!is_dynamic_input_) {
+    is_mini_pad = false;
+  }
   return true;
 }
 

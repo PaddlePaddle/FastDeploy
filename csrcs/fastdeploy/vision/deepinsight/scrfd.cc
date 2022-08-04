@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/wongkinyiu/yolor.h"
+#include "fastdeploy/vision/deepinsight/scrfd.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
-namespace vision {
-namespace wongkinyiu {
 
-void YOLOR::LetterBox(Mat* mat, const std::vector<int>& size,
+namespace vision {
+
+namespace deepinsight {
+
+void SCRFD::LetterBox(Mat* mat, const std::vector<int>& size,
                       const std::vector<float>& color, bool _auto,
                       bool scale_fill, bool scale_up, int stride) {
   float scale =
@@ -57,7 +59,7 @@ void YOLOR::LetterBox(Mat* mat, const std::vector<int>& size,
   }
 }
 
-YOLOR::YOLOR(const std::string& model_file, const std::string& params_file,
+SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
              const RuntimeOption& custom_option, const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
@@ -73,16 +75,21 @@ YOLOR::YOLOR(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool YOLOR::Initialize() {
+bool SCRFD::Initialize() {
   // parameters for preprocess
+  use_kps = true;
   size = {640, 640};
-  padding_value = {114.0, 114.0, 114.0};
+  padding_value = {0.0, 0.0, 0.0};
   is_mini_pad = false;
   is_no_pad = false;
   is_scale_up = false;
   stride = 32;
-  max_wh = 7680.0;
-
+  downsample_strides = {8, 16, 32};
+  num_anchors = 2;
+  landmarks_per_face = 5;
+  center_points_is_update_ = false;
+  max_nms = 30000;
+  // num_outputs = use_kps ? 9 : 6;
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -102,12 +109,12 @@ bool YOLOR::Initialize() {
   if (!is_dynamic_input_) {
     is_mini_pad = false;
   }
+
   return true;
 }
 
-bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
+bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                        std::map<std::string, std::array<float, 2>>* im_info) {
-  // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
   if (ratio != 1.0) {
@@ -119,24 +126,25 @@ bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-  // yolor's preprocess steps
+  // scrfd's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  YOLOR::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+  SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
                    is_scale_up, stride);
+
   BGR2RGB::Run(mat);
   // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
   //                std::vector<float>(mat->Channels(), 1.0));
   // Compute `result = mat * alpha + beta` directly by channel
-  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
-  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
+  // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
+  // input_size, (127.5, 127.5, 127.5), swapRB=True)
+  std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+  std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
   Convert::Run(mat, alpha, beta);
-
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
-
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
@@ -144,40 +152,58 @@ bool YOLOR::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOR::Postprocess(
-    FDTensor& infer_result, DetectionResult* result,
+void SCRFD::GeneratePoints() {
+  if (center_points_is_update_ && !is_dynamic_input_) {
+    return;
+  }
+  // 8, 16, 32
+  for (auto local_stride : downsample_strides) {
+    unsigned int num_grid_w = size[0] / local_stride;
+    unsigned int num_grid_h = size[1] / local_stride;
+    // y
+    for (unsigned int i = 0; i < num_grid_h; ++i) {
+      // x
+      for (unsigned int j = 0; j < num_grid_w; ++j) {
+        // num_anchors, col major
+        for (unsigned int k = 0; k < num_anchors; ++k) {
+          SCRFDPoint point;
+          point.cx = static_cast<float>(j);
+          point.cy = static_cast<float>(i);
+          center_points_[local_stride].push_back(point);
+        }
+      }
+    }
+  }
+
+  center_points_is_update_ = true;
+}
+
+bool SCRFD::Postprocess(
+    std::vector<FDTensor>& infer_result, FaceDetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
-  FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
-  result->Clear();
-  result->Reserve(infer_result.shape[1]);
-  if (infer_result.dtype != FDDataType::FP32) {
-    FDERROR << "Only support post process with float32 data." << std::endl;
-    return false;
-  }
-  float* data = static_cast<float*>(infer_result.Data());
-  for (size_t i = 0; i < infer_result.shape[1]; ++i) {
-    int s = i * infer_result.shape[2];
-    float confidence = data[s + 4];
-    float* max_class_score =
-        std::max_element(data + s + 5, data + s + infer_result.shape[2]);
-    confidence *= (*max_class_score);
-    // filter boxes by conf_threshold
-    if (confidence <= conf_threshold) {
-      continue;
+  // number of downsample_strides
+  int fmc = downsample_strides.size();
+  // scrfd has 6,9,10,15 output tensors
+  FDASSERT((infer_result.size() == 9 || infer_result.size() == 6 ||
+            infer_result.size() == 10 || infer_result.size() == 15),
+           "The default number of output tensor must be 6, 9, 10, or 15 "
+           "according to scrfd.");
+  FDASSERT((fmc == 3 || fmc == 5), "The fmc must be 3 or 5");
+  FDASSERT((infer_result.at(0).shape[0] == 1), "Only support batch =1 now.");
+  for (int i = 0; i < fmc; ++i) {
+    if (infer_result.at(i).dtype != FDDataType::FP32) {
+      FDERROR << "Only support post process with float32 data." << std::endl;
+      return false;
     }
-    int32_t label_id = std::distance(data + s + 5, max_class_score);
-    // convert from [x, y, w, h] to [x1, y1, x2, y2]
-    result->boxes.emplace_back(std::array<float, 4>{
-        data[s] - data[s + 2] / 2.0f + label_id * max_wh,
-        data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh,
-        data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh,
-        data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh});
-    result->label_ids.push_back(label_id);
-    result->scores.push_back(confidence);
   }
-  utils::NMS(result, nms_iou_threshold);
-
+  int total_num_boxes = 0;
+  // compute the reserve space.
+  for (int f = 0; f < fmc; ++f) {
+    total_num_boxes += infer_result.at(f).shape[1];
+  };
+  GeneratePoints();
+  result->Clear();
   // scale the boxes to the origin image shape
   auto iter_out = im_info.find("output_shape");
   auto iter_ipt = im_info.find("input_shape");
@@ -195,31 +221,99 @@ bool YOLOR::Postprocess(
     pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }
+  // must be setup landmarks_per_face before reserve
+  result->landmarks_per_face = landmarks_per_face;
+  result->Reserve(total_num_boxes);
+  unsigned int count = 0;
+  // loop each stride
+  for (int f = 0; f < fmc; ++f) {
+    float* score_ptr = static_cast<float*>(infer_result.at(f).Data());
+    float* bbox_ptr = static_cast<float*>(infer_result.at(f + fmc).Data());
+    const unsigned int num_points = infer_result.at(f).shape[1];
+    int current_stride = downsample_strides[f];
+    auto& stride_points = center_points_[current_stride];
+    // loop each anchor
+    for (unsigned int i = 0; i < num_points; ++i) {
+      const float cls_conf = score_ptr[i];
+      if (cls_conf < conf_threshold) continue;  // filter
+      auto& point = stride_points.at(i);
+      const float cx = point.cx;  // cx
+      const float cy = point.cy;  // cy
+      // bbox
+      const float* offsets = bbox_ptr + i * 4;
+      float l = offsets[0];  // left
+      float t = offsets[1];  // top
+      float r = offsets[2];  // right
+      float b = offsets[3];  // bottom
+
+      float x1 =
+          ((cx - l) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) / scale;  // cx - l x1
+      float y1 =
+          ((cy - t) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) / scale;  // cy - t y1
+      float x2 =
+          ((cx + r) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) / scale;  // cx + r x2
+      float y2 =
+          ((cy + b) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) / scale;  // cy + b y2
+      result->boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
+      result->scores.push_back(cls_conf);
+      if (use_kps) {
+        float* landmarks_ptr =
+            static_cast<float*>(infer_result.at(f + 2 * fmc).Data());
+        // landmarks
+        const float* kps_offsets = landmarks_ptr + i * (landmarks_per_face * 2);
+        for (unsigned int j = 0; j < landmarks_per_face * 2; j += 2) {
+          float kps_l = kps_offsets[j];
+          float kps_t = kps_offsets[j + 1];
+          float kps_x = ((cx + kps_l) * static_cast<float>(current_stride) - static_cast<float>(pad_w)) /
+                        scale;  // cx + l x
+          float kps_y = ((cy + kps_t) * static_cast<float>(current_stride) - static_cast<float>(pad_h)) /
+                        scale;  // cy + t y
+          result->landmarks.emplace_back(std::array<float, 2>{kps_x, kps_y});
+        }
+      }
+      count += 1;  // limit boxes for nms.
+      if (count > max_nms) {
+        break;
+      }
+    }
+  }
+
+  // fetch original image shape
+  FDASSERT((iter_ipt != im_info.end()),
+           "Cannot find input_shape from im_info.");
+
+  if (result->boxes.size() == 0) {
+    return true;
+  }
+
+  utils::NMS(result, nms_iou_threshold);
+
+  // scale and clip box
   for (size_t i = 0; i < result->boxes.size(); ++i) {
-    int32_t label_id = (result->label_ids)[i];
-    // clip box
-    result->boxes[i][0] = result->boxes[i][0] - max_wh * label_id;
-    result->boxes[i][1] = result->boxes[i][1] - max_wh * label_id;
-    result->boxes[i][2] = result->boxes[i][2] - max_wh * label_id;
-    result->boxes[i][3] = result->boxes[i][3] - max_wh * label_id;
-    result->boxes[i][0] = std::max((result->boxes[i][0] - pad_w) / scale, 0.0f);
-    result->boxes[i][1] = std::max((result->boxes[i][1] - pad_h) / scale, 0.0f);
-    result->boxes[i][2] = std::max((result->boxes[i][2] - pad_w) / scale, 0.0f);
-    result->boxes[i][3] = std::max((result->boxes[i][3] - pad_h) / scale, 0.0f);
+    result->boxes[i][0] = std::max(result->boxes[i][0], 0.0f);
+    result->boxes[i][1] = std::max(result->boxes[i][1], 0.0f);
+    result->boxes[i][2] = std::max(result->boxes[i][2], 0.0f);
+    result->boxes[i][3] = std::max(result->boxes[i][3], 0.0f);
     result->boxes[i][0] = std::min(result->boxes[i][0], ipt_w - 1.0f);
     result->boxes[i][1] = std::min(result->boxes[i][1], ipt_h - 1.0f);
     result->boxes[i][2] = std::min(result->boxes[i][2], ipt_w - 1.0f);
     result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
   }
+  // scale and clip landmarks
+  for (size_t i = 0; i < result->landmarks.size(); ++i) {
+    result->landmarks[i][0] = std::max(result->landmarks[i][0], 0.0f);
+    result->landmarks[i][1] = std::max(result->landmarks[i][1], 0.0f);
+    result->landmarks[i][0] = std::min(result->landmarks[i][0], ipt_w - 1.0f);
+    result->landmarks[i][1] = std::min(result->landmarks[i][1], ipt_h - 1.0f);
+  }
   return true;
 }
 
-bool YOLOR::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
-                    float nms_iou_threshold) {
+bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
+                    float conf_threshold, float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif
-
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
@@ -252,7 +346,7 @@ bool YOLOR::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   TIMERECORD_START(2)
 #endif
 
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(output_tensors, result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
@@ -264,6 +358,6 @@ bool YOLOR::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace wongkinyiu
+}  // namespace deepinsight
 }  // namespace vision
 }  // namespace fastdeploy
