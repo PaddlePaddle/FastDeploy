@@ -45,9 +45,6 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
 
  protected:
   PPYOLOE() {}
-  // This function will used to check if this model contains multiclass_nms
-  // and get parameters from the operator
-  void GetNmsInfo();
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;

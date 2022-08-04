@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "yaml-cpp/yaml.h"
+
+namespace fastdeploy {
+namespace vision {
 
 bool BuildPreprocessPipelineFromConfig(
     std::vector<std::shared_ptr<Processor>>* processors,
@@ -22,7 +27,7 @@ bool BuildPreprocessPipelineFromConfig(
   try {
     cfg = YAML::LoadFile(config_file);
   } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file_
+    FDERROR << "Failed to load yaml file " << config_file
             << ", maybe you should check this file." << std::endl;
     return false;
   }
@@ -76,3 +81,6 @@ bool BuildPreprocessPipelineFromConfig(
   processors->push_back(std::make_shared<HWC2CHW>());
   return true;
 }
+
+}  // namespace vision
+}  // namespace fastdeploy

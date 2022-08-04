@@ -16,6 +16,11 @@ import logging
 import os
 import sys
 
+try:
+    import paddle
+except:
+    pass
+
 
 def add_dll_search_dir(dir_path):
     os.environ["path"] = dir_path + ";" + os.environ["path"]

@@ -49,14 +49,12 @@ bool PPYOLO::Initialize() {
 bool PPYOLO::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
-  mat->PrintInfo("Origin");
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-    mat->PrintInfo(processors_[i]->Name());
   }
 
   outputs->resize(3);

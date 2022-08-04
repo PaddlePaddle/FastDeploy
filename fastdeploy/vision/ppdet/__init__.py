@@ -45,7 +45,7 @@ class PPYOLO(PPYOLOE):
                  config_file,
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PPYOLO, self).__init__(runtime_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLO model only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.PPYOLO(model_file, params_file,
@@ -61,7 +61,7 @@ class YOLOX(PPYOLOE):
                  config_file,
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(YOLOX, self).__init__(runtime_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "YOLOX model only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.YOLOX(model_file, params_file,
@@ -77,7 +77,7 @@ class PicoDet(PPYOLOE):
                  config_file,
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PicoDet, self).__init__(runtime_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PicoDet model only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.PicoDet(model_file, params_file,
@@ -93,10 +93,26 @@ class FasterRCNN(PPYOLOE):
                  config_file,
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(FasterRCNN, self).__init__(runtime_option)
+        super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "FasterRCNN model only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.FasterRCNN(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "FasterRCNN model initialize failed."
+
+
+class YOLOv3(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "YOLOv3 model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.YOLOv3(model_file, params_file,
+                                            config_file, self._runtime_option,
+                                            model_format)
+        assert self.initialized, "YOLOv3 model initialize failed."

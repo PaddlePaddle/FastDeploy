@@ -85,6 +85,9 @@ class TrtBackend : public BaseBackend {
  private:
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;
+  SampleUniquePtr<nvonnxparser::IParser> parser_;
+  SampleUniquePtr<nvinfer1::IBuilder> builder_;
+  SampleUniquePtr<nvinfer1::INetworkDefinition> network_;
   cudaStream_t stream_{};
   std::vector<void*> bindings_;
   std::vector<TrtValueInfo> inputs_desc_;
