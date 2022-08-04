@@ -7,6 +7,106 @@ namespace fastdeploy {
 namespace vision {
 namespace ppseg {
 
+// NCHW2NHWC
+void NCHW2NHWC(FDTensor& infer_result) {
+  float_t* infer_result_buffer =
+      reinterpret_cast<float_t*>(infer_result.MutableData());
+  // NCHW to NHWC
+  int num = infer_result.shape[0];
+  int channel = infer_result.shape[1];
+  int height = infer_result.shape[2];
+  int width = infer_result.shape[3];
+  int chw = channel * height * width;
+  int wc = width * channel;
+  int wh = width * height;
+  std::vector<float_t> hwc_data(chw);
+  int index = 0;
+  for (int n = 0; n < num; n++) {
+    for (int c = 0; c < channel; c++) {
+      for (int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+          hwc_data[n * chw + h * wc + w * channel + c] =
+              *(infer_result_buffer + index);
+          index++;
+        }
+      }
+    }
+  }
+  std::memcpy(infer_result.MutableData(), hwc_data.data(),
+              num * chw * sizeof(float_t));
+  infer_result.shape = {num, height, width, channel};
+}
+
+void Cast2FP32Mat(cv::Mat& mat, FDTensor& infer_result,
+                  bool contain_score_map) {
+  int channel = 1;
+  int height = infer_result.shape[1];
+  int width = infer_result.shape[2];
+
+  if (contain_score_map) {
+    // output without argmax and convent to NHWC
+    channel = infer_result.shape[3];
+  }
+  if (infer_result.dtype == FDDataType::INT64) {
+    // output with argmax
+    FDWARNING << "The PaddleSeg model is exported with argmax. Inference "
+                 "result type is " +
+                     Str(infer_result.dtype) +
+                     ". If you want the edge of segmentation image more "
+                     "smoother. Please export model with --without_argmax "
+                     "--with_softmax."
+              << std::endl;
+    int64_t chw = channel * height * width;
+    int64_t* infer_result_buffer = static_cast<int64_t*>(infer_result.Data());
+    std::vector<float_t> float_result_buffer(chw);
+    mat = cv::Mat(height, width, CV_32FC(channel));
+    int index = 0;
+    for (int i = 0; i < height; i++) {
+      for (int j = 0; j < width; j++) {
+        mat.at<float_t>(i, j) =
+            static_cast<float_t>(infer_result_buffer[index++]);
+      }
+    }
+  } else if (infer_result.dtype == FDDataType::FP32) {
+    mat = cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
+  }
+}
+
+void ArgmaxScoreMap(float_t* infer_result_buffer, SegmentationResult* result,
+                    bool with_softmax) {
+  int64_t height = result->shape[0];
+  int64_t width = result->shape[1];
+  int64_t num_classes = result->shape[2];
+  int index = 0;
+  for (size_t i = 0; i < height; ++i) {
+    for (size_t j = 0; j < width; ++j) {
+      int64_t s = (i * width + j) * num_classes;
+      float_t* max_class_score = std::max_element(
+          infer_result_buffer + s, infer_result_buffer + s + num_classes);
+      int label_id = std::distance(infer_result_buffer + s, max_class_score);
+      if (label_id >= 255) {
+        FDWARNING << "label_id is stored by uint8_t, now the value is bigger "
+                     "than 255, it's "
+                  << static_cast<int>(label_id) << "." << std::endl;
+      }
+      result->label_map[index] = static_cast<uint8_t>(label_id);
+
+      if (with_softmax) {
+        double_t total = 0;
+        for (int k = 0; k < num_classes; k++) {
+          total += exp(*(infer_result_buffer + s + k) - *max_class_score);
+        }
+        double_t softmax_class_score = 1 / total;
+        result->score_map[index] = static_cast<float>(softmax_class_score);
+
+      } else {
+        result->score_map[index] = *max_class_score;
+      }
+      index++;
+    }
+  }
+}
+
 Model::Model(const std::string& model_file, const std::string& params_file,
              const std::string& config_file, const RuntimeOption& custom_option,
              const Frontend& model_format) {
@@ -114,71 +214,21 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
            "Require the data type of output is int64 or fp32, but now it's " +
                Str(infer_result.dtype) + ".");
   result->Clear();
+
   if (infer_result.shape.size() == 4) {
+    // output without argmax
     FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
     result->contain_score_map = true;
-    float_t* infer_result_buffer =
-        reinterpret_cast<float_t*>(infer_result.MutableData());
-    // NCHW to NHWC
-    int num = infer_result.shape[0];
-    int channel = infer_result.shape[1];
-    int height = infer_result.shape[2];
-    int width = infer_result.shape[3];
-    int chw = channel * height * width;
-    int wc = width * channel;
-    int wh = width * height;
-    std::vector<float_t> hwc_data(chw);
-    int index = 0;
-    for (int n = 0; n < num; n++) {
-      for (int c = 0; c < channel; c++) {
-        for (int h = 0; h < height; h++) {
-          for (int w = 0; w < width; w++) {
-            hwc_data[n * chw + h * wc + w * channel + c] =
-                *(infer_result_buffer + index);
-            index++;
-          }
-        }
-      }
-    }
-    std::memcpy(infer_result.MutableData(), hwc_data.data(),
-                num * chw * sizeof(float_t));
-    infer_result.shape = {num, height, width, channel};
+    NCHW2NHWC(infer_result);
   }
 
   FDTensor new_infer_result;
   Mat* mat = nullptr;
   if (is_resized) {
-    int channel = 1;
-    int height = infer_result.shape[1];
-    int width = infer_result.shape[2];
-
-    if (result->contain_score_map) {
-      channel = infer_result.shape[3];
-    }
     cv::Mat temp_mat;
-    if (infer_result.dtype == FDDataType::INT64) {
-      FDWARNING << "The PaddleSeg model is exported with argmax. Inference "
-                   "result type is " +
-                       Str(infer_result.dtype) +
-                       ". If you want the edge of segmentation image more "
-                       "smoother. Please export model with --without_argmax "
-                       "--with_softmax."
-                << std::endl;
-      int64_t chw = channel * height * width;
-      int64_t* infer_result_buffer = static_cast<int64_t*>(infer_result.Data());
-      std::vector<float_t> float_result_buffer(chw);
-      temp_mat = cv::Mat(height, width, CV_32FC(channel));
-      int index = 0;
-      for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-          temp_mat.at<float_t>(i, j) =
-              static_cast<float_t>(infer_result_buffer[index++]);
-        }
-      }
-    } else if (infer_result.dtype == FDDataType::FP32) {
-      temp_mat = cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
-    }
+    Cast2FP32Mat(temp_mat, infer_result, result->contain_score_map);
 
+    // original image shape
     auto iter_ipt = (*im_info).find("input_shape");
     FDASSERT(iter_ipt != im_info->end(),
              "Cannot find input_shape from im_info.");
@@ -206,37 +256,9 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     } else {
       infer_result_buffer = static_cast<float_t*>(infer_result.Data());
     }
-    int64_t height = result->shape[0];
-    int64_t width = result->shape[1];
-    int64_t num_classes = result->shape[2];
-    int index = 0;
-    for (size_t i = 0; i < height; ++i) {
-      for (size_t j = 0; j < width; ++j) {
-        int64_t s = (i * width + j) * num_classes;
-        float_t* max_class_score = std::max_element(
-            infer_result_buffer + s, infer_result_buffer + s + num_classes);
-        int label_id = std::distance(infer_result_buffer + s, max_class_score);
-        if (label_id >= 255) {
-          FDWARNING << "label_id is stored by uint8_t, now the value is bigger "
-                       "than 255, it's "
-                    << static_cast<int>(label_id) << "." << std::endl;
-        }
-        result->label_map[index] = static_cast<uint8_t>(label_id);
-
-        if (with_softmax) {
-          double_t total = 0;
-          for (int k = 0; k < num_classes; k++) {
-            total += exp(*(infer_result_buffer + s + k) - *max_class_score);
-          }
-          double_t softmax_class_score = 1 / total;
-          result->score_map[index] = static_cast<float>(softmax_class_score);
-
-        } else {
-          result->score_map[index] = *max_class_score;
-        }
-        index++;
-      }
-    }
+    // argmax
+    ArgmaxScoreMap(infer_result_buffer, result, with_softmax);
+    result->shape.erase(result->shape.begin() + 2);
   } else {
     if (is_resized) {
       float_t* infer_result_buffer =
@@ -252,7 +274,6 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
       }
     }
   }
-  result->shape.erase(result->shape.begin() + 2);
   delete mat;
   mat = nullptr;
   return true;
