@@ -41,6 +41,16 @@ class Resize : public Processor {
                   float scale_h = -1.0, int interp = 1, bool use_scale = false,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
+  bool SetWidthAndHeight(int width, int height) {
+    width_ = width;
+    height_ = height;
+    return true;
+  }
+
+  std::tuple<int, int> GetWidthAndHeight() {
+    return std::make_tuple(width_, height_);
+  }
+
  private:
   int width_;
   int height_;
@@ -49,5 +59,5 @@ class Resize : public Processor {
   int interp_ = 1;
   bool use_scale_ = false;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

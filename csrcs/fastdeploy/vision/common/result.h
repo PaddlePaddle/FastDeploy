@@ -93,6 +93,10 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
 
   void Clear();
 
+  void Reserve(int size);
+
+  void Resize(int size);
+
   std::string Str();
 };
 

@@ -28,6 +28,8 @@ void BindPPSeg(pybind11::module& m) {
              self.Predict(&mat, res);
              return res;
            })
-      .def_readwrite("with_softmax", &vision::ppseg::Model::with_softmax);
+      .def_readwrite("with_softmax", &vision::ppseg::Model::with_softmax)
+      .def_readwrite("is_vertical_screen",
+                     &vision::ppseg::Model::is_vertical_screen);
 }
 }  // namespace fastdeploy

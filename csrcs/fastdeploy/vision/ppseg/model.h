@@ -20,6 +20,8 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
 
   bool with_softmax = false;
 
+  bool is_vertical_screen = false;
+
  private:
   bool Initialize();
 

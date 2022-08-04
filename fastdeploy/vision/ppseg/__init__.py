@@ -46,3 +46,14 @@ class Model(FastDeployModel):
             value,
             bool), "The value to set `with_softmax` must be type of bool."
         self._model.with_softmax = value
+
+    @property
+    def is_vertical_screen(self):
+        return self._model.is_vertical_screen
+
+    @is_vertical_screen.setter
+    def is_vertical_screen(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_vertical_screen` must be type of bool."
+        self._model.is_vertical_screen = value

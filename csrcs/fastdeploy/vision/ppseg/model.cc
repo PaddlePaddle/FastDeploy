@@ -78,6 +78,18 @@ bool Model::BuildPreprocessPipelineFromConfig() {
 bool Model::Preprocess(Mat* mat, FDTensor* output,
                        std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
+    if (processors_[i]->Name().compare("Resize") == 0) {
+      auto processor = dynamic_cast<Resize*>(processors_[i].get());
+      int resize_width = -1;
+      int resize_height = -1;
+      std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
+      if (is_vertical_screen && (resize_width > resize_height)) {
+        if (processor->SetWidthAndHeight(resize_height, resize_width)) {
+          FDERROR << "Failed to set Resize processor width and height "
+                  << processors_[i]->Name() << "." << std::endl;
+        }
+      }
+    }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
@@ -100,8 +112,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   FDASSERT(infer_result.dtype == FDDataType::INT64 ||
                infer_result.dtype == FDDataType::FP32,
            "Require the data type of output is int64 or fp32, but now it's " +
-               Str(const_cast<fastdeploy::FDDataType&>(infer_result.dtype)) +
-               ".");
+               Str(infer_result.dtype) + ".");
   result->Clear();
   if (infer_result.shape.size() == 4) {
     FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
@@ -146,6 +157,13 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     }
     cv::Mat temp_mat;
     if (infer_result.dtype == FDDataType::INT64) {
+      FDWARNING << "The PaddleSeg model is exported with argmax. Inference "
+                   "result type is " +
+                       Str(infer_result.dtype) +
+                       ". If you want the edge of segmentation image more "
+                       "smoother. Please export model with --without_argmax "
+                       "--with_softmax."
+                << std::endl;
       int64_t chw = channel * height * width;
       int64_t* infer_result_buffer = static_cast<int64_t*>(infer_result.Data());
       std::vector<float_t> float_result_buffer(chw);
@@ -180,7 +198,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
                       std::multiplies<int>());
 
   result->shape.erase(result->shape.begin());
-  result->label_map.reserve(out_num);
+  result->Resize(out_num);
   if (result->contain_score_map) {
     float_t* infer_result_buffer = nullptr;
     if (is_resized) {
@@ -191,9 +209,6 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
     int64_t height = result->shape[0];
     int64_t width = result->shape[1];
     int64_t num_classes = result->shape[2];
-    result->shape.erase(result->shape.begin() + 2);
-
-    result->score_map.reserve(out_num);
     int index = 0;
     for (size_t i = 0; i < height; ++i) {
       for (size_t j = 0; j < width; ++j) {
@@ -237,7 +252,9 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
       }
     }
   }
-  std::free(mat);
+  result->shape.erase(result->shape.begin() + 2);
+  delete mat;
+  mat = nullptr;
   return true;
 }
 

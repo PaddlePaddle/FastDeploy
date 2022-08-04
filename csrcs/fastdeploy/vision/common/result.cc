@@ -146,6 +146,20 @@ void SegmentationResult::Clear() {
   contain_score_map = false;
 }
 
+void SegmentationResult::Reserve(int size) {
+  label_map.reserve(size);
+  if (contain_score_map > 0) {
+    score_map.reserve(size);
+  }
+}
+
+void SegmentationResult::Resize(int size) {
+  label_map.resize(size);
+  if (contain_score_map) {
+    score_map.resize(size);
+  }
+}
+
 std::string SegmentationResult::Str() {
   std::string out;
   out = "SegmentationResult Image masks 10 rows x 10 cols: \n";
@@ -168,6 +182,8 @@ std::string SegmentationResult::Str() {
     }
     out += "...........\n";
   }
+  out += "result shape is: [" + std::to_string(shape[0]) + " " +
+         std::to_string(shape[1]) + "]";
   return out;
 }
 
