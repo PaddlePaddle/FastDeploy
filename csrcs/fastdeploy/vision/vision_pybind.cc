@@ -28,6 +28,7 @@ void BindRangiLyu(pybind11::module& m);
 void BindLinzaer(pybind11::module& m);
 void BindBiubug6(pybind11::module& m);
 void BindPpogg(pybind11::module& m);
+void BindDeepinsight(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -75,6 +76,7 @@ void BindVision(pybind11::module& m) {
   BindLinzaer(m);
   BindBiubug6(m);
   BindPpogg(m);
+  BindDeepinsight(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif
