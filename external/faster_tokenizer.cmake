@@ -21,10 +21,11 @@ set(FASTERTOKENIZER_SOURCE_DIR
     ${THIRD_PARTY_PATH}/faster_tokenizer/src/${FASTERTOKENIZER_PROJECT})
 set(FASTERTOKENIZER_INSTALL_DIR ${THIRD_PARTY_PATH}/install/faster_tokenizer)
 set(FASTERTOKENIZER_INC_DIR
-    "${FASTERTOKENIZER_INSTALL_DIR}/faster_tokenizer/include"
+    "${FASTERTOKENIZER_INSTALL_DIR}/include"
+    "${FASTERTOKENIZER_INSTALL_DIR}/third_party/include"
     CACHE PATH "faster_tokenizer include directory." FORCE)
 set(FASTERTOKENIZER_LIB_DIR
-    "${FASTERTOKENIZER_INSTALL_DIR}/faster_tokenizer/lib/"
+    "${FASTERTOKENIZER_INSTALL_DIR}/lib/"
     CACHE PATH "faster_tokenizer lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${FASTERTOKENIZER_LIB_DIR}")
@@ -37,9 +38,9 @@ elseif(APPLE)
 # Not support apple so far.
 else()
 
-set(FASTERTOKENIZER_COMPILE_LIB
-"${FASTERTOKENIZER_INSTALL_DIR}/paddle/lib/libcore_tokenizers.so"
-CACHE FILEPATH "faster_tokenizer compile library." FORCE)
+set(FASTERTOKENIZER_COMPILE_LIB "${FASTERTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
+    CACHE FILEPATH "faster_tokenizer compile library." FORCE)
+message("FASTERTOKENIZER_COMPILE_LIB = ${FASTERTOKENIZER_COMPILE_LIB}")
 set(ICUDT_LIB "")
 set(ICUUC_LIB "")
 endif(WIN32)
@@ -72,6 +73,7 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E copy_directory ${FASTERTOKENIZER_SOURCE_DIR} ${FASTERTOKENIZER_INSTALL_DIR}
   BUILD_BYPRODUCTS ${FASTERTOKENIZER_COMPILE_LIB})
 
-add_library(faster_tokenizer SHARED IMPORTED GLOBAL)
-set_property(TARGET extern_faster_tokenizer PROPERTY IMPORTED_LOCATION ${FASTERTOKENIZER_COMPILE_LIB})
+add_library(faster_tokenizer STATIC IMPORTED GLOBAL)
+set_property(TARGET faster_tokenizer PROPERTY IMPORTED_LOCATION ${FASTERTOKENIZER_COMPILE_LIB})
 add_dependencies(faster_tokenizer ${FASTERTOKENIZER_PROJECT})
+list(APPEND DEPEND_LIBS faster_tokenizer)
