@@ -84,13 +84,18 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
 
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   // mask
-  std::vector<std::vector<int64_t>> masks;
+  std::vector<uint8_t> label_map;
+  std::vector<float> score_map;
+  std::vector<int64_t> shape;
+  bool contain_score_map = false;
 
   ResultType type = ResultType::SEGMENTATION;
 
   void Clear();
 
-  void Resize(int64_t height, int64_t width);
+  void Reserve(int size);
+
+  void Resize(int size);
 
   std::string Str();
 };
