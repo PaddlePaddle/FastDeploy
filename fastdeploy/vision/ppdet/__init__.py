@@ -27,7 +27,7 @@ class PPYOLOE(FastDeployModel):
                  model_format=Frontend.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPYOLOE only support model format of Frontend.Paddle now."
+        assert model_format == Frontend.PADDLE, "PPYOLOE model only support model format of Frontend.Paddle now."
         self._model = C.vision.ppdet.PPYOLOE(model_file, params_file,
                                              config_file, self._runtime_option,
                                              model_format)
@@ -36,3 +36,83 @@ class PPYOLOE(FastDeployModel):
     def predict(self, input_image):
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
+
+
+class PPYOLO(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "PPYOLO model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.PPYOLO(model_file, params_file,
+                                            config_file, self._runtime_option,
+                                            model_format)
+        assert self.initialized, "PPYOLO model initialize failed."
+
+
+class YOLOX(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "YOLOX model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.YOLOX(model_file, params_file,
+                                           config_file, self._runtime_option,
+                                           model_format)
+        assert self.initialized, "YOLOX model initialize failed."
+
+
+class PicoDet(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "PicoDet model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.PicoDet(model_file, params_file,
+                                             config_file, self._runtime_option,
+                                             model_format)
+        assert self.initialized, "PicoDet model initialize failed."
+
+
+class FasterRCNN(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "FasterRCNN model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.FasterRCNN(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "FasterRCNN model initialize failed."
+
+
+class YOLOv3(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "YOLOv3 model only support model format of Frontend.Paddle now."
+        self._model = C.vision.ppdet.YOLOv3(model_file, params_file,
+                                            config_file, self._runtime_option,
+                                            model_format)
+        assert self.initialized, "YOLOv3 model initialize failed."
