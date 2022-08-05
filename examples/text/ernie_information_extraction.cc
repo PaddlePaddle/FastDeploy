@@ -13,7 +13,7 @@
 // limitations under the License.
 #include <iostream>
 
-#include "eigen.h"
+#include "compute.h"
 #include "fastdeploy/text.h"
 #include "tokenizers/ernie_faster_tokenizer.h"
 
