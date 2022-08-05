@@ -37,4 +37,14 @@ if(WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples/vision)
   endforeach()
 endif()
 
+# text examples
+if(WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples/text)
+  message(STATUS "")
+  message(STATUS "*************FastDeploy Examples Summary**********")
+  file(GLOB ALL_VISION_EXAMPLE_SRCS ${PROJECT_SOURCE_DIR}/examples/text/*.cc)
+  foreach(_CC_FILE ${ALL_VISION_EXAMPLE_SRCS})
+    add_fastdeploy_executable(text ${_CC_FILE})
+  endforeach()
+endif()
+
 # other examples ...
