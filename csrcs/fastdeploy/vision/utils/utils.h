@@ -127,6 +127,14 @@ void SortDetectionResult(DetectionResult* output);
 
 void SortDetectionResult(FaceDetectionResult* result);
 
+// L2 Norm / cosine similarity  (for face recognition, ...)
+FASTDEPLOY_DECL std::vector<float> L2Normalize(
+    const std::vector<float>& values);
+
+FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
+                                       const std::vector<float>& b,
+                                       bool normalized = true);
+
 }  // namespace utils
 }  // namespace vision
 }  // namespace fastdeploy

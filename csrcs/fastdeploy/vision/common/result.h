@@ -22,7 +22,8 @@ enum FASTDEPLOY_DECL ResultType {
   CLASSIFY,
   DETECTION,
   SEGMENTATION,
-  FACE_DETECTION
+  FACE_DETECTION,
+  FACE_RECOGNITION
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -90,6 +91,24 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   bool contain_score_map = false;
 
   ResultType type = ResultType::SEGMENTATION;
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
+  // face embedding vector with 128/256/512 ... dim
+  std::vector<float> embedding;
+
+  ResultType type = ResultType::FACE_RECOGNITION;
+
+  FaceRecognitionResult() {}
+  FaceRecognitionResult(const FaceRecognitionResult& res);
 
   void Clear();
 

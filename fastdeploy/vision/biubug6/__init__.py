@@ -37,7 +37,7 @@ class RetinaFace(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟UltraFace模型有关的属性封装
+    # 一些跟模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [640, 480]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
