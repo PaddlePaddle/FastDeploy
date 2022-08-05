@@ -371,9 +371,13 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             for f1 in os.listdir(lib_dir_name):
                 release_dir = os.path.join(lib_dir_name, f1)
                 if f1 == "Release" and not os.path.isfile(release_dir):
-                    if os.path.exists(os.path.join("fastdeploy/libs/third_libs", f)):
-                        shutil.rmtree(os.path.join("fastdeploy/libs/third_libs", f))
-                    shutil.copytree(release_dir, os.path.join("fastdeploy/libs/third_libs", f, "lib"))
+                    if os.path.exists(
+                            os.path.join("fastdeploy/libs/third_libs", f)):
+                        shutil.rmtree(
+                            os.path.join("fastdeploy/libs/third_libs", f))
+                    shutil.copytree(release_dir,
+                                    os.path.join("fastdeploy/libs/third_libs",
+                                                 f, "lib"))
 
     if platform.system().lower() == "windows":
         release_dir = os.path.join(".setuptools-cmake-build", "Release")
@@ -398,6 +402,9 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                                                             path))
         rpaths = ":".join(rpaths)
         command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
+        print(
+            "=========================Set rpath for library===================")
+        print(command)
         # The sw_64 not suppot patchelf, so we just disable that.
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
             assert os.system(

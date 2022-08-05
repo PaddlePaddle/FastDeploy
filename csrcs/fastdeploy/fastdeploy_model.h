@@ -18,7 +18,7 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FastDeployModel {
  public:
-  virtual std::string ModelName() const { return "NameUndefined"; };
+  virtual std::string ModelName() const { return "NameUndefined"; }
 
   virtual bool InitRuntime();
   virtual bool CreateCpuBackend();
@@ -47,21 +47,21 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool DebugEnabled();
 
  private:
-  Runtime* runtime_ = nullptr;
+  std::unique_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   bool debug_ = false;
 };
 
-#define TIMERECORD_START(id)                                                   \
-  TimeCounter tc_##id;                                                         \
+#define TIMERECORD_START(id) \
+  TimeCounter tc_##id;       \
   tc_##id.Start();
 
-#define TIMERECORD_END(id, prefix)                                             \
-  if (DebugEnabled()) {                                                        \
-    tc_##id.End();                                                             \
-    FDLogger() << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " "   \
-               << prefix << " duration = " << tc_##id.Duration() << "s."       \
-               << std::endl;                                                   \
+#define TIMERECORD_END(id, prefix)                                           \
+  if (DebugEnabled()) {                                                      \
+    tc_##id.End();                                                           \
+    FDLogger() << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " " \
+               << prefix << " duration = " << tc_##id.Duration() << "s."     \
+               << std::endl;                                                 \
   }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
