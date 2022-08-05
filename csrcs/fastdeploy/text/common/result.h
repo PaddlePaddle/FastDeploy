@@ -12,52 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-
-#include <ostream>
-#include <sstream>
-#include <string>
-
-#include "fastdeploy/core/config.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
+namespace text {
 
-enum FASTDEPLOY_DECL Device { DEFAULT, CPU, GPU };
+struct FASTDEPLOY_DECL Result {};
 
-FASTDEPLOY_DECL std::string Str(const Device& d);
-
-enum FASTDEPLOY_DECL FDDataType {
-  BOOL,
-  INT16,
-  INT32,
-  INT64,
-  FP16,
-  FP32,
-  FP64,
-  UNKNOWN1,
-  UNKNOWN2,
-  UNKNOWN3,
-  UNKNOWN4,
-  UNKNOWN5,
-  UNKNOWN6,
-  UNKNOWN7,
-  UNKNOWN8,
-  UNKNOWN9,
-  UNKNOWN10,
-  UNKNOWN11,
-  UNKNOWN12,
-  UNKNOWN13,
-  UINT8,
-  INT8
-};
-
-FASTDEPLOY_DECL std::string Str(const FDDataType& fdt);
-
-FASTDEPLOY_DECL int32_t FDDataTypeSize(const FDDataType& data_dtype);
-
-template <typename PlainType>
-struct FASTDEPLOY_DECL TypeToDataType {
-  static const FDDataType dtype;
-};
-
+}  // namespace text
 }  // namespace fastdeploy

@@ -93,4 +93,31 @@ std::string Str(const FDDataType& fdt) {
   return out;
 }
 
+template <typename PlainType>
+const FDDataType TypeToDataType<PlainType>::dtype = UNKNOWN1;
+
+template <>
+const FDDataType TypeToDataType<bool>::dtype = BOOL;
+
+template <>
+const FDDataType TypeToDataType<int16_t>::dtype = INT16;
+
+template <>
+const FDDataType TypeToDataType<int32_t>::dtype = INT32;
+
+template <>
+const FDDataType TypeToDataType<int64_t>::dtype = INT64;
+
+template <>
+const FDDataType TypeToDataType<float>::dtype = FP32;
+
+template <>
+const FDDataType TypeToDataType<double>::dtype = FP64;
+
+template <>
+const FDDataType TypeToDataType<uint8_t>::dtype = UINT8;
+
+template <>
+const FDDataType TypeToDataType<int8_t>::dtype = INT8;
+
 }  // namespace fastdeploy

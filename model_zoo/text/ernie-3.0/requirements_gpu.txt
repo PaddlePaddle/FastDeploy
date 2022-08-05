@@ -1,0 +1,4 @@
+onnxruntime-gpu
+onnxconverter-common
+psutil
+paddlenlp
