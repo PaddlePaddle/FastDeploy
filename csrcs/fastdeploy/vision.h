@@ -17,7 +17,12 @@
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision/biubug6/retinaface.h"
 #include "fastdeploy/vision/deepcam/yolov5face.h"
+#include "fastdeploy/vision/deepinsight/arcface.h"
+#include "fastdeploy/vision/deepinsight/cosface.h"
+#include "fastdeploy/vision/deepinsight/insightface_rec.h"
+#include "fastdeploy/vision/deepinsight/partial_fc.h"
 #include "fastdeploy/vision/deepinsight/scrfd.h"
+#include "fastdeploy/vision/deepinsight/vpl.h"
 #include "fastdeploy/vision/linzaer/ultraface.h"
 #include "fastdeploy/vision/megvii/yolox.h"
 #include "fastdeploy/vision/meituan/yolov6.h"
