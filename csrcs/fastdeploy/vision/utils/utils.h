@@ -51,6 +51,73 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
   return res;
 }
 
+template <typename T>
+void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result,
+                    bool with_softmax) {
+  int64_t height = result->shape[0];
+  int64_t width = result->shape[1];
+  int64_t num_classes = result->shape[2];
+  int index = 0;
+  for (size_t i = 0; i < height; ++i) {
+    for (size_t j = 0; j < width; ++j) {
+      int64_t s = (i * width + j) * num_classes;
+      T max_class_score = std::max_element(
+          infer_result_buffer + s, infer_result_buffer + s + num_classes);
+      int label_id = std::distance(infer_result_buffer + s, max_class_score);
+      if (label_id >= 255) {
+        FDWARNING << "label_id is stored by uint8_t, now the value is bigger "
+                     "than 255, it's "
+                  << static_cast<int>(label_id) << "." << std::endl;
+      }
+      result->label_map[index] = static_cast<uint8_t>(label_id);
+
+      if (with_softmax) {
+        double_t total = 0;
+        for (int k = 0; k < num_classes; k++) {
+          total += exp(*(infer_result_buffer + s + k) - *max_class_score);
+        }
+        double_t softmax_class_score = 1 / total;
+        result->score_map[index] = static_cast<float>(softmax_class_score);
+
+      } else {
+        result->score_map[index] = static_cast<float>(*max_class_score);
+      }
+      index++;
+    }
+  }
+}
+
+template <typename T>
+void NCHW2NHWC(FDTensor& infer_result) {
+  T* infer_result_buffer = reinterpret_cast<T*>(infer_result.MutableData());
+  int num = infer_result.shape[0];
+  int channel = infer_result.shape[1];
+  int height = infer_result.shape[2];
+  int width = infer_result.shape[3];
+  int chw = channel * height * width;
+  int wc = width * channel;
+  int wh = width * height;
+  std::vector<T> hwc_data(chw);
+  int index = 0;
+  for (int n = 0; n < num; n++) {
+    for (int c = 0; c < channel; c++) {
+      for (int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+          hwc_data[n * chw + h * wc + w * channel + c] =
+              *(infer_result_buffer + index);
+          index++;
+        }
+      }
+    }
+  }
+  std::memcpy(infer_result.MutableData(), hwc_data.data(),
+              num * chw * sizeof(T));
+  infer_result.shape = {num, height, width, channel};
+}
+
+void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
+                        bool contain_score_map);
+
 void NMS(DetectionResult* output, float iou_threshold = 0.5);
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
