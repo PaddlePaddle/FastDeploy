@@ -37,20 +37,20 @@ if(NOT MSVC)
 endif(NOT MSVC)
 
 #############################CMAKE FOR FASTDEPLOY################################
-option(ENABLE_PADDLE_FRONTEND "if to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
-option(WITH_GPU "if WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
-option(ENABLE_ORT_BACKEND "if to enable onnxruntime backend." OFF)
-option(ENABLE_TRT_BACKEND "if to enable tensorrt backend." OFF)
-option(ENABLE_PADDLE_BACKEND "if to enable paddle backend." OFF)
-option(CUDA_DIRECTORY "if build tensorrt backend, need to define path of cuda library.")
-option(TRT_DIRECTORY "if build tensorrt backend, need to define path of tensorrt library.")
-option(ENABLE_VISION "if to enable vision models usage." OFF)
-option(ENABLE_VISION_VISUALIZE "if to enable visualize vision model result toolbox." ON)
-option(ENABLE_TEXT "whether to enable text models usage." OFF)
+option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
+option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
+option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
+option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
+option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
+option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
+option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
+option(ENABLE_VISION "Whether to enable vision models usage." OFF)
+option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
+option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 
 # Please don't open this flag now, some bugs exists.
-option(ENABLE_OPENCV_CUDA "if to enable opencv with cuda, this will allow process image with GPU." OFF)
-option(ENABLE_DEBUG "if to enable print debug information, this may reduce performance." OFF)
+option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
+option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
