@@ -15,9 +15,10 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindDeepinsight(pybind11::module& m) {
-  auto deepinsight_module = m.def_submodule(
-      "deepinsight", "https://github.com/deepinsight");
+void BindDeepInsight(pybind11::module& m) {
+  auto deepinsight_module =
+      m.def_submodule("deepinsight", "https://github.com/deepinsight");
+  // Bind SCRFD
   pybind11::class_<vision::deepinsight::SCRFD, FastDeployModel>(
       deepinsight_module, "SCRFD")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
@@ -43,5 +44,101 @@ void BindDeepinsight(pybind11::module& m) {
       .def_readwrite("num_anchors", &vision::deepinsight::SCRFD::num_anchors)
       .def_readwrite("landmarks_per_face",
                      &vision::deepinsight::SCRFD::landmarks_per_face);
+  // Bind InsightFaceRecognitionModel
+  pybind11::class_<vision::deepinsight::InsightFaceRecognitionModel,
+                   FastDeployModel>(deepinsight_module,
+                                    "InsightFaceRecognitionModel")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::deepinsight::InsightFaceRecognitionModel& self,
+              pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::FaceRecognitionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
+      .def_readwrite("size",
+                     &vision::deepinsight::InsightFaceRecognitionModel::size)
+      .def_readwrite("alpha",
+                     &vision::deepinsight::InsightFaceRecognitionModel::alpha)
+      .def_readwrite("beta",
+                     &vision::deepinsight::InsightFaceRecognitionModel::beta)
+      .def_readwrite("swap_rb",
+                     &vision::deepinsight::InsightFaceRecognitionModel::swap_rb)
+      .def_readwrite(
+          "l2_normalize",
+          &vision::deepinsight::InsightFaceRecognitionModel::l2_normalize);
+  // Bind ArcFace
+  pybind11::class_<vision::deepinsight::ArcFace,
+                   vision::deepinsight::InsightFaceRecognitionModel>(
+      deepinsight_module, "ArcFace")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::deepinsight::ArcFace& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::FaceRecognitionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
+      .def_readwrite("size", &vision::deepinsight::ArcFace::size)
+      .def_readwrite("alpha", &vision::deepinsight::ArcFace::alpha)
+      .def_readwrite("beta", &vision::deepinsight::ArcFace::beta)
+      .def_readwrite("swap_rb", &vision::deepinsight::ArcFace::swap_rb)
+      .def_readwrite("l2_normalize",
+                     &vision::deepinsight::ArcFace::l2_normalize);
+  // Bind CosFace
+  pybind11::class_<vision::deepinsight::CosFace,
+                   vision::deepinsight::InsightFaceRecognitionModel>(
+      deepinsight_module, "CosFace")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::deepinsight::CosFace& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::FaceRecognitionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
+      .def_readwrite("size", &vision::deepinsight::CosFace::size)
+      .def_readwrite("alpha", &vision::deepinsight::CosFace::alpha)
+      .def_readwrite("beta", &vision::deepinsight::CosFace::beta)
+      .def_readwrite("swap_rb", &vision::deepinsight::CosFace::swap_rb)
+      .def_readwrite("l2_normalize",
+                     &vision::deepinsight::CosFace::l2_normalize);
+  // Bind Partial FC
+  pybind11::class_<vision::deepinsight::PartialFC,
+                   vision::deepinsight::InsightFaceRecognitionModel>(
+      deepinsight_module, "PartialFC")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::deepinsight::PartialFC& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::FaceRecognitionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
+      .def_readwrite("size", &vision::deepinsight::PartialFC::size)
+      .def_readwrite("alpha", &vision::deepinsight::PartialFC::alpha)
+      .def_readwrite("beta", &vision::deepinsight::PartialFC::beta)
+      .def_readwrite("swap_rb", &vision::deepinsight::PartialFC::swap_rb)
+      .def_readwrite("l2_normalize",
+                     &vision::deepinsight::PartialFC::l2_normalize);
+  // Bind VPL
+  pybind11::class_<vision::deepinsight::VPL,
+                   vision::deepinsight::InsightFaceRecognitionModel>(
+      deepinsight_module, "VPL")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def("predict",
+           [](vision::deepinsight::VPL& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::FaceRecognitionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
+      .def_readwrite("size", &vision::deepinsight::VPL::size)
+      .def_readwrite("alpha", &vision::deepinsight::VPL::alpha)
+      .def_readwrite("beta", &vision::deepinsight::VPL::beta)
+      .def_readwrite("swap_rb", &vision::deepinsight::VPL::swap_rb)
+      .def_readwrite("l2_normalize", &vision::deepinsight::VPL::l2_normalize);
 }
+
 }  // namespace fastdeploy
