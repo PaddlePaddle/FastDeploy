@@ -13,6 +13,7 @@
 // limitations under the License.
 #include <iostream>
 
+#include "eigen.h"
 #include "fastdeploy/text.h"
 #include "tokenizers/ernie_faster_tokenizer.h"
 
@@ -65,16 +66,65 @@ int main() {
   runtime.Infer(inputs, &outputs);
 
   // 5. Postprocess
-  std::cout << "outputs size: " << outputs.size() << std::endl;
-  for (auto&& output : outputs) {
-    std::cout << "shape: (";
-    for (auto&& s : output.shape) {
-      std::cout << s << ", ";
-    }
-    std::cout << ")" << std::endl;
-  }
+  // domain_max_value = np.max(domain_logits, axis=1, keepdims=True)
+  // intent_max_value = np.max(intent_logits, axis=1, keepdims=True)
+  fastdeploy::FDTensor domain_max_value, intent_max_value;
+  Eigen::DefaultDevice dev;
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
+      dev, outputs[0], &domain_max_value, {1});
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
+      dev, outputs[1], &intent_max_value, {1});
+  // domain_exp_data = np.exp(domain_logits - domain_max_value)
+  // intent_exp_data = np.exp(intent_logits - intent_max_value)
+  fastdeploy::FDTensor domain_exp_data, intent_exp_data;
+  // Broadcast and diff
+  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::SubFunctor<float>,
+                                                float>(
+      outputs[0], domain_max_value, &domain_exp_data,
+      fastdeploy::SubFunctor<float>(), 0);
+  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::SubFunctor<float>,
+                                                float>(
+      outputs[1], intent_max_value, &intent_exp_data,
+      fastdeploy::SubFunctor<float>(), 0);
+  // domain_exp_data = np.exp(domain_logits - domain_max_value)
+  // intent_exp_data = np.exp(intent_logits - intent_max_value)
+  float* domain_exp_data_ptr = reinterpret_cast<float*>(domain_exp_data.Data());
+  float* intent_exp_data_ptr = reinterpret_cast<float*>(intent_exp_data.Data());
+  auto trans = [](float a) { return std::exp(a); };
+  std::transform(domain_exp_data_ptr,
+                 domain_exp_data_ptr + domain_exp_data.Numel(),
+                 domain_exp_data_ptr, trans);
+  std::transform(intent_exp_data_ptr,
+                 intent_exp_data_ptr + intent_exp_data.Numel(),
+                 intent_exp_data_ptr, trans);
+  // domain_probs = domain_exp_data / np.sum(domain_exp_data, axis=1,
+  // keepdims=True)
+  // intent_probs = intent_exp_data / np.sum(intent_exp_data, axis=1,
+  // keepdims=True)
+  fastdeploy::FDTensor domain_exp_data_sum, intent_exp_data_sum;
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::SumFunctor>(
+      dev, domain_exp_data, &domain_exp_data_sum, {1});
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::SumFunctor>(
+      dev, intent_exp_data, &intent_exp_data_sum, {1});
+
+  fastdeploy::FDTensor domain_probs, intent_probs;
+  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::DivFunctor<float>,
+                                                float>(
+      domain_exp_data, domain_exp_data_sum, &domain_probs,
+      fastdeploy::DivFunctor<float>(), 0);
+  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::DivFunctor<float>,
+                                                float>(
+      intent_exp_data, intent_exp_data_sum, &intent_probs,
+      fastdeploy::DivFunctor<float>(), 0);
+
+  fastdeploy::FDTensor domain_max_probs, intent_max_probs;
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
+      dev, domain_probs, &domain_max_probs, {1});
+  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
+      dev, intent_probs, &intent_max_probs, {1});
 
   // 6. Print result
-
+  domain_max_probs.PrintInfo();
+  intent_max_probs.PrintInfo();
   return 0;
 }

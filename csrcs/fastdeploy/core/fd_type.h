@@ -54,4 +54,10 @@ enum FASTDEPLOY_DECL FDDataType {
 FASTDEPLOY_DECL std::string Str(const FDDataType& fdt);
 
 FASTDEPLOY_DECL int32_t FDDataTypeSize(const FDDataType& data_dtype);
+
+template <typename PlainType>
+struct FASTDEPLOY_DECL TypeToDataType {
+  static const FDDataType dtype;
+};
+
 }  // namespace fastdeploy
