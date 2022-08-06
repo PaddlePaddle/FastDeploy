@@ -18,6 +18,38 @@
 #include "tokenizers/ernie_faster_tokenizer.h"
 
 using namespace paddlenlp;
+
+// Only useful for axis = -1
+template <typename T>
+void Softmax(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
+  auto softmax_func = [](const T* score_vec, T* softmax_vec, int label_num) {
+    double score_max = *(std::max_element(score_vec, score_vec + label_num));
+    double e_sum = 0;
+    for (int j = 0; j < label_num; j++) {
+      softmax_vec[j] = std::exp(score_vec[j] - score_max);
+      e_sum += softmax_vec[j];
+    }
+    for (int k = 0; k < label_num; k++) {
+      softmax_vec[k] /= e_sum;
+    }
+  };
+
+  std::vector<int32_t> output_shape;
+  for (int i = 0; i < input.shape.size(); ++i) {
+    output_shape.push_back(input.shape[i]);
+  }
+  output->Allocate(output_shape, input.dtype);
+  int label_num = output_shape.back();
+  int batch_size = input.Numel() / label_num;
+  int offset = 0;
+  const T* input_ptr = reinterpret_cast<const T*>(input.Data());
+  T* output_ptr = reinterpret_cast<T*>(output->Data());
+  for (int i = 0; i < batch_size; ++i) {
+    softmax_func(input_ptr + offset, output_ptr + offset, label_num);
+    offset += label_num;
+  }
+}
+
 int main() {
   // 1. Define a ernie faster tokenizer
   faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer(
@@ -63,57 +95,11 @@ int main() {
   runtime.Infer(inputs, &outputs);
 
   // 5. Postprocess
-  // domain_max_value = np.max(domain_logits, axis=1, keepdims=True)
-  // intent_max_value = np.max(intent_logits, axis=1, keepdims=True)
-  fastdeploy::FDTensor domain_max_value, intent_max_value;
-  Eigen::DefaultDevice dev;
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
-      dev, outputs[0], &domain_max_value, {1});
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
-      dev, outputs[1], &intent_max_value, {1});
-  // domain_exp_data = np.exp(domain_logits - domain_max_value)
-  // intent_exp_data = np.exp(intent_logits - intent_max_value)
-  fastdeploy::FDTensor domain_exp_data, intent_exp_data;
-  // Broadcast and diff
-  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::SubFunctor<float>,
-                                                float>(
-      outputs[0], domain_max_value, &domain_exp_data,
-      fastdeploy::SubFunctor<float>(), 0);
-  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::SubFunctor<float>,
-                                                float>(
-      outputs[1], intent_max_value, &intent_exp_data,
-      fastdeploy::SubFunctor<float>(), 0);
-  // domain_exp_data = np.exp(domain_logits - domain_max_value)
-  // intent_exp_data = np.exp(intent_logits - intent_max_value)
-  float* domain_exp_data_ptr = reinterpret_cast<float*>(domain_exp_data.Data());
-  float* intent_exp_data_ptr = reinterpret_cast<float*>(intent_exp_data.Data());
-  auto trans = [](float a) { return std::exp(a); };
-  std::transform(domain_exp_data_ptr,
-                 domain_exp_data_ptr + domain_exp_data.Numel(),
-                 domain_exp_data_ptr, trans);
-  std::transform(intent_exp_data_ptr,
-                 intent_exp_data_ptr + intent_exp_data.Numel(),
-                 intent_exp_data_ptr, trans);
-  // domain_probs = domain_exp_data / np.sum(domain_exp_data, axis=1,
-  // keepdims=True)
-  // intent_probs = intent_exp_data / np.sum(intent_exp_data, axis=1,
-  // keepdims=True)
-  fastdeploy::FDTensor domain_exp_data_sum, intent_exp_data_sum;
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::SumFunctor>(
-      dev, domain_exp_data, &domain_exp_data_sum, {1});
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::SumFunctor>(
-      dev, intent_exp_data, &intent_exp_data_sum, {1});
-
   fastdeploy::FDTensor domain_probs, intent_probs;
-  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::DivFunctor<float>,
-                                                float>(
-      domain_exp_data, domain_exp_data_sum, &domain_probs,
-      fastdeploy::DivFunctor<float>(), 0);
-  fastdeploy::CommonElementwiseBroadcastForward<fastdeploy::DivFunctor<float>,
-                                                float>(
-      intent_exp_data, intent_exp_data_sum, &intent_probs,
-      fastdeploy::DivFunctor<float>(), 0);
+  Softmax<float>(outputs[0], &domain_probs);
+  Softmax<float>(outputs[1], &intent_probs);
 
+  Eigen::DefaultDevice dev;
   fastdeploy::FDTensor domain_max_probs, intent_max_probs;
   fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
       dev, domain_probs, &domain_max_probs, {1});
