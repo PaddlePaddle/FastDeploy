@@ -13,7 +13,6 @@
 // limitations under the License.
 #include <iostream>
 
-#include "compute.h"
 #include "fastdeploy/text.h"
 #include "tokenizers/ernie_faster_tokenizer.h"
 
@@ -46,6 +45,27 @@ void Softmax(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
   T* output_ptr = reinterpret_cast<T*>(output->Data());
   for (int i = 0; i < batch_size; ++i) {
     softmax_func(input_ptr + offset, output_ptr + offset, label_num);
+    offset += label_num;
+  }
+}
+
+// Only useful for axis = -1
+template <typename T>
+void Max(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
+  std::vector<int32_t> output_shape;
+  for (int i = 0; i < input.shape.size() - 1; ++i) {
+    output_shape.push_back(input.shape[i]);
+  }
+  output_shape.push_back(1);
+  output->Allocate(output_shape, input.dtype);
+  int batch_size = output->Numel();
+  int label_num = input.shape.back();
+  int offset = 0;
+  const T* input_ptr = reinterpret_cast<const T*>(input.Data());
+  T* output_ptr = reinterpret_cast<T*>(output->Data());
+  for (int i = 0; i < batch_size; ++i) {
+    output_ptr[i] =
+        *(std::max_element(input_ptr + offset, input_ptr + offset + label_num));
     offset += label_num;
   }
 }
@@ -99,12 +119,9 @@ int main() {
   Softmax<float>(outputs[0], &domain_probs);
   Softmax<float>(outputs[1], &intent_probs);
 
-  Eigen::DefaultDevice dev;
   fastdeploy::FDTensor domain_max_probs, intent_max_probs;
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
-      dev, domain_probs, &domain_max_probs, {1});
-  fastdeploy::ReduceFunctor<float, 2, 1, fastdeploy::MaxFunctor>(
-      dev, intent_probs, &intent_max_probs, {1});
+  Max<float>(domain_probs, &domain_max_probs);
+  Max<float>(intent_probs, &intent_max_probs);
 
   // 6. Print result
   domain_max_probs.PrintInfo();
