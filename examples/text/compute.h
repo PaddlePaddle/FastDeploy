@@ -267,4 +267,19 @@ struct DivFunctor {
   T operator()(const T& lhs, const T& rhs) { return lhs / rhs; }
 };
 
+inline std::vector<float> softmax(const std::vector<float>& score_vec) {
+  int label_num = score_vec.size();
+  std::vector<float> softmax_vec(label_num);
+  double score_max = *(std::max_element(score_vec.begin(), score_vec.end()));
+  double e_sum = 0;
+  for (int j = 0; j < label_num; j++) {
+    softmax_vec[j] = std::exp(static_cast<double>(score_vec[j]) - score_max);
+    e_sum += softmax_vec[j];
+  }
+  for (int k = 0; k < label_num; k++) {
+    softmax_vec[k] /= e_sum;
+  }
+  return softmax_vec;
+}
+
 }  // namespace fastdeploy

@@ -39,15 +39,7 @@ int main() {
   runtime.Init(runtime_option);
 
   // 3. Construct input vector
-  std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
-  for (int i = 0; i < runtime.NumInputs(); ++i) {
-    inputs[i].dtype = fastdeploy::FDDataType::INT64;
-    inputs[i].shape = {batch_size, seq_len};
-    inputs[i].name = runtime.GetInputInfo(i).name;
-    inputs[i].data.resize(sizeof(int64_t) * batch_size * seq_len);
-  }
-
-  // Convert encodings to input_ids, token_type_ids
+  // 3.1 Convert encodings to input_ids, token_type_ids
   std::vector<int64_t> input_ids, token_type_ids;
   for (int i = 0; i < encodings.size(); ++i) {
     auto&& curr_input_ids = encodings[i].GetIds();
@@ -57,9 +49,14 @@ int main() {
     token_type_ids.insert(token_type_ids.end(), curr_type_ids.begin(),
                           curr_type_ids.end());
   }
-
-  memcpy(inputs[0].data.data(), input_ids.data(), inputs[0].data.size());
-  memcpy(inputs[1].data.data(), token_type_ids.data(), inputs[1].data.size());
+  // 3.2 Set data to input vector
+  std::vector<fastdeploy::FDTensor> inputs(runtime.NumInputs());
+  void* inputs_ptrs[] = {input_ids.data(), token_type_ids.data()};
+  for (int i = 0; i < runtime.NumInputs(); ++i) {
+    inputs[i].SetExternalData({batch_size, seq_len},
+                              fastdeploy::FDDataType::INT64, inputs_ptrs[i]);
+    inputs[i].name = runtime.GetInputInfo(i).name;
+  }
 
   // 4. Infer
   std::vector<fastdeploy::FDTensor> outputs(runtime.NumOutputs());
