@@ -12,11 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <iostream>
+#include <sstream>
 
 #include "fastdeploy/text.h"
 #include "tokenizers/ernie_faster_tokenizer.h"
 
 using namespace paddlenlp;
+
+void LoadTransitionFromFile(const std::string& file,
+                            std::vector<float>* transitions, int* num_tags) {
+  std::ifstream fin(file);
+  std::string curr_transition;
+  float transition;
+  int i = 0;
+  while (fin) {
+    std::getline(fin, curr_transition);
+    std::istringstream iss(curr_transition);
+    while (iss) {
+      iss >> transition;
+      transitions->push_back(transition);
+    }
+    if (curr_transition != "") {
+      ++i;
+    }
+  }
+  *num_tags = i;
+}
 
 // Only useful for axis = -1
 template <typename T>
@@ -67,6 +88,65 @@ void Max(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
     output_ptr[i] =
         *(std::max_element(input_ptr + offset, input_ptr + offset + label_num));
     offset += label_num;
+  }
+}
+
+template <typename T>
+void ViterbiDecode(const fastdeploy::FDTensor& slot_logits,
+                   const fastdeploy::FDTensor& trans,
+                   fastdeploy::FDTensor* best_path) {
+  int batch_size = slot_logits.shape[0];
+  int seq_len = slot_logits.shape[1];
+  int num_tags = slot_logits.shape[2];
+  best_path->Allocate({batch_size, seq_len}, fastdeploy::FDDataType::INT64);
+
+  const T* slot_logits_ptr = reinterpret_cast<const T*>(slot_logits.Data());
+  const T* trans_ptr = reinterpret_cast<const T*>(trans.Data());
+  int64_t* best_path_ptr = reinterpret_cast<int64_t*>(best_path->Data());
+  std::vector<T> scores(num_tags);
+  std::copy(slot_logits_ptr, slot_logits_ptr + num_tags, scores.begin());
+  std::vector<std::vector<T>> M(num_tags, std::vector<T>(num_tags));
+  for (int b = 0; b < batch_size; ++b) {
+    std::vector<std::vector<int>> paths;
+    const T* curr_slot_logits_ptr = slot_logits_ptr + b * seq_len * num_tags;
+    int64_t* curr_best_path_ptr = best_path_ptr + b * seq_len;
+    for (int t = 1; t < seq_len; t++) {
+      for (size_t i = 0; i < num_tags; i++) {
+        for (size_t j = 0; j < num_tags; j++) {
+          auto trans_idx = i * num_tags * num_tags + j * num_tags;
+          auto slot_logit_idx = t * num_tags + j;
+          M[i][j] = scores[i] + trans_ptr[trans_idx] +
+                    curr_slot_logits_ptr[slot_logit_idx];
+        }
+      }
+      std::vector<int> idxs;
+      for (size_t i = 0; i < num_tags; i++) {
+        T max = 0.0f;
+        int idx = 0;
+        for (size_t j = 0; j < num_tags; j++) {
+          if (M[j][i] > max) {
+            max = M[j][i];
+            idx = j;
+          }
+        }
+        scores[i] = max;
+        idxs.push_back(idx);
+      }
+      paths.push_back(idxs);
+    }
+    int scores_max_index = 0;
+    float scores_max = 0.0f;
+    for (size_t i = 0; i < scores.size(); i++) {
+      if (scores[i] > scores_max) {
+        scores_max = scores[i];
+        scores_max_index = i;
+      }
+    }
+    curr_best_path_ptr[seq_len - 1] = scores_max_index;
+    for (int i = seq_len - 2; i >= 0; i--) {
+      int index = curr_best_path_ptr[i + 1];
+      curr_best_path_ptr[i] = paths[i][index];
+    }
   }
 }
 
@@ -123,8 +203,30 @@ int main() {
   Max<float>(domain_probs, &domain_max_probs);
   Max<float>(intent_probs, &intent_max_probs);
 
+  std::vector<float> transition;
+  int num_tags;
+  LoadTransitionFromFile("joint_transition.txt", &transition, &num_tags);
+  fastdeploy::FDTensor trans;
+  trans.SetExternalData({num_tags, num_tags}, fastdeploy::FDDataType::FP32,
+                        transition.data());
+
+  fastdeploy::FDTensor best_path;
+  ViterbiDecode<float>(outputs[2], trans, &best_path);
   // 6. Print result
   domain_max_probs.PrintInfo();
   intent_max_probs.PrintInfo();
+
+  batch_size = best_path.shape[0];
+  seq_len = best_path.shape[1];
+  const int64_t* best_path_ptr =
+      reinterpret_cast<const int64_t*>(best_path.Data());
+  for (int i = 0; i < batch_size; ++i) {
+    std::cout << "best_path[" << i << "] = ";
+    for (int j = 0; j < seq_len; ++j) {
+      std::cout << best_path_ptr[i * seq_len + j] << ", ";
+    }
+    std::cout << std::endl;
+  }
+  best_path.PrintInfo();
   return 0;
 }
