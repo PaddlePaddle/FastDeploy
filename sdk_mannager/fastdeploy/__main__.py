@@ -11,14 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-import logging
-import os
-import sys
 
-from .c_lib_wrap import Frontend, Backend, FDDataType, TensorInfo, Device
-from .runtime import Runtime, RuntimeOption
-from .model import FastDeployModel
-from . import c_lib_wrap as C
-from . import vision
-from .download import download, download_and_decompress
+import fastdeploy
+
+if __name__ == "__main__":
+    fastdeploy.main()

@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 import logging
 from ... import FastDeployModel, Frontend
-from ... import fastdeploy_main as C
+from ... import c_lib_wrap as C
 
 
 class PPYOLOE(FastDeployModel):
