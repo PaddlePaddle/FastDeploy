@@ -54,16 +54,19 @@ struct FASTDEPLOY_DECL FDTensor {
   // will copy to cpu store in `temporary_cpu_buffer`
   void* Data();
 
+  const void* Data() const;
+
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer
-  void SetExternalData(const std::vector<int>& new_shape,
+  void SetExternalData(const std::vector<int64_t>& new_shape,
                        const FDDataType& data_type, void* data_buffer);
 
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
-  void Allocate(const std::vector<int>& new_shape, const FDDataType& data_type,
+  void Allocate(const std::vector<int64_t>& new_shape,
+                const FDDataType& data_type,
                 const std::string& tensor_name = "");
 
   // Total size of tensor memory buffer in bytes
@@ -81,4 +84,4 @@ struct FASTDEPLOY_DECL FDTensor {
   explicit FDTensor(const std::string& tensor_name);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/fastdeploy_runtime.h"
+#include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
+
 #ifdef ENABLE_ORT_BACKEND
 #include "fastdeploy/backends/ort/ort_backend.h"
 #endif
@@ -276,8 +278,8 @@ void Runtime::CreatePaddleBackend() {
   pd_option.cpu_thread_num = option.cpu_thread_num;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
-  backend_ = new PaddleBackend();
-  auto casted_backend = dynamic_cast<PaddleBackend*>(backend_);
+  backend_ = utils::make_unique<PaddleBackend>();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
@@ -306,8 +308,8 @@ void Runtime::CreateOrtBackend() {
                option.model_format == Frontend::ONNX,
            "OrtBackend only support model format of Frontend::PADDLE / "
            "Frontend::ONNX.");
-  backend_ = new OrtBackend();
-  auto casted_backend = dynamic_cast<OrtBackend*>(backend_);
+  backend_ = utils::make_unique<OrtBackend>();
+  auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
   if (option.model_format == Frontend::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, ort_option),
              "Load model from ONNX failed while initliazing OrtBackend.");
@@ -344,8 +346,8 @@ void Runtime::CreateTrtBackend() {
                option.model_format == Frontend::ONNX,
            "TrtBackend only support model format of Frontend::PADDLE / "
            "Frontend::ONNX.");
-  backend_ = new TrtBackend();
-  auto casted_backend = dynamic_cast<TrtBackend*>(backend_);
+  backend_ = utils::make_unique<TrtBackend>();
+  auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
   if (option.model_format == Frontend::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
              "Load model from ONNX failed while initliazing TrtBackend.");

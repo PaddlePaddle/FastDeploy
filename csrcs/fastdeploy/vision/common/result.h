@@ -22,7 +22,9 @@ enum FASTDEPLOY_DECL ResultType {
   CLASSIFY,
   DETECTION,
   SEGMENTATION,
-  FACE_DETECTION
+  FACE_DETECTION,
+  FACE_RECOGNITION,
+  MATTING
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -84,13 +86,60 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
 
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   // mask
-  std::vector<std::vector<int64_t>> masks;
+  std::vector<uint8_t> label_map;
+  std::vector<float> score_map;
+  std::vector<int64_t> shape;
+  bool contain_score_map = false;
 
   ResultType type = ResultType::SEGMENTATION;
 
   void Clear();
 
-  void Resize(int64_t height, int64_t width);
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
+  // face embedding vector with 128/256/512 ... dim
+  std::vector<float> embedding;
+
+  ResultType type = ResultType::FACE_RECOGNITION;
+
+  FaceRecognitionResult() {}
+  FaceRecognitionResult(const FaceRecognitionResult& res);
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL MattingResult : public BaseResult {
+  // alpha matte and fgr (predicted foreground: HWC/BGR float32)
+  std::vector<float> alpha;       // h x w
+  std::vector<float> foreground;  // h x w x c (c=3 default)
+  // height, width, channel for foreground and alpha
+  // must be (h,w,c) and setup before Reserve and Resize
+  // c is only for foreground if contain_foreground is true.
+  std::vector<int64_t> shape;
+  bool contain_foreground = false;
+
+  ResultType type = ResultType::MATTING;
+
+  MattingResult() {}
+  MattingResult(const MattingResult& res);
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
 
   std::string Str();
 };

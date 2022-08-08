@@ -4,14 +4,16 @@ cmake-build-debug
 cmake-build-release
 .vscode
 FastDeploy.cmake
-fastdeploy/core/config.h
 build-debug.sh
 *dist
 fastdeploy.egg-info
 .setuptools-cmake-build
 fastdeploy/version.py
+fastdeploy/core/config.h
+fastdeploy/c_lib_wrap.py
 fastdeploy/LICENSE*
 fastdeploy/ThirdPartyNotices*
 *.so*
 fastdeploy/libs/third_libs
 csrcs/fastdeploy/core/config.h
+csrcs/fastdeploy/pybind/main.cc

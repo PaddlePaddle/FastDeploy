@@ -33,13 +33,23 @@ void BindVisualize(pybind11::module& m) {
             vision::Visualize::VisFaceDetection(&im, result, line_size,
                                                 font_size);
           })
-      .def_static("vis_segmentation", [](pybind11::array& im_data,
-                                         vision::SegmentationResult& result,
-                                         pybind11::array& vis_im_data,
-                                         const int& num_classes) {
-        cv::Mat im = PyArrayToCvMat(im_data);
-        cv::Mat vis_im = PyArrayToCvMat(vis_im_data);
-        vision::Visualize::VisSegmentation(im, result, &vis_im, num_classes);
-      });
+      .def_static(
+          "vis_segmentation",
+          [](pybind11::array& im_data, vision::SegmentationResult& result,
+             pybind11::array& vis_im_data, const int& num_classes) {
+            cv::Mat im = PyArrayToCvMat(im_data);
+            cv::Mat vis_im = PyArrayToCvMat(vis_im_data);
+            vision::Visualize::VisSegmentation(im, result, &vis_im,
+                                               num_classes);
+          })
+      .def_static(
+          "vis_matting_alpha",
+          [](pybind11::array& im_data, vision::MattingResult& result,
+             pybind11::array& vis_im_data, bool remove_small_connected_area) {
+            cv::Mat im = PyArrayToCvMat(im_data);
+            cv::Mat vis_im = PyArrayToCvMat(vis_im_data);
+            vision::Visualize::VisMattingAlpha(im, result, &vis_im,
+                                               remove_small_connected_area);
+          });
 }
 }  // namespace fastdeploy

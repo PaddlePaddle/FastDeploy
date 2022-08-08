@@ -27,3 +27,5 @@ from . import rangilyu
 from . import linzaer
 from . import biubug6
 from . import ppogg
+from . import deepinsight
+from . import zhkkke
