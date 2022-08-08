@@ -225,8 +225,8 @@ void CommonElementwiseBroadcastForward(const FDTensor& x, const FDTensor& y,
                          y_dims_array.data(), out_dims_array.data(), max_dim,
                          axis);
 
-  const T* x_data = reinterpret_cast<const T*>(x.data.data());
-  const T* y_data = reinterpret_cast<const T*>(y.data.data());
+  const T* x_data = reinterpret_cast<const T*>(x.Data());
+  const T* y_data = reinterpret_cast<const T*>(y.Data());
 
   z->Allocate(out_dims_array, TypeToDataType<OutType>::dtype);
   OutType* out_data = reinterpret_cast<T*>(z->MutableData());
