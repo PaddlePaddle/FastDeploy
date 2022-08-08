@@ -45,7 +45,7 @@ class UltraFace(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(

@@ -85,7 +85,7 @@ class SCRFD(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -200,7 +200,7 @@ class InsightFaceRecognitionModel(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -209,7 +209,7 @@ class InsightFaceRecognitionModel(FastDeployModel):
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -218,7 +218,7 @@ class InsightFaceRecognitionModel(FastDeployModel):
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -281,7 +281,7 @@ class ArcFace(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -290,7 +290,7 @@ class ArcFace(FastDeployModel):
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -299,7 +299,7 @@ class ArcFace(FastDeployModel):
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -362,7 +362,7 @@ class CosFace(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -371,7 +371,7 @@ class CosFace(FastDeployModel):
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -380,7 +380,7 @@ class CosFace(FastDeployModel):
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -443,7 +443,7 @@ class PartialFC(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -452,7 +452,7 @@ class PartialFC(FastDeployModel):
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -461,7 +461,7 @@ class PartialFC(FastDeployModel):
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -524,7 +524,7 @@ class VPL(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, [list, tuple]),\
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
@@ -533,7 +533,7 @@ class VPL(FastDeployModel):
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
@@ -542,7 +542,7 @@ class VPL(FastDeployModel):
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, [list, tuple]),\
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
         assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
