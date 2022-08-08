@@ -225,5 +225,82 @@ std::string FaceRecognitionResult::Str() {
   return out;
 }
 
+MattingResult::MattingResult(const MattingResult& res) {
+  alpha.assign(res.alpha.begin(), res.alpha.end());
+  foreground.assign(res.foreground.begin(), res.foreground.end());
+  shape.assign(res.shape.begin(), res.shape.end());
+  contain_foreground = res.contain_foreground;
+}
+
+void MattingResult::Clear() {
+  std::vector<float>().swap(alpha);
+  std::vector<float>().swap(foreground);
+  std::vector<int64_t>().swap(shape);
+  contain_foreground = false;
+}
+
+void MattingResult::Reserve(int size) {
+  alpha.reserve(size);
+  if (contain_foreground) {
+    FDASSERT((shape.size() == 3),
+             "Please initial shape (h,w,c) before call Reserve.");
+    int c = static_cast<int>(shape[3]);
+    foreground.reserve(size * c);
+  }
+}
+
+void MattingResult::Resize(int size) {
+  alpha.resize(size);
+  if (contain_foreground) {
+    FDASSERT((shape.size() == 3),
+             "Please initial shape (h,w,c) before call Resize.");
+    int c = static_cast<int>(shape[3]);
+    foreground.resize(size * c);
+  }
+}
+
+std::string MattingResult::Str() {
+  std::string out;
+  out = "MattingResult[";
+  if (contain_foreground) {
+    out += "Foreground(true)";
+  } else {
+    out += "Foreground(false)";
+  }
+  out += ", Alpha(";
+  size_t numel = alpha.size();
+  if (numel <= 0) {
+    return out + "[Empty Result]";
+  }
+  // max, min, mean
+  float min_val = alpha.at(0);
+  float max_val = alpha.at(0);
+  float total_val = alpha.at(0);
+  for (size_t i = 1; i < numel; ++i) {
+    float val = alpha.at(i);
+    total_val += val;
+    if (val < min_val) {
+      min_val = val;
+    }
+    if (val > max_val) {
+      max_val = val;
+    }
+  }
+  float mean_val = total_val / static_cast<float>(numel);
+  // shape
+  std::string shape_str = "Shape(";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if ((i + 1) != shape.size()) {
+      shape_str += std::to_string(shape[i]) + ",";
+    } else {
+      shape_str += std::to_string(shape[i]) + ")";
+    }
+  }
+  out = out + "Numel(" + std::to_string(numel) + "), " + shape_str + ", Min(" +
+        std::to_string(min_val) + "), " + "Max(" + std::to_string(max_val) +
+        "), " + "Mean(" + std::to_string(mean_val) + "))]\n";
+  return out;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

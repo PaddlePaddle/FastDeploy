@@ -17,7 +17,8 @@ import os
 import sys
 
 try:
-    import paddle
+    # import paddle
+    pass
 except:
     pass
 

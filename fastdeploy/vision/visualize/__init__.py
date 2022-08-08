@@ -29,3 +29,11 @@ def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
 def vis_segmentation(im_data, seg_result, vis_im_data, num_classes=1000):
     C.vision.Visualize.vis_segmentation(im_data, seg_result, vis_im_data,
                                         num_classes)
+
+
+def vis_matting_alpha(im_data,
+                      matting_result,
+                      vis_im_data,
+                      remove_small_connected_area=False):
+    C.vision.Visualize.vis_matting_alpha(im_data, matting_result, vis_im_data,
+                                         remove_small_connected_area)
