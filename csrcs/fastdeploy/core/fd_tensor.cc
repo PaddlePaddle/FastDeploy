@@ -57,14 +57,14 @@ const void* FDTensor::Data() const {
   return data.data();
 }
 
-void FDTensor::SetExternalData(const std::vector<int>& new_shape,
+void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
 }
 
-void FDTensor::Allocate(const std::vector<int>& new_shape,
+void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
                         const FDDataType& data_type,
                         const std::string& tensor_name) {
   dtype = data_type;
