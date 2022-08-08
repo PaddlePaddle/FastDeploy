@@ -153,14 +153,7 @@ struct FASTDEPLOY_DECL Runtime {
 
   RuntimeOption option;
 
-  ~Runtime() {
-    if (backend_ != nullptr) {
-      delete backend_;
-      backend_ = nullptr;
-    }
-  }
-
  private:
-  BaseBackend* backend_ = nullptr;
+  std::unique_ptr<BaseBackend> backend_;
 };
 }  // namespace fastdeploy
