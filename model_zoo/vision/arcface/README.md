@@ -31,7 +31,7 @@ fastdeploy支持 [insightface](https://github.com/deepinsight/insightface/tree/m
 
 * 导出onnx格式文件
   ```bash
-  PYTHONPATH=. python ./torch2onnx.py partial_fc/pytorch/ms1mv3_arcface_r100_fp16/backbone.pth --output ms1mv3_arcface_r100.onnx --network r100 --simplify 1
+  PYTHONPATH=. python ./torch2onnx.py ms1mv3_arcface_r100_fp16/backbone.pth --output ms1mv3_arcface_r100.onnx --network r100 --simplify 1
   ```
 * 移动onnx文件到model_zoo/arcface的目录
   ```bash
