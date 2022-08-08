@@ -1,4 +1,4 @@
-import cpu_fastdeploy as fd
+import fastdeploy as fd
 import cv2
 
 # 下载模型和测试图片
