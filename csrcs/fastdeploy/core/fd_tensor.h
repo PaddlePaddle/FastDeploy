@@ -54,6 +54,8 @@ struct FASTDEPLOY_DECL FDTensor {
   // will copy to cpu store in `temporary_cpu_buffer`
   void* Data();
 
+  const void* Data() const;
+
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer
@@ -81,4 +83,4 @@ struct FASTDEPLOY_DECL FDTensor {
   explicit FDTensor(const std::string& tensor_name);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

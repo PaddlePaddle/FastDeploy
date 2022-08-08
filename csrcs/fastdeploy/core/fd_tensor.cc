@@ -50,6 +50,13 @@ void* FDTensor::Data() {
   return data.data();
 }
 
+const void* FDTensor::Data() const {
+  if (external_data_ptr != nullptr) {
+    return external_data_ptr;
+  }
+  return data.data();
+}
+
 void FDTensor::SetExternalData(const std::vector<int>& new_shape,
                                const FDDataType& data_type, void* data_buffer) {
   dtype = data_type;
