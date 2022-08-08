@@ -34,26 +34,25 @@
 
 ## 特性
 
-### 📦**开箱即用的推理部署工具链，支持云边端、多硬件、多平台部署**
+### 📦开箱即用的推理部署工具链，支持云边端、多硬件、多平台部署
 
-- 网页端点选下载、PIP 安装一行命令，快速下载多种类型SDK安装包
-- 云端（含服务器、数据中心）：
-  - 支持 Window、Linux 操作系统
-  - 支持 Python、C++ 编程语言
-- 边缘端：
-  - 支持 NVIDIA Jetson 等边缘设备
-- 端侧（含移动端）
-  - 支持 iOS、Android 移动端
-  - 支持 ARM CPU 端侧设备
-- 支持主流硬件
+- 支持 PIP 安装，一行命令快速下载SDK安装包，开箱即用
+- 服务器与云端部署：
+  - 跨平台：同时支持 Windows、Linux 操作系统
+  - 多语言：提供 Python、C++ 多种语言部署示例
+- 移动与边缘端侧部署：
+  - 支持 iOS、Android 移动端部署
+  - 支持 ARM Linux、NVIDIA Jetson 系列等边缘设备
+- 覆盖主流AI硬件：
   - 支持 Intel CPU 系列（含酷睿、至强等）
   - 支持 ARM CPU 全系（含高通、MTK、RK等）
-  - 支持 NVIDIA GPU 全系（含 V100、T4、Jetson 等）
+  - 支持 NVIDIA GPU 全系（含 A100、V100、T4、Jetson 等）
 
-## 服务器端
 
-### 🤗**服务端：丰富的预训练模型，轻松下载SDK搞定推理部署**
 
+### 🤗丰富的预置模型与高性能部署示例
+
+#### 服务器与云端（含Jetson）
 
 | <font size=2> 任务场景              | <font size=2> 模型                                          | <font size=2>  大小(MB) | <font size=2>边缘端                        | <font size=2>服务器/云端             | <font size=2>服务器/云端  | <font size=2> 服务器/云端      | <font size=2> 服务器/云端  |
 | ------------------------------- | --------------------------------------------------------- | --------------------- | --------------------------------------- | ------------------------------- | -------------------- | ------------------------- | --------------------- |
@@ -81,10 +80,7 @@
 
 
 
-### 服务器端快速开始(CPU/GPU/Jetson)
-
-
-### 方式：pip安装
+#### 快速开始（服务器与云端部署）
 
 开发者可以通过pip安装`fastdeploy-python`来获取最新的下载链接
 
@@ -125,12 +121,10 @@ pip install fastdeploy-python --upgrade
     - `soc`: 部署硬件，支持 x86/x86-NVIDIA-GPU/ARM/Jetson
     - `save_dir`: SDK下载保存目录
 
-## 端侧
-
-### 🤗**移动端和端侧：丰富的预训练模型，轻松下载SDK搞定推理部署**
+### 📱轻量化SDK快速实现端侧AI推理部署
 
 
-| <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>端侧       | <font size=2>移动端       | <font size=2> 移动端     |
+| <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>边缘端       | <font size=2>移动端       | <font size=2> 移动端     |
 | ------------------ | ---------------------------- | --------------------- | --------------------- | ---------------------- | --------------------- |
 | ----               | ---                          | ---                   | <font size=2>  Linux  | <font size=2> Android  | <font size=2>  iOS    |
 | -----              | ----                         | ---                   | <font size=2> ARM CPU | <font size=2>  ARM CPU | <font size=2> ARM CPU |
@@ -169,24 +163,23 @@ pip install fastdeploy-python --upgrade
 |                    | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
 |                    | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |
 
-## 
+ 
+#### SDK快速使用
 
-## SDK使用(ARM CPU)
+##### 1.边缘侧部署
 
-### 1 端侧部署
-
-- ArmLinux 系统(ARM CPU)  
+- ARM Linux 系统 
   - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
   - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
   - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
   - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
 
-### 2 移动端部署
+##### 2.移动端部署
 
 - [iOS 系统部署](./docs/iOS-SDK.md)
 - [Android 系统部署](./docs/Android-SDK.md)  
 
-### 3 自定义模型部署
+##### 3.自定义模型部署
 
 - [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
 
