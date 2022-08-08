@@ -38,7 +38,10 @@ void ShareTensorFromCpu(paddle_infer::Tensor* tensor, FDTensor& fd_tensor) {
 void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
                      FDTensor* fd_tensor) {
   auto fd_dtype = PaddleDataTypeToFD(tensor->type());
-  fd_tensor->Allocate(tensor->shape(), fd_dtype, tensor->name());
+  std::vector<int64_t> shape;
+  auto tmp_shape = tensor->shape();
+  shape.assign(tmp_shape.begin(), tmp_shape.end());
+  fd_tensor->Allocate(shape, fd_dtype, tensor->name());
   if (fd_tensor->dtype == FDDataType::FP32) {
     tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
     return;

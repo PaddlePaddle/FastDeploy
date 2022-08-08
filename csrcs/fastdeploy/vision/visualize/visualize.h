@@ -32,6 +32,9 @@ class FASTDEPLOY_DECL Visualize {
   static void VisSegmentation(const cv::Mat& im,
                               const SegmentationResult& result,
                               cv::Mat* vis_img, const int& num_classes = 1000);
+  static void VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
+                              cv::Mat* vis_img,
+                              bool remove_small_connected_area = false);
 };
 
 }  // namespace vision
