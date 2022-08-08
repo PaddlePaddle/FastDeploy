@@ -76,7 +76,6 @@
 | <font size=2>OCR                | [PP-OCRv1](./model_zoo/vison/ppocrv1/README.md)           | 2.3+4.4               | ✅                                       | ✅                               | ✅                    | ✅                         | ✅                     |
 |                                 | [PP-OCRv2](./model_zoo/vison/ppocrv2/README.md)           | 2.3+4.4               | ✅                                       | ✅                               | ✅                    | ✅                         | ✅                     |
 |                                 | [PP-OCRv3](./model_zoo/vison/ppocrv3/README.md)           | 2.4+10.6              | ✅                                       | ✅                               | ✅                    | ✅                         | ✅                     |
-| </font>                         |                                                           |                       |                                         |                                 |                      |                           |                       |
 
 
 
@@ -163,10 +162,8 @@ pip install fastdeploy-python --upgrade
 |                    | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
 |                    | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |
 
- 
-#### SDK快速使用
 
-##### 1.边缘侧部署
+#### 边缘侧部署
 
 - ARM Linux 系统 
   - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
@@ -174,12 +171,12 @@ pip install fastdeploy-python --upgrade
   - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
   - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
 
-##### 2.移动端部署
+#### 移动端部署
 
 - [iOS 系统部署](./docs/iOS-SDK.md)
 - [Android 系统部署](./docs/Android-SDK.md)  
 
-##### 3.自定义模型部署
+#### 自定义模型部署
 
 - [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
 
