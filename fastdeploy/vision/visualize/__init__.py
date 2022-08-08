@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from ... import fastdeploy_main as C
+from ... import c_lib_wrap as C
 
 
 def vis_detection(im_data, det_result, line_size=1, font_size=0.5):
