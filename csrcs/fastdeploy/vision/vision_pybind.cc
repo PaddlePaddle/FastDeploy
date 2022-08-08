@@ -29,6 +29,7 @@ void BindLinzaer(pybind11::module& m);
 void BindBiubug6(pybind11::module& m);
 void BindPpogg(pybind11::module& m);
 void BindDeepInsight(pybind11::module& m);
+void BindZHKKKe(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -74,6 +75,15 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::FaceRecognitionResult::Str)
       .def("__str__", &vision::FaceRecognitionResult::Str);
 
+  pybind11::class_<vision::MattingResult>(m, "MattingResult")
+      .def(pybind11::init())
+      .def_readwrite("alpha", &vision::MattingResult::alpha)
+      .def_readwrite("foreground", &vision::MattingResult::foreground)
+      .def_readwrite("shape", &vision::MattingResult::shape)
+      .def_readwrite("contain_foreground", &vision::MattingResult::shape)
+      .def("__repr__", &vision::MattingResult::Str)
+      .def("__str__", &vision::MattingResult::Str);
+
   BindPPCls(m);
   BindPPDet(m);
   BindPPSeg(m);
@@ -87,6 +97,7 @@ void BindVision(pybind11::module& m) {
   BindBiubug6(m);
   BindPpogg(m);
   BindDeepInsight(m);
+  BindZHKKKe(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif
