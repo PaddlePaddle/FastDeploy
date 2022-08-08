@@ -23,6 +23,9 @@
 #include "fastdeploy/vision/deepinsight/partial_fc.h"
 #include "fastdeploy/vision/deepinsight/scrfd.h"
 #include "fastdeploy/vision/deepinsight/vpl.h"
+#include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
+#include "fastdeploy/vision/detection/contrib/yolor.h"
+#include "fastdeploy/vision/detection/contrib/yolov7.h"
 #include "fastdeploy/vision/linzaer/ultraface.h"
 #include "fastdeploy/vision/megvii/yolox.h"
 #include "fastdeploy/vision/meituan/yolov6.h"
@@ -32,9 +35,6 @@
 #include "fastdeploy/vision/ppseg/model.h"
 #include "fastdeploy/vision/rangilyu/nanodet_plus.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
-#include "fastdeploy/vision/wongkinyiu/scaledyolov4.h"
-#include "fastdeploy/vision/wongkinyiu/yolor.h"
-#include "fastdeploy/vision/wongkinyiu/yolov7.h"
 #include "fastdeploy/vision/zhkkke/modnet.h"
 #endif
 

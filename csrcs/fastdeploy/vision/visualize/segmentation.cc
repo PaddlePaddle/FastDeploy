@@ -21,24 +21,24 @@
 namespace fastdeploy {
 namespace vision {
 
-void Visualize::VisSegmentation(const cv::Mat& im,
-                                const SegmentationResult& result,
-                                cv::Mat* vis_img, const int& num_classes) {
-  auto color_map = GetColorMap(num_classes);
+cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
+                                   const SegmentationResult& result) {
+  auto color_map = GetColorMap();
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
-  *vis_img = cv::Mat::zeros(height, width, CV_8UC3);
+  auto vis_img = cv::Mat(height, width, CV_8UC3);
 
   int64_t index = 0;
   for (int i = 0; i < height; i++) {
     for (int j = 0; j < width; j++) {
       int category_id = result.label_map[index++];
-      vis_img->at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img->at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img->at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
+      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
+      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
     }
   }
-  cv::addWeighted(im, .5, *vis_img, .5, 0, *vis_img);
+  cv::addWeighted(im, .5, vis_img, .5, 0, vis_img);
+  return vis_img;
 }
 
 }  // namespace vision

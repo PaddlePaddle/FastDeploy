@@ -27,7 +27,7 @@ namespace vision {
 
 enum Layout { HWC, CHW };
 
-struct Mat {
+struct FASTDEPLOY_DECL Mat {
   explicit Mat(cv::Mat& mat) {
     cpu_mat = mat;
     device = Device::CPU;
@@ -76,5 +76,5 @@ struct Mat {
   Device device = Device::CPU;
 };
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

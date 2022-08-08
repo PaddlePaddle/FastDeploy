@@ -25,16 +25,15 @@ class FASTDEPLOY_DECL Visualize {
   static int num_classes_;
   static std::vector<int> color_map_;
   static const std::vector<int>& GetColorMap(int num_classes = 1000);
-  static void VisDetection(cv::Mat* im, const DetectionResult& result,
-                           int line_size = 2, float font_size = 0.5f);
-  static void VisFaceDetection(cv::Mat* im, const FaceDetectionResult& result,
-                               int line_size = 2, float font_size = 0.5f);
-  static void VisSegmentation(const cv::Mat& im,
-                              const SegmentationResult& result,
-                              cv::Mat* vis_img, const int& num_classes = 1000);
-  static void VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
-                              cv::Mat* vis_img,
-                              bool remove_small_connected_area = false);
+  static cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
+                              int line_size = 2, float font_size = 0.5f);
+  static cv::Mat VisFaceDetection(const cv::Mat& im,
+                                  const FaceDetectionResult& result,
+                                  int line_size = 2, float font_size = 0.5f);
+  static cv::Mat VisSegmentation(const cv::Mat& im,
+                                 const SegmentationResult& result);
+  static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
+                                 bool remove_small_connected_area = false);
 };
 
 }  // namespace vision
