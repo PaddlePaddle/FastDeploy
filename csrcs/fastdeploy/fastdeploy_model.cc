@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -53,7 +54,7 @@ bool FastDeployModel::InitRuntime() {
           << std::endl;
       return false;
     }
-    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    runtime_ = utils::make_unique<Runtime>();
     if (!runtime_->Init(runtime_option)) {
       return false;
     }
