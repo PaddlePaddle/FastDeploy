@@ -17,6 +17,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
+import shutil
+import os
+
+PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy")
+assert PACKAGE_NAME in [
+    "cpu_fastdeploy", "gpu_fastdeploy", "fastdeploy"
+], "Only support PACKAGE_NAME set to ['cpu_fastdeploy', 'gpu_fastdeploy', 'fastdeploy'] now."
+if PACKAGE_NAME != "fastdeploy":
+    if os.path.exists(PACKAGE_NAME):
+        shutil.rmtree(PACKAGE_NAME)
+    shutil.copytree("fastdeploy", PACKAGE_NAME)
 
 from distutils.spawn import find_executable
 from distutils import sysconfig, log
@@ -28,7 +39,6 @@ import setuptools.command.build_ext
 from collections import namedtuple
 from contextlib import contextmanager
 import glob
-import os
 import shlex
 import subprocess
 import sys
@@ -39,7 +49,6 @@ import multiprocessing
 with open("requirements.txt") as fin:
     REQUIRED_PACKAGES = fin.read()
 
-PACKAGE_NAME = "fastdeploy"
 setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
@@ -53,11 +62,14 @@ setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
                                             "/usr/local/cuda")
+setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
+setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
+
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
-SRC_DIR = os.path.join(TOP_DIR, "fastdeploy")
+SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
 CMAKE_BUILD_DIR = os.path.join(TOP_DIR, '.setuptools-cmake-build')
 
 WINDOWS = (os.name == 'nt')
@@ -237,8 +249,8 @@ class build_py(setuptools.command.build_py.build_py):
         self.run_command('cmake_build')
 
         generated_python_files = \
-            glob.glob(os.path.join(CMAKE_BUILD_DIR, 'fastdeploy', '*.py')) + \
-            glob.glob(os.path.join(CMAKE_BUILD_DIR, 'fastdeploy', '*.pyi'))
+            glob.glob(os.path.join(CMAKE_BUILD_DIR, PACKAGE_NAME, '*.py')) + \
+            glob.glob(os.path.join(CMAKE_BUILD_DIR, PACKAGE_NAME, '*.pyi'))
 
         for src in generated_python_files:
             dst = os.path.join(TOP_DIR, os.path.relpath(src, CMAKE_BUILD_DIR))
@@ -273,7 +285,7 @@ class build_ext(setuptools.command.build_ext.build_ext):
                     lib_path = release_lib_dir
             src = os.path.join(lib_path, filename)
             dst = os.path.join(
-                os.path.realpath(self.build_lib), "fastdeploy", filename)
+                os.path.realpath(self.build_lib), PACKAGE_NAME, filename)
             self.copy_file(src, dst)
 
 
@@ -305,7 +317,8 @@ cmdclass = {
 
 ext_modules = [
     setuptools.Extension(
-        name=str(PACKAGE_NAME + '.fastdeploy_main'), sources=[]),
+        name=str(PACKAGE_NAME + '.' + setup_configs["PY_LIBRARY_NAME"]),
+        sources=[]),
 ]
 
 ################################################################################
@@ -313,7 +326,10 @@ ext_modules = [
 ################################################################################
 
 # no need to do fancy stuff so far
-packages = setuptools.find_packages()
+if PACKAGE_NAME != "fastdeploy":
+    packages = setuptools.find_packages(exclude=['fastdeploy*'])
+else:
+    packages = setuptools.find_packages()
 
 ################################################################################
 # Test
@@ -335,8 +351,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         sys.exit(0)
     import shutil
 
-    shutil.copy("ThirdPartyNotices.txt", "fastdeploy")
-    shutil.copy("LICENSE", "fastdeploy")
+    shutil.copy("ThirdPartyNotices.txt", PACKAGE_NAME)
+    shutil.copy("LICENSE", PACKAGE_NAME)
     depend_libs = list()
 
     # copy fastdeploy library
@@ -344,10 +360,11 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     for f in os.listdir(".setuptools-cmake-build"):
         if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):
             continue
-        if f.count("fastdeploy") > 0:
+        if f.count(PACKAGE_NAME) > 0:
             shutil.copy(
-                os.path.join(".setuptools-cmake-build", f), "fastdeploy/libs")
-        if f.count("fastdeploy_main.cpython-"):
+                os.path.join(".setuptools-cmake-build", f),
+                os.path.join(PACKAGE_NAME, "libs"))
+        if f.count(".cpython-") > 0:
             pybind_so_file = os.path.join(".setuptools-cmake-build", f)
 
     if not os.path.exists(".setuptools-cmake-build/third_libs/install"):
@@ -355,11 +372,11 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             "Cannot find directory third_libs/install in .setuptools-cmake-build."
         )
 
-    if os.path.exists("fastdeploy/libs/third_libs"):
-        shutil.rmtree("fastdeploy/libs/third_libs")
+    if os.path.exists(os.path.join(PACKAGE_NAME, "libs/third_libs")):
+        shutil.rmtree(os.path.join(PACKAGE_NAME, "libs/third_libs"))
     shutil.copytree(
         ".setuptools-cmake-build/third_libs/install",
-        "fastdeploy/libs/third_libs",
+        os.path.join(PACKAGE_NAME, "libs/third_libs"),
         symlinks=True)
 
     third_party_path = os.path.join(".setuptools-cmake-build", "third_party")
@@ -372,12 +389,12 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                 release_dir = os.path.join(lib_dir_name, f1)
                 if f1 == "Release" and not os.path.isfile(release_dir):
                     if os.path.exists(
-                            os.path.join("fastdeploy/libs/third_libs", f)):
+                            os.path.join(PACKAGE_NAME, "libs/third_libs", f)):
                         shutil.rmtree(
-                            os.path.join("fastdeploy/libs/third_libs", f))
+                            os.path.join(PACKAGE_NAME, "libs/third_libs", f))
                     shutil.copytree(release_dir,
-                                    os.path.join("fastdeploy/libs/third_libs",
-                                                 f, "lib"))
+                                    os.path.join(PACKAGE_NAME,
+                                                 "libs/third_libs", f, "lib"))
 
     if platform.system().lower() == "windows":
         release_dir = os.path.join(".setuptools-cmake-build", "Release")
@@ -387,7 +404,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                 continue
             if filename.endswith(".pyd"):
                 continue
-            shutil.copy(filename, "fastdeploy/libs")
+            shutil.copy(filename, os.path.join(PACKAGE_NAME, "libs"))
 
     if platform.system().lower() == "linux":
         rpaths = ["$ORIGIN:$ORIGIN/libs"]
@@ -445,9 +462,10 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                 command) == 0, "command execute failed! command: {}".format(
                     command)
 
-    all_files = get_all_files("fastdeploy/libs")
+    all_files = get_all_files(os.path.join(PACKAGE_NAME, "libs"))
     for f in all_files:
-        package_data[PACKAGE_NAME].append(os.path.relpath(f, "fastdeploy"))
+        package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
+
 setuptools.setup(
     name=PACKAGE_NAME,
     version=VersionInfo.version,
