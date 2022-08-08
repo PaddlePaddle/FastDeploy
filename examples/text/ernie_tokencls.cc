@@ -54,12 +54,8 @@ void Softmax(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
     }
   };
 
-  std::vector<int32_t> output_shape;
-  for (int i = 0; i < input.shape.size(); ++i) {
-    output_shape.push_back(input.shape[i]);
-  }
-  output->Allocate(output_shape, input.dtype);
-  int label_num = output_shape.back();
+  output->Allocate(input.shape, input.dtype);
+  int label_num = output->shape.back();
   int batch_size = input.Numel() / label_num;
   int offset = 0;
   const T* input_ptr = reinterpret_cast<const T*>(input.Data());
@@ -73,11 +69,8 @@ void Softmax(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
 // Only useful for axis = -1
 template <typename T>
 void Max(const fastdeploy::FDTensor& input, fastdeploy::FDTensor* output) {
-  std::vector<int32_t> output_shape;
-  for (int i = 0; i < input.shape.size() - 1; ++i) {
-    output_shape.push_back(input.shape[i]);
-  }
-  output_shape.push_back(1);
+  auto output_shape = input.shape;
+  output_shape.back() = 1;
   output->Allocate(output_shape, input.dtype);
   int batch_size = output->Numel();
   int label_num = input.shape.back();
