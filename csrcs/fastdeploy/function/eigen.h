@@ -97,6 +97,7 @@ struct EigenVector : public EigenTensor<T, 1, MajorType, IndexType> {
 };
 
 class EigenDeviceWrapper {
+ public:
   static std::shared_ptr<EigenDeviceWrapper> GetInstance();
   const Eigen::DefaultDevice* GetDevice() const;
 
