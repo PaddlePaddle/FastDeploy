@@ -204,7 +204,7 @@ FDTensor input, output;
 std::array<bool, 6> bool_inputs = {false, false, true, true, false, true};
 input.SetExternalData({2, 3}, FDDataType::INT32, bool_inputs.data());
 
-// Calculate the any value for axis 0 of `inputs`
+// Calculate the all value for axis 0 of `inputs`
 // The output result would be [[false, false, true]].
 All(input, &output, {0}, /* keep_dim = */true);
 ```
