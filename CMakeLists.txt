@@ -47,6 +47,7 @@ option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
+option(WITH_TESTING "Whether to compile with unittest." OFF)
 
 # Please don't open this flag now, some bugs exists.
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
@@ -55,6 +56,12 @@ option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
 option(WITH_TEXT_EXAMPLES "Whether to build fastdeply with text examples" OFF)
+
+# config GIT_URL with github mirrors to speed up dependent repos clone
+option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
+if(NOT GIT_URL)
+    set(GIT_URL "https://github.com")
+endif()
 
 # Check for 32bit system
 if(WIN32)
@@ -274,6 +281,14 @@ if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   if (NOT WITH_VISION_EXAMPLES)
     add_subdirectory(examples)
   endif()
+endif()
+
+if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
+  add_definitions(-DWITH_TESTING)
+  include(external/gtest.cmake)
+  include(external/gflags.cmake)
+  include(external/glog.cmake)
+  add_subdirectory(tests)
 endif()
 
 include(external/summary.cmake)

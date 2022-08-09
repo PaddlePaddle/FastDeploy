@@ -162,8 +162,6 @@ void ReduceKernelImpl(const FDTensor& input, FDTensor* output,
 template <typename OutT, typename Functor>
 void BoolReduceKernel(const FDTensor& input, const std::vector<int64_t>& dims,
                       bool keep_dim, bool reduce_all, FDTensor* output) {
-  output->Allocate({1}, TypeToDataType<OutT>::dtype);
-
   // The dims has full dim, set the reduce_all is True
   const auto& input_dim_size = input.shape.size();
   std::set<int> dims_set(dims.begin(), dims.end());
