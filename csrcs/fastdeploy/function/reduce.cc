@@ -21,6 +21,8 @@
 
 namespace fastdeploy {
 
+#ifdef ENABLE_FDTENSOR_FUNC
+
 template <typename T, size_t D, size_t R_D, typename Functor>
 void ReduceFunctor(const FDTensor& input, FDTensor* output,
                    const std::vector<int64_t>& dims, bool keep_dim) {
@@ -239,5 +241,6 @@ void Prod(const FDTensor& x, FDTensor* out, const std::vector<int64_t>& dims,
           bool keep_dim, bool reduce_all) {
   Reduce<ProdFunctor>(x, out, dims, keep_dim, reduce_all);
 }
+#endif
 
 }  // namespace fastdeploy

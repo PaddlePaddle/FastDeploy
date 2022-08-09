@@ -18,6 +18,7 @@
 
 namespace fastdeploy {
 
+#ifdef ENABLE_FDTENSOR_FUNC
 /** Excute the maximum operation for input FDTensor along given dims.
     @param x The input tensor.
     @param out The output tensor which stores the result.
@@ -95,4 +96,5 @@ FASTDEPLOY_DECL void Prod(const FDTensor& x, FDTensor* out,
                           const std::vector<int64_t>& dims,
                           bool keep_dim = false, bool reduce_all = false);
 
+#endif
 }  // namespace fastdeploy

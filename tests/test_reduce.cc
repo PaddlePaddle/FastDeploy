@@ -20,6 +20,8 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
+
+#ifdef ENABLE_FDTENSOR_FUNC
 TEST(fastdeploy, reduce_max) {
   FDTensor input, output;
 
@@ -264,5 +266,5 @@ TEST(fastdeploy, reduce_any) {
   CheckData(reinterpret_cast<const bool*>(output.Data()),
             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
-
+#endif
 }  // namespace fastdeploy

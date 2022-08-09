@@ -48,6 +48,8 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+# Will remove it later
+option(ENABLE_FDTENSOR_FUNC "Whether to compile with function of FDTensor." OFF)
 
 # Please don't open this flag now, some bugs exists.
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
@@ -115,13 +117,14 @@ endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
+file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${FDTENSOR_FUNC_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -228,6 +231,11 @@ if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
   include(external/faster_tokenizer.cmake)
+endif()
+
+if (ENABLE_FDTENSOR_FUNC)
+  add_definitions(-DENABLE_FDTENSOR_FUNC)
+  list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_SRCS})
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
