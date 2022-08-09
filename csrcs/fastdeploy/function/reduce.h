@@ -18,30 +18,79 @@
 
 namespace fastdeploy {
 
+/** Excute the maximum operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Max(const FDTensor& x, FDTensor* out,
                          const std::vector<int64_t>& dims,
                          bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the minimum operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Min(const FDTensor& x, FDTensor* out,
                          const std::vector<int64_t>& dims,
                          bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the sum operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Sum(const FDTensor& x, FDTensor* out,
                          const std::vector<int64_t>& dims,
                          bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the all operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void All(const FDTensor& x, FDTensor* out,
                          const std::vector<int64_t>& dims,
                          bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the any operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Any(const FDTensor& x, FDTensor* out,
                          const std::vector<int64_t>& dims,
                          bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the mean operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Mean(const FDTensor& x, FDTensor* out,
                           const std::vector<int64_t>& dims,
                           bool keep_dim = false, bool reduce_all = false);
 
+/** Excute the product operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which will be reduced.
+    @param keep_dim Whether to keep the reduced dims, default false.
+    @param reduce_all Whether to reduce all dims, default false.
+*/
 FASTDEPLOY_DECL void Prod(const FDTensor& x, FDTensor* out,
                           const std::vector<int64_t>& dims,
                           bool keep_dim = false, bool reduce_all = false);
