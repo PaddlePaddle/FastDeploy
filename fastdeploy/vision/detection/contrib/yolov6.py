@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import c_lib_wrap as C
 
 
-class YOLOv5Lite(FastDeployModel):
+class YOLOv6(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,18 +26,18 @@ class YOLOv5Lite(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(YOLOv5Lite, self).__init__(runtime_option)
+        super(YOLOv6, self).__init__(runtime_option)
 
-        self._model = C.vision.ppogg.YOLOv5Lite(
+        self._model = C.vision.detection.YOLOv6(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOv5Lite initialize failed."
+        assert self.initialized, "YOLOv6 initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟YOLOv5Lite模型有关的属性封装
+    # 一些跟YOLOv6模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
@@ -66,14 +66,6 @@ class YOLOv5Lite(FastDeployModel):
     @property
     def max_wh(self):
         return self._model.max_wh
-
-    @property
-    def is_decode_exported(self):
-        return self._model.is_decode_exported
-
-    @property
-    def anchor_config(self):
-        return self._model.anchor_config
 
     @size.setter
     def size(self, wh):
@@ -122,18 +114,3 @@ class YOLOv5Lite(FastDeployModel):
         assert isinstance(
             value, float), "The value to set `max_wh` must be type of float."
         self._model.max_wh = value
-
-    @is_decode_exported.setter
-    def is_decode_exported(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `is_decode_exported` must be type of bool."
-        self._model.is_decode_exported = value
-
-    @anchor_config.setter
-    def anchor_config(self, anchor_config_val):
-        assert isinstance(anchor_config_val, list),\
-            "The value to set `anchor_config` must be type of tuple or list."
-        assert isinstance(anchor_config_val[0], list),\
-            "The value to set `anchor_config` must be 2-dimensions tuple or list"
-        self._model.anchor_config = anchor_config_val

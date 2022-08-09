@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import c_lib_wrap as C
 
 
-class RetinaFace(FastDeployModel):
+class PartialFC(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,38 +26,37 @@ class RetinaFace(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(RetinaFace, self).__init__(runtime_option)
+        super(PartialFC, self).__init__(runtime_option)
 
-        self._model = C.vision.biubug6.RetinaFace(
+        self._model = C.vision.faceid.PartialFC(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "RetinaFace initialize failed."
+        assert self.initialized, "PartialFC initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.7, nms_iou_threshold=0.3):
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
+    def predict(self, input_image):
+        return self._model.predict(input_image)
 
     # 一些跟模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [640, 480]改变预处理时resize的大小（前提是模型支持）
+    # 多数是预处理相关，可通过修改如model.size = [112, 112]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
         return self._model.size
 
     @property
-    def variance(self):
-        return self._model.variance
+    def alpha(self):
+        return self._model.alpha
 
     @property
-    def downsample_strides(self):
-        return self._model.downsample_strides
+    def beta(self):
+        return self._model.beta
 
     @property
-    def min_sizes(self):
-        return self._model.min_sizes
+    def swap_rb(self):
+        return self._model.swap_rb
 
     @property
-    def landmarks_per_face(self):
-        return self._model.landmarks_per_face
+    def l2_normalize(self):
+        return self._model.l2_normalize
 
     @size.setter
     def size(self, wh):
@@ -68,31 +67,33 @@ class RetinaFace(FastDeployModel):
             len(wh))
         self._model.size = wh
 
-    @variance.setter
-    def variance(self, value):
-        assert isinstance(v, (list, tuple)),\
-            "The value to set `variance` must be type of tuple or list."
-        assert len(value) == 2,\
-            "The value to set `variance` must contatins 2 elements".format(
+    @alpha.setter
+    def alpha(self, value):
+        assert isinstance(value, (list, tuple)),\
+            "The value to set `alpha` must be type of tuple or list."
+        assert len(value) == 3,\
+            "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
             len(value))
-        self._model.variance = value
+        self._model.alpha = value
 
-    @downsample_strides.setter
-    def downsample_strides(self, value):
+    @beta.setter
+    def beta(self, value):
+        assert isinstance(value, (list, tuple)),\
+            "The value to set `beta` must be type of tuple or list."
+        assert len(value) == 3,\
+            "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
+            len(value))
+        self._model.beta = value
+
+    @swap_rb.setter
+    def swap_rb(self, value):
+        assert isinstance(
+            value, bool), "The value to set `swap_rb` must be type of bool."
+        self._model.swap_rb = value
+
+    @l2_normalize.setter
+    def l2_normalize(self, value):
         assert isinstance(
             value,
-            list), "The value to set `downsample_strides` must be type of list."
-        self._model.downsample_strides = value
-
-    @min_sizes.setter
-    def min_sizes(self, value):
-        assert isinstance(
-            value, list), "The value to set `min_sizes` must be type of list."
-        self._model.min_sizes = value
-
-    @landmarks_per_face.setter
-    def landmarks_per_face(self, value):
-        assert isinstance(
-            value,
-            int), "The value to set `landmarks_per_face` must be type of int."
-        self._model.landmarks_per_face = value
+            bool), "The value to set `l2_normalize` must be type of bool."
+        self._model.l2_normalize = value

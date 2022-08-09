@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import c_lib_wrap as C
 
 
-class MODNet(FastDeployModel):
+class VPL(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,18 +26,18 @@ class MODNet(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(MODNet, self).__init__(runtime_option)
+        super(VPL, self).__init__(runtime_option)
 
-        self._model = C.vision.zhkkke.MODNet(
-            model_file, params_file, self._runtime_option, model_format)
+        self._model = C.vision.faceid.VPL(model_file, params_file,
+                                          self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "MODNet initialize failed."
+        assert self.initialized, "VPL initialize failed."
 
     def predict(self, input_image):
         return self._model.predict(input_image)
 
     # 一些跟模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [256, 256]改变预处理时resize的大小（前提是模型支持）
+    # 多数是预处理相关，可通过修改如model.size = [112, 112]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
         return self._model.size
@@ -53,6 +53,10 @@ class MODNet(FastDeployModel):
     @property
     def swap_rb(self):
         return self._model.swap_rb
+
+    @property
+    def l2_normalize(self):
+        return self._model.l2_normalize
 
     @size.setter
     def size(self, wh):
@@ -86,3 +90,10 @@ class MODNet(FastDeployModel):
         assert isinstance(
             value, bool), "The value to set `swap_rb` must be type of bool."
         self._model.swap_rb = value
+
+    @l2_normalize.setter
+    def l2_normalize(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `l2_normalize` must be type of bool."
+        self._model.l2_normalize = value

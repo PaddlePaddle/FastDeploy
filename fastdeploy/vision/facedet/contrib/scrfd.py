@@ -18,7 +18,7 @@ from ... import FastDeployModel, Frontend
 from ... import c_lib_wrap as C
 
 
-class YOLOv6(FastDeployModel):
+class SCRFD(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,19 +26,19 @@ class YOLOv6(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(YOLOv6, self).__init__(runtime_option)
+        super(SCRFD, self).__init__(runtime_option)
 
-        self._model = C.vision.meituan.YOLOv6(
+        self._model = C.vision.facedet.SCRFD(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOv6 initialize failed."
+        assert self.initialized, "SCRFD initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
+    def predict(self, input_image, conf_threshold=0.7, nms_iou_threshold=0.3):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    # 一些跟YOLOv6模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
+    # 一些跟SCRFD模型有关的属性封装
+    # 多数是预处理相关，可通过修改如model.size = [640, 640]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
         return self._model.size
@@ -64,8 +64,24 @@ class YOLOv6(FastDeployModel):
         return self._model.stride
 
     @property
-    def max_wh(self):
-        return self._model.max_wh
+    def downsample_strides(self):
+        return self._model.downsample_strides
+
+    @property
+    def landmarks_per_face(self):
+        return self._model.landmarks_per_face
+
+    @property
+    def use_kps(self):
+        return self._model.use_kps
+
+    @property
+    def max_nms(self):
+        return self._model.max_nms
+
+    @property
+    def num_anchors(self):
+        return self._model.num_anchors
 
     @size.setter
     def size(self, wh):
@@ -109,8 +125,34 @@ class YOLOv6(FastDeployModel):
             value, int), "The value to set `stride` must be type of int."
         self._model.stride = value
 
-    @max_wh.setter
-    def max_wh(self, value):
+    @downsample_strides.setter
+    def downsample_strides(self, value):
         assert isinstance(
-            value, float), "The value to set `max_wh` must be type of float."
-        self._model.max_wh = value
+            value,
+            list), "The value to set `downsample_strides` must be type of list."
+        self._model.downsample_strides = value
+
+    @landmarks_per_face.setter
+    def landmarks_per_face(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `landmarks_per_face` must be type of int."
+        self._model.landmarks_per_face = value
+
+    @use_kps.setter
+    def use_kps(self, value):
+        assert isinstance(
+            value, bool), "The value to set `use_kps` must be type of bool."
+        self._model.use_kps = value
+
+    @max_nms.setter
+    def max_nms(self, value):
+        assert isinstance(
+            value, int), "The value to set `max_nms` must be type of int."
+        self._model.max_nms = value
+
+    @num_anchors.setter
+    def num_anchors(self, value):
+        assert isinstance(
+            value, int), "The value to set `num_anchors` must be type of int."
+        self._model.num_anchors = value

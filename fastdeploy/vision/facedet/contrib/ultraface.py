@@ -28,7 +28,7 @@ class UltraFace(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(UltraFace, self).__init__(runtime_option)
 
-        self._model = C.vision.linzaer.UltraFace(
+        self._model = C.vision.facedet.UltraFace(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "UltraFace initialize failed."
