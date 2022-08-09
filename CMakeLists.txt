@@ -48,7 +48,7 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-# Will remove it later
+# TODO(zhoushunjie): Will remove it later.
 option(ENABLE_FDTENSOR_FUNC "Whether to compile with function of FDTensor." OFF)
 
 # Please don't open this flag now, some bugs exists.
