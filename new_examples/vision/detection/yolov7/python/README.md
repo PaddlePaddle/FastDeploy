@@ -12,7 +12,12 @@
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000087038.jpg
 
+# CPU推理
 python infer.py --model yolov7.onnx --image 000000087038.jpg --device cpu
+# GPU推理
+python infer.py --model yolov7.onnx --image 000000087038.jpg --device gpu
+# GPU上使用TensorRT推理
+python infer.py --model yolov7.onnx --image 000000087038.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
