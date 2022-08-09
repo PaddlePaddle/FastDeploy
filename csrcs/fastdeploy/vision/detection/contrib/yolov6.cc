@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/meituan/yolov6.h"
+#include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -20,11 +20,11 @@ namespace fastdeploy {
 
 namespace vision {
 
-namespace meituan {
+namespace detection {
 
-void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
-               bool _auto, bool scale_fill = false, bool scale_up = true,
-               int stride = 32) {
+void YOLOv6::LetterBox(Mat* mat, std::vector<int> size,
+                       std::vector<float> color, bool _auto, bool scale_fill,
+                       bool scale_up, int stride) {
   float scale = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
   if (!scale_up) {
@@ -262,6 +262,6 @@ bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace meituan
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

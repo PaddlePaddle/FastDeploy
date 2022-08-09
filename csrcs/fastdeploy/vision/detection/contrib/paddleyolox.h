@@ -22,18 +22,19 @@ namespace fastdeploy {
 
 namespace vision {
 
-namespace meituan {
+namespace detection {
 
-class FASTDEPLOY_DECL YOLOv6 : public FastDeployModel {
+class FASTDEPLOY_DECL PaddleYOLOX : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  YOLOv6(const std::string& model_file, const std::string& params_file = "",
-         const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::ONNX);
+  PaddleYOLOX(const std::string& model_file,
+              const std::string& params_file = "",
+              const RuntimeOption& custom_option = RuntimeOption(),
+              const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  std::string ModelName() const { return "meituan/YOLOv6"; }
+  std::string ModelName() const { return "PaddleYOLOX"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
@@ -51,17 +52,15 @@ class FASTDEPLOY_DECL YOLOv6 : public FastDeployModel {
   std::vector<int> size;
   // padding value, size should be same with Channels
   std::vector<float> padding_value;
-  // only pad to the minimum rectange which height and width is times of stride
-  bool is_mini_pad;
-  // while is_mini_pad = false and is_no_pad = true, will resize the image to
-  // the set size
-  bool is_no_pad;
-  // if is_scale_up is false, the input image only can be zoom out, the maximum
-  // resize scale cannot exceed 1.0
-  bool is_scale_up;
-  // padding stride, for is_mini_pad
-  int stride;
-  // for offseting the boxes by classes when using NMS, default 4096 in meituan/YOLOv6
+  // whether the model_file was exported with decode module. The official
+  // YOLOX/tools/export_onnx.py script will export ONNX file without
+  // decode module. Please set it 'true' manually if the model file
+  // was exported with decode module.
+  bool is_decode_exported;
+  // downsample strides for YOLOX to generate anchors, will take
+  // (8,16,32) as default values, might have stride=64.
+  std::vector<int> downsample_strides;
+  // for offseting the boxes by classes when using NMS, default 4096.
   float max_wh;
 
  private:
@@ -81,21 +80,29 @@ class FASTDEPLOY_DECL YOLOv6 : public FastDeployModel {
   // im_info 为预处理记录的信息，后处理用于还原box
   // conf_threshold 后处理时过滤box的置信度阈值
   // nms_iou_threshold 后处理时NMS设定的iou阈值
-  bool Postprocess(
+  bool Postprocess(FDTensor& infer_result, DetectionResult* result,
+                   const std::map<std::string, std::array<float, 2>>& im_info,
+                   float conf_threshold, float nms_iou_threshold);
+
+  // YOLOX的官方脚本默认导出不带decode模块的模型文件 需要在后处理进行decode
+  bool PostprocessWithDecode(
       FDTensor& infer_result, DetectionResult* result,
       const std::map<std::string, std::array<float, 2>>& im_info,
       float conf_threshold, float nms_iou_threshold);
 
   // 查看输入是否为动态维度的 不建议直接使用 不同模型的逻辑可能不一致
-  bool IsDynamicInput() const { return is_dynamic_input_; }         
+  bool IsDynamicInput() const { return is_dynamic_input_; }
 
-  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape or not.)
-  // meituan/YOLOv6 official 'export_onnx.py' script will export static ONNX by default.
-  // while is_dynamic_input if 'false', is_mini_pad will force 'false'. This value will
-  // auto check by fastdeploy after the internal Runtime already initialized. 
+  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape
+  // or not.)
+  // megvii/YOLOX official 'export_onnx.py' script will export static ONNX by
+  // default.
+  // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This
+  // value will
+  // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
 };
 
-}  // namespace meituan
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

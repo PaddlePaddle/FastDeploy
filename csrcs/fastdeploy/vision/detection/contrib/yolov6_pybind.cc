@@ -15,28 +15,23 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindUltralytics(pybind11::module& m) {
-  auto ultralytics_module =
-      m.def_submodule("ultralytics", "https://github.com/ultralytics/yolov5");
-  pybind11::class_<vision::ultralytics::YOLOv5, FastDeployModel>(
-      ultralytics_module, "YOLOv5")
+void BindYOLOv6(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOv6, FastDeployModel>(m, "YOLOv6")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::ultralytics::YOLOv5& self, pybind11::array& data,
+           [](vision::detection::YOLOv6& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::ultralytics::YOLOv5::size)
-      .def_readwrite("padding_value",
-                     &vision::ultralytics::YOLOv5::padding_value)
-      .def_readwrite("is_mini_pad", &vision::ultralytics::YOLOv5::is_mini_pad)
-      .def_readwrite("is_no_pad", &vision::ultralytics::YOLOv5::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::ultralytics::YOLOv5::is_scale_up)
-      .def_readwrite("stride", &vision::ultralytics::YOLOv5::stride)
-      .def_readwrite("max_wh", &vision::ultralytics::YOLOv5::max_wh)
-      .def_readwrite("multi_label", &vision::ultralytics::YOLOv5::multi_label);
+      .def_readwrite("size", &vision::detection::YOLOv6::size)
+      .def_readwrite("padding_value", &vision::detection::YOLOv6::padding_value)
+      .def_readwrite("is_mini_pad", &vision::detection::YOLOv6::is_mini_pad)
+      .def_readwrite("is_no_pad", &vision::detection::YOLOv6::is_no_pad)
+      .def_readwrite("is_scale_up", &vision::detection::YOLOv6::is_scale_up)
+      .def_readwrite("stride", &vision::detection::YOLOv6::stride)
+      .def_readwrite("max_wh", &vision::detection::YOLOv6::max_wh);
 }
 }  // namespace fastdeploy

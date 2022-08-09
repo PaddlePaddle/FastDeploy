@@ -15,27 +15,24 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindRangiLyu(pybind11::module& m) {
-  auto rangilyu_module =
-      m.def_submodule("rangilyu", "https://github.com/RangiLyu/nanodet");
-  pybind11::class_<vision::rangilyu::NanoDetPlus, FastDeployModel>(
-      rangilyu_module, "NanoDetPlus")
+void BindYOLOv5(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOv5, FastDeployModel>(m, "YOLOv5")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::rangilyu::NanoDetPlus& self, pybind11::array& data,
+           [](vision::detection::YOLOv5& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::rangilyu::NanoDetPlus::size)
-      .def_readwrite("padding_value",
-                     &vision::rangilyu::NanoDetPlus::padding_value)
-      .def_readwrite("keep_ratio", &vision::rangilyu::NanoDetPlus::keep_ratio)
-      .def_readwrite("downsample_strides",
-                     &vision::rangilyu::NanoDetPlus::downsample_strides)
-      .def_readwrite("max_wh", &vision::rangilyu::NanoDetPlus::max_wh)
-      .def_readwrite("reg_max", &vision::rangilyu::NanoDetPlus::reg_max);
+      .def_readwrite("size", &vision::detection::YOLOv5::size)
+      .def_readwrite("padding_value", &vision::detection::YOLOv5::padding_value)
+      .def_readwrite("is_mini_pad", &vision::detection::YOLOv5::is_mini_pad)
+      .def_readwrite("is_no_pad", &vision::detection::YOLOv5::is_no_pad)
+      .def_readwrite("is_scale_up", &vision::detection::YOLOv5::is_scale_up)
+      .def_readwrite("stride", &vision::detection::YOLOv5::stride)
+      .def_readwrite("max_wh", &vision::detection::YOLOv5::max_wh)
+      .def_readwrite("multi_label", &vision::detection::YOLOv5::multi_label);
 }
 }  // namespace fastdeploy

@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ultralytics/yolov5.h"
+#include "fastdeploy/vision/detection/contrib/yolov5.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ultralytics {
+namespace detection {
 
-void LetterBox(Mat* mat, std::vector<int> size, std::vector<float> color,
-               bool _auto, bool scale_fill = false, bool scale_up = true,
-               int stride = 32) {
+void YOLOv5::LetterBox(Mat* mat, std::vector<int> size,
+                       std::vector<float> color, bool _auto, bool scale_fill,
+                       bool scale_up, int stride) {
   float scale =
       std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
@@ -204,9 +204,9 @@ bool YOLOv5::Postprocess(
   }
 
   if (result->boxes.size() == 0) {
-    return  true;
+    return true;
   }
- 
+
   utils::NMS(result, nms_iou_threshold);
 
   // scale the boxes to the origin image shape
@@ -290,6 +290,6 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace ultralytics
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

@@ -19,6 +19,11 @@ namespace fastdeploy {
 void BindYOLOv7(pybind11::module& m);
 void BindScaledYOLOv4(pybind11::module& m);
 void BindYOLOR(pybind11::module& m);
+void BindYOLOv6(pybind11::module& m);
+void BindYOLOv5Lite(pybind11::module& m);
+void BindYOLOv5(pybind11::module& m);
+void BindPaddleYOLOX(pybind11::module& m);
+void BindNanoDetPlus(pybind11::module& m);
 
 void BindDetection(pybind11::module& m) {
   auto detection_module =
@@ -26,5 +31,10 @@ void BindDetection(pybind11::module& m) {
   BindYOLOv7(detection_module);
   BindScaledYOLOv4(detection_module);
   BindYOLOR(detection_module);
+  BindYOLOv6(detection_module);
+  BindYOLOv5Lite(detection_module);
+  BindYOLOv5(detection_module);
+  BindPaddleYOLOX(detection_module);
+  BindNanoDetPlus(detection_module);
 }
 }  // namespace fastdeploy

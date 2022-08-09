@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/megvii/yolox.h"
+#include "fastdeploy/vision/detection/contrib/paddleyolox.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -20,7 +20,7 @@ namespace fastdeploy {
 
 namespace vision {
 
-namespace megvii {
+namespace detection {
 
 struct YOLOXAnchor {
   int grid0;
@@ -72,8 +72,10 @@ void LetterBoxWithRightBottomPad(Mat* mat, std::vector<int> size,
   }
 }
 
-YOLOX::YOLOX(const std::string& model_file, const std::string& params_file,
-             const RuntimeOption& custom_option, const Frontend& model_format) {
+PaddleYOLOX::PaddleYOLOX(const std::string& model_file,
+                         const std::string& params_file,
+                         const RuntimeOption& custom_option,
+                         const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
@@ -88,7 +90,7 @@ YOLOX::YOLOX(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool YOLOX::Initialize() {
+bool PaddleYOLOX::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -113,8 +115,9 @@ bool YOLOX::Initialize() {
   return true;
 }
 
-bool YOLOX::Preprocess(Mat* mat, FDTensor* output,
-                       std::map<std::string, std::array<float, 2>>* im_info) {
+bool PaddleYOLOX::Preprocess(
+    Mat* mat, FDTensor* output,
+    std::map<std::string, std::array<float, 2>>* im_info) {
   // YOLOX ( >= v0.1.1) preprocess steps
   // 1. preproc
   // 2. HWC->CHW
@@ -131,7 +134,7 @@ bool YOLOX::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOX::Postprocess(
+bool PaddleYOLOX::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -194,7 +197,7 @@ bool YOLOX::Postprocess(
   return true;
 }
 
-bool YOLOX::PostprocessWithDecode(
+bool PaddleYOLOX::PostprocessWithDecode(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -276,8 +279,8 @@ bool YOLOX::PostprocessWithDecode(
   return true;
 }
 
-bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
-                    float nms_iou_threshold) {
+bool PaddleYOLOX::Predict(cv::Mat* im, DetectionResult* result,
+                          float conf_threshold, float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif
@@ -334,6 +337,6 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   return true;
 }
 
-}  // namespace megvii
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

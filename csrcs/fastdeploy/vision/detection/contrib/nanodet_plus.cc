@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/rangilyu/nanodet_plus.h"
+#include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -18,7 +18,7 @@ namespace fastdeploy {
 
 namespace vision {
 
-namespace rangilyu {
+namespace detection {
 
 struct NanoDetPlusCenterPoint {
   int grid0;
@@ -350,6 +350,6 @@ bool NanoDetPlus::Predict(cv::Mat* im, DetectionResult* result,
   return true;
 }
 
-}  // namespace rangilyu
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
