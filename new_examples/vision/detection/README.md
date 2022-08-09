@@ -6,7 +6,7 @@
 | :------- | :----| :------------- |
 | Detection | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | DetectionResult |
 | Segmentation | 语义分割，输入图像，给出图像中每个像素的分类及置信度 | SegmentationResult |
-| Classification | 图像分类，输入图像，给出图像的分类结果和置信度 | ClassificationResult |
+| Classification | 图像分类，输入图像，给出图像的分类结果和置信度 | ClassifyResult |
 
 
 ## FastDeploy API设计
