@@ -30,6 +30,8 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
     dt = pybind11::dtype::of<float>();
   } else if (fd_dtype == FDDataType::FP64) {
     dt = pybind11::dtype::of<double>();
+  } else if (fd_dtype == FDDataType::UINT8) {
+    dt = pybind11::dtype::of<uint8_t>();
   } else {
     FDASSERT(false, "The function doesn't support data type of " +
                         Str(fd_dtype) + ".");
@@ -46,6 +48,8 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype) {
     return FDDataType::FP32;
   } else if (np_dtype.is(pybind11::dtype::of<double>())) {
     return FDDataType::FP64;
+  } else if (np_dtype.is(pybind11::dtype::of<uint8_t>())) {
+    return FDDataType::UINT8;
   }
   FDASSERT(false,
            "NumpyDataTypeToFDDataType() only support "
@@ -64,6 +68,13 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
     tensor->data.resize(pyarray.nbytes());
     memcpy(tensor->data.data(), pyarray.mutable_data(), pyarray.nbytes());
   }
+}
+
+pybind11::array TensorToPyArray(const FDTensor& tensor) {
+  auto numpy_dtype = FDDataTypeToNumpyDataType(tensor.dtype);
+  auto out = pybind11::array(numpy_dtype, tensor.shape);
+  memcpy(out.mutable_data(), tensor.Data(), tensor.Numel() * FDDataTypeSize(tensor.dtype));
+  return out;
 }
 
 #ifdef ENABLE_VISION

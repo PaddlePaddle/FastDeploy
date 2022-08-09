@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/wongkinyiu/scaledyolov4.h"
+#include "fastdeploy/vision/detection/contrib/yolov7.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace wongkinyiu {
+namespace detection {
 
-void ScaledYOLOv4::LetterBox(Mat* mat, const std::vector<int>& size,
-                             const std::vector<float>& color, bool _auto,
-                             bool scale_fill, bool scale_up, int stride) {
+void YOLOv7::LetterBox(Mat* mat, const std::vector<int>& size,
+                       const std::vector<float>& color, bool _auto,
+                       bool scale_fill, bool scale_up, int stride) {
   float scale =
       std::min(size[1] * 1.0 / mat->Height(), size[0] * 1.0 / mat->Width());
   if (!scale_up) {
@@ -57,25 +57,23 @@ void ScaledYOLOv4::LetterBox(Mat* mat, const std::vector<int>& size,
   }
 }
 
-ScaledYOLOv4::ScaledYOLOv4(const std::string& model_file,
-                           const std::string& params_file,
-                           const RuntimeOption& custom_option,
-                           const Frontend& model_format) {
+YOLOv7::YOLOv7(const std::string& model_file, const std::string& params_file,
+               const RuntimeOption& custom_option,
+               const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
-  runtime_option.params_file = params_file;
   initialized = Initialize();
 }
 
-bool ScaledYOLOv4::Initialize() {
+bool YOLOv7::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -107,9 +105,8 @@ bool ScaledYOLOv4::Initialize() {
   return true;
 }
 
-bool ScaledYOLOv4::Preprocess(
-    Mat* mat, FDTensor* output,
-    std::map<std::string, std::array<float, 2>>* im_info) {
+bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
+                        std::map<std::string, std::array<float, 2>>* im_info) {
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
@@ -122,12 +119,12 @@ bool ScaledYOLOv4::Preprocess(
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-  // ScaledYOLOv4's preprocess steps
+  // yolov7's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  ScaledYOLOv4::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
-                          is_scale_up, stride);
+  YOLOv7::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+                    is_scale_up, stride);
   BGR2RGB::Run(mat);
   // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
   //                std::vector<float>(mat->Channels(), 1.0));
@@ -147,7 +144,7 @@ bool ScaledYOLOv4::Preprocess(
   return true;
 }
 
-bool ScaledYOLOv4::Postprocess(
+bool YOLOv7::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -217,12 +214,8 @@ bool ScaledYOLOv4::Postprocess(
   return true;
 }
 
-bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
-                           float conf_threshold, float nms_iou_threshold) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
-
+bool YOLOv7::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
+                     float nms_iou_threshold) {
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
@@ -239,21 +232,12 @@ bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
@@ -261,12 +245,9 @@ bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 
-}  // namespace wongkinyiu
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
