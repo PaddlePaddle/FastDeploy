@@ -17,7 +17,12 @@ tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-./infer_demo yolov7.onnx 000001.jpg
+# CPU推理
+./infer_demo yolov7.onnx 000001.jpg 0
+# GPU推理
+./infer_demo yolov7.onnx 000001.jpg 1
+# GPU上TensorRT推理
+./infer_demo yolov7.onnx 000001.jpg 2
 ```
 
 ## YOLOv7 C++接口
