@@ -35,19 +35,14 @@ struct CheckData {
       ASSERT_EQ(lhs_ptr[i], rhs_ptr[i]);
     }
   }
-  void operator()(const std::vector<float>& lhs,
-                  const std::vector<float>& rhs) {
-    ASSERT_EQ(lhs.size(), rhs.size());
-    for (int i = 0; i < lhs.size(); ++i) {
-      ASSERT_FLOAT_EQ(lhs[i], rhs[i]);
+  void operator()(const float* lhs_ptr, const float* rhs_ptr, int num) {
+    for (int i = 0; i < num; ++i) {
+      ASSERT_FLOAT_EQ(lhs_ptr[i], rhs_ptr[i]);
     }
   }
-
-  void operator()(const std::vector<double>& lhs,
-                  const std::vector<double>& rhs) {
-    ASSERT_EQ(lhs.size(), rhs.size());
-    for (int i = 0; i < lhs.size(); ++i) {
-      ASSERT_DOUBLE_EQ(lhs[i], rhs[i]);
+  void operator()(const double* lhs_ptr, const double* rhs_ptr, int num) {
+    for (int i = 0; i < num; ++i) {
+      ASSERT_DOUBLE_EQ(lhs_ptr[i], rhs_ptr[i]);
     }
   }
 };
