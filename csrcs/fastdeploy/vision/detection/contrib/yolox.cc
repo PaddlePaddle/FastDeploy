@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/contrib/paddleyolox.h"
+#include "fastdeploy/vision/detection/contrib/yolox.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -72,7 +72,7 @@ void LetterBoxWithRightBottomPad(Mat* mat, std::vector<int> size,
   }
 }
 
-PaddleYOLOX::PaddleYOLOX(const std::string& model_file,
+YOLOX::YOLOX(const std::string& model_file,
                          const std::string& params_file,
                          const RuntimeOption& custom_option,
                          const Frontend& model_format) {
@@ -90,7 +90,7 @@ PaddleYOLOX::PaddleYOLOX(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool PaddleYOLOX::Initialize() {
+bool YOLOX::Initialize() {
   // parameters for preprocess
   size = {640, 640};
   padding_value = {114.0, 114.0, 114.0};
@@ -115,7 +115,7 @@ bool PaddleYOLOX::Initialize() {
   return true;
 }
 
-bool PaddleYOLOX::Preprocess(
+bool YOLOX::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info) {
   // YOLOX ( >= v0.1.1) preprocess steps
@@ -134,7 +134,7 @@ bool PaddleYOLOX::Preprocess(
   return true;
 }
 
-bool PaddleYOLOX::Postprocess(
+bool YOLOX::Postprocess(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -197,7 +197,7 @@ bool PaddleYOLOX::Postprocess(
   return true;
 }
 
-bool PaddleYOLOX::PostprocessWithDecode(
+bool YOLOX::PostprocessWithDecode(
     FDTensor& infer_result, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold) {
@@ -279,7 +279,7 @@ bool PaddleYOLOX::PostprocessWithDecode(
   return true;
 }
 
-bool PaddleYOLOX::Predict(cv::Mat* im, DetectionResult* result,
+bool YOLOX::Predict(cv::Mat* im, DetectionResult* result,
                           float conf_threshold, float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)

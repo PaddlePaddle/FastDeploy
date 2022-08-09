@@ -24,17 +24,17 @@ namespace vision {
 
 namespace detection {
 
-class FASTDEPLOY_DECL PaddleYOLOX : public FastDeployModel {
+class FASTDEPLOY_DECL YOLOX : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  PaddleYOLOX(const std::string& model_file,
+  YOLOX(const std::string& model_file,
               const std::string& params_file = "",
               const RuntimeOption& custom_option = RuntimeOption(),
               const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  std::string ModelName() const { return "PaddleYOLOX"; }
+  std::string ModelName() const { return "YOLOX"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat

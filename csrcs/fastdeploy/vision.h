@@ -16,7 +16,7 @@
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
-#include "fastdeploy/vision/detection/contrib/paddleyolox.h"
+#include "fastdeploy/vision/detection/contrib/yolox.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
 #include "fastdeploy/vision/detection/contrib/yolor.h"
 #include "fastdeploy/vision/detection/contrib/yolov5.h"

@@ -18,7 +18,7 @@ from .... import FastDeployModel, Frontend
 from .... import c_lib_wrap as C
 
 
-class PaddleYOLOX(FastDeployModel):
+class YOLOX(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
@@ -26,12 +26,12 @@ class PaddleYOLOX(FastDeployModel):
                  model_format=Frontend.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(PaddleYOLOX, self).__init__(runtime_option)
+        super(YOLOX, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.PaddleYOLOX(
+        self._model = C.vision.detection.YOLOX(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "PaddleYOLOX initialize failed."
+        assert self.initialized, "YOLOX initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,

@@ -15,25 +15,25 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPaddleYOLOX(pybind11::module& m) {
-  pybind11::class_<vision::detection::PaddleYOLOX, FastDeployModel>(
-      m, "PaddleYOLOX")
+void BindYOLOX(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOX, FastDeployModel>(
+      m, "YOLOX")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::detection::PaddleYOLOX& self, pybind11::array& data,
+           [](vision::detection::YOLOX& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::detection::PaddleYOLOX::size)
+      .def_readwrite("size", &vision::detection::YOLOX::size)
       .def_readwrite("padding_value",
-                     &vision::detection::PaddleYOLOX::padding_value)
+                     &vision::detection::YOLOX::padding_value)
       .def_readwrite("is_decode_exported",
-                     &vision::detection::PaddleYOLOX::is_decode_exported)
+                     &vision::detection::YOLOX::is_decode_exported)
       .def_readwrite("downsample_strides",
-                     &vision::detection::PaddleYOLOX::downsample_strides)
-      .def_readwrite("max_wh", &vision::detection::PaddleYOLOX::max_wh);
+                     &vision::detection::YOLOX::downsample_strides)
+      .def_readwrite("max_wh", &vision::detection::YOLOX::max_wh);
 }
 }  // namespace fastdeploy
