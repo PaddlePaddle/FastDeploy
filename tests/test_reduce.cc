@@ -24,6 +24,8 @@ namespace fastdeploy {
 #ifdef ENABLE_FDTENSOR_FUNC
 TEST(fastdeploy, reduce_max) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int> expected_result_axis0 = {7, 4, 5};
@@ -33,32 +35,34 @@ TEST(fastdeploy, reduce_max) {
 
   // keep_dim = true, reduce_all = false
   Max(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Max(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Max(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Max(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_min) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int> expected_result_axis0 = {2, 1, 3};
@@ -68,32 +72,34 @@ TEST(fastdeploy, reduce_min) {
 
   // keep_dim = true, reduce_all = false
   Min(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Min(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Min(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Min(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_sum) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int> expected_result_axis0 = {9, 5, 8};
@@ -103,32 +109,34 @@ TEST(fastdeploy, reduce_sum) {
 
   // keep_dim = true, reduce_all = false
   Sum(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Sum(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Sum(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Sum(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_prod) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int> expected_result_axis0 = {14, 4, 15};
@@ -138,32 +146,34 @@ TEST(fastdeploy, reduce_prod) {
 
   // keep_dim = true, reduce_all = false
   Prod(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Prod(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Prod(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Prod(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_mean) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
 
   std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
   std::vector<int> expected_result_axis0 = {4, 2, 4};
@@ -173,32 +183,35 @@ TEST(fastdeploy, reduce_mean) {
 
   // keep_dim = true, reduce_all = false
   Mean(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Mean(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Mean(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Mean(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const int*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_all) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
+
   std::array<bool, 6> inputs = {false, false, true, true, false, true};
   std::array<bool, 3> expected_result_axis0 = {false, false, true};
   std::array<bool, 2> expected_result_axis1 = {false, false};
@@ -208,32 +221,35 @@ TEST(fastdeploy, reduce_all) {
 
   // keep_dim = true, reduce_all = false
   All(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   All(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   All(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   All(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
 TEST(fastdeploy, reduce_any) {
   FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
+
   std::array<bool, 6> inputs = {false, false, true, true, false, true};
   std::array<bool, 3> expected_result_axis0 = {true, false, true};
   std::array<bool, 2> expected_result_axis1 = {true, true};
@@ -243,28 +259,28 @@ TEST(fastdeploy, reduce_any) {
 
   // keep_dim = true, reduce_all = false
   Any(input, &output, {0}, true);
-  CheckShape(output.shape, {1, 3});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_axis0.data(), expected_result_axis0.size());
+  check_shape(output.shape, {1, 3});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // keep_dim = false, reduce_all = false
   Any(input, &output, {1});
-  CheckShape(output.shape, {2});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_axis1.data(), expected_result_axis1.size());
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 
   // keep_dim = false, reduce_all = true
   Any(input, &output, {1}, false, true);
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 
   // test 1-D tensor
   input.shape = {6};
   Any(input, &output, {0});
-  CheckShape(output.shape, {1});
-  CheckData(reinterpret_cast<const bool*>(output.Data()),
-            expected_result_noaxis.data(), expected_result_noaxis.size());
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const bool*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 #endif
 }  // namespace fastdeploy

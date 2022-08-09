@@ -18,19 +18,38 @@
 
 namespace fastdeploy {
 
-template <typename T>
-void CheckShape(const std::vector<T>& lhs, const std::vector<T>& rhs) {
-  ASSERT_EQ(lhs.size(), rhs.size());
-  for (int i = 0; i < lhs.size(); ++i) {
-    ASSERT_EQ(lhs[i], rhs[i]);
+struct CheckShape {
+  template <typename T>
+  void operator()(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+    ASSERT_EQ(lhs.size(), rhs.size());
+    for (int i = 0; i < lhs.size(); ++i) {
+      ASSERT_EQ(lhs[i], rhs[i]);
+    }
   }
-}
+};
 
-template <typename T>
-void CheckData(const T* lhs_ptr, const T* rhs_ptr, int num) {
-  for (int i = 0; i < num; ++i) {
-    ASSERT_EQ(lhs_ptr[i], rhs_ptr[i]);
+struct CheckData {
+  template <typename T>
+  void operator()(const T* lhs_ptr, const T* rhs_ptr, int num) {
+    for (int i = 0; i < num; ++i) {
+      ASSERT_EQ(lhs_ptr[i], rhs_ptr[i]);
+    }
   }
-}
+  void operator()(const std::vector<float>& lhs,
+                  const std::vector<float>& rhs) {
+    ASSERT_EQ(lhs.size(), rhs.size());
+    for (int i = 0; i < lhs.size(); ++i) {
+      ASSERT_FLOAT_EQ(lhs[i], rhs[i]);
+    }
+  }
+
+  void operator()(const std::vector<double>& lhs,
+                  const std::vector<double>& rhs) {
+    ASSERT_EQ(lhs.size(), rhs.size());
+    for (int i = 0; i < lhs.size(); ++i) {
+      ASSERT_DOUBLE_EQ(lhs[i], rhs[i]);
+    }
+  }
+};
 
 }  // namespace fastdeploy
