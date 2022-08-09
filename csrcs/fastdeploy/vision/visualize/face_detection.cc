@@ -24,12 +24,14 @@ namespace vision {
 // Default only support visualize num_classes <= 1000
 // If need to visualize num_classes > 1000
 // Please call Visualize::GetColorMap(num_classes) first
-void Visualize::VisFaceDetection(cv::Mat* im, const FaceDetectionResult& result,
-                                 int line_size, float font_size) {
+cv::Mat Visualize::VisFaceDetection(const cv::Mat& im,
+                                    const FaceDetectionResult& result,
+                                    int line_size, float font_size) {
   auto color_map = GetColorMap();
-  int h = im->rows;
-  int w = im->cols;
+  int h = im.rows;
+  int w = im.cols;
 
+  auto vis_im = im.clone();
   bool vis_landmarks = false;
   if ((result.landmarks_per_face > 0) &&
       (result.boxes.size() * result.landmarks_per_face ==
@@ -57,9 +59,9 @@ void Visualize::VisFaceDetection(cv::Mat* im, const FaceDetectionResult& result,
     cv::Rect text_background =
         cv::Rect(result.boxes[i][0], result.boxes[i][1] - text_size.height,
                  text_size.width, text_size.height);
-    cv::rectangle(*im, rect, rect_color, line_size);
-    cv::putText(*im, text, origin, font, font_size, cv::Scalar(255, 255, 255),
-                1);
+    cv::rectangle(vis_im, rect, rect_color, line_size);
+    cv::putText(vis_im, text, origin, font, font_size,
+                cv::Scalar(255, 255, 255), 1);
     // vis landmarks (if have)
     if (vis_landmarks) {
       cv::Scalar landmark_color = rect_color;
@@ -69,10 +71,11 @@ void Visualize::VisFaceDetection(cv::Mat* im, const FaceDetectionResult& result,
             result.landmarks[i * result.landmarks_per_face + j][0]);
         landmark.y = static_cast<int>(
             result.landmarks[i * result.landmarks_per_face + j][1]);
-        cv::circle(*im, landmark, line_size, landmark_color, -1);
+        cv::circle(vis_im, landmark, line_size, landmark_color, -1);
       }
     }
   }
+  return vis_im;
 }
 
 }  // namespace vision

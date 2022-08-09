@@ -23,11 +23,13 @@ namespace vision {
 // Default only support visualize num_classes <= 1000
 // If need to visualize num_classes > 1000
 // Please call Visualize::GetColorMap(num_classes) first
-void Visualize::VisDetection(cv::Mat* im, const DetectionResult& result,
-                             int line_size, float font_size) {
+cv::Mat Visualize::VisDetection(const cv::Mat& im,
+                                const DetectionResult& result, int line_size,
+                                float font_size) {
   auto color_map = GetColorMap();
-  int h = im->rows;
-  int w = im->cols;
+  int h = im.rows;
+  int w = im.cols;
+  auto vis_im = im.clone();
   for (size_t i = 0; i < result.boxes.size(); ++i) {
     cv::Rect rect(result.boxes[i][0], result.boxes[i][1],
                   result.boxes[i][2] - result.boxes[i][0],
@@ -50,10 +52,11 @@ void Visualize::VisDetection(cv::Mat* im, const DetectionResult& result,
     cv::Rect text_background =
         cv::Rect(result.boxes[i][0], result.boxes[i][1] - text_size.height,
                  text_size.width, text_size.height);
-    cv::rectangle(*im, rect, rect_color, line_size);
-    cv::putText(*im, text, origin, font, font_size, cv::Scalar(255, 255, 255),
-                1);
+    cv::rectangle(vis_im, rect, rect_color, line_size);
+    cv::putText(vis_im, text, origin, font, font_size,
+                cv::Scalar(255, 255, 255), 1);
   }
+  return vis_im;
 }
 
 }  // namespace vision
