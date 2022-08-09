@@ -53,6 +53,8 @@ struct OrtBackendOption {
 class OrtBackend : public BaseBackend {
  public:
   OrtBackend() {}
+  virtual ~OrtBackend() = default;
+
   void BuildOption(const OrtBackendOption& option);
 
   bool InitFromPaddle(const std::string& model_file,

@@ -63,6 +63,7 @@ FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
 class TrtBackend : public BaseBackend {
  public:
   TrtBackend() : engine_(nullptr), context_(nullptr) {}
+  virtual ~TrtBackend() = default;
   void BuildOption(const TrtBackendOption& option);
 
   bool InitFromPaddle(const std::string& model_file,
