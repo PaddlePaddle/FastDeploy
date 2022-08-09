@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/ppdet/picodet.h"
-#include "fastdeploy/vision/ppdet/ppyolo.h"
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
-#include "fastdeploy/vision/ppdet/rcnn.h"
-#include "fastdeploy/vision/ppdet/yolov3.h"
-#include "fastdeploy/vision/ppdet/yolox.h"
+#include "fastdeploy/vision/detection/ppdet/picodet.h"
+#include "fastdeploy/vision/detection/ppdet/ppyolo.h"
+#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/detection/ppdet/rcnn.h"
+#include "fastdeploy/vision/detection/ppdet/yolov3.h"
+#include "fastdeploy/vision/detection/ppdet/yolox.h"

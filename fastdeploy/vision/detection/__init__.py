@@ -16,3 +16,5 @@ from __future__ import absolute_import
 from .yolov7 import YOLOv7
 from .yolor import YOLOR
 from .scaled_yolov4 import ScaledYOLOv4
+
+from .ppdet import PPYOLOE, PPYOLO, PPYOLOv2, PaddleYOLOX, PicoDet, FasterRCNN, YOLOv3
