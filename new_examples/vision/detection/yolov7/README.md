@@ -31,7 +31,7 @@ cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
 | [YOLOv7-x] | 10MB | 51.4% |
 
 
-## 模型部署
+## 其它文档
 
 - [Python部署](python)
 - [C++部署](cpp)
