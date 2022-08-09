@@ -17,7 +17,7 @@
 namespace fastdeploy {
 void BindYOLOv5Lite(pybind11::module& m) {
   pybind11::class_<vision::detection::YOLOv5Lite, FastDeployModel>(m,
-                                                               "YOLOv5Lite")
+                                                                   "YOLOv5Lite")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
            [](vision::detection::YOLOv5Lite& self, pybind11::array& data,
@@ -28,13 +28,15 @@ void BindYOLOv5Lite(pybind11::module& m) {
              return res;
            })
       .def_readwrite("size", &vision::detection::YOLOv5Lite::size)
-      .def_readwrite("padding_value", &vision::detection::YOLOv5Lite::padding_value)
+      .def_readwrite("padding_value",
+                     &vision::detection::YOLOv5Lite::padding_value)
       .def_readwrite("is_mini_pad", &vision::detection::YOLOv5Lite::is_mini_pad)
       .def_readwrite("is_no_pad", &vision::detection::YOLOv5Lite::is_no_pad)
       .def_readwrite("is_scale_up", &vision::detection::YOLOv5Lite::is_scale_up)
       .def_readwrite("stride", &vision::detection::YOLOv5Lite::stride)
       .def_readwrite("max_wh", &vision::detection::YOLOv5Lite::max_wh)
-      .def_readwrite("anchor_config", &vision::detection::YOLOv5Lite::anchor_config)
+      .def_readwrite("anchor_config",
+                     &vision::detection::YOLOv5Lite::anchor_config)
       .def_readwrite("is_decode_exported",
                      &vision::detection::YOLOv5Lite::is_decode_exported);
 }

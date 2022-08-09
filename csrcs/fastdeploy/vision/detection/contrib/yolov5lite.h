@@ -31,7 +31,6 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
 
   // 定义模型的名称
   virtual std::string ModelName() const { return "YOLOv5-Lite"; }
-
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
   // result 为模型预测的输出结构体

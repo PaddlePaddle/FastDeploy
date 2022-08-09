@@ -191,7 +191,6 @@ bool YOLOv5Lite::PostprocessWithDecode(
   std::vector<YOLOv5Lite::Anchor> anchors;
   int num_anchors = anchor_config[0].size() / 2;
   GenerateAnchors(size, downsample_strides, &anchors, num_anchors);
-
   // infer_result shape might look like (1,n,85=5+80)
   float* data = static_cast<float*>(infer_result.Data());
   for (size_t i = 0; i < infer_result.shape[1]; ++i) {
