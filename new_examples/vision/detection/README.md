@@ -2,12 +2,11 @@
 
 本目录下提供了各类视觉模型的部署，主要涵盖以下任务类型
 
-| 任务类型 | 说明 | 预测结果结构体 |
-| :------- | :----| :------------- |
-| Detection | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | DetectionResult |
-| Segmentation | 语义分割，输入图像，给出图像中每个像素的分类及置信度 | SegmentationResult |
-| Classification | 图像分类，输入图像，给出图像的分类结果和置信度 | ClassifyResult |
-
+| 任务类型           | 说明                                  | 预测结果结构体                                                                          |
+|:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
+| Detection      | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | [DetectionResult](../../../../docs/api/vision_results/detection_result.md)       |
+| Segmentation   | 语义分割，输入图像，给出图像中每个像素的分类及置信度          | [SegmentationResult](../../../../docs/api/vision_results/segmentation_result.md) |
+| Classification | 图像分类，输入图像，给出图像的分类结果和置信度             | [ClassifyResult](../../../../docs/api/vision_results/classification_result.md)   |
 
 ## FastDeploy API设计
 
