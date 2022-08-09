@@ -26,10 +26,10 @@ class FASTDEPLOY_DECL Visualize {
   static std::vector<int> color_map_;
   static const std::vector<int>& GetColorMap(int num_classes = 1000);
   static cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
-                              int line_size = 2, float font_size = 0.5f);
+                              int line_size = 1, float font_size = 0.5f);
   static cv::Mat VisFaceDetection(const cv::Mat& im,
                                   const FaceDetectionResult& result,
-                                  int line_size = 2, float font_size = 0.5f);
+                                  int line_size = 1, float font_size = 0.5f);
   static cv::Mat VisSegmentation(const cv::Mat& im,
                                  const SegmentationResult& result);
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,

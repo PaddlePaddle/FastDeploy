@@ -16,8 +16,7 @@
 
 namespace fastdeploy {
 void BindUltraFace(pybind11::module& m) {
-  pybind11::class_<vision::facedet::UltraFace, FastDeployModel>(linzaer_module,
-                                                                "UltraFace")
+  pybind11::class_<vision::facedet::UltraFace, FastDeployModel>(m, "UltraFace")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
            [](vision::facedet::UltraFace& self, pybind11::array& data,

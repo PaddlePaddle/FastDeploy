@@ -17,14 +17,14 @@ tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-./infer_demo yolov7.onnx 000001.jpg
+./infer_demo yolov7.onnx 000000014439.jpg 0
 ```
 
 ## YOLOv7 C++接口
 
 ### YOLOv7类
 ```
-fastdeploy::vision::wongkinyiu::YOLOv7(
+fastdeploy::vision::detection::YOLOv7(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),

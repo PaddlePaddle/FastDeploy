@@ -10,9 +10,9 @@
 ```
 #下载yolov7模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000087038.jpg
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-python infer.py --model yolov7.onnx --image 000000087038.jpg --device cpu
+python infer.py --model yolov7.onnx --image 000000014439.jpg --device cpu
 ```
 
 运行完成可视化结果如下图所示

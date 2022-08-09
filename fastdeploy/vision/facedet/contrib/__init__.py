@@ -13,8 +13,3 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .contrib.arcface import ArcFace
-from .contrib.cosface import CosFace
-from .contrib.insightface_rec import InsightFaceRecognitionModel
-from .contrib.partial_fc import PartialFC
-from .contrib.vpl import VPL
