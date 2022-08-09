@@ -36,12 +36,14 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype);
 
 void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
                      bool share_buffer = false);
+pybind11::array TensorToPyArray(const FDTensor& tensor);
 
 #ifdef ENABLE_VISION
 cv::Mat PyArrayToCvMat(pybind11::array& pyarray);
 #endif
 
-template <typename T> FDDataType CTypeToFDDataType() {
+template <typename T>
+FDDataType CTypeToFDDataType() {
   if (std::is_same<T, int32_t>::value) {
     return FDDataType::INT32;
   } else if (std::is_same<T, int64_t>::value) {
@@ -57,9 +59,9 @@ template <typename T> FDDataType CTypeToFDDataType() {
 }
 
 template <typename T>
-std::vector<pybind11::array>
-PyBackendInfer(T& self, const std::vector<std::string>& names,
-               std::vector<pybind11::array>& data) {
+std::vector<pybind11::array> PyBackendInfer(
+    T& self, const std::vector<std::string>& names,
+    std::vector<pybind11::array>& data) {
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
     // TODO(jiangjiajun) here is considered to use user memory directly
@@ -85,4 +87,4 @@ PyBackendInfer(T& self, const std::vector<std::string>& names,
   return results;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

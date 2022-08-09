@@ -11,23 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from __future__ import absolute_import
-
-from . import evaluation
-from . import ppcls
-from . import ppdet
-from . import ppseg
-from . import ultralytics
-from . import meituan
-from . import megvii
-from . import deepcam
-from . import rangilyu
-from . import linzaer
-from . import biubug6
-from . import ppogg
-from . import deepinsight
-from . import zhkkke
-
-from . import detection
-
-from .visualize import *
+from .yolov7 import YOLOv7
+from .yolor import YOLOR
+from .scaled_yolov4 import ScaledYOLOv4

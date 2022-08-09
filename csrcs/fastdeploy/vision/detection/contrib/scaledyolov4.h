@@ -19,7 +19,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace wongkinyiu {
+namespace detection {
 
 class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
  public:
@@ -31,7 +31,7 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
                const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
-  virtual std::string ModelName() const { return "WongKinYiu/ScaledYOLOv4"; }
+  virtual std::string ModelName() const { return "ScaledYOLOv4"; }
 
   // 模型预测接口，即用户调用的接口
   // im 为用户的输入数据，目前对于CV均定义为cv::Mat
@@ -98,6 +98,6 @@ class FASTDEPLOY_DECL ScaledYOLOv4 : public FastDeployModel {
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
 };
-}  // namespace wongkinyiu
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
