@@ -15,29 +15,27 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPpogg(pybind11::module& m) {
-  auto ppogg_module =
-      m.def_submodule("ppogg", "https://github.com/ppogg/YOLOv5-Lite");
-  pybind11::class_<vision::ppogg::YOLOv5Lite, FastDeployModel>(ppogg_module,
+void BindYOLOv5Lite(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOv5Lite, FastDeployModel>(m,
                                                                "YOLOv5Lite")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
-           [](vision::ppogg::YOLOv5Lite& self, pybind11::array& data,
+           [](vision::detection::YOLOv5Lite& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::ppogg::YOLOv5Lite::size)
-      .def_readwrite("padding_value", &vision::ppogg::YOLOv5Lite::padding_value)
-      .def_readwrite("is_mini_pad", &vision::ppogg::YOLOv5Lite::is_mini_pad)
-      .def_readwrite("is_no_pad", &vision::ppogg::YOLOv5Lite::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::ppogg::YOLOv5Lite::is_scale_up)
-      .def_readwrite("stride", &vision::ppogg::YOLOv5Lite::stride)
-      .def_readwrite("max_wh", &vision::ppogg::YOLOv5Lite::max_wh)
-      .def_readwrite("anchor_config", &vision::ppogg::YOLOv5Lite::anchor_config)
+      .def_readwrite("size", &vision::detection::YOLOv5Lite::size)
+      .def_readwrite("padding_value", &vision::detection::YOLOv5Lite::padding_value)
+      .def_readwrite("is_mini_pad", &vision::detection::YOLOv5Lite::is_mini_pad)
+      .def_readwrite("is_no_pad", &vision::detection::YOLOv5Lite::is_no_pad)
+      .def_readwrite("is_scale_up", &vision::detection::YOLOv5Lite::is_scale_up)
+      .def_readwrite("stride", &vision::detection::YOLOv5Lite::stride)
+      .def_readwrite("max_wh", &vision::detection::YOLOv5Lite::max_wh)
+      .def_readwrite("anchor_config", &vision::detection::YOLOv5Lite::anchor_config)
       .def_readwrite("is_decode_exported",
-                     &vision::ppogg::YOLOv5Lite::is_decode_exported);
+                     &vision::detection::YOLOv5Lite::is_decode_exported);
 }
 }  // namespace fastdeploy

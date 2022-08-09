@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppogg/yolov5lite.h"
+#include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppogg {
+namespace detection {
 
 void YOLOv5Lite::LetterBox(Mat* mat, const std::vector<int>& size,
                            const std::vector<float>& color, bool _auto,
@@ -395,6 +395,6 @@ bool YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
   return true;
 }
 
-}  // namespace ppogg
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

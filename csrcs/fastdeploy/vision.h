@@ -31,7 +31,7 @@
 #include "fastdeploy/vision/meituan/yolov6.h"
 #include "fastdeploy/vision/ppcls/model.h"
 #include "fastdeploy/vision/ppdet/model.h"
-#include "fastdeploy/vision/ppogg/yolov5lite.h"
+#include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/vision/ppseg/model.h"
 #include "fastdeploy/vision/rangilyu/nanodet_plus.h"
 #include "fastdeploy/vision/ultralytics/yolov5.h"
