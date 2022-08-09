@@ -57,5 +57,5 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
 ## 其它文档
 
 - [YOLOv7 模型介绍](..)
-- [YOLOv7 C++部署（../cpp）
+- [YOLOv7 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
