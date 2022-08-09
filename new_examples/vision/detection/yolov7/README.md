@@ -32,7 +32,8 @@ cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
 | [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx) | 141MB | 51.4% |
 | [YOLOv7-x]                                                       | 10MB  | 51.4% |
 
-# 部署示例及API文档
+
+## 详细部署文档
 
 - [Python部署](python)
 - [C++部署](cpp)
