@@ -11,7 +11,7 @@
 
 ## FastDeploy API设计
 
-视觉模型具有较有统一任务范式，在设计API时（包括C++/Python），FastDeploy将视觉模型的部署拆分为三个步骤
+视觉模型具有较有统一任务范式，在设计API时（包括C++/Python），FastDeploy将视觉模型的部署拆分为四个步骤
 
 - 模型加载
 - 图像预处理
