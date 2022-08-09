@@ -2,7 +2,7 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../docs/quick_start/requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. FastDeploy Python安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
 
 本目录下提供`infer.py`快速完成YOLOv7在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
