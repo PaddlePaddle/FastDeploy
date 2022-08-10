@@ -18,7 +18,7 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 # 如果您的代码版本中有支持NMS的ONNX文件导出，请使用如下命令导出ONNX文件(请暂时不要使用 "--end2end"，我们后续将支持带有NMS的ONNX模型的部署)
 python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
-# 移动onnx文件到demo目录
+# 移动onnx文件到examples目录
 cp PATH/TO/yolov7.onnx PATH/TO/FastDeploy/examples/vision/detextion/yolov7/
 ```
 
