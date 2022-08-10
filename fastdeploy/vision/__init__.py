@@ -18,4 +18,7 @@ from . import matting
 from . import facedet
 from . import faceid
 
+from . import ppcls
+from . import ppseg
+from . import evaluation
 from .visualize import *
