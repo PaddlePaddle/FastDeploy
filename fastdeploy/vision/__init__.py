@@ -13,21 +13,12 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-from . import evaluation
-from . import ppcls
-from . import ppdet
-from . import ppseg
-from . import ultralytics
-from . import meituan
-from . import megvii
-from . import deepcam
-from . import rangilyu
-from . import linzaer
-from . import biubug6
-from . import ppogg
-from . import deepinsight
-from . import zhkkke
-
 from . import detection
+from . import matting
+from . import facedet
+from . import faceid
 
+from . import ppcls
+from . import ppseg
+from . import evaluation
 from .visualize import *
