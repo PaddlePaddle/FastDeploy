@@ -18,6 +18,7 @@
 
 #include "fastdeploy/function/eigen.h"
 #include "fastdeploy/function/reduce_functor.h"
+#include "fastdeploy/function/transpose.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -72,7 +73,7 @@ void ReduceFunctor(const FDTensor& input, FDTensor* output,
 inline void GetShuffledDim(const std::vector<int64_t>& src_dims,
                            std::vector<int64_t>* dst_dims,
                            const std::vector<int64_t>& reduced_dims,
-                           std::vector<int>* perm_axis) {
+                           std::vector<int64_t>* perm_axis) {
   // check if it's a reduced dim
   std::vector<bool> src_dims_check(src_dims.size(), false);
   size_t src_size = src_dims.size();
@@ -105,19 +106,33 @@ template <typename OutT>
 void GetShuffledInput(const FDTensor& input, FDTensor* shuffled_input,
                       const std::vector<int64_t>& dims) {
   auto shuffled_dims = input.shape;
-  std::vector<int> perm_axis(input.shape.size());
+  std::vector<int64_t> perm_axis(input.shape.size());
   GetShuffledDim(input.shape, &shuffled_dims, dims, &perm_axis);
 
   shuffled_input->Allocate(shuffled_dims, input.dtype);
-  // TODO(zhoushunjie) : Need to implement trans function
-  // phi::funcs::TransposeNormal<DeviceContext, OutT> trans;
-  // trans(dev_ctx, input, shuffled_input, perm_axis);
+  Transpose(input, shuffled_input, perm_axis);
 }
 
 //////////////// HandleLargeDim
 template <typename OutT, typename Functor>
 void HandleLargeDim(const FDTensor& input, FDTensor* output,
                     const std::vector<int64_t>& dims, bool keep_dim) {
+  auto out_dims = input.shape;
+  std::vector<int64_t> dims_ref = dims;
+  auto x_rank = input.shape.size();
+  for (size_t i = 0; i < dims_ref.size(); ++i) {
+    if (dims_ref[i] < 0) dims_ref[i] = x_rank + dims_ref[i];
+    out_dims[dims_ref[i]] = 1;
+  }
+  if (!keep_dim) {
+    const int kDelFlag = -2;
+    for (size_t i = 0; i < dims_ref.size(); ++i) {
+      out_dims[dims_ref[i]] = kDelFlag;
+    }
+    out_dims.erase(remove(out_dims.begin(), out_dims.end(), kDelFlag),
+                   out_dims.end());
+  }
+  output->Allocate(out_dims, TypeToDataType<OutT>::dtype);
   //  shuffle the reduced dim to the end
   FDTensor shuffled_input;
   GetShuffledInput<OutT>(input, &shuffled_input, dims);
@@ -127,11 +142,9 @@ void HandleLargeDim(const FDTensor& input, FDTensor* output,
   const int64_t reduced = shuffled_input.Numel() / unreduced;
   shuffled_input.Allocate({unreduced, reduced}, TypeToDataType<OutT>::dtype);
 
-  auto output_dim = output->shape;
-  output->Allocate({unreduced}, TypeToDataType<OutT>::dtype);
-
+  output->shape = {unreduced};
   ReduceFunctor<OutT, 2, 1, Functor>(shuffled_input, output, {1}, keep_dim);
-  output->shape = output_dim;
+  output->shape = out_dims;
 }
 
 ////////////// ReduceKernel
@@ -153,7 +166,7 @@ void ReduceKernelImpl(const FDTensor& input, FDTensor* output,
   } else {
     int ndim = input.shape.size();
     int rdim = dims.size();
-    if (ndim > 3) {
+    if (ndim > 4) {
       HandleLargeDim<OutT, Functor>(input, output, dims, keep_dim);
     } else {
       HANDLE_REDUCE_DIM(4, 3);
