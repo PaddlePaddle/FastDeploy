@@ -44,7 +44,6 @@ struct SoftmaxEigen {
     const int batch_size = logits.dimension(kBatchDim);
     const int num_classes = logits.dimension(kClassDim);
     const int num_remain = num_classes / axis_dim;
-
     Eigen::DSizes<int, 1> along_axis(kAxisDim);
     Eigen::DSizes<int, 2> batch_classes(batch_size, num_classes);
     Eigen::DSizes<int, 2> batch_by_one(batch_size, 1);
@@ -75,10 +74,10 @@ struct SoftmaxEigen {
                                  .eval()
                                  .reshape(batch_one_remain)
                                  .broadcast(one_axis_one)
-                                 .reshape(batch_classes))
+                                 .reshape(batch_axis_remain))
+                                .reshape(batch_classes)
                                 .unaryExpr(ValueClip<T>());
     }
-
     softmax.device(dev) = softmax.exp();
     softmax.device(dev) = (softmax *
                            softmax.reshape(batch_axis_remain)
@@ -90,14 +89,15 @@ struct SoftmaxEigen {
 };
 
 template <typename T>
-void SoftmaxFunctor(const FDTensor& x, FDTensor* out, int axis) {}
+void SoftmaxFunctor(const FDTensor& x, FDTensor* out, int axis) {
+  SoftmaxEigen<T>()(x, out, axis);
+}
 
 template <typename T>
 void SoftmaxKernel(const FDTensor& x, FDTensor* out, int axis) {
   const int rank = x.shape.size();
   const int calc_axis = CanonicalAxis(axis, rank);
   int axis_dim = x.shape[calc_axis];
-  auto original_shape = x.shape;
   out->Allocate(x.shape, x.dtype);
   if (out->Numel() == 0) {
     return;
@@ -110,7 +110,7 @@ void SoftmaxKernel(const FDTensor& x, FDTensor* out, int axis) {
   x_2d.SetExternalData({n, d}, x.dtype, const_cast<void*>(x.Data()));
   out_2d.SetExternalData({n, d}, out->dtype, out->Data());
 
-  SoftmaxFunctor<T>(x_2d, &out_2d, axis);
+  SoftmaxFunctor<T>(x_2d, &out_2d, axis_dim);
 }
 
 void Softmax(const FDTensor& x, FDTensor* out, int axis) {
