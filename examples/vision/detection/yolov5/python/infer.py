@@ -7,7 +7,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of yolov7 onnx model.")
+        "--model", required=True, help="Path of yolov5 onnx model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
@@ -39,7 +39,7 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.YOLOv7(args.model, runtime_option=runtime_option)
+model = fd.vision.detection.YOLOv5(args.model, runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)

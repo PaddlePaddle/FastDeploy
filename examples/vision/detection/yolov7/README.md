@@ -23,7 +23,7 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
 ```
 
-## 下载预训练模型
+## 下载预训练ONNX模型
 
 为了方便开发者的测试，下面提供了YOLOv7导出的各系列模型，开发者可直接下载使用。
 
