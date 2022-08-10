@@ -9,7 +9,7 @@
 
 ```
 #下载yolov5模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
@@ -18,11 +18,11 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/yolov5/python/
 
 # CPU推理
-python infer.py --model yolov5.onnx --image 000000014439.jpg --device cpu
+python infer.py --model yolov5s.onnx --image 000000014439.jpg --device cpu
 # GPU推理
-python infer.py --model yolov5.onnx --image 000000014439.jpg --device gpu
+python infer.py --model yolov5s.onnx --image 000000014439.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model yolov5.onnx --image 000000014439.jpg --device gpu --use_trt True
+python infer.py --model yolov5s.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
