@@ -21,7 +21,7 @@ cd examples/vison/detection/yolov7/python/
 python infer.py --model yolov7.onnx --image 000000087038.jpg --device cpu
 # GPU推理
 python infer.py --model yolov7.onnx --image 000000087038.jpg --device gpu
-# GPU上使用TensorRT推理
+# GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python infer.py --model yolov7.onnx --image 000000087038.jpg --device gpu --use_trt True
 ```
 
