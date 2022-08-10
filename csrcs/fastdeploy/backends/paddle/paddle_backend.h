@@ -53,6 +53,7 @@ FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype);
 class PaddleBackend : public BaseBackend {
  public:
   PaddleBackend() {}
+  virtual ~PaddleBackend() = default;
   void BuildOption(const PaddleBackendOption& option);
 
   bool InitFromPaddle(

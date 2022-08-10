@@ -17,23 +17,22 @@ import logging
 from ... import c_lib_wrap as C
 
 
-def vis_detection(im_data, det_result, line_size=1, font_size=0.5):
-    C.vision.Visualize.vis_detection(im_data, det_result, line_size, font_size)
+def vis_detection(im_data, det_result, line_size=2, font_size=0.5):
+    return C.vision.Visualize.vis_detection(im_data, det_result, line_size,
+                                            font_size)
 
 
-def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
-    C.vision.Visualize.vis_face_detection(im_data, face_det_result, line_size,
-                                          font_size)
+def vis_face_detection(im_data, face_det_result, line_size=2, font_size=0.5):
+    return C.vision.Visualize.vis_face_detection(im_data, face_det_result,
+                                                 line_size, font_size)
 
 
-def vis_segmentation(im_data, seg_result, vis_im_data, num_classes=1000):
-    C.vision.Visualize.vis_segmentation(im_data, seg_result, vis_im_data,
-                                        num_classes)
+def vis_segmentation(im_data, seg_result):
+    return C.vision.Visualize.vis_segmentation(im_data, seg_result)
 
 
 def vis_matting_alpha(im_data,
                       matting_result,
-                      vis_im_data,
                       remove_small_connected_area=False):
-    C.vision.Visualize.vis_matting_alpha(im_data, matting_result, vis_im_data,
-                                         remove_small_connected_area)
+    return C.vision.Visualize.vis_matting_alpha(im_data, matting_result,
+                                                remove_small_connected_area)

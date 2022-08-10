@@ -18,7 +18,6 @@ namespace fastdeploy {
 
 void BindPPCls(pybind11::module& m);
 void BindPPDet(pybind11::module& m);
-void BindWongkinyiu(pybind11::module& m);
 void BindPPSeg(pybind11::module& m);
 void BindUltralytics(pybind11::module& m);
 void BindMeituan(pybind11::module& m);
@@ -30,6 +29,8 @@ void BindBiubug6(pybind11::module& m);
 void BindPpogg(pybind11::module& m);
 void BindDeepInsight(pybind11::module& m);
 void BindZHKKKe(pybind11::module& m);
+
+void BindDetection(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -88,7 +89,6 @@ void BindVision(pybind11::module& m) {
   BindPPDet(m);
   BindPPSeg(m);
   BindUltralytics(m);
-  BindWongkinyiu(m);
   BindMeituan(m);
   BindMegvii(m);
   BindDeepCam(m);
@@ -98,6 +98,8 @@ void BindVision(pybind11::module& m) {
   BindPpogg(m);
   BindDeepInsight(m);
   BindZHKKKe(m);
+
+  BindDetection(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

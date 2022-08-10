@@ -65,12 +65,14 @@ static void RemoveSmallConnectedArea(cv::Mat* alpha_pred,
   }
 }
 
-void Visualize::VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
-                                cv::Mat* vis_img,
-                                bool remove_small_connected_area) {
+cv::Mat Visualize::VisMattingAlpha(const cv::Mat& im,
+                                   const MattingResult& result,
+                                   bool remove_small_connected_area) {
   // 只可视化alpha，fgr(前景)本身就是一张图 不需要可视化
   FDASSERT((!im.empty()), "im can't be empty!");
   FDASSERT((im.channels() == 3), "Only support 3 channels mat!");
+
+  auto vis_img = im.clone();
   int out_h = static_cast<int>(result.shape[0]);
   int out_w = static_cast<int>(result.shape[1]);
   int height = im.rows;
@@ -87,18 +89,11 @@ void Visualize::VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
     cv::resize(alpha, alpha, cv::Size(width, height));
   }
 
-  int vis_h = (*vis_img).rows;
-  int vis_w = (*vis_img).cols;
-
-  if ((vis_h != height) || (vis_w != width)) {
-    // faster than resize
-    (*vis_img) = cv::Mat::zeros(height, width, CV_8UC3);
-  }
-  if ((*vis_img).type() != CV_8UC3) {
-    (*vis_img).convertTo((*vis_img), CV_8UC3);
+  if ((vis_img).type() != CV_8UC3) {
+    (vis_img).convertTo((vis_img), CV_8UC3);
   }
 
-  uchar* vis_data = static_cast<uchar*>(vis_img->data);
+  uchar* vis_data = static_cast<uchar*>(vis_img.data);
   uchar* im_data = static_cast<uchar*>(im.data);
   float* alpha_data = reinterpret_cast<float*>(alpha.data);
 
@@ -116,6 +111,7 @@ void Visualize::VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
           (1.f - alpha_val) * 120.f);
     }
   }
+  return vis_img;
 }
 
 }  // namespace vision
