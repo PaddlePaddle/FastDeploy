@@ -24,10 +24,6 @@
   ```bash
   onnxsim yolov5s-face.onnx yolov5s-face.onnx
   ```
-* 移动onnx文件到model_zoo/yolov5face的目录
-  ```bash
-  cp PATH/TO/yolov5s-face.onnx PATH/TO/model_zoo/vision/yolov5face/
-  ```
 
 ## 下载预训练ONNX模型
 
