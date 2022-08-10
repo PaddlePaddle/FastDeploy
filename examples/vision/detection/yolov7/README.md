@@ -3,7 +3,7 @@
 ## 模型版本说明
 
 - [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)
-  - （1）[YOLOv7 0.1链接中](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1).pt后缀模型通过[导出ONNX模型](#导出ONNX模型)操作后，可直接部署；.onnx、.trt和 .pose后缀模型暂不支持部署；
+  - （1）[YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)链接中.pt后缀模型通过[导出ONNX模型](#导出ONNX模型)操作后，可直接部署；.onnx、.trt和 .pose后缀模型暂不支持部署；
   - （2）开发者基于自己数据训练的YOLOv7 0.1模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 ## 导出ONNX模型
