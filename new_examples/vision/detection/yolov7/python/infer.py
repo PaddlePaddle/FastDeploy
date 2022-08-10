@@ -31,8 +31,7 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("image", [1, 3, 320, 320],
-                                   [1, 3, 640, 640], [1, 3, 1280, 1280])
+        option.set_trt_input_shape("images", [1, 3, 640, 640])
     return option
 
 

@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from __future__ import absolute_import
-
-from . import detection
-from . import matting
-from . import facedet
-from . import faceid
-
-from .visualize import *
+from .contrib.arcface import ArcFace
+from .contrib.cosface import CosFace
+from .contrib.insightface_rec import InsightFaceRecognitionModel
+from .contrib.partial_fc import PartialFC
+from .contrib.vpl import VPL

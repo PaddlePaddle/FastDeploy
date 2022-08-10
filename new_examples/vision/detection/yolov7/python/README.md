@@ -10,7 +10,8 @@
 ```
 #下载yolov7模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000087038.jpg
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
