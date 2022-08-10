@@ -59,6 +59,28 @@ TEST(fastdeploy, reduce_max) {
              expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
+TEST(fastdeploy, reduce_max_large_dim) {
+  FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
+
+  std::vector<int> inputs = {2, 4, 3, 7, 1, 5, 6, 9};
+  std::vector<int> expected_result_axis0 = {4, 7, 5, 9};
+  input.SetExternalData({2, 1, 2, 1, 2}, FDDataType::INT32, inputs.data());
+
+  // keep_dim = true, reduce_all = false
+  Max(input, &output, {4}, true);
+  check_shape(output.shape, {2, 1, 2, 1, 1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
+
+  // keep_dim = false, reduce_all = false
+  Max(input, &output, {4});
+  check_shape(output.shape, {2, 1, 2, 1});
+  check_data(reinterpret_cast<const int*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
+}
+
 TEST(fastdeploy, reduce_min) {
   FDTensor input, output;
   CheckShape check_shape;
