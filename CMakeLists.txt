@@ -47,6 +47,9 @@ option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
+option(WITH_TESTING "Whether to compile with unittest." OFF)
+# TODO(zhoushunjie): Will remove it later.
+option(ENABLE_FDTENSOR_FUNC "Whether to compile with function of FDTensor." OFF)
 
 # Please don't open this flag now, some bugs exists.
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
@@ -55,6 +58,12 @@ option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
 option(WITH_TEXT_EXAMPLES "Whether to build fastdeply with text examples" OFF)
+
+# config GIT_URL with github mirrors to speed up dependent repos clone
+option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
+if(NOT GIT_URL)
+    set(GIT_URL "https://github.com")
+endif()
 
 # Check for 32bit system
 if(WIN32)
@@ -108,13 +117,14 @@ endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
+file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${FDTENSOR_FUNC_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -223,6 +233,11 @@ if(ENABLE_TEXT)
   include(external/faster_tokenizer.cmake)
 endif()
 
+if (ENABLE_FDTENSOR_FUNC)
+  add_definitions(-DENABLE_FDTENSOR_FUNC)
+  list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_SRCS})
+endif()
+
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
@@ -231,6 +246,8 @@ configure_file(${PROJECT_SOURCE_DIR}/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURC
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
+add_dependencies(${LIBRARY_NAME} extern_eigen3)
+
 redefine_file_macro(${LIBRARY_NAME})
 set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
 if(NOT APPLE)
@@ -274,6 +291,14 @@ if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   if (NOT WITH_VISION_EXAMPLES)
     add_subdirectory(examples)
   endif()
+endif()
+
+if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
+  add_definitions(-DWITH_TESTING)
+  include(external/gtest.cmake)
+  include(external/gflags.cmake)
+  include(external/glog.cmake)
+  add_subdirectory(tests)
 endif()
 
 include(external/summary.cmake)
