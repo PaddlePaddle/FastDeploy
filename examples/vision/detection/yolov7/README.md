@@ -30,7 +30,13 @@ cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx) | 141MB | 51.4% |
-| [YOLOv7-x]                                                       | 10MB  | 51.4% |
+| [YOLOv7x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x.onnx) | 273MB | 53.1% |
+| [YOLOv7-w6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6.onnx) | 269MB | 54.9% |
+| [YOLOv7-e6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6.onnx) | 372MB | 56.0% |
+| [YOLOv7-d6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6.onnx) | 511MB | 56.6% |
+| [YOLOv7-e6e](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e.onnx) | 579MB | 56.8% |
+
+
 
 
 ## 详细部署文档

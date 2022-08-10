@@ -30,6 +30,10 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_demo yolov7.onnx 000000014439.jpg 2
 ```
 
+运行完成可视化结果如下图所示
+
+<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+
 ## YOLOv7 C++接口
 
 ### YOLOv7类
