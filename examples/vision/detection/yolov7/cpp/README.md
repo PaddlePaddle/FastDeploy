@@ -5,7 +5,7 @@
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/compile/prebuild_libraries.md)
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/compile/prebuilt_libraries.md)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
