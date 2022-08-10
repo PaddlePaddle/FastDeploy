@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppcls/model.h"
+#include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppcls {
+namespace classification {
 
-Model::Model(const std::string& model_file, const std::string& params_file,
+PaddleClasModel::PaddleClasModel(const std::string& model_file, const std::string& params_file,
              const std::string& config_file, const RuntimeOption& custom_option,
              const Frontend& model_format) {
   config_file_ = config_file;
@@ -33,7 +33,7 @@ Model::Model(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool Model::Initialize() {
+bool PaddleClasModel::Initialize() {
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -46,7 +46,7 @@ bool Model::Initialize() {
   return true;
 }
 
-bool Model::BuildPreprocessPipelineFromConfig() {
+bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   try {
@@ -91,7 +91,7 @@ bool Model::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool Model::Preprocess(Mat* mat, FDTensor* output) {
+bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
@@ -109,7 +109,7 @@ bool Model::Preprocess(Mat* mat, FDTensor* output) {
   return true;
 }
 
-bool Model::Postprocess(const FDTensor& infer_result, ClassifyResult* result,
+bool PaddleClasModel::Postprocess(const FDTensor& infer_result, ClassifyResult* result,
                         int topk) {
   int num_classes = infer_result.shape[1];
   const float* infer_result_buffer =
@@ -124,7 +124,7 @@ bool Model::Postprocess(const FDTensor& infer_result, ClassifyResult* result,
   return true;
 }
 
-bool Model::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
+bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
   if (!Preprocess(&mat, &(processed_data[0]))) {
@@ -148,6 +148,6 @@ bool Model::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   return true;
 }
 
-} // namespace ppcls
+} // namespace classification
 } // namespace vision
 } // namespace fastdeploy
