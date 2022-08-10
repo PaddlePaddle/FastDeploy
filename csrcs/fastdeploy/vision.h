@@ -34,7 +34,7 @@
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
 #include "fastdeploy/vision/ppcls/model.h"
-#include "fastdeploy/vision/ppdet/model.h"
+#include "fastdeploy/vision/detection/ppdet/model.h"
 #include "fastdeploy/vision/ppseg/model.h"
 #endif
 

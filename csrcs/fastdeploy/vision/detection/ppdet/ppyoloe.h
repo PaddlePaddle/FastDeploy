@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
 class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
  public:
@@ -63,10 +63,6 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   void GetNmsInfo();
 };
 
-// Read configuration and build pipeline to process input image
-bool BuildPreprocessPipelineFromConfig(
-    std::vector<std::shared_ptr<Processor>>* processors,
-    const std::string& config_file);
-}  // namespace ppdet
+}  // namespace detection 
 }  // namespace vision
 }  // namespace fastdeploy

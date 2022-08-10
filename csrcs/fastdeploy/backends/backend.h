@@ -34,6 +34,7 @@ class BaseBackend {
   bool initialized_ = false;
 
   BaseBackend() {}
+  virtual ~BaseBackend() = default;
 
   virtual bool Initialized() const { return initialized_; }
 

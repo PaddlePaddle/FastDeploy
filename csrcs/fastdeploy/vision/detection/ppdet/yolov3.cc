@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppdet/ppyolo.h"
+#include "fastdeploy/vision/detection/ppdet/yolov3.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
-PPYOLO::PPYOLO(const std::string& model_file, const std::string& params_file,
+YOLOv3::YOLOv3(const std::string& model_file, const std::string& params_file,
                const std::string& config_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER};
   valid_gpu_backends = {Backend::PDINFER};
-  has_nms_ = true;
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -33,20 +32,7 @@ PPYOLO::PPYOLO(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool PPYOLO::Initialize() {
-  if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file."
-            << std::endl;
-    return false;
-  }
-  if (!InitRuntime()) {
-    FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
-    return false;
-  }
-  return true;
-}
-
-bool PPYOLO::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
+bool YOLOv3::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
   for (size_t i = 0; i < processors_.size(); ++i) {
@@ -73,6 +59,6 @@ bool PPYOLO::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   return true;
 }
 
-}  // namespace ppdet
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

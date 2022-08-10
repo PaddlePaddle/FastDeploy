@@ -24,10 +24,12 @@ void BindYOLOv5Lite(pybind11::module& m);
 void BindYOLOv5(pybind11::module& m);
 void BindYOLOX(pybind11::module& m);
 void BindNanoDetPlus(pybind11::module& m);
+void BindPPDet(pybind11::module& m);
 
 void BindDetection(pybind11::module& m) {
   auto detection_module =
       m.def_submodule("detection", "Image object detection models.");
+  BindPPDet(detection_module);
   BindYOLOv7(detection_module);
   BindScaledYOLOv4(detection_module);
   BindYOLOR(detection_module);
