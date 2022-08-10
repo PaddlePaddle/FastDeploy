@@ -15,12 +15,11 @@
 
 namespace fastdeploy {
 void BindPPCls(pybind11::module& m) {
-  auto ppcls_module = m.def_submodule("ppcls", "Module to deploy PaddleClas.");
-  pybind11::class_<vision::ppcls::Model, FastDeployModel>(ppcls_module, "Model")
+  pybind11::class_<vision::classification::PaddleClasModel, FastDeployModel>(m, "PaddleClasModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
       .def("predict",
-           [](vision::ppcls::Model& self, pybind11::array& data, int topk = 1) {
+           [](vision::classification::PaddleClasModel& self, pybind11::array& data, int topk = 1) {
              auto mat = PyArrayToCvMat(data);
              vision::ClassifyResult res;
              self.Predict(&mat, &res, topk);
