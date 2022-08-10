@@ -13,23 +13,39 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
-class FASTDEPLOY_DECL YOLOv3 : public PPYOLOE {
+class FASTDEPLOY_DECL PPYOLO : public PPYOLOE {
  public:
-  YOLOv3(const std::string& model_file, const std::string& params_file,
+  PPYOLO(const std::string& model_file, const std::string& params_file,
          const std::string& config_file,
          const RuntimeOption& custom_option = RuntimeOption(),
          const Frontend& model_format = Frontend::PADDLE);
 
-  virtual std::string ModelName() const { return "PaddleDetection/YOLOv3"; }
+  virtual std::string ModelName() const { return "PaddleDetection/PPYOLO"; }
 
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
+  virtual bool Initialize();
+
+ protected:
+  PPYOLO() {}
 };
-}  // namespace ppdet
+
+class FASTDEPLOY_DECL PPYOLOv2 : public PPYOLO {
+  public:
+  PPYOLOv2(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const Frontend& model_format = Frontend::PADDLE) : PPYOLO(model_file, params_file, config_file, custom_option, model_format) {
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/PPYOLOv2"; }
+};
+
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
