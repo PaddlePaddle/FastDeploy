@@ -32,7 +32,7 @@ python infer.py --model modnet_photographic__portrait_matting.onnx --image todo 
 ## MODNet Python接口
 
 ```
-fastdeploy.vision.facedet.MODNet(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.matting.MODNet(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
 MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式
