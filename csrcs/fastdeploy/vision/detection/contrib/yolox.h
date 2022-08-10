@@ -28,10 +28,9 @@ class FASTDEPLOY_DECL YOLOX : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  YOLOX(const std::string& model_file,
-              const std::string& params_file = "",
-              const RuntimeOption& custom_option = RuntimeOption(),
-              const Frontend& model_format = Frontend::ONNX);
+  YOLOX(const std::string& model_file, const std::string& params_file = "",
+        const RuntimeOption& custom_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::ONNX);
 
   // 定义模型的名称
   std::string ModelName() const { return "YOLOX"; }

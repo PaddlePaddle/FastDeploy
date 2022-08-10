@@ -72,10 +72,8 @@ void LetterBoxWithRightBottomPad(Mat* mat, std::vector<int> size,
   }
 }
 
-YOLOX::YOLOX(const std::string& model_file,
-                         const std::string& params_file,
-                         const RuntimeOption& custom_option,
-                         const Frontend& model_format) {
+YOLOX::YOLOX(const std::string& model_file, const std::string& params_file,
+             const RuntimeOption& custom_option, const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
@@ -115,9 +113,8 @@ bool YOLOX::Initialize() {
   return true;
 }
 
-bool YOLOX::Preprocess(
-    Mat* mat, FDTensor* output,
-    std::map<std::string, std::array<float, 2>>* im_info) {
+bool YOLOX::Preprocess(Mat* mat, FDTensor* output,
+                       std::map<std::string, std::array<float, 2>>* im_info) {
   // YOLOX ( >= v0.1.1) preprocess steps
   // 1. preproc
   // 2. HWC->CHW
@@ -279,8 +276,8 @@ bool YOLOX::PostprocessWithDecode(
   return true;
 }
 
-bool YOLOX::Predict(cv::Mat* im, DetectionResult* result,
-                          float conf_threshold, float nms_iou_threshold) {
+bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
+                    float nms_iou_threshold) {
 #ifdef FASTDEPLOY_DEBUG
   TIMERECORD_START(0)
 #endif

@@ -16,8 +16,7 @@
 
 namespace fastdeploy {
 void BindYOLOX(pybind11::module& m) {
-  pybind11::class_<vision::detection::YOLOX, FastDeployModel>(
-      m, "YOLOX")
+  pybind11::class_<vision::detection::YOLOX, FastDeployModel>(m, "YOLOX")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
       .def("predict",
            [](vision::detection::YOLOX& self, pybind11::array& data,
@@ -28,8 +27,7 @@ void BindYOLOX(pybind11::module& m) {
              return res;
            })
       .def_readwrite("size", &vision::detection::YOLOX::size)
-      .def_readwrite("padding_value",
-                     &vision::detection::YOLOX::padding_value)
+      .def_readwrite("padding_value", &vision::detection::YOLOX::padding_value)
       .def_readwrite("is_decode_exported",
                      &vision::detection::YOLOX::is_decode_exported)
       .def_readwrite("downsample_strides",
