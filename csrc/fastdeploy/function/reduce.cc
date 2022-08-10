@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/function/reduce.h"
+
 #include <set>
 
 #include "fastdeploy/function/eigen.h"
-#include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/reduce_functor.h"
 #include "fastdeploy/utils/utils.h"
 
