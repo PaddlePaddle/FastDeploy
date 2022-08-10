@@ -13,8 +13,12 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .yolov7 import YOLOv7
-from .yolor import YOLOR
-from .scaled_yolov4 import ScaledYOLOv4
-
+from .contrib.yolov7 import YOLOv7
+from .contrib.yolor import YOLOR
+from .contrib.scaled_yolov4 import ScaledYOLOv4
+from .contrib.nanodet_plus import NanoDetPlus
+from .contrib.yolox import YOLOX
+from .contrib.yolov5 import YOLOv5
+from .contrib.yolov5lite import YOLOv5Lite
+from .contrib.yolov6 import YOLOv6
 from .ppdet import PPYOLOE, PPYOLO, PPYOLOv2, PaddleYOLOX, PicoDet, FasterRCNN, YOLOv3

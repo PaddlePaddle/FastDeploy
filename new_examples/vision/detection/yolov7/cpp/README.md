@@ -35,7 +35,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ### YOLOv7类
 
 ```
-fastdeploy::vision::wongkinyiu::YOLOv7(
+fastdeploy::vision::detection::YOLOv7(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
