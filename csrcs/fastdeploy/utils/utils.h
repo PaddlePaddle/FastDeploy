@@ -72,13 +72,13 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 #define __REL_FILE__ __FILE__
 #endif
 
-#define FDERROR             \
-  FDLogger(true, "[ERROR]") \
-      << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+#define FDERROR                                                \
+  FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
+                            << ")::" << __FUNCTION__ << "\t"
 
-#define FDWARNING             \
-  FDLogger(true, "[WARNING]") \
-      << __REL_FILE__ << "(" << __LINE__ << ")::" << __FUNCTION__ << "\t"
+#define FDWARNING                                                \
+  FDLogger(true, "[WARNING]") << __REL_FILE__ << "(" << __LINE__ \
+                              << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                \
   FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
@@ -89,5 +89,62 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
     FDERROR << message << std::endl; \
     std::abort();                    \
   }
+
+///////// Basic Marco ///////////
+
+#define FD_PRIVATE_CASE_TYPE_USING_HINT(NAME, enum_type, type, HINT, ...) \
+  case enum_type: {                                                       \
+    using HINT = type;                                                    \
+    __VA_ARGS__();                                                        \
+    break;                                                                \
+  }
+
+#define FD_PRIVATE_CASE_TYPE(NAME, enum_type, type, ...) \
+  FD_PRIVATE_CASE_TYPE_USING_HINT(NAME, enum_type, type, data_t, __VA_ARGS__)
+
+#define FD_VISIT_ALL_TYPES(TYPE, NAME, ...)                                \
+  [&] {                                                                    \
+    const auto& __dtype__ = TYPE;                                          \
+    switch (__dtype__) {                                                   \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::BOOL, bool,     \
+                           __VA_ARGS__)                                    \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT32, int32_t, \
+                           __VA_ARGS__)                                    \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT64, int64_t, \
+                           __VA_ARGS__)                                    \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP32, float,    \
+                           __VA_ARGS__)                                    \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP64, double,   \
+                           __VA_ARGS__)                                    \
+      default:                                                             \
+        FDASSERT(false, "Invalid enum data type.")                         \
+    }                                                                      \
+  }()
+
+#define FD_VISIT_FLOAT_TYPES(TYPE, NAME, ...)                            \
+  [&] {                                                                  \
+    const auto& __dtype__ = TYPE;                                        \
+    switch (__dtype__) {                                                 \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP32, float,  \
+                           __VA_ARGS__)                                  \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP64, double, \
+                           __VA_ARGS__)                                  \
+      default:                                                           \
+        FDASSERT(false, "Invalid enum data type.")                       \
+    }                                                                    \
+  }()
+
+#define FD_VISIT_INT_TYPES(TYPE, NAME, ...)                                \
+  [&] {                                                                    \
+    const auto& __dtype__ = TYPE;                                          \
+    switch (__dtype__) {                                                   \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT32, int32_t, \
+                           __VA_ARGS__)                                    \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT64, int64_t, \
+                           __VA_ARGS__)                                    \
+      default:                                                             \
+        FDASSERT(false, "Invalid enum data type.")                         \
+    }                                                                      \
+  }()
 
 }  // namespace fastdeploy
