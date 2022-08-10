@@ -9,7 +9,7 @@
 ## 导出ONNX模型
 
 ```
-# 下载yolov7模型文件
+# 下载yolov7模型文件，或准备训练好的YOLOv7模型文件
 wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 
 # 导出onnx格式文件 (Tips: 对应 YOLOv7 release v0.1 代码)
