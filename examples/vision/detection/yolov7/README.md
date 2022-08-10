@@ -19,7 +19,7 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
 # 移动onnx文件到demo目录
-cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
+cp PATH/TO/yolov7.onnx PATH/TO/FastDeploy/examples/vision/detextion/yolov7/
 ```
 
 ## 下载预训练模型
