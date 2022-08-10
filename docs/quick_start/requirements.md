@@ -17,5 +17,6 @@
 - gcc/g++ >= 8.2
 - python >= 3.6
 - Visual Studio 2019 (Windows平台)
-- cuda >= 11.0
+- cuda >= 11.0 （Linux默认安装路径在/usr/local/cuda下）
 - cudnn >= 8.0
+- TensorRT、Paddle Inference、ONNXruntime等推理引擎，会在SDK中包含，不需要单独安装。
