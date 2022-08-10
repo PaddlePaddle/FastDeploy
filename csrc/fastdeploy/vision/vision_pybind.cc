@@ -17,7 +17,6 @@
 namespace fastdeploy {
 
 void BindPPCls(pybind11::module& m);
-void BindPPDet(pybind11::module& m);
 void BindPPSeg(pybind11::module& m);
 
 void BindDetection(pybind11::module& m);
@@ -79,7 +78,6 @@ void BindVision(pybind11::module& m) {
       .def("__str__", &vision::MattingResult::Str);
 
   BindPPCls(m);
-  BindPPDet(m);
   BindPPSeg(m);
 
   BindDetection(m);
