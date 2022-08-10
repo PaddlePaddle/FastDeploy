@@ -1,15 +1,15 @@
-# RetinaFace Python部署示例
+# UltraFace Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
 
-本目录下提供`infer.py`快速完成RetinaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成UltraFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
 #下载yolov7模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx
 wget todo
 
 
@@ -18,24 +18,24 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/yolov7/python/
 
 # CPU推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device cpu
+python infer.py --model version-RFB-320.onnx --image todo --device cpu
 # GPU推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu
+python infer.py --model version-RFB-320.onnx --image todo --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu --use_trt True
+python infer.py --model version-RFB-320.onnx --image todo --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
 
-## RetinaFace Python接口
+## UltraFace Python接口
 
 ```
-fastdeploy.vision.facedet.RetinaFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.facedet.UltraFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
-RetinaFace模型加载和初始化，其中model_file为导出的ONNX模型格式
+UltraFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 **参数**
 
@@ -47,7 +47,7 @@ RetinaFace模型加载和初始化，其中model_file为导出的ONNX模型格�
 ### predict函数
 
 > ```
-> RetinaFace.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> UltraFace.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -74,6 +74,6 @@ RetinaFace模型加载和初始化，其中model_file为导出的ONNX模型格�
 
 ## 其它文档
 
-- [RetinaFace 模型介绍](..)
-- [RetinaFace C++部署](../cpp)
+- [UltraFace 模型介绍](..)
+- [UltraFace C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
