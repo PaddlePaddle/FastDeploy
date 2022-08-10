@@ -20,6 +20,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #ifdef FASTDEPLOY_LIB
@@ -146,5 +147,8 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false, "Invalid enum data type.")                         \
     }                                                                      \
   }()
+
+FASTDEPLOY_DECL std::vector<int64_t> GetStride(
+    const std::vector<int64_t>& dims);
 
 }  // namespace fastdeploy

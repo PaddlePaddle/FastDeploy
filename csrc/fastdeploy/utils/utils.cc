@@ -46,4 +46,13 @@ bool ReadBinaryFromFile(const std::string& file, std::string* contents) {
   return true;
 }
 
+std::vector<int64_t> GetStride(const std::vector<int64_t>& dims) {
+  auto dims_size = dims.size();
+  std::vector<int64_t> result(dims_size, 1);
+  for (int i = dims_size - 2; i >= 0; --i) {
+    result[i] = result[i + 1] * dims[i + 1];
+  }
+  return result;
+}
+
 }  // namespace fastdeploy
