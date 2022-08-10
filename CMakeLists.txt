@@ -19,7 +19,7 @@ option(CSRCS_DIR_NAME "Name of source code directory")
 option(LIBRARY_NAME "Name of build library name")
 option(PY_LIBRARY_NAME "Name of build python library name")
 if(NOT CSRCS_DIR_NAME)
-  set(CSRCS_DIR_NAME "csrcs")
+  set(CSRCS_DIR_NAME "csrc")
 endif()
 if(NOT LIBRARY_NAME)
   set(LIBRARY_NAME "fastdeploy")
@@ -54,10 +54,6 @@ option(ENABLE_FDTENSOR_FUNC "Whether to compile with function of FDTensor." OFF)
 # Please don't open this flag now, some bugs exists.
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
-
-# Whether to build fastdeply with vision/text/... examples, only for testings.
-option(WITH_VISION_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
-option(WITH_TEXT_EXAMPLES "Whether to build fastdeply with text examples" OFF)
 
 # config GIT_URL with github mirrors to speed up dependent repos clone
 option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
@@ -101,19 +97,6 @@ option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  # ENABLE_VISION and ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
-  message(STATUS "Found WTIH_VISION_EXAMPLES ON, so, force ENABLE_VISION and ENABLE_VISION_VISUALIZE ON")
-  set(ENABLE_VISION ON CACHE BOOL "force to enable vision models usage" FORCE)
-  set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
-endif()
-
-if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  # ENABLE_TEXT must be ON if enable text examples.
-  message(STATUS "Found WITH_TEXT_EXAMPLES ON, so, force ENABLE_TEXT ON")
-  set(ENABLE_TEXT ON CACHE BOOL "force to enable text models usage" FORCE)
-endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
@@ -276,22 +259,6 @@ if(MSVC)
   target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
-
-# add examples after prepare include paths for third-parties
-if (WITH_VISION_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  add_definitions(-DWITH_VISION_EXAMPLES)
-  set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
-  add_subdirectory(examples)
-endif()
-
-if (WITH_TEXT_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  add_definitions(-DWITH_TEXT_EXAMPLES)
-  set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/examples/bin)
-  # Avoid to add_subdirectory repeatedly
-  if (NOT WITH_VISION_EXAMPLES)
-    add_subdirectory(examples)
-  endif()
-endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
