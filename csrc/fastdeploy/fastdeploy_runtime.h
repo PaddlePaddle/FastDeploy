@@ -68,6 +68,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // disable mkldnn while use paddle inference in CPU
   void DisablePaddleMKLDNN();
 
+  // enable debug information of paddle backend
+  void EnablePaddleLogInfo();
+  // disable debug information of paddle backend
+  void DisablePaddleLogInfo();
+
   // set size of cached shape while enable mkldnn with paddle inference backend
   void SetPaddleMKLDNNCacheSize(int size);
 
@@ -108,6 +113,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
+  bool pd_enable_log_info = false;
   int pd_mkldnn_cache_size = 1;
 
   // ======Only for Trt Backend=======
