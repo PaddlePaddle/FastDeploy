@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppdet/picodet.h"
+#include "fastdeploy/vision/detection/ppdet/picodet.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
 PicoDet::PicoDet(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
@@ -61,6 +61,6 @@ bool PicoDet::CheckIfContainDecodeAndNMS() {
   return true;
 }
 
-}  // namespace ppdet
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

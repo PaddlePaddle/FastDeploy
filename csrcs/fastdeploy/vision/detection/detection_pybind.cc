@@ -19,10 +19,12 @@ namespace fastdeploy {
 void BindYOLOv7(pybind11::module& m);
 void BindScaledYOLOv4(pybind11::module& m);
 void BindYOLOR(pybind11::module& m);
+void BindPPDet(pybind11::module& m);
 
 void BindDetection(pybind11::module& m) {
   auto detection_module =
       m.def_submodule("detection", "Image object detection models.");
+  BindPPDet(detection_module);
   BindYOLOv7(detection_module);
   BindScaledYOLOv4(detection_module);
   BindYOLOR(detection_module);

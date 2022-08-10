@@ -13,27 +13,23 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
-class FASTDEPLOY_DECL FasterRCNN : public PPYOLOE {
+class FASTDEPLOY_DECL YOLOv3 : public PPYOLOE {
  public:
-  FasterRCNN(const std::string& model_file, const std::string& params_file,
-             const std::string& config_file,
-             const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+  YOLOv3(const std::string& model_file, const std::string& params_file,
+         const std::string& config_file,
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const Frontend& model_format = Frontend::PADDLE);
 
-  virtual std::string ModelName() const { return "PaddleDetection/FasterRCNN"; }
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOv3"; }
 
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
-  virtual bool Initialize();
-
- protected:
-  FasterRCNN() {}
 };
-}  // namespace ppdet
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

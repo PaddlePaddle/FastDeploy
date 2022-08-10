@@ -13,24 +13,23 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
-class FASTDEPLOY_DECL PicoDet : public PPYOLOE {
+class FASTDEPLOY_DECL PaddleYOLOX : public PPYOLOE {
  public:
-  PicoDet(const std::string& model_file, const std::string& params_file,
-          const std::string& config_file,
-          const RuntimeOption& custom_option = RuntimeOption(),
-          const Frontend& model_format = Frontend::PADDLE);
+  PaddleYOLOX(const std::string& model_file, const std::string& params_file,
+        const std::string& config_file,
+        const RuntimeOption& custom_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::PADDLE);
 
-  // Only support picodet contains decode and nms
-  bool CheckIfContainDecodeAndNMS();
+  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 
-  virtual std::string ModelName() const { return "PaddleDetection/PicoDet"; }
+  virtual std::string ModelName() const { return "PaddleDetection/YOLOX"; }
 };
-}  // namespace ppdet
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

@@ -1,4 +1,4 @@
-#include "fastdeploy/vision/ppdet/ppyoloe.h"
+#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 #ifdef ENABLE_PADDLE_FRONTEND
@@ -7,7 +7,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppdet {
+namespace detection {
 
 PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
@@ -253,6 +253,6 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   return true;
 }
 
-}  // namespace ppdet
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy
