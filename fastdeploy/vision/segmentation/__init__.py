@@ -13,13 +13,4 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-from . import detection
-from . import classification
-from . import segmentation
-
-from . import matting
-from . import facedet
-from . import faceid
-
-from . import evaluation
-from .visualize import *
+from .ppseg import PaddleSegModel

@@ -15,21 +15,22 @@
 
 namespace fastdeploy {
 void BindPPSeg(pybind11::module& m) {
-  auto ppseg_module =
-      m.def_submodule("ppseg", "Module to deploy PaddleSegmentation.");
-  pybind11::class_<vision::ppseg::Model, FastDeployModel>(ppseg_module, "Model")
+  pybind11::class_<vision::segmentation::PaddleSegModel, FastDeployModel>(
+      m, "PaddleSegModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
       .def("predict",
-           [](vision::ppseg::Model& self, pybind11::array& data) {
+           [](vision::segmentation::PaddleSegModel& self,
+              pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::SegmentationResult* res = new vision::SegmentationResult();
              // self.Predict(&mat, &res);
              self.Predict(&mat, res);
              return res;
            })
-      .def_readwrite("with_softmax", &vision::ppseg::Model::with_softmax)
+      .def_readwrite("with_softmax",
+                     &vision::segmentation::PaddleSegModel::with_softmax)
       .def_readwrite("is_vertical_screen",
-                     &vision::ppseg::Model::is_vertical_screen);
+                     &vision::segmentation::PaddleSegModel::is_vertical_screen);
 }
 }  // namespace fastdeploy
