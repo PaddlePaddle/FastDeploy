@@ -7,7 +7,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of retinaface onnx model.")
+        "--model", required=True, help="Path of yolov5face onnx model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
@@ -39,7 +39,7 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.facedet.RetinaFace(args.model, runtime_option=runtime_option)
+model = fd.vision.facedet.YOLOv5Face(args.model, runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)

@@ -7,7 +7,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of yolov7 onnx model.")
+        "--model", required=True, help="Path of ultraface onnx model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
