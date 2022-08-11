@@ -1,5 +1,5 @@
 # InsightFace C++部署示例
-
+本目录下提供infer_xxx.cc快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 以ArcFace为例提供`infer_arcface.cc`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
