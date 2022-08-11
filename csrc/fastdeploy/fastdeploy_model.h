@@ -43,13 +43,30 @@ class FASTDEPLOY_DECL FastDeployModel {
     return runtime_initialized_ && initialized;
   }
 
+  virtual void EnableRecordTimeOfRuntime() {
+    time_of_runtime_.clear();
+    std::vector<double>().swap(time_of_runtime_);
+    enable_record_time_of_runtime_ = true;
+  }
+
+  virtual void DisableRecordTimeOfRuntime() {
+    enable_record_time_of_runtime_ = false;
+  }
+
+  virtual void PrintStatisInfoOfRuntime();
+
   virtual void EnableDebug();
   virtual bool DebugEnabled();
 
  private:
   std::unique_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
+  // whether to record inference time
+  bool enable_record_time_of_runtime_ = false;
   bool debug_ = false;
+
+  // record inference time for backend
+  std::vector<double> time_of_runtime_;
 };
 
 #define TIMERECORD_START(id) \

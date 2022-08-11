@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/pybind/main.h"
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
 
@@ -25,6 +25,11 @@ void BindFDModel(pybind11::module& m) {
       .def("num_outputs_of_runtime", &FastDeployModel::NumOutputsOfRuntime)
       .def("input_info_of_runtime", &FastDeployModel::InputInfoOfRuntime)
       .def("output_info_of_runtime", &FastDeployModel::OutputInfoOfRuntime)
+      .def("enable_record_of_runtime", &FastDeployModel::EnableRecordOfRuntime)
+      .def("disable_record_of_runtime",
+           &FastDeployModel::DisableRecordOfRuntime)
+      .def("print_statis_info_of_runtime",
+           &FastDeployModel::PrintStatisInfoOfRuntime)
       .def("initialized", &FastDeployModel::Initialized)
       .def_readwrite("runtime_option", &FastDeployModel::runtime_option)
       .def_readwrite("valid_cpu_backends", &FastDeployModel::valid_cpu_backends)
@@ -32,4 +37,4 @@ void BindFDModel(pybind11::module& m) {
                      &FastDeployModel::valid_gpu_backends);
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
