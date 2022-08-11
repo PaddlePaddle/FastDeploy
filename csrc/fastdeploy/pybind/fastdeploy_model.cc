@@ -25,8 +25,8 @@ void BindFDModel(pybind11::module& m) {
       .def("num_outputs_of_runtime", &FastDeployModel::NumOutputsOfRuntime)
       .def("input_info_of_runtime", &FastDeployModel::InputInfoOfRuntime)
       .def("output_info_of_runtime", &FastDeployModel::OutputInfoOfRuntime)
-      .def("enable_record_of_runtime", &FastDeployModel::EnableRecordTimeOfRuntime)
-      .def("disable_record_of_runtime",
+      .def("enable_record_time_of_runtime", &FastDeployModel::EnableRecordTimeOfRuntime)
+      .def("disable_record_time_of_runtime",
            &FastDeployModel::DisableRecordTimeOfRuntime)
       .def("print_statis_info_of_runtime",
            &FastDeployModel::PrintStatisInfoOfRuntime)
