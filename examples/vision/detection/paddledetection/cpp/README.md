@@ -7,11 +7,10 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/compile/prebuilt_libraries.md)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```
-mkdir build
-cd build
+#下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/detection/paddledetection

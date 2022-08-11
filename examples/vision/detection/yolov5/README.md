@@ -1,9 +1,9 @@
-# YOLOv7准备部署模型
+# YOLOv5准备部署模型
 
 ## 模型版本说明
 
-- [YOLOv5 v6.0](https://github.com/ultralytics/yolov5/releases/tag/v6.0)
-  - （1）[链接中](https://github.com/ultralytics/yolov5/releases/tag/v6.0)的*.onnx可直接进行部署；
+- YOLOv5 v6.0部署模型实现来自[YOLOv5 v6.0分支](https://github.com/ultralytics/yolov5/tree/v6.0),和[基于COCO的预训练模型](https://github.com/ultralytics/yolov5/releases/tag/v6.0)
+  - （1）[预训练模型](https://github.com/ultralytics/yolov5/releases/tag/v6.0)的*.onnx可直接进行部署；
   - （2）开发者基于自己数据训练的YOLOv5 v6.0模型，可使用[YOLOv5](https://github.com/ultralytics/yolov5)中的`export.py`导出ONNX文件后后，完成部署。
 
 
