@@ -20,7 +20,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device cpu
 # GPU推理
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu
-# GPU上使用TensorRT推理 (TensorRT在SDK中已包含，不需要单独下载)
+# GPU上使用TensorRT推理 (TensorRT在SDK中已包含，不需要单独安装)
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 
