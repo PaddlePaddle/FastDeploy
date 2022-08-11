@@ -24,13 +24,17 @@ namespace vision {
 // If need to visualize num_classes > 1000
 // Please call Visualize::GetColorMap(num_classes) first
 cv::Mat Visualize::VisDetection(const cv::Mat& im,
-                                const DetectionResult& result, int line_size,
+                                const DetectionResult& result,
+                                float score_threshold, int line_size,
                                 float font_size) {
   auto color_map = GetColorMap();
   int h = im.rows;
   int w = im.cols;
   auto vis_im = im.clone();
   for (size_t i = 0; i < result.boxes.size(); ++i) {
+    if (result.scores[i] < score_threshold) {
+      continue;
+    }
     cv::Rect rect(result.boxes[i][0], result.boxes[i][1],
                   result.boxes[i][2] - result.boxes[i][0],
                   result.boxes[i][3] - result.boxes[i][1]);

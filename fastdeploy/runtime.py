@@ -81,6 +81,12 @@ class RuntimeOption:
     def disable_paddle_mkldnn(self):
         return self._option.disable_paddle_mkldnn()
 
+    def enable_paddle_log_info(self):
+        return self._option.enable_paddle_log_info()
+
+    def disable_paddle_log_info(self):
+        return self._option.disable_paddle_log_info()
+
     def set_paddle_mkldnn_cache_size(self, cache_size):
         return self._option.set_paddle_mkldnn_cache_size(cache_size)
 

@@ -32,6 +32,8 @@ struct PaddleBackendOption {
 #endif
   bool enable_mkldnn = true;
 
+  bool enable_log_info = false;
+
   int mkldnn_cache_size = 1;
   int cpu_thread_num = 8;
   // initialize memory size(MB) for GPU
