@@ -3,7 +3,7 @@
 - YOLOv7部署实现来自[YOLOv7 0.1分支](https://github.com/WongKinYiu/yolov7/tree/v0.1)，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。
 
   - （1）[预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署;*.onnx、*.trt和*.pose模型不支持部署；
-  - （2）开发者基于自己数据训练的YOLOv7 0.1模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - （2）自己数据训练的YOLOv7 0.1模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考下方[详细部署文档](#详细部署文档)完成部署。
 
 ## 导出ONNX模型
 
