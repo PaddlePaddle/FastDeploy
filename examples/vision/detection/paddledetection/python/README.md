@@ -50,7 +50,7 @@ PaddleDetection模型加载和初始化，其中model_file， params_file为导�
 
 ### predict函数
 
-PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO/FasterRCNN，均提供如下同样的成员函数用于进去图像的检测
+PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO/FasterRCNN，均提供如下同样的成员函数用于进行图像的检测
 > ```
 > PPYOLOE.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
