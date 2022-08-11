@@ -165,7 +165,52 @@ bool FastDeployModel::CreateGpuBackend() {
 
 bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                             std::vector<FDTensor>* output_tensors) {
-  return runtime_->Infer(input_tensors, output_tensors);
+  TimeCounter tc;
+  if (enable_record_time_of_runtime_) {
+    tc.Start();
+  }
+  auto ret = runtime_->Infer(input_tensors, output_tensors);
+  if (enable_record_time_of_runtime_) {
+    tc.End();
+    if (time_of_runtime_.size() > 50000) {
+      FDWARNING << "There are already 50000 records of runtime, will force to "
+                   "disable record time of runtime now."
+                << std::endl;
+      enable_record_time_of_runtime_ = false;
+    }
+    time_of_runtime_.push_back(tc.Duration());
+  }
+  return ret;
+}
+
+void FastDeployModel::PrintStatisInfoOfRuntime() {
+  if (time_of_runtime_.size() < 10) {
+    FDWARNING << "PrintStatisInfoOfRuntime require the runtime ran 10 times at "
+                 "least, but now you only ran "
+              << time_of_runtime_.size() << " times." << std::endl;
+    return;
+  }
+  double warmup_time = 0.0;
+  double remain_time = 0.0;
+  int warmup_iter = time_of_runtime_.size() / 5;
+  for (size_t i = 0; i < time_of_runtime_.size(); ++i) {
+    if (i < warmup_iter) {
+      warmup_time += time_of_runtime_[i];
+    } else {
+      remain_time += time_of_runtime_[i];
+    }
+  }
+  double avg_time = remain_time / (time_of_runtime_.size() - warmup_iter);
+  std::cout << "============= Runtime Statis Info(" << ModelName()
+            << ") =============" << std::endl;
+  std::cout << "Total iterations: " << time_of_runtime_.size() << std::endl;
+  std::cout << "Total time of runtime: " << warmup_time + remain_time << "s."
+            << std::endl;
+  std::cout << "Warmup iterations: " << warmup_iter << std::endl;
+  std::cout << "Total time of runtime in warmup step: " << warmup_time << "s."
+            << std::endl;
+  std::cout << "Average time of runtime exclude warmup step: " << avg_time
+            << "s." << std::endl;
 }
 
 void FastDeployModel::EnableDebug() {

@@ -49,7 +49,7 @@ else()
 endif(WIN32)
 
 set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/paddle2onnx/libs/")
-set(PADDLEINFERENCE_VERSION "2.3.1")
+set(PADDLEINFERENCE_VERSION "2.3.2")
 if(WIN32)
   message(FATAL_ERROR "Paddle Backend doesn't support Windows now.")
   set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-${PADDLEINFERENCE_VERSION}.zip")

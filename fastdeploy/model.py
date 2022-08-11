@@ -45,6 +45,15 @@ class FastDeployModel:
             index, self.num_outputs())
         return self._model.get_output_info(index)
 
+    def enable_record_time_of_runtime(self):
+        self._model.enable_record_time_of_runtime()
+
+    def disable_record_time_of_runtime(self):
+        self._model.disable_record_time_of_runtime()
+
+    def print_statis_info_of_runtime(self):
+        self._model.print_statis_info_of_runtime()
+
     @property
     def runtime_option(self):
         return self._model.runtime_option if self._model is not None else None
