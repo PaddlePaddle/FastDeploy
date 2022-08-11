@@ -16,6 +16,29 @@ import logging
 import os
 import sys
 
+
+def is_built_with_gpu() -> bool:
+    return True if "@WITH_GPU@" == "ON" else False
+
+
+def is_built_with_ort() -> bool:
+    return True if "@ENABLE_ORT_BACKEND@" == "ON" else False
+
+
+def is_built_with_trt() -> bool:
+    return True if "@ENABLE_TRT_BACKEND@" == "ON" else False
+
+
+def is_built_with_paddle() -> bool:
+    return True if "@ENABLE_PADDLE_BACKEND@" == "ON" else False
+
+
+def get_default_cuda_directory() -> str:
+    if not is_built_with_gpu():
+       return ""
+    return r"@CUDA_DIRECTORY@".strip()
+
+
 def add_dll_search_dir(dir_path):
     os.environ["path"] = dir_path + ";" + os.environ["path"]
     sys.path.insert(0, dir_path)
@@ -23,7 +46,33 @@ def add_dll_search_dir(dir_path):
         os.add_dll_directory(dir_path)
 
 
+def add_cuda_shared_lib_dir_windows():
+    if is_built_with_gpu():
+        # if fastdeploy built with gpu and want to run
+        # in windows, we need to add CUDA_DIRECTORY into
+        # dll search paths to make sure fastdeploy.dll
+        # can link cudart correctly. we search the
+        # default path firstly and try to add into
+        # paths. User should set it manually if the
+        # cuda toolkit is not locate in the default
+        # path we assume.
+        default_cuda_dir = get_default_cuda_directory()
+        cuda_shared_lib_dir = os.path.join(default_cuda_dir, "bin")
+        # TODO: add FAQ docs reference.
+        if not os.path.exists(cuda_shared_lib_dir):
+            # try to get cuda directory from user's local env
+            custom_cuda_dir = os.getenv("CUDA_DIRECTORY", "NOTFOUNDED")
+            if not os.path.exists(custom_cuda_dir) or custom_cuda_dir == "NOTFOUNDED":
+                raise RuntimeWarning(f"fastdeploy was built with gpu, \
+                      but the default cuda directory does not exists. \
+                      Please setup CUDA_DIRECTORY manually, this path \
+                      should look like:\n ---> {default_cuda_dir}")
+            cuda_shared_lib_dir = os.path.join(custom_cuda_dir, "bin")
+        add_dll_search_dir(cuda_shared_lib_dir)
+        print(f"[fastdeploy][cuda]: Found valid cuda directroy and added it: -> {cuda_shared_lib_dir}")
+
 if os.name == "nt":
+    add_cuda_shared_lib_dir_windows()
     current_path = os.path.abspath(__file__)
     dirname = os.path.dirname(current_path)
     third_libs_dir = os.path.join(dirname, "libs")
@@ -33,7 +82,27 @@ if os.name == "nt":
             if d == "lib" or d == "bin":
                 add_dll_search_dir(os.path.join(dirname, root, d))
 
-from .@PY_LIBRARY_NAME@ import *
+
+FASTDEPLOY_INITIALED = False
+try:
+    from .@PY_LIBRARY_NAME@ import *
+    FASTDEPLOY_INITIALED = True
+except:
+    raise RuntimeWarning("fastdeploy initalized failed!")
+
+
+def check_initialed() -> bool:
+    global FASTDEPLOY_INITIALED
+    built_info = f"Built info:\n \
+            WITH_GPU: {is_built_with_gpu()}, \n \
+            ENABLE_ORT_BACKEND:  {is_built_with_ort()} \n \
+            ENABLE_TRT_BACKEND:  {is_built_with_trt()} \n \
+            ENABLE_PADDLE_BACKEND:  {is_built_with_paddle()}"
+    if not FASTDEPLOY_INITIALED:
+       raise RuntimeWarning(f"fastdeploy initalized failed! {built_info}")
+    print(f"fastdeploy initalized done! {built_info}")
+    return FASTDEPLOY_INITIALED
+
 
 def TensorInfoStr(tensor_info):
     message = "TensorInfo(name : '{}', dtype : '{}', shape : '{}')".format(
