@@ -61,13 +61,22 @@ def add_cuda_shared_lib_dir_windows():
         # TODO: add FAQ docs reference.
         if not os.path.exists(cuda_shared_lib_dir):
             # try to get cuda directory from user's local env
-            custom_cuda_dir = os.getenv("CUDA_DIRECTORY", "NOTFOUNDED")
+            custom_cuda_dir = "NOTFOUNDED"
+            custom_cuda_envs = ["CUDA_DIRECTORY", "CUDA_HOME", "CUDA_HOME", "CUDA_ROOT", "CUDA_PATH"]
+            for custom_env in custom_cuda_envs:
+                custom_cuda_dir = os.getenv(custom_env, "NOTFOUNDED")
+                if os.path.exists(custom_cuda_dir) and custom_cuda_dir != "NOTFOUNDED":
+                    break
             if not os.path.exists(custom_cuda_dir) or custom_cuda_dir == "NOTFOUNDED":
-                logging.warnings.warn(f"\n--- fastdeploy was built with gpu, \n--- but the default cuda directory does not exists. \n--- Please setup CUDA_DIRECTORY manually, \n--- this path should look like: {default_cuda_dir}")
+                logging.warnings.warn(f"\n--- fastdeploy was built with gpu, \
+                    \n--- but the default cuda directory does not exists. \
+                    \n--- Please setup one of {custom_cuda_envs} manually, \
+                    \n--- this path should look like: {default_cuda_dir}")
                 return
             cuda_shared_lib_dir = os.path.join(custom_cuda_dir, "bin")
         add_dll_search_dir(cuda_shared_lib_dir)
         logging.info(f"[fastdeploy][cuda]: Found valid cuda directroy and added it: -> {cuda_shared_lib_dir}")
+
 
 if os.name == "nt":
     add_cuda_shared_lib_dir_windows()
