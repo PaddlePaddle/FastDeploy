@@ -2,8 +2,9 @@
 
 ## 模型版本说明
 
-- [YOLOv6 v0.1.0](https://github.com/meituan/YOLOv6/releases/download/0.1.0)
-  - （1）[链接中](https://github.com/meituan/YOLOv6/releases/download/0.1.0)的*.onnx可直接进行部署；
+- YOLOv6 v0.1.0部署实现来自[YOLOv6 0.1分支](https://github.com/meituan/YOLOv6/releases/download/0.1.0)，和[基于coco的预训练模型](https://github.com/meituan/YOLOv6/releases/tag/0.1.0)。
+
+  - （1）[基于coco的预训练模型](https://github.com/meituan/YOLOv6/releases/download/0.1.0)的*.onnx可直接进行部署；
 
 
 ## 下载预训练ONNX模型
