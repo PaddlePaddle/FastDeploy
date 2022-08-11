@@ -19,15 +19,15 @@ make -j
 
 #下载官方转换好的RetinaFace模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx
-wget todo
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 # CPU推理
-./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx todo 0
+./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
-./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx todo 1
+./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
-./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx todo 2
+./infer_demo Pytorch_RetinaFace_mobile0.25-640-640.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示
