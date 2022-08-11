@@ -1,6 +1,6 @@
-# YOLOv7 C++部署示例
+# NanoDetPlus C++部署示例
 
-本目录下提供`infer.cc`快速完成YOLOv7在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成NanoDetPlus在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -17,36 +17,36 @@ tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-#下载官方转换好的yolov7模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
+#下载官方转换好的NanoDetPlus模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/nanodet-plus-m_320.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
 # CPU推理
-./infer_demo yolov7.onnx 000000014439.jpg 0
+./infer_demo nanodet-plus-m_320.onnx 000000014439.jpg 0
 # GPU推理
-./infer_demo yolov7.onnx 000000014439.jpg 1
+./infer_demo nanodet-plus-m_320.onnx 000000014439.jpg 1
 # GPU上TensorRT推理
-./infer_demo yolov7.onnx 000000014439.jpg 2
+./infer_demo nanodet-plus-m_320.onnx 000000014439.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
 
-## YOLOv7 C++接口
+## NanoDetPlus C++接口
 
-### YOLOv7类
+### NanoDetPlus类
 
 ```
-fastdeploy::vision::detection::YOLOv7(
+fastdeploy::vision::detection::NanoDetPlus(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
 
-YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式。
+NanoDetPlus模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 **参数**
 
@@ -58,7 +58,7 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式。
 #### Predict函数
 
 > ```
-> YOLOv7::Predict(cv::Mat* im, DetectionResult* result,
+> NanoDetPlus::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
