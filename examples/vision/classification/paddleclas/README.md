@@ -33,7 +33,7 @@ PaddleClas模型导出，请参考其文档说明[模型导出](https://github.c
 | [PPLCNet_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNet_x1_0_infer.tgz) | 12MB | 224x224 |71.32% | 90.03% |
 | [PPLCNetV2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)  | 26MB  | 224x224 |77.04% | 93.27% |
 | [EfficientNetB7](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB7_infer.tgz) |  255MB | 600x600 | 84.3% | 96.9% |
-| [EfficientNetB0_small](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz |  18MB | 224x224 | 75.8% | 75.8% |
+| [EfficientNetB0_small](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)|  18MB | 224x224 | 75.8% | 75.8% |
 | [GhostNet_x1_3_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/GhostNet_x1_3_ssld_infer.tgz) |  29MB | 224x224 | 75.7% | 92.5% |
 | [GhostNet_x0_5_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/GhostNet_x0_5_infer.tgz) |  10MB | 224x224 | 66.8% | 86.9% |
 | [MobileNetV1_x0_25](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_x0_25_infer.tgz) |  1.9MB | 224x224 | 51.4% | 75.5% |
