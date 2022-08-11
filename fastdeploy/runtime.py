@@ -19,7 +19,8 @@ from . import c_lib_wrap as C
 class Runtime:
     def __init__(self, runtime_option):
         self._runtime = C.Runtime()
-        assert self._runtime.init(runtime_option), "Initialize Runtime Failed!"
+        assert self._runtime.init(
+            runtime_option._option), "Initialize Runtime Failed!"
 
     def infer(self, data):
         assert isinstance(data, dict), "The input data should be type of dict."
