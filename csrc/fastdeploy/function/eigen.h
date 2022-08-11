@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/axis_utils.h"
 #include "unsupported/Eigen/CXX11/Tensor"
 
 namespace fastdeploy {
@@ -93,6 +94,30 @@ struct EigenVector : public EigenTensor<T, 1, MajorType, IndexType> {
   static typename EigenVector::ConstType Flatten(
       const FDTensor& tensor) {  // NOLINT
     return EigenVector::From(tensor, {tensor.Numel()});
+  }
+};
+
+template <typename T, int MajorType = Eigen::RowMajor,
+          typename IndexType = Eigen::DenseIndex>
+struct EigenMatrix : public EigenTensor<T, 2, MajorType, IndexType> {
+  static typename EigenMatrix::Type Reshape(FDTensor& tensor,  // NOLINT
+                                            int num_col_dims) {
+    int rank = tensor.shape.size();
+    FDASSERT((num_col_dims > 0 && num_col_dims < rank),
+             "Input dimension number(num_col_dims).");
+    const int n = SizeToAxis(num_col_dims, tensor.shape);
+    const int d = SizeFromAxis(num_col_dims, tensor.shape);
+    return EigenMatrix::From(tensor, {n, d});
+  }
+
+  static typename EigenMatrix::ConstType Reshape(const FDTensor& tensor,
+                                                 int num_col_dims) {
+    int rank = tensor.shape.size();
+    FDASSERT((num_col_dims > 0 && num_col_dims < rank),
+             "Input dimension number(num_col_dims).");
+    const int n = SizeToAxis(num_col_dims, tensor.shape);
+    const int d = SizeFromAxis(num_col_dims, tensor.shape);
+    return EigenMatrix::From(tensor, {n, d});
   }
 };
 
