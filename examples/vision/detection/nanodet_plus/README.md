@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- NanoDetPlus部署实现来自[NanoDetPlus v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1)，基于coco的[预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)。
+- NanoDetPlus部署实现来自[NanoDetPlus v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) ，和基于coco的[预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)。
 
   - （1）[预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)的*.onnx可直接进行部署；
 
