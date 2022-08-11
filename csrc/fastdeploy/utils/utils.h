@@ -86,14 +86,14 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
   FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
                            << ")::" << __FUNCTION__ << "\t"
 
-#define FDASSERT(condition, format, ...)                                  \
-  if (!(condition)) {                                                     \
-    std::string format_string(format);                                    \
-    constexpr int BUF_SIZE = 256;                                         \
-    char buffer[BUF_SIZE];                                                \
-    std::snprintf(buffer, BUF_SIZE, format_string.data(), ##__VA_ARGS__); \
-    FDERROR << buffer << std::endl;                                       \
-    std::abort();                                                         \
+#define FDASSERT(condition, format, ...)                                      \
+  if (!(condition)) {                                                         \
+    std::string format_string(format);                                        \
+    int n = std::snprintf(nullptr, 0, format_string.data(), ##__VA_ARGS__);   \
+    std::vector<char> buffer(n + 1);                                          \
+    std::snprintf(buffer.data(), n + 1, format_string.data(), ##__VA_ARGS__); \
+    FDERROR << buffer.data() << std::endl;                                    \
+    std::abort();                                                             \
   }
 
 ///////// Basic Marco ///////////
