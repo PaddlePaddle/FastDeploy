@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -54,12 +53,52 @@ bool FastDeployModel::InitRuntime() {
           << std::endl;
       return false;
     }
-    runtime_ = utils::make_unique<Runtime>();
-    if (!runtime_->Init(runtime_option)) {
-      return false;
+
+    bool use_gpu = (runtime_option.device == Device::GPU);
+#ifndef WITH_GPU
+    use_gpu = false;
+#endif
+
+    // whether the model is supported by the setted backend
+    bool is_supported = false;
+    if (use_gpu) {
+      for (auto& item : valid_gpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    } else {
+      for (auto& item : valid_cpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
     }
-    runtime_initialized_ = true;
-    return true;
+
+    if (is_supported) {
+      runtime_ = std::unique_ptr<Runtime>(new Runtime());
+      if (!runtime_->Init(runtime_option)) {
+        return false;
+      }
+      runtime_initialized_ = true;
+      return true;
+    } else {
+      FDWARNING << ModelName() << " is not supported with backend "
+                << Str(runtime_option.backend) << "." << std::endl;
+      if (use_gpu) {
+        FDASSERT(valid_gpu_backends.size() > 0,
+                 "There's no valid gpu backend for " + ModelName() + ".");
+        FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
+                  << " for model inference." << std::endl;
+      } else {
+        FDASSERT(valid_gpu_backends.size() > 0,
+                 "There's no valid cpu backend for " + ModelName() + ".");
+        FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
+                  << " for model inference." << std::endl;
+      }
+    }
   }
 
   if (runtime_option.device == Device::CPU) {
