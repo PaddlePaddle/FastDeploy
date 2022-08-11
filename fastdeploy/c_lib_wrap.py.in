@@ -66,7 +66,6 @@ def add_cuda_shared_lib_dir_windows():
             for custom_env in custom_cuda_envs:
                 custom_cuda_dir = os.getenv(custom_env, "NOTFOUNDED")
                 custom_cuda_dir = custom_cuda_dir.strip().split(";")[0]
-                print(custom_cuda_dir)
                 if os.path.exists(custom_cuda_dir) and custom_cuda_dir != "NOTFOUNDED":
                     break
             if not os.path.exists(custom_cuda_dir) or custom_cuda_dir == "NOTFOUNDED":
