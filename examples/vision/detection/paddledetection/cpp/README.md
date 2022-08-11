@@ -10,7 +10,7 @@
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```
-#下载SDK，编译模型examples代码（包含了examples代码）
+#下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/detection/paddledetection
