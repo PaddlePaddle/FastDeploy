@@ -8,7 +8,6 @@
 本目录下提供`infer.py`快速完成NanoDetPlus在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/nanodet_plus/python/
