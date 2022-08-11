@@ -7,6 +7,7 @@
   - （1）[基于coco的预训练模型](https://github.com/meituan/YOLOv6/releases/download/0.1.0)的*.onnx可直接进行部署；
 
 
+
 ## 下载预训练ONNX模型
 
 为了方便开发者的测试，下面提供了YOLOv6导出的各系列模型，开发者可直接下载使用。

@@ -1,6 +1,6 @@
-# UltraFace C++部署示例
+# SCRFD C++部署示例
 
-本目录下提供`infer.cc`快速完成UltraFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成SCRFD在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -17,36 +17,36 @@ tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-#下载官方转换好的UltraFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx
+#下载官方转换好的SCRFD模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 # CPU推理
-./infer_demo version-RFB-320.onnx test_lite_face_detector_3.jpg 0
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
-./infer_demo version-RFB-320.onnx test_lite_face_detector_3.jpg 1
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
-./infer_demo version-RFB-320.onnx test_lite_face_detector_3.jpg 2
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/182562483-2719648c-8fe2-48af-a8e0-82e4ebe15133.jpg">
 
-## UltraFace C++接口
+## SCRFD C++接口
 
-### UltraFace类
+### SCRFD类
 
 ```
-fastdeploy::vision::facedet::UltraFace(
+fastdeploy::vision::detection::SCRFD(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
 
-UltraFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+SCRFD模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 **参数**
 
@@ -58,7 +58,7 @@ UltraFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 #### Predict函数
 
 > ```
-> UltraFace::Predict(cv::Mat* im, DetectionResult* result,
+> SCRFD::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -79,6 +79,10 @@ UltraFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
 > > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
 > > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
+> > * **downsample_strides**(vector&lt;int&gt;): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含三个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32]
+> > * **landmarks_per_face**(int): 如果使用具有人脸关键点的输出, 可以修改人脸关键点数量, 默认值为`landmarks_per_face=5`
+> > * **use_kps**(bool): 通过此参数可以设置模型是否使用关键点,如果ONNX文件没有关键点输出则需要将`use_kps=false`, 并将`landmarks_per_face=0`, 默认值为`use_kps=true`
+> > * **num_anchors**(int): 通过此参数可以设置每个锚点预测的anchor数量, 需要跟进训练模型的参数设定, 默认值为`num_anchors=2`
 
 - [模型介绍](../../)
 - [Python部署](../python)

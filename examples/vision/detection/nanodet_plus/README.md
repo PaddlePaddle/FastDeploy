@@ -6,7 +6,7 @@
 
   - （1）[预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)的*.onnx可直接进行部署；
   - （2）自己训练的模型，导出ONNX模型后，参考[详细部署教程](#详细部署文档)完成部署。
-  
+
 ## 下载预训练ONNX模型
 
 为了方便开发者的测试，下面提供了NanoDetPlus导出的各系列模型，开发者可直接下载使用。

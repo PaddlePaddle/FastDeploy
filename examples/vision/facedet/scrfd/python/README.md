@@ -1,43 +1,41 @@
-# MODNet Python部署示例
+# SCRFD Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
 
-本目录下提供`infer.py`快速完成MODNet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成SCRFD在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-#下载modnet模型文件和测试图片
-
-wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
+#下载SCRFD模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/modnet/python/
+cd examples/vison/detection/scrfd/python/
 
 # CPU推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device cpu
+python infer.py --model scrfd_500m_bnkps_shape640x640.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu
+python infer.py --model scrfd_500m_bnkps_shape640x640.onnx --image test_lite_face_detector_3.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu --use_trt True
-
+python infer.py --model scrfd_500m_bnkps_shape640x640.onnx --image test_lite_face_detector_3.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/182562483-2719648c-8fe2-48af-a8e0-82e4ebe15133.jpg">
 
-## MODNet Python接口
+## SCRFD Python接口
 
 ```
-fastdeploy.vision.matting.MODNet(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.detection.SCRFD(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
-MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式
+SCRFD模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 **参数**
 
@@ -49,7 +47,7 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式
 ### predict函数
 
 > ```
-> MODNet.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> SCRFD.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -71,11 +69,14 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式
 > > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
 > > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
 > > * **stride**(int): 配合`stris_mini_padide`成员变量使用, 默认值为`stride=32`
-
+> > * **downsample_strides**(list[int]): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含三个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32]
+> > * **landmarks_per_face**(int): 如果使用具有人脸关键点的输出, 可以修改人脸关键点数量, 默认值为`landmarks_per_face=5`
+> > * **use_kps**(bool): 通过此参数可以设置模型是否使用关键点,如果ONNX文件没有关键点输出则需要将`use_kps=False`, 并将`landmarks_per_face=0`, 默认值为`use_kps=True`
+> > * **num_anchors**(int): 通过此参数可以设置每个锚点预测的anchor数量, 需要跟进训练模型的参数设定, 默认值为`num_anchors=2`
 
 
 ## 其它文档
 
-- [MODNet 模型介绍](..)
-- [MODNet C++部署](../cpp)
+- [SCRFD 模型介绍](..)
+- [SCRFD C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)

@@ -10,7 +10,7 @@
 ```
 #下载retinaface模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx
-wget todo
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 #下载部署示例代码
@@ -18,11 +18,12 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/retinaface/python/
 
 # CPU推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device cpu
+
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_lite_face_detector_3.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu --use_trt True
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_lite_face_detector_3.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
