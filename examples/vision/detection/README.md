@@ -1,23 +1,13 @@
-# 视觉模型部署
+# 目标检测模型
 
-本目录下提供了各类视觉模型的部署，主要涵盖以下任务类型
+FastDeploy目前支持如下目标检测模型部署
 
-| 任务类型           | 说明                                  | 预测结果结构体                                                                          |
-|:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
-| Detection      | 目标检测，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度 | [DetectionResult](../../../../docs/api/vision_results/detection_result.md)       |
-| Segmentation   | 语义分割，输入图像，给出图像中每个像素的分类及置信度          | [SegmentationResult](../../../../docs/api/vision_results/segmentation_result.md) |
-| Classification | 图像分类，输入图像，给出图像的分类结果和置信度             | [ClassifyResult](../../../../docs/api/vision_results/classification_result.md)   |
-
-## FastDeploy API设计
-
-视觉模型具有较有统一任务范式，在设计API时（包括C++/Python），FastDeploy将视觉模型的部署拆分为四个步骤
-
-- 模型加载
-- 图像预处理
-- 模型推理
-- 推理结果后处理
-
-FastDeploy针对飞桨的视觉套件，以及外部热门模型，提供端到端的部署服务，用户只需准备模型，按以下步骤即可完成整个模型的部署
-
-- 加载模型
-- 调用`predict`接口
+| 模型 | 说明 | 模型格式 | 版本 |
+| :--- | :--- | :------- | :--- |
+| [PaddleDetection/PPYOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLOE系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/PicoDet](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PicoDet系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/YOLOX](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | Paddle版本的YOLOX系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/YOLOv3](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | YOLOv3系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/PPYOLO](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLO系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/FasterRCNN](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | FasterRCNN系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [WongKinYiu/YOLOv7](https://github.com/WongKinYiu/yolov7) | YOLOv7、YOLOv7-X等系列模型 | ONNX | [v0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) |

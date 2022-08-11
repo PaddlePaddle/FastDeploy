@@ -14,21 +14,21 @@
 
 from __future__ import absolute_import
 import logging
-from ... import FastDeployModel, Frontend
-from ... import c_lib_wrap as C
+from .... import FastDeployModel, Frontend
+from .... import c_lib_wrap as C
 
 
-class Model(FastDeployModel):
+class PaddleClasModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
                  config_file,
                  backend_option=None,
                  model_format=Frontend.PADDLE):
-        super(Model, self).__init__(backend_option)
+        super(PaddleClasModel, self).__init__(backend_option)
 
-        assert model_format == Frontend.PADDLE, "PaddleClas only support model format of Frontend.Paddle now."
-        self._model = C.vision.ppcls.Model(model_file, params_file,
+        assert model_format == Frontend.PADDLE, "PaddleClasModel only support model format of Frontend.Paddle now."
+        self._model = C.vision.classification.PaddleClasModel(model_file, params_file,
                                            config_file, self._runtime_option,
                                            model_format)
         assert self.initialized, "PaddleClas model initialize failed."

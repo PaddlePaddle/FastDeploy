@@ -28,6 +28,8 @@ void BindRuntime(pybind11::module& m) {
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("enable_paddle_mkldnn", &RuntimeOption::EnablePaddleMKLDNN)
       .def("disable_paddle_mkldnn", &RuntimeOption::DisablePaddleMKLDNN)
+      .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
+      .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",
            &RuntimeOption::SetPaddleMKLDNNCacheSize)
       .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)

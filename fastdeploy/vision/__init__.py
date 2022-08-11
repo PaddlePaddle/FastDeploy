@@ -14,11 +14,12 @@
 from __future__ import absolute_import
 
 from . import detection
+from . import classification
+
 from . import matting
 from . import facedet
 from . import faceid
 
-from . import ppcls
 from . import ppseg
 from . import evaluation
 from .visualize import *

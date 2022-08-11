@@ -181,6 +181,10 @@ void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
 
+void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
+
+void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
+
 void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   FDASSERT(size > 0, "Parameter size must greater than 0.");
   pd_mkldnn_cache_size = size;
@@ -272,6 +276,7 @@ void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
   pd_option.enable_mkldnn = option.pd_enable_mkldnn;
+  pd_option.enable_log_info = option.pd_enable_log_info;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;

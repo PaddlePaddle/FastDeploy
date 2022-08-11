@@ -19,21 +19,21 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppcls {
+namespace classification {
 
-class FASTDEPLOY_DECL Model : public FastDeployModel {
+class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
  public:
-  Model(const std::string& model_file, const std::string& params_file,
+  PaddleClasModel(const std::string& model_file, const std::string& params_file,
         const std::string& config_file,
         const RuntimeOption& custom_option = RuntimeOption(),
         const Frontend& model_format = Frontend::PADDLE);
 
-  std::string ModelName() const { return "ppclas-classify"; }
+  virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
   // TODO(jiangjiajun) Batch is on the way
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
- private:
+ protected:
   bool Initialize();
 
   bool BuildPreprocessPipelineFromConfig();
@@ -46,6 +46,20 @@ class FASTDEPLOY_DECL Model : public FastDeployModel {
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
 };
-}  // namespace ppcls
+
+typedef PaddleClasModel PPLCNet;
+typedef PaddleClasModel PPLCNetv2;
+typedef PaddleClasModel EfficientNet;
+typedef PaddleClasModel GhostNet;
+typedef PaddleClasModel MobileNetv1;
+typedef PaddleClasModel MobileNetv2;
+typedef PaddleClasModel MobileNetv3;
+typedef PaddleClasModel ShuffleNetv2;
+typedef PaddleClasModel SqueezeNet;
+typedef PaddleClasModel Inceptionv3;
+typedef PaddleClasModel PPHGNet;
+typedef PaddleClasModel ResNet50vd;
+typedef PaddleClasModel SwinTransformer;
+}  // namespace classification
 }  // namespace vision
 }  // namespace fastdeploy

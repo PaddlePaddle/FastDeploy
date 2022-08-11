@@ -1,6 +1,6 @@
 # FDTensor C++ 张量化函数
 
-FDTensor是FastDeploy在C++层表示张量的结构体。该结构体主要用于管理推理部署时模型的输入输出数据，支持在不同的Runtime后端中使用。在基于C++的推理部署应用开发过程中，我们往往需要对输入输出的数据进行一些数据处理，用以得到模型的实际输入或者应用的实际输出。这种数据预处理的逻辑可以使用原生的C++标准库来实现，但开发难度会比较大，如对3维Tensor的第2维求最大值。针对这个问题，FastDeploy基于FDTensor开发了一套C++张量化函数，用于降低FastDeploy用户的开发成本，提高开发效率。目前主要分为两类函数：Reduce类函数和Elementwise类函数。
+FDTensor是FastDeploy在C++层表示张量的结构体。该结构体主要用于管理推理部署时模型的输入输出数据，支持在不同的Runtime后端中使用。在基于C++的推理部署应用开发过程中，我们往往需要对输入输出的数据进行一些数据处理，用以得到模型的实际输入或者应用的实际输出。这种数据预处理的逻辑可以使用原生的C++标准库来实现，但开发难度会比较大，如对3维Tensor的第2维求最大值。针对这个问题，FastDeploy基于FDTensor开发了一套C++张量化函数，用于降低FastDeploy用户的开发成本，提高开发效率。目前主要分为三类函数：Reduce类函数，Manipulate类函数，Math类函数以及Elementwise类函数。
 
 ## Reduce类函数
 
@@ -208,6 +208,70 @@ input.SetExternalData({2, 3}, FDDataType::INT32, bool_inputs.data());
 // The output result would be [[false, false, true]].
 All(input, &output, {0}, /* keep_dim = */true);
 ```
+
+## Manipulate类函数
+
+目前FastDeploy支持1种Manipulate类函数：Transpose。
+
+### Transpose
+
+#### 函数签名
+
+```c++
+/** Excute the transpose operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param dims The vector of axis which the input tensor will transpose.
+*/
+void Transpose(const FDTensor& x, FDTensor* out,
+               const std::vector<int64_t>& dims);
+```
+
+#### 使用示例
+
+```c++
+FDTensor input, output;
+std::vector<float> inputs = {2, 4, 3, 7, 1, 5};
+input.SetExternalData({2, 3}, FDDataType::FP32, inputs.data());
+
+// Transpose the input tensor with axis {1, 0}.
+// The output result would be [[2, 7], [4, 1], [3, 5]]
+Transpose(input, &output, {1, 0});
+```
+
+## Math类函数
+
+目前FastDeploy支持1种Math类函数：Softmax。
+
+### Softmax
+
+#### 函数签名
+
+```c++
+/** Excute the softmax operation for input FDTensor along given dims.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param axis The axis to be computed softmax value.
+*/
+void Softmax(const FDTensor& x, FDTensor* out, int axis = -1);
+```
+
+#### 使用示例
+
+```c++
+FDTensor input, output;
+CheckShape check_shape;
+CheckData check_data;
+std::vector<float> inputs = {1, 2, 3, 4, 5, 6};
+input.SetExternalData({2, 3}, FDDataType::FP32, inputs.data());
+
+// Transpose the input tensor with axis {1, 0}.
+// The output result would be
+// [[0.04742587, 0.04742587, 0.04742587],
+//  [0.95257413, 0.95257413, 0.95257413]]
+Softmax(input, &output, 0);
+```
+
 
 ## Elementwise类函数
 

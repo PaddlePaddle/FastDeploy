@@ -26,6 +26,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
+  if (!option.enable_log_info) {
+    config_.DisableGlogInfo();
+  }
   config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
 }
 

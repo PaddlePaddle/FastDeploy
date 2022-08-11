@@ -20,10 +20,10 @@ void BindVisualize(pybind11::module& m) {
       .def(pybind11::init<>())
       .def_static("vis_detection",
                   [](pybind11::array& im_data, vision::DetectionResult& result,
-                     int line_size, float font_size) {
+                     float score_threshold, int line_size, float font_size) {
                     auto im = PyArrayToCvMat(im_data);
                     auto vis_im = vision::Visualize::VisDetection(
-                        im, result, line_size, font_size);
+                        im, result, score_threshold, line_size, font_size);
                     FDTensor out;
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);

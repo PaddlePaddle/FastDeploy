@@ -17,9 +17,13 @@ import logging
 from ... import c_lib_wrap as C
 
 
-def vis_detection(im_data, det_result, line_size=1, font_size=0.5):
-    return C.vision.Visualize.vis_detection(im_data, det_result, line_size,
-                                            font_size)
+def vis_detection(im_data,
+                  det_result,
+                  score_threshold=0.0,
+                  line_size=1,
+                  font_size=0.5):
+    return C.vision.Visualize.vis_detection(
+        im_data, det_result, score_threshold, line_size, font_size)
 
 
 def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -54,12 +53,52 @@ bool FastDeployModel::InitRuntime() {
           << std::endl;
       return false;
     }
-    runtime_ = utils::make_unique<Runtime>();
-    if (!runtime_->Init(runtime_option)) {
-      return false;
+
+    bool use_gpu = (runtime_option.device == Device::GPU);
+#ifndef WITH_GPU
+    use_gpu = false;
+#endif
+
+    // whether the model is supported by the setted backend
+    bool is_supported = false;
+    if (use_gpu) {
+      for (auto& item : valid_gpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    } else {
+      for (auto& item : valid_cpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
     }
-    runtime_initialized_ = true;
-    return true;
+
+    if (is_supported) {
+      runtime_ = std::unique_ptr<Runtime>(new Runtime());
+      if (!runtime_->Init(runtime_option)) {
+        return false;
+      }
+      runtime_initialized_ = true;
+      return true;
+    } else {
+      FDWARNING << ModelName() << " is not supported with backend "
+                << Str(runtime_option.backend) << "." << std::endl;
+      if (use_gpu) {
+        FDASSERT(valid_gpu_backends.size() > 0,
+                 "There's no valid gpu backend for " + ModelName() + ".");
+        FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
+                  << " for model inference." << std::endl;
+      } else {
+        FDASSERT(valid_gpu_backends.size() > 0,
+                 "There's no valid cpu backend for " + ModelName() + ".");
+        FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
+                  << " for model inference." << std::endl;
+      }
+    }
   }
 
   if (runtime_option.device == Device::CPU) {
@@ -126,7 +165,52 @@ bool FastDeployModel::CreateGpuBackend() {
 
 bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                             std::vector<FDTensor>* output_tensors) {
-  return runtime_->Infer(input_tensors, output_tensors);
+  TimeCounter tc;
+  if (enable_record_time_of_runtime_) {
+    tc.Start();
+  }
+  auto ret = runtime_->Infer(input_tensors, output_tensors);
+  if (enable_record_time_of_runtime_) {
+    tc.End();
+    if (time_of_runtime_.size() > 50000) {
+      FDWARNING << "There are already 50000 records of runtime, will force to "
+                   "disable record time of runtime now."
+                << std::endl;
+      enable_record_time_of_runtime_ = false;
+    }
+    time_of_runtime_.push_back(tc.Duration());
+  }
+  return ret;
+}
+
+void FastDeployModel::PrintStatisInfoOfRuntime() {
+  if (time_of_runtime_.size() < 10) {
+    FDWARNING << "PrintStatisInfoOfRuntime require the runtime ran 10 times at "
+                 "least, but now you only ran "
+              << time_of_runtime_.size() << " times." << std::endl;
+    return;
+  }
+  double warmup_time = 0.0;
+  double remain_time = 0.0;
+  int warmup_iter = time_of_runtime_.size() / 5;
+  for (size_t i = 0; i < time_of_runtime_.size(); ++i) {
+    if (i < warmup_iter) {
+      warmup_time += time_of_runtime_[i];
+    } else {
+      remain_time += time_of_runtime_[i];
+    }
+  }
+  double avg_time = remain_time / (time_of_runtime_.size() - warmup_iter);
+  std::cout << "============= Runtime Statis Info(" << ModelName()
+            << ") =============" << std::endl;
+  std::cout << "Total iterations: " << time_of_runtime_.size() << std::endl;
+  std::cout << "Total time of runtime: " << warmup_time + remain_time << "s."
+            << std::endl;
+  std::cout << "Warmup iterations: " << warmup_iter << std::endl;
+  std::cout << "Total time of runtime in warmup step: " << warmup_time << "s."
+            << std::endl;
+  std::cout << "Average time of runtime exclude warmup step: " << avg_time
+            << "s." << std::endl;
 }
 
 void FastDeployModel::EnableDebug() {
