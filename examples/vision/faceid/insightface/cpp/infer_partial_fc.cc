@@ -16,7 +16,7 @@
 
 void CpuInfer(const std::string& model_file,
               const std::vector<std::string>& image_file) {
-  auto model = fastdeploy::vision::faceid::CosFace(model_file);
+  auto model = fastdeploy::vision::faceid::PartialFC(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -55,7 +55,7 @@ void GpuInfer(const std::string& model_file,
               const std::vector<std::string>& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::faceid::CosFace(model_file, "", option);
+  auto model = fastdeploy::vision::faceid::PartialFC(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -96,7 +96,7 @@ void TrtInfer(const std::string& model_file,
   option.UseGpu();
   option.UseTrtBackend();
   option.SetTrtInputShape("data", {1, 3, 112, 112});
-  auto model = fastdeploy::vision::faceid::CosFace(model_file, "", option);
+  auto model = fastdeploy::vision::faceid::PartialFC(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;

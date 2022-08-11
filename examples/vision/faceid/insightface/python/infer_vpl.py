@@ -58,7 +58,7 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.faceid.CosFace(args.model, runtime_option=runtime_option)
+model = fd.vision.faceid.VPL(args.model, runtime_option=runtime_option)
 
 # 加载图片
 face0 = cv2.imread(args.face)  # 0,1 同一个人
