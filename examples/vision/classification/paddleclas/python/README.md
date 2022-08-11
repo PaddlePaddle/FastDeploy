@@ -11,7 +11,6 @@
 # 下载ResNet50_vd模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/images/coco_000000570688.jpg
 
 
 #下载部署示例代码
