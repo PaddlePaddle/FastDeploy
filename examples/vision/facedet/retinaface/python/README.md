@@ -1,41 +1,41 @@
-# YOLOv7 Python部署示例
+# RetinaFace Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
 
-本目录下提供`infer.py`快速完成YOLOv7在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成RetinaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-#下载yolov7模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+#下载retinaface模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx
+wget todo
 
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/yolov7/python/
+cd examples/vison/detection/retinaface/python/
 
 # CPU推理
-python infer.py --model yolov7.onnx --image 000000014439.jpg --device cpu
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device cpu
 # GPU推理
-python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu --use_trt True
+python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image todo --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
 
-## YOLOv7 Python接口
+## RetinaFace Python接口
 
 ```
-fastdeploy.vision.detection.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.facedet.RetinaFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
-YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
+RetinaFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 **参数**
 
@@ -47,7 +47,7 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
 ### predict函数
 
 > ```
-> YOLOv7.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> RetinaFace.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -74,6 +74,6 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ## 其它文档
 
-- [YOLOv7 模型介绍](..)
-- [YOLOv7 C++部署](../cpp)
+- [RetinaFace 模型介绍](..)
+- [RetinaFace C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
