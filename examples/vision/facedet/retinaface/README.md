@@ -4,11 +4,11 @@
 
 - [RetinaFace CommitID:b984b4b](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
   - （1）[链接中](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）开发者基于自己数据训练的RetinaFace CommitID:b984b4b模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - （2）自己数据训练的RetinaFace CommitID:b984b4b模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
 
 ## 导出ONNX模型
 
-自动下载的模型文件是我们事先转换好的，如果您需要从RetinaFace官方repo导出ONNX，请参考以下步骤。  
+[下载预训练ONNX模型](#下载预训练ONNX模型)已事先转换成ONNX；如果从RetinaFace官方repo下载的模型，需要按如下教程导出ONNX。  
 
 * 下载官方仓库并
 ```bash
