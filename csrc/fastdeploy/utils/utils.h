@@ -103,6 +103,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 #define FD_PRIVATE_CASE_TYPE(NAME, enum_type, type, ...) \
   FD_PRIVATE_CASE_TYPE_USING_HINT(NAME, enum_type, type, data_t, __VA_ARGS__)
 
+// Visit different data type to match the corresponding function of FDTensor
 #define FD_VISIT_ALL_TYPES(TYPE, NAME, ...)                                    \
   [&] {                                                                        \
     const auto& __dtype__ = TYPE;                                              \
