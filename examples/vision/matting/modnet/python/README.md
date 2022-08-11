@@ -9,8 +9,8 @@
 
 ```
 #下载modnet模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic__portrait_matting.onnx
-wget todo
+wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
 
 
 #下载部署示例代码
@@ -18,11 +18,11 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/modnet/python/
 
 # CPU推理
-python infer.py --model modnet_photographic__portrait_matting.onnx --image todo --device cpu
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device cpu
 # GPU推理
-python infer.py --model modnet_photographic__portrait_matting.onnx --image todo --device gpu
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model modnet_photographic__portrait_matting.onnx --image todo --device gpu --use_trt True
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示

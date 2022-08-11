@@ -7,7 +7,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of nanodet_plus onnx model.")
+        "--model", required=True, help="Path of modnet onnx model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
@@ -31,7 +31,7 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("images", [1, 3, 320, 320])
+        option.set_trt_input_shape("input", [1, 3, 256, 256])
     return option
 
 
@@ -39,14 +39,15 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.NanoDetPlus(
-    args.model, runtime_option=runtime_option)
+model = fd.vision.matting.MODNet(args.model, runtime_option=runtime_option)
 
+#设置推理size, 必须和模型文件一致
+model.size = (256, 256)
 # 预测图片检测结果
 im = cv2.imread(args.image)
 result = model.predict(im)
 
 # 预测结果可视化
-vis_im = fd.vision.vis_detection(im, result)
+vis_im = fd.vision.vis_matting_alpha(im, result)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")

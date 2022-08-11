@@ -15,22 +15,23 @@
 #include "fastdeploy/vision.h"
 
 void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::detection::NanoDetPlus(model_file);
+  auto model = fastdeploy::vision::matting::MODNet(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-
+  // 设置推理size, 必须和模型文件一致
+  model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -38,23 +39,24 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
 void GpuInfer(const std::string& model_file, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model =
-      fastdeploy::vision::detection::NanoDetPlus(model_file, "", option);
+  auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
+  // 设置推理size, 必须和模型文件一致
+  model.size = {256, 256};
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -63,24 +65,24 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("images", {1, 3, 320, 320});
-  auto model =
-      fastdeploy::vision::detection::NanoDetPlus(model_file, "", option);
+  option.SetTrtInputShape("input", {1, 3, 256, 256});
+  auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-
+  // 设置推理size, 必须和模型文件一致
+  model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -88,7 +90,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_model ./nanodet-plus-m_320.onnx ./test.jpeg 0"
+                 "e.g ./modnet_photographic_portrait_matting.onnx ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."

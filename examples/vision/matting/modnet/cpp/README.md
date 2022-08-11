@@ -18,16 +18,16 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
 #下载官方转换好的MODNet模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic__portrait_matting.onnx
-wget todo
+wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
 
 
 # CPU推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 0
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 0
 # GPU推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 1
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 1
 # GPU上TensorRT推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 2
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 2
 ```
 
 运行完成可视化结果如下图所示
