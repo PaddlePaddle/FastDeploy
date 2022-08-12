@@ -1,23 +1,23 @@
 # FastDeploy安装
 
-## Python安装
-
-首先安装FastDeploy的SDK管理工具
+目前已提供Linux、Windows上的Python Wheel安装包，开发者根据自身需求下载后使用如下命令安装即可，如
 
 ```
-pip install fastdeploy-python
+python -m pip install fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl
 ```
 
-然后通过命令行管理工具，根据自己的硬件安装相应SDK
+## Linux 
 
-### 安装CPU Python SDK
+| 安装包                                                       | Python环境 | 支持硬件 |
+| ------------------------------------------------------------ | ---------- | -------- |
+| [fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl) | 3.6        | CPU      |
+| [fastdeploy_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl) | 3.7        | CPU      |
+| [fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl) | 3.8        | CPU      |
+| [fastdeploy_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl) | 3.9        | CPU      |
 
-```
-fastdeploy --install cpu
-```
-
-### 安装GPU Python SDK
-
-```
-fastdeploy --install gpu
-```
+| GPU安装包                                                       | Python环境 | 支持硬件 |
+| ------------------------------------------------------------ | ---------- | -------- |
+| [fastdeploy_gpu_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl) | 3.6        | CPU/GPU(CUDA11.2 CUDNN8)     |
+| [fastdeploy_gpu_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl) | 3.7        | CPU/GPU(CUDA11.2 CUDNN8)       |
+| [fastdeploy_gpu_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl) | 3.8        | CPU/GPU(CUDA11.2 CUDNN8)       |
+| [fastdeploy_gpu_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl) | 3.9        | CPU/GPU(CUDA11.2 CUDNN8)       |
