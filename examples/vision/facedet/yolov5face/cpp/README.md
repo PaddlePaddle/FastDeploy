@@ -12,27 +12,27 @@
 ```
 mkdir build
 cd build
-wget https://xxx.tgz
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
 #下载官方转换好的YOLOv5Face模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx
-wget todo
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 # CPU推理
-./infer_demo yolov5s-face.onnx todo 0
+./infer_demo yolov5s-face.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
-./infer_demo yolov5s-face.onnx todo 1
+./infer_demo yolov5s-face.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
-./infer_demo yolov5s-face.onnx todo 2
+./infer_demo yolov5s-face.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301839-a29aefae-16c9-4196-bf9d-9c6cf694f02d.jpg">
 
 ## YOLOv5Face C++接口
 
@@ -58,7 +58,7 @@ YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 #### Predict函数
 
 > ```
-> YOLOv5Face::Predict(cv::Mat* im, DetectionResult* result,
+> YOLOv5Face::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -68,17 +68,20 @@ YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceDetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 > > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
 > > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
 > > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
 > > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
-> > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
+> > * **stride**(int): 配合`is_mini_pad`成员变量使用, 默认值为`stride=32`
+> > * **landmarks_per_face**(int): 指定当前模型检测的人脸所带的关键点个数，默认为5.
 
 - [模型介绍](../../)
 - [Python部署](../python)

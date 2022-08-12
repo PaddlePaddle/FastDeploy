@@ -10,24 +10,25 @@
 ```
 #下载ultraface模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx
-wget todo
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/ultraface/python/
+cd examples/vison/facedet/ultraface/python/
 
 # CPU推理
-python infer.py --model version-RFB-320.onnx --image todo --device cpu
+
+python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
-python infer.py --model version-RFB-320.onnx --image todo --device gpu
+python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model version-RFB-320.onnx --image todo --device gpu --use_trt True
+python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301821-0788483b-a72b-42b0-a566-b6430f184f6e.jpg">
 
 ## UltraFace Python接口
 
@@ -60,17 +61,13 @@ UltraFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.FaceDetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 ### 类成员属性
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
-> > * **stride**(int): 配合`stris_mini_padide`成员变量使用, 默认值为`stride=32`
-
-
+> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[320, 240]
 
 ## 其它文档
 

@@ -1,6 +1,6 @@
-# PartialFC C++部署示例
+# ScaledYOLOv4 C++部署示例
 
-本目录下提供`infer.cc`快速完成PartialFC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成ScaledYOLOv4在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -12,41 +12,41 @@
 ```
 mkdir build
 cd build
-wget https://xxx.tgz
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-#下载官方转换好的PartialFC模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/partial_fc_glint360k_r50.onnx
-wget todo
+#下载官方转换好的ScaledYOLOv4模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
 # CPU推理
-./infer_demo partial_fc_glint360k_r50.onnx todo 0
+./infer_demo scaled_yolov4-p5.onnx 000000014439.jpg 0
 # GPU推理
-./infer_demo partial_fc_glint360k_r50.onnx todo 1
+./infer_demo scaled_yolov4-p5.onnx 000000014439.jpg 1
 # GPU上TensorRT推理
-./infer_demo partial_fc_glint360k_r50.onnx todo 2
+./infer_demo scaled_yolov4-p5.onnx 000000014439.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301908-7027cf41-af51-4485-bd32-87aca0e77336.jpg">
 
-## PartialFC C++接口
+## ScaledYOLOv4 C++接口
 
-### PartialFC类
+### ScaledYOLOv4类
 
 ```
-fastdeploy::vision::faceid::PartialFC(
+fastdeploy::vision::detection::ScaledYOLOv4(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
 
-PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式。
+ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 **参数**
 
@@ -58,7 +58,7 @@ PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式
 #### Predict函数
 
 > ```
-> PartialFC::Predict(cv::Mat* im, DetectionResult* result,
+> ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -73,6 +73,8 @@ PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 > > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
 > > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
