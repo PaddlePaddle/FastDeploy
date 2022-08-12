@@ -28,7 +28,7 @@ python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301763-1b950047-c17f-4819-b175-c743b699c3b1.jpg">
 
 ## RetinaFace Python接口
 

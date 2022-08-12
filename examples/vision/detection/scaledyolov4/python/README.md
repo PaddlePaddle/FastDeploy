@@ -27,7 +27,7 @@ python infer.py --model scaled_yolov4-p5.onnx --image 000000014439.jpg --device 
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301908-7027cf41-af51-4485-bd32-87aca0e77336.jpg">
 
 ## ScaledYOLOv4 Python接口
 

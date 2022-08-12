@@ -26,7 +26,7 @@ def eval_detection(model,
     from .utils import CocoDetection
     from .utils import COCOMetric
     import cv2
-    from tqdm import trange 
+    from tqdm import trange
 
     if conf_threshold is not None or nms_iou_threshold is not None:
         assert conf_threshold is not None and nms_iou_threshold is not None, "The conf_threshold and nms_iou_threshold should be setted at the same time"
@@ -54,7 +54,7 @@ def eval_detection(model,
         im = cv2.imread(image_info["image"])
         im_id = image_info["im_id"]
         if conf_threshold is None and nms_iou_threshold is None:
-            result = model.predict(im)
+            result = model.predict(im.copy())
         else:
             result = model.predict(im, conf_threshold, nms_iou_threshold)
         pred = {

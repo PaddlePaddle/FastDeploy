@@ -26,7 +26,7 @@ python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu --use
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301746-04595d76-454a-4f07-8c7d-6f41418f8ae3.jpg">
 
 ## YOLOX Python接口
 

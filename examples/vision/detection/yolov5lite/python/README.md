@@ -27,7 +27,7 @@ python infer.py --model v5Lite-g-sim-640.onnx --image 000000014439.jpg --device 
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301943-263c8153-a52a-4533-a7c1-ee86d05d314b.jpg">
 
 ## YOLOv5Lite Python接口
 

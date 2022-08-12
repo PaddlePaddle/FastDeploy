@@ -39,9 +39,10 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.classification.PaddleClasModel(args.model, runtime_option=runtime_option)
+model = fd.vision.classification.PaddleClasModel(
+    args.model, runtime_option=runtime_option)
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im)
+result = model.predict(im.copy())
 print(result)

@@ -27,7 +27,7 @@ python infer.py --model scrfd_500m_bnkps_shape640x640.onnx --image test_lite_fac
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/182562483-2719648c-8fe2-48af-a8e0-82e4ebe15133.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301789-1981d065-208f-4a6b-857c-9a0f9a63e0b1.jpg">
 
 ## SCRFD Python接口
 

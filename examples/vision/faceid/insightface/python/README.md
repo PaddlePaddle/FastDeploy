@@ -11,9 +11,9 @@
 ```
 #下载ArcFace模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_0.png
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_1.png
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_2.png
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 
 #下载部署示例代码
@@ -21,11 +21,11 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/insightface/python/
 
 # CPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.png --face_positive test_lite_focal_arcface_1.png --face_negative test_lite_focal_arcface_2.png --device cpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
 # GPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.png --face_positive test_lite_focal_arcface_1.png --face_negative test_lite_focal_arcface_2.png --device gpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
 # GPU上使用TensorRT推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.png --face_positive test_lite_focal_arcface_1.png --face_negative test_lite_focal_arcface_2.png --device gpu --use_trt True
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示

@@ -29,7 +29,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -53,6 +53,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
+  std::cout << res.Str() << std::endl;
 
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -79,6 +80,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
+  std::cout << res.Str() << std::endl;
 
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);

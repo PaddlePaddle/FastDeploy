@@ -26,7 +26,7 @@ python infer.py --model nanodet-plus-m_320.onnx --image 000000014439.jpg --devic
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301689-87ee5205-2eff-4204-b615-24c400f01323.jpg">
 
 ## NanoDetPlus Python接口
 

@@ -19,17 +19,17 @@ make -j
 
 #下载官方转换好的ArcFace模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_0.png
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_1.png
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_focal_arcface_2.png
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
+wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 
 # CPU推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.png test_lite_focal_arcface_1.png test_lite_focal_arcface_2.png 0
+./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
 # GPU推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.png test_lite_focal_arcface_1.png test_lite_focal_arcface_2.png 1
+./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 1
 # GPU上TensorRT推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.png test_lite_focal_arcface_1.png test_lite_focal_arcface_2.png 2
+./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 2
 ```
 
 运行完成可视化结果如下图所示
