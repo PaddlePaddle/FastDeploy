@@ -21,7 +21,7 @@
 ## 发版历史
 - [v0.2.0] 2022.08.18 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过GPU TensorRT加速部署
 
-## 支持模型
+## 服务端模型
 
 | 任务场景 | 模型                                                         | CPU | NVIDIA GPU | TensorRT |
 | -------- | ------------------------------------------------------------ | ------- | ---------- | ------------------- |
@@ -86,7 +86,7 @@ DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
 ...
 ```
 
-## 更多部署示例
+## 更多服务端部署示例
 
 FastDeploy提供了大量部署示例供开发者参考，支持模型在CPU、GPU以及TensorRT的部署
 
@@ -98,6 +98,78 @@ FastDeploy提供了大量部署示例供开发者参考，支持模型在CPU、G
 - [YOLOv5部署](examples/vision/detection/yolov5)
 - [人脸检测模型部署](examples/vision/facedet)
 - [更多视觉模型部署示例...](examples/vision)
+
+### 📱轻量化SDK快速实现端侧AI推理部署
+
+
+| <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>边缘端       | <font size=2>移动端       | <font size=2> 移动端     |
+| ------------------ | ---------------------------- | --------------------- | --------------------- | ---------------------- | --------------------- |
+| ----               | ---                          | ---                   | <font size=2>  Linux  | <font size=2> Android  | <font size=2>  iOS    |
+| -----              | ----                         | ---                   | <font size=2> ARM CPU | <font size=2>  ARM CPU | <font size=2> ARM CPU |
+| Classfication      | PP-LCNet                     | 11.9                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-LCNetv2                   | 26.6                  | ✅                     | ✅                      | ✅                     |
+|                    | EfficientNet                 | 31.4                  | ✅                     | ✅                      | ✅                     |
+|                    | GhostNet                     | 20.8                  | ✅                     | ✅                      | ✅                     |
+|                    | MobileNetV1                  | 17                    | ✅                     | ✅                      | ✅                     |
+|                    | MobileNetV2                  | 14.2                  | ✅                     | ✅                      | ✅                     |
+|                    | MobileNetV3                  | 22                    | ✅                     | ✅                      | ✅                     |
+|                    | ShuffleNetV2                 | 9.2                   | ✅                     | ✅                      | ✅                     |
+|                    | SqueezeNetV1.1               | 5                     | ✅                     | ✅                      | ✅                     |
+|                    | Inceptionv3                  | 95.5                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-HGNet                     | 59                    | ✅                     | ✅                      | ✅                     |
+|                    | SwinTransformer_224_win7     | 352.7                 | ✅                     | ✅                      | ✅                     |
+| Detection          | PP-PicoDet_s_320_coco        | 4.1                   | ✅                     | ✅                      | ✅                     |
+|                    | PP-PicoDet_s_320_lcnet       | 4.9                   | ✅                     | ✅                      | ✅                     |
+|                    | CenterNet                    | 4.8                   | ✅                     | ✅                      | ✅                     |
+|                    | YOLOv3_MobileNetV3           | 94.6                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-YOLO_tiny_650e_coco       | 4.4                   | ✅                     | ✅                      | ✅                     |
+|                    | SSD_MobileNetV1_300_120e_voc | 23.3                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-YOLO_ResNet50vd           | 188.5                 | ✅                     | ✅                      | ✅                     |
+|                    | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     |
+|                    | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     |
+|                    | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     |
+| Face Detection     | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |
+| Face Localisation  | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |
+| Keypoint Detection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |
+| Segmentation       | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     |
+|                    | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     |
+|                    | PP-HumanSeg-Server           | 107.2                 | ✅                     | ✅                      | ✅                     |
+|                    | Unet                         | 53.7                  | ❌                     | ✅                      | ❌                     |
+| OCR                | PP-OCRv1                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
+|                    | PP-OCRv2                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
+|                    | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
+|                    | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |
+
+
+#### 边缘侧部署
+
+- ARM Linux 系统 
+  - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
+  - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
+  - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
+  - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
+
+#### 移动端部署
+
+- [iOS 系统部署](./docs/iOS-SDK.md)
+- [Android 系统部署](./docs/Android-SDK.md)  
+
+#### 自定义模型部署
+
+- [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
+
+## 社区交流
+
+- **加入社区👬：** 微信扫描二维码后，填写问卷加入交流群，与开发者共同讨论推理部署痛点问题
+
+<div align="center">
+<img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "200" height = "200" />
+</div>
+
+## Acknowledge
+
+本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，再次表示感谢。
 
 
 ## License
