@@ -1,9 +1,9 @@
 # UltraFace准备部署模型
 
-## 模型版本说明
 
 - [UltraFace](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)
-  - （1）[链接中](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)的*.onnx可下载, 也可以通过下面模型链接下载并进行部署
+  - （1）[官方库中提供的](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/)的*.onnx可下载, 也可以通过下面模型链接下载并进行部署
+  - （2）开发者自己训练的模型，导出ONNX模型后，参考[详细部署文档](#详细部署文档)完成部署。
 
 
 ## 下载预训练ONNX模型

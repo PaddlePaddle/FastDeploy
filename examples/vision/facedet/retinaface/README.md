@@ -1,10 +1,8 @@
 # RetinaFace准备部署模型
 
-## 模型版本说明
-
 - [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
-  - （1）[链接中](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）自己数据训练的RetinaFace CommitID:b984b4b模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
+  - （1）[官方库中提供的](https://github.com/biubug6/Pytorch_Retinaface/)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （2）自己数据训练的RetinaFace模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
 
 ## 导出ONNX模型
 

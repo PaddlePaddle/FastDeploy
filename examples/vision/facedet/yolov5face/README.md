@@ -1,9 +1,7 @@
 # YOLOv5Face准备部署模型
 
-## 模型版本说明
-
 - [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
-  - （1）[链接中](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （1）[官方库中提供的](https://github.com/deepcam-cn/yolov5-face/)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）开发者基于自己数据训练的YOLOv5Face模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 ## 导出ONNX模型
