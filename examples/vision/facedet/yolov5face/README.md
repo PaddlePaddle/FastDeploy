@@ -2,9 +2,9 @@
 
 ## 模型版本说明
 
-- [YOLOv5Face CommitID:4fd1ead](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
+- [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
   - （1）[链接中](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）开发者基于自己数据训练的YOLOv5Face CommitID:b984b4b模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - （2）开发者基于自己数据训练的YOLOv5Face模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 ## 导出ONNX模型
 
@@ -31,12 +31,17 @@
 
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv5s-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx) | 30MB | - |
+| [YOLOv5s-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx) | 30MB | 94.3 |
 | [YOLOv5s-Face-bak](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-s-640x640.bak.onnx) | 30MB | -|
-| [YOLOv5l-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-l-640x640.onnx ) | 181MB | - |
+| [YOLOv5l-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-l-640x640.onnx ) | 181MB | 95.8 |
 
 
 ## 详细部署文档
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[YOLOv5Face CommitID:4fd1ead](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead) 编写

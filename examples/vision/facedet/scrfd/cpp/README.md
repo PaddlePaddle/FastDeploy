@@ -1,6 +1,6 @@
-# ArcFace C++部署示例
+# SCRFD C++部署示例
 
-本目录下提供`infer.cc`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成SCRFD在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -12,41 +12,41 @@
 ```
 mkdir build
 cd build
-wget https://xxx.tgz
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
-#下载官方转换好的ArcFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r34.onnx
-wget todo
+#下载官方转换好的SCRFD模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 
 # CPU推理
-./infer_demo ms1mv3_arcface_r34.onnx todo 0
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
-./infer_demo ms1mv3_arcface_r34.onnx todo 1
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
-./infer_demo ms1mv3_arcface_r34.onnx todo 2
+./infer_demo scrfd_500m_bnkps_shape640x640.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301789-1981d065-208f-4a6b-857c-9a0f9a63e0b1.jpg">
 
-## ArcFace C++接口
+## SCRFD C++接口
 
-### ArcFace类
+### SCRFD类
 
 ```
-fastdeploy::vision::faceid::ArcFace(
+fastdeploy::vision::facedet::SCRFD(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::ONNX)
 ```
 
-ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+SCRFD模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 **参数**
 
@@ -58,7 +58,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 #### Predict函数
 
 > ```
-> ArcFace::Predict(cv::Mat* im, DetectionResult* result,
+> SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -68,17 +68,23 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceDetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 > > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
 > > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
 > > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
 > > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
 > > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
+> > * **downsample_strides**(vector&lt;int&gt;): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含三个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32]
+> > * **landmarks_per_face**(int): 如果使用具有人脸关键点的输出, 可以修改人脸关键点数量, 默认值为`landmarks_per_face=5`
+> > * **use_kps**(bool): 通过此参数可以设置模型是否使用关键点,如果ONNX文件没有关键点输出则需要将`use_kps=false`, 并将`landmarks_per_face=0`, 默认值为`use_kps=true`
+> > * **num_anchors**(int): 通过此参数可以设置每个锚点预测的anchor数量, 需要跟进训练模型的参数设定, 默认值为`num_anchors=2`
 
 - [模型介绍](../../)
 - [Python部署](../python)

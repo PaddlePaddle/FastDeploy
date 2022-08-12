@@ -61,7 +61,7 @@ def eval_detection(model,
         im = cv2.imread(image_info["image"])
         im_id = image_info["im_id"]
         if conf_threshold is None and nms_iou_threshold is None:
-            result = model.predict(im)
+            result = model.predict(im.copy())
         else:
             result = model.predict(im, conf_threshold, nms_iou_threshold)
         pred = {
