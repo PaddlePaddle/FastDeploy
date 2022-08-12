@@ -70,15 +70,12 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ### 类成员属性
 
-> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
-> > * **stride**(int): 配合`stris_mini_padide`成员变量使用, 默认值为`stride=32`
-> > * **downsample_strides**(list[int]): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含三个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32]
-> > * **landmarks_per_face**(int): 如果使用具有人脸关键点的输出, 可以修改人脸关键点数量, 默认值为`landmarks_per_face=5`
-> > * **use_kps**(bool): 通过此参数可以设置模型是否使用关键点,如果ONNX文件没有关键点输出则需要将`use_kps=False`, 并将`landmarks_per_face=0`, 默认值为`use_kps=True`
-> > * **num_anchors**(int): 通过此参数可以设置每个锚点预测的anchor数量, 需要跟进训练模型的参数设定, 默认值为`num_anchors=2`
+
+> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
+> > * **alpha**(list[float]): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
+> > * **beta**(list[float]): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
+> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认True
+> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认False
 
 
 ## 其它文档
