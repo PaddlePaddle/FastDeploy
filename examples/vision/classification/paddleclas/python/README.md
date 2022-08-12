@@ -29,8 +29,9 @@ python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg -
 运行完成返回结果如下所示
 ```
 ClassifyResult(
-    label_ids: 153,
-    scores: 0.686229)
+label_ids: 153,
+scores: 0.686229,
+)
 ```
 
 ## PaddleClasModel Python接口
