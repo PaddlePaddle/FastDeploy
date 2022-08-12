@@ -14,11 +14,11 @@
 
 from __future__ import absolute_import
 import logging
-from ... import FastDeployModel, Frontend
-from ... import c_lib_wrap as C
+from .... import FastDeployModel, Frontend
+from .... import c_lib_wrap as C
 
 
-class Model(FastDeployModel):
+class PaddleSegModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
@@ -28,9 +28,9 @@ class Model(FastDeployModel):
         super(Model, self).__init__(backend_option)
 
         assert model_format == Frontend.PADDLE, "PaddleSeg only support model format of Frontend.Paddle now."
-        self._model = C.vision.ppseg.Model(model_file, params_file,
-                                           config_file, self._runtime_option,
-                                           model_format)
+        self._model = C.vision.segmentation.PaddleSegModel(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PaddleSeg model initialize failed."
 
     def predict(self, input_image):
