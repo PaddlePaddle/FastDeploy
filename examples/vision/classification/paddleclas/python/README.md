@@ -26,7 +26,7 @@ python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg -
 python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True
 ```
 
-运行完成返回结果如下所示
+运行完成后返回结果如下所示
 ```
 ClassifyResult(
 label_ids: 153,
@@ -60,7 +60,7 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 > 
 > **参数**
 > 
-> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
 > > * **topk**(int):返回预测概率最高的topk个分类结果
 
 > **返回**
