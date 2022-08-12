@@ -23,7 +23,7 @@
 
 ## 支持模型
 
-| 任务场景 | 模型                                                         | X86 CPU | NVIDIA GPU | TensorRT |
+| 任务场景 | 模型                                                         | CPU | NVIDIA GPU | TensorRT |
 | -------- | ------------------------------------------------------------ | ------- | ---------- | ------------------- |
 | 图像分类 | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | √       | √          | √                   |
 |          | [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | √       | √          | √                   |
