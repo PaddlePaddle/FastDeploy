@@ -23,7 +23,7 @@
 
 ## 支持模型
 
-| 任务场景 | 模型                                                         | X64 CPU | Nvidia-GPU | Nvidia-GPU TensorRT |
+| 任务场景 | 模型                                                         | X86 CPU | NVIDIA GPU | TensorRT |
 | -------- | ------------------------------------------------------------ | ------- | ---------- | ------------------- |
 | 图像分类 | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | √       | √          | √                   |
 |          | [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | √       | √          | √                   |
@@ -41,7 +41,7 @@
 |          | [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | √       | √          | -                   |
 |          | [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7) | √       | √          | √                   |
 
-#### 快速开始
+## 快速开始
 
 #### 安装FastDeploy Python
 
