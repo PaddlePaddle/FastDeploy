@@ -28,6 +28,7 @@ python -m pip install fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 | [fastdeploy_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp39-cp39-manylinux1_x86_64.whl) | CPU | 3.9 |
 
 | GPU 安装包 | 硬件 | Python版本 |
+| :------------- | :--- | :--------- |
 | [fastdeploy_gpu_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl) | CPU/GPU | 3.6 |
 | [fastdeploy_gpu_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl) | CPU/GPU | 3.7 |
 | [fastdeploy_gpu_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl) | CPU/GPU | 3.8 |
