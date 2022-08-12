@@ -8,20 +8,19 @@
 本目录下提供`infer.py`快速完成YOLOX在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-#下载YOLOX模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-
-
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/yolox/python/
+
+#下载YOLOX模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # CPU推理
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device cpu
 # GPU推理
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu
-# GPU上使用TensorRT推理
+# GPU上使用TensorRT推理 (TensorRT在SDK中已包含，不需要单独安装)
 python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 

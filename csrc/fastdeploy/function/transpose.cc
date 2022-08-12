@@ -94,10 +94,14 @@ void Transpose(const FDTensor& x, FDTensor* out,
                const std::vector<int64_t>& dims) {
   size_t dims_size = dims.size();
   FDASSERT(dims_size == x.shape.size(),
-           "The input tensor's dimension should be equal to the dims's size.");
+           "The input tensor's dimension should be equal to the dims's size. "
+           "Expect dims size is %d, but receive %d.",
+           x.shape.size(), dims_size);
   std::vector<int> count(dims_size, 0);
   for (size_t i = 0; i < dims_size; i++) {
-    FDASSERT(dims[i] >= 0, "The dims should be greater than or equal to 0.");
+    FDASSERT(dims[i] >= 0,
+             "The dims should be greater than or equal to 0, but receive %d.",
+             dims[i]);
     FDASSERT(dims[i] < static_cast<int>(dims_size) && ++count[dims[i]] == 1,
              "Each element of Attribute axis should be a unique value range "
              "from 0 to (dims - 1), where the dims is the axis's size, unique "

@@ -15,6 +15,7 @@
 
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
+#include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
 #include "fastdeploy/vision/detection/contrib/yolor.h"
@@ -23,6 +24,7 @@
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/vision/detection/contrib/yolov7.h"
 #include "fastdeploy/vision/detection/contrib/yolox.h"
+#include "fastdeploy/vision/detection/ppdet/model.h"
 #include "fastdeploy/vision/facedet/contrib/retinaface.h"
 #include "fastdeploy/vision/facedet/contrib/scrfd.h"
 #include "fastdeploy/vision/facedet/contrib/ultraface.h"
@@ -33,9 +35,7 @@
 #include "fastdeploy/vision/faceid/contrib/partial_fc.h"
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
-#include "fastdeploy/vision/classification/ppcls/model.h"
-#include "fastdeploy/vision/detection/ppdet/model.h"
-#include "fastdeploy/vision/ppseg/model.h"
+#include "fastdeploy/vision/segmentation/ppseg/model.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

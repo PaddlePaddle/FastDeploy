@@ -21,13 +21,7 @@ import shutil
 import os
 
 PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy")
-assert PACKAGE_NAME in [
-    "cpu_fastdeploy", "gpu_fastdeploy", "fastdeploy"
-], "Only support PACKAGE_NAME set to ['cpu_fastdeploy', 'gpu_fastdeploy', 'fastdeploy'] now."
-if PACKAGE_NAME != "fastdeploy":
-    if os.path.exists(PACKAGE_NAME):
-        shutil.rmtree(PACKAGE_NAME)
-    shutil.copytree("fastdeploy", PACKAGE_NAME)
+wheel_name = "fastdeploy-python"
 
 from distutils.spawn import find_executable
 from distutils import sysconfig, log
@@ -64,6 +58,9 @@ setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
                                             "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
+
+if setup_configs["WITH_GPU"] == "ON":
+    wheel_name = "fastdeploy-gpu-python"
 
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
@@ -467,7 +464,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
 
 setuptools.setup(
-    name=PACKAGE_NAME,
+    name=wheel_name,
     version=VersionInfo.version,
     description="Deploy Kit Tool For Deeplearning models.",
     ext_modules=ext_modules,

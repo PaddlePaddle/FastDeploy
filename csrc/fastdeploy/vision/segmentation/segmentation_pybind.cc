@@ -11,20 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPaddleClas(pybind11::module& m) {
-  pybind11::class_<vision::classification::PaddleClasModel, FastDeployModel>(
-      m, "PaddleClasModel")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
-      .def("predict", [](vision::classification::PaddleClasModel& self,
-                         pybind11::array& data, int topk = 1) {
-        auto mat = PyArrayToCvMat(data);
-        vision::ClassifyResult res;
-        self.Predict(&mat, &res, topk);
-        return res;
-      });
+
+void BindPPSeg(pybind11::module& m);
+
+void BindSegmentation(pybind11::module& m) {
+  auto segmentation_module =
+      m.def_submodule("segmentation", "Image semantic segmentation models.");
+  BindPPSeg(segmentation_module);
 }
 }  // namespace fastdeploy

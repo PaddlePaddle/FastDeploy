@@ -104,7 +104,9 @@ struct EigenMatrix : public EigenTensor<T, 2, MajorType, IndexType> {
                                             int num_col_dims) {
     int rank = tensor.shape.size();
     FDASSERT((num_col_dims > 0 && num_col_dims < rank),
-             "Input dimension number(num_col_dims).");
+             "Input dimension number(num_col_dims) must be between 0 and %d, "
+             "but received number is %d.",
+             rank, num_col_dims);
     const int n = SizeToAxis(num_col_dims, tensor.shape);
     const int d = SizeFromAxis(num_col_dims, tensor.shape);
     return EigenMatrix::From(tensor, {n, d});
@@ -114,7 +116,9 @@ struct EigenMatrix : public EigenTensor<T, 2, MajorType, IndexType> {
                                                  int num_col_dims) {
     int rank = tensor.shape.size();
     FDASSERT((num_col_dims > 0 && num_col_dims < rank),
-             "Input dimension number(num_col_dims).");
+             "Input dimension number(num_col_dims) must be between 0 and %d, "
+             "but received number is %d.",
+             rank, num_col_dims);
     const int n = SizeToAxis(num_col_dims, tensor.shape);
     const int d = SizeFromAxis(num_col_dims, tensor.shape);
     return EigenMatrix::From(tensor, {n, d});
