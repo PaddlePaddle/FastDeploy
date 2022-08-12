@@ -8,7 +8,7 @@ python -m pip install fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl
 
 ## Linux 
 
-| 安装包                                                       | Python环境 | 支持硬件 |
+| CPU安装包                                                       | Python环境 | 支持硬件 |
 | ------------------------------------------------------------ | ---------- | -------- |
 | [fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl) | 3.6        | CPU      |
 | [fastdeploy_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp37-cp37m-manylinux1_x86_64.whl) | 3.7        | CPU      |
