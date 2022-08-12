@@ -95,9 +95,6 @@ FastDeploy提供了大量部署示例供开发者参考，支持模型在CPU、G
 - [人脸检测模型部署](examples/vision/facedet)
 - [更多视觉模型部署示例...](examples/vision)
 
-## Acknowledge
-
-本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，再次表示感谢。
 
 ## License
 
