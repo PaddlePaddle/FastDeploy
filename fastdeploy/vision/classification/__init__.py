@@ -14,3 +14,17 @@
 from __future__ import absolute_import
 
 from .ppcls import PaddleClasModel
+
+PPLCNet = PaddleClasModel
+PPLCNetv2 = PaddleClasModel
+EfficientNet = PaddleClasModel
+GhostNet = PaddleClasModel
+MobileNetv1 = PaddleClasModel
+MobileNetv2 = PaddleClasModel
+MobileNetv3 = PaddleClasModel
+ShuffleNetv2 = PaddleClasModel
+SqueezeNet = PaddleClasModel
+Inceptionv3 = PaddleClasModel
+PPHGNet = PaddleClasModel
+ResNet50vd = PaddleClasModel
+SwinTransformer = PaddleClasModel
