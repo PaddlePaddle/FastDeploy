@@ -1,6 +1,6 @@
 # YOLOv7准备部署模型
 
-- YOLOv7部署实现来自[YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。
+- YOLOv7部署实现来自[YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。
 
   - （1）[预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署;*.onnx、*.trt和*.pose模型不支持部署；
   - （2）自己数据训练的YOLOv7 0.1模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考[详细部署文档](#详细部署文档)完成部署。
@@ -18,8 +18,7 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 # 如果您的代码版本中有支持NMS的ONNX文件导出，请使用如下命令导出ONNX文件(请暂时不要使用 "--end2end"，我们后续将支持带有NMS的ONNX模型的部署)
 python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
-# 移动onnx文件到demo目录
-cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
+
 ```
 
 ## 下载预训练ONNX模型
@@ -42,3 +41,8 @@ cp PATH/TO/yolov7.onnx PATH/TO/model_zoo/vision/yolov7/
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) 编写

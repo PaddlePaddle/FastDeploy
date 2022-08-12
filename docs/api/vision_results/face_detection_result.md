@@ -1,4 +1,4 @@
-# FaceDetectionResult 目标检测结果
+# FaceDetectionResult 人脸检测结果
 
 FaceDetectionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度。
 

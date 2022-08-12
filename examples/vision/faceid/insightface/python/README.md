@@ -18,7 +18,7 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/insightface/python/
+cd examples/vison/faceid/insightface/python/
 
 # CPU推理
 python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
@@ -45,13 +45,13 @@ Detect Done! Cosine 01: 0.814385, Cosine 02:-0.059388
 
 ```
 
-## ArcFace Python接口
+## InsightFace Python接口
 
 ```
-fastdeploy.vision.detection.ArcFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.detection.CosFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.detection.PartialFC(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.detection.VPL(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
 ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
@@ -79,9 +79,11 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.FaceRecognitionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 ### 类成员属性
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 
 > > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]

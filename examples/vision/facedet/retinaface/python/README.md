@@ -15,7 +15,7 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/retinaface/python/
+cd examples/vison//retinaface/python/
 
 # CPU推理
 
@@ -61,9 +61,11 @@ RetinaFace模型加载和初始化，其中model_file为导出的ONNX模型格�
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.FaceDetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 ### 类成员属性
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 > > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
 > > * **variance**(list[float]): 通过此参数可以指定retinaface中的方差variance值，默认是[0.1,0.2], 一般不用修改.

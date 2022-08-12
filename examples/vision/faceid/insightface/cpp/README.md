@@ -12,7 +12,7 @@
 ```
 mkdir build
 cd build
-wget https://xxx.tgz
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
@@ -34,14 +34,18 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/182562483-2719648c-8fe2-48af-a8e0-82e4ebe15133.jpg">
+<div width="700">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321537-860bf857-0101-4e92-a74c-48e8658d838c.JPG">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184322004-a551e6e4-6f47-454e-95d6-f8ba2f47b516.JPG">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG">
+</div>
 
-## ArcFace C++接口
+## InsightFace C++接口
 
 ### ArcFace类
 
 ```
-fastdeploy::vision::detection::ArcFace(
+fastdeploy::vision::faceid::ArcFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
@@ -50,6 +54,41 @@ fastdeploy::vision::detection::ArcFace(
 
 ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
+### CosFace类
+
+```
+fastdeploy::vision::faceid::CosFace(
+        const string& model_file,
+        const string& params_file = "",
+        const RuntimeOption& runtime_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::ONNX)
+```
+
+CosFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+
+### PartialFC类
+
+```
+fastdeploy::vision::faceid::PartialFC(
+        const string& model_file,
+        const string& params_file = "",
+        const RuntimeOption& runtime_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::ONNX)
+```
+
+PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式。
+
+### VPL类
+
+```
+fastdeploy::vision::faceid::VPL(
+        const string& model_file,
+        const string& params_file = "",
+        const RuntimeOption& runtime_option = RuntimeOption(),
+        const Frontend& model_format = Frontend::ONNX)
+```
+
+VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 **参数**
 
 > * **model_file**(str): 模型文件路径
@@ -60,7 +99,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 #### Predict函数
 
 > ```
-> ArcFace::Predict(cv::Mat* im, DetectionResult* result,
+> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -70,11 +109,13 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
 
 > > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]

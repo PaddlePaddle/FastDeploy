@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- [RetinaFace CommitID:b984b4b](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
+- [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
   - （1）[链接中](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）自己数据训练的RetinaFace CommitID:b984b4b模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
 
@@ -53,3 +53,8 @@ onnxsim FaceDetector.onnx Pytorch_RetinaFace_resnet50-640-640.onnx  # resnet50
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[RetinaFace CommitID:b984b4b](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b) 编写

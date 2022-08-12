@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- [SCRFD CID:17cdeab](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)
+- [SCRFD](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)
   - （1）[链接中](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）开发者基于自己数据训练的SCRFD CID:17cdeab模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
@@ -28,9 +28,6 @@
   - docker
     docker的onnx目录中已有生成好的onnx文件
 
-
-  # 移动onnx文件到demo目录
-  cp PATH/TO/SCRFD.onnx PATH/TO/model_zoo/vision/scrfd/
   ```
 
 ## 下载预训练ONNX模型
@@ -67,3 +64,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[SCRFD CommitID:17cdeab](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950) 编写

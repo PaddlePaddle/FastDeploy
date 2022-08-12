@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- YOLOX部署实现来自[YOLOX v0.1.1分支](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0)，基于[coco的预训练模型](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)。
+- YOLOX部署实现来自[YOLOX](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0)，基于[coco的预训练模型](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)。
 
   - （1）[预训练模型](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)中的*.pth通过导出ONNX模型操作后，可进行部署;*.onnx、*.trt和*.pose模型不支持部署；
   - （2）开发者基于自己数据训练的YOLOX v0.1.1模型，可按照导出ONNX模型后，完成部署。
@@ -14,7 +14,10 @@
 
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOX-s](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx) | 35MB | 40.5% |
+| [YOLOX-s](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx) | 35MB | 39.6% |
+| [YOLOX-m](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_m.onnx) | 97MB | 46.4.5% |
+| [YOLOX-l](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_tiny.onnx) | 207MB | 50.0% |
+| [YOLOX-x](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_x.onnx) | 378MB | 51.2% |
 
 
 
@@ -23,3 +26,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[YOLOX v0.1.1版本](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0) 编写

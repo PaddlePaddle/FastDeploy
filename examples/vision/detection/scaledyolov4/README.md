@@ -1,6 +1,6 @@
 # ScaledYOLOv4准备部署模型
 
-- ScaledYOLOv4部署实现来自[ScaledYOLOv4 branch yolov4-large](https://github.com/WongKinYiu/ScaledYOLOv4)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/ScaledYOLOv4)。
+- ScaledYOLOv4部署实现来自[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)的代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/ScaledYOLOv4)。
 
   - （1）[预训练模型](https://github.com/WongKinYiu/ScaledYOLOv4)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署;*.onnx、*.trt和*.pose模型不支持部署；
   - （2）自己数据训练的ScaledYOLOv4模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考[详细部署文档](#详细部署文档)完成部署。
@@ -38,3 +38,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[ScaledYOLOv4 CommitID: 6768003](https://github.com/WongKinYiu/ScaledYOLOv4/commit/676800364a3446900b9e8407bc880ea2127b3415) 编写

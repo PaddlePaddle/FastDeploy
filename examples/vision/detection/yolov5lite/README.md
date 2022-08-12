@@ -1,6 +1,6 @@
 # YOLOv5Lite准备部署模型
 
-- YOLOv5Lite部署实现来自[YOLOv5-Lite-v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
+- YOLOv5Lite部署实现来自[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
 代码，和[基于COCO的预训练模型](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)。
 
   - （1）[预训练模型](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署;*.onnx、*.trt和*.pose模型不支持部署；
@@ -35,8 +35,7 @@
   # 导出onnx格式文件
   python export.py --grid --dynamic --concat --weights PATH/TO/yolov5-lite-xx.pt
 
-  # 移动onnx文件到demo目录
-  cp PATH/TO/yolov5lite.onnx PATH/TO/model_zoo/vision/yolov5lite/
+
   ```
   - 导出无decode模块的ONNX文件(不需要修改代码)
 
@@ -48,7 +47,7 @@
   # 导出onnx格式文件
   python export.py --grid --dynamic --weights PATH/TO/yolov5-lite-xx.pt
 
-```
+  ```
 
 ## 下载预训练ONNX模型
 
@@ -66,3 +65,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[YOLOv5-Lite v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) 编写

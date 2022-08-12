@@ -31,7 +31,7 @@
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了RetinaFace导出的各系列模型，开发者可直接下载使用。
+为了方便开发者的测试，下面提供了InsightFace导出的各系列模型，开发者可直接下载使用。
 其中精度指标来源于InsightFace中对各模型的介绍，详情各参考InsightFace中的说明
 
 | 模型                                                               | 大小    | 精度 (AgeDB_30)   |
@@ -55,3 +55,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[InsightFace CommitID:babb9a5](https://github.com/deepinsight/insightface/commit/babb9a5) 编写
