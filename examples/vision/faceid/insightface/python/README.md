@@ -32,10 +32,18 @@ python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_
 
 <div width="700">
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321537-860bf857-0101-4e92-a74c-48e8658d838c.JPG">
-<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321537-860bf857-0101-4e92-a74c-48e8658d838c.JPG">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184322004-a551e6e4-6f47-454e-95d6-f8ba2f47b516.JPG">
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG">
 </div>
-<!-- <img width="640" float="left" src="https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG"> -->
+
+```
+Prediction Done!
+--- [Face 0]:FaceRecognitionResult: [Dim(512), Min(-2.309220), Max(2.372197), Mean(0.016987)]
+--- [Face 1]:FaceRecognitionResult: [Dim(512), Min(-2.288258), Max(1.995104), Mean(-0.003400)]
+--- [Face 2]:FaceRecognitionResult: [Dim(512), Min(-3.243411), Max(3.875866), Mean(-0.030682)]
+Detect Done! Cosine 01: 0.814385, Cosine 02:-0.059388
+
+```
 
 ## ArcFace Python接口
 
