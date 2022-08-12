@@ -6,6 +6,8 @@
 python -m pip install fastdeploy_python-0.2.0-cp36-cp36m-manylinux1_x86_64.whl
 ```
 
+注意环境中不要重复安装`fastdeploy-python`和`fastdeploy-gpu-python`，在安装前，例如已安装cpu版本的`fastdeploy-python`后，如想重新安装gpu版本的`fastdeploy-gpu-python`，请先执行`pip uninstall fastdeploy-python`卸载已有版本
+
 ## Linux 
 
 | CPU安装包                                                       | Python环境 | 支持硬件 |
