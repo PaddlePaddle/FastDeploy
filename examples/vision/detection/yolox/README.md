@@ -3,7 +3,7 @@
 
 - YOLOX部署实现来自[YOLOX](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0)，基于[coco的预训练模型](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)。
 
-  - （1）[预训练模型](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)中的*.pth通过导出ONNX模型操作后，可进行部署;
+  - （1）[官方库](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)提供中的*.pth通过导出ONNX模型操作后，可进行部署;
   - （2）开发者自己训练的模型，导出ONNX模型后，参考[详细部署文档](#详细部署文档)完成部署。
 
 
