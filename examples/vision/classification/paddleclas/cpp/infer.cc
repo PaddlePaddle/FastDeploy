@@ -13,80 +13,95 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
 
-void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::detection::YOLOv7(model_file);
+void CpuInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
+
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+  auto model = fastdeploy::vision::classification::PaddleClasModel(
+      model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  // print res
+  std::cout << res.Str() << std::endl;
 }
 
-void GpuInfer(const std::string& model_file, const std::string& image_file) {
+void GpuInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::detection::YOLOv7(model_file, "", option);
+  auto model = fastdeploy::vision::classification::PaddleClasModel(
+      model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  // print res
+  std::cout << res.Str() << std::endl;
 }
 
-void TrtInfer(const std::string& model_file, const std::string& image_file) {
+void TrtInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("images", {1, 3, 640, 640});
-  auto model = fastdeploy::vision::detection::YOLOv7(model_file, "", option);
+  option.SetTrtInputShape("inputs", {1, 3, 224, 224}, {1, 3, 224, 224},
+                          {1, 3, 224, 224});
+  auto model = fastdeploy::vision::classification::PaddleClasModel(
+      model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
-  fastdeploy::vision::DetectionResult res;
+  fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  // print res
+  std::cout << res.Str() << std::endl;
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_model ./yolov7.onnx ./test.jpeg 0"
+                 "e.g ./infer_demo ./ResNet50_vd ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
