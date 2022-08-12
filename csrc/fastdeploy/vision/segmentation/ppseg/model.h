@@ -38,6 +38,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
 };
+
+void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
+                        bool contain_score_map);
 }  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy

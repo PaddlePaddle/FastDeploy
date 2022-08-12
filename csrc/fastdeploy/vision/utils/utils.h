@@ -115,9 +115,6 @@ void NCHW2NHWC(FDTensor& infer_result) {
   infer_result.shape = {num, height, width, channel};
 }
 
-void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
-                        bool contain_score_map);
-
 void NMS(DetectionResult* output, float iou_threshold = 0.5);
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);

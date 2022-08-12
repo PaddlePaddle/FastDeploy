@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/utils/utils.h"
+#include "fastdeploy/vision/segmentation/ppseg/model.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace utils {
+namespace segmentation {
 
 void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
                         bool contain_score_map) {
@@ -54,6 +54,6 @@ void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
   }
 }
 
-}  // namespace utils
+}  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy
