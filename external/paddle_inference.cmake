@@ -32,8 +32,8 @@ if(WIN32)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/paddle_inference.lib"
       CACHE FILEPATH "paddle_inference compile library." FORCE)
-  set(DNNL_LIB "${CMAKE_CURRENT_LIST_DIR}/third_libs/install/paddle_inference/third_party/install/mkldnn/lib/mkldnn.lib")
-  set(IOMP_LIB "${CMAKE_CURRENT_LIST_DIR}/third_libs/install/paddle_inference/third_party/install/mklml/lib/libiomp5md.lib")
+  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/mkldnn.lib")
+  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5md.lib")
 elseif(APPLE)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.dylib"
