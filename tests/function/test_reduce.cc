@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <array>
 #include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/reduce.h"
@@ -304,5 +305,72 @@ TEST(fastdeploy, reduce_any) {
   check_data(reinterpret_cast<const bool*>(output.Data()),
              expected_result_noaxis.data(), expected_result_noaxis.size());
 }
+
+TEST(fastdeploy, reduce_argmax) {
+  FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
+
+  std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
+  std::vector<int64_t> expected_result_axis0 = {1, 0, 1};
+  std::vector<int64_t> expected_result_axis1 = {1, 0};
+  std::vector<int64_t> expected_result_noaxis = {3};
+  input.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
+
+  // axis = 0, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // false
+  ArgMax(input, &output, 0);
+  check_shape(output.shape, {3});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
+
+  // axis = -1, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // false
+  ArgMax(input, &output, -1);
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
+
+  // axis = -1, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // true
+  ArgMax(input, &output, -1, FDDataType::INT64, false, true);
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
+}
+
+TEST(fastdeploy, reduce_argmin) {
+  FDTensor input, output;
+  CheckShape check_shape;
+  CheckData check_data;
+
+  std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
+  std::vector<int64_t> expected_result_axis0 = {0, 1, 0};
+  std::vector<int64_t> expected_result_axis1 = {0, 1};
+  std::vector<int64_t> expected_result_noaxis = {4};
+  input.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
+
+  // axis = 0, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // false
+  ArgMin(input, &output, 0);
+  check_shape(output.shape, {3});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
+
+  // axis = -1, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // false
+  ArgMin(input, &output, -1);
+  check_shape(output.shape, {2});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
+
+  // axis = -1, output_dtype = FDDataType::INT64, keep_dim = false, flatten =
+  // true
+  ArgMin(input, &output, -1, FDDataType::INT64, false, true);
+  check_shape(output.shape, {1});
+  check_data(reinterpret_cast<const int64_t*>(output.Data()),
+             expected_result_noaxis.data(), expected_result_noaxis.size());
+}
+
 #endif
 }  // namespace fastdeploy

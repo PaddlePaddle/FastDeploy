@@ -26,7 +26,7 @@ python infer.py --model yolox_s.onnx --image 000000014439.jpg --device gpu --use
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301746-04595d76-454a-4f07-8c7d-6f41418f8ae3.jpg">
 
 ## YOLOX Python接口
 
@@ -62,12 +62,12 @@ YOLOX模型加载和初始化，其中model_file为导出的ONNX模型格式
 > > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 ### 类成员属性
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
-> > * **stride**(int): 配合`stris_mini_padide`成员变量使用, 默认值为`stride=32`
+> >* **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
+> >* **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
+> >* **is_decode_exported**(bool): 表示导出的YOLOX的onnx模型文件是否带坐标反算的decode部分, 默认值为`is_decode_exported=False`，官方默认的导出不带decode部分，如果您导出的模型带了decode，请将此参数设置为True  
 
 
 

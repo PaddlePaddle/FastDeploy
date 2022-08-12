@@ -14,16 +14,17 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPCls(pybind11::module& m) {
-  pybind11::class_<vision::classification::PaddleClasModel, FastDeployModel>(m, "PaddleClasModel")
+void BindPaddleClas(pybind11::module& m) {
+  pybind11::class_<vision::classification::PaddleClasModel, FastDeployModel>(
+      m, "PaddleClasModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
-      .def("predict",
-           [](vision::classification::PaddleClasModel& self, pybind11::array& data, int topk = 1) {
-             auto mat = PyArrayToCvMat(data);
-             vision::ClassifyResult res;
-             self.Predict(&mat, &res, topk);
-             return res;
-           });
+      .def("predict", [](vision::classification::PaddleClasModel& self,
+                         pybind11::array& data, int topk = 1) {
+        auto mat = PyArrayToCvMat(data);
+        vision::ClassifyResult res;
+        self.Predict(&mat, &res, topk);
+        return res;
+      });
 }
 }  // namespace fastdeploy

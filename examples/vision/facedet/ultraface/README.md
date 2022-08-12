@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- [UltraFace CommitID:dffdddd](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)
+- [UltraFace](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)
   - （1）[链接中](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)的*.onnx可下载, 也可以通过下面模型链接下载并进行部署
 
 
@@ -21,3 +21,8 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+
+
+## 版本说明
+
+- 本版本文档和代码基于[UltraFace CommitID:dffdddd](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd) 编写
