@@ -1,4 +1,4 @@
-# 目标检测模型
+人脸检测模型
 
 FastDeploy目前支持如下目标检测模型部署
 
@@ -18,3 +18,4 @@ FastDeploy目前支持如下目标检测模型部署
 | [YOLOR](./yolor) | YOLOR 系列模型 | ONNX | [Release/weights](https://github.com/WongKinYiu/yolor/releases/tag/weights) |
 | [YOLOX](./yolox) | YOLOX 系列模型 | ONNX | [Release/v0.1.1](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0) |
 | [ScaledYOLOv4](./scaledyolov4) | ScaledYOLOv4 系列模型 | ONNX | [CommitID: 6768003](https://github.com/WongKinYiu/ScaledYOLOv4/commit/676800364a3446900b9e8407bc880ea2127b3415) |
+
