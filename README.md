@@ -39,7 +39,7 @@
 |          | [PaddleDetection/PPYOLO](./examples/vision/detection/paddledetection) | √       | √          | -                   |
 |          | [PaddleDetection/PPYOLOv2](./examples/vision/detection/paddledetection) | √       | √          | -                   |
 |          | [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | √       | √          | -                   |
-|          | [WongKinYiu/YOLOv6](./examples/vision/detection/yolov7) | √       | √          | -                   |
+|          | [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7) | √       | √          | √                   |
 
 #### 快速开始
 
