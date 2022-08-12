@@ -38,10 +38,9 @@ YOLOX模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 **参数**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX
+>* **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
+* **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
+* **is_decode_exported**(bool): 表示导出的YOLOX的onnx模型文件是否带坐标反算的decode部分, 默认值为`is_decode_exported=False`，官方默认的导出不带decode部分，如果您导出的模型带了decode，请将此参数设置为True  
 
 ### predict函数
 
