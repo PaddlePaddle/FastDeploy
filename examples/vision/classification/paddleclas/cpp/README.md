@@ -68,7 +68,7 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 > 
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **topk**(int):返回预测概率最高的topk个分类结果
+> > * **topk**(int):返回预测概率最高的topk个分类结果，默认为1
 
 
 - [模型介绍](../../)
