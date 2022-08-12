@@ -58,8 +58,6 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
                 << std::endl;
       option_.use_gpu = false;
     } else {
-      FDASSERT(option.gpu_id == 0, "Requires gpu_id == 0, but now gpu_id = " +
-                                       std::to_string(option.gpu_id) + ".");
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = option.gpu_id;
       session_options_.AppendExecutionProvider_CUDA(cuda_options);

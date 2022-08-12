@@ -26,6 +26,9 @@ python infer.py --model_dir ppyoloe_crn_l_300e_coco --image 000000087038.jpg --d
 ```
 
 运行完成可视化结果如下图所示
+<div  align="center">    
+<img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
+</div>
 
 ## PaddleDetection Python接口
 

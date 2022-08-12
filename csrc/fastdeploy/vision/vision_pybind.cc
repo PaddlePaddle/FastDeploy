@@ -16,10 +16,9 @@
 
 namespace fastdeploy {
 
-void BindPPCls(pybind11::module& m);
-void BindPPSeg(pybind11::module& m);
-
 void BindDetection(pybind11::module& m);
+void BindClassification(pybind11::module& m);
+void BindSegmentation(pybind11::module& m);
 void BindMatting(pybind11::module& m);
 void BindFaceDet(pybind11::module& m);
 void BindFaceId(pybind11::module& m);
@@ -58,7 +57,6 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("label_map", &vision::SegmentationResult::label_map)
       .def_readwrite("score_map", &vision::SegmentationResult::score_map)
       .def_readwrite("shape", &vision::SegmentationResult::shape)
-      .def_readwrite("shape", &vision::SegmentationResult::shape)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 
@@ -77,10 +75,9 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::MattingResult::Str)
       .def("__str__", &vision::MattingResult::Str);
 
-  BindPPCls(m);
-  BindPPSeg(m);
-
   BindDetection(m);
+  BindClassification(m);
+  BindSegmentation(m);
   BindFaceDet(m);
   BindFaceId(m);
   BindMatting(m);

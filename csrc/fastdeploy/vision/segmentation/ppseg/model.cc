@@ -1,15 +1,17 @@
-#include "fastdeploy/vision/ppseg/model.h"
+#include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppseg {
+namespace segmentation {
 
-Model::Model(const std::string& model_file, const std::string& params_file,
-             const std::string& config_file, const RuntimeOption& custom_option,
-             const Frontend& model_format) {
+PaddleSegModel::PaddleSegModel(const std::string& model_file,
+                               const std::string& params_file,
+                               const std::string& config_file,
+                               const RuntimeOption& custom_option,
+                               const Frontend& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
@@ -20,7 +22,7 @@ Model::Model(const std::string& model_file, const std::string& params_file,
   initialized = Initialize();
 }
 
-bool Model::Initialize() {
+bool PaddleSegModel::Initialize() {
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -33,7 +35,7 @@ bool Model::Initialize() {
   return true;
 }
 
-bool Model::BuildPreprocessPipelineFromConfig() {
+bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   processors_.push_back(std::make_shared<BGR2RGB>());
@@ -75,8 +77,9 @@ bool Model::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool Model::Preprocess(Mat* mat, FDTensor* output,
-                       std::map<std::string, std::array<int, 2>>* im_info) {
+bool PaddleSegModel::Preprocess(
+    Mat* mat, FDTensor* output,
+    std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (processors_[i]->Name().compare("Resize") == 0) {
       auto processor = dynamic_cast<Resize*>(processors_[i].get());
@@ -107,8 +110,9 @@ bool Model::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
-                        std::map<std::string, std::array<int, 2>>* im_info) {
+bool PaddleSegModel::Postprocess(
+    FDTensor& infer_result, SegmentationResult* result,
+    std::map<std::string, std::array<int, 2>>* im_info) {
   // PaddleSeg has three types of inference output:
   //     1. output with argmax and without softmax. 3-D matrix CHW, Channel
   //     always 1, the element in matrix is classified label_id INT64 Type.
@@ -139,8 +143,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   Mat* mat = nullptr;
   if (is_resized) {
     cv::Mat temp_mat;
-    utils::FDTensor2FP32CVMat(temp_mat, infer_result,
-                              result->contain_score_map);
+    FDTensor2FP32CVMat(temp_mat, infer_result, result->contain_score_map);
 
     // original image shape
     auto iter_ipt = (*im_info).find("input_shape");
@@ -196,7 +199,7 @@ bool Model::Postprocess(FDTensor& infer_result, SegmentationResult* result,
   return true;
 }
 
-bool Model::Predict(cv::Mat* im, SegmentationResult* result) {
+bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
 
@@ -227,6 +230,6 @@ bool Model::Predict(cv::Mat* im, SegmentationResult* result) {
   return true;
 }
 
-}  // namespace ppseg
+}  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy

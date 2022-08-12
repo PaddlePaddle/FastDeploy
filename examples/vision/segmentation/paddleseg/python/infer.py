@@ -8,11 +8,11 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_dir",
-        required=True,
-        help="Path of PaddleDetection model directory")
+        "--model", required=True, help="Path of PaddleClas model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--image", type=str, required=True, help="Path of test image file.")
+    parser.add_argument(
+        "--topk", type=int, default=1, help="Return topk results.")
     parser.add_argument(
         "--device",
         type=str,
@@ -34,28 +34,23 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("image", [1, 3, 640, 640])
-        option.set_trt_input_shape("scale_factor", [1, 2])
+        option.set_trt_input_shape("inputs", [1, 3, 224, 224],
+                                   [1, 3, 224, 224], [1, 3, 224, 224])
     return option
 
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model_dir, "model.pdmodel")
-params_file = os.path.join(args.model_dir, "model.pdiparams")
-config_file = os.path.join(args.model_dir, "infer_cfg.yml")
-
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.PPYOLOE(
+model_file = os.path.join(args.model, "inference.pdmodel")
+params_file = os.path.join(args.model, "inference.pdiparams")
+config_file = os.path.join(args.model, "inference_cls.yaml")
+#model = fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=runtime_option)
+model = fd.vision.classification.ResNet50vd(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
-# 预测图片检测结果
+# 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im, args.topk)
 print(result)
-
-# 预测结果可视化
-vis_im = fd.vision.vis_detection(im, result, score_threshold=0.5)
-cv2.imwrite("visualized_result.jpg", vis_im)
-print("Visualized result save in ./visualized_result.jpg")

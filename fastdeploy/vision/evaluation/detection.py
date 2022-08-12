@@ -15,6 +15,7 @@
 import numpy as np
 import copy
 import collections
+import math
 
 
 def eval_detection(model,
@@ -48,9 +49,15 @@ def eval_detection(model,
     eval_metric = COCOMetric(
         coco_gt=copy.deepcopy(eval_dataset.coco_gt), classwise=False)
     scores = collections.OrderedDict()
+    twenty_percent_image_num = math.ceil(image_num * 0.2)
+    start_time = 0
+    end_time = 0
+    average_inference_time = 0
     for image_info, i in zip(all_image_info,
                              trange(
                                  image_num, desc="Inference Progress")):
+        if i == twenty_percent_image_num:
+            start_time = time.time()
         im = cv2.imread(image_info["image"])
         im_id = image_info["im_id"]
         if conf_threshold is None and nms_iou_threshold is None:
@@ -66,8 +73,13 @@ def eval_detection(model,
             'im_id': im_id
         }
         eval_metric.update(im_id, pred)
+        if i == image_num - 1:
+            end_time = time.time()
+    average_inference_time = round(
+        (end_time - start_time) / (image_num - twenty_percent_image_num), 4)
     eval_metric.accumulate()
     eval_details = eval_metric.details
     scores.update(eval_metric.get())
+    scores.update({'average_inference_time': average_inference_time})
     eval_metric.reset()
     return scores
