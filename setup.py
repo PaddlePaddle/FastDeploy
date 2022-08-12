@@ -461,6 +461,10 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
 
     all_files = get_all_files(os.path.join(PACKAGE_NAME, "libs"))
     for f in all_files:
+        if f.find(".vcxproj.") > 0:
+            continue
+        if f.find("opencv") > 0 and f.find("samples") > 0:
+            continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
 
 setuptools.setup(
