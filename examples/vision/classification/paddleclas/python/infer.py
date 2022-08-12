@@ -43,6 +43,7 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
+
 model_file = os.path.join(args.model, "inference.pdmodel")
 params_file = os.path.join(args.model, "inference.pdiparams")
 config_file = os.path.join(args.model, "inference_cls.yaml")
@@ -51,5 +52,5 @@ model = fd.vision.classification.PaddleClasModel(
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im, args.topk)
+result = model.predict(im.copy(), args.topk)
 print(result)

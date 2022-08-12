@@ -12,27 +12,29 @@
 ```
 mkdir build
 cd build
-wget https://xxx.tgz
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
 #下载官方转换好的MODNet模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic__portrait_matting.onnx
-wget todo
+
+wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
 
 
 # CPU推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 0
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 0
 # GPU推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 1
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 1
 # GPU上TensorRT推理
-./infer_demo modnet_photographic__portrait_matting.onnx todo 2
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/183847558-abcd9a57-9cd9-4891-b09a-710963c99b74.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
 
 ## MODNet C++接口
 
@@ -58,7 +60,7 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式。
 #### Predict函数
 
 > ```
-> MODNet::Predict(cv::Mat* im, DetectionResult* result,
+> MODNet::Predict(cv::Mat* im, MattingResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)
 > ```
@@ -68,17 +70,19 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: 检测结果，包括检测框，各个框的置信度, MattingResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 > > * **conf_threshold**: 检测框置信度过滤阈值
 > > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
-> > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
+
+> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[256, 256]
+> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
+> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
+> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认true
 
 - [模型介绍](../../)
 - [Python部署](../python)

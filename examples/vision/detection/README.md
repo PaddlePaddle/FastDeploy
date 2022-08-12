@@ -1,13 +1,14 @@
-# 目标检测模型
+人脸检测模型
 
 FastDeploy目前支持如下目标检测模型部署
 
 | 模型 | 说明 | 模型格式 | 版本 |
 | :--- | :--- | :------- | :--- |
-| [PaddleDetection/PPYOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLOE系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/PicoDet](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PicoDet系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/YOLOX](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | Paddle版本的YOLOX系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/YOLOv3](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | YOLOv3系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/PPYOLO](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLO系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/FasterRCNN](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | FasterRCNN系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [WongKinYiu/YOLOv7](https://github.com/WongKinYiu/yolov7) | YOLOv7、YOLOv7-X等系列模型 | ONNX | [v0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) |
+| [nanodet_plus](./nanodet_plus) | NanoDetPlus系列模型 | ONNX | Release/v1.0.0-alpha-1 |
+| [yolov5](./yolov5) | YOLOv5系列模型 | ONNX | Release/v6.0 |
+| [yolov5lite](./yolov5lite) | YOLOv5-Lite系列模型 | ONNX | Release/v1.4 |
+| [yolov6](./yolov6) | YOLOv6系列模型 | ONNX | Release/0.1.0 |
+| [yolov7](./yolov7) | YOLOv7系列模型 | ONNX | Release/0.1 |
+| [yolor](./yolor) | YOLOR系列模型 | ONNX | Release/weights |
+| [yolox](./yolox) | YOLOX系列模型 | ONNX | Release/v0.1.1 |
+| [scaledyolov4](./scaledyolov4) | ScaledYOLOv4系列模型 | ONNX | CommitID:6768003 |
