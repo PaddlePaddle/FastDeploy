@@ -30,8 +30,11 @@ python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/182562483-2719648c-8fe2-48af-a8e0-82e4ebe15133.jpg">
-
+<div width="700">
+<img width="220" float="left" src="https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG">
+<img width="220" float="left" src="https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG">
+<img width="220" float="left" src="https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG">
+</div>
 ## ArcFace Python接口
 
 ```
