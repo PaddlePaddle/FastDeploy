@@ -57,7 +57,6 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("label_map", &vision::SegmentationResult::label_map)
       .def_readwrite("score_map", &vision::SegmentationResult::score_map)
       .def_readwrite("shape", &vision::SegmentationResult::shape)
-      .def_readwrite("shape", &vision::SegmentationResult::shape)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 

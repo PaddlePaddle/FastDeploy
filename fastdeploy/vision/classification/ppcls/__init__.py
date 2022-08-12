@@ -23,14 +23,14 @@ class PaddleClasModel(FastDeployModel):
                  model_file,
                  params_file,
                  config_file,
-                 backend_option=None,
+                 runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PaddleClasModel, self).__init__(backend_option)
+        super(PaddleClasModel, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PaddleClasModel only support model format of Frontend.Paddle now."
-        self._model = C.vision.classification.PaddleClasModel(model_file, params_file,
-                                           config_file, self._runtime_option,
-                                           model_format)
+        self._model = C.vision.classification.PaddleClasModel(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PaddleClas model initialize failed."
 
     def predict(self, input_image, topk=1):
