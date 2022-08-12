@@ -14,6 +14,7 @@
 
 #include "fastdeploy/function/reduce.h"
 
+#include <limits>
 #include <set>
 
 #include "fastdeploy/function/eigen.h"
@@ -215,9 +216,133 @@ void Reduce(const FDTensor& x, FDTensor* out, const std::vector<int64_t>& dims,
   }
   reduce_all = (reduce_all || full_dim);
 
-  FD_VISIT_ALL_TYPES(x.dtype, "ReduceKernelImpl", ([&] {
-                       ReduceKernelImpl<data_t, Functor>(x, out, dims, keep_dim,
-                                                         reduce_all);
+  FD_VISIT_INT_FLOAT_TYPES(x.dtype, "ReduceKernelImpl", ([&] {
+                             ReduceKernelImpl<data_t, Functor>(
+                                 x, out, dims, keep_dim, reduce_all);
+                           }));
+}
+
+enum ArgMinMaxType { kArgMin, kArgMax };
+
+template <typename T, typename Tout, int64_t Rank, ArgMinMaxType argMinMaxValue>
+struct ArgMinMaxFunctor {};
+
+#define DECLARE_ARG_MIN_MAX_FUNCTOR(eigen_op_type, enum_argminmax_value) \
+  template <typename T, typename Tout, int64_t Rank>                     \
+  struct ArgMinMaxFunctor<T, Tout, Rank, enum_argminmax_value> {         \
+    void operator()(const FDTensor& in, FDTensor* out,                   \
+                    const std::vector<int64_t>& x_dims, int64_t axis,    \
+                    bool keepdims) {                                     \
+      const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice(); \
+      auto in_eigen = EigenTensor<T, Rank>::From(in, x_dims);            \
+      if (keepdims) {                                                    \
+        auto out_eigen = EigenTensor<Tout, Rank>::From(*out);            \
+        out_eigen.device(dev) =                                          \
+            in_eigen.eigen_op_type(axis).template cast<Tout>();          \
+      } else {                                                           \
+        auto out_eigen = EigenTensor<Tout, Rank - 1>::From(*out);        \
+        out_eigen.device(dev) =                                          \
+            in_eigen.eigen_op_type(axis).template cast<Tout>();          \
+      }                                                                  \
+    }                                                                    \
+  }
+
+DECLARE_ARG_MIN_MAX_FUNCTOR(argmin, ArgMinMaxType::kArgMin);
+DECLARE_ARG_MIN_MAX_FUNCTOR(argmax, ArgMinMaxType::kArgMax);
+
+template <typename T, typename Tout, ArgMinMaxType EnumArgMinMaxValue>
+void ArgMinMaxKernel(const FDTensor& x, FDTensor* out, int64_t axis,
+                     bool keepdims, bool flatten) {
+  bool new_keepdims = keepdims | flatten;
+  // if flatten, will construct the new dims for the cacluate
+  std::vector<int64_t> x_dims;
+  int new_axis = axis;
+  if (flatten) {
+    x_dims = {x.Numel()};
+    // if flatten, the axis just as 0
+    new_axis = 0;
+  } else {
+    x_dims = x.shape;
+    if (axis < 0) new_axis = axis + x_dims.size();
+  }
+#define CALL_ARG_MINMAX_FUNCTOR(rank)                                \
+  ArgMinMaxFunctor<T, Tout, rank, EnumArgMinMaxValue> functor##rank; \
+  functor##rank(x, out, x_dims, new_axis, new_keepdims)
+
+  switch (x_dims.size()) {
+    case 1:
+      CALL_ARG_MINMAX_FUNCTOR(1);
+      break;
+    case 2:
+      CALL_ARG_MINMAX_FUNCTOR(2);
+      break;
+    case 3:
+      CALL_ARG_MINMAX_FUNCTOR(3);
+      break;
+    case 4:
+      CALL_ARG_MINMAX_FUNCTOR(4);
+      break;
+    case 5:
+      CALL_ARG_MINMAX_FUNCTOR(5);
+      break;
+    case 6:
+      CALL_ARG_MINMAX_FUNCTOR(6);
+      break;
+    default:
+      FDASSERT(x_dims.size() <= 6,
+               "%s operator doesn't supports tensors whose ranks are greater "
+               "than 6.",
+               (EnumArgMinMaxValue == kArgMin ? "argmin" : "argmax"));
+      break;
+#undef CALL_ARG_MINMAX_FUNCTOR
+  }
+}
+
+template <typename T, ArgMinMaxType EnumArgMinMaxValue>
+void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
+               FDDataType output_dtype, bool keepdims, bool flatten) {
+  const auto& x_dims = x.shape;
+  FDASSERT(axis >= -x_dims.size(),
+           "'axis'(%d) must be greater than or equal to -Rank(X)(%d).", axis,
+           -x_dims.size());
+  FDASSERT(axis < x_dims.size(),
+           "'axis'(%d) must be less than or equal to Rank(X)(%d).", axis,
+           x_dims.size());
+  FDASSERT(output_dtype == FDDataType::INT32 || FDDataType::INT64,
+           "The attribute of dtype in argmin/argmax must be [%s] or [%s], but "
+           "received [%s].",
+           Str(FDDataType::INT32), Str(FDDataType::INT64), Str(output_dtype));
+  auto x_rank = x_dims.size();
+  if (axis < 0) axis += x_rank;
+  if (output_dtype == FDDataType::INT32) {
+    int64_t all_element_num = 0;
+    if (flatten) {
+      all_element_num = x.Numel();
+
+    } else {
+      all_element_num = x_dims[axis];
+    }
+    FDASSERT(all_element_num <= std::numeric_limits<int>::max(),
+             "The element num of the argmin/argmax input at axis is "
+             "%d, is larger than int32 maximum value:%d, you must "
+             "set the dtype of argmin/argmax to 'int64'.",
+             all_element_num, std::numeric_limits<int>::max());
+  }
+  std::vector<int64_t> vec;
+  if (flatten) {
+    vec.emplace_back(static_cast<int64_t>(1));
+  } else {
+    for (int64_t i = 0; i < axis; i++) vec.emplace_back(x_dims[i]);
+    if (keepdims) {
+      vec.emplace_back(static_cast<int64_t>(1));
+    }
+    for (int64_t i = axis + 1; i < x_rank; i++) vec.emplace_back(x_dims[i]);
+  }
+  out->Allocate(vec, output_dtype);
+
+  FD_VISIT_INT_TYPES(output_dtype, "ArgMinMaxKernel", ([&] {
+                       ArgMinMaxKernel<T, data_t, EnumArgMinMaxValue>(
+                           x, out, axis, keepdims, flatten);
                      }));
 }
 
@@ -255,6 +380,23 @@ void Prod(const FDTensor& x, FDTensor* out, const std::vector<int64_t>& dims,
           bool keep_dim, bool reduce_all) {
   Reduce<ProdFunctor>(x, out, dims, keep_dim, reduce_all);
 }
+
+void ArgMax(const FDTensor& x, FDTensor* out, int64_t axis,
+            FDDataType output_dtype, bool keep_dim, bool flatten) {
+  FD_VISIT_INT_FLOAT_TYPES(x.dtype, "ArgMaxKernel", ([&] {
+                             ArgMinMax<data_t, kArgMax>(
+                                 x, out, axis, output_dtype, keep_dim, flatten);
+                           }));
+}
+
+void ArgMin(const FDTensor& x, FDTensor* out, int64_t axis,
+            FDDataType output_dtype, bool keep_dim, bool flatten) {
+  FD_VISIT_INT_FLOAT_TYPES(x.dtype, "ArgMaxKernel", ([&] {
+                             ArgMinMax<data_t, kArgMin>(
+                                 x, out, axis, output_dtype, keep_dim, flatten);
+                           }));
+}
+
 #endif
 
 }  // namespace fastdeploy
