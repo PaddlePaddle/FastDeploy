@@ -44,46 +44,9 @@
 |          | [PaddleDetection/PPYOLOv2](./examples/vision/detection/paddledetection) | √       | √          | -                   |
 |          | [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | √       | √          | -                   |
 
-#### 快速开始（服务器与云端部署）
+#### 快速开始
 
-开发者可以通过pip安装`fastdeploy-python`来获取最新的下载链接
 
-- 环境依赖
-  
-  python >= 3.6
-
-- 安装方式
-
-```
-pip install fastdeploy-python --upgrade
-```
-
-- 使用方式
-  
-  - 列出FastDeploy当前支持的所有模型
-    
-    ```
-    fastdeploy --list_models
-    ```
-  
-  - 下载模型在具体平台和对应硬件上的部署SDK以及示例
-    
-    ```
-    fastdeploy --download_sdk \
-             --model PP-PicoDet-s_320 \
-             --platform Linux \
-             --soc x86 \
-             --save_dir .
-    ```
-  
-  - 参数说明
-    
-    - `list_models`: 列出FastDeploy当前最新支持的所有模型
-    - `download_sdk`: 下载模型在具体平台和对应硬件上的部署SDK以及示例
-    - `model`: 模型名，如"PP-PicoDet-s_320"，可通过`list_models`查看所有的可选项
-    - `platform`: 部署平台，支持 Windows/Linux/Android/iOS
-    - `soc`: 部署硬件，支持 x86/x86-NVIDIA-GPU/ARM/Jetson
-    - `save_dir`: SDK下载保存目录
 
 ### 📱轻量化SDK快速实现端侧AI推理部署
 
