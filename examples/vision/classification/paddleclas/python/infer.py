@@ -46,8 +46,7 @@ runtime_option = build_option(args)
 model_file = os.path.join(args.model, "inference.pdmodel")
 params_file = os.path.join(args.model, "inference.pdiparams")
 config_file = os.path.join(args.model, "inference_cls.yaml")
-#model = fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=runtime_option)
-model = fd.vision.classification.ResNet50vd(
+model = fd.vision.classification.PaddleClasModel(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片分类结果
