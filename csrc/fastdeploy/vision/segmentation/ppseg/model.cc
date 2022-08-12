@@ -143,8 +143,7 @@ bool PaddleSegModel::Postprocess(
   Mat* mat = nullptr;
   if (is_resized) {
     cv::Mat temp_mat;
-    utils::FDTensor2FP32CVMat(temp_mat, infer_result,
-                              result->contain_score_map);
+    FDTensor2FP32CVMat(temp_mat, infer_result, result->contain_score_map);
 
     // original image shape
     auto iter_ipt = (*im_info).find("input_shape");
