@@ -18,11 +18,11 @@ tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # CPU推理
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device cpu
+python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device cpu --topk 1
 # GPU推理
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu
+python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu --topk 1
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True
+python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1
 ```
 
 运行完成后返回结果如下所示
