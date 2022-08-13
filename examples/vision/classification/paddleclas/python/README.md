@@ -8,15 +8,14 @@
 本目录下提供`infer.py`快速完成ResNet50_vd在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd  FastDeploy/examples/vision/classification/paddleclas/python
+
 # 下载ResNet50_vd模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
-
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/classification/paddleclas/python
 
 # CPU推理
 python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device cpu
