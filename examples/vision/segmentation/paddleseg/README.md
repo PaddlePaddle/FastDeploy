@@ -1,36 +1,31 @@
-# PaddleClas 模型部署
+# PaddleSeg 模型部署
 
 ## 模型版本说明
 
-- [PaddleClas Release/2.4](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4)
+- [PaddleSeg Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6)
 
 目前FastDeploy支持如下模型的部署
 
-- [PP-LCNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNet.md)
-- [PP-LCNetV2系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNetV2.md)
-- [EfficientNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/EfficientNet_and_ResNeXt101_wsl.md)
-- [GhostNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [MobileNet系列模型(包含v1,v2,v3)](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [ShuffleNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [SqueezeNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Others.md)
-- [Inception系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Inception.md)
-- [PP-HGNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-HGNet.md)
-- [ResNet系列模型（包含vd系列）](https://github.com/PaddlePaddle/PaddleClas/blob/develop/docs/zh_CN/models/ResNet_and_vd.md)
+- [U-Net系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/unet/README.md)
+- [PP-LiteSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/pp_liteseg/README.md)
+- [PP-HumanSeg系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README.md)
+- [FCN系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/fcn/README.md)
+- [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/deeplabv3/README.md)
 
-## 准备PaddleClas部署模型
+## 准备PaddleSeg部署模型
 
-PaddleClas模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)  
+PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/docs/model_export_cn.md)  
 
-注意：PaddleClas导出的模型仅包含`inference.pdmodel`和`inference.pdiparams`两个文档，但为了满足部署的需求，同时也需准备其提供的通用[inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml)文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息，开发者可直接下载此文件使用。但需根据自己的需求修改yaml文件中的配置参数，具体可比照PaddleClas模型训练[config](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)中的infer部分的配置信息进行修改。
+注意：在使用PaddleSeg模型导出时，可指定`--input_shape`参数，若预测输入图片尺寸并不固定，建议使用默认值即不指定该参数。PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息。
 
 
 ## 下载预训练模型
 
-为了方便开发者的测试，下面提供了PaddleClas导出的部分模型（含inference_cls.yaml文件），开发者可直接下载使用。
+为了方便开发者的测试，下面提供了PaddleSeg导出的部分模型（导出方式为：**不指定**`input_shape`和`with_softmax`，**指定**`without_argmax`），开发者可直接下载使用。
 
-| 模型                                                               | 参数文件大小    |输入Shape |  Top1 | Top5 |
-|:---------------------------------------------------------------- |:----- |:----- | :----- | :----- |
-| [PPLCNet_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNet_x1_0_infer.tgz) | 12MB | 224x224 |71.32% | 90.03% |
+| 模型                                                               | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |
+|:---------------------------------------------------------------- |:----- |:----- | :----- | :----- | :----- |
+| [Unet_cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz) | 52MB | 1024x512 | 65.00% | 66.02% | 66.89% |
 | [PPLCNetV2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)  | 26MB  | 224x224 |77.04% | 93.27% |
 | [EfficientNetB7](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB7_infer.tgz) |  255MB | 600x600 | 84.3% | 96.9% |
 | [EfficientNetB0_small](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)|  18MB | 224x224 | 75.8% | 75.8% |
