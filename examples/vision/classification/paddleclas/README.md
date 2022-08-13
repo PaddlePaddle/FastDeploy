@@ -21,7 +21,7 @@
 
 PaddleClas模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)  
 
-注意：PaddleClas导出的模型仅包含`inference.pdmodel`和`inference.pdiparams`两个文档，但为了满足部署的需求，同时也需准备其提供的通用[inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml)文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息，开发者可直接下载此文件使用。但需根据自己的需求修改yaml文件中的配置参数，具体可比照PaddleClas模型训练[config](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)中的infer部分的配置信息进行修改。
+注意：PaddleClas导出的模型仅包含`inference.pdmodel`和`inference.pdiparams`两个文件，但为了满足部署的需求，同时也需准备其提供的通用[inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml)文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息，开发者可直接下载此文件使用。但需根据自己的需求修改yaml文件中的配置参数，具体可比照PaddleClas模型训练[config](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)中的infer部分的配置信息进行修改。
 
 
 ## 下载预训练模型
