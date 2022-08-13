@@ -1,29 +1,29 @@
-# PaddleClas模型 Python部署示例
+# PaddleSeg模型 Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
 
-本目录下提供`infer.py`快速完成ResNet50_vd在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成Unet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-# 下载ResNet50_vd模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
-tar -xvf ResNet50_vd_infer.tgz
-wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
-
-
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/classification/paddleclas/python
+cd FastDeploy/examples/vision/segmentation/paddleseg/python
+
+# 下载Unet模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz
+tar -xvf Unet_cityscapes_without_argmax_infer.tgz
+wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
+
 
 # CPU推理
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device cpu
+python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device cpu
 # GPU推理
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu
+python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True
+python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu --use_trt True
 ```
 
 运行完成后返回结果如下所示
