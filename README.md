@@ -89,7 +89,8 @@
 
 <details>
 <summary>💡 安装FastDeploy Python/C++ </summary>  
-用户根据开发环境选择安装版本，更多安装环境参考[安装文档](docs/quick_start/install.md).
+
+用户根据开发环境选择安装版本，更多安装环境参考 [安装文档](docs/quick_start/install.md) .
 
 ```bash
 pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
