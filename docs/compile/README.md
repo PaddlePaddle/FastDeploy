@@ -13,6 +13,6 @@
 | ENABLE_PADDLE_BACKEND | 启用Paddle Inference推理后端，默认OFF | 默认支持CPU，开启WITH_GPU后，同时支持GPU |
 | ENABLE_TRT_BACKEND | 启用TensorRT推理后端，默认OFF | 仅支持GPU |
 | WITH_GPU | 是否开启GPU使用，默认OFF | 当设为TRUE，编译后将支持Nvidia GPU部署 |
-| CUDA_DIRECTORY | 指定编译时的CUDA路径，默认为/usr/local/cuda |
-| TRT_DIRECTORY | 当启用TensorRT推理后端时，需通过此参数指定TensorRT路径 |
-| ENABLE_VISION | 启用视觉模型模块，默认为ON |
+| CUDA_DIRECTORY | 指定编译时的CUDA路径，默认为/usr/local/cuda | CUDA 11.2及以上 |
+| TRT_DIRECTORY | 当启用TensorRT推理后端时，需通过此参数指定TensorRT路径 | TensorRT 8.4及以上 |
+| ENABLE_VISION | 启用视觉模型模块，默认为ON | |
