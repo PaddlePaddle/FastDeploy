@@ -133,7 +133,13 @@ if(ENABLE_PADDLE_BACKEND)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
   include(external/paddle_inference.cmake)
-  list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
+  if(NOT APPLE)
+    list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
+  else()
+    # no third parties libs(mkldnn and omp) need to
+    # link into paddle_inference on MacOS OSX.
+    list(APPEND DEPEND_LIBS external_paddle_inference)
+  endif()
 endif()
 
 if(WITH_GPU)
