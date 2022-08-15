@@ -4,13 +4,13 @@ FastDeploy目前支持如下目标检测模型部署
 
 | 模型 | 说明 | 模型格式 | 版本 |
 | :--- | :--- | :------- | :--- |
-| [PaddleDetection/PPYOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLOE系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/PicoDet](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PicoDet系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/YOLOX](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | Paddle版本的YOLOX系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/YOLOv3](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | YOLOv3系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/PPYOLO](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | PPYOLO系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [PaddleDetection/FasterRCNN](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe) | FasterRCNN系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
-| [WongKinYiu/YOLOv7](https://github.com/WongKinYiu/yolov7) | YOLOv7、YOLOv7-X等系列模型 | ONNX | [Release/v0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) |
+| [PaddleDetection/PPYOLOE](./paddledetection) | PPYOLOE系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/PicoDet](./paddledetection) | PicoDet系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/YOLOX](./paddledetection) | Paddle版本的YOLOX系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/YOLOv3](./paddledetection) | YOLOv3系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/PPYOLO](./paddledetection) | PPYOLO系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [PaddleDetection/FasterRCNN](./paddledetection) | FasterRCNN系列模型 | Paddle | [Release/2.4](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4) |
+| [WongKinYiu/YOLOv7](./yolov7) | YOLOv7、YOLOv7-X等系列模型 | ONNX | [Release/v0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) |
 | [RangiLyu/NanoDetPlus](./nanodet_plus) | NanoDetPlus 系列模型 | ONNX | [Release/v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) |
 | [ultralytics/YOLOv5](./yolov5) | YOLOv5 系列模型 | ONNX | [Release/v6.0](https://github.com/ultralytics/yolov5/tree/v6.0) |
 | [ppogg/YOLOv5-Lite](./yolov5lite) | YOLOv5-Lite 系列模型 | ONNX | [Release/v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) |
