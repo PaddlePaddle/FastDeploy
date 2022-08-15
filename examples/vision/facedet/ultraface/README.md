@@ -9,12 +9,11 @@
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了UltraFace导出的各系列模型，开发者可直接下载使用。
-
+为了方便开发者的测试，下面提供了UltraFace导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库的.pt文件测试结果）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [RFB-320](https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx) | 1.3MB | - |
-| [RFB-320-sim](https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320-sim.onnx) | 1.2MB | -|
+| [RFB-320](https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx) | 1.3MB | 78.7 |
+| [RFB-320-sim](https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320-sim.onnx) | 1.2MB | 78.7 |
 
 
 
