@@ -37,7 +37,7 @@
 <div id="fastdeploy-server-models"></div>
 
 符号说明: (1) √: 已经支持, (2) ?: 待详细测试, (3) -: 暂不支持, (4) contrib: 非飞桨生态模型
-| 任务场景 | 模型                                                         | API | CPU | NVIDIA GPU | Paddle Inference | TensorRT | ORT |
+| 任务场景 | 模型                                                         | API | CPU | NVIDIA GPU | Paddle Inference | TensorRT | ONNXRuntime |
 | -------- | ------------------------------------------------------------ | ------- | ------- | ---------- | ---------| ---------| ---------|
 | 图像分类 | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | √       | √          | √                   | √        | ? |
 | 图像分类 | [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | √       | √          | √                   | √        | ? |
