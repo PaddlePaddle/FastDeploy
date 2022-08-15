@@ -21,4 +21,4 @@ struct FaceRecognitionResult {
 
 `fastdeploy.vision.FaceRecognitionResult`
 
-- **embedding**: 成员变量，表示人脸识别模型最终提取的特征embedding，可以用来计算人脸之间的特征相似度。
+- **embedding**(list of float): 成员变量，表示人脸识别模型最终提取的特征embedding，可以用来计算人脸之间的特征相似度。
