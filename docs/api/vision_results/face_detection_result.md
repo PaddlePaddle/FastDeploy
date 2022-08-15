@@ -32,3 +32,4 @@ struct FaceDetectionResult {
 - **scores**(list of float): 成员变量，表示单张图片检测出来的所有目标置信度
 - **landmarks**(list of list(float)): 成员变量，表示单张图片检测出来的所有人脸的关键点
 - **landmarks_per_face**(int): 成员变量，表示每个人脸框中的关键点的数量。
+
