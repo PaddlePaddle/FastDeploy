@@ -2,7 +2,7 @@
 
 
 - [SCRFD](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)
-  - （1）[官方库中提供的](https://github.com/deepinsight/insightface/)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （1）[官方库](https://github.com/deepinsight/insightface/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）开发者基于自己数据训练的SCRFD模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 
