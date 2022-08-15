@@ -32,6 +32,11 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 2
 ```
 
+运行完成可视化结果如下图所示
+<div  align="center">    
+<img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
+</div>
+
 ## PaddleSeg C++接口
 
 ### PaddleSeg类
