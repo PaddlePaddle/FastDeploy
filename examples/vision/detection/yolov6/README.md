@@ -10,8 +10,7 @@
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了YOLOv6导出的各系列模型，开发者可直接下载使用。
-
+为了方便开发者的测试，下面提供了YOLOv6导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% |
@@ -29,4 +28,4 @@
 
 ## 版本说明
 
-- 本版本文档和代码基于[YOLOv6 0.1.0版本](https://github.com/meituan/YOLOv6/releases/download/0.1.0) 编写
+- 本版本文档和代码基于[YOLOv6 0.1.0版本](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) 编写
