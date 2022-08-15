@@ -2,14 +2,14 @@
 
 MattingResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明模型预测的alpha透明度的值，预测的前景等。
 
-## C++ 结构体
+## C++ 定义
 
 `fastdeploy::vision::MattingResult`
 
 ```
 struct MattingResult {
-  std::vector<float> alpha;       // h x w
-  std::vector<float> foreground;  // h x w x c (c=3 default)
+  std::vector<float> alpha;
+  std::vector<float> foreground;
   std::vector<int64_t> shape;
   bool contain_foreground = false;
   void Clear();
@@ -25,7 +25,7 @@ struct MattingResult {
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
 
-## Python结构体
+## Python 定义
 
 `fastdeploy.vision.MattingResult`
 

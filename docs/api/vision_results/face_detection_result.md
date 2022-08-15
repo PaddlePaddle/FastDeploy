@@ -2,7 +2,7 @@
 
 FaceDetectionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明人脸检测出来的目标框、人脸landmarks，目标置信度和每张人脸的landmark数量。
 
-## C++ 结构体
+## C++ 定义
 
 `fastdeploy::vision::FaceDetectionResult`
 
@@ -24,7 +24,7 @@ struct FaceDetectionResult {
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
-## Python结构体
+## Python 定义
 
 `fastdeploy.vision.FaceDetectionResult`
 
