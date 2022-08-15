@@ -146,44 +146,43 @@ int main(int argc, char* argv[]) {
 ## 3. 轻量化SDK快速实现端侧AI推理部署 📱
 <div id="fastdeploy-edge-sdk"></div>
 
-| <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>边缘端       | <font size=2>移动端       | <font size=2> 移动端     |
-| :--------: | :--------: | :--------: | :--------: | :--------: | :--------: |
-| ---               | ---                          | ---                   | <font size=2>  Linux  | <font size=2> Android  | <font size=2>  iOS    |
-| ---              | ---                         | ---                   | <font size=2> ARM CPU | <font size=2>  ARM CPU | <font size=2> ARM CPU |
-| Classification      | PP-LCNet                     | 11.9                  | ✅                     | ✅                      | ✅                     |
-| Classification      | PP-LCNetv2                   | 26.6                  | ✅                     | ✅                      | ✅                     |
-| Classification      | EfficientNet                 | 31.4                  | ✅                     | ✅                      | ✅                     |
-| Classification      | GhostNet                     | 20.8                  | ✅                     | ✅                      | ✅                     |
-| Classification      | MobileNetV1                  | 17                    | ✅                     | ✅                      | ✅                     |
-| Classification      | MobileNetV2                  | 14.2                  | ✅                     | ✅                      | ✅                     |
-| Classification      | MobileNetV3                  | 22                    | ✅                     | ✅                      | ✅                     |
-| Classification      | ShuffleNetV2                 | 9.2                   | ✅                     | ✅                      | ✅                     |
-| Classification      | SqueezeNetV1.1               | 5                     | ✅                     | ✅                      | ✅                     |
-| Classification      | Inceptionv3                  | 95.5                  | ✅                     | ✅                      | ✅                     |
-| Classification      | PP-HGNet                     | 59                    | ✅                     | ✅                      | ✅                     |
-| Classification      | SwinTransformer_224_win7     | 352.7                 | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-PicoDet_s_320_coco        | 4.1                   | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-PicoDet_s_320_lcnet       | 4.9                   | ✅                     | ✅                      | ✅                     |
-| Detection      | CenterNet                    | 4.8                   | ✅                     | ✅                      | ✅                     |
-| Detection      | YOLOv3_MobileNetV3           | 94.6                  | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-YOLO_tiny_650e_coco       | 4.4                   | ✅                     | ✅                      | ✅                     |
-| Detection      | SSD_MobileNetV1_300_120e_voc | 23.3                  | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-YOLO_ResNet50vd           | 188.5                 | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     |
-| Detection      | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     |
-| Detection      | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     |
-| FaceDetection      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |
-| FaceDetection      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |
-| KeypointsDetection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |
-| Segmentation  | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     |
-| Segmentation  | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     |
-| Segmentation  | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     |
-| Segmentation  | PP-HumanSeg-Server           | 107.2                 | ✅                     | ✅                      | ✅                     |
-| Segmentation  | Unet                         | 53.7                  | ❌                     | ✅                      | ❌                     |
-| OCR          | PP-OCRv1                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
-| OCR          | PP-OCRv2                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
-| OCR          | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
-| OCR          | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |
+| <font size=2> 场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>  Linux  | <font size=2> Android  | <font size=2>  iOS    |<font size=2>  Linux  | <font size=2>  Linux  | <font size=2>  Linux  | 扩展中... | 
+| :--------: | :--------: | :--------: | :--------: | :--------: | :--------: |:--------: | :--------: | :--------: | :--------: |
+| ---              | ---                         | ---                   | <font size=2> ARM CPU | <font size=2>  ARM CPU | <font size=2> ARM CPU|<font size=2>  瑞芯微NPU RV1109/RV1126/RK1808  | <font size=2> 晶晨NPU A311D/S905D3/C308X | <font size=2> 恩智浦NPU i.MX 8M Plus |扩展中... | 
+| Detection      | PP-PicoDet_s_320_coco        | 4.1                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | PP-PicoDet_s_320_lcnet       | 4.9                   | ✅                     | ✅                      | ✅                     |✅                     | ✅                      | ✅         |
+| Detection      | CenterNet                    | 4.8                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | YOLOv3_MobileNetV3           | 94.6                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | PP-YOLO_tiny_650e_coco       | 4.4                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | SSD_MobileNetV1_300_120e_voc | 23.3                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | PP-YOLO_ResNet50vd           | 188.5                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Detection      | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| FaceDetection      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| FaceDetection      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     | \ | \ | \ |  |
+| Classification      | PP-LCNet                     | 11.9                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | PP-LCNetv2                   | 26.6                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | EfficientNet                 | 31.4                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | GhostNet                     | 20.8                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | MobileNetV1                  | 17                    | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | MobileNetV2                  | 14.2                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | MobileNetV3                  | 22                    | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | ShuffleNetV2                 | 9.2                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | SqueezeNetV1.1               | 5                     | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | Inceptionv3                  | 95.5                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | PP-HGNet                     | 59                    | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Classification      | SwinTransformer_224_win7     | 352.7                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| KeypointsDetection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Segmentation  | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Segmentation  | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Segmentation  | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Segmentation  | PP-HumanSeg-Server           | 107.2                 | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| Segmentation  | Unet                         | 53.7                  | ❌                     | ✅                      | ❌                     | \ | \ | \ |  |
+| OCR          | PP-OCRv1                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| OCR          | PP-OCRv2                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| OCR          | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
+| OCR          | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     | \ | \ | \ |  |
 
 ### 3.1 边缘侧部署  
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
