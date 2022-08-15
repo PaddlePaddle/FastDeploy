@@ -14,34 +14,45 @@
 
 #include "fastdeploy/vision.h"
 
-void CpuInfer(const std::string& model_file, const std::string& params_file,
-              const std::string& config_file, const std::string& image_file) {
-  auto option = fastdeploy::RuntimeOption();
-  option.UseCpu() auto model =
-      fastdeploy::vision::classification::PaddleClasModel(
-          model_file, params_file, config_file, option);
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
+
+void CpuInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+      model_file, params_file, config_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  fastdeploy::vision::ClassifyResult res;
+  fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  // print res
-  res.Str();
+  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-void GpuInfer(const std::string& model_file, const std::string& params_file,
-              const std::string& config_file, const std::string& image_file) {
+void GpuInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
+  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -49,25 +60,30 @@ void GpuInfer(const std::string& model_file, const std::string& params_file,
   }
 
   auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  fastdeploy::vision::ClassifyResult res;
+  fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  // print res
-  res.Str();
+  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-void TrtInfer(const std::string& model_file, const std::string& params_file,
-              const std::string& config_file, const std::string& image_file) {
+void TrtInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("inputs", [ 1, 3, 224, 224 ], [ 1, 3, 224, 224 ],
-                          [ 1, 3, 224, 224 ]);
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
+  option.SetTrtInputShape("x", {1, 3, 256, 256}, {1, 3, 1024, 1024},
+                          {1, 3, 2048, 2048});
+  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -75,40 +91,37 @@ void TrtInfer(const std::string& model_file, const std::string& params_file,
   }
 
   auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  fastdeploy::vision::ClassifyResult res;
+  fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  // print res
-  res.Str();
+  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
-    std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_demo ./ResNet50_vd ./test.jpeg 0"
-              << std::endl;
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./ppseg_model_dir ./test.jpeg 0"
+        << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
               << std::endl;
     return -1;
   }
 
-  std::string model_file =
-      argv[1] + "/" + "model.pdmodel" std::string params_file =
-          argv[1] + "/" + "model.pdiparams" std::string config_file =
-              argv[1] + "/" + "inference_cls.yaml" std::string image_file =
-                  argv[2] if (std::atoi(argv[3]) == 0) {
-    CpuInfer(model_file, params_file, config_file, image_file);
-  }
-  else if (std::atoi(argv[3]) == 1) {
-    GpuInfer(model_file, params_file, config_file, image_file);
-  }
-  else if (std::atoi(argv[3]) == 2) {
-    TrtInfer(model_file, params_file, config_file, image_file);
+  if (std::atoi(argv[3]) == 0) {
+    CpuInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 1) {
+    GpuInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 2) {
+    TrtInfer(argv[1], argv[2]);
   }
   return 0;
 }
