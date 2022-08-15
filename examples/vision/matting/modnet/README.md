@@ -1,10 +1,8 @@
 # MODNet准备部署模型
 
-## 模型版本说明
-
 - [MODNet](https://github.com/ZHKKKe/MODNet/commit/28165a4)
-  - （1）[链接中](https://github.com/ZHKKKe/MODNet/commit/28165a4)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）开发者基于自己数据训练的MODNet CommitID:b984b4b模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - （1）[官方库](https://github.com/ZHKKKe/MODNet/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （2）开发者基于自己数据训练的MODNet模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 ## 导出ONNX模型
 
