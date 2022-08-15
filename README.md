@@ -17,7 +17,7 @@
 **⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
 ## 0. 发版历史
-- [v0.2.0] 2022.08.18 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过GPU TensorRT加速部署
+- [v0.2.0] 2022.08.18 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过TensorRT加速部署
 
 ## 1. 内容目录
 * [服务端模型列表](#fastdeploy-server-models)
@@ -31,58 +31,58 @@
 * [社区交流](#fastdeploy-community)
 * [Acknowledge](#fastdeploy-acknowledge)  
 * [License](#fastdeploy-license)
-## 2. 服务端模型列表
+## 2. 服务端模型列表 🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>
 
 符号说明: (1)  ✅: 已经支持; (2) ❔: 计划未来支持; (3) ❌: 暂不支持; (4) contrib: 外部模型
-| <font size=2> 任务场景 | <font size=2> 模型  | <font size=2> API | <font size=2> 平台/硬件 | <font size=2> 平台/硬件 | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  |  <font size=2> 平台/硬件  |
-| --------------------  | ------------------ | ----------------- | ----------------- | ----------------- | ----------------- | ------------------------ | --------------------- | ------------------ | ------------------ | ------------------ | ------------------ |
-|  --- | --- |  --- |  <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Windows   |  <font size=2> Windows    |  <font size=2> MacOS     | <font size=2>  MacOS     | <font size=2> Linux |  
-|  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> Arm CPU   | <font size=2> NVIDIA Jetson GPU |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |   ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/PPLCNetv2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/EfficientNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/GhostNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/MobileNetV1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/MobileNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/MobileNetV3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/ShuffleNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/PPHGNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分类 | <font size=2> [PaddleClas/SwinTransformer](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/PPYOLOE](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/PPYOLO](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/PPYOLOv2](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOX](./examples/vision/detection/yolox) | <font size=2> [Python](./examples/vision/detection/yolox/python)/[C++](./examples/vision/detection/yolox/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOv7](./examples/vision/detection/yolov7) | <font size=2> [Python](./examples/vision/detection/yolov7/python)/[C++](./examples/vision/detection/yolov7/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOv6](./examples/vision/detection/yolov6) | <font size=2> [Python](./examples/vision/detection/yolov6/python)/[C++](./examples/vision/detection/yolov6/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOv5](./examples/vision/detection/yolov5) | <font size=2> [Python](./examples/vision/detection/yolov5/python)/[C++](./examples/vision/detection/yolov5/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOR](./examples/vision/detection/yolor) | <font size=2> [Python](./examples/vision/detection/yolor/python)/[C++](./examples/vision/detection/yolor/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/ScaledYOLOv4](./examples/vision/detection/scaledyolov4) | <font size=2> [Python](./examples/vision/detection/scaledyolov4/python)/[C++](./examples/vision/detection/scaledyolov4/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/YOLOv5Lite](./examples/vision/detection/yolov5lite) | <font size=2> [Python](./examples/vision/detection/yolov5lite/python)/[C++](./examples/vision/detection/yolov5lite/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 目标检测 | <font size=2> [Contrib/NanoDetPlus](./examples/vision/detection/nanodet_plus) | <font size=2> [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/detection/nanodet_plus/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/PPLiteSeg](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/PPHumanSegLite](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/HRNet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/PPHumanSegServer](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 图像分割 | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸检测 | <font size=2> [Contrib/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸检测 | <font size=2> [Contrib/UltraFace](./examples/vision/facedet/utltraface) | [<font size=2> Python](./examples/vision/facedet/utltraface/python)/[C++](./examples/vision/facedet/utltraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸检测 | <font size=2> [Contrib/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸检测 | <font size=2> [Contrib/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸识别 | <font size=2> [Contrib/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸识别 | <font size=2> [Contrib/CosFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸识别 | <font size=2> [Contrib/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人脸识别 | <font size=2> [Contrib/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
-| <font size=2> 人像抠图 | <font size=2> [Contrib/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> 任务场景 | <font size=2> 模型  | <font size=2> API | <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Windows   |  <font size=2> Windows    |  <font size=2> MacOS     | <font size=2>  MacOS     | <font size=2> Linux |  
+| --------------------  | ------------------ | ----------------- | ----------------- | ----------------- | ----------------- | ------------------------ | --------------------- | ------------------ | ------------------ |
+|  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> Arm CPU   | <font size=2> NVIDIA Jetson |
+| <font size=2> Classification | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |   ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/PPLCNetv2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/EfficientNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/GhostNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/ShuffleNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/PPHGNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Classification | <font size=2> [PaddleClas/SwinTransformer](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/PPYOLOE](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/PPYOLO](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/PPYOLOv2](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOX](./examples/vision/detection/yolox) | <font size=2> [Python](./examples/vision/detection/yolox/python)/[C++](./examples/vision/detection/yolox/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOv7](./examples/vision/detection/yolov7) | <font size=2> [Python](./examples/vision/detection/yolov7/python)/[C++](./examples/vision/detection/yolov7/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOv6](./examples/vision/detection/yolov6) | <font size=2> [Python](./examples/vision/detection/yolov6/python)/[C++](./examples/vision/detection/yolov6/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOv5](./examples/vision/detection/yolov5) | <font size=2> [Python](./examples/vision/detection/yolov5/python)/[C++](./examples/vision/detection/yolov5/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOR](./examples/vision/detection/yolor) | <font size=2> [Python](./examples/vision/detection/yolor/python)/[C++](./examples/vision/detection/yolor/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/ScaledYOLOv4](./examples/vision/detection/scaledyolov4) | <font size=2> [Python](./examples/vision/detection/scaledyolov4/python)/[C++](./examples/vision/detection/scaledyolov4/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/YOLOv5Lite](./examples/vision/detection/yolov5lite) | <font size=2> [Python](./examples/vision/detection/yolov5lite/python)/[C++](./examples/vision/detection/yolov5lite/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Detection | <font size=2> [Contrib/NanoDetPlus](./examples/vision/detection/nanodet_plus) | <font size=2> [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/detection/nanodet_plus/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/PPLiteSeg](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/PPHumanSegLite](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/HRNet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/PPHumanSegServer](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Segmentation | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Contrib/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Contrib/UltraFace](./examples/vision/facedet/utltraface) | [<font size=2> Python](./examples/vision/facedet/utltraface/python)/[C++](./examples/vision/facedet/utltraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Contrib/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Contrib/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceRecognition | <font size=2> [Contrib/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceRecognition | <font size=2> [Contrib/CosFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceRecognition | <font size=2> [Contrib/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> FaceRecognition | <font size=2> [Contrib/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+| <font size=2> Matting | <font size=2> [Contrib/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
+
 
 ## 3. 服务端快速开始
 <div id="fastdeploy-quick-start"></div>
@@ -114,8 +114,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-model = vision.detection.PPYOLOE(
-    "model.pdmodel", "model.pdiparams", "infer_cfg.yml")
+model = vision.detection.PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
 print(result)
@@ -130,58 +129,56 @@ cv2.imwrite("vis_image.jpg", vis_im)
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
-  namespce vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE(
-      "model.pdmodel", "model.pdiparams", "infer_cfg.yml");
-  auto im = cv::imread(image_file);
+  namespace vision = fastdeploy::vision;
+  auto model = vision::detection::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+  auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
   model.Predict(&im, &res)
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
-  cv::imwrite("vis_result.jpg", vis_im);
+  cv::imwrite("vis_image.jpg", vis_im);
 }
 ```
-更多部署案例请参考[视觉模型部署示例...](examples/vision) .
+更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
-## 4. 📱轻量化SDK快速实现端侧AI推理部署
+## 4. 轻量化SDK快速实现端侧AI推理部署 📱
 <div id="fastdeploy-edge-sdk"></div>
-
 
 | <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>边缘端       | <font size=2>移动端       | <font size=2> 移动端     |
 | ------------------ | ---------------------------- | --------------------- | --------------------- | ---------------------- | --------------------- |
 | ---               | ---                          | ---                   | <font size=2>  Linux  | <font size=2> Android  | <font size=2>  iOS    |
 | ---              | ---                         | ---                   | <font size=2> ARM CPU | <font size=2>  ARM CPU | <font size=2> ARM CPU |
-| 图像分类      | PP-LCNet                     | 11.9                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | PP-LCNetv2                   | 26.6                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | EfficientNet                 | 31.4                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | GhostNet                     | 20.8                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | MobileNetV1                  | 17                    | ✅                     | ✅                      | ✅                     |
-| 图像分类      | MobileNetV2                  | 14.2                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | MobileNetV3                  | 22                    | ✅                     | ✅                      | ✅                     |
-| 图像分类      | ShuffleNetV2                 | 9.2                   | ✅                     | ✅                      | ✅                     |
-| 图像分类      | SqueezeNetV1.1               | 5                     | ✅                     | ✅                      | ✅                     |
-| 图像分类      | Inceptionv3                  | 95.5                  | ✅                     | ✅                      | ✅                     |
-| 图像分类      | PP-HGNet                     | 59                    | ✅                     | ✅                      | ✅                     |
-| 图像分类      | SwinTransformer_224_win7     | 352.7                 | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-PicoDet_s_320_coco        | 4.1                   | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-PicoDet_s_320_lcnet       | 4.9                   | ✅                     | ✅                      | ✅                     |
-| 目标检测      | CenterNet                    | 4.8                   | ✅                     | ✅                      | ✅                     |
-| 目标检测      | YOLOv3_MobileNetV3           | 94.6                  | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-YOLO_tiny_650e_coco       | 4.4                   | ✅                     | ✅                      | ✅                     |
-| 目标检测      | SSD_MobileNetV1_300_120e_voc | 23.3                  | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-YOLO_ResNet50vd           | 188.5                 | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     |
-| 目标检测      | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     |
-| 目标检测      | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     |
-| 人脸检测      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |
-| 人脸检测      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |
-| 人体关键点检测 | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |
-| 图像分割  | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     |
-| 图像分割  | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     |
-| 图像分割  | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     |
-| 图像分割  | PP-HumanSeg-Server           | 107.2                 | ✅                     | ✅                      | ✅                     |
-| 图像分割  | Unet                         | 53.7                  | ❌                     | ✅                      | ❌                     |
+| Classification      | PP-LCNet                     | 11.9                  | ✅                     | ✅                      | ✅                     |
+| Classification      | PP-LCNetv2                   | 26.6                  | ✅                     | ✅                      | ✅                     |
+| Classification      | EfficientNet                 | 31.4                  | ✅                     | ✅                      | ✅                     |
+| Classification      | GhostNet                     | 20.8                  | ✅                     | ✅                      | ✅                     |
+| Classification      | MobileNetV1                  | 17                    | ✅                     | ✅                      | ✅                     |
+| Classification      | MobileNetV2                  | 14.2                  | ✅                     | ✅                      | ✅                     |
+| Classification      | MobileNetV3                  | 22                    | ✅                     | ✅                      | ✅                     |
+| Classification      | ShuffleNetV2                 | 9.2                   | ✅                     | ✅                      | ✅                     |
+| Classification      | SqueezeNetV1.1               | 5                     | ✅                     | ✅                      | ✅                     |
+| Classification      | Inceptionv3                  | 95.5                  | ✅                     | ✅                      | ✅                     |
+| Classification      | PP-HGNet                     | 59                    | ✅                     | ✅                      | ✅                     |
+| Classification      | SwinTransformer_224_win7     | 352.7                 | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-PicoDet_s_320_coco        | 4.1                   | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-PicoDet_s_320_lcnet       | 4.9                   | ✅                     | ✅                      | ✅                     |
+| Detection      | CenterNet                    | 4.8                   | ✅                     | ✅                      | ✅                     |
+| Detection      | YOLOv3_MobileNetV3           | 94.6                  | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-YOLO_tiny_650e_coco       | 4.4                   | ✅                     | ✅                      | ✅                     |
+| Detection      | SSD_MobileNetV1_300_120e_voc | 23.3                  | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-YOLO_ResNet50vd           | 188.5                 | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     |
+| Detection      | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     |
+| Detection      | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     |
+| FaceDetection      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |
+| FaceDetection      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |
+| KeypointsDetection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |
+| Segmentation  | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     |
+| Segmentation  | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     |
+| Segmentation  | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     |
+| Segmentation  | PP-HumanSeg-Server           | 107.2                 | ✅                     | ✅                      | ✅                     |
+| Segmentation  | Unet                         | 53.7                  | ❌                     | ✅                      | ❌                     |
 | OCR          | PP-OCRv1                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
 | OCR          | PP-OCRv2                     | 2.3+4.4               | ✅                     | ✅                      | ✅                     |
 | OCR          | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
