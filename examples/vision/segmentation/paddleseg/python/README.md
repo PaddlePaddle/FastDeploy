@@ -1,4 +1,4 @@
-# PaddleSeg模型 Python部署示例
+# PaddleSeg 模型Python部署示例
 
 在部署前，需确认以下两个步骤
 
