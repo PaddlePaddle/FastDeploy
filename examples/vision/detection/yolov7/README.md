@@ -25,7 +25,7 @@ python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了YOLOv7导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库的.pt文件测试结果）
+为了方便开发者的测试，下面提供了YOLOv7导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx) | 141MB | 51.4% |
