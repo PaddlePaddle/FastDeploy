@@ -45,7 +45,7 @@ fastdeploy::vision::segmentation::PaddleSegModel(
         const Frontend& model_format = Frontend::PADDLE)
 ```
 
-YOLOv7模型加载和初始化，其中model_file为导出的Paddle模型格式。
+PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模型格式。
 
 **参数**
 
@@ -58,7 +58,7 @@ YOLOv7模型加载和初始化，其中model_file为导出的Paddle模型格式�
 #### Predict函数
 
 > ```
-> YOLOv7::Predict(cv::Mat* im, DetectionResult* result)
+> PaddleSegModel::Predict(cv::Mat* im, DetectionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
