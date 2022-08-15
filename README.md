@@ -1,5 +1,5 @@
 
-![⚡️FastDeploy](docs/logo/fastdeploy-logo.png)
+![⚡️FastDeploy](docs/logo/fastdeploy-opaque.png)
 </p>
 
 <p align="center">
@@ -16,12 +16,13 @@
 
 **⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
-## 0. 发版历史
+## 发版历史
 - [v0.2.0] 2022.08.18 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过TensorRT加速部署
 
-## 1. 内容目录
+## 内容目录
 * [服务端模型列表](#fastdeploy-server-models)
 * [服务端快速开始](#fastdeploy-quick-start)  
+  * [快速安装](#fastdeploy-quick-start)
   * [Python预测示例](#fastdeploy-quick-start-python)  
   * [C++预测示例](#fastdeploy-quick-start-cpp)
 * [轻量化SDK快速实现端侧AI推理部署](#fastdeploy-edge-sdk)
@@ -31,12 +32,12 @@
 * [社区交流](#fastdeploy-community)
 * [Acknowledge](#fastdeploy-acknowledge)  
 * [License](#fastdeploy-license)
-## 2. 服务端模型列表 🔥🔥🔥
+## 1. 服务端模型列表 🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>
 
 符号说明: (1)  ✅: 已经支持; (2) ❔: 计划未来支持; (3) ❌: 暂不支持; (4) contrib: 外部模型
-| <font size=2> 任务场景 | <font size=2> 模型  | <font size=2> API | <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Windows   |  <font size=2> Windows    |  <font size=2> MacOS     | <font size=2>  MacOS     | <font size=2> Linux |  
+| <font size=2> 任务场景 </font> | <font size=2> 模型  | <font size=2> API | <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Windows   |  <font size=2> Windows    |  <font size=2> MacOS     | <font size=2>  MacOS     | <font size=2> Linux |  
 | :--------:  | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: |
 |  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel  CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> Arm CPU   | <font size=2> NVIDIA Jetson |
 | <font size=2> Classification | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
@@ -84,18 +85,18 @@
 | <font size=2> Matting | <font size=2> [Contrib/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
 
 
-## 3. 服务端快速开始
+## 2. 服务端快速开始
 <div id="fastdeploy-quick-start"></div>
 
 <details>
-<summary>💡 安装FastDeploy Python/C++ </summary>  
+<summary>💡 快速安装 FastDeploy Python/C++ 库 </summary>  
 
-用户根据开发环境选择安装版本，更多安装环境参考 [安装文档](docs/quick_start/install.md) .
+用户根据自己的python版本选择安装对应的wheel包，详细的wheel目录请参考 [python安装文档](docs/compile/prebuilt_wheels.md) .
 
 ```bash
 pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 ```
-或获取C++预编译库，更多可用的预编译库请参考[C++预编译库下载](docs/compile/prebuilt_libraries.md)
+或获取C++预编译库，更多可用的预编译库请参考 [C++预编译库下载](docs/compile/prebuilt_libraries.md)
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
 ```
@@ -107,7 +108,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ```
 </details>
 
-### 3.1 Python预测示例  
+### 2.1 Python预测示例  
 <div id="fastdeploy-quick-start-python"></div>
 
 ```python
@@ -122,7 +123,7 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-### 3.2 C++预测示例  
+### 2.2 C++预测示例  
 <div id="fastdeploy-quick-start-cpp"></div>
 
 ```C++
@@ -142,7 +143,7 @@ int main(int argc, char* argv[]) {
 ```
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
-## 4. 轻量化SDK快速实现端侧AI推理部署 📱
+## 3. 轻量化SDK快速实现端侧AI推理部署 📱
 <div id="fastdeploy-edge-sdk"></div>
 
 | <font size=2> 任务场景 | <font size=2> 模型             | <font size=2>  大小(MB) | <font size=2>边缘端       | <font size=2>移动端       | <font size=2> 移动端     |
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
 | OCR          | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |
 | OCR          | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |
 
-### 4.1 边缘侧部署  
+### 3.1 边缘侧部署  
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
 
 - ARM Linux 系统
@@ -193,18 +194,18 @@ int main(int argc, char* argv[]) {
   - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
   - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
 
-### 4.2 移动端部署
+### 3.2 移动端部署
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
 - [iOS 系统部署](./docs/iOS-SDK.md)
 - [Android 系统部署](./docs/Android-SDK.md)  
 
-### 4.3 自定义模型部署
+### 3.3 自定义模型部署
 <div id="fastdeploy-edge-sdk-custom"></div>
 
 - [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
 
-## 5. 社区交流
+## 4. 社区交流
 <div id="fastdeploy-community"></div>
 
 - **加入社区👬：** 微信扫描二维码后，填写问卷加入交流群，与开发者共同讨论推理部署痛点问题
@@ -213,13 +214,13 @@ int main(int argc, char* argv[]) {
 <img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "200" height = "200" />
 </div>
 
-## 6. Acknowledge
+## 5. Acknowledge
 <div id="fastdeploy-acknowledge"></div>
 
 本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，再次表示感谢。
 
 
-## 7. License
+## 6. License
 <div id="fastdeploy-license"></div>
 
 FastDeploy遵循[Apache-2.0开源协议](./LICENSE)。
