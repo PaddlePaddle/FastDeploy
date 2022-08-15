@@ -14,7 +14,7 @@ FastDeploy目前支持如下目标检测模型部署
 | [RangiLyu/NanoDetPlus](./nanodet_plus) | NanoDetPlus 系列模型 | ONNX | [Release/v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) |
 | [ultralytics/YOLOv5](./yolov5) | YOLOv5 系列模型 | ONNX | [Release/v6.0](https://github.com/ultralytics/yolov5/tree/v6.0) |
 | [ppogg/YOLOv5-Lite](./yolov5lite) | YOLOv5-Lite 系列模型 | ONNX | [Release/v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) |
-| [meituan/YOLOv6](./yolov6) | YOLOv6 系列模型 | ONNX | [Release/0.1.0](https://github.com/meituan/YOLOv6/releases/download/0.1.0) |
+| [meituan/YOLOv6](./yolov6) | YOLOv6 系列模型 | ONNX | [Release/0.1.0](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) |
 | [WongKinYiu/YOLOR](./yolor) | YOLOR 系列模型 | ONNX | [Release/weights](https://github.com/WongKinYiu/yolor/releases/tag/weights) |
 | [Megvii-BaseDetection/YOLOX](./yolox) | YOLOX 系列模型 | ONNX | [Release/v0.1.1](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0) |
 | [WongKinYiu/ScaledYOLOv4](./scaledyolov4) | ScaledYOLOv4 系列模型 | ONNX | [CommitID: 6768003](https://github.com/WongKinYiu/ScaledYOLOv4/commit/676800364a3446900b9e8407bc880ea2127b3415) |
