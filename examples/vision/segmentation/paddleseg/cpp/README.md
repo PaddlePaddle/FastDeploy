@@ -75,7 +75,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`True`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **with_softmax**(bool): 当模型导出时，并未指定`with_softmax`参数，可通过此设置此参数为`True`将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **with_softmax**(bool): 当模型导出时，并未指定`with_softmax`参数，可通过此设置此参数为`True`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 - [模型介绍](../../)
 - [Python部署](../python)
