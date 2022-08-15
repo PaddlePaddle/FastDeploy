@@ -1,7 +1,6 @@
-# FaceRecognitionResult 人脸检测结果
+# FaceRecognitionResult 人脸识别结果
 
-FaceRecognitionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度。
-
+FaceRecognitionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明人脸识别模型对图像特征的embedding。
 ## C++ 结构体
 
 `fastdeploy::vision::FaceRecognitionResult`
@@ -22,4 +21,4 @@ struct FaceRecognitionResult {
 
 `fastdeploy.vision.FaceRecognitionResult`
 
-- **embedding**: 成员变量，表示人脸识别模型最终的提取的特征embedding，可以用来计算人脸之间的特征相似度。
+- **embedding**: 成员变量，表示人脸识别模型最终提取的特征embedding，可以用来计算人脸之间的特征相似度。

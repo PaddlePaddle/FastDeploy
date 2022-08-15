@@ -1,6 +1,6 @@
 # FaceDetectionResult 人脸检测结果
 
-FaceDetectionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度。
+FaceDetectionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明人脸检测出来的目标框、人脸landmarks，目标置信度和每张人脸的landmark数量。
 
 ## C++ 结构体
 
