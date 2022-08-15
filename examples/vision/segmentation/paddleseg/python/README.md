@@ -26,21 +26,18 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu --use_trt True
 ```
 
-运行完成后返回结果如下所示
-```
-ClassifyResult(
-label_ids: 153,
-scores: 0.686229,
-)
-```
+运行完成可视化结果如下图所示
+<div  align="center">    
+<img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
+</div>
 
-## PaddleClasModel Python接口
+## PaddleSegModel Python接口
 
 ```
-fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 ```
 
-PaddleClas模型加载和初始化，其中model_file, params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)
+PaddleSeg模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/docs/model_export_cn.md)
 
 **参数**
 
@@ -53,7 +50,7 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 ### predict函数
 
 > ```
-> PaddleClasModel.predict(input_image, topk=1)
+> PaddleSegModel.predict(input_image)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -61,15 +58,22 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 > **参数**
 >
 > > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **topk**(int):返回预测概率最高的topk个分类结果
 
 > **返回**
 >
-> > 返回`fastdeploy.vision.ClassifyResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > 返回`fastdeploy.vision.SegmentationResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
+### 类成员属性
+#### 预处理参数
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+
+> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
+
+#### 后处理参数
+> > * **with_softmax**(bool): 当模型导出时，并未指定`with_softmax`参数，可通过此设置此参数为`true`将输出结果做softmax归一化处理
 
 ## 其它文档
 
-- [PaddleClas 模型介绍](..)
-- [PaddleClas C++部署](../cpp)
+- [PaddleSeg 模型介绍](..)
+- [PaddleSeg C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
