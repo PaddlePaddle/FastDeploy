@@ -38,15 +38,20 @@ python -m pip install fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 
 | CPU 安装包 | 硬件 | Python版本 |
 | :----  | :-- | :------ |
-| [comming...] | CPU | 3.8 |
-| [comming...] | CPU | 3.9 |
+| [fastdeploy_python-0.2.0-cp38-cp38-win_amd64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-win_amd64.whl) | CPU | 3.8 |
+| [fastdeploy_python-0.2.0-cp39-cp39-win_amd64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp39-cp39-win_amd64.whl) | CPU | 3.9 |
+
+| GPU 安装包 | 硬件 | Python版本 |
+| :----  | :-- | :------ |
+| [fastdeploy_gpu_python-0.2.0-cp38-cp38-win_amd64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp38-cp38-win_amd64.whl) | CPU/GPU | 3.8 |
+| [fastdeploy_gpu_python-0.2.0-cp39-cp39-win_amd64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_gpu_python-0.2.0-cp39-cp39-win_amd64.whl) | CPU/GPU | 3.9 |
 
 ### Linux aarch64平台
 
 | 安装包 | 硬件 | Python版本 |
 | :----  | :-- | :------ |
 | [comming...] | CPU | 3.7 |
-| [comming...] | CPU | 3.8 | 
+| [comming...] | CPU | 3.8 |
 | [comming...] | CPU | 3.9 |
 
 ### Mac OSX平台
