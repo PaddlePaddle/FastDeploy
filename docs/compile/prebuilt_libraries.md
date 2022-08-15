@@ -1,4 +1,4 @@
-# FastDeploy 预编编译Python Wheel包
+# FastDeploy 预编编译 C++ 库
 
 FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发者可以直接下载后使用，也可以自行编译代码。
 
