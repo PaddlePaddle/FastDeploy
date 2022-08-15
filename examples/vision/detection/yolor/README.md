@@ -2,7 +2,7 @@
 
 - YOLOR部署实现来自[YOLOR](https://github.com/WongKinYiu/yolor/releases/tag/weights)的代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolor/releases/tag/weights)。
 
-  - （1）[官方库](https://github.com/WongKinYiu/yolor/releases/tag/weights)提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （1）[官方库](https://github.com/WongKinYiu/yolor/releases/tag/weights)提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署，*.pose模型不支持部署；
   - （2）自己数据训练的YOLOR模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考[详细部署文档](#详细部署文档)完成部署。
 
 
@@ -21,8 +21,7 @@
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了YOLOR导出的各系列模型，开发者可直接下载使用。
-
+为了方便开发者的测试，下面提供了YOLOR导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOR-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-1280-1280.onnx) | 143MB | 54.1% |
