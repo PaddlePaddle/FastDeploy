@@ -1,5 +1,13 @@
 # Linux & Mac编译
 
+## 环境依赖
+
+- cmake >= 3.12
+- g++ >= 8.2
+- cuda >= 11.2 (当WITH_GPU=ON)
+- cudnn >= 11.2 (当WITH_GPU=ON)
+- TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
+
 ## 编译C++
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -27,4 +35,4 @@ python setup.py bdist_wheel
 ```
 编译后的wheel包即在当前目录下的`dist`目录中
 
-编译选项说明参考[编译指南](./README.md)
+更多编译选项说明参考[编译指南](./README.md)
