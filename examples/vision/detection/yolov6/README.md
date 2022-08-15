@@ -29,4 +29,4 @@
 
 ## 版本说明
 
-- 本版本文档和代码基于[YOLOv6 0.1.0版本](https://github.com/meituan/YOLOv6/releases/download/0.1.0) 编写
+- 本版本文档和代码基于[YOLOv6 0.1.0版本](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) 编写
