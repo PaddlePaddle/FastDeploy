@@ -37,7 +37,7 @@
 <div id="fastdeploy-server-models"></div>
 
 符号说明: (1) √: 已经支持, (2) ?: 待详细测试, (3) -: 暂不支持, (4) contrib: 非飞桨生态模型
-| <font size=2> 任务场景 | <font size=2> 模型                                                         | <font size=2> API | <font size=2> CPU | <font size=2> NVIDIA GPU | <font size=2> Paddle | <font size=2> TRT | <font size=2> ORT |
+| <font size=2> 任务场景 | <font size=2> 模型                                                         | <font size=2> API | <font size=2> CPU | <font size=2> GPU | <font size=2> Paddle | <font size=2> TRT | <font size=2> ORT |
 | -------- | ------------------------------------------------------------ | ------- | ------- | ---------- | ---------| ---------| ---------|
 | <font size=2> 图像分类 | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | √       | √          | √                   | √        | ? |
 | <font size=2> 图像分类 | <font size=2> [PaddleClas/PPLCNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | √       | √          | √                   | √        | ? |
