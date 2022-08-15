@@ -18,7 +18,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of scrfd onnx model.")
+        "--model", required=True, help="Path of insgihtface onnx model.")
     parser.add_argument(
         "--face", required=True, help="Path of test face image file.")
     parser.add_argument(

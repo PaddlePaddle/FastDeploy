@@ -1,9 +1,7 @@
 # InsightFace准备部署模型
 
-## 模型版本说明
-
 - [InsightFace](https://github.com/deepinsight/insightface/commit/babb9a5)
-  - （1）[链接中](https://github.com/deepinsight/insightface/commit/babb9a5)的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
+  - （1）[官方库](https://github.com/deepinsight/insightface/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
   - （2）开发者基于自己数据训练的InsightFace模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
 
 
