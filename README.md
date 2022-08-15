@@ -114,10 +114,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
-                                 "ppyoloe_crn_l_300e_coco/model.pdiparams",
-                                 "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
-
+model = vision.detection.PPYOLOE(
+    "model.pdmodel", "model.pdiparams", "infer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
 print(result)
@@ -133,20 +131,15 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 int main(int argc, char* argv[]) {
   namespce vision = fastdeploy::vision;
-  auto model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
-  auto params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
-  auto config_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  auto model = vision::detection::PPYOLOE(model_file, params_file, config_file);
-
+  auto model = vision::detection::PPYOLOE(
+      "model.pdmodel", "model.pdiparams", "infer_cfg.yml");
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   vision::DetectionResult res;
   model.Predict(&im, &res)
 
-  auto vis_im = vision::Visualize::VisDetection(im_bak, res, 0.5);
+  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_image.jpg" << std::endl;
 }
 ```
 
