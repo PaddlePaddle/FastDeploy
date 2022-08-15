@@ -45,10 +45,18 @@
 #cmakedefine ENABLE_VISION
 #endif
 
+#ifndef ENABLE_TEXT
+#cmakedefine ENABLE_TEXT
+#endif
+
 #ifndef ENABLE_OPENCV_CUDA
 #cmakedefine ENABLE_OPENCV_CUDA
 #endif
 
 #ifndef ENABLE_VISION_VISUALIZE
 #cmakedefine ENABLE_VISION_VISUALIZE
+#endif
+
+#ifndef ENABLE_FDTENSOR_FUNC
+#cmakedefine ENABLE_FDTENSOR_FUNC
 #endif
