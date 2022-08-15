@@ -1,5 +1,13 @@
 # Windows编译
 
+## 环境依赖
+
+- cmake >= 3.12
+- g++ >= 8.2
+- cuda >= 11.2 (当WITH_GPU=ON)
+- cudnn >= 11.2 (当WITH_GPU=ON)
+- TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
+
 ## 获取代码
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -34,3 +42,5 @@ set ENABLE_VISION=ON
 python setup.py build
 python setup.py bdist_wheel
 ```
+
+更多编译选项说明参考[编译指南](./README.md)
