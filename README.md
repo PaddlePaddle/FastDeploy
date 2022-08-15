@@ -36,8 +36,8 @@
 <div id="fastdeploy-server-models"></div>
 
 符号说明: (1)  ✅: 已经支持; (2) ❔: 计划未来支持; (3) ❌: 暂不支持; (4) contrib: 外部模型
-| <font size=2> 任务场景 | <font size=2> 模型  | <font size=2> API | <font size=2> 平台/硬件 | <font size=2> 平台/硬件 | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  |
-| --------------------  | ------------------ | ----------------- | ----------------- | ------------------------ | --------------------- | ------------------ | ------------------ | ------------------ | ------------------ |
+| <font size=2> 任务场景 | <font size=2> 模型  | <font size=2> API | <font size=2> 平台/硬件 | <font size=2> 平台/硬件 | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  | <font size=2> 平台/硬件  |  <font size=2> 平台/硬件  |
+| --------------------  | ------------------ | ----------------- | ----------------- | ----------------- | ----------------- | ------------------------ | --------------------- | ------------------ | ------------------ | ------------------ | ------------------ |
 |  --- | --- |  --- |  <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Windows   |  <font size=2> Windows    |  <font size=2> MacOS     | <font size=2>  MacOS     | <font size=2> Linux |  
 |  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> Arm CPU   | <font size=2> NVIDIA Jetson GPU |
 | <font size=2> 图像分类 | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❔ | ❔ |
