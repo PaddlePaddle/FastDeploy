@@ -29,7 +29,7 @@ struct MattingResult {
 
 `fastdeploy.vision.MattingResult`
 
-- **alpha**(list of list(float)): 是一维向量，为预测的alpha透明度的值，值域为[0.,1.]，长度为hxw，h,w为输入图像的高和宽
-- **foreground**(list of list(float)): 是一维向量，为预测的前景，值域为[0.,255.]，长度为hxwxc，h,w为输入图像的高和宽，c一般为3，foreground不是一定有的，只有模型本身预测了前景，这个属性才会有效
+- **alpha**(list of float): 是一维向量，为预测的alpha透明度的值，值域为[0.,1.]，长度为hxw，h,w为输入图像的高和宽
+- **foreground**(list of float): 是一维向量，为预测的前景，值域为[0.,255.]，长度为hxwxc，h,w为输入图像的高和宽，c一般为3，foreground不是一定有的，只有模型本身预测了前景，这个属性才会有效
 - **contain_foreground**(bool): 表示预测的结果是否包含前景
 - **shape**(list of int): 表示输出结果的shape，当contain_foreground为false，shape只包含(h,w)，当contain_foreground为true，shape包含(h,w,c), c一般为3
