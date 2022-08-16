@@ -310,10 +310,10 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
   const auto& x_dims = x.shape;
   int64_t x_rank = x_dims.size();
   FDASSERT(axis >= -x_rank,
-           "'axis'(%d) must be greater than or equal to -Rank(X)(%d).", axis,
-           -x_rank);
+           "'axis'(%lld) must be greater than or equal to -Rank(X)(%lld).",
+           axis, -x_rank);
   FDASSERT(axis < x_rank,
-           "'axis'(%d) must be less than or equal to Rank(X)(%d).", axis,
+           "'axis'(%lld) must be less than or equal to Rank(X)(%lld).", axis,
            x_rank);
   FDASSERT(output_dtype == FDDataType::INT32 || FDDataType::INT64,
            "The attribute of dtype in argmin/argmax must be [%s] or [%s], but "

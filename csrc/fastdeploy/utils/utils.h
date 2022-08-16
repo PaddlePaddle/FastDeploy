@@ -127,7 +127,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
             false,                                                             \
             "Invalid enum data type. Expect to accept data type BOOL, INT32, " \
             "INT64, FP32, FP64, but receive type %s.",                         \
-            Str(__dtype__));                                                   \
+            Str(__dtype__).c_str());                                           \
     }                                                                          \
   }()
 
@@ -147,7 +147,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
                  "INT64, FP32, FP64, but receive type %s.",                   \
-                 Str(__dtype__));                                             \
+                 Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
 
@@ -163,7 +163,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                      \
                  "Invalid enum data type. Expect to accept data type FP32, " \
                  "FP64, but receive type %s.",                               \
-                 Str(__dtype__));                                            \
+                 Str(__dtype__).c_str());                                    \
     }                                                                        \
   }()
 
@@ -179,7 +179,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
                  "INT64, but receive type %s.",                               \
-                 Str(__dtype__));                                             \
+                 Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
 
