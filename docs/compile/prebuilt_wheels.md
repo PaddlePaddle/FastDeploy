@@ -58,8 +58,12 @@ python -m pip install fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 
 | 架构 | 硬件 | 安装包 | Python版本 |
 | :----  | :-- | :------ | :----- |
-| x86_64 | CPU | [comming...] | 3.9 |
-| arm64 | CPU | [comming...] | 3.9 |
+| x86_64 | CPU | [fastdeploy_python-0.2.0-cp36-cp36m-macosx_10_14_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp36-cp36m-macosx_10_14_x86_64.whl) | 3.6 |
+| x86_64 | CPU | [fastdeploy_python-0.2.0-cp37-cp37m-macosx_10_14_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp37-cp37m-macosx_10_14_x86_64.whl) | 3.7 |
+| x86_64 | CPU | [fastdeploy_python-0.2.0-cp38-cp38-macosx_10_14_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-macosx_10_14_x86_64.whl) | 3.8 |
+| x86_64 | CPU | [fastdeploy_python-0.2.0-cp39-cp39-macosx_10_14_x86_64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp39-cp39-macosx_10_14_x86_64.whl) | 3.9 |
+| arm64 | CPU | [fastdeploy_python-0.2.0-cp38-cp38-macosx_11_0_arm64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-macosx_11_0_arm64.whl) | 3.8 |
+| arm64 | CPU | [fastdeploy_python-0.2.0-cp39-cp39-macosx_11_0_arm64.whl](https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp39-cp39-macosx_11_0_arm64.whl) | 3.9 |
 
 ## 其它文档
 
