@@ -99,8 +99,8 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       auto target_size = op["target_size"].as<std::vector<int>>();
       int interp = op["interp"].as<int>();
       FDASSERT(target_size.size(),
-               "Require size of target_size be 2, but now it's " +
-                   std::to_string(target_size.size()) + ".");
+               "Require size of target_size be 2, but now it's %d.",
+               target_size.size());
       if (!keep_ratio) {
         int width = target_size[1];
         int height = target_size[0];
