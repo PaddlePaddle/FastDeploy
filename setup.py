@@ -426,11 +426,12 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                     command, pybind_so_file)
     elif platform.system().lower() == "darwin":
         # Get Mac OSX dependent libs from 'otool -L'
-        libs_osx = os.popen(
-            f"otool -L {pybind_so_file} | grep @rpath").res.read().split("\n")
+        libs_osx = os.popen(f"otool -L {pybind_so_file} | grep @rpath").read(
+        ).split("\n")
         libs_osx = [x for x in libs_osx if len(x) > 5]
         # e.g [libpaddle2onnx.1.0.0.rc3.dylib, ...]
         libs_osx = [x.strip().split("/")[1] for x in libs_osx]
+        libs_osx = [x.strip().split(" ")[0] for x in libs_osx]
         print("--- Found dependent OSX libs: ", libs_osx)
         third_libs = os.popen(
             'find .setuptools-cmake-build/third_libs/install/ -name "*.dylib" | grep -v "dSYM"'
@@ -443,7 +444,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         commands = []
         # set libfastdeploy @loader_path
         for i in range(len(libs_osx)):
-            if libs_osx[i].find("libfastdeploy"):
+            if libs_osx[i].find("libfastdeploy") > 0:
                 commands.append(
                     f"install_name_tool -change @rpath/{libs_osx[i]} @loader_path/libs/{libs_osx[i]} {pybind_so_file}"
                 )
@@ -505,7 +506,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         #         print("Skip execute command: " + command)
         print(
             "=========================Set rpath for library===================")
-        print(command)
+        print(commands)
 
         for command in commands:
             assert os.system(
