@@ -70,11 +70,11 @@ struct UIEInput {
 
 struct UIEModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
-           const std::string& vocab_file, double position_prob,
+           const std::string& vocab_file, float position_prob,
            size_t max_length, const std::vector<std::string>& schema);
   UIEModel(
       const std::string& model_file, const std::string& params_file,
-      const std::string& vocab_file, double position_prob, size_t max_length,
+      const std::string& vocab_file, float position_prob, size_t max_length,
       const std::unordered_map<std::string, std::vector<std::string>>& schema);
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(
@@ -90,10 +90,16 @@ struct UIEModel {
       const std::vector<std::string>& texts, size_t max_length,
       std::vector<std::string>* short_texts,
       std::unordered_map<size_t, std::vector<size_t>>* input_mapping);
+  // Get idx of the last dimension in probability arrays, which is greater than
+  // a limitation.
+  void GetCandidateIdx(
+      const float* probs, int64_t batch_size, int64_t seq_len,
+      std::vector<std::vector<std::pair<int64_t, float>>>* candidate_idx_prob,
+      float threshold = 0.5) const;
   fastdeploy::RuntimeOption runtime_option_;
   fastdeploy::Runtime runtime_;
   std::unique_ptr<Schema> schema_;
   size_t max_length_;
-  double position_prob_;
+  float position_prob_;
   faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer_;
 };
