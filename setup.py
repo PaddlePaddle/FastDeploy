@@ -425,35 +425,88 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                 command) == 0, "patchelf {} failed, the command: {}".format(
                     command, pybind_so_file)
     elif platform.system().lower() == "darwin":
-        pre_commands = [
-            "install_name_tool -delete_rpath '@loader_path/libs' " +
-            pybind_so_file
+        # Get Mac OSX dependent libs from 'otool -L'
+        libs_osx = os.popen(
+            f"otool -L {pybind_so_file} | grep @rpath").res.read().split("\n")
+        libs_osx = [x for x in libs_osx if len(x) > 5]
+        # e.g [libpaddle2onnx.1.0.0.rc3.dylib, ...]
+        libs_osx = [x.strip().split("/")[1] for x in libs_osx]
+        print("--- Found dependent OSX libs: ", libs_osx)
+        third_libs = os.popen(
+            'find .setuptools-cmake-build/third_libs/install/ -name "*.dylib" | grep -v "dSYM"'
+        ).read().split("\n")
+        third_libs = [x for x in third_libs if len(x) > 5]
+        third_libs = [
+            os.path.relpath(x, ".setuptools-cmake-build/third_libs/install")
+            for x in third_libs
         ]
-        commands = [
-            "install_name_tool -id '@loader_path/libs' " + pybind_so_file
-        ]
-        commands.append("install_name_tool -add_rpath '@loader_path/libs' " +
-                        pybind_so_file)
-        for root, dirs, files in os.walk(
-                ".setuptools-cmake-build/third_libs/install"):
-            for d in dirs:
-                if d == "lib":
-                    path = os.path.relpath(
-                        os.path.join(root, d),
-                        ".setuptools-cmake-build/third_libs/install")
-                    pre_commands.append(
-                        "install_name_tool -delete_rpath '@loader_path/{}' ".
-                        format(os.path.join("libs/third_libs",
-                                            path)) + pybind_so_file)
+        commands = []
+        # set libfastdeploy @loader_path
+        for i in range(len(libs_osx)):
+            if libs_osx[i].find("libfastdeploy"):
+                commands.append(
+                    f"install_name_tool -change @rpath/{libs_osx[i]} @loader_path/libs/{libs_osx[i]} {pybind_so_file}"
+                )
+                libs_osx.pop(i)
+                break
+        # set third libs @loader_path
+        for i in range(len(libs_osx)):
+            curr_lib = libs_osx[i]
+            for j in range(len(third_libs)):
+                if third_libs[j].find(curr_lib) > 0:
                     commands.append(
-                        "install_name_tool -add_rpath '@loader_path/{}' ".
-                        format(os.path.join("libs/third_libs",
-                                            path)) + pybind_so_file)
-        for command in pre_commands:
-            try:
-                os.system(command)
-            except:
-                print("Skip execute command: " + command)
+                        f"install_name_tool -change @rpath/{curr_lib} @loader_path/libs/third_libs/{third_libs[j]} {pybind_so_file}"
+                    )
+
+        # for root, dirs, files in os.walk(
+        #         ".setuptools-cmake-build/third_libs/install"):
+        #     for d in dirs:
+        #         if d == "lib":
+        #             path = os.path.relpath(
+        #                 os.path.join(root, d),
+        #                 ".setuptools-cmake-build/third_libs/install")
+        #             pre_commands.append(
+        #                 "install_name_tool -delete_rpath '@loader_path/{}' ".
+        #                 format(os.path.join("libs/third_libs",
+        #                                     path)) + pybind_so_file)
+        #             commands.append(
+        #                 "install_name_tool -add_rpath '@loader_path/{}' ".
+        #                 format(os.path.join("libs/third_libs",
+        #                                     path)) + pybind_so_file)
+
+        # pre_commands = [
+        #     "install_name_tool -delete_rpath '@loader_path/libs' " +
+        #     pybind_so_file
+        # ]
+        # commands = [
+        #     "install_name_tool -id '@loader_path/libs' " + pybind_so_file
+        # ]
+        # commands.append("install_name_tool -add_rpath '@loader_path/libs' " +
+        #                 pybind_so_file)
+        # for root, dirs, files in os.walk(
+        #         ".setuptools-cmake-build/third_libs/install"):
+        #     for d in dirs:
+        #         if d == "lib":
+        #             path = os.path.relpath(
+        #                 os.path.join(root, d),
+        #                 ".setuptools-cmake-build/third_libs/install")
+        #             pre_commands.append(
+        #                 "install_name_tool -delete_rpath '@loader_path/{}' ".
+        #                 format(os.path.join("libs/third_libs",
+        #                                     path)) + pybind_so_file)
+        #             commands.append(
+        #                 "install_name_tool -add_rpath '@loader_path/{}' ".
+        #                 format(os.path.join("libs/third_libs",
+        #                                     path)) + pybind_so_file)
+        # for command in pre_commands:
+        #     try:
+        #         os.system(command)
+        #     except:
+        #         print("Skip execute command: " + command)
+        print(
+            "=========================Set rpath for library===================")
+        print(command)
+
         for command in commands:
             assert os.system(
                 command) == 0, "command execute failed! command: {}".format(
@@ -463,12 +516,13 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     for f in all_files:
         # remove un-need ocv samples files to avoid too long file path
         # in windows which can make building process failed.
-        if f.find(".vcxproj.") > 0:
-            continue
-        if f.find("opencv") > 0 and (f.find("samples") > 0 or
-                                     f.find("java") > 0 or
-                                     f.find(".png") > 0 or f.find(".jpg")):
-            continue
+        if platform.system().lower() == "windows":
+            if f.find(".vcxproj.") > 0:
+                continue
+            if f.find("opencv") > 0 and any(
+                (f.find("samples") > 0, f.find("java") > 0, f.find(".png") > 0,
+                 f.find(".jpg") > 0)):
+                continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
 
 setuptools.setup(
