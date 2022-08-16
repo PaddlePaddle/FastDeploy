@@ -9,9 +9,13 @@
 
 | 选项 | 作用 | 备注 |
 |:---- | :--- | :--- |
-| ENABLE_ORT_BACKEND | 启用ONNXRuntime推理后端，默认ON | - |
-| WITH_GPU | 是否开启GPU使用，默认OFF | 当设为TRUE时，须通过CUDA_DIRECTORY指定cuda目录，如/usr/local/cuda; Mac上不支持设为ON |
-| ENABLE_TRT_BACKEND | 启用TensorRT推理后端，默认OFF | 当设为TRUE时，需通过TRT_DIRECTORY指定tensorrt目录，如/usr/downloads/TensorRT-8.4.0.1; Mac上不支持设为ON|
-| ENABLE_VISION | 编译集成视觉模型模块，包括OpenCV的编译集成，默认OFF | - |
-| ENABLE_PADDLE_FRONTEND | 编译集成Paddle2ONNX，默认ON | - |
-| ENABLE_DEBUG | 当为ON时，支持输出DEBUG信息，但可能会有性能损耗，默认OFF | - |
+| ENABLE_ORT_BACKEND | 启用ONNXRuntime推理后端，默认ON | 默认支持CPU，开启WITH_GPU后，同时支持GPU |
+| ENABLE_PADDLE_BACKEND | 启用Paddle Inference推理后端，默认OFF | 默认支持CPU，开启WITH_GPU后，同时支持GPU |
+| ENABLE_TRT_BACKEND | 启用TensorRT推理后端，默认OFF | 仅支持GPU |
+| WITH_GPU | 是否开启GPU使用，默认OFF | 当设为TRUE，编译后将支持Nvidia GPU部署 |
+| CUDA_DIRECTORY | 指定编译时的CUDA路径，默认为/usr/local/cuda | CUDA 11.2及以上 |
+| TRT_DIRECTORY | 当启用TensorRT推理后端时，需通过此参数指定TensorRT路径 | TensorRT 8.4及以上 |
+| ENABLE_VISION | 启用视觉模型模块，默认为ON | |
+
+
+FastDeploy支持在编译时，用户选择自己的后端进行编译, 目前已经支持Paddle Inference、ONNXRuntime、TensorRT(加载ONNX格式)。FastDeploy已支持的模型已完成在不同后端上的验证工作，会自动根据编译时支持的后端进行选择，如若无可用后端则会给出相应提示(如YOLOv7目前仅支持ONNXRuntime/TensorRT后端，如若编译时未开启这两个后端，则推理时会提示无可用后端)。 

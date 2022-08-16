@@ -36,7 +36,7 @@
 
 <div id="fastdeploy-server-models"></div>
 
-符号说明: (1)  ✅: 已经支持; (2) ❔: 计划未来支持; (3) ❌: 暂不支持; (4) contrib: 外部模型
+符号说明: (1)  ✅: 已经支持; (2) ❔: 计划未来支持; (3) ❌: 暂不支持; (4) contrib: 外部模型   
 | <font size=2> 任务场景 </font> | <font size=2> 模型  | <font size=2> API | <font size=2> Linux   |  <font size=2> Linux      |  <font size=2> Win   |  <font size=2> Win    |  <font size=2> Mac     | <font size=2>  Mac     | <font size=2> Linux |  
 | :--------:  | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: |
 |  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel  CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU |  <font size=2> Arm CPU   | <font size=2> NVIDIA Jetson |
@@ -83,7 +83,6 @@
 | <font size=2> FaceRecognition | <font size=2> [Contrib/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceRecognition | <font size=2> [Contrib/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ | ❔ |
 | <font size=2> Matting | <font size=2> [Contrib/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ | ❔ |
-
 
 ## 2. 服务端快速开始
 <div id="fastdeploy-quick-start"></div>
