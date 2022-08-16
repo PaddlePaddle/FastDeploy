@@ -331,7 +331,7 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
     }
     FDASSERT(all_element_num <= std::numeric_limits<int>::max(),
              "The element num of the argmin/argmax input at axis is "
-             "%d, is larger than int32 maximum value:%d, you must "
+             "%lld, is larger than int32 maximum value:%d, you must "
              "set the dtype of argmin/argmax to 'int64'.",
              all_element_num, std::numeric_limits<int>::max());
   }

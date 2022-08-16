@@ -165,7 +165,7 @@ void MultiClassNMS::Compute(const float* boxes_data, const float* scores_data,
   FDASSERT(score_size == 3,
            "Require rank of input scores be 3, but now it's %d.", score_size);
   FDASSERT(boxes_dim[2] == 4,
-           "Require the 3-dimension of input boxes be 4, but now it's %d.",
+           "Require the 3-dimension of input boxes be 4, but now it's %lld.",
            box_dim);
   out_num_rois_data.resize(batch_size);
 
