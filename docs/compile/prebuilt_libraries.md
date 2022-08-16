@@ -35,8 +35,8 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 | 部署库下载地址 | 架构 |硬件 |
 | :----  | :-- | :------ |
-| [comming...] | x86 | CPU |
-| [comming...] | arm64 | CPU |
+| [fastdeploy-osx-x86_64-0.2.0.tgz](https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-osx-x86_64-0.2.0.tgz) | x86 | CPU |
+| [fastdeploy-osx-arm64-0.2.0.tgz](https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-osx-arm64-0.2.0.tgz) | arm64 | CPU |
 
 ## 其它文档
 

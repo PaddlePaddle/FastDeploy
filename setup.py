@@ -463,12 +463,13 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     for f in all_files:
         # remove un-need ocv samples files to avoid too long file path
         # in windows which can make building process failed.
-        if f.find(".vcxproj.") > 0:
-            continue
-        if f.find("opencv") > 0 and (f.find("samples") > 0 or
-                                     f.find("java") > 0 or
-                                     f.find(".png") > 0 or f.find(".jpg")):
-            continue
+        if platform.system().lower() == "windows":
+            if f.find(".vcxproj.") > 0:
+                continue
+            if f.find("opencv") > 0 and any(
+                (f.find("samples") > 0, f.find("java") > 0, f.find(".png") > 0,
+                 f.find(".jpg") > 0)):
+                continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
 
 setuptools.setup(
