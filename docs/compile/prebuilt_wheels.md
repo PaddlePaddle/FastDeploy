@@ -50,9 +50,10 @@ python -m pip install fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 
 | 安装包 | 硬件 | Python版本 |
 | :----  | :-- | :------ |
-| [comming...] | CPU | 3.7 |
-| [comming...] | CPU | 3.8 |
-| [comming...] | CPU | 3.9 |
+| [fastdeploy_python-0.2.0-cp36-cp36m-manylinux_2_17_aarch64.whl](https://bj.bcebos.com/paddle2onnx/libs/wheels/fastdeploy_python-0.2.0-cp36-cp36m-manylinux_2_17_aarch64.whl) | CPU | 3.6 |
+| [fastdeploy_python-0.2.0-cp37-cp37m-manylinux_2_17_aarch64.whl](https://bj.bcebos.com/paddle2onnx/libs/wheels/fastdeploy_python-0.2.0-cp37-cp37m-manylinux_2_17_aarch64.whl) | CPU | 3.7 |
+| [fastdeploy_python-0.2.0-cp38-cp38-manylinux_2_17_aarch64.whl](https://bj.bcebos.com/paddle2onnx/libs/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux_2_17_aarch64.whl) | CPU | 3.8 |
+| [fastdeploy_python-0.2.0-cp39-cp39-manylinux_2_17_aarch64.whl](https://bj.bcebos.com/paddle2onnx/libs/wheels/fastdeploy_python-0.2.0-cp39-cp39-manylinux_2_17_aarch64.whl) | CPU | 3.9 |
 
 ### Mac OSX平台
 
