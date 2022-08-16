@@ -190,6 +190,16 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
+void RuntimeOption::EnablePaddleToTrt() {
+  FDASSERT(backend == Backend::TRT, "Should call UseTrtBackend() before call EnablePaddleToTrt().");
+#ifdef ENABLE_PADDLE_BACKEND
+  backend = Backend::PDINFER;
+  pd_enable_trt = true;
+#else
+  FDASSERT(false, "The FastDeploy is not compiled with Paddle Inference backend, cannot EnablePaddleToTrt now.");
+#endif
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -281,6 +291,22 @@ void Runtime::CreatePaddleBackend() {
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;
   pd_option.cpu_thread_num = option.cpu_thread_num;
+#ifdef ENABLE_TRT_BACKEND
+  if (option.pd_enable_trt) {
+    pd_option.enable_trt = true;
+    auto trt_option = TrtBackendOption();
+    trt_option.gpu_id = option.device_id;
+    trt_option.enable_fp16 = option.trt_enable_fp16;
+    trt_option.enable_int8 = option.trt_enable_int8;
+    trt_option.max_batch_size = option.trt_max_batch_size;
+    trt_option.max_workspace_size = option.trt_max_workspace_size;
+    trt_option.max_shape = option.trt_max_shape;
+    trt_option.min_shape = option.trt_min_shape;
+    trt_option.opt_shape = option.trt_opt_shape;
+    trt_option.serialize_file = option.trt_serialize_file;
+    pd_option.trt_option = trt_option;
+  }
+#endif
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();

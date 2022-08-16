@@ -22,6 +22,10 @@
 #include "fastdeploy/backends/backend.h"
 #include "paddle_inference_api.h"  // NOLINT
 
+#ifdef ENABLE_TRT_BACKEND
+#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#endif
+
 namespace fastdeploy {
 
 struct PaddleBackendOption {
@@ -33,6 +37,12 @@ struct PaddleBackendOption {
   bool enable_mkldnn = true;
 
   bool enable_log_info = false;
+
+  // Enable TensorRT backend by Paddle2TRT
+  bool enable_trt = false;
+#ifdef ENABLE_TRT_BACKEND
+  TrtBackendOption trt_option;
+#endif
 
   int mkldnn_cache_size = 1;
   int cpu_thread_num = 8;

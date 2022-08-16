@@ -19,6 +19,32 @@ namespace fastdeploy {
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+    if (option.enable_trt) {
+#ifdef ENABLE_TRT_BACKEND
+      auto precision = paddle_infer::PrecisionType::kFloat32;
+      if (option.trt_option.enable_fp16) {
+        precision = paddle_infer::PrecisionType::kHalf;
+      }
+      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, option.trt_option.max_batch_size, 3, precision, false);
+      std::map<std::string, std::vector<int>> max_shape;
+      std::map<std::string, std::vector<int>> min_shape;
+      std::map<std::string, std::vector<int>> opt_shape;
+      for (auto iter = option.trt_option.max_shape.begin(); iter != option.trt_option.max_shape.end(); ++iter) {
+        auto min_iter = option.trt_option.min_shape.find(iter->first);
+        auto opt_iter = option.trt_option.opt_shape.find(iter->first);
+        FDASSERT(min_iter != option.trt_option.min_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::min_shape.");
+        FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::opt_shape.");
+        max_shape[iter->first].assign(iter->second.begin(), iter->second.end());
+        min_shape[iter->first].assign(min_iter->second.begin(), min_iter->second.end());
+        opt_shape[iter->first].assign(opt_iter->second.begin(), opt_iter->second.end());
+      }
+      if (max_shape.size() > 0) {
+        config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
+      }
+#else
+    FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
+#endif
+    }
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {

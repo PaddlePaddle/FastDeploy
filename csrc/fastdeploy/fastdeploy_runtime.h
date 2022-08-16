@@ -63,6 +63,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // use tensorrt backend
   void UseTrtBackend();
 
+  // use paddle to tensorrt directly
+  // otherwise use onnx to tensorrt
+  void EnablePaddleToTrt();
+
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
   // disable mkldnn while use paddle inference in CPU
@@ -113,8 +117,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
-  bool pd_enable_log_info = false;
   int pd_mkldnn_cache_size = 1;
+  bool pd_enable_trt = false;
+  bool pd_enable_log_info = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
