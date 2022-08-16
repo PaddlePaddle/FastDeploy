@@ -33,8 +33,8 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
   } else if (fd_dtype == FDDataType::UINT8) {
     dt = pybind11::dtype::of<uint8_t>();
   } else {
-    FDASSERT(false, "The function doesn't support data type of " +
-                        Str(fd_dtype) + ".");
+    FDASSERT(false, "The function doesn't support data type of %s.",
+             Str(fd_dtype).c_str());
   }
   return dt;
 }
@@ -73,7 +73,8 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
 pybind11::array TensorToPyArray(const FDTensor& tensor) {
   auto numpy_dtype = FDDataTypeToNumpyDataType(tensor.dtype);
   auto out = pybind11::array(numpy_dtype, tensor.shape);
-  memcpy(out.mutable_data(), tensor.Data(), tensor.Numel() * FDDataTypeSize(tensor.dtype));
+  memcpy(out.mutable_data(), tensor.Data(),
+         tensor.Numel() * FDDataTypeSize(tensor.dtype));
   return out;
 }
 
