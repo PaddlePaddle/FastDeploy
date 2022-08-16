@@ -1,6 +1,6 @@
 # SegmentationResult 目标检测结果
 
-SegmentationResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像每个像素预测出来的分割类别和预测类别的概率值。
+SegmentationResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像中每个像素预测出来的分割类别和分割类别的概率值。
 
 ## C++ 定义
 
