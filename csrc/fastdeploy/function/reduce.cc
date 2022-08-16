@@ -318,7 +318,8 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
   FDASSERT(output_dtype == FDDataType::INT32 || FDDataType::INT64,
            "The attribute of dtype in argmin/argmax must be [%s] or [%s], but "
            "received [%s].",
-           Str(FDDataType::INT32), Str(FDDataType::INT64), Str(output_dtype));
+           Str(FDDataType::INT32).c_str(), Str(FDDataType::INT64).c_str(),
+           Str(output_dtype).c_str());
   if (axis < 0) axis += x_rank;
   if (output_dtype == FDDataType::INT32) {
     int64_t all_element_num = 0;
