@@ -35,8 +35,7 @@ onnxsim FaceDetector.onnx Pytorch_RetinaFace_resnet50-640-640.onnx  # resnet50
 
 ## 下载预训练ONNX模型
 
-为了方便开发者的测试，下面提供了RetinaFace导出的各系列模型，开发者可直接下载使用。
-
+为了方便开发者的测试，下面提供了RetinaFace导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [RetinaFace_mobile0.25-640](https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx) | 1.7MB | - |
