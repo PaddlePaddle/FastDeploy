@@ -95,7 +95,7 @@ void Transpose(const FDTensor& x, FDTensor* out,
   size_t dims_size = dims.size();
   FDASSERT(dims_size == x.shape.size(),
            "The input tensor's dimension should be equal to the dims's size. "
-           "Expect dims size is %lld, but receive %lld.",
+           "Expect dims size is %lu, but receive %lu.",
            x.shape.size(), dims_size);
   std::vector<int> count(dims_size, 0);
   for (size_t i = 0; i < dims_size; i++) {
