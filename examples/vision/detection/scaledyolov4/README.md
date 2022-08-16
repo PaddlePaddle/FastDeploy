@@ -25,11 +25,11 @@
 为了方便开发者的测试，下面提供了ScaledYOLOv4导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [ScaledYOLOv4-P5](https://bj.bcebos.com/paddlehub/fastdeploy/yolov4-p5.onnx) | 271MB | 51.2% |
-| [ScaledYOLOv4-P5+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/yolov4-p5_.onnx) | 271MB | 51.7% |
-| [ScaledYOLOv4-P6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov4-p6.onnx) | 487MB | 53.9% |
-| [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/yolov4-p6_.onnx) | 487MB | 54.4% |
-| [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov4-p7.onnx) | 1.1GB | 55.0% |
+| [ScaledYOLOv4-P5](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx) | 271MB | 51.2% |
+| [ScaledYOLOv4-P5+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_.onnx) | 271MB | 51.7% |
+| [ScaledYOLOv4-P6](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6.onnx) | 487MB | 53.9% |
+| [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_.onnx) | 487MB | 54.4% |
+| [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | 55.0% |
 
 
 
