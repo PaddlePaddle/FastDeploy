@@ -71,12 +71,10 @@ struct UIEInput {
 struct UIEModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, double position_prob,
-           int64_t batch_size, size_t max_length,
-           const std::vector<std::string>& schema);
+           size_t max_length, const std::vector<std::string>& schema);
   UIEModel(
       const std::string& model_file, const std::string& params_file,
-      const std::string& vocab_file, double position_prob, int64_t batch_size,
-      size_t max_length,
+      const std::string& vocab_file, double position_prob, size_t max_length,
       const std::unordered_map<std::string, std::vector<std::string>>& schema);
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(
@@ -96,7 +94,6 @@ struct UIEModel {
   fastdeploy::Runtime runtime_;
   std::unique_ptr<Schema> schema_;
   size_t max_length_;
-  int64_t batch_size_;
   double position_prob_;
   faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer_;
 };

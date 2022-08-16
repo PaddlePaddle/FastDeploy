@@ -76,12 +76,10 @@ Schema::Schema(
 UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, double position_prob,
-                   int64_t batch_size, size_t max_length,
-                   const std::vector<std::string>& schema)
+                   size_t max_length, const std::vector<std::string>& schema)
     : max_length_(max_length),
       position_prob_(position_prob),
-      tokenizer_(vocab_file),
-      batch_size_(batch_size) {
+      tokenizer_(vocab_file) {
   runtime_option_.SetModelPath(model_file, params_file);
   runtime_.Init(runtime_option_);
   SetSchema(schema);
@@ -92,13 +90,11 @@ UIEModel::UIEModel(const std::string& model_file,
 
 UIEModel::UIEModel(
     const std::string& model_file, const std::string& params_file,
-    const std::string& vocab_file, double position_prob, int64_t batch_size,
-    size_t max_length,
+    const std::string& vocab_file, double position_prob, size_t max_length,
     const std::unordered_map<std::string, std::vector<std::string>>& schema)
     : max_length_(max_length),
       position_prob_(position_prob),
-      tokenizer_(vocab_file),
-      batch_size_(batch_size) {
+      tokenizer_(vocab_file) {
   runtime_option_.SetModelPath(model_file, params_file);
   runtime_.Init(runtime_option_);
   SetSchema(schema);
@@ -207,32 +203,26 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
                         curr_position_ids.end());
   }
   // 3.2 Set data to input vector
-  int64_t seq_len = input_ids.size() / input_texts.size();
+  int64_t batch_size = input_texts.size();
+  int64_t seq_len = input_ids.size() / batch_size;
   std::vector<fastdeploy::FDTensor> inputs(runtime_.NumInputs());
   int64_t* inputs_ptrs[] = {input_ids.data(), token_type_ids.data(),
                             position_ids.data(), attn_mask.data()};
-  std::vector<float> start_probs, end_probs;
-
-  std::vector<fastdeploy::FDTensor> outputs(runtime_.NumOutputs());
-  for (int i = 0; i * batch_size_ < input_texts.size(); ++i) {
-    auto curr_bz = batch_size_;
-    if ((i + 1) * batch_size_ > input_texts.size()) {
-      curr_bz = (i + 1) * batch_size_ - input_texts.size();
-    }
-    for (int j = 0; j < runtime_.NumInputs(); ++j) {
-      inputs[j].SetExternalData({curr_bz, seq_len},
-                                fastdeploy::FDDataType::INT64,
-                                inputs_ptrs[j] + i * batch_size_ * seq_len);
-      inputs[j].name = runtime_.GetInputInfo(j).name;
-    }
-    // 4. Infer
-    runtime_.Infer(inputs, &outputs);
-    auto* start_prob = reinterpret_cast<float*>(outputs[0].Data());
-    auto* end_prob = reinterpret_cast<float*>(outputs[1].Data());
-    start_probs.insert(start_probs.end(), start_prob,
-                       start_prob + outputs[0].Numel());
-    end_probs.insert(end_probs.end(), end_prob, end_prob + outputs[0].Numel());
+  for (int i = 0; i < runtime_.NumInputs(); ++i) {
+    inputs[i].SetExternalData({batch_size, seq_len},
+                              fastdeploy::FDDataType::INT64, inputs_ptrs[i]);
+    inputs[i].name = runtime_.GetInputInfo(i).name;
   }
+
+  std::vector<float> start_probs, end_probs;
+  std::vector<fastdeploy::FDTensor> outputs(runtime_.NumOutputs());
+  // 4. Infer
+  runtime_.Infer(inputs, &outputs);
+  auto* start_prob = reinterpret_cast<float*>(outputs[0].Data());
+  auto* end_prob = reinterpret_cast<float*>(outputs[1].Data());
+  start_probs.insert(start_probs.end(), start_prob,
+                     start_prob + outputs[0].Numel());
+  end_probs.insert(end_probs.end(), end_prob, end_prob + outputs[0].Numel());
 
   // 5. Postprocess
 }
