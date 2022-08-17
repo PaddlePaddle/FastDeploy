@@ -302,5 +302,33 @@ std::string MattingResult::Str() {
   return out;
 }
 
+std::string OCRResult::Str() {
+  std::string out;
+  // det_result
+  if (boxes.size() > 0) {
+    out = out + "det boxes: [";
+    for (int n = 0; n < boxes.size(); n++) {
+      out = out + "[" + std::to_string(boxes[n][0]) + "," +
+            std::to_string(boxes[n][1]) + "]";
+      if (n != boxes.size() - 1) {
+        out = out + ",";
+      }
+    }
+    out = out + "]";
+  }
+  // rec_result
+  if (score != -1.0) {
+    out = out + "rec text: " + text + " rec scores:" + std::to_string(score) +
+          " ";
+  }
+  // cls_result
+  if (cls_label != -1) {
+    out = out + "cls label: " + std::to_string(cls_label) + " cls score: " +
+          std::to_string(cls_score) + "\n";
+  }
+
+  return out;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

@@ -15,6 +15,7 @@
 
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
+#include "fastdeploy/application/PPOCRSystemv3.h"
 #include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
@@ -35,6 +36,10 @@
 #include "fastdeploy/vision/faceid/contrib/partial_fc.h"
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
+#include "fastdeploy/vision/ocr/ppocr/classifier.h"
+#include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocrsys.h"
+#include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #endif
 

@@ -22,6 +22,7 @@ enum FASTDEPLOY_DECL ResultType {
   CLASSIFY,
   DETECTION,
   SEGMENTATION,
+  OCR,
   FACE_DETECTION,
   FACE_RECOGNITION,
   MATTING
@@ -59,6 +60,20 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+<<<<<<< HEAD
+=======
+struct FASTDEPLOY_DECL OCRResult : public BaseResult {
+  std::vector<std::vector<int>> boxes;
+  std::string text;
+  float score = -1.0;
+  float cls_score;
+  int cls_label = -1;
+
+  ResultType type = ResultType::OCR;
+
+  std::string Str();
+};
+>>>>>>> 7250f8e... Add PaddleOCR Support
 struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   // box: xmin, ymin, xmax, ymax
   std::vector<std::array<float, 4>> boxes;

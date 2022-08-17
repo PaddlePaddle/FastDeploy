@@ -35,6 +35,8 @@ class FASTDEPLOY_DECL Visualize {
                                  const SegmentationResult& result);
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
                                  bool remove_small_connected_area = false);
+  static cv::Mat VisOcr(const cv::Mat& srcimg,
+                        const std::vector<OCRResult>& ocr_result);
 };
 
 }  // namespace vision

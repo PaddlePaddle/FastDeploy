@@ -181,6 +181,9 @@ void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
 
+void RuntimeOption::EnablePaddleDeletePass(const std::string& pass_name) {
+  pd_delete_pass_names.push_back(pass_name);
+}
 void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
@@ -280,6 +283,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;
+  pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
