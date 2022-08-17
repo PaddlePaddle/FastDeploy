@@ -1,5 +1,5 @@
-文档构成说明
-| 序号  | 文件（夹）名 | 内容 | 
+
+| **序号**  | **文件（夹）名** | **文档内容/用途** | 
 | :--------:  | :--------: | :--------: | 
 | 1  | <p align="left">[the software and hardware requirements.md</p>](the%20software%20and%20hardware%20requirements.md) | <p align="left">说明FastDeploy服务器端的软硬件环境要求</p> |
 |2 | <p align="left">[quick_start](quick_start)</p> | <p align="left">官方编译好的Python-SDK和CPP-SDK的下载位置，已经具体安装方式</p>|
