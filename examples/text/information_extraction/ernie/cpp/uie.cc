@@ -169,6 +169,45 @@ void UIEModel::GetCandidateIdx(
   }
 }
 
+bool UIEModel::IdxProbCmp::operator()(
+    const std::pair<IDX_PROB, IDX_PROB>& lhs,
+    const std::pair<IDX_PROB, IDX_PROB>& rhs) const {
+  if (lhs.first.first == rhs.first.first) {
+    return lhs.second.first < rhs.second.first;
+  }
+  return lhs.first.first < rhs.first.first;
+}
+
+void UIEModel::GetSpan(const std::vector<IDX_PROB>& start_idx_prob,
+                       const std::vector<IDX_PROB>& end_idx_prob,
+                       SPAN_SET* span_set) const {
+  size_t start_pointer = 0;
+  size_t end_pointer = 0;
+  size_t len_start = start_idx_prob.size();
+  size_t len_end = end_idx_prob.size();
+  while (start_pointer < len_start && end_pointer < len_end) {
+    if (start_idx_prob[start_pointer].first ==
+        end_idx_prob[end_pointer].first) {
+      span_set->insert(std::make_pair(start_idx_prob[start_pointer],
+                                      end_idx_prob[end_pointer]));
+      ++start_pointer;
+      ++end_pointer;
+    } else if (start_idx_prob[start_pointer].first <
+               end_idx_prob[end_pointer].first) {
+      span_set->insert(std::make_pair(start_idx_prob[start_pointer],
+                                      end_idx_prob[end_pointer]));
+      ++start_pointer;
+    } else {
+      ++end_pointer;
+    }
+  }
+}
+void UIEModel::GetSpanIdxAndProbs(
+    const SPAN_SET& span_set,
+    const faster_tokenizer::core::Offset& offset_mapping,
+    std::vector<faster_tokenizer::core::Offset>* span_idxs,
+    std::vector<float>* probs) const {}
+
 void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
                                const std::vector<std::string>& prompts) {
   // 1. Shortten the input texts and prompts
@@ -201,21 +240,30 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
   // 3. Construct the input vector tensor
   // 3.1 Convert encodings to input_ids, token_type_ids, position_ids, attn_mask
   std::vector<int64_t> input_ids, token_type_ids, position_ids, attn_mask;
+  std::vector<faster_tokenizer::core::Offset> offset_mapping;
   for (int i = 0; i < encodings.size(); ++i) {
     auto&& curr_input_ids = encodings[i].GetIds();
     auto&& curr_type_ids = encodings[i].GetTypeIds();
     auto&& curr_attn_mask = encodings[i].GetAttentionMask();
+    auto&& curr_offsets = encodings[i].GetOffsets();
     input_ids.insert(input_ids.end(), curr_input_ids.begin(),
                      curr_input_ids.end());
     token_type_ids.insert(token_type_ids.end(), curr_type_ids.begin(),
                           curr_type_ids.end());
     attn_mask.insert(attn_mask.end(), curr_attn_mask.begin(),
                      curr_attn_mask.end());
+    offset_mapping.insert(offset_mapping.end(), curr_offsets.begin(),
+                          curr_offsets.end());
     std::vector<int64_t> curr_position_ids(curr_input_ids.size());
     std::iota(curr_position_ids.begin(), curr_position_ids.end(), 0);
     position_ids.insert(position_ids.end(), curr_position_ids.begin(),
                         curr_position_ids.end());
   }
+  for (auto&& offset : offset_mapping) {
+    fastdeploy::FDINFO << "offset = " << offset.first << ", " << offset.second
+                       << std::endl;
+  }
+  fastdeploy::FDINFO << std::endl;
   // 3.2 Set data to input vector
   int64_t batch_size = input_texts.size();
   int64_t seq_len = input_ids.size() / batch_size;
@@ -242,6 +290,14 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
                   &start_candidate_idx_prob, position_prob_);
   GetCandidateIdx(end_prob, outputs[1].shape[0], outputs[1].shape[1],
                   &end_candidate_idx_prob, position_prob_);
+  SPAN_SET span_list;
+  for (int i = 0; i < batch_size; ++i) {
+    GetSpan(start_candidate_idx_prob[i], end_candidate_idx_prob[i], &span_list);
+    // sentence_id, prob = get_id_and_prob(span_list, offset_map)
+    // sentence_ids.append(sentence_id)
+    // probs.append(prob)
+    span_list.clear();
+  }
 }
 
 void UIEModel::Predict(const std::vector<std::string>& texts,
