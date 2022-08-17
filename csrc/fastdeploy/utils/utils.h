@@ -86,14 +86,13 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
   FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
                            << ")::" << __FUNCTION__ << "\t"
 
-#define FDASSERT(condition, format, ...)                                      \
-  if (!(condition)) {                                                         \
-    std::string format_string(format);                                        \
-    int n = std::snprintf(nullptr, 0, format_string.data(), ##__VA_ARGS__);   \
-    std::vector<char> buffer(n + 1);                                          \
-    std::snprintf(buffer.data(), n + 1, format_string.data(), ##__VA_ARGS__); \
-    FDERROR << buffer.data() << std::endl;                                    \
-    std::abort();                                                             \
+#define FDASSERT(condition, format, ...)                        \
+  if (!(condition)) {                                           \
+    int n = std::snprintf(nullptr, 0, format, ##__VA_ARGS__);   \
+    std::vector<char> buffer(n + 1);                            \
+    std::snprintf(buffer.data(), n + 1, format, ##__VA_ARGS__); \
+    FDERROR << buffer.data() << std::endl;                      \
+    std::abort();                                               \
   }
 
 ///////// Basic Marco ///////////
@@ -128,7 +127,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
             false,                                                             \
             "Invalid enum data type. Expect to accept data type BOOL, INT32, " \
             "INT64, FP32, FP64, but receive type %s.",                         \
-            Str(__dtype__));                                                   \
+            Str(__dtype__).c_str());                                           \
     }                                                                          \
   }()
 
@@ -148,7 +147,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
                  "INT64, FP32, FP64, but receive type %s.",                   \
-                 Str(__dtype__));                                             \
+                 Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
 
@@ -164,7 +163,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                      \
                  "Invalid enum data type. Expect to accept data type FP32, " \
                  "FP64, but receive type %s.",                               \
-                 Str(__dtype__));                                            \
+                 Str(__dtype__).c_str());                                    \
     }                                                                        \
   }()
 
@@ -180,7 +179,7 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
                  "INT64, but receive type %s.",                               \
-                 Str(__dtype__));                                             \
+                 Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
 

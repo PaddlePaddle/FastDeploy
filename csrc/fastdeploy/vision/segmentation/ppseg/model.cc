@@ -127,8 +127,8 @@ bool PaddleSegModel::Postprocess(
   //     3. shape: 2-D HW
   FDASSERT(infer_result.dtype == FDDataType::INT64 ||
                infer_result.dtype == FDDataType::FP32,
-           "Require the data type of output is int64 or fp32, but now it's " +
-               Str(infer_result.dtype) + ".");
+           "Require the data type of output is int64 or fp32, but now it's %s.",
+           Str(infer_result.dtype).c_str());
   result->Clear();
 
   if (infer_result.shape.size() == 4) {
