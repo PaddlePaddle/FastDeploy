@@ -40,5 +40,5 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 ## 其它文档
 
-- [预编译Python安装包](./prebuilt_wheels.md)
+- [预编译Python安装包](./Python_prebuilt_wheels.md)
 - [视觉模型C++/Python部署示例](../../examples/vision/)
