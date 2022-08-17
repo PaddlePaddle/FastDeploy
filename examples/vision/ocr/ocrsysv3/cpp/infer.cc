@@ -55,8 +55,10 @@ int main() {
 
   auto option1 = fastdeploy::RuntimeOption();
   option1.UseCpu();
+  option1.UseOrtBackend();
   auto option2 = fastdeploy::RuntimeOption();
   option2.UseCpu();
+  option2.UseOrtBackend();
   auto option3 = fastdeploy::RuntimeOption();
   option3.UseGpu(5);
   option3.UseOrtBackend();

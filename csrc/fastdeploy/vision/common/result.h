@@ -60,8 +60,6 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
-<<<<<<< HEAD
-=======
 struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::vector<std::vector<int>> boxes;
   std::string text;
@@ -73,7 +71,6 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
 
   std::string Str();
 };
->>>>>>> 7250f8e... Add PaddleOCR Support
 struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   // box: xmin, ymin, xmax, ymax
   std::vector<std::array<float, 4>> boxes;

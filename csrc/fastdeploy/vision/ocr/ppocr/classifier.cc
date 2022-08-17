@@ -36,7 +36,6 @@ Classifier::Classifier(const std::string& model_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-  runtime_option.UsePaddleBackend();
 
   initialized = Initialize();
 }
