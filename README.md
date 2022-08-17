@@ -22,13 +22,13 @@
 
 
 ## 内容目录
-* 服务端
+* **服务端**
     * [服务端快速开始](#fastdeploy-quick-start)  
       * [快速安装](#fastdeploy-quick-start)
       * [Python预测示例](#fastdeploy-quick-start-python)  
       * [C++预测示例](#fastdeploy-quick-start-cpp)
     * [服务端模型列表](#fastdeploy-server-models)
-* 端侧
+* **端侧**
     * [端侧文档](#fastdeploy-edge-doc)
       * [ARM CPU端部署](#fastdeploy-edge-sdk-arm-linux)  
       * [ARM CPU移动端部署](#fastdeploy-edge-sdk-ios-android)  
