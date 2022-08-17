@@ -102,9 +102,8 @@
 |  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
 |  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
 
-根据开发语言，选择下载/安装预编译包：
 
-* Python预编译包：根据电脑Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
+* Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
 
 ```
 pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
@@ -115,7 +114,7 @@ pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-
 wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
 ```
 
-准备目标检测模型和测试图片
+* 准备目标检测模型和测试图片
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
