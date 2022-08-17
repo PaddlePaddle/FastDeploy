@@ -240,7 +240,9 @@ configure_file(${PROJECT_SOURCE_DIR}/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURC
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
-add_dependencies(${LIBRARY_NAME} extern_eigen3)
+if(ENABLE_FDTENSOR_FUNC OR ENABLE_TEXT)
+  add_dependencies(${LIBRARY_NAME} extern_eigen3)
+endif()
 
 redefine_file_macro(${LIBRARY_NAME})
 set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
