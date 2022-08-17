@@ -68,5 +68,5 @@ python -m pip install fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
 
 ## 其它文档
 
-- [预编译C++部署库](./prebuilt_libraries.md)
+- [预编译C++部署库](./CPP_prebuilt_libraries.md)
 - [视觉模型C++/Python部署示例](../../examples/vision/)
