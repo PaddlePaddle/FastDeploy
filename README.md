@@ -45,12 +45,13 @@
 
 ### 1.1 快速安装 FastDeploy Python/C++ 库 
 
+**注意**：建议优先选择下载「预编译包」的方式准备环境。
 | 预编译包语言  |下载位置 |  
 |  ---   |  --- |  
 |  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
 |  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
 
-**建议**：服务端，优先选择预编译包的方式准备环境。
+
 
 * Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
 
