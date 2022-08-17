@@ -22,22 +22,96 @@
 
 
 ## 内容目录
-
-* [服务端模型列表](#fastdeploy-server-models)
-* [服务端快速开始](#fastdeploy-quick-start)  
-  * [快速安装](#fastdeploy-quick-start)
-  * [Python预测示例](#fastdeploy-quick-start-python)  
-  * [C++预测示例](#fastdeploy-quick-start-cpp)
-* [轻量化SDK快速实现端侧AI推理部署](#fastdeploy-edge-sdk)
-  * [ARM CPU端部署](#fastdeploy-edge-sdk-arm-linux)  
-  * [ARM CPU移动端部署](#fastdeploy-edge-sdk-ios-android)  
-  * [ARM CPU自定义模型](#fastdeploy-edge-sdk-custom)  
-  * [NPU端部署](#fastdeploy-edge-sdk-npu)
+* 服务端
+    * [服务端快速开始](#fastdeploy-quick-start)  
+      * [快速安装](#fastdeploy-quick-start)
+      * [Python预测示例](#fastdeploy-quick-start-python)  
+      * [C++预测示例](#fastdeploy-quick-start-cpp)
+    * [服务端模型列表](#fastdeploy-server-models)
+* 端侧
+    * [端侧文档](#fastdeploy-edge-doc)
+      * [ARM CPU端部署](#fastdeploy-edge-sdk-arm-linux)  
+      * [ARM CPU移动端部署](#fastdeploy-edge-sdk-ios-android)  
+      * [ARM CPU自定义模型](#fastdeploy-edge-sdk-custom)  
+      * [NPU端部署](#fastdeploy-edge-sdk-npu)
+   * [端侧模型列表](#fastdeploy-edge-sdk)
 * [社区交流](#fastdeploy-community)
 * [Acknowledge](#fastdeploy-acknowledge)  
 * [License](#fastdeploy-license)
+
+## 1. 服务端快速开始
+
+<div id="fastdeploy-quick-start"></div>
+
+### 1.1 快速安装 FastDeploy Python/C++ 库 
+
+| 预编译包语言  |下载位置 |  
+|  ---   |  --- |  
+|  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
+|  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
+
+**建议**：服务端，优先选择预编译包的方式准备环境。
+
+* Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
+
+```
+pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
+```
+
+* C++预编译包：获取C++预编译库，以CPU 为例:
+```
+wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
+```
+
+* 准备目标检测模型和测试图片
+
+```bash
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
+tar xvf ppyoloe_crn_l_300e_coco.tgz
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+```
+
+
+### 1.2 Python预测示例
+
+<div id="fastdeploy-quick-start-python"></div>
+
+```python
+import cv2
+import fastdeploy.vision as vision
+
+model = vision.detection.PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml")
+im = cv2.imread("000000014439.jpg")
+result = model.predict(im.copy())
+print(result)
+
+vis_im = vision.vis_detection(im, result, score_threshold=0.5)
+cv2.imwrite("vis_image.jpg", vis_im)
+```
+
+### 1.3 C++预测示例
+
+<div id="fastdeploy-quick-start-cpp"></div>
+
+```C++
+#include "fastdeploy/vision.h"
+
+int main(int argc, char* argv[]) {
+  namespace vision = fastdeploy::vision;
+  auto model = vision::detection::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+  auto im = cv::imread("000000014439.jpg");
+
+  vision::DetectionResult res;
+  model.Predict(&im, &res)
+
+  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  cv::imwrite("vis_image.jpg", vis_im);
+}
+```
+
+更多部署案例请参考[视觉模型部署示例](examples/vision) .
   
-  ## 1. 服务端模型列表 🔥🔥🔥
+## 2. 服务端模型列表 🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>
 
@@ -91,78 +165,41 @@
 | <font size=2> FaceRecognition | <font size=2> [deepinsight/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 
-## 2. 服务端快速开始
 
-<div id="fastdeploy-quick-start"></div>
+## 3. 端侧文档
 
-### 2.1 快速安装 FastDeploy Python/C++ 库 
+<div id="fastdeploy-edge-doc"></div>
 
-| 预编译包语言  |下载位置 |  
-|  ---   |  --- |  
-|  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
-|  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
+### 3.1 端侧部署
 
+<div id="fastdeploy-edge-sdk-arm-linux"></div>
 
-* Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
+- ARM Linux 系统
+  - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
+  - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
+  - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
+  - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
 
-```
-pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
-```
+### 3.2 移动端部署
 
-* C++预编译包：获取C++预编译库，以CPU 为例:
-```
-wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
-```
+<div id="fastdeploy-edge-sdk-ios-android"></div>
 
-* 准备目标检测模型和测试图片
+- [iOS 系统部署](./docs/iOS-SDK.md)
+- [Android 系统部署](./docs/Android-SDK.md)  
 
-```bash
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-tar xvf ppyoloe_crn_l_300e_coco.tgz
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-```
+### 3.3 自定义模型部署
 
+<div id="fastdeploy-edge-sdk-custom"></div>
 
-### 2.2 Python预测示例
+- [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
 
-<div id="fastdeploy-quick-start-python"></div>
+### 3.4 NPU部署
 
-```python
-import cv2
-import fastdeploy.vision as vision
+<div id="fastdeploy-edge-sdk-npu"></div>
 
-model = vision.detection.PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml")
-im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
-print(result)
+- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
 
-vis_im = vision.vis_detection(im, result, score_threshold=0.5)
-cv2.imwrite("vis_image.jpg", vis_im)
-```
-
-### 2.3 C++预测示例
-
-<div id="fastdeploy-quick-start-cpp"></div>
-
-```C++
-#include "fastdeploy/vision.h"
-
-int main(int argc, char* argv[]) {
-  namespace vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
-  auto im = cv::imread("000000014439.jpg");
-
-  vision::DetectionResult res;
-  model.Predict(&im, &res)
-
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
-  cv::imwrite("vis_image.jpg", vis_im);
-}
-```
-
-更多部署案例请参考[视觉模型部署示例](examples/vision) .
-
-## 3. 轻量化SDK快速实现端侧AI推理部署 📱
+## 4. 端侧模型列表
 
 <div id="fastdeploy-edge-sdk"></div>
 
@@ -204,36 +241,7 @@ int main(int argc, char* argv[]) {
 | OCR                | PP-OCRv3                     | 2.4+10.6              | ✅                     | ✅                      | ✅                     |❔ | ❔ | ❔  |❔|
 | OCR                | PP-OCRv3-tiny                | 2.4+10.7              | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
 
-### 3.1 端侧部署
-
-<div id="fastdeploy-edge-sdk-arm-linux"></div>
-
-- ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
-  - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
-  - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
-  - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
-
-### 3.2 移动端部署
-
-<div id="fastdeploy-edge-sdk-ios-android"></div>
-
-- [iOS 系统部署](./docs/iOS-SDK.md)
-- [Android 系统部署](./docs/Android-SDK.md)  
-
-### 3.3 自定义模型部署
-
-<div id="fastdeploy-edge-sdk-custom"></div>
-
-- [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
-
-### 3.4 NPU部署
-
-<div id="fastdeploy-edge-sdk-npu"></div>
-
-- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
-
-## 4. 社区交流
+## 5. 社区交流
 
 <div id="fastdeploy-community"></div>
 
@@ -243,13 +251,13 @@ int main(int argc, char* argv[]) {
 <img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "200" height = "200" />
 </div>
 
-## 5. Acknowledge
+## 6. Acknowledge
 
 <div id="fastdeploy-acknowledge"></div>
 
 本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，再次表示感谢。
 
-## 6. License
+## 7. License
 
 <div id="fastdeploy-license"></div>
 
