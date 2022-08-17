@@ -351,8 +351,7 @@ void TrtBackend::AllocateBufferInDynamicShape(
     // find the original index of output
     auto iter = outputs_order_.find(outputs_desc_[i].name);
     FDASSERT(iter != outputs_order_.end(),
-             "Cannot find output:" + outputs_desc_[i].name +
-                 " of tensorrt network from the original model.");
+             "Cannot find output: %s of tensorrt network from the original model.", outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
     (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
     (*outputs)[ori_idx].shape.assign(output_dims.d,
@@ -431,29 +430,24 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kMIN,
                                       sample::toDims(item.second)),
-               "[TrtBackend] Failed to set min_shape for input: " + item.first +
-                   " in TrtBackend.");
+               "[TrtBackend] Failed to set min_shape for input: %s in TrtBackend.", item.first.c_str());
 
       // set optimization shape
       auto iter = option.opt_shape.find(item.first);
       FDASSERT(iter != option.opt_shape.end(),
-               "[TrtBackend] Cannot find input name: " + item.first +
-                   " in TrtBackendOption::opt_shape.");
+               "[TrtBackend] Cannot find input name: %s in TrtBackendOption::opt_shape.", item.first.c_str());
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kOPT,
                                       sample::toDims(iter->second)),
-               "[TrtBackend] Failed to set opt_shape for input: " + item.first +
-                   " in TrtBackend.");
+               "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.", item.first.c_str());
       // set max shape
       iter = option.max_shape.find(item.first);
       FDASSERT(iter != option.max_shape.end(),
-               "[TrtBackend] Cannot find input name: " + item.first +
-                   " in TrtBackendOption::max_shape.");
+               "[TrtBackend] Cannot find input name: %s in TrtBackendOption::max_shape.", item.first);
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kMAX,
                                       sample::toDims(iter->second)),
-               "[TrtBackend] Failed to set max_shape for input: " + item.first +
-                   " in TrtBackend.");
+               "[TrtBackend] Failed to set max_shape for input: %s in TrtBackend.", item.first);
     }
     config->addOptimizationProfile(profile);
   }
@@ -502,9 +496,7 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
 }
 
 TensorInfo TrtBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index:" + std::to_string(index) +
-                                    " should less than the number of inputs:" +
-                                    std::to_string(NumInputs()) + ".");
+  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
   TensorInfo info;
   info.name = inputs_desc_[index].name;
   info.shape.assign(inputs_desc_[index].shape.begin(),
@@ -515,9 +507,7 @@ TensorInfo TrtBackend::GetInputInfo(int index) {
 
 TensorInfo TrtBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index:" + std::to_string(index) +
-               " should less than the number of outputs:" +
-               std::to_string(NumOutputs()) + ".");
+           "The index: %d should less than the number of outputs: %d.", index, NumOutputs());
   TensorInfo info;
   info.name = outputs_desc_[index].name;
   info.shape.assign(outputs_desc_[index].shape.begin(),
