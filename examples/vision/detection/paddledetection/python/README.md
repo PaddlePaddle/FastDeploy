@@ -8,10 +8,11 @@
 本目录下提供`infer_xxx.py`快速完成PPYOLOE/PicoDet等模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+以ppyoloe为例进行推理部署
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/detection/paddledetection/python/
+cd FastDeploy/examples/vision/detection/paddledetection/python/
 
 #下载PPYOLOE模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -19,11 +20,11 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 # CPU推理
-python infer.py --model_dir ppyoloe_crn_l_300e_coco --image 000000087038.jpg --device cpu
+python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device cpu
 # GPU推理
-python infer.py --model_dir ppyoloe_crn_l_300e_coco --image 000000087038.jpg --device gpu
+python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model_dir ppyoloe_crn_l_300e_coco --image 000000087038.jpg --device gpu --use_trt True
+python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
