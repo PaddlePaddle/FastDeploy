@@ -18,7 +18,7 @@
 
 ## 近期更新
 
-- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0) **
+- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)**
     - **服务端全新升级：一套SDK，覆盖全量模型**   
         - x86 CPU、NVIDIA GPU发布基于最快/优推理引擎的SDK
         - 发布目标检测、人脸检测/识别、实时人像抠图、图像分割等40+重点模型
