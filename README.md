@@ -19,15 +19,12 @@
 ## 近期更新
 
 - 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0) **
-    -**服务端全新升级：一个SDK，覆盖全量模型**   
+    - **服务端全新升级：一套SDK，覆盖全量模型**   
         - x86 CPU、NVIDIA GPU发布基于最快/优推理引擎的SDK
         - 发布目标检测、人脸检测/识别、实时人像抠图、图像分割等40+重点模型
-        - * 支持Python API 和 C++ API
-    -**端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
+        - 支持Python API 和 C++ API
+    - **端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
         - 发布轻量化目标检测Picodet-NPU模型，提供低门槛INT8全量化能力
-        - 瑞芯微（Rockchip）1代NPU，包括开发板：RV1109、RV1126、RK1808
-        - 晶晨（Amlogic）NPU，包括开发板：A311D、S905D3、C308X
-        - 恩智浦（NXP）NPU，包括开发板：i.MX 8M Plus
 
 ## 内容目录
 * **服务端**
