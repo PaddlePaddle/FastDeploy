@@ -26,10 +26,10 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 ### Linux aarch64平台
 
-| 安装包 | 硬件 |
-| :----  | :-- |
-| [fastdeploy-linux-aarch64-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.2.0.tgz) | CPU |
-| [comming...] | Jetson |
+| 安装包 | 硬件 | 说明 |
+| :----  | :-- | :--- |
+| [fastdeploy-linux-aarch64-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.2.0.tgz) | CPU | g++ 6.3.0编译产出 |
+| [comming...] | Jetson | |
 
 ### Mac OSX平台
 
