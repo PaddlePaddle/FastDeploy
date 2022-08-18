@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [biubug6/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceDetection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/utltraface/python)/[C++](./examples/vision/facedet/utltraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/ultraface/python)/[C++](./examples/vision/facedet/ultraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [deepcam-cn/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [deepinsight/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceRecognition | <font size=2> [deepinsight/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
@@ -176,23 +176,23 @@ int main(int argc, char* argv[]) {
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
 
 - ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
-  - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
-  - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
-  - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
+  - [C++ Inference部署（含视频流）](./docs/ARM_CPU/ARM-Linux-CPP-SDK-Inference.md)
+  - [C++ 服务化部署](./docs/ARM_CPU/ARM-Linux-CPP-SDK-Serving.md)
+  - [Python Inference部署](./docs/ARM_CPU/ARM-Linux-Python-SDK-Inference.md)
+  - [Python 服务化部署](./docs/ARM_CPU/ARM-Linux-Python-SDK-Serving.md)
 
 ### 3.2 移动端部署
 
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
-- [iOS 系统部署](./docs/iOS-SDK.md)
-- [Android 系统部署](./docs/Android-SDK.md)  
+- [iOS 系统部署](./docs/ARM_CPU/iOS-SDK.md)
+- [Android 系统部署](./docs/ARM_CPU/Android-SDK.md)  
 
 ### 3.3 自定义模型部署
 
 <div id="fastdeploy-edge-sdk-custom"></div>
 
-- [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
+- [快速实现个性化模型替换](./docs/ARM_CPU/Replace-Model-With-Anther-One.md)
 
 ### 3.4 NPU部署
 
