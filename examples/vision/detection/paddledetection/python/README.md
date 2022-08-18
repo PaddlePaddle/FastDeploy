@@ -8,11 +8,9 @@
 本目录下提供`infer_xxx.py`快速完成PPYOLOE/PicoDet等模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-以ppyoloe为例进行推理部署
-
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/
+cd examples/vision/detection/paddledetection/python/
 
 #下载PPYOLOE模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
