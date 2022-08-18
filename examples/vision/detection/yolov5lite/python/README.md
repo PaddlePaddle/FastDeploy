@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/yolov5lite/python/
+cd examples/vision/detection/yolov5lite/python/
 
 #下载YOLOv5Lite模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx
