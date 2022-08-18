@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/yolor/python/
+cd examples/vision/detection/yolor/python/
 
 #下载YOLOR模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-640-640.onnx
