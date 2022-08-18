@@ -53,26 +53,20 @@
 
 ### 1.1 快速安装 FastDeploy Python/C++ 库 
 
-**注意**：建议优先选择下载「预编译包」的方式准备环境。
-| 预编译包语言  |下载位置 |  
-|  ---   |  --- |  
-|  Python  |[Python预编译库下载地址](docs/quick_start/Python_prebuilt_wheels.md) |  
-|  C++  |  [C++预编译库下载地址](docs/quick_start/CPP_prebuilt_libraries.md) | 
-
-
-
-* Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
-
+#### 安装 CPU Python 版本
 ```
-pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
+pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
+#### 安装 GPU Python 版本
+```
+pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+```
+#### 安装 C++ 版本
 
-* C++预编译包：获取C++预编译库，以CPU 为例:
-```
-wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
-```
+- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
 
-* 准备目标检测模型和测试图片
+
+#### 准备目标检测模型和测试图片
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
