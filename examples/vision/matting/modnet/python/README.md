@@ -8,15 +8,13 @@
 本目录下提供`infer.py`快速完成MODNet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
-#下载modnet模型文件和测试图片
-
-wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
-
-
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/matting/modnet/python/
+cd examples/vision/matting/modnet/python/
+
+#下载modnet模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
 
 # CPU推理
 python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device cpu
@@ -24,7 +22,6 @@ python infer.py --model modnet_photographic_portrait_matting.onnx --image test_l
 python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu
 # GPU上使用TensorRT推理
 python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu --use_trt True
-
 ```
 
 运行完成可视化结果如下图所示
