@@ -55,6 +55,9 @@
 
 #### 环境依赖
 
+- Linux x64/aarch64
+- Windows 10
+- Mac OSX x86/arm64
 - cuda >= 11.2
 - cudnn >= 8.0
 - python 3.6\~3.9(Windows 10 3.8\~3.9)
