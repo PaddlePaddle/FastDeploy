@@ -259,7 +259,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
              << option.serialize_file << ", will load it directly."
              << std::endl;
       fin.close();
-      return InitFromTrt(option.serialize_file);
+      return InitFromTrt(option.serialize_file, option);
     }
   }
 
