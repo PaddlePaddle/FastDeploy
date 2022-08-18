@@ -9,6 +9,7 @@
 
 ```
 以ppyoloe为例进行推理部署
+
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/paddledetection/python/
