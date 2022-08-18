@@ -17,7 +17,6 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_i
 tar -xvf Unet_cityscapes_without_argmax_infer.tgz
 wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
-
 # CPU推理
 python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device cpu
 # GPU推理

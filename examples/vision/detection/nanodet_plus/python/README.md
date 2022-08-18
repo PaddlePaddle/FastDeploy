@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/nanodet_plus/python/
+cd examples/vision/detection/nanodet_plus/python/
 
 #下载NanoDetPlus模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/nanodet-plus-m_320.onnx

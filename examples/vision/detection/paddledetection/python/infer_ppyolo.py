@@ -56,7 +56,6 @@ result = model.predict(im.copy())
 print(result)
 
 # 预测结果可视化
-vis_im = fd.vision.vis_detection(
-    im, result, score_threshold=0.5, score_threshold=0.5)
+vis_im = fd.vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")
