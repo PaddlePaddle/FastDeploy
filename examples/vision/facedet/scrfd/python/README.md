@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/scrfd/python/
+cd examples/vision/facedet/scrfd/python/
 
 #下载SCRFD模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
