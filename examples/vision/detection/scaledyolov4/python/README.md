@@ -12,7 +12,6 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vison/detection/scaledyolov4/python/
 
-
 #下载scaledyolov4模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
