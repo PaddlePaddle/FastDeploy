@@ -16,10 +16,18 @@
 
 **⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
-## 发版历史
+## 近期更新
 
-- **[v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0) 2022.08.18** 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过TensorRT加速部署
-
+- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0) **
+    -**服务端全新升级：一个SDK，覆盖全量模型**   
+        - x86 CPU、NVIDIA GPU发布基于最快/优推理引擎的SDK
+        - 发布目标检测、人脸检测/识别、实时人像抠图、图像分割等40+重点模型
+        - * 支持Python API 和 C++ API
+    -**端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
+        - 发布轻量化目标检测Picodet-NPU模型，提供低门槛INT8全量化能力
+        - 瑞芯微（Rockchip）1代NPU，包括开发板：RV1109、RV1126、RK1808
+        - 晶晨（Amlogic）NPU，包括开发板：A311D、S905D3、C308X
+        - 恩智浦（NXP）NPU，包括开发板：i.MX 8M Plus
 
 ## 内容目录
 * **服务端**
