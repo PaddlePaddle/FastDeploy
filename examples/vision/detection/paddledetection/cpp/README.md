@@ -11,25 +11,25 @@
 
 ```
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/detection/paddledetection
+cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/detection/paddledetection/cpp
 mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
 make -j
 
 # 下载PPYOLOE模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/picodet_l_320_coco_lcnet.tgz
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000087038.jpg
-tar xvf picodet_l_320_coco_lcnet.tgz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 
 # CPU推理
-./infer_ppyoloe_demo ./picodet_l_320_coco_lcnet 000000087038.jpg 0
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 0
 # GPU推理
-./infer_ppyoloe_demo ./picodet_l_320_coco_lcnet 000000087038.jpg 1
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 1
 # GPU上TensorRT推理
-./infer_ppyoloe_demo ./picodet_l_320_coco_lcnet 000000087038.jpg 2
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
 ```
 
 ## PaddleDetection C++接口
