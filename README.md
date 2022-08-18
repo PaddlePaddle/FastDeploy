@@ -20,7 +20,7 @@
 
 - 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
     - **服务端全新升级：一套SDK，覆盖全量模型**   
-        - x86 CPU、NVIDIA GPU发布基于最快/优推理引擎的SDK
+        - 发布基于x86 CPU、NVIDIA GPU的最快、最优推理引擎的SDK，推理速度大幅提升
         - 支持TensorRT、ONNXRuntime、Paddle Inference等推理引擎
         - 发布目标检测、人脸检测/识别、实时人像抠图、图像分割等40+重点模型
         - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE、YOLOv5Lite、NanoDet、PicoNet等目标检测领域最优模型
