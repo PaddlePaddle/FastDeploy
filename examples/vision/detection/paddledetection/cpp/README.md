@@ -10,6 +10,8 @@
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```
+以ppyoloe为例进行推理部署
+
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
