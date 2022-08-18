@@ -48,8 +48,8 @@
 **注意**：建议优先选择下载「预编译包」的方式准备环境。
 | 预编译包语言  |下载位置 |  
 |  ---   |  --- |  
-|  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
-|  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
+|  Python  |[Python预编译库下载地址](docs/quick_start/Python_prebuilt_wheels.md) |  
+|  C++  |  [C++预编译库下载地址](docs/quick_start/CPP_prebuilt_libraries.md) | 
 
 
 
