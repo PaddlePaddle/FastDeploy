@@ -15,7 +15,7 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/yolov5face/python/
+cd examples/vision/facedet/yolov5face/python/
 
 # CPU推理
 python infer.py --model yolov5s-face.onnx --image test_lite_face_detector_3.jpg --device cpu
