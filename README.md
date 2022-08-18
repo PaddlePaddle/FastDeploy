@@ -22,8 +22,8 @@
     - **服务端全新升级：一套SDK，覆盖全量模型**   
         - 发布基于x86 CPU、NVIDIA GPU的易用、高性能推理引擎SDK，推理速度大幅提升
         - 支持ONNXRuntime、Paddle Inference、TensorRT推理引擎
-        - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE等目标检测最优模型及Demo示例
-        - 支持人脸检测、人脸识别、实时人像抠图、图像分割等40+重点模型及Demo示例
+        - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE等目标检测最优模型及[Demo示例](examples/vision/detection/)
+        - 支持人脸检测、人脸识别、实时人像抠图、图像分割等40+重点模型及[Demo示例](examples/vision/)
         - 支持Python API 和 C++ API
         - 开发AI模型部署代码量减少～60%
     - **端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
