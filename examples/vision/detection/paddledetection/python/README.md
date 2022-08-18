@@ -15,7 +15,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/paddledetection/python/
+cd examples/vision/detection/paddledetection/python/
 
 # CPU推理
 python infer.py --model_dir ppyoloe_crn_l_300e_coco --image 000000087038.jpg --device cpu
