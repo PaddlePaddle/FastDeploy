@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/yolov6/python/
+cd examples/vision/detection/yolov6/python/
 
 
 #下载YOLOv6模型文件和测试图片
