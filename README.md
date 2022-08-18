@@ -52,6 +52,12 @@
 
 ### 1.1 快速安装 FastDeploy Python/C++ 库 
 
+#### 环境依赖
+
+- cuda >= 11.2
+- cudnn >= 8.0
+- python 3.6\~3.9(Windows 10 3.8\~3.9)
+
 #### 安装 CPU Python 版本
 ```
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
