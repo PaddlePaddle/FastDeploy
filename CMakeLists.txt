@@ -115,7 +115,9 @@ file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
 set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
-include(external/eigen.cmake)
+if(ENABLE_FDTENSOR_FUNC OR ENABLE_TEXT)
+  include(external/eigen.cmake)
+endif()
 if(ENABLE_PADDLE_FRONTEND)
   add_definitions(-DENABLE_PADDLE_FRONTEND)
   include(${PROJECT_SOURCE_DIR}/external/paddle2onnx.cmake)
@@ -133,7 +135,13 @@ if(ENABLE_PADDLE_BACKEND)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
   include(external/paddle_inference.cmake)
-  list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
+  if(NOT APPLE)
+    list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
+  else()
+    # no third parties libs(mkldnn and omp) need to
+    # link into paddle_inference on MacOS OSX.
+    list(APPEND DEPEND_LIBS external_paddle_inference)
+  endif()
 endif()
 
 if(WITH_GPU)
@@ -232,7 +240,9 @@ configure_file(${PROJECT_SOURCE_DIR}/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURC
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
-add_dependencies(${LIBRARY_NAME} extern_eigen3)
+if(ENABLE_FDTENSOR_FUNC OR ENABLE_TEXT)
+  add_dependencies(${LIBRARY_NAME} extern_eigen3)
+endif()
 
 redefine_file_macro(${LIBRARY_NAME})
 set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")

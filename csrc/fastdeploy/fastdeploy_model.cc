@@ -89,12 +89,12 @@ bool FastDeployModel::InitRuntime() {
                 << Str(runtime_option.backend) << "." << std::endl;
       if (use_gpu) {
         FDASSERT(valid_gpu_backends.size() > 0,
-                 "There's no valid gpu backend for " + ModelName() + ".");
+                 "There's no valid gpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
       } else {
         FDASSERT(valid_gpu_backends.size() > 0,
-                 "There's no valid cpu backend for " + ModelName() + ".");
+                 "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
       }

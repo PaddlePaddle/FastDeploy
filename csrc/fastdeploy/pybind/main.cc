@@ -33,8 +33,8 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
   } else if (fd_dtype == FDDataType::UINT8) {
     dt = pybind11::dtype::of<uint8_t>();
   } else {
-    FDASSERT(false, "The function doesn't support data type of " +
-                        Str(fd_dtype) + ".");
+    FDASSERT(false, "The function doesn't support data type of %s.",
+                        Str(fd_dtype).c_str());
   }
   return dt;
 }
