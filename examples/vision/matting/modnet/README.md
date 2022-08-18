@@ -21,7 +21,7 @@
 为了方便开发者的测试，下面提供了MODNet导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [modnet_photographic](https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic__portrait_matting.onnx) | 25MB | - |
+| [modnet_photographic](https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx) | 25MB | - |
 | [modnet_webcam](https://bj.bcebos.com/paddlehub/fastdeploy/modnet_webcam_portrait_matting.onnx) | 25MB | -|
 | [modnet_photographic_256](https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting-256x256.onnx) | 25MB | - |
 | [modnet_webcam_256](https://bj.bcebos.com/paddlehub/fastdeploy/modnet_webcam_portrait_matting-256x256.onnx) | 25MB | - |
