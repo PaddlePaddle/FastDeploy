@@ -64,11 +64,11 @@
 
 #### 安装 CPU Python 版本
 ```
-pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 #### 安装 GPU Python 版本
 ```
-pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 #### 安装 C++ 版本
 

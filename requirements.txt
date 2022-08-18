@@ -1,2 +1,4 @@
 requests
 tqdm
+numpy
+opencv-python
