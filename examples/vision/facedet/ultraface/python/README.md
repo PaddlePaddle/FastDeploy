@@ -8,17 +8,15 @@
 本目录下提供`infer.py`快速完成UltraFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision/facedet/ultraface/python/
+
 #下载ultraface模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/ultraface/python/
-
 # CPU推理
-
 python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
 python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device gpu

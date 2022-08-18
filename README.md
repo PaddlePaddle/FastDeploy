@@ -14,7 +14,7 @@
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
-**⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
+**⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人脸识别、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
 ## 近期更新
 
@@ -27,7 +27,7 @@
         - 支持Python API 和 C++ API
         - 开发AI模型部署代码量减少～60%
     - **端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
-        - 发布轻量化目标检测Picodet-NPU模型，提供低门槛INT8全量化能力
+        - 发布轻量化目标检测[Picodet-NPU部署Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)，提供低门槛INT8全量化能力
 
 ## 内容目录
 * **服务端**
