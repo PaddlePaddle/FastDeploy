@@ -89,6 +89,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 <div id="fastdeploy-quick-start-python"></div>
 
 ```python
+# GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
 
@@ -106,6 +107,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 <div id="fastdeploy-quick-start-cpp"></div>
 
 ```C++
+// GPU/TensorRT部署参考 examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
