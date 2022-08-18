@@ -176,23 +176,23 @@ int main(int argc, char* argv[]) {
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
 
 - ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/ARM_CPU/ARM-Linux-CPP-SDK-Inference.md)
-  - [C++ 服务化部署](./docs/ARM_CPU/ARM-Linux-CPP-SDK-Serving.md)
-  - [Python Inference部署](./docs/ARM_CPU/ARM-Linux-Python-SDK-Inference.md)
-  - [Python 服务化部署](./docs/ARM_CPU/ARM-Linux-Python-SDK-Serving.md)
+  - [C++ Inference部署（含视频流）](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Inference.md)
+  - [C++ 服务化部署](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Serving.md)
+  - [Python Inference部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Inference.md)
+  - [Python 服务化部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Serving.md)
 
 ### 3.2 移动端部署
 
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
-- [iOS 系统部署](./docs/ARM_CPU/iOS-SDK.md)
-- [Android 系统部署](./docs/ARM_CPU/Android-SDK.md)  
+- [iOS 系统部署](./docs/ARM-CPU/iOS-SDK.md)
+- [Android 系统部署](./docs/ARM-CPU/Android-SDK.md)  
 
 ### 3.3 自定义模型部署
 
 <div id="fastdeploy-edge-sdk-custom"></div>
 
-- [快速实现个性化模型替换](./docs/ARM_CPU/Replace-Model-With-Anther-One.md)
+- [快速实现个性化模型替换](./docs/ARM-CPU/Replace-Model-With-Anther-One.md)
 
 ### 3.4 NPU部署
 
