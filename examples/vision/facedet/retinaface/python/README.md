@@ -8,17 +8,15 @@
 本目录下提供`infer.py`快速完成RetinaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision//retinaface/python/
+
 #下载retinaface模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison//retinaface/python/
-
 # CPU推理
-
 python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
 python infer.py --model Pytorch_RetinaFace_mobile0.25-640-640.onnx --image test_lite_face_detector_3.jpg --device gpu

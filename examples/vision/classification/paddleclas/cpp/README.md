@@ -16,7 +16,7 @@ tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/classification/paddleclas/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.2.0 
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0 
 make -j
 
 # 下载ResNet50_vd模型文件和测试图片

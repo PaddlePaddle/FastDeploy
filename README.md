@@ -14,12 +14,20 @@
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
-**⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
+**⚡️FastDeploy**是一款**简单易用**的推理部署工具箱。覆盖业界主流**优质预训练模型**并提供**开箱即用**的开发体验，包括图像分类、目标检测、图像分割、人脸检测、人脸识别、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的快速部署需求。
 
-## 发版历史
+## 近期更新
 
-- **[v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0) 2022.08.18** 全面开源服务端部署代码，支持40+视觉模型在CPU/GPU，以及通过TensorRT加速部署
-
+- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
+    - **服务端全新升级：一套SDK，覆盖全量模型**   
+        - 发布基于x86 CPU、NVIDIA GPU的易用、高性能推理引擎SDK，推理速度大幅提升
+        - 支持ONNXRuntime、Paddle Inference、TensorRT推理引擎
+        - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE等目标检测最优模型及[Demo示例](examples/vision/detection/)
+        - 支持人脸检测、人脸识别、实时人像抠图、图像分割等40+重点模型及[Demo示例](examples/vision/)
+        - 支持Python API 和 C++ API
+        - 开发AI模型部署代码量减少～60%
+    - **端侧继ARM CPU后，延伸至瑞芯微、晶晨、恩智浦等NPU能力**
+        - 发布轻量化目标检测[Picodet-NPU部署Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)，提供低门槛INT8全量化能力
 
 ## 内容目录
 * **服务端**
@@ -45,26 +53,29 @@
 
 ### 1.1 快速安装 FastDeploy Python/C++ 库 
 
-**注意**：建议优先选择下载「预编译包」的方式准备环境。
-| 预编译包语言  |下载位置 |  
-|  ---   |  --- |  
-|  Python  |[Python预编译库下载地址](docs/compile/prebuilt_wheels.md) |  
-|  C++  |  [C++预编译库下载地址](docs/compile/prebuilt_libraries.md) | 
+#### 环境依赖
 
+- Linux x64/aarch64
+- Windows 10
+- Mac OSX x86/arm64
+- cuda >= 11.2
+- cudnn >= 8.0
+- python 3.6\~3.9(Windows 10 3.8\~3.9)
 
-
-* Python预编译包：根据Python版本选择安装对应的wheel包，以CPU + Python3.8为例:
-
+#### 安装 CPU Python 版本
 ```
-pip install https://bj.bcebos.com/paddlehub/fastdeploy/wheels/fastdeploy_python-0.2.0-cp38-cp38-manylinux1_x86_64.whl
+pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
+#### 安装 GPU Python 版本
+```
+pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+```
+#### 安装 C++ 版本
 
-* C++预编译包：获取C++预编译库，以CPU 为例:
-```
-wget https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-0.2.0.tgz
-```
+- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
 
-* 准备目标检测模型和测试图片
+
+#### 准备目标检测模型和测试图片
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -78,10 +89,13 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 <div id="fastdeploy-quick-start-python"></div>
 
 ```python
+# GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
 
-model = vision.detection.PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml")
+model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
+                                 "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+                                 "ppyoloe_crn_l_300e_coco/nfer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
 print(result)
@@ -95,11 +109,14 @@ cv2.imwrite("vis_image.jpg", vis_im)
 <div id="fastdeploy-quick-start-cpp"></div>
 
 ```C++
+// GPU/TensorRT部署参考 examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
+                                          "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+                                          "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
@@ -157,7 +174,7 @@ int main(int argc, char* argv[]) {
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [biubug6/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceDetection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/utltraface/python)/[C++](./examples/vision/facedet/utltraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> FaceDetection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/ultraface/python)/[C++](./examples/vision/facedet/ultraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [deepcam-cn/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [deepinsight/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceRecognition | <font size=2> [deepinsight/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
@@ -176,23 +193,23 @@ int main(int argc, char* argv[]) {
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
 
 - ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/ARM-Linux-CPP-SDK-Inference.md)
-  - [C++ 服务化部署](./docs/ARM-Linux-CPP-SDK-Serving.md)
-  - [Python Inference部署](./docs/ARM-Linux-Python-SDK-Inference.md)
-  - [Python 服务化部署](./docs/ARM-Linux-Python-SDK-Serving.md)
+  - [C++ Inference部署（含视频流）](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Inference.md)
+  - [C++ 服务化部署](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Serving.md)
+  - [Python Inference部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Inference.md)
+  - [Python 服务化部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Serving.md)
 
 ### 3.2 移动端部署
 
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
-- [iOS 系统部署](./docs/iOS-SDK.md)
-- [Android 系统部署](./docs/Android-SDK.md)  
+- [iOS 系统部署](./docs/ARM-CPU/iOS-SDK.md)
+- [Android 系统部署](./docs/ARM-CPU/Android-SDK.md)  
 
 ### 3.3 自定义模型部署
 
 <div id="fastdeploy-edge-sdk-custom"></div>
 
-- [快速实现个性化模型替换](./docs/Replace-Model-With-Anther-One.md)
+- [快速实现个性化模型替换](./docs/ARM-CPU/Replace-Model-With-Anther-One.md)
 
 ### 3.4 NPU部署
 

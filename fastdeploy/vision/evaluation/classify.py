@@ -71,7 +71,12 @@ def eval_classify(model, image_file_path, label_file_path, topk=5):
     topk_acc_score = topk_accuracy(np.array(result_list), np.array(label_list))
     if topk == 1:
         scores.update({'topk1': topk_acc_score})
+        scores.update({
+            'topk1_average_inference_time(s)': average_inference_time
+        })
     elif topk == 5:
         scores.update({'topk5': topk_acc_score})
-    scores.update({'average_inference_time': average_inference_time})
+        scores.update({
+            'topk5_average_inference_time(s)': average_inference_time
+        })
     return scores

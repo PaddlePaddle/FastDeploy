@@ -56,7 +56,7 @@
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% |
 | [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% |
-| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnxx) | 18MB | 50.9% |
+| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% |
 | [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% |
 
 
