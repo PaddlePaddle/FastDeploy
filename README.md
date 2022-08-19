@@ -93,7 +93,9 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-model = vision.detection.PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml")
+model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
+                                 "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+                                 "ippyoloe_crn_l_300e_coco/nfer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
 print(result)
@@ -112,7 +114,9 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
+                                          "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+                                          "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
