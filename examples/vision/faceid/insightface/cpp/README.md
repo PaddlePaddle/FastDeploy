@@ -9,7 +9,7 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -44,7 +44,7 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 ### ArcFace类
 
-```
+```c++
 fastdeploy::vision::faceid::ArcFace(
         const string& model_file,
         const string& params_file = "",
@@ -56,7 +56,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 
 ### CosFace类
 
-```
+```c++
 fastdeploy::vision::faceid::CosFace(
         const string& model_file,
         const string& params_file = "",
@@ -68,7 +68,7 @@ CosFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 
 ### PartialFC类
 
-```
+```c++
 fastdeploy::vision::faceid::PartialFC(
         const string& model_file,
         const string& params_file = "",
@@ -80,7 +80,7 @@ PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ### VPL类
 
-```
+```c++
 fastdeploy::vision::faceid::VPL(
         const string& model_file,
         const string& params_file = "",
@@ -98,7 +98,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

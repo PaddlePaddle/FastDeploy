@@ -9,7 +9,7 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -38,7 +38,7 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 ### SCRFD类
 
-```
+```c++
 fastdeploy::vision::facedet::SCRFD(
         const string& model_file,
         const string& params_file = "",
@@ -57,7 +57,7 @@ SCRFD模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

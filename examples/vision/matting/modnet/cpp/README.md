@@ -9,7 +9,7 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -40,7 +40,7 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 ### MODNet类
 
-```
+```c++
 fastdeploy::vision::matting::MODNet(
         const string& model_file,
         const string& params_file = "",
@@ -59,7 +59,7 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > MODNet::Predict(cv::Mat* im, MattingResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

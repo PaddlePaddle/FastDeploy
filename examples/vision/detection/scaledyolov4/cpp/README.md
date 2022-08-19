@@ -9,7 +9,7 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -38,7 +38,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 ### ScaledYOLOv4类
 
-```
+```c++
 fastdeploy::vision::detection::ScaledYOLOv4(
         const string& model_file,
         const string& params_file = "",
@@ -57,7 +57,7 @@ ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格
 
 #### Predict函数
 
-> ```
+> ```c++
 > ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

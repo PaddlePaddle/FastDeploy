@@ -6,7 +6,7 @@ ClassifyResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用�
 
 `fastdeploy::vision::ClassifyResult`
 
-```
+```c++
 struct ClassifyResult {
   std::vector<int32_t> label_ids;
   std::vector<float> scores;

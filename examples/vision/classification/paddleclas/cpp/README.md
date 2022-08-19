@@ -9,14 +9,14 @@
 
 以Linux上ResNet50_vd推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/classification/paddleclas/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0 
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
 make -j
 
 # 下载ResNet50_vd模型文件和测试图片
@@ -37,7 +37,7 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 
 ### PaddleClas类
 
-```
+```c++
 fastdeploy::vision::classification::PaddleClasModel(
         const string& model_file,
         const string& params_file,
@@ -58,14 +58,14 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 
 #### Predict函数
 
-> ```
+> ```c++
 > PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk = 1)
 > ```
-> 
+>
 > 模型预测接口，输入图像直接输出检测结果。
-> 
+>
 > **参数**
-> 
+>
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 分类结果，包括label_id，以及相应的置信度, ClassifyResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 > > * **topk**(int):返回预测概率最高的topk个分类结果，默认为1

@@ -8,7 +8,7 @@
 
 ## 导出ONNX模型
 
-  ```
+  ```bash
   #下载scrfd模型文件
   e.g. download from  https://onedrive.live.com/?authkey=%21ABbFJx2JMhNjhNA&id=4A83B6B633B029CC%215542&cid=4A83B6B633B029CC
 
