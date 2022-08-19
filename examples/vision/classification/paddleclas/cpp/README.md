@@ -33,6 +33,9 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 2
 ```
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## PaddleClas C++接口
 
 ### PaddleClas类

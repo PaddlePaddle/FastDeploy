@@ -40,6 +40,9 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG">
 </div>
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## InsightFace C++接口
 
 ### ArcFace类

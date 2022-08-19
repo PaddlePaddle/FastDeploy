@@ -37,6 +37,9 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 <img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
 </div>
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## PaddleSeg C++接口
 
 ### PaddleSeg类

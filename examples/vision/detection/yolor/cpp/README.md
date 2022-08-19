@@ -34,6 +34,9 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301926-fa3711bf-5984-4e61-9c98-7fdeacb622e9.jpg">
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## YOLOR C++接口
 
 ### YOLOR类
