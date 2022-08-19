@@ -15,12 +15,18 @@
 from tqdm import trange
 import numpy as np
 import collections
+import os
+import math
+import time
 
 
 def eval_segmentation(model, data_dir):
     import cv2
     from utils import Cityscapes
     from utils import f1_score, calculate_area, mean_iou, accuracy, kappa
+    assert os.path.isdir(
+        data_dir), "The image_file_path:{} is not a directory.".format(
+            data_dir)
     eval_dataset = Cityscapes(dataset_root=data_dir, mode="val")
     file_list = eval_dataset.file_list
     image_num = eval_dataset.num_samples
@@ -29,12 +35,23 @@ def eval_segmentation(model, data_dir):
     pred_area_all = 0
     label_area_all = 0
     conf_mat_all = []
+    twenty_percent_image_num = math.ceil(image_num * 0.2)
+    start_time = 0
+    end_time = 0
+    average_inference_time = 0
     for image_label_path, i in zip(file_list,
                                    trange(
                                        image_num, desc="Inference Progress")):
+        if i == twenty_percent_image_num:
+            start_time = time.time()
         im = cv2.imread(image_label_path[0])
         label = cv2.imread(image_label_path[1], cv2.IMREAD_GRAYSCALE)
         result = model.predict(im)
+        if i == image_num - 1:
+            end_time = time.time()
+        average_inference_time = round(
+            (end_time - start_time) / (image_num - twenty_percent_image_num),
+            4)
         pred = np.array(result.label_map).reshape(result.shape[0],
                                                   result.shape[1])
         intersect_area, pred_area, label_area = calculate_area(pred, label,
@@ -53,8 +70,11 @@ def eval_segmentation(model, data_dir):
     eval_metrics = collections.OrderedDict(
         zip([
             'miou', 'category_iou', 'oacc', 'category_acc', 'kappa',
-            'category_F1-score'
-        ], [miou, class_iou, oacc, class_acc, kappa_res, category_f1score]))
+            'category_F1-score', 'average_inference_time(s)'
+        ], [
+            miou, class_iou, oacc, class_acc, kappa_res, category_f1score,
+            average_inference_time
+        ]))
     return eval_metrics
 
 
