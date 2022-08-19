@@ -16,7 +16,7 @@ FastDeploy产品中的Runtime包含多个推理后端，其各关系如下所示
 
 在各模型的，均通过`RuntimeOption`来配置推理的后端，以及推理时的参数，例如在python中，加载模型后可通过如下代码打印推理配置
 ```python
-model = fastdeploy.vision.ultralytics.YOLOv5("yolov5s.onnx")
+model = fastdeploy.vision.detection.YOLOv5("yolov5s.onnx")
 print(model.runtime_option)
 ```
 可看下如下输出
@@ -81,10 +81,11 @@ option.trt_min_shape = {"x": [1, 3, 224, 224]}
 option.trt_opt_shape = {"x": [4, 3, 224, 224]}
 option.trt_max_shape = {"x": [8, 3, 224, 224]}
 
-model = fd.vision.ppcls.Model("resnet50/inference.pdmodel",
-                              "resnet50/inference.pdiparams",
-                              "resnet50/inference_cls.yaml",
-                              runtime_option=option)
+model = fd.vision.classification.PaddleClasModel(
+    "resnet50/inference.pdmodel",
+    "resnet50/inference.pdiparams",
+    "resnet50/inference_cls.yaml",
+    runtime_option=option)
 ```
 
 ## C++ 使用
@@ -121,11 +122,11 @@ int main() {
   option.trt_opt_shape["x"] = {4, 3, 224, 224};
   option.trt_max_shape["x"] = {8, 3, 224, 224};
 
-  auto model = fastdeploy::vision::ppcls.Model(
+  auto model = fastdeploy::vision::classification::PaddleClasModel(
                            "resnet50/inference.pdmodel",
                            "resnet50/inference.pdiparams",
                            "resnet50/inference_cls.yaml",
-                           option);
+                            option);
   return 0;
 }
 ```
