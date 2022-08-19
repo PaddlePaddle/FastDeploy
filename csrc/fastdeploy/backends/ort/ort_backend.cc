@@ -191,8 +191,10 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
            numel * sizeof(double));
     tensor->dtype = FDDataType::FP64;
   } else {
-    FDASSERT(false, "Unrecognized data type of " + std::to_string(data_type) +
-                        " while calling OrtBackend::CopyToCpu().");
+    FDASSERT(
+        false,
+        "Unrecognized data type of %d while calling OrtBackend::CopyToCpu().",
+        data_type);
   }
 }
 
@@ -237,9 +239,9 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
 }
 
 TensorInfo OrtBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index:" + std::to_string(index) +
-                                    " should less than the number of inputs:" +
-                                    std::to_string(NumInputs()) + ".");
+  FDASSERT(index < NumInputs(),
+           "The index: %d should less than the number of inputs: %d.", index,
+           NumInputs());
   TensorInfo info;
   info.name = inputs_desc_[index].name;
   info.shape.assign(inputs_desc_[index].shape.begin(),
@@ -250,9 +252,8 @@ TensorInfo OrtBackend::GetInputInfo(int index) {
 
 TensorInfo OrtBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index:" + std::to_string(index) +
-               " should less than the number of outputs:" +
-               std::to_string(NumOutputs()) + ".");
+           "The index: %d should less than the number of outputs: %d.", index,
+           NumOutputs());
   TensorInfo info;
   info.name = outputs_desc_[index].name;
   info.shape.assign(outputs_desc_[index].shape.begin(),

@@ -94,17 +94,13 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index:" + std::to_string(index) +
-                                    " should less than the number of inputs:" +
-                                    std::to_string(NumInputs()) + ".");
+  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
   return inputs_desc_[index];
 }
 
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index:" + std::to_string(index) +
-               " should less than the number of outputs:" +
-               std::to_string(NumOutputs()) + ".");
+           "The index: %d should less than the number of outputs %d.", index, NumOutputs());
   return outputs_desc_[index];
 }
 

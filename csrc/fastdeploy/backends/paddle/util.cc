@@ -31,8 +31,7 @@ void ShareTensorFromCpu(paddle_infer::Tensor* tensor, FDTensor& fd_tensor) {
                               shape, paddle_infer::PlaceType::kCPU);
     return;
   }
-  FDASSERT(false, "Unexpected data type(" + Str(fd_tensor.dtype) +
-                      ") while infer with PaddleBackend.");
+  FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.", Str(fd_tensor.dtype).c_str());
 }
 
 void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
@@ -52,8 +51,7 @@ void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
     tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
     return;
   }
-  FDASSERT(false, "Unexpected data type(" + Str(fd_tensor->dtype) +
-                      ") while infer with PaddleBackend.");
+  FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.", Str(fd_tensor->dtype).c_str());
 }
 
 FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {
@@ -67,8 +65,7 @@ FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {
   } else if (dtype == paddle_infer::UINT8) {
     fd_dtype = FDDataType::UINT8;
   } else {
-    FDASSERT(false, "Unexpected data type:" + std::to_string(int(dtype)) +
-                        " while call CopyTensorToCpu in PaddleBackend.");
+    FDASSERT(false, "Unexpected data type: %d while call CopyTensorToCpu in PaddleBackend.", int(dtype));
   }
   return fd_dtype;
 }

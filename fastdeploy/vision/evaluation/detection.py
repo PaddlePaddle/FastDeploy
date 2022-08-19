@@ -28,6 +28,7 @@ def eval_detection(model,
     from .utils import COCOMetric
     import cv2
     from tqdm import trange
+    import time
 
     if conf_threshold is not None or nms_iou_threshold is not None:
         assert conf_threshold is not None and nms_iou_threshold is not None, "The conf_threshold and nms_iou_threshold should be setted at the same time"
@@ -80,6 +81,6 @@ def eval_detection(model,
     eval_metric.accumulate()
     eval_details = eval_metric.details
     scores.update(eval_metric.get())
-    scores.update({'average_inference_time': average_inference_time})
+    scores.update({'average_inference_time(s)': average_inference_time})
     eval_metric.reset()
     return scores

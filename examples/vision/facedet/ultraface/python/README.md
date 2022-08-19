@@ -2,23 +2,21 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成UltraFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision/facedet/ultraface/python/
+
 #下载ultraface模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/version-RFB-320.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/ultraface/python/
-
 # CPU推理
-
 python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
 python infer.py --model version-RFB-320.onnx --image test_lite_face_detector_3.jpg --device gpu

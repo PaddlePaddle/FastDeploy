@@ -79,6 +79,22 @@ def add_cuda_shared_lib_dir_windows():
         print(f"[FastDeploy][CUDA]: Found valid cuda directroy and added it: -> {cuda_shared_lib_dir}")
 
 
+def try_pre_load_fastdeploy_dll(dll_name=None):
+    # Try pre-load fastdeploy dll in windows to
+    # make sure the added custom dll directory
+    # has been activated. Reference:
+    # [1] https://github.com/conda/conda/issues/10897
+    # [2] https://github.com/dhermes/bezier/issues/237
+    from ctypes import cdll
+    if dll_name is None:
+        dll_name = "fastdeploy.dll"
+    try:
+        dll = cdll.LoadLibrary(dll_name)
+        del dll
+    except Exception as e:
+        raise RuntimeError(f"Can not pre load dll: {dso_name}. {e}")
+
+
 if os.name == "nt":
     add_cuda_shared_lib_dir_windows()
     current_path = os.path.abspath(__file__)
@@ -89,6 +105,7 @@ if os.name == "nt":
         for d in dirs:
             if d == "lib" or d == "bin":
                 add_dll_search_dir(os.path.join(dirname, root, d))
+    try_pre_load_fastdeploy_dll()
 
 
 try:
