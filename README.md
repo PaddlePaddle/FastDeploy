@@ -95,7 +95,7 @@ import fastdeploy.vision as vision
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams", 
-                                 "ippyoloe_crn_l_300e_coco/nfer_cfg.yml")
+                                 "ppyoloe_crn_l_300e_coco/nfer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
 print(result)
