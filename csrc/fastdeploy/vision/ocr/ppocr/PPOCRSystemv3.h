@@ -19,11 +19,11 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_postprocess_op.h"
 
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 
 namespace fastdeploy {
 namespace application {
@@ -39,10 +39,8 @@ class FASTDEPLOY_DECL PPOCRSystemv3 : public FastDeployModel {
   fastdeploy::vision::ppocr::Classifier* classifier = nullptr;
   fastdeploy::vision::ppocr::Recognizer* recognizer = nullptr;
 
-  //~PPOCRSystemv3();
-
   std::vector<std::vector<fastdeploy::vision::OCRResult>> Predict(
-      std::vector<cv::Mat> cv_all_img_names);
+      std::vector<cv::Mat> cv_all_imgs);
 
  private:
   void det(cv::Mat img,

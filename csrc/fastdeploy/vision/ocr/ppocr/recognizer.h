@@ -16,7 +16,7 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 
 namespace fastdeploy {
 namespace vision {

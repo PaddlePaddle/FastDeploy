@@ -16,10 +16,12 @@
 
 namespace fastdeploy {
 
-void BindPPOCR(pybind11::module& m);
+void BindPPOCRModel(pybind11::module& m);
+void BindPPOCRSystemv3(pybind11::module& m);
 
 void BindOcr(pybind11::module& m) {
-  auto ppocr_module = m.def_submodule("ppocr", "Module to deploy PaddleOCR");
-  BindPPOCR(ppocr_module);
+  auto ocr_module = m.def_submodule("ocr", "Module to deploy OCR models");
+  BindPPOCRModel(ocr_module);
+  BindPPOCRSystemv3(ocr_module);
 }
 }  // namespace fastdeploy

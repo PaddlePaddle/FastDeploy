@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppocr/dbdetector.h"
+#include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
 #include "fastdeploy/utils/perf.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -158,8 +158,6 @@ bool DBDetector::Predict(
   TIMERECORD_START(0)
 #endif
   Mat mat(*img);
-  // output boxes
-  // std::vector<std::vector<std::vector<int>>> boxes_result;
 
   std::vector<FDTensor> input_tensors(1);
 

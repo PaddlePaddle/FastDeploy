@@ -15,7 +15,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPOCR(pybind11::module& m) {
+void BindPPOCRModel(pybind11::module& m) {
   // DBDetector
   pybind11::class_<vision::ppocr::DBDetector, FastDeployModel>(m, "DBDetector")
       .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
@@ -51,28 +51,5 @@ void BindPPOCR(pybind11::module& m) {
       .def_readwrite("rec_img_w", &vision::ppocr::Recognizer::rec_img_w)
       .def_readwrite("rec_batch_num",
                      &vision::ppocr::Recognizer::rec_batch_num);
-
-  // OCRSys
-  pybind11::class_<application::ocrsystem::PPOCRSystemv3, FastDeployModel>(
-      m, "PPOCRSystem")
-
-      .def(pybind11::init<fastdeploy::vision::ppocr::DBDetector*,
-                          fastdeploy::vision::ppocr::Classifier*,
-                          fastdeploy::vision::ppocr::Recognizer*>())
-
-      .def("predict", [](application::ocrsystem::PPOCRSystemv3& self,
-                         std::vector<pybind11::array>& data_list) {
-
-        std::vector<cv::Mat> img_list;
-
-        for (int i = 0; i < data_list.size(); i++) {
-          auto mat = PyArrayToCvMat(data_list[i]);
-          img_list.push_back(mat);
-        }
-
-        std::vector<std::vector<vision::OCRResult>> res(self.Predict(img_list));
-
-        return res;
-      });
 }
 }  // namespace fastdeploy

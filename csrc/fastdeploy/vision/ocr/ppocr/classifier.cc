@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppocr/classifier.h"
+#include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/utils/perf.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -29,8 +29,9 @@ Classifier::Classifier(const std::string& model_file,
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    // Cls模型暂不支持ORT后端推理
+    valid_cpu_backends = {Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -46,7 +47,7 @@ bool Classifier::Initialize() {
   cls_thresh = 0.9;
   cls_batch_num = 1;
   mean = {0.485f, 0.456f, 0.406f};
-  scale = {0.5f, 0.5f, 0.5f};  // scale即std
+  scale = {0.5f, 0.5f, 0.5f};
   is_scale = true;
 
   if (!InitRuntime()) {

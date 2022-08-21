@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ppocr/recognizer.h"
+#include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/utils/perf.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -58,7 +58,7 @@ Recognizer::Recognizer(const std::string& label_path,
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
     // NOTE:此模型暂不支持paddle-inference-Gpu推理
-    valid_cpu_backends = {Backend::ORT};
+    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   }
 
@@ -66,7 +66,7 @@ Recognizer::Recognizer(const std::string& label_path,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-  // Recognizer需要删除这个pass
+  // Recognizer在使用CPU推理，并把PaddleInference作为推理后端时,需要删除以下2个pass//
   runtime_option.EnablePaddleDeletePass("matmul_transpose_reshape_fuse_pass");
   runtime_option.EnablePaddleDeletePass(
       "matmul_transpose_reshape_mkldnn_fuse_pass");
@@ -132,8 +132,6 @@ bool Recognizer::Preprocess(const std::vector<cv::Mat>& img_list,
     // cv::Mat to Mat
     Mat img(resize_img);
 
-    img.PrintInfo("Input After resize: ");
-
     Normalize::Run(&img, mean, scale, true);
 
     batch_width =
@@ -144,8 +142,6 @@ bool Recognizer::Preprocess(const std::vector<cv::Mat>& img_list,
 
     img.ShareWithTensor(output);
     output->shape.insert(output->shape.begin(), 1);
-
-    output->PrintInfo();
   }
 
   return true;

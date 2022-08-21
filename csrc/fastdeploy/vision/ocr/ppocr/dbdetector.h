@@ -16,7 +16,7 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -37,7 +37,6 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   virtual bool Predict(cv::Mat* im,
                        std::vector<std::vector<std::vector<int>>>& boxes);
 
-  // Copy from ppocr2.5-ocr_det.h
   // pre&post process parameters
   int max_side_len;
 
@@ -58,17 +57,12 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
   bool Initialize();
 
-  // 输入图像预处理操作
-  // 由于预处理函数问题，暂时用cv::Mat 替代自定义的Mat数据结构
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
   // im_info为预处理过程保存的数据，在后处理中需要用到
   bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
   // 后端推理结果后处理，输出给用户
-  // infer_result 为后端推理后的输出Tensor
-  // result 为模型预测的结果
-  // im_info 为预处理记录的信息，后处理用于还原box
   bool Postprocess(FDTensor& infer_result,
                    std::vector<std::vector<std::vector<int>>>* boxes,
                    const std::map<std::string, std::array<float, 2>>& im_info);

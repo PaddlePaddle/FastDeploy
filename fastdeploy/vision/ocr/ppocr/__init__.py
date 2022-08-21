@@ -14,8 +14,8 @@
 
 from __future__ import absolute_import
 import logging
-from ... import FastDeployModel, Frontend
-from ... import fastdeploy_main as C
+from .... import FastDeployModel, Frontend
+from .... import c_lib_wrap as C
 
 
 class DBDetector(FastDeployModel):
@@ -28,13 +28,12 @@ class DBDetector(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(DBDetector, self).__init__(runtime_option)
 
-        self._model = C.vision.ppocr.DBDetector(
+        self._model = C.vision.ocr.DBDetector(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "DBDetector initialize failed."
 
     # 一些跟DBDetector模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
     def max_side_len(self):
         return self._model.max_side_len
@@ -121,7 +120,7 @@ class Classifier(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(Classifier, self).__init__(runtime_option)
 
-        self._model = C.vision.ppocr.Classifier(
+        self._model = C.vision.ocr.Classifier(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "Classifier initialize failed."
@@ -160,7 +159,7 @@ class Recognizer(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(Recognizer, self).__init__(runtime_option)
 
-        self._model = C.vision.ppocr.Recognizer(
+        self._model = C.vision.ocr.Recognizer(
             label_path, model_file, params_file, self._runtime_option,
             model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
@@ -198,11 +197,10 @@ class Recognizer(FastDeployModel):
         self._model.rec_batch_num = value
 
 
-class PPOCRSystem(FastDeployModel):
+class PPOCRSystemv3(FastDeployModel):
     def __init__(self, ocr_det=None, ocr_cls=None, ocr_rec=None):
 
-        self._model = C.application.ocrsystem.PPOCRSystemv3(ocr_det, ocr_cls,
-                                                            ocr_rec)
+        self._model = C.vision.ocr.PPOCRSystemv3(ocr_det, ocr_cls, ocr_rec)
 
     def predict(self, cv_all_img_names):
         return self._model.predict(cv_all_img_names)
