@@ -6,7 +6,7 @@ SegmentationResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，
 
 `fastdeploy::vision::DetectionResult`
 
-```
+```c++
 struct DetectionResult {
   std::vector<uint8_t> label_map;
   std::vector<float> score_map;

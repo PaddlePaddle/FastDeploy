@@ -5,7 +5,7 @@ FaceRecognitionResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`�
 
 `fastdeploy::vision::FaceRecognitionResult`
 
-```
+```c++
 struct FaceRecognitionResult {
   std::vector<float> embedding;
   void Clear();
