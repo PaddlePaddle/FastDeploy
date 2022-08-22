@@ -106,14 +106,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 
 ### 类成员变量
-#### DBDetector预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
-
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
-> > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
 
 #### DBDetector预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
