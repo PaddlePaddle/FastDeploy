@@ -73,7 +73,7 @@ if(BUILD_EXAMPLES AND ENABLE_TEXT)
     foreach(_CC_FILE ${ALL_TEXT_EXAMPLE_SRCS})
       add_fastdeploy_executable(text ${_CC_FILE})
     endforeach()
-    message(STATUS "FastDeploy text examples will be saving to: ${EXECUTABLE_OUTPUT_PATH}")
+    message(STATUS "  [FastDeploy Executable Path]        : ${EXECUTABLE_OUTPUT_PATH}")
   endif()
 endif()
 
