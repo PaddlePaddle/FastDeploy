@@ -19,7 +19,7 @@
 ## 近期更新
 
 - 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
-    - **服务端全新升级：一套SDK，覆盖全量模型**   
+    - **服务端全新升级：一套SDK，覆盖全量模型**  
         - 发布基于x86 CPU、NVIDIA GPU的易用、高性能推理引擎SDK，推理速度大幅提升
         - 支持ONNXRuntime、Paddle Inference、TensorRT推理引擎
         - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE等目标检测最优模型及[Demo示例](examples/vision/detection/)
@@ -51,7 +51,7 @@
 
 <div id="fastdeploy-quick-start"></div>
 
-### 1.1 快速安装 FastDeploy Python/C++ 库 
+### 1.1 快速安装 FastDeploy Python/C++ 库
 
 #### 环境依赖
 
@@ -63,11 +63,11 @@
 - python 3.6\~3.9(Windows 10 3.8\~3.9)
 
 #### 安装 CPU Python 版本
-```
+```bash
 pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 #### 安装 GPU Python 版本
-```
+```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 #### 安装 C++ 版本
@@ -93,8 +93,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
-                                 "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
+                                 "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/nfer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
 result = model.predict(im.copy())
@@ -114,8 +114,8 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel", 
-                                          "ppyoloe_crn_l_300e_coco/model.pdiparams", 
+  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
+                                          "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                           "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
   auto im = cv::imread("000000014439.jpg");
 
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
 ```
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
-  
+
 ## 2. 服务端模型列表 🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>

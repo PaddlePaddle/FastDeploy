@@ -6,7 +6,7 @@ DetectionResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用
 
 `fastdeploy::vision::DetectionResult`
 
-```
+```c++
 struct DetectionResult {
   std::vector<std::array<float, 4>> boxes;
   std::vector<float> scores;
