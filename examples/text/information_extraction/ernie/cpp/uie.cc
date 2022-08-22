@@ -364,7 +364,7 @@ void UIEModel::AutoJoiner(
   for (auto&& short_result : *results) {
     if (short_result.size() == 0) {
       continue;
-    } else if (short_result[0].start_ == 0 && short_result[0].end_) {
+    } else if (short_result[0].start_ == 0 && short_result[0].end_ == 0) {
       is_cls_task = true;
       break;
     } else {
@@ -435,13 +435,20 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
                                const std::vector<std::string>& prompts,
                                std::vector<std::vector<UIEResult>>* results) {
   // 1. Shortten the input texts and prompts
-  auto max_predict_len =
-      max_length_ - 3 -
-      std::max_element(prompts.begin(), prompts.end(),
-                       [](const std::string& lhs, const std::string& rhs) {
-                         return lhs.length() < rhs.length();
-                       })
-          ->length();
+  auto max_prompt_iter = std::max_element(
+      prompts.begin(), prompts.end(),
+      [](const std::string& lhs, const std::string& rhs) {
+        auto lhs_ulen = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+            lhs.c_str(), lhs.length());
+        auto rhs_ulen = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+            rhs.c_str(), rhs.length());
+        return lhs_ulen < rhs_ulen;
+      });
+
+  auto max_prompt_len = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+      max_prompt_iter->c_str(), max_prompt_iter->length());
+  auto max_predict_len = max_length_ - 3 - max_prompt_len;
+
   std::vector<std::string> short_texts;
   std::unordered_map<size_t, std::vector<size_t>> input_mapping;
   AutoSplitter(input_texts, max_predict_len, &short_texts, &input_mapping);
@@ -503,7 +510,6 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
   // 5. Postprocess
   std::vector<std::vector<std::pair<int64_t, float>>> start_candidate_idx_prob,
       end_candidate_idx_prob;
-
   GetCandidateIdx(start_prob, outputs[0].shape[0], outputs[0].shape[1],
                   &start_candidate_idx_prob, position_prob_);
   GetCandidateIdx(end_prob, outputs[1].shape[0], outputs[1].shape[1],
