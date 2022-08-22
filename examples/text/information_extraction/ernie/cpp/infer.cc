@@ -31,5 +31,19 @@ int main() {
   predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷"
                      "爱凌以188.25分获得金牌！"},
                     &results);
+  std::cout << results << std::endl;
+
+  // schema for relation extraction
+  // schema = {'竞赛名称': ['主办方', '承办方', '已举办次数']}
+  predictor.SetSchema({{"竞赛名称",
+                        {SchemaNode("主办方"), SchemaNode("承办方"),
+                         SchemaNode("已举办次数")}}});
+  results.clear();
+  predictor.Predict(
+      {"2022语言与智能技术竞赛由中国中文信息学会和中国计算机学会联合主办，百度"
+       "公司、中国中文信息学会评测工作委员会和中国计算机学会自然语言处理专委会"
+       "承办，已连续举办4届，成为全球最热门的中文NLP赛事之一。"},
+      &results);
+  std::cout << results << std::endl;
   return 0;
 }

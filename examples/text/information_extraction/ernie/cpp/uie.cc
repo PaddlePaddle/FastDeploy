@@ -17,6 +17,7 @@
 #include <codecvt>
 #include <locale>
 #include <queue>
+#include <sstream>
 
 #include "utils/utf8.h"  // faster_tokenizer helper funciton
 
@@ -63,10 +64,72 @@ static void CharToByteOffsetMap(const std::string& seq,
   offset_mapping->push_back(index);
 }
 
+static std::ostream& PrintResult(std::ostream& os, const UIEResult& result,
+                                 int tab_size) {
+  constexpr int TAB_OFFSET = 4;
+  // Print text
+  for (int i = 0; i < tab_size; ++i) {
+    os << " ";
+  }
+  os << "text: " << result.text_ << "\n";
+
+  // Print probability
+  for (int i = 0; i < tab_size; ++i) {
+    os << " ";
+  }
+  os << "probability: " << result.probability_ << "\n";
+
+  // Print start
+  for (int i = 0; i < tab_size; ++i) {
+    os << " ";
+  }
+  os << "start: " << result.start_ << "\n";
+
+  // Print end
+  for (int i = 0; i < tab_size; ++i) {
+    os << " ";
+  }
+  os << "end: " << result.end_ << "\n";
+
+  // Print relation
+  if (result.relation_.size() > 0) {
+    for (int i = 0; i < tab_size; ++i) {
+      os << " ";
+    }
+    os << "relation:\n";
+    for (auto&& curr_relation : result.relation_) {
+      for (int i = 0; i < tab_size + TAB_OFFSET; ++i) {
+        os << " ";
+      }
+      os << curr_relation.first << ":\n";
+      for (int i = 0; i < curr_relation.second.size(); ++i) {
+        PrintResult(os, curr_relation.second[i],
+                    tab_size + TAB_OFFSET + TAB_OFFSET);
+      }
+    }
+  }
+  os << "\n";
+  return os;
+}
+
 std::ostream& operator<<(std::ostream& os, const UIEResult& result) {
-  os << "text = " << result.text_ << "\nprobability = " << result.probability_
-     << "\nstart = " << result.start_ << "\nend = " << result.end_;
-  os << std::endl;
+  return PrintResult(os, result, 0);
+}
+
+std::ostream& operator<<(
+    std::ostream& os,
+    const std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>&
+        results) {
+  os << "The result:\n";
+  for (int i = 0; i < results.size(); ++i) {
+    for (auto&& curr_result : results[i]) {
+      os << curr_result.first << ": \n";
+      for (auto&& uie_result : curr_result.second) {
+        PrintResult(os, uie_result, 4);
+      }
+    }
+    os << std::endl;
+  }
   return os;
 }
 
@@ -88,7 +151,7 @@ Schema::Schema(const std::vector<std::string>& schema_list,
 }
 
 Schema::Schema(
-    const std::unordered_map<std::string, std::vector<std::string>>& schema_map,
+    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema_map,
     const std::string& name) {
   CreateRoot(name);
   for (auto& schema_item : schema_map) {
@@ -114,7 +177,7 @@ UIEModel::UIEModel(const std::string& model_file,
 UIEModel::UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
-    const std::unordered_map<std::string, std::vector<std::string>>& schema)
+    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
@@ -131,7 +194,7 @@ void UIEModel::SetSchema(const std::vector<std::string>& schema) {
 }
 
 void UIEModel::SetSchema(
-    const std::unordered_map<std::string, std::vector<std::string>>& schema) {
+    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema) {
   schema_ = fastdeploy::utils::make_unique<Schema>(schema);
 }
 
@@ -142,7 +205,8 @@ void UIEModel::AutoSplitter(
   size_t cnt_org = 0;
   size_t cnt_short = 0;
   for (auto& text : texts) {
-    auto text_len = text.length();
+    auto text_len = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+        text.c_str(), text.length());
     if (text_len <= max_length) {
       short_texts->push_back(text);
       if (input_mapping->count(cnt_org) == 0) {
@@ -152,12 +216,17 @@ void UIEModel::AutoSplitter(
       }
       cnt_short += 1;
     } else {
+      std::vector<uint32_t> offset_mapping;
+      CharToByteOffsetMap(text, &offset_mapping);
       for (size_t start = 0; start < text_len; start += max_length) {
         size_t end = start + max_length;
         if (end > text_len) {
           end = text_len;
         }
-        short_texts->emplace_back(text.data() + start, end - start);
+        auto unicode_start = offset_mapping[start];
+        auto unicode_end = offset_mapping[end];
+        short_texts->emplace_back(text.data() + unicode_start,
+                                  unicode_end - unicode_start);
       }
       auto short_idx = cnt_short;
       cnt_short += text_len / max_length;
@@ -391,7 +460,6 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
   // 2. Tokenize the short texts and short prompts
   std::vector<faster_tokenizer::core::Encoding> encodings;
   tokenizer_.EncodeBatchStrings(text_pair_input, &encodings);
-
   // 3. Construct the input vector tensor
   // 3.1 Convert encodings to input_ids, token_type_ids, position_ids, attn_mask
   std::vector<int64_t> input_ids, token_type_ids, position_ids, attn_mask;
@@ -461,8 +529,9 @@ void UIEModel::Predict(
   for (auto& node : schema_->root_->children_) {
     nodes.push(node);
   }
+  results->resize(texts.size());
   while (!nodes.empty()) {
-    auto& node = nodes.front();
+    auto node = nodes.front();
     nodes.pop();
     std::vector<std::vector<size_t>> input_mapping;
     size_t idx = 0;
@@ -498,7 +567,6 @@ void UIEModel::Predict(
     // 2. Predict from UIEInput
     std::vector<std::vector<UIEResult>> results_list;
     PredictUIEInput(input_texts, prompts, &results_list);
-
     // 3. Postprocess
     std::vector<std::vector<UIEResult*>> relations;
     relations.resize(texts.size());
@@ -511,7 +579,7 @@ void UIEModel::Predict(
             continue;
           }
           if (curr_result.count(node.name_) == 0) {
-            curr_result[node.name_] = std::move(results_list[idx]);
+            curr_result[node.name_] = results_list[idx];
           } else {
             curr_result[node.name_].insert(curr_result[node.name_].end(),
                                            results_list[idx].begin(),
@@ -534,8 +602,7 @@ void UIEModel::Predict(
             continue;
           }
           if (new_relations[i][j]->relation_.count(node.name_) == 0) {
-            new_relations[i][j]->relation_[node.name_] =
-                std::move(results_list[idx]);
+            new_relations[i][j]->relation_[node.name_] = results_list[idx];
           } else {
             auto& curr_result = new_relations[i][j]->relation_[node.name_];
             curr_result.insert(curr_result.end(), results_list[idx].begin(),
@@ -554,20 +621,19 @@ void UIEModel::Predict(
         }
       }
     }
-
     std::vector<std::vector<std::string>> prefix(texts.size());
     for (int i = 0; i < input_mapping.size(); ++i) {
       auto&& input_mapping_item = input_mapping[i];
       for (auto&& idx : input_mapping_item) {
         for (int j = 0; j < results_list[idx].size(); ++j) {
-          prefix[i].push_back(results_list[idx][j].text_ + "\u7684");
+          auto prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
+          prefix[i].push_back(prefix_str);
         }
       }
     }
-
     for (auto& node_child : node.children_) {
-      node_child.relations_ = std::move(relations);
-      node_child.prefix_ = std::move(prefix);
+      node_child.relations_ = relations;
+      node_child.prefix_ = prefix;
       nodes.push(node_child);
     }
   }

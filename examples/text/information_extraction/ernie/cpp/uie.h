@@ -36,6 +36,10 @@ struct UIEResult {
 };
 
 std::ostream& operator<<(std::ostream& os, const UIEResult& result);
+std::ostream& operator<<(
+    std::ostream& os,
+    const std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>&
+        results);
 
 struct SchemaNode {
   std::string name_;
@@ -43,7 +47,9 @@ struct SchemaNode {
   std::vector<std::vector<UIEResult*>> relations_;
   std::vector<SchemaNode> children_;
 
-  explicit SchemaNode(const std::string& name) : name_(name) {}
+  explicit SchemaNode(const std::string& name,
+                      const std::vector<SchemaNode>& children = {})
+      : name_(name), children_(children) {}
   void AddChild(const std::string& schema) { children_.emplace_back(schema); }
   void AddChild(const std::string& schema,
                 const std::vector<std::string>& children) {
@@ -53,14 +59,20 @@ struct SchemaNode {
     }
     children_.emplace_back(schema_node);
   }
+  void AddChild(const std::string& schema,
+                const std::vector<SchemaNode>& children) {
+    SchemaNode schema_node(schema);
+    schema_node.children_ = children;
+    children_.emplace_back(schema_node);
+  }
 };
 
 struct Schema {
   explicit Schema(const std::string& schema, const std::string& name = "root");
   explicit Schema(const std::vector<std::string>& schema_list,
                   const std::string& name = "root");
-  explicit Schema(const std::unordered_map<
-                      std::string, std::vector<std::string>>& schema_map,
+  explicit Schema(const std::unordered_map<std::string,
+                                           std::vector<SchemaNode>>& schema_map,
                   const std::string& name = "root");
 
  private:
@@ -77,10 +89,10 @@ struct UIEModel {
   UIEModel(
       const std::string& model_file, const std::string& params_file,
       const std::string& vocab_file, float position_prob, size_t max_length,
-      const std::unordered_map<std::string, std::vector<std::string>>& schema);
+      const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(
-      const std::unordered_map<std::string, std::vector<std::string>>& schema);
+      const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);
 
   void PredictUIEInput(const std::vector<std::string>& input_texts,
                        const std::vector<std::string>& prompts,
