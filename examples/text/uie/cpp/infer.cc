@@ -28,22 +28,53 @@ int main() {
                "uie-base/vocab.txt", 0.5, 128, {"时间", "选手", "赛事名称"});
   fastdeploy::FDINFO << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
+  // Named Entity Recognition
   predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷"
                      "爱凌以188.25分获得金牌！"},
                     &results);
   std::cout << results << std::endl;
+  results.clear();
 
-  // schema for relation extraction
-  // schema = {'竞赛名称': ['主办方', '承办方', '已举办次数']}
+  // Relation Extraction
   predictor.SetSchema({{"竞赛名称",
                         {SchemaNode("主办方"), SchemaNode("承办方"),
                          SchemaNode("已举办次数")}}});
-  results.clear();
   predictor.Predict(
       {"2022语言与智能技术竞赛由中国中文信息学会和中国计算机学会联合主办，百度"
        "公司、中国中文信息学会评测工作委员会和中国计算机学会自然语言处理专委会"
        "承办，已连续举办4届，成为全球最热门的中文NLP赛事之一。"},
       &results);
   std::cout << results << std::endl;
+  results.clear();
+
+  // Event Extraction
+  predictor.SetSchema({{"地震触发词",
+                        {SchemaNode("地震强度"), SchemaNode("时间"),
+                         SchemaNode("震中位置"), SchemaNode("震源深度")}}});
+  predictor.Predict(
+      {"中国地震台网正式测定：5月16日06时08分在云南临沧市凤庆县(北纬24."
+       "34度，东经99.98度)发生3.5级地震，震源深度10千米。"},
+      &results);
+  std::cout << results << std::endl;
+  results.clear();
+
+  // Opinion Extraction
+  predictor.SetSchema(
+      {{"评价维度",
+        {SchemaNode("观点词"), SchemaNode("情感倾向[正向，负向]")}}});
+  predictor.Predict(
+      {"店面干净，很清静，服务员服务热情，性价比很高，发现收银台有排队"},
+      &results);
+  std::cout << results << std::endl;
+  results.clear();
+
+  // Sequence classification
+  predictor.SetSchema({"情感倾向[正向，负向]"});
+  predictor.Predict({"这个产品用起来真的很流畅，我非常喜欢"}, &results);
+  std::cout << results << std::endl;
+  results.clear();
+
+  // Cross task extraction
+
   return 0;
 }

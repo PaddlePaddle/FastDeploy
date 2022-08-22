@@ -79,17 +79,19 @@ static std::ostream& PrintResult(std::ostream& os, const UIEResult& result,
   }
   os << "probability: " << result.probability_ << "\n";
 
-  // Print start
-  for (int i = 0; i < tab_size; ++i) {
-    os << " ";
-  }
-  os << "start: " << result.start_ << "\n";
+  if (result.start_ != 0 || result.end_ != 0) {
+    // Print start
+    for (int i = 0; i < tab_size; ++i) {
+      os << " ";
+    }
+    os << "start: " << result.start_ << "\n";
 
-  // Print end
-  for (int i = 0; i < tab_size; ++i) {
-    os << " ";
+    // Print end
+    for (int i = 0; i < tab_size; ++i) {
+      os << " ";
+    }
+    os << "end: " << result.end_ << "\n";
   }
-  os << "end: " << result.end_ << "\n";
 
   // Print relation
   if (result.relation_.size() > 0) {
