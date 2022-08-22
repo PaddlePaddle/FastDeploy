@@ -43,7 +43,7 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/
 
 运行完成可视化结果如下图所示
 
-![665dda576aad1a7a24a3c31828563470](https://user-images.githubusercontent.com/109218879/185825930-c2d87a53-c394-4f7d-846a-419bd331bb80.jpg)
+<img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
 
 ## PPOCRSystemv3 C++接口
