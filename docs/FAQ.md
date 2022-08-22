@@ -1,4 +1,4 @@
-# FAQ
+# FastDeploy FAQ 文档
 
 ## 1. 在Windows 10 配置 CUDA v11.2 环境变量  
 FastDeploy Windows 10 x64 的 GPU 版本需要依赖 CUDA 11.2，在安装完 CUDA v11.2 之后，需要设置`CUDA_DIRECTORY`、`CUDA_HOME`、`CUDA_PATH`和`CUDA_ROOT`中**任意一个**环境变量，这样FastDeploy才能链接到相关的库。有两种方式设置环境变量，通过终端命令行设置以及在系统环境变量中设置。  
