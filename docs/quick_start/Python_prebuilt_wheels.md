@@ -9,11 +9,11 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译Python Wheel包，开�
 - Mac 支持Python3.6~3.9
 
 ## 安装 CPU Python 版本
-```
+```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 ## 安装 GPU Python 版本
-```
+```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
