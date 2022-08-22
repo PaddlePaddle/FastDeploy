@@ -55,6 +55,9 @@ option(ENABLE_FDTENSOR_FUNC "Whether to compile with function of FDTensor." OFF)
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
+# Whether to build fastdeply with vision/text/... examples, only for testings.
+option(BUILD_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
+
 # config GIT_URL with github mirrors to speed up dependent repos clone
 option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
 if(NOT GIT_URL)
@@ -97,6 +100,16 @@ option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  if(ENABLE_VISION)
+    # ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
+    message(STATUS "Found BUILD_EXAMPLES and ENABLE_VISION ON, so, force ENABLE_VISION_VISUALIZE ON")
+    set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
+  else()
+    message(WARNING "BUILD_EXAMPLES is ON, but found ENABLE_VISION OFF, will skip vision examples.")
+  endif()
+endif()
 
 add_definitions(-DFASTDEPLOY_LIB)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
@@ -272,6 +285,15 @@ if(MSVC)
   target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
+
+# add examples after prepare include paths for third-parties
+if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
+  add_definitions(-DBUILD_EXAMPLES)
+  if(NOT EXECUTABLE_OUTPUT_PATH STREQUAL ${CMAKE_CURRENT_BINARY_DIR}/bin)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
+  endif()
+  add_subdirectory(examples)
+endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
