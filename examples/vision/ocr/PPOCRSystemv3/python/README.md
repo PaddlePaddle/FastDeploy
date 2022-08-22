@@ -38,8 +38,8 @@ python infer_ocr.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobil
 ```
 
 运行完成可视化结果如下图所示
+![665dda576aad1a7a24a3c31828563470](https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg)
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184309358-d803347a-8981-44b6-b589-4608021ad0f4.jpg">
 
 ## PPOCRSystemv3 Python接口
 
