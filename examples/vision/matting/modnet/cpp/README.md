@@ -9,7 +9,7 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -36,11 +36,14 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## MODNet C++接口
 
 ### MODNet类
 
-```
+```c++
 fastdeploy::vision::matting::MODNet(
         const string& model_file,
         const string& params_file = "",
@@ -59,7 +62,7 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > MODNet::Predict(cv::Mat* im, MattingResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

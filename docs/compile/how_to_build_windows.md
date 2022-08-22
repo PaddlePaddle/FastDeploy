@@ -3,13 +3,13 @@
 ## 环境依赖
 
 - cmake >= 3.12
-- g++ >= 8.2
+- Visual Studio 16 2019
 - cuda >= 11.2 (当WITH_GPU=ON)
 - cudnn >= 11.2 (当WITH_GPU=ON)
 - TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
 
 ## 获取代码
-```
+```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop
@@ -19,10 +19,10 @@ git checkout develop
 
 Windows菜单打开`x64 Native Tools Command Prompt for VS 2019`命令工具，其中`CMAKE_INSTALL_PREFIX`用于指定编译后生成的SDK路径
 
-```
+```bat
 mkdir build
 cd build
-cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON .. 
+cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON ..
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
@@ -31,7 +31,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ## 编译Python Wheel包
 
 Python编译时，通过环境变量获取编译选项
-```
+```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop

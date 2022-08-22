@@ -1,7 +1,7 @@
 # 代码提交说明
 
 FastDeploy使用clang-format, cpplint检查和格式化代码，提交代码前，需安装pre-commit
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop
