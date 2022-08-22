@@ -18,7 +18,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 //构造
 Classifier::Classifier(const std::string& model_file,
@@ -45,6 +45,7 @@ Classifier::Classifier(const std::string& model_file,
 bool Classifier::Initialize() {
   // pre&post process parameters
   cls_thresh = 0.9;
+  cls_image_shape = {3, 48, 192};
   cls_batch_num = 1;
   mean = {0.485f, 0.456f, 0.406f};
   scale = {0.5f, 0.5f, 0.5f};
@@ -120,13 +121,7 @@ bool Classifier::Postprocess(FDTensor& infer_result,
 bool Classifier::Predict(const std::vector<cv::Mat>& img_list,
                          std::vector<int>& cls_labels,
                          std::vector<float>& cls_socres) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
-
   int img_num = img_list.size();
-  std::vector<int> cls_image_shape = {3, 48, 192};
-
   // cls_batch_num, 默认为1
   for (int ino = 0; ino < img_num; ino += cls_batch_num) {
     // PPOCR套件支持推理一个batch. 目前FD暂支持推理一张图
@@ -137,35 +132,22 @@ bool Classifier::Predict(const std::vector<cv::Mat>& img_list,
       return false;
     }
 
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(0, "Preprocess")
-    TIMERECORD_START(1)
-#endif
-
     input_tensors[0].name = InputInfoOfRuntime(0).name;
     std::vector<FDTensor> output_tensors;
     if (!Infer(input_tensors, &output_tensors)) {
       FDERROR << "Failed to inference." << std::endl;
       return false;
     }
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(1, "Inference")
-    TIMERECORD_START(2)
-#endif
 
     if (!Postprocess(output_tensors[0], cls_labels, cls_socres, ino)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
-
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(2, "Postprocess")
-#endif
   }
 
   return true;
 }
 
-}  // namesapce ppocr
+}  // namesapce ocr
 }  // namespace vision
 }  // namespace fastdeploy

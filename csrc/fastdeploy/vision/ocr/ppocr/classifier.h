@@ -20,7 +20,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 class FASTDEPLOY_DECL Classifier : public FastDeployModel {
  public:
@@ -39,7 +39,8 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
                        std::vector<float>& cls_socres);
 
   // pre & post parameters
-  double cls_thresh;
+  float cls_thresh;
+  std::vector<int> cls_image_shape;
   int cls_batch_num;
 
   std::vector<float> mean;
@@ -62,6 +63,6 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
                    std::vector<float>& cls_scores, const int& cur_index);
 };
 
-}  // namespace ppocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

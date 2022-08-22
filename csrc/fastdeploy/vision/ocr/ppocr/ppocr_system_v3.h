@@ -31,26 +31,26 @@ namespace ocrsystem {
 
 class FASTDEPLOY_DECL PPOCRSystemv3 : public FastDeployModel {
  public:
-  PPOCRSystemv3(fastdeploy::vision::ppocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ppocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ppocr::Recognizer* ocr_rec = nullptr);
+  PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
+                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
+                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
 
-  fastdeploy::vision::ppocr::DBDetector* detector = nullptr;
-  fastdeploy::vision::ppocr::Classifier* classifier = nullptr;
-  fastdeploy::vision::ppocr::Recognizer* recognizer = nullptr;
+  fastdeploy::vision::ocr::DBDetector* detector = nullptr;
+  fastdeploy::vision::ocr::Classifier* classifier = nullptr;
+  fastdeploy::vision::ocr::Recognizer* recognizer = nullptr;
 
   std::vector<std::vector<fastdeploy::vision::OCRResult>> Predict(
       std::vector<cv::Mat> cv_all_imgs);
 
  private:
-  void det(cv::Mat img,
-           std::vector<fastdeploy::vision::OCRResult>& ocr_results);
-  void rec(std::vector<cv::Mat> img_list,
-           std::vector<fastdeploy::vision::OCRResult>& ocr_results);
-  void cls(std::vector<cv::Mat> img_list,
-           std::vector<fastdeploy::vision::OCRResult>& ocr_results);
+  void Detect(cv::Mat img,
+              std::vector<fastdeploy::vision::OCRResult>& ocr_results);
+  void Recognize(std::vector<cv::Mat> img_list,
+                 std::vector<fastdeploy::vision::OCRResult>& ocr_results);
+  void Classify(std::vector<cv::Mat> img_list,
+                std::vector<fastdeploy::vision::OCRResult>& ocr_results);
 };
 
-}  // namesapce ocrsystem
+}  // namespace ocrsystem
 }  // namespace application
 }  // namespace fastdeploy

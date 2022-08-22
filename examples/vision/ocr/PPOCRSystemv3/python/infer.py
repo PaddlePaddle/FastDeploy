@@ -116,9 +116,9 @@ cls_model = fd.vision.ocr.Classifier(
     cls_model_file, cls_params_file, runtime_option=cls_runtime_option)
 
 rec_model = fd.vision.ocr.Recognizer(
-    rec_label_file,
     rec_model_file,
     rec_params_file,
+    rec_label_file,
     runtime_option=rec_runtime_option)
 
 ppocrsysv3 = fd.vision.ocr.PPOCRSystemv3(

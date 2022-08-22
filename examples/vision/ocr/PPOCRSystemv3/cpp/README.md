@@ -51,9 +51,9 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/
 ### PPOCRSystemv3类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ppocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ppocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ppocr::Recognizer* ocr_rec = nullptr);
+fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
+                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
+                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
 ```
 
 PPOCRSystemv3 的初始化，由检测，分类和识别模型串联构成
@@ -85,7 +85,7 @@ PPOCRSystemv3 的初始化，由检测，分类和识别模型串联构成
 ### DBDetector类
 
 ```
-fastdeploy::vision::ppocr::DBDetector(const std::string& model_file, const std::string& params_file = "",
+fastdeploy::vision::ocr::DBDetector(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const Frontend& model_format = Frontend::PADDLE);
 ```
@@ -103,8 +103,9 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
 
 ### Recognizer类
 ```
-  Recognizer(const std::string& label_path, const std::string& model_file,
+  Recognizer(const std::string& model_file,
              const std::string& params_file = "",
+             const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const Frontend& model_format = Frontend::PADDLE);
 ```

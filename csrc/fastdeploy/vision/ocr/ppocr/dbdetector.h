@@ -20,7 +20,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
  public:
@@ -71,6 +71,6 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   PostProcessor post_processor_;
 };
 
-}  // namespace ppocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

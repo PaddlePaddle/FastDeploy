@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "./ocr_utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
                            const std::vector<std::vector<int>>& box) {
@@ -76,6 +76,6 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
   }
 }
 
-}  // namesoace ppocr
+}  // namesoace ocr
 }  // namespace vision
 }  // namespace fastdeploy

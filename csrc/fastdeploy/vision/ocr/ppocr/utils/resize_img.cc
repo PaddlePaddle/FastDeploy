@@ -15,11 +15,11 @@
 #include <map>
 
 #include "fastdeploy/vision/common/processors/transform.h"
-#include "ocr_utils.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 void cls_resize_img(const cv::Mat &img, cv::Mat &resize_img,
                     const std::vector<int> &rec_image_shape) {
@@ -65,6 +65,6 @@ void crnn_resize_img(const cv::Mat &img, cv::Mat &resize_img, float wh_ratio,
                      int(imgW - resize_img.cols), cv::BORDER_CONSTANT,
                      {127, 127, 127});
 }
-}
-}
-}
+}  // namespace ocr
+}  // namespace vision
+}  // namespace fastdeploy

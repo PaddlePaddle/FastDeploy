@@ -34,7 +34,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (!option.delete_pass_names.empty()) {
     auto pass_builder = config_.pass_builder();
     for (int i = 0; i < option.delete_pass_names.size(); i++) {
-      std::cout << "Delete pass : " << option.delete_pass_names[i] << std::endl;
+      FDINFO << "Delete pass : " << option.delete_pass_names[i] << std::endl;
       pass_builder->DeletePass(option.delete_pass_names[i]);
     }
   }

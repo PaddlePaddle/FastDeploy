@@ -27,11 +27,11 @@
 #include <fstream>
 #include <numeric>
 
-#include "./clipper.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/clipper.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 class PostProcessor {
  public:
@@ -88,6 +88,6 @@ class PostProcessor {
   }
 };
 
-}  // namespace ppocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

@@ -20,9 +20,9 @@ void BindPPOCRSystemv3(pybind11::module& m) {
   pybind11::class_<application::ocrsystem::PPOCRSystemv3, FastDeployModel>(
       m, "PPOCRSystemv3")
 
-      .def(pybind11::init<fastdeploy::vision::ppocr::DBDetector*,
-                          fastdeploy::vision::ppocr::Classifier*,
-                          fastdeploy::vision::ppocr::Recognizer*>())
+      .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
+                          fastdeploy::vision::ocr::Classifier*,
+                          fastdeploy::vision::ocr::Recognizer*>())
 
       .def("predict", [](application::ocrsystem::PPOCRSystemv3& self,
                          std::vector<pybind11::array>& data_list) {

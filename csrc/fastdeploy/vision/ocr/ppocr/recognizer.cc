@@ -18,7 +18,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 std::vector<std::string> ReadDict(const std::string& path) {
   std::ifstream in(path);
@@ -48,9 +48,9 @@ std::vector<int> argsort(const std::vector<float>& array) {
   return array_index;
 }
 
-Recognizer::Recognizer(const std::string& label_path,
-                       const std::string& model_file,
+Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
+                       const std::string& label_path,
                        const RuntimeOption& custom_option,
                        const Frontend& model_format) {
   if (model_format == Frontend::ONNX) {
@@ -67,8 +67,8 @@ Recognizer::Recognizer(const std::string& label_path,
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
   // Recognizer在使用CPU推理，并把PaddleInference作为推理后端时,需要删除以下2个pass//
-  runtime_option.EnablePaddleDeletePass("matmul_transpose_reshape_fuse_pass");
-  runtime_option.EnablePaddleDeletePass(
+  runtime_option.DeletePaddleBackendPass("matmul_transpose_reshape_fuse_pass");
+  runtime_option.DeletePaddleBackendPass(
       "matmul_transpose_reshape_mkldnn_fuse_pass");
   runtime_option.EnablePaddleLogInfo();
 
@@ -202,10 +202,6 @@ bool Recognizer::Postprocess(FDTensor& infer_result, const int& cur_index,
 bool Recognizer::Predict(const std::vector<cv::Mat>& img_list,
                          std::vector<std::string>& rec_texts,
                          std::vector<float>& rec_text_scores) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
-
   int img_num = img_list.size();
   std::vector<float> width_list;
   for (int i = 0; i < img_num; i++) {
@@ -224,11 +220,6 @@ bool Recognizer::Predict(const std::vector<cv::Mat>& img_list,
       return false;
     }
 
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(0, "Preprocess")
-    TIMERECORD_START(1)
-#endif
-
     input_tensors[0].name = InputInfoOfRuntime(0).name;
     std::vector<FDTensor> output_tensors;
 
@@ -237,24 +228,16 @@ bool Recognizer::Predict(const std::vector<cv::Mat>& img_list,
       return false;
     }
 
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(1, "Inference")
-    TIMERECORD_START(2)
-#endif
     if (!Postprocess(output_tensors[0], ino, indices, rec_texts,
                      rec_text_scores)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
-
-#ifdef FASTDEPLOY_DEBUG
-    TIMERECORD_END(2, "Postprocess")
-#endif
   }
 
   return true;
 }
 
-}  // namesapce ppocr
+}  // namesapce ocr
 }  // namespace vision
 }  // namespace fastdeploy

@@ -18,7 +18,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 //获取轮廓区域
 void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
@@ -360,6 +360,6 @@ void PostProcessor::FilterTagDetRes(
     }
   }
 }
-}
-}
-}
+}  // namespace ocr
+}  // namespace vision
+}  // namespace fastdeploy

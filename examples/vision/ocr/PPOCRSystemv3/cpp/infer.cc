@@ -45,20 +45,20 @@ void CpuInfer(const std::string& det_model_dir,
   rec_option.UseCpu();
 
   //准备模型
-  auto det_model = fastdeploy::vision::ppocr::DBDetector(
+  auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option);
   if (!det_model.Initialized()) {
     std::cerr << "Failed to initialize det_model." << std::endl;
     return;
   }
-  auto cls_model = fastdeploy::vision::ppocr::Classifier(
+  auto cls_model = fastdeploy::vision::ocr::Classifier(
       cls_model_file, cls_params_file, cls_option);
   if (!cls_model.Initialized()) {
     std::cerr << "Failed to initialize cls_model." << std::endl;
     return;
   }
-  auto rec_model = fastdeploy::vision::ppocr::Recognizer(
-      rec_label, rec_model_file, rec_params_file, rec_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(
+      rec_model_file, rec_params_file, rec_label, rec_option);
   if (!rec_model.Initialized()) {
     std::cerr << "Failed to initialize rec_model." << std::endl;
     return;
@@ -132,20 +132,20 @@ void GpuInfer(const std::string& det_model_dir,
   rec_option.UseGpu();
 
   //准备模型
-  auto det_model = fastdeploy::vision::ppocr::DBDetector(
+  auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option);
   if (!det_model.Initialized()) {
     std::cerr << "Failed to initialize det_model." << std::endl;
     return;
   }
-  auto cls_model = fastdeploy::vision::ppocr::Classifier(
+  auto cls_model = fastdeploy::vision::ocr::Classifier(
       cls_model_file, cls_params_file, cls_option);
   if (!cls_model.Initialized()) {
     std::cerr << "Failed to initialize cls_model." << std::endl;
     return;
   }
-  auto rec_model = fastdeploy::vision::ppocr::Recognizer(
-      rec_label, rec_model_file, rec_params_file, rec_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(
+      rec_model_file, rec_params_file, rec_label, rec_option);
   if (!rec_model.Initialized()) {
     std::cerr << "Failed to initialize rec_model." << std::endl;
     return;
@@ -229,20 +229,20 @@ void TrtInfer(const std::string& det_model_dir,
                               {1, 3, 48, 2000});
 
   //准备模型
-  auto det_model = fastdeploy::vision::ppocr::DBDetector(
+  auto det_model = fastdeploy::vision::ocr::DBDetector(
       det_model_file, det_params_file, det_option);
   if (!det_model.Initialized()) {
     std::cerr << "Failed to initialize det_model." << std::endl;
     return;
   }
-  auto cls_model = fastdeploy::vision::ppocr::Classifier(
+  auto cls_model = fastdeploy::vision::ocr::Classifier(
       cls_model_file, cls_params_file, cls_option);
   if (!cls_model.Initialized()) {
     std::cerr << "Failed to initialize cls_model." << std::endl;
     return;
   }
-  auto rec_model = fastdeploy::vision::ppocr::Recognizer(
-      rec_label, rec_model_file, rec_params_file, rec_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(
+      rec_model_file, rec_params_file, rec_label, rec_option);
   if (!rec_model.Initialized()) {
     std::cerr << "Failed to initialize rec_model." << std::endl;
     return;

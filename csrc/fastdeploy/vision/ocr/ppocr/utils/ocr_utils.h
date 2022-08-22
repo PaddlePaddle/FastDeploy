@@ -26,7 +26,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat &srcimage,
                            const std::vector<std::vector<int>> &box);
@@ -37,11 +37,6 @@ void cls_resize_img(const cv::Mat &img, cv::Mat &resize_img,
 void crnn_resize_img(const cv::Mat &img, cv::Mat &resize_img, float wh_ratio,
                      const std::vector<int> &rec_image_shape);
 
-void ocr_normalize(cv::Mat *im, const std::vector<float> &mean,
-                   const std::vector<float> &scale, const bool is_scale);
-
-void ocr_permute(cv::Mat *im);
-
-}  // namespace ppocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

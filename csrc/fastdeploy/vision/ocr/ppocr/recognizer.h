@@ -20,14 +20,14 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
  public:
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
-  Recognizer(const std::string& label_path, const std::string& model_file,
-             const std::string& params_file = "",
+  Recognizer(const std::string& model_file, const std::string& params_file = "",
+             const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const Frontend& model_format = Frontend::PADDLE);
 
@@ -67,6 +67,6 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
                    std::vector<float>& rec_text_scores);
 };
 
-}  // namespace ppocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

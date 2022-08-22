@@ -18,7 +18,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace ppocr {
+namespace ocr {
 
 //构造
 DBDetector::DBDetector(const std::string& model_file,
@@ -154,9 +154,6 @@ bool DBDetector::Postprocess(
 //预测
 bool DBDetector::Predict(
     cv::Mat* img, std::vector<std::vector<std::vector<int>>>& boxes_result) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
   Mat mat(*img);
 
   std::vector<FDTensor> input_tensors(1);
@@ -174,33 +171,21 @@ bool DBDetector::Predict(
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (!Postprocess(output_tensors[0], &boxes_result, im_info)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 
-}  // namesapce ppocr
+}  // namesapce ocr
 }  // namespace vision
 }  // namespace fastdeploy

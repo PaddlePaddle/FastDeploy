@@ -130,6 +130,10 @@ class Classifier(FastDeployModel):
         return self._model.cls_thresh
 
     @property
+    def cls_image_shape(self):
+        return self._model.cls_image_shape
+
+    @property
     def cls_batch_num(self):
         return self._model.cls_batch_num
 
@@ -139,6 +143,12 @@ class Classifier(FastDeployModel):
             value,
             float), "The value to set `cls_thresh` must be type of float."
         self._model.cls_thresh = value
+
+    @cls_image_shape.setter
+    def cls_image_shape(self, value):
+        assert isinstance(
+            value, list), "The value to set `cls_thresh` must be type of list."
+        self._model.cls_image_shape = value
 
     @cls_batch_num.setter
     def cls_batch_num(self, value):
@@ -150,18 +160,18 @@ class Classifier(FastDeployModel):
 
 class Recognizer(FastDeployModel):
     def __init__(self,
-                 label_path,
                  model_file,
                  params_file="",
+                 label_path="",
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(Recognizer, self).__init__(runtime_option)
 
-        self._model = C.vision.ocr.Recognizer(
-            label_path, model_file, params_file, self._runtime_option,
-            model_format)
+        self._model = C.vision.ocr.Recognizer(model_file, params_file,
+                                              label_path, self._runtime_option,
+                                              model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "Recognizer initialize failed."
 

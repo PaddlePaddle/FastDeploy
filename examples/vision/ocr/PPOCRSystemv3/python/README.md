@@ -94,7 +94,7 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
 
 ### Recognizer类
 ```
-fastdeploy.vision.ocr.Recognizer(rec_label_file,rec_model_file,rec_params_file,
+fastdeploy.vision.ocr.Recognizer(rec_model_file,rec_params_file,rec_label_file,
                                   runtime_option=rec_runtime_option,model_format=Frontend.PADDLE)
 ```
 Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所需的label文件路径，其他参数均与DBDetector类相同

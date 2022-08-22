@@ -68,7 +68,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // disable mkldnn while use paddle inference in CPU
   void DisablePaddleMKLDNN();
   // Enable delete in pass
-  void EnablePaddleDeletePass(const std::string& delete_pass_name);
+  void DeletePaddleBackendPass(const std::string& delete_pass_name);
 
   // enable debug information of paddle backend
   void EnablePaddleLogInfo();
