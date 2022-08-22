@@ -27,7 +27,7 @@ int main() {
       UIEModel("uie-base/inference.pdmodel", "uie-base/inference.pdiparams",
                "uie-base/vocab.txt", 0.5, 128, {"时间", "选手", "赛事名称"});
   fastdeploy::FDINFO << "After init predictor" << std::endl;
-  std::vector<UIEResult> results;
+  std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷"
                      "爱凌以188.25分获得金牌！"},
                     &results);

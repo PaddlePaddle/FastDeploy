@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <ostream>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -23,11 +24,23 @@
 
 using namespace paddlenlp;
 
+struct UIEResult {
+  size_t start_;
+  size_t end_;
+  double probability_;
+  std::string text_;
+  std::unordered_map<std::string, std::vector<UIEResult>> relation_;
+  UIEResult() = default;
+  UIEResult(size_t start, size_t end, double probability, std::string text)
+      : start_(start), end_(end), probability_(probability), text_(text) {}
+};
+
+std::ostream& operator<<(std::ostream& os, const UIEResult& result);
+
 struct SchemaNode {
   std::string name_;
-  std::vector<std::string> prefix_;
-  std::vector<std::vector<std::unordered_map<std::string, std::string>>>
-      relations_;
+  std::vector<std::vector<std::string>> prefix_;
+  std::vector<std::vector<UIEResult*>> relations_;
   std::vector<SchemaNode> children_;
 
   explicit SchemaNode(const std::string& name) : name_(name) {}
@@ -56,19 +69,6 @@ struct Schema {
   friend class UIEModel;
 };
 
-struct UIEResult {
-  size_t start_;
-  size_t end_;
-  double probability_;
-  std::string text_;
-  std::unique_ptr<UIEResult> relations_;
-};
-
-struct UIEInput {
-  std::string text_;
-  std::string prompt_;
-};
-
 struct UIEModel {
  public:
   UIEModel(const std::string& model_file, const std::string& params_file,
@@ -83,9 +83,12 @@ struct UIEModel {
       const std::unordered_map<std::string, std::vector<std::string>>& schema);
 
   void PredictUIEInput(const std::vector<std::string>& input_texts,
-                       const std::vector<std::string>& prompts);
-  void Predict(const std::vector<std::string>& texts,
-               std::vector<UIEResult>* results);
+                       const std::vector<std::string>& prompts,
+                       std::vector<std::vector<UIEResult>>* results);
+  void Predict(
+      const std::vector<std::string>& texts,
+      std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
+          results);
 
  private:
   using IDX_PROB = std::pair<int64_t, float>;
@@ -94,10 +97,18 @@ struct UIEModel {
                     const std::pair<IDX_PROB, IDX_PROB>& rhs) const;
   };
   using SPAN_SET = std::set<std::pair<IDX_PROB, IDX_PROB>, IdxProbCmp>;
+  struct SpanIdx {
+    faster_tokenizer::core::Offset offset_;
+    bool is_prompt_;
+  };
   void AutoSplitter(
       const std::vector<std::string>& texts, size_t max_length,
       std::vector<std::string>* short_texts,
       std::unordered_map<size_t, std::vector<size_t>>* input_mapping);
+  void AutoJoiner(
+      const std::vector<std::string>& short_texts,
+      const std::unordered_map<size_t, std::vector<size_t>>& input_mapping,
+      std::vector<std::vector<UIEResult>>* results);
   // Get idx of the last dimension in probability arrays, which is greater than
   // a limitation.
   void GetCandidateIdx(const float* probs, int64_t batch_size, int64_t seq_len,
@@ -108,9 +119,14 @@ struct UIEModel {
                SPAN_SET* span_set) const;
   void GetSpanIdxAndProbs(
       const SPAN_SET& span_set,
-      const faster_tokenizer::core::Offset& offset_mapping,
-      std::vector<faster_tokenizer::core::Offset>* span_idxs,
-      std::vector<float>* probs) const;
+      const std::vector<faster_tokenizer::core::Offset>& offset_mapping,
+      std::vector<SpanIdx>* span_idxs, std::vector<float>* probs) const;
+  void ConvertSpanToUIEResult(
+      const std::vector<std::string>& texts,
+      const std::vector<std::string>& prompts,
+      const std::vector<std::vector<SpanIdx>>& span_idxs,
+      const std::vector<std::vector<float>>& probs,
+      std::vector<std::vector<UIEResult>>* results) const;
   fastdeploy::RuntimeOption runtime_option_;
   fastdeploy::Runtime runtime_;
   std::unique_ptr<Schema> schema_;
