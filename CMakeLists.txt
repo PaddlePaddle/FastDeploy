@@ -42,6 +42,7 @@ option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernc
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
+option(ENABLE_OPENVINO_BACKEND "Whether to enable paddle backend." OFF)
 option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
 option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
@@ -104,10 +105,11 @@ file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fas
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
+file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/openvino/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${FDTENSOR_FUNC_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${FDTENSOR_FUNC_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -142,6 +144,13 @@ if(ENABLE_PADDLE_BACKEND)
     # link into paddle_inference on MacOS OSX.
     list(APPEND DEPEND_LIBS external_paddle_inference)
   endif()
+endif()
+
+if(ENABLE_OPENVINO_BACKEND)
+  add_definitions(-DENABLE_OPENVINO_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
+  include(external/openvino.cmake)
+  list(APPEND DEPEND_LIBS external_openvino)
 endif()
 
 if(WITH_GPU)
