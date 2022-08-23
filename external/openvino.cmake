@@ -23,7 +23,7 @@ set(OPENVINO_INC_DIR
     "${OPENVINO_INSTALL_DIR}/include"
     CACHE PATH "openvino include directory." FORCE)
 set(OPENVINO_LIB_DIR
-    "${OPENVINO_INSTALL_DIR}/lib"
+    "${OPENVINO_INSTALL_DIR}/lib/"
     CACHE PATH "openvino lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
 
@@ -65,7 +65,7 @@ elseif(APPLE)
       CACHE FILEPATH "OPENVINO static library." FORCE)
 else()
   set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/intel64/libopenvino.so"
+      "${OPENVINO_INSTALL_DIR}/lib/libopenvino.so"
       CACHE FILEPATH "OPENVINO static library." FORCE)
 endif()
 
@@ -81,7 +81,7 @@ ExternalProject_Add(
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
     ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-    ${CMAKE_COMMAND} -E rename ${OPENVINO_SOURCE_DIR}/lib/ ${OPENVINO_INSTALL_DIR}/lib &&
+    ${CMAKE_COMMAND} -E rename ${OPENVINO_SOURCE_DIR}/lib/intel64 ${OPENVINO_INSTALL_DIR}/lib &&
     ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include
     ${OPENVINO_INC_DIR}
   BUILD_BYPRODUCTS ${OPENVINO_LIB})

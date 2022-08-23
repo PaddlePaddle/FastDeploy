@@ -332,9 +332,14 @@ void Runtime::CreateOpenVINOBackend() {
   backend_ = utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
 
-  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
-                                          ov_option),
-           "Load model from Paddle failed while initliazing PaddleBackend.");
+  if (option.model_format == Frontend::ONNX) {
+    FDASSERT(casted_backend->InitFromOnnx(option.model_file, ov_option),
+             "Load model from ONNX failed while initliazing OrtBackend.");
+  } else {
+    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
+                                            option.params_file, ov_option),
+             "Load model from Paddle failed while initliazing OrtBackend.");
+  }
 #else
   FDASSERT(false,
            "OpenVINOBackend is not available, please compiled with "
