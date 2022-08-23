@@ -52,24 +52,27 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         }
         //min
         std::vector<torch::jit::IValue> inputs_min;
-        if (option.use_gpu):
+        if (option.use_gpu) {
             inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
-        else:
+        } else{
             inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+        }
         _prewarm_datas.push_back(inputs_min);
         //opt
         std::vector<torch::jit::IValue> inputs_opt;
-        if (option.use_gpu):
+        if (option.use_gpu) {
             inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}));
-        else:
+        } else {
             inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}));
+        }
         _prewarm_datas.push_back(inputs_opt);
         //max
         std::vector<torch::jit::IValue> inputs_max;
-        if (option.use_gpu):
+        if (option.use_gpu) {
             inputs_max.push_back(at::randn(max_shape, {at::kCUDA}));
-        else:
+        } else {
             inputs_max.push_back(at::randn(max_shape, {at::kCPU}));
+        }
         _prewarm_datas.push_back(inputs_max);
     }
     else {
@@ -104,10 +107,11 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     torch::jit::Module mod;
     mod = torch::jit::load(model_file);
     mod.eval();
-    if option.use_gpu:
+    if (option.use_gpu) {
         mod.to(at::kCUDA);
-    else:
+    } else {
         mod.to(at::kCPU);
+    }
     _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options)
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
