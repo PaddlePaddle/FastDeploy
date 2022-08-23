@@ -49,40 +49,45 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
   FDASSERT(tensor.device == Device::GPU || tensor.device == Device::CPU,
            "Only support tensor which device is CPU or GPU for PorosBackend.");
   if (tensor.device == Device::GPU && is_backend_cuda) {
-      at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCUDA}).to(GetPorosDtype(tensor.dtype)).contiguous()) 
+      at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCUDA}).to(GetPorosDtype(tensor.dtype)).contiguous()); 
       poros_value.data_ptr() = tensor.Data();
       return poros_value;
   }
-  at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(GetPorosDtype(tensor.dtype)).contiguous()) 
+  at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(GetPorosDtype(tensor.dtype)).contiguous());
   poros_value.data_ptr() = tensor.Data();
   return poros_value;
 }
 
 void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     const auto data_type = tensor.scalar_type();
-    fd_tensor->shape = tensor.sizes();
+    std::vector<int64_t> shape;
+    auto sizes = tensor.sizes();
+    for (size_t i = 0; i < sizes.size(); i++) {
+      shape.push_back(sizes[i]);
+    }
+    fd_tensor->shape = shape;
     size_t numel = tensor.numel();
 
     if (data_type == at::kFloat) {
-        tensor->data.resize(numel * sizeof(float));
-        memcpy(static_cast<void*>(tensor->Data()), tensor.data_ptr(),
+        fd_tensor->data.resize(numel * sizeof(float));
+        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
             numel * sizeof(float));
-        tensor->dtype = FDDataType::FP32;
+        fd_tensor->dtype = FDDataType::FP32;
     } else if (data_type == at::kInt) {
-        tensor->data.resize(numel * sizeof(int32_t));
-        memcpy(static_cast<void*>(tensor->Data()), tensor.data_ptr(),
+        fd_tensor->data.resize(numel * sizeof(int32_t));
+        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
             numel * sizeof(int32_t));
-        tensor->dtype = FDDataType::INT32;
+        fd_tensor->dtype = FDDataType::INT32;
     } else if (data_type == at::kLong) {
-        tensor->data.resize(numel * sizeof(int64_t));
-        memcpy(static_cast<void*>(tensor->Data()), tensor.data_ptr(),
+        fd_tensor->data.resize(numel * sizeof(int64_t));
+        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
             numel * sizeof(int64_t));
-        tensor->dtype = FDDataType::INT64;
+        fd_tensor->dtype = FDDataType::INT64;
     } else if (data_type == at::kDouble) {
-        tensor->data.resize(numel * sizeof(double));
-        memcpy(static_cast<void*>(tensor->Data()), tensor.data_ptr(),
+        fd_tensor->data.resize(numel * sizeof(double));
+        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
             numel * sizeof(double));
-        tensor->dtype = FDDataType::FP64;
+        fd_tensor->dtype = FDDataType::FP64;
     } else {
         FDASSERT(false, "Unrecognized data type of " + std::to_string(data_type) +
                             " while calling OrtBackend::CopyToCpu().");

@@ -110,6 +110,7 @@ bool CheckModelFormat(const std::string& model_file,
                  "should ends with `.pt`, but now it's "
               << model_file << std::endl;
       return false;
+    }
   } else {
     FDERROR << "Only support model format with frontend Frontend::PADDLE / "
                "Frontend::ONNX / Frontend::TORCHSCRIPT."
