@@ -19,8 +19,8 @@
 #include <queue>
 #include <sstream>
 
-#include "pretokenizers/pretokenizer.h"  // faster_tokenizer helper funciton
-#include "utils/utf8.h"                  // faster_tokenizer helper funciton
+#include "faster_tokenizer/pretokenizers/pretokenizer.h"
+#include "faster_tokenizer/utils/utf8.h"
 
 static std::string DBC2SBC(const std::string& content) {
   std::string result;

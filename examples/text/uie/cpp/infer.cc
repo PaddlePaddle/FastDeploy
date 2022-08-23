@@ -17,7 +17,7 @@
 #include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/text.h"
-#include "tokenizers/ernie_faster_tokenizer.h"
+#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
 #include "uie.h"
 
 using namespace paddlenlp;

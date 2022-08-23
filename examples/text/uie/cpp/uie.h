@@ -20,7 +20,7 @@
 #include <vector>
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/utils/unique_ptr.h"
-#include "tokenizers/ernie_faster_tokenizer.h"
+#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
 
 using namespace paddlenlp;
 
