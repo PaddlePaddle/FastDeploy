@@ -37,7 +37,7 @@
 * **端侧部署**
     * [EasyEdge边缘端部署](#fastdeploy-edge-sdk-arm-linux)  
     * [EasyEdge移动端部署](#fastdeploy-edge-sdk-ios-android)  
-    * [EasyEdge移动端部署自定义模型](#fastdeploy-edge-sdk-custom)  
+    * [EasyEdge自定义模型部署](#fastdeploy-edge-sdk-custom)  
     * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
     * [端侧模型支持列表](#fastdeploy-edge-sdk)
 * [社区交流](#fastdeploy-community)
@@ -48,29 +48,29 @@
 
 <div id="fastdeploy-quick-start"></div>
 
-### 快速安装 FastDeploy
-
-#### 操作系统
-- Linux x64/aarch64
-- Windows 10
-- macOS x86/arm64
+### 快速开始
 
 #### 前置依赖
 - CUDA >= 11.2
 - cuDNN >= 8.0
 - python >= 3.8
+- OS: Linux x86_64/macOS/Windows 10
 
-#### 安装 CPU Python 版本
+#### 安装 Python SDK
 
-```bash
-pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-```
-#### 安装 GPU Python 版本
+* GPU版本
 
 ```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
-#### 安装 C++ 版本
+
+* CPU版本
+
+```bash
+pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+```
+
+#### 安装 C++ SDK
 
 - 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
 
@@ -83,8 +83,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-
-### Python预测示例
+### FastDeploy Python Quick Start
 
 <div id="fastdeploy-quick-start-python"></div>
 
@@ -104,7 +103,7 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
-### C++预测示例
+### FastDeploy C++ Quick Start
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
