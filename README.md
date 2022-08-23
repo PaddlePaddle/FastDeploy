@@ -30,7 +30,6 @@
 
 ## 目录
 * **服务端部署**
-    * [快速安装](#fastdeploy-quick-start)
     * [FastDeploy Python SDK快速开始](#fastdeploy-quick-start-python)  
     * [FastDeploy C++ SDK快速开始](#fastdeploy-quick-start-cpp)
     * [服务端模型支持列表](#fastdeploy-server-models)
