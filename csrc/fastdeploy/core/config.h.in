@@ -33,6 +33,10 @@
 #cmakedefine ENABLE_PADDLE_BACKEND
 #endif
 
+#ifndef ENABLE_POROS_BACKEND
+#cmakedefine ENABLE_POROS_BACKEND
+#endif
+
 #ifndef WITH_GPU
 #cmakedefine WITH_GPU
 #endif

@@ -21,10 +21,10 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
+enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, POROS };
 // AUTOREC will according to the name of model file
 // to decide which Frontend is
-enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
+enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX, TORCHSCRIPT };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const Frontend& f);
@@ -62,6 +62,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // use tensorrt backend
   void UseTrtBackend();
+
+  // use poros backend
+  void UsePorosBackend();
 
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
@@ -126,6 +129,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
 
+  // ======Only for Poros Backend=======
+  bool long_to_int = true;
+  bool use_nvidia_tf32 = false;
+  int unconst_ops_thres = -1;
+  std::string poros_file = "";
+
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   Frontend model_format = Frontend::AUTOREC;  // format of input model
@@ -151,6 +160,8 @@ struct FASTDEPLOY_DECL Runtime {
   void CreatePaddleBackend();
 
   void CreateTrtBackend();
+
+  void CreatePorosBackend();
 
   int NumInputs() { return backend_->NumInputs(); }
   int NumOutputs() { return backend_->NumOutputs(); }
