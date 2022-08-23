@@ -49,11 +49,11 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
   FDASSERT(tensor.device == Device::GPU || tensor.device == Device::CPU,
            "Only support tensor which device is CPU or GPU for PorosBackend.");
   if (tensor.device == Device::GPU && is_backend_cuda) {
-      at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCUDA}).to(GetPorosDtype(tensor.dtype)).contiguous()); 
+      at::Tensor poros_value = std::move(at::empty(tensor.shape, {at::kCUDA}).to(GetPorosDtype(tensor.dtype)).contiguous()); 
       poros_value.data_ptr() = tensor.Data();
       return poros_value;
   }
-  at::tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(GetPorosDtype(tensor.dtype)).contiguous());
+  at::Tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(GetPorosDtype(tensor.dtype)).contiguous());
   poros_value.data_ptr() = tensor.Data();
   return poros_value;
 }

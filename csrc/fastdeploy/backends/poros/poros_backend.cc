@@ -139,18 +139,18 @@ bool PorosBackend::InitFromPoros(const std::string& model_file, const PorosBacke
     return true;
 }
 
-bool Porosbackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) {
+bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) {
     // Convert FD Tensor to PyTorch Tensor
     std::vector<torch::jit::IValue> poros_inputs;
     bool is_backend_cuda = _options.device == baidu::mirana::poros::Device::GPU ? true : false; 
     for (size_t i = 0; i < inputs.size(); ++i) {
-        poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda))
+        poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
     //infer
     auto poros_outputs = _poros_module->forward(poros_inputs);
     // Convert PyTorch Tensor to FD Tensor
     for (size_t i = 0; i < poros_outputs.size(); ++i) {
-        outputs.push_back(CopyTensorToCpu(poros_outputs[i], &((*outputs)[i])))
+        CopyTensorToCpu(poros_outputs[i], &((*outputs)[i]));
     }
 }
 

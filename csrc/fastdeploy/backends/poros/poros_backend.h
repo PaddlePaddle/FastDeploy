@@ -21,6 +21,7 @@
 
 #include "fastdeploy/backends/backend.h"
 
+#include "fastdeploy/backends/poros/common/compile.h"
 #include "fastdeploy/backends/poros/common/poros_module.h"
 
 #ifdef ENABLE_TRT_BACKEND

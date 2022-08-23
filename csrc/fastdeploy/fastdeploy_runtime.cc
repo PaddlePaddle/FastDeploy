@@ -417,10 +417,10 @@ void Runtime::CreatePorosBackend() {
   auto poros_option = PorosBackendOption();
   poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
   poros_option.gpu_id = option.device_id;
-  poros_option.long_to_int = option.long_to_int
-  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32
-  poros_option.unconst_ops_thres = option.unconst_ops_thres
-  poros_option.poros_file = option.poros_file
+  poros_option.long_to_int = option.long_to_int;
+  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
+  poros_option.unconst_ops_thres = option.unconst_ops_thres;
+  poros_option.poros_file = option.poros_file;
 #ifdef ENABLE_TRT_BACKEND
   auto trt_option = TrtBackendOption();
   trt_option.gpu_id = option.device_id;
