@@ -30,8 +30,8 @@ class FASTDEPLOY_DECL PPMatting : public FastDeployModel {
   bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<int, 2>>* im_info);
 
-  bool Postprocess(FDTensor& infer_result, MattingResult* result,
-                   std::map<std::string, std::array<int, 2>>* im_info);
+  bool Postprocess(std::vector<FDTensor>& infer_result, MattingResult* result,
+                   const std::map<std::string, std::array<int, 2>>& im_info);
 
   bool is_resized = false;
 
@@ -39,8 +39,6 @@ class FASTDEPLOY_DECL PPMatting : public FastDeployModel {
   std::string config_file_;
 };
 
-void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
-                        bool contain_score_map);
 }  // namespace matting
 }  // namespace vision
 }  // namespace fastdeploy

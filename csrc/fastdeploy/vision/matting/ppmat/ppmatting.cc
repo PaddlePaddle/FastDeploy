@@ -52,7 +52,24 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
     for (const auto& op : preprocess_cfg) {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
-      if (op["type"].as<std::string>() == "Normalize") {
+      if (op["type"].as<std::string>() == "LimitShort") {
+        int max_short = -1;
+        int min_short = -1;
+        if (op["max_short"]) {
+          max_short = op["max_short"].as<int>();
+        }
+        if (op["min_short"]) {
+          min_short = op["min_short"].as<int>();
+        }
+        processors_.push_back(
+            std::make_shared<LimitShort>(max_short, min_short));
+      } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
+        int mult_int = 32;
+        if (op["mult_int"]) {
+          mult_int = op["mult_int"].as<int>();
+        }
+        processors_.push_back(std::make_shared<ResizeToIntMult>(mult_int));
+      } else if (op["type"].as<std::string>() == "Normalize") {
         std::vector<float> mean = {0.5, 0.5, 0.5};
         std::vector<float> std = {0.5, 0.5, 0.5};
         if (op["mean"]) {
@@ -62,14 +79,6 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
           std = op["std"].as<std::vector<float>>();
         }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
-
-      } else if (op["type"].as<std::string>() == "Resize") {
-        const auto& target_size = op["target_size"];
-        int resize_width = target_size[0].as<int>();
-        int resize_height = target_size[1].as<int>();
-        is_resized = true;
-        processors_.push_back(
-            std::make_shared<Resize>(resize_width, resize_height));
       }
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
@@ -80,18 +89,6 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
 bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
                            std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
-    if (processors_[i]->Name().compare("Resize") == 0) {
-      auto processor = dynamic_cast<Resize*>(processors_[i].get());
-      int resize_width = -1;
-      int resize_height = -1;
-      std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
-      if (is_vertical_screen && (resize_width > resize_height)) {
-        if (processor->SetWidthAndHeight(resize_height, resize_width)) {
-          FDERROR << "Failed to set Resize processor width and height "
-                  << processors_[i]->Name() << "." << std::endl;
-        }
-      }
-    }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
@@ -110,91 +107,47 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
 }
 
 bool PPMatting::Postprocess(
-    FDTensor& infer_result, MattingResult* result,
-    std::map<std::string, std::array<int, 2>>* im_info) {
-  // PaddleSeg has three types of inference output:
-  //     1. output with argmax and without softmax. 3-D matrix CHW, Channel
-  //     always 1, the element in matrix is classified label_id INT64 Type.
-  //     2. output without argmax and without softmax. 4-D matrix NCHW, N always
-  //     1, Channel is the num of classes. The element is the logits of classes
-  //     FP32
-  //     3. output without argmax and with softmax. 4-D matrix NCHW, the result
-  //     of 2 with softmax layer
-  // Fastdeploy output:
-  //     1. label_map
-  //     2. score_map(optional)
-  //     3. shape: 2-D HW
-  FDASSERT(infer_result.dtype == FDDataType::INT64 ||
-               infer_result.dtype == FDDataType::FP32,
-           "Require the data type of output is int64 or fp32, but now it's %s.",
-           Str(infer_result.dtype).c_str());
+    std::vector<FDTensor>& infer_result, MattingResult* result,
+    const std::map<std::string, std::array<int, 2>>& im_info) {
+  FDASSERT((infer_result.size() == 1),
+           "The default number of output tensor must be 1 according to "
+           "modnet.");
+  FDTensor& alpha_tensor = infer_result.at(0);  // (1,h,w,1)
+  FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch =1 now.");
+  if (alpha_tensor.dtype != FDDataType::FP32) {
+    FDERROR << "Only support post process with float32 data." << std::endl;
+    return false;
+  }
+
+  // 先获取alpha并resize (使用opencv)
+  auto iter_ipt = im_info.find("input_shape");
+  auto iter_out = im_info.find("output_shape");
+  FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
+           "Cannot find input_shape or output_shape from im_info.");
+  int out_h = iter_out->second[0];
+  int out_w = iter_out->second[1];
+  int ipt_h = iter_ipt->second[0];
+  int ipt_w = iter_ipt->second[1];
+
+  // TODO: 需要修改成FDTensor或Mat的运算 现在依赖cv::Mat
+  float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
+  cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
+  Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
+  if ((out_h != ipt_h) || (out_w != ipt_w)) {
+    // already allocated a new continuous memory after resize.
+    // cv::resize(alpha_resized, alpha_resized, cv::Size(ipt_w, ipt_h));
+    Resize::Run(&alpha_resized, ipt_w, ipt_h, -1, -1);
+  }
+
   result->Clear();
-
-  if (infer_result.shape.size() == 4) {
-    FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
-    // output without argmax
-    result->contain_score_map = true;
-    utils::NCHW2NHWC<float_t>(infer_result);
-  }
-
-  // for resize mat below
-  FDTensor new_infer_result;
-  Mat* mat = nullptr;
-  if (is_resized) {
-    cv::Mat temp_mat;
-    FDTensor2FP32CVMat(temp_mat, infer_result, result->contain_score_map);
-
-    // original image shape
-    auto iter_ipt = (*im_info).find("input_shape");
-    FDASSERT(iter_ipt != im_info->end(),
-             "Cannot find input_shape from im_info.");
-    int ipt_h = iter_ipt->second[0];
-    int ipt_w = iter_ipt->second[1];
-
-    mat = new Mat(temp_mat);
-
-    Resize::Run(mat, ipt_w, ipt_h, -1, -1, 1);
-    mat->ShareWithTensor(&new_infer_result);
-    new_infer_result.shape.insert(new_infer_result.shape.begin(), 1);
-    result->shape = new_infer_result.shape;
-  } else {
-    result->shape = infer_result.shape;
-  }
-  int out_num =
-      std::accumulate(result->shape.begin(), result->shape.begin() + 3, 1,
-                      std::multiplies<int>());
-  // NCHW remove N or CHW remove C
-  result->shape.erase(result->shape.begin());
-  result->Resize(out_num);
-  if (result->contain_score_map) {
-    // output with label_map and score_map
-    float_t* infer_result_buffer = nullptr;
-    if (is_resized) {
-      infer_result_buffer = static_cast<float_t*>(new_infer_result.Data());
-    } else {
-      infer_result_buffer = static_cast<float_t*>(infer_result.Data());
-    }
-    // argmax
-    utils::ArgmaxScoreMap(infer_result_buffer, result, with_softmax);
-    result->shape.erase(result->shape.begin() + 2);
-  } else {
-    // output only with label_map
-    if (is_resized) {
-      float_t* infer_result_buffer =
-          static_cast<float_t*>(new_infer_result.Data());
-      for (int i = 0; i < out_num; i++) {
-        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
-      }
-    } else {
-      const int64_t* infer_result_buffer =
-          reinterpret_cast<const int64_t*>(infer_result.Data());
-      for (int i = 0; i < out_num; i++) {
-        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
-      }
-    }
-  }
-  delete mat;
-  mat = nullptr;
+  // note: must be setup shape before Resize
+  result->contain_foreground = false;
+  // 和输入原图大小对应的alpha
+  result->shape = {static_cast<int64_t>(ipt_h), static_cast<int64_t>(ipt_w)};
+  int numel = ipt_h * ipt_w;
+  int nbytes = numel * sizeof(float);
+  result->Resize(numel);
+  std::memcpy(result->alpha.data(), alpha_resized.GetCpuMat()->data, nbytes);
   return true;
 }
 
@@ -221,7 +174,7 @@ bool PPMatting::Predict(cv::Mat* im, MattingResult* result) {
             << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result[0], result, &im_info)) {
+  if (!Postprocess(infer_result, result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

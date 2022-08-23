@@ -17,3 +17,5 @@ fastdeploy/ThirdPartyNotices*
 fastdeploy/libs/third_libs
 csrcs/fastdeploy/core/config.h
 csrcs/fastdeploy/pybind/main.cc
+fastdeploy_gpu_python.egg-info
+

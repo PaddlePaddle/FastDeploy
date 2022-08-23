@@ -24,9 +24,6 @@ void BindPPMat(pybind11::module& m) {
              vision::MattingResult* res = new vision::MattingResult();
              self.Predict(&mat, res);
              return res;
-           })
-      .def_readwrite("with_softmax", &vision::matting::PPMatting::with_softmax)
-      .def_readwrite("is_vertical_screen",
-                     &vision::matting::PPMatting::is_vertical_screen);
+           });
 }
 }  // namespace fastdeploy
