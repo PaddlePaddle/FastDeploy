@@ -51,6 +51,7 @@ struct SchemaNode {
                       const std::vector<SchemaNode>& children = {})
       : name_(name), children_(children) {}
   void AddChild(const std::string& schema) { children_.emplace_back(schema); }
+  void AddChild(const SchemaNode& schema) { children_.push_back(schema); }
   void AddChild(const std::string& schema,
                 const std::vector<std::string>& children) {
     SchemaNode schema_node(schema);

@@ -76,5 +76,15 @@ int main() {
 
   // Cross task extraction
 
+  predictor.SetSchema({{"法院", {}},
+                       {"原告", {SchemaNode("委托代理人")}},
+                       {"被告", {SchemaNode("委托代理人")}}});
+  predictor.Predict({"北京市海淀区人民法院\n民事判决书\n(199x)"
+                     "建初字第xxx号\n原告：张三。\n委托代理人李四，北京市 "
+                     "A律师事务所律师。\n被告：B公司，法定代表人王五，开发公司"
+                     "总经理。\n委托代理人赵六，北京市 C律师事务所律师。"},
+                    &results);
+  std::cout << results << std::endl;
+  results.clear();
   return 0;
 }
