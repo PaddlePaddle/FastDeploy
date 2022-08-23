@@ -19,7 +19,8 @@
 #include <queue>
 #include <sstream>
 
-#include "utils/utf8.h"  // faster_tokenizer helper funciton
+#include "pretokenizers/pretokenizer.h"  // faster_tokenizer helper funciton
+#include "utils/utf8.h"                  // faster_tokenizer helper funciton
 
 static std::string DBC2SBC(const std::string& content) {
   std::string result;
@@ -47,21 +48,6 @@ static std::string DBC2SBC(const std::string& content) {
     content_utf8_len += content_char_width;
   }
   return result;
-}
-
-// Will remove to faster_tokenizer utils
-static void CharToByteOffsetMap(const std::string& seq,
-                                std::vector<uint32_t>* offset_mapping) {
-  std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> conv;
-  std::u32string u32seq = conv.from_bytes(seq);
-  uint32_t index = 0;
-  offset_mapping->reserve(u32seq.length() * 4);
-  for (int i = 0; i < u32seq.length(); ++i) {
-    offset_mapping->push_back(index);
-    auto utf8_len = faster_tokenizer::utils::GetUTF8CharLen(u32seq[i]);
-    index += utf8_len;
-  }
-  offset_mapping->push_back(index);
 }
 
 static std::ostream& PrintResult(std::ostream& os, const UIEResult& result,
@@ -218,17 +204,17 @@ void UIEModel::AutoSplitter(
       }
       cnt_short += 1;
     } else {
-      std::vector<uint32_t> offset_mapping;
-      CharToByteOffsetMap(text, &offset_mapping);
+      faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+          text);
       for (size_t start = 0; start < text_len; start += max_length) {
         size_t end = start + max_length;
         if (end > text_len) {
           end = text_len;
         }
-        auto unicode_start = offset_mapping[start];
-        auto unicode_end = offset_mapping[end];
-        short_texts->emplace_back(text.data() + unicode_start,
-                                  unicode_end - unicode_start);
+        faster_tokenizer::core::Offset byte_offset;
+        converter.convert({start, end}, &byte_offset);
+        short_texts->emplace_back(text.data() + byte_offset.first,
+                                  byte_offset.second - byte_offset.first);
       }
       auto short_idx = cnt_short;
       cnt_short += text_len / max_length;
@@ -338,18 +324,22 @@ void UIEModel::ConvertSpanToUIEResult(
       std::string span_text;
       std::vector<uint32_t> offset_mapping;
       if (span_idxs[i][j].is_prompt_) {
-        CharToByteOffsetMap(prompt, &offset_mapping);
-        auto byte_start = offset_mapping[start];
-        auto byte_end = offset_mapping[end];
-        span_text = prompt.substr(byte_start, byte_end - byte_start);
+        faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+            prompt);
+        faster_tokenizer::core::Offset byte_offset;
+        converter.convert({start, end}, &byte_offset);
+        span_text = prompt.substr(byte_offset.first,
+                                  byte_offset.second - byte_offset.first);
         // Indicate cls task
         start = 0;
         end = 0;
       } else {
-        CharToByteOffsetMap(text, &offset_mapping);
-        auto byte_start = offset_mapping[start];
-        auto byte_end = offset_mapping[end];
-        span_text = text.substr(byte_start, byte_end - byte_start);
+        faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+            text);
+        faster_tokenizer::core::Offset byte_offset;
+        converter.convert({start, end}, &byte_offset);
+        span_text = text.substr(byte_offset.first,
+                                byte_offset.second - byte_offset.first);
       }
       result_list.emplace_back(start, end, probs[i][j], span_text);
     }
