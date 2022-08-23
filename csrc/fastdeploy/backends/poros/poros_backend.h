@@ -34,6 +34,7 @@ struct PorosBackendOption {
   bool use_gpu = true;
 #else
   bool use_gpu = false;
+#endif
   int gpu_id = 0;
   // Device device = GPU;
   // bool is_dynamic = false;
