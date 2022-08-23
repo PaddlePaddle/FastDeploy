@@ -147,6 +147,15 @@ if(ENABLE_POROS_BACKEND)
   include(external/poros.cmake)
   list(APPEND DEPEND_LIBS external_poros)
   set(PYTORCH_MINIMUM_VERSION 1.9)
+  # find python3
+  find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
+  message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
+
+  if (NOT Python3_SITELIB)
+    message(FATAL_ERROR "site-packages not found. ")
+  else ()
+    message(STATUS "site-packages: ${Python3_SITELIB}")
+  endif ()
   # find pytorch
   find_package(Torch ${PYTORCH_MINIMUM_VERSION} REQUIRED HINTS ${Python3_SITELIB})
   include_directories(${TORCH_INCLUDE_DIRS})
