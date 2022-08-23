@@ -263,7 +263,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::ORT;
     } else if (IsBackendAvailable(Backend::PDINFER)) {
       option.backend = Backend::PDINFER;
-    } else if (IsBackendAvailable(Backend::POROS) {
+    } else if (IsBackendAvailable(Backend::POROS)) {
       option.backend = Backend::POROS;
     } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "

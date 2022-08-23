@@ -17,11 +17,15 @@
 namespace fastdeploy {
 
 TensorInfo PorosBackend::GetInputInfo(int index) {
-    return NULL;
+    // eager mode cann't obtain input information before infer
+    TensorInfo info_input;
+    return info_input;
 }
 
 TensorInfo PorosBackend::GetOutputInfo(int index) {
-    return NULL;
+    // eager mode cann't obtain output information before infer
+    TensorInfo info_output;
+    return info_output;
 }
 
 void PorosBackend::BuildOption(const PorosBackendOption& option) {
@@ -48,21 +52,21 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         }
         //min
         std::vector<torch::jit::IValue> inputs_min;
-        if option.use_gpu:
+        if (option.use_gpu):
             inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
         else:
             inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
         _prewarm_datas.push_back(inputs_min);
         //opt
         std::vector<torch::jit::IValue> inputs_opt;
-        if option.use_gpu:
+        if (option.use_gpu):
             inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}));
         else:
             inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}));
         _prewarm_datas.push_back(inputs_opt);
         //max
         std::vector<torch::jit::IValue> inputs_max;
-        if option.use_gpu:
+        if (option.use_gpu):
             inputs_max.push_back(at::randn(max_shape, {at::kCUDA}));
         else:
             inputs_max.push_back(at::randn(max_shape, {at::kCPU}));
