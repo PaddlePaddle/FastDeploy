@@ -146,6 +146,11 @@ if(ENABLE_POROS_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_POROS_SRCS})
   include(external/poros.cmake)
   list(APPEND DEPEND_LIBS external_poros)
+  set(PYTORCH_MINIMUM_VERSION 1.9)
+  # find pytorch
+  find_package(Torch ${PYTORCH_MINIMUM_VERSION} REQUIRED HINTS ${Python3_SITELIB})
+  include_directories(${TORCH_INCLUDE_DIRS})
+  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/common)
 endif()
 
 if(WITH_GPU)
