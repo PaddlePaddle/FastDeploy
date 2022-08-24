@@ -27,6 +27,9 @@ set(FASTERTOKENIZER_INC_DIR
 set(FASTERTOKENIZER_LIB_DIR
     "${FASTERTOKENIZER_INSTALL_DIR}/lib/"
     CACHE PATH "faster_tokenizer lib directory." FORCE)
+set(FASTERTOKENIZER_THIRD_LIB_DIR
+    "${FASTERTOKENIZER_INSTALL_DIR}/third_party/lib/"
+    CACHE PATH "faster_tokenizer lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${FASTERTOKENIZER_LIB_DIR}")
 
@@ -34,6 +37,12 @@ include_directories(${FASTERTOKENIZER_INC_DIR})
 
 # Set lib path
 if(WIN32)
+set(FASTERTOKENIZER_COMPILE_LIB "${FASTERTOKENIZER_LIB_DIR}/core_tokenizers.lib"
+    CACHE FILEPATH "faster_tokenizer compile library." FORCE)
+message("FASTERTOKENIZER_COMPILE_LIB = ${FASTERTOKENIZER_COMPILE_LIB}")
+set(ICUDT_LIB "${FASTERTOKENIZER_THIRD_LIB_DIR}/icudt.lib")
+set(ICUUC_LIB "${FASTERTOKENIZER_THIRD_LIB_DIR}/icuuc.lib")
+
 elseif(APPLE)
 # Not support apple so far.
 else()
@@ -41,8 +50,6 @@ else()
 set(FASTERTOKENIZER_COMPILE_LIB "${FASTERTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
     CACHE FILEPATH "faster_tokenizer compile library." FORCE)
 message("FASTERTOKENIZER_COMPILE_LIB = ${FASTERTOKENIZER_COMPILE_LIB}")
-set(ICUDT_LIB "")
-set(ICUUC_LIB "")
 endif(WIN32)
 
 set(FASTERTOKENIZER_URL_BASE "https://bj.bcebos.com/paddlenlp/faster_tokenizer/")
@@ -81,3 +88,15 @@ add_library(faster_tokenizer STATIC IMPORTED GLOBAL)
 set_property(TARGET faster_tokenizer PROPERTY IMPORTED_LOCATION ${FASTERTOKENIZER_COMPILE_LIB})
 add_dependencies(faster_tokenizer ${FASTERTOKENIZER_PROJECT})
 list(APPEND DEPEND_LIBS faster_tokenizer)
+
+if (WIN32)
+  add_library(icudt STATIC IMPORTED GLOBAL)
+  set_property(TARGET icudt PROPERTY IMPORTED_LOCATION ${ICUDT_LIB})
+  add_dependencies(icudt ${FASTERTOKENIZER_PROJECT})
+  list(APPEND DEPEND_LIBS icudt)
+
+  add_library(icuuc STATIC IMPORTED GLOBAL)
+  set_property(TARGET icuuc PROPERTY IMPORTED_LOCATION ${ICUUC_LIB})
+  add_dependencies(icuuc ${FASTERTOKENIZER_PROJECT})
+  list(APPEND DEPEND_LIBS icuuc)
+endif()
