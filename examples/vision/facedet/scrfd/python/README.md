@@ -8,14 +8,13 @@
 本目录下提供`infer.py`快速完成SCRFD在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision/facedet/scrfd/python/
+
 #下载SCRFD模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
-
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/scrfd/python/
 
 # CPU推理
 python infer.py --model scrfd_500m_bnkps_shape640x640.onnx --image test_lite_face_detector_3.jpg --device cpu

@@ -10,7 +10,7 @@
 ```
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/yolox/python/
+cd examples/vision/detection/yolox/python/
 
 #下载YOLOX模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx
