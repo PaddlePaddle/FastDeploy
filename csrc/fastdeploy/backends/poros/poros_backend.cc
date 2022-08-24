@@ -38,9 +38,9 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.max_workspace_size = option.trt_option.max_workspace_size;
     _options.use_fp16 = option.trt_option.enable_fp16;
     if (_options.is_dynamic) {
-        std::vector<int32_t> min_shape;
-        std::vector<int32_t> opt_shape;
-        std::vector<int32_t> max_shape;
+        std::vector<int64_t> min_shape;
+        std::vector<int64_t> opt_shape;
+        std::vector<int64_t> max_shape;
         for (auto iter:option.trt_option.min_shape) {
             auto max_iter = option.trt_option.max_shape.find(iter->first);
             auto opt_iter = option.trt_option.opt_shape.find(iter->first);
@@ -76,7 +76,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         _prewarm_datas.push_back(inputs_max);
     }
     else {
-        std::vector<int32_t> min_shape;
+        std::vector<int64_t> min_shape;
         for (auto iter:option.trt_option.min_shape) {
             min_shape.assign(iter->second.begin(), iter->second.end());
         }
@@ -112,7 +112,7 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     } else {
         mod.to(at::kCPU);
     }
-    _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options)
+    _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
                 << std::endl;
@@ -146,8 +146,8 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     for (size_t i = 0; i < inputs.size(); ++i) {
         poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
-    //infer
-    auto poros_outputs = _poros_module->forward(poros_inputs);
+    // Infer
+    auto poros_outputs = _poros_module->forward(poros_inputs).toList();
     // Convert PyTorch Tensor to FD Tensor
     for (size_t i = 0; i < poros_outputs.size(); ++i) {
         CopyTensorToCpu(poros_outputs[i], &((*outputs)[i]));
