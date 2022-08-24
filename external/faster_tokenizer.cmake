@@ -50,6 +50,10 @@ set(FASTERTOKENIZER_VERSION "dev")
 
 # Set download url
 if(WIN32)
+  set(FASTERTOKENIZER_FILE "faster_tokenizer-win-x64-${FASTERTOKENIZER_VERSION}.zip")
+  if(NOT CMAKE_CL_64)
+    set(FASTERTOKENIZER_FILE "faster_tokenizer-win-x86-${FASTERTOKENIZER_VERSION}.zip")
+  endif()
 elseif(APPLE)
 else()
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
