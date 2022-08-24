@@ -61,6 +61,9 @@ at::ScalarType GetPorosDtype(const FDDataType& fd_dtype);
 // Convert data type from poros to fastdeploy
 FDDataType GetFdDtype(const at::ScalarType& dtype);
 
+// at::ScalarType to std::string for FDERROR
+std::string AtType2String(const at::ScalarType& dtype);
+
 // Create at::Tensor
 // is_backend_cuda specify if Poros use GPU Device
 // While is_backend_cuda = true, and tensor.device = Device::GPU

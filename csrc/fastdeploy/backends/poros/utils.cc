@@ -16,6 +16,39 @@
 
 namespace fastdeploy {
 
+std::string AtType2String(const at::ScalarType& dtype) {
+  std::string out;
+  switch (dtype) {
+    case at::kByte:
+      out = "at::kByte";
+      break;
+    case at::kChar:
+      out = "at::kChar";
+      break;
+    case at::kShort:
+      out = "at::kShort";
+      break;
+    case at::kInt:
+      out = "at::kInt";
+      break;
+    case at::kLong:
+      out = "at::kLong";
+      break;
+    case at::kHalf:
+      out = "at::kHalf";
+      break;
+    case at::kFloat:
+      out = "at::kFloat";
+      break;
+    case at::kDouble:
+      out = "at::kDouble";
+      break;
+    default:
+      out = "at::UNKNOWN";
+  }
+  return out;
+}
+
 at::ScalarType GetPorosDtype(const FDDataType& fd_dtype) {
   if (fd_dtype == FDDataType::FP32) {
     return at::kFloat;
@@ -41,7 +74,7 @@ FDDataType GetFdDtype(const at::ScalarType& poros_dtype) {
   } else if (poros_dtype == at::kLong) {
     return FDDataType::INT64;
   }
-  FDERROR << "Unrecognized poros data type:" << poros_dtype << "." << std::endl;
+  FDERROR << "Unrecognized poros data type:" << AtType2String(poros_dtype) << "." << std::endl;
   return FDDataType::FP32;
 }
 
@@ -64,7 +97,7 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(double));
   } else {
-    FDASSERT(false, "Unrecognized data type of " + std::to_string(data_type) +
+    FDASSERT(false, "Unrecognized data type of " + Str(tensor.dtype) +
               " while calling PorosBackend::CreatePorosValue().");
   }
   // to cuda
@@ -109,7 +142,7 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
         fd_tensor->dtype = FDDataType::FP64;
         return;
     } else {
-        FDASSERT(false, "Unrecognized data type of " + std::to_string(data_type) +
+        FDASSERT(false, "Unrecognized data type of " + AtType2String(data_type) +
                             " while calling PorosBackend::CopyToCpu().");
     }
 }
