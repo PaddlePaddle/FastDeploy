@@ -14,12 +14,12 @@
 
 #pragma once
 
+#include "fastdeploy/backends/common/multiclass_nms.h"
+#include "fastdeploy/core/fd_tensor.h"
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-#include "fastdeploy/backends/common/multiclass_nms.h"
-#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 
@@ -27,6 +27,20 @@ struct TensorInfo {
   std::string name;
   std::vector<int> shape;
   FDDataType dtype;
+
+  friend std::ostream& operator<<(std::ostream& output,
+                                  const TensorInfo& info) {
+    output << "TensorInfo(name: " << info.name << ", shape: [";
+    for (size_t i = 0; i < info.shape.size(); ++i) {
+      if (i == info.shape.size() - 1) {
+        output << info.shape[i];
+      } else {
+        output << info.shape[i] << ", ";
+      }
+    }
+    output << "], dtype: " << Str(info.dtype) << ")";
+    return output;
+  }
 };
 
 class BaseBackend {

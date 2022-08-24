@@ -32,10 +32,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     session_options_.SetGraphOptimizationLevel(
         GraphOptimizationLevel(option.graph_optimization_level));
   }
-  if (option.intra_op_num_threads >= 0) {
+  if (option.intra_op_num_threads > 0) {
     session_options_.SetIntraOpNumThreads(option.intra_op_num_threads);
   }
-  if (option.inter_op_num_threads >= 0) {
+  if (option.inter_op_num_threads > 0) {
     session_options_.SetInterOpNumThreads(option.inter_op_num_threads);
   }
   if (option.execution_mode >= 0) {
