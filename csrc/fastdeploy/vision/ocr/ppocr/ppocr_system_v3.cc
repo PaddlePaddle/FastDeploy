@@ -21,127 +21,114 @@ namespace application {
 namespace ocrsystem {
 PPOCRSystemv3::PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* ocr_det,
                              fastdeploy::vision::ocr::Classifier* ocr_cls,
-                             fastdeploy::vision::ocr::Recognizer* ocr_rec) {
-  this->detector = ocr_det;
-  this->classifier = ocr_cls;
-  this->recognizer = ocr_rec;
-}
+                             fastdeploy::vision::ocr::Recognizer* ocr_rec)
+    : detector(ocr_det), classifier(ocr_cls), recognizer(ocr_rec) {}
 
-void PPOCRSystemv3::Detect(
-    cv::Mat img, std::vector<fastdeploy::vision::OCRResult>& ocr_results) {
+void PPOCRSystemv3::Detect(cv::Mat* img,
+                           fastdeploy::vision::OCRResult* result) {
   std::vector<std::vector<std::vector<int>>> boxes;
 
-  this->detector->Predict(&img, boxes);
+  this->detector->Predict(img, &boxes);
 
   for (int i = 0; i < boxes.size(); i++) {
-    fastdeploy::vision::OCRResult res;
-    res.boxes = boxes[i];
-    ocr_results.push_back(res);
-  }
+    // boxes[i]转成array<float,8>
+    std::array<int, 8> new_box;
+    int k = 0;
 
-  std::cout << "=== Finish DET Prediction ====" << std::endl;
-}
-
-void PPOCRSystemv3::Recognize(
-    std::vector<cv::Mat> img_list,
-    std::vector<fastdeploy::vision::OCRResult>& ocr_results) {
-  std::vector<std::string> rec_texts(img_list.size(), "");
-  std::vector<float> rec_text_scores(img_list.size(), 0);
-
-  this->recognizer->Predict(img_list, rec_texts, rec_text_scores);
-
-  // output rec results
-  for (int i = 0; i < rec_texts.size(); i++) {
-    ocr_results[i].text = rec_texts[i];
-    ocr_results[i].score = rec_text_scores[i];
-  }
-  std::cout << "=== Finish REC Prediction ====" << std::endl;
-}
-
-void PPOCRSystemv3::Classify(
-    std::vector<cv::Mat> img_list,
-    std::vector<fastdeploy::vision::OCRResult>& ocr_results) {
-  std::vector<int> cls_labels(img_list.size(), 0);
-  std::vector<float> cls_scores(img_list.size(), 0);
-
-  this->classifier->Predict(img_list, cls_labels, cls_scores);
-  // output cls results
-  for (int i = 0; i < cls_labels.size(); i++) {
-    ocr_results[i].cls_label = cls_labels[i];
-    ocr_results[i].cls_score = cls_scores[i];
-  }
-  std::cout << "=== Finish CLS Prediction ====" << std::endl;
-}
-
-std::vector<std::vector<fastdeploy::vision::OCRResult>> PPOCRSystemv3::Predict(
-    std::vector<cv::Mat> cv_all_imgs) {
-  std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results;
-
-  if (this->detector == nullptr) {  //没det
-    std::vector<fastdeploy::vision::OCRResult> ocr_result;
-
-    for (int i = 0; i < cv_all_imgs.size(); ++i) {
-      fastdeploy::vision::OCRResult res;
-      ocr_result.push_back(res);
-    }
-
-    if (this->classifier != nullptr) {
-      this->Classify(cv_all_imgs, ocr_result);
-      //摆正图像
-      for (int i = 0; i < cv_all_imgs.size(); i++) {
-        if (ocr_result[i].cls_label % 2 == 1 &&
-            ocr_result[i].cls_score > this->classifier->cls_thresh) {
-          cv::rotate(cv_all_imgs[i], cv_all_imgs[i], 1);
-        }
+    for (auto& vec : boxes[i]) {
+      for (auto& e : vec) {
+        new_box[k++] = e;
       }
     }
 
-    if (this->recognizer != nullptr) {
-      this->Recognize(cv_all_imgs, ocr_result);
+    (result->boxes).push_back(new_box);
+  }
+}
+
+void PPOCRSystemv3::Recognize(cv::Mat* img,
+                              fastdeploy::vision::OCRResult* result) {
+  std::string rec_texts = "";
+  float rec_text_scores = 0;
+
+  this->recognizer->Predict(img, rec_texts, rec_text_scores);
+
+  result->text.push_back(rec_texts);
+  result->rec_scores.push_back(rec_text_scores);
+}
+
+void PPOCRSystemv3::Classify(cv::Mat* img,
+                             fastdeploy::vision::OCRResult* result) {
+  int cls_label = 0;
+  float cls_scores = 0;
+
+  this->classifier->Predict(img, cls_label, cls_scores);
+
+  result->cls_label.push_back(cls_label);
+  result->cls_scores.push_back(cls_scores);
+}
+
+bool PPOCRSystemv3::Predict(cv::Mat* img,
+                            fastdeploy::vision::OCRResult* result) {
+  if (this->detector->initialized == 0) {  //没det
+    //输入单张“小图片”给分类器
+    if (this->classifier->initialized != 0) {
+      this->Classify(img, result);
+      //摆正单张图像
+      if ((result->cls_label)[0] % 2 == 1 &&
+          (result->cls_scores)[0] > this->classifier->cls_thresh) {
+        cv::rotate(*img, *img, 1);
+      }
+    }
+    //输入单张“小图片”给识别器
+    if (this->recognizer->initialized != 0) {
+      this->Recognize(img, result);
     }
 
-    for (int i = 0; i < cv_all_imgs.size(); ++i) {
-      std::vector<fastdeploy::vision::OCRResult> ocr_result_tmp;
-      ocr_result_tmp.push_back(ocr_result[i]);
-      ocr_results.push_back(ocr_result_tmp);
-    }
   } else {
     //从DET模型开始
-    for (int i = 0; i < cv_all_imgs.size(); ++i) {
-      std::vector<fastdeploy::vision::OCRResult> ocr_result;
-      // det
-      cv::Mat srcimg = cv_all_imgs[i];
-      this->Detect(srcimg, ocr_result);
-      // crop image
-      std::vector<cv::Mat> img_list;
-      for (int j = 0; j < ocr_result.size(); j++) {
-        cv::Mat crop_img;
-        crop_img = fastdeploy::vision::ocr::GetRotateCropImage(
-            srcimg, ocr_result[j].boxes);
-        img_list.push_back(crop_img);
-      }
-      // cls
-      if (this->classifier != nullptr) {
-        // cls模型推理
-        this->Classify(img_list, ocr_result);
+    //一张图,会输出多个“小图片”，送给后续模型
+    // det
+    // cv::Mat* srcimg = img;
+    this->Detect(img, result);
+    std::cout << "Finish Det Prediction!" << std::endl;
+    // crop image
+    std::vector<cv::Mat> img_list;
 
-        for (int i = 0; i < img_list.size(); i++) {
-          if (ocr_result[i].cls_label % 2 == 1 &&
-              ocr_result[i].cls_score > this->classifier->cls_thresh) {
-            std::cout << "Rotate this image " << std::endl;
-            cv::rotate(img_list[i], img_list[i], 1);
-          }
+    for (int j = 0; j < (result->boxes).size(); j++) {
+      cv::Mat crop_img;
+      crop_img =
+          fastdeploy::vision::ocr::GetRotateCropImage(*img, (result->boxes)[j]);
+      // GetRotateCropImage已更改
+      img_list.push_back(crop_img);
+    }
+
+    // cls
+    if (this->classifier->initialized != 0) {
+      // cls模型 单张推理，在外for循环
+      for (int i = 0; i < img_list.size(); i++) {
+        this->Classify(&img_list[0], result);
+      }
+
+      for (int i = 0; i < img_list.size(); i++) {
+        if ((result->cls_label)[i] % 2 == 1 &&
+            (result->cls_scores)[i] > this->classifier->cls_thresh) {
+          std::cout << "Rotate this image " << std::endl;
+          cv::rotate(img_list[i], img_list[i], 1);
         }
       }
-      // rec
-      if (this->recognizer != nullptr) {
-        this->Recognize(img_list, ocr_result);
+      std::cout << "Finish Cls Prediction!" << std::endl;
+    }
+
+    // rec
+    if (this->recognizer->initialized != 0) {
+      for (int i = 0; i < img_list.size(); i++) {
+        this->Recognize(&img_list[i], result);
       }
-      ocr_results.push_back(ocr_result);
+      std::cout << "Finish Rec Prediction!" << std::endl;
     }
   }
 
-  return ocr_results;
+  return true;
 };
 
 }  // namesapce ocrsystem

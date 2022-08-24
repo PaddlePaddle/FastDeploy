@@ -24,8 +24,8 @@ namespace ocr {
 
 class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
  public:
-  // 当model_format为ONNX时，无需指定params_file
-  // 当model_format为Paddle时，则需同时指定model_file & params_file
+  DBDetector();
+
   DBDetector(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const Frontend& model_format = Frontend::PADDLE);
@@ -35,7 +35,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   // 模型预测接口，即用户调用的接口
   virtual bool Predict(cv::Mat* im,
-                       std::vector<std::vector<std::vector<int>>>& boxes);
+                       std::vector<std::vector<std::vector<int>>>* boxes);
 
   // pre&post process parameters
   int max_side_len;

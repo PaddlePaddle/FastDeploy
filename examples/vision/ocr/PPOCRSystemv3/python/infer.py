@@ -92,11 +92,6 @@ def build_rec_option(args):
 
 args = parse_arguments()
 
-# 配置runtime，加载模型
-det_runtime_option = build_det_option(args)
-cls_runtime_option = build_cls_option(args)
-rec_runtime_option = build_rec_option(args)
-
 #Det模型
 det_model_file = os.path.join(args.det_model, "inference.pdmodel")
 det_params_file = os.path.join(args.det_model, "inference.pdiparams")
@@ -108,18 +103,29 @@ rec_model_file = os.path.join(args.rec_model, "inference.pdmodel")
 rec_params_file = os.path.join(args.rec_model, "inference.pdiparams")
 rec_label_file = args.rec_label_file
 
+#默认
+det_model = fd.vision.ocr.DBDetector("")
+cls_model = fd.vision.ocr.Classifier("")
+rec_model = fd.vision.ocr.Recognizer("")
+
 #模型初始化
-det_model = fd.vision.ocr.DBDetector(
-    det_model_file, det_params_file, runtime_option=det_runtime_option)
+if (len(args.det_model) != 0):
+    det_runtime_option = build_det_option(args)
+    det_model = fd.vision.ocr.DBDetector(
+        det_model_file, det_params_file, runtime_option=det_runtime_option)
 
-cls_model = fd.vision.ocr.Classifier(
-    cls_model_file, cls_params_file, runtime_option=cls_runtime_option)
+if (len(args.cls_model) != 0):
+    cls_runtime_option = build_cls_option(args)
+    cls_model = fd.vision.ocr.Classifier(
+        cls_model_file, cls_params_file, runtime_option=cls_runtime_option)
 
-rec_model = fd.vision.ocr.Recognizer(
-    rec_model_file,
-    rec_params_file,
-    rec_label_file,
-    runtime_option=rec_runtime_option)
+if (len(args.rec_model) != 0):
+    rec_runtime_option = build_rec_option(args)
+    rec_model = fd.vision.ocr.Recognizer(
+        rec_model_file,
+        rec_params_file,
+        rec_label_file,
+        runtime_option=rec_runtime_option)
 
 ppocrsysv3 = fd.vision.ocr.PPOCRSystemv3(
     ocr_det=det_model._model,
@@ -127,15 +133,13 @@ ppocrsysv3 = fd.vision.ocr.PPOCRSystemv3(
     ocr_rec=rec_model._model)
 
 # 预测图片准备
-img_list = []
 im = cv2.imread(args.image)
-img_list.append(im)
 
 #预测并打印结果
-result = ppocrsysv3.predict(img_list)
+result = ppocrsysv3.predict(im)
 print(result)
 
 # 可视化结果
-vis_im = fd.vision.vis_ppocr(img_list[0], result[0])
+vis_im = fd.vision.vis_ppocr(im, result)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")

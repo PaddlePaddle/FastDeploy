@@ -29,7 +29,7 @@ namespace vision {
 namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat &srcimage,
-                           const std::vector<std::vector<int>> &box);
+                           const std::array<int, 8> &box);
 
 void cls_resize_img(const cv::Mat &img, cv::Mat &resize_img,
                     const std::vector<int> &rec_image_shape);

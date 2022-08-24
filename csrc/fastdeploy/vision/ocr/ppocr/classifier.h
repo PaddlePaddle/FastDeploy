@@ -24,6 +24,7 @@ namespace ocr {
 
 class FASTDEPLOY_DECL Classifier : public FastDeployModel {
  public:
+  Classifier();
   // 当model_format为ONNX时，无需指定params_file
   // 当model_format为Paddle时，则需同时指定model_file & params_file
   Classifier(const std::string& model_file, const std::string& params_file = "",
@@ -34,9 +35,7 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
   std::string ModelName() const { return "ppocr/ocr_cls"; }
 
   // 模型预测接口，即用户调用的接口
-  virtual bool Predict(const std::vector<cv::Mat>& img_list,
-                       std::vector<int>& cls_labels,
-                       std::vector<float>& cls_socres);
+  virtual bool Predict(cv::Mat* img, int& cls_labels, float& cls_socres);
 
   // pre & post parameters
   float cls_thresh;
@@ -53,14 +52,11 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
 
   // 输入图像预处理操作
   // FDTensor为预处理后的Tensor数据，传给后端进行推理
-  bool Preprocess(const std::vector<cv::Mat>& img_list, FDTensor* outputs,
-                  const std::vector<int>& cls_image_shape,
-                  const int& cur_index);
+  bool Preprocess(Mat* img, FDTensor* output);
 
   // 后端推理结果后处理，输出给用户
   // infer_result 为后端推理后的输出Tensor
-  bool Postprocess(FDTensor& infer_result, std::vector<int>& cls_labels,
-                   std::vector<float>& cls_scores, const int& cur_index);
+  bool Postprocess(FDTensor& infer_result, int& cls_labels, float& cls_scores);
 };
 
 }  // namespace ocr

@@ -36,17 +36,7 @@ std::vector<std::string> ReadDict(const std::string& path) {
   return m_vec;
 }
 
-std::vector<int> argsort(const std::vector<float>& array) {
-  const int array_len(array.size());
-  std::vector<int> array_index(array_len, 0);
-  for (int i = 0; i < array_len; ++i) array_index[i] = i;
-
-  std::sort(
-      array_index.begin(), array_index.end(),
-      [&array](int pos1, int pos2) { return (array[pos1] < array[pos2]); });
-
-  return array_index;
-}
+Recognizer::Recognizer() {}
 
 Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
@@ -100,139 +90,112 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-//预处理
-bool Recognizer::Preprocess(const std::vector<cv::Mat>& img_list,
-                            FDTensor* output,
-                            const std::vector<int>& rec_image_shape,
-                            const int& cur_index,
-                            const std::vector<int>& indices) {
-  int img_num = img_list.size();
-  int end_img_no = std::min(img_num, cur_index + rec_batch_num);
-  int batch_num = end_img_no - cur_index;
+void OcrRecognizerResizeImage(Mat* mat, float wh_ratio,
+                              const std::vector<int>& rec_image_shape) {
+  int imgC, imgH, imgW;
+  imgC = rec_image_shape[0];
+  imgH = rec_image_shape[1];
+  imgW = rec_image_shape[2];
 
+  imgW = int(imgH * wh_ratio);
+
+  float ratio = float(mat->Width()) / float(mat->Height());
+  int resize_w;
+  if (ceilf(imgH * ratio) > imgW)
+    resize_w = imgW;
+  else
+    resize_w = int(ceilf(imgH * ratio));
+
+  Resize::Run(mat, resize_w, imgH);
+
+  std::vector<float> value = {127, 127, 127};
+  Pad::Run(mat, 0, 0, 0, int(imgW - mat->Width()), value);
+}
+
+//预处理
+bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
+                            const std::vector<int>& rec_image_shape) {
   int imgH = rec_image_shape[1];
   int imgW = rec_image_shape[2];
-  float max_wh_ratio = imgW * 1.0 / imgH;
+  float wh_ratio = imgW * 1.0 / imgH;
 
-  for (int ino = cur_index; ino < end_img_no; ino++) {
-    //这个batch中的max_wh_ratio
-    int h = img_list[indices[ino]].rows;
-    int w = img_list[indices[ino]].cols;
-    float wh_ratio = w * 1.0 / h;
-    max_wh_ratio = std::max(max_wh_ratio, wh_ratio);
-  }
+  OcrRecognizerResizeImage(mat, wh_ratio, rec_image_shape);
 
-  int batch_width = imgW;
+  Normalize::Run(mat, mean, scale, true);
 
-  for (int ino = cur_index; ino < end_img_no; ino++) {
-    cv::Mat resize_img;
+  HWC2CHW::Run(mat);
+  Cast::Run(mat, "float");
 
-    crnn_resize_img(img_list[indices[ino]], resize_img, max_wh_ratio,
-                    rec_image_shape);
-    // cv::Mat to Mat
-    Mat img(resize_img);
-
-    Normalize::Run(&img, mean, scale, true);
-
-    batch_width =
-        std::max(resize_img.cols, batch_width);  //支持batch推理时要用，暂时没用
-
-    HWC2CHW::Run(&img);
-    Cast::Run(&img, "float");
-
-    img.ShareWithTensor(output);
-    output->shape.insert(output->shape.begin(), 1);
-  }
+  mat->ShareWithTensor(output);
+  output->shape.insert(output->shape.begin(), 1);
 
   return true;
 }
 
 //后处理
-bool Recognizer::Postprocess(FDTensor& infer_result, const int& cur_index,
-                             const std::vector<int>& indices,
-                             std::vector<std::string>& rec_texts,
-                             std::vector<float>& rec_text_scores) {
+bool Recognizer::Postprocess(FDTensor& infer_result, std::string& rec_texts,
+                             float& rec_text_scores) {
   // infer_result : n, c, h , w
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
   float* out_data = static_cast<float*>(infer_result.Data());
 
-  for (int m = 0; m < output_shape[0]; m++) {
-    std::string str_res;
-    int argmax_idx;
-    int last_index = 0;
-    float score = 0.f;
-    int count = 0;
-    float max_value = 0.0f;
+  std::string str_res;
+  int argmax_idx;
+  int last_index = 0;
+  float score = 0.f;
+  int count = 0;
+  float max_value = 0.0f;
 
-    for (int n = 0; n < output_shape[1]; n++) {
-      argmax_idx = int(std::distance(
-          &out_data[(m * output_shape[1] + n) * output_shape[2]],
-          std::max_element(
-              &out_data[(m * output_shape[1] + n) * output_shape[2]],
-              &out_data[(m * output_shape[1] + n + 1) * output_shape[2]])));
+  for (int n = 0; n < output_shape[1]; n++) {
+    argmax_idx = int(
+        std::distance(&out_data[n * output_shape[2]],
+                      std::max_element(&out_data[n * output_shape[2]],
+                                       &out_data[(n + 1) * output_shape[2]])));
 
-      max_value = float(*std::max_element(
-          &out_data[(m * output_shape[1] + n) * output_shape[2]],
-          &out_data[(m * output_shape[1] + n + 1) * output_shape[2]]));
+    max_value = float(*std::max_element(&out_data[n * output_shape[2]],
+                                        &out_data[(n + 1) * output_shape[2]]));
 
-      if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
-        score += max_value;
-        count += 1;
-        str_res += label_list[argmax_idx];
-      }
-      last_index = argmax_idx;
+    if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
+      score += max_value;
+      count += 1;
+      str_res += label_list[argmax_idx];
     }
-
-    score /= count;
-
-    if (std::isnan(score)) {
-      continue;
-    }
-
-    rec_texts[indices[cur_index + m]] = str_res;
-    rec_text_scores[indices[cur_index + m]] = score;
+    last_index = argmax_idx;
   }
+
+  score /= count;
+
+  rec_texts = str_res;
+  rec_text_scores = score;
 
   return true;
 }
 
 //预测
-bool Recognizer::Predict(const std::vector<cv::Mat>& img_list,
-                         std::vector<std::string>& rec_texts,
-                         std::vector<float>& rec_text_scores) {
-  int img_num = img_list.size();
-  std::vector<float> width_list;
-  for (int i = 0; i < img_num; i++) {
-    width_list.push_back(float(img_list[i].cols) / img_list[i].rows);
+bool Recognizer::Predict(cv::Mat* img, std::string& rec_texts,
+                         float& rec_text_scores) {
+  Mat mat(*img);
+
+  std::vector<FDTensor> input_tensors(1);
+
+  if (!Preprocess(&mat, &input_tensors[0], rec_image_shape)) {
+    FDERROR << "Failed to preprocess input image." << std::endl;
+    return false;
   }
-  std::vector<int> indices = argsort(width_list);
 
-  // rec_batch_num, 默认为1
-  for (int ino = 0; ino < img_num; ino += rec_batch_num) {
-    // PPOCR套件支持推理一个batch. 目前FD暂支持推理一张图
-    std::vector<FDTensor> input_tensors(1);
+  input_tensors[0].name = InputInfoOfRuntime(0).name;
+  std::vector<FDTensor> output_tensors;
 
-    if (!Preprocess(img_list, &input_tensors[0], rec_image_shape, ino,
-                    indices)) {
-      FDERROR << "Failed to preprocess input image." << std::endl;
-      return false;
-    }
+  if (!Infer(input_tensors, &output_tensors)) {
+    FDERROR << "Failed to inference." << std::endl;
+    return false;
+  }
 
-    input_tensors[0].name = InputInfoOfRuntime(0).name;
-    std::vector<FDTensor> output_tensors;
-
-    if (!Infer(input_tensors, &output_tensors)) {
-      FDERROR << "Failed to inference." << std::endl;
-      return false;
-    }
-
-    if (!Postprocess(output_tensors[0], ino, indices, rec_texts,
-                     rec_text_scores)) {
-      FDERROR << "Failed to post process." << std::endl;
-      return false;
-    }
+  if (!Postprocess(output_tensors[0], rec_texts, rec_text_scores)) {
+    FDERROR << "Failed to post process." << std::endl;
+    return false;
   }
 
   return true;

@@ -39,16 +39,12 @@ class FASTDEPLOY_DECL PPOCRSystemv3 : public FastDeployModel {
   fastdeploy::vision::ocr::Classifier* classifier = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer = nullptr;
 
-  std::vector<std::vector<fastdeploy::vision::OCRResult>> Predict(
-      std::vector<cv::Mat> cv_all_imgs);
+  bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 
  private:
-  void Detect(cv::Mat img,
-              std::vector<fastdeploy::vision::OCRResult>& ocr_results);
-  void Recognize(std::vector<cv::Mat> img_list,
-                 std::vector<fastdeploy::vision::OCRResult>& ocr_results);
-  void Classify(std::vector<cv::Mat> img_list,
-                std::vector<fastdeploy::vision::OCRResult>& ocr_results);
+  void Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  void Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  void Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 };
 
 }  // namespace ocrsystem

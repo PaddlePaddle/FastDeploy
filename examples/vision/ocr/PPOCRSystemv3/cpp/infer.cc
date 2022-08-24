@@ -34,76 +34,67 @@ void CpuInfer(const std::string& det_model_dir,
   auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
   auto rec_label = rec_label_file;
 
-  std::string vis_path = "./vis.jpg";
+  fastdeploy::vision::ocr::DBDetector det_model;
+  fastdeploy::vision::ocr::Classifier cls_model;
+  fastdeploy::vision::ocr::Recognizer rec_model;
 
-  //准备runtime
-  auto det_option = fastdeploy::RuntimeOption();
-  det_option.UseCpu();
-  auto cls_option = fastdeploy::RuntimeOption();  //只可用PaddleBackend
-  cls_option.UseCpu();
-  auto rec_option = fastdeploy::RuntimeOption();
-  rec_option.UseCpu();
+  if (!det_model_dir.empty()) {
+    auto det_option = fastdeploy::RuntimeOption();
+    det_option.UseCpu();
+    det_model = fastdeploy::vision::ocr::DBDetector(
+        det_model_file, det_params_file, det_option);
 
-  //准备模型
-  auto det_model = fastdeploy::vision::ocr::DBDetector(
-      det_model_file, det_params_file, det_option);
-  if (!det_model.Initialized()) {
-    std::cerr << "Failed to initialize det_model." << std::endl;
-    return;
+    if (!det_model.Initialized()) {
+      std::cerr << "Failed to initialize det_model." << std::endl;
+      return;
+    }
   }
-  auto cls_model = fastdeploy::vision::ocr::Classifier(
-      cls_model_file, cls_params_file, cls_option);
-  if (!cls_model.Initialized()) {
-    std::cerr << "Failed to initialize cls_model." << std::endl;
-    return;
+
+  if (!cls_model_dir.empty()) {
+    auto cls_option = fastdeploy::RuntimeOption();
+    cls_option.UseCpu();
+    cls_model = fastdeploy::vision::ocr::Classifier(
+        cls_model_file, cls_params_file, cls_option);
+
+    if (!cls_model.Initialized()) {
+      std::cerr << "Failed to initialize cls_model." << std::endl;
+      return;
+    }
   }
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(
-      rec_model_file, rec_params_file, rec_label, rec_option);
-  if (!rec_model.Initialized()) {
-    std::cerr << "Failed to initialize rec_model." << std::endl;
-    return;
+
+  if (!rec_model_dir.empty()) {
+    auto rec_option = fastdeploy::RuntimeOption();
+    rec_option.UseCpu();
+    rec_model = fastdeploy::vision::ocr::Recognizer(
+        rec_model_file, rec_params_file, rec_label, rec_option);
+
+    if (!rec_model.Initialized()) {
+      std::cerr << "Failed to initialize rec_model." << std::endl;
+      return;
+    }
   }
 
   auto ocrv3_app = fastdeploy::application::ocrsystem::PPOCRSystemv3(
       &det_model, &cls_model, &rec_model);
 
-  //准备输入
-  std::vector<cv::String> cv_all_img_names;
-  cv::glob(image_file, cv_all_img_names);
-  std::cout << "total images num: " << cv_all_img_names.size() << std::endl;
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  std::vector<cv::Mat> img_list;
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    cv::Mat srcimg = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-
-    if (!srcimg.data) {
-      std::cerr << "[ERROR] image read failed! image path: "
-                << cv_all_img_names[i] << std::endl;
-      std::exit(1);
-    }
-    img_list.push_back(srcimg);
-  }
-
+  fastdeploy::vision::OCRResult res;
   //开始预测
-  std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-      ocrv3_app.Predict(img_list);
-
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    std::cout << "Image name is: " << cv_all_img_names[i] << std::endl;
-
-    //输出预测信息
-    for (int j = 0; j < ocr_results[i].size(); ++j) {
-      std::cout << ocr_results[i][j].Str() << std::endl;
-    }
-
-    //可视化
-    cv::Mat im_bak = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-    auto vis_img =
-        fastdeploy::vision::Visualize::VisOcr(im_bak, ocr_results[i]);
-    cv::imwrite(vis_path, vis_img);
-    std::cout << "Ocr Predict Done! Visualized image is saved: " << vis_path
-              << std::endl;
+  if (!ocrv3_app.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
   }
+
+  //输出预测信息
+  std::cout << res.Str() << std::endl;
+
+  //可视化
+  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
+
+  cv::imwrite("vis_result.jpg", vis_img);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 void GpuInfer(const std::string& det_model_dir,
@@ -121,76 +112,67 @@ void GpuInfer(const std::string& det_model_dir,
   auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
   auto rec_label = rec_label_file;
 
-  std::string vis_path = "./vis.jpg";
-
-  //准备runtime
-  auto det_option = fastdeploy::RuntimeOption();
-  det_option.UseGpu();
-  auto cls_option = fastdeploy::RuntimeOption();
-  cls_option.UseGpu();
-  auto rec_option = fastdeploy::RuntimeOption();
-  rec_option.UseGpu();
+  fastdeploy::vision::ocr::DBDetector det_model;
+  fastdeploy::vision::ocr::Classifier cls_model;
+  fastdeploy::vision::ocr::Recognizer rec_model;
 
   //准备模型
-  auto det_model = fastdeploy::vision::ocr::DBDetector(
-      det_model_file, det_params_file, det_option);
-  if (!det_model.Initialized()) {
-    std::cerr << "Failed to initialize det_model." << std::endl;
-    return;
+  if (!det_model_dir.empty()) {
+    auto det_option = fastdeploy::RuntimeOption();
+    det_option.UseGpu();
+    det_model = fastdeploy::vision::ocr::DBDetector(
+        det_model_file, det_params_file, det_option);
+
+    if (!det_model.Initialized()) {
+      std::cerr << "Failed to initialize det_model." << std::endl;
+      return;
+    }
   }
-  auto cls_model = fastdeploy::vision::ocr::Classifier(
-      cls_model_file, cls_params_file, cls_option);
-  if (!cls_model.Initialized()) {
-    std::cerr << "Failed to initialize cls_model." << std::endl;
-    return;
+
+  if (!cls_model_dir.empty()) {
+    auto cls_option = fastdeploy::RuntimeOption();  //只可用PaddleBackend
+    cls_option.UseGpu();
+    cls_model = fastdeploy::vision::ocr::Classifier(
+        cls_model_file, cls_params_file, cls_option);
+
+    if (!cls_model.Initialized()) {
+      std::cerr << "Failed to initialize cls_model." << std::endl;
+      return;
+    }
   }
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(
-      rec_model_file, rec_params_file, rec_label, rec_option);
-  if (!rec_model.Initialized()) {
-    std::cerr << "Failed to initialize rec_model." << std::endl;
-    return;
+
+  if (!rec_model_dir.empty()) {
+    auto rec_option = fastdeploy::RuntimeOption();
+    rec_option.UseGpu();
+    rec_model = fastdeploy::vision::ocr::Recognizer(
+        rec_model_file, rec_params_file, rec_label, rec_option);
+
+    if (!rec_model.Initialized()) {
+      std::cerr << "Failed to initialize rec_model." << std::endl;
+      return;
+    }
   }
 
   auto ocrv3_app = fastdeploy::application::ocrsystem::PPOCRSystemv3(
       &det_model, &cls_model, &rec_model);
 
-  //准备输入
-  std::vector<cv::String> cv_all_img_names;
-  cv::glob(image_file, cv_all_img_names);
-  std::cout << "total images num: " << cv_all_img_names.size() << std::endl;
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  std::vector<cv::Mat> img_list;
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    cv::Mat srcimg = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-
-    if (!srcimg.data) {
-      std::cerr << "[ERROR] image read failed! image path: "
-                << cv_all_img_names[i] << std::endl;
-      std::exit(1);
-    }
-    img_list.push_back(srcimg);
-  }
-
+  fastdeploy::vision::OCRResult res;
   //开始预测
-  std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-      ocrv3_app.Predict(img_list);
-
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    std::cout << "Image name is: " << cv_all_img_names[i] << std::endl;
-
-    //输出预测信息
-    for (int j = 0; j < ocr_results[i].size(); ++j) {
-      std::cout << ocr_results[i][j].Str() << std::endl;
-    }
-
-    //可视化
-    cv::Mat im_bak = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-    auto vis_img =
-        fastdeploy::vision::Visualize::VisOcr(im_bak, ocr_results[i]);
-    cv::imwrite(vis_path, vis_img);
-    std::cout << "Ocr Predict Done! Visualized image is saved: " << vis_path
-              << std::endl;
+  if (!ocrv3_app.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
   }
+  //输出预测信息
+  std::cout << res.Str() << std::endl;
+
+  //可视化
+  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
+
+  cv::imwrite("vis_result.jpg", vis_img);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 void TrtInfer(const std::string& det_model_dir,
@@ -208,86 +190,78 @@ void TrtInfer(const std::string& det_model_dir,
   auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
   auto rec_label = rec_label_file;
 
-  std::string vis_path = "./vis.jpg";
-
-  //准备runtime
-  auto det_option = fastdeploy::RuntimeOption();
-  det_option.UseGpu();
-  det_option.UseTrtBackend();
-  det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
-                              {1, 3, 960, 960});
-
-  auto cls_option = fastdeploy::RuntimeOption();
-  cls_option.UseGpu();
-  cls_option.UseTrtBackend();
-  cls_option.SetTrtInputShape("x", {1, 3, 32, 100});
-
-  auto rec_option = fastdeploy::RuntimeOption();
-  rec_option.UseGpu();
-  rec_option.UseTrtBackend();
-  rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320},
-                              {1, 3, 48, 2000});
+  fastdeploy::vision::ocr::DBDetector det_model;
+  fastdeploy::vision::ocr::Classifier cls_model;
+  fastdeploy::vision::ocr::Recognizer rec_model;
 
   //准备模型
-  auto det_model = fastdeploy::vision::ocr::DBDetector(
-      det_model_file, det_params_file, det_option);
-  if (!det_model.Initialized()) {
-    std::cerr << "Failed to initialize det_model." << std::endl;
-    return;
+  if (!det_model_dir.empty()) {
+    auto det_option = fastdeploy::RuntimeOption();
+    det_option.UseGpu();
+    det_option.UseTrtBackend();
+    det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
+                                {1, 3, 960, 960});
+
+    det_model = fastdeploy::vision::ocr::DBDetector(
+        det_model_file, det_params_file, det_option);
+
+    if (!det_model.Initialized()) {
+      std::cerr << "Failed to initialize det_model." << std::endl;
+      return;
+    }
   }
-  auto cls_model = fastdeploy::vision::ocr::Classifier(
-      cls_model_file, cls_params_file, cls_option);
-  if (!cls_model.Initialized()) {
-    std::cerr << "Failed to initialize cls_model." << std::endl;
-    return;
+
+  if (!cls_model_dir.empty()) {
+    auto cls_option = fastdeploy::RuntimeOption();
+    cls_option.UseGpu();
+    cls_option.UseTrtBackend();
+    cls_option.SetTrtInputShape("x", {1, 3, 48, 192});
+
+    cls_model = fastdeploy::vision::ocr::Classifier(
+        cls_model_file, cls_params_file, cls_option);
+
+    if (!cls_model.Initialized()) {
+      std::cerr << "Failed to initialize cls_model." << std::endl;
+      return;
+    }
   }
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(
-      rec_model_file, rec_params_file, rec_label, rec_option);
-  if (!rec_model.Initialized()) {
-    std::cerr << "Failed to initialize rec_model." << std::endl;
-    return;
+
+  if (!rec_model_dir.empty()) {
+    auto rec_option = fastdeploy::RuntimeOption();
+    rec_option.UseGpu();
+    rec_option.UseTrtBackend();
+    rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320},
+                                {1, 3, 48, 2000});
+
+    rec_model = fastdeploy::vision::ocr::Recognizer(
+        rec_model_file, rec_params_file, rec_label, rec_option);
+
+    if (!rec_model.Initialized()) {
+      std::cerr << "Failed to initialize rec_model." << std::endl;
+      return;
+    }
   }
 
   auto ocrv3_app = fastdeploy::application::ocrsystem::PPOCRSystemv3(
       &det_model, &cls_model, &rec_model);
 
-  //准备输入
-  std::vector<cv::String> cv_all_img_names;
-  cv::glob(image_file, cv_all_img_names);
-  std::cout << "total images num: " << cv_all_img_names.size() << std::endl;
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
-  std::vector<cv::Mat> img_list;
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    cv::Mat srcimg = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-
-    if (!srcimg.data) {
-      std::cerr << "[ERROR] image read failed! image path: "
-                << cv_all_img_names[i] << std::endl;
-      std::exit(1);
-    }
-    img_list.push_back(srcimg);
-  }
-
+  fastdeploy::vision::OCRResult res;
   //开始预测
-  std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-      ocrv3_app.Predict(img_list);
-
-  for (int i = 0; i < cv_all_img_names.size(); ++i) {
-    std::cout << "Image name is: " << cv_all_img_names[i] << std::endl;
-
-    //输出预测信息
-    for (int j = 0; j < ocr_results[i].size(); ++j) {
-      std::cout << ocr_results[i][j].Str() << std::endl;
-    }
-
-    //可视化
-    cv::Mat im_bak = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-    auto vis_img =
-        fastdeploy::vision::Visualize::VisOcr(im_bak, ocr_results[i]);
-    cv::imwrite(vis_path, vis_img);
-    std::cout << "Ocr Predict Done! Visualized image is saved: " << vis_path
-              << std::endl;
+  if (!ocrv3_app.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
   }
+  //输出预测信息
+  std::cout << res.Str() << std::endl;
+
+  //可视化
+  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
+
+  cv::imwrite("vis_result.jpg", vis_img);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {

@@ -21,6 +21,9 @@ namespace vision {
 namespace ocr {
 
 //构造
+
+DBDetector::DBDetector() {}
+
 DBDetector::DBDetector(const std::string& model_file,
                        const std::string& params_file,
                        const RuntimeOption& custom_option,
@@ -153,7 +156,7 @@ bool DBDetector::Postprocess(
 
 //预测
 bool DBDetector::Predict(
-    cv::Mat* img, std::vector<std::vector<std::vector<int>>>& boxes_result) {
+    cv::Mat* img, std::vector<std::vector<std::vector<int>>>* boxes_result) {
   Mat mat(*img);
 
   std::vector<FDTensor> input_tensors(1);
@@ -178,7 +181,7 @@ bool DBDetector::Predict(
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], &boxes_result, im_info)) {
+  if (!Postprocess(output_tensors[0], boxes_result, im_info)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

@@ -61,16 +61,19 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
 };
 
 struct FASTDEPLOY_DECL OCRResult : public BaseResult {
-  std::vector<std::vector<int>> boxes;
-  std::string text;
-  float score = -1.0;
-  float cls_score;
-  int cls_label = -1;
+  std::vector<std::array<int, 8>> boxes;
+
+  std::vector<std::string> text;
+  std::vector<float> rec_scores;
+
+  std::vector<float> cls_scores;
+  std::vector<int32_t> cls_label;
 
   ResultType type = ResultType::OCR;
 
   std::string Str();
 };
+
 struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   // box: xmin, ymin, xmax, ymax
   std::vector<std::array<float, 4>> boxes;

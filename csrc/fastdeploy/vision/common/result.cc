@@ -303,31 +303,66 @@ std::string MattingResult::Str() {
 }
 
 std::string OCRResult::Str() {
-  std::string out;
-  // det_result
+  std::string no_result;
   if (boxes.size() > 0) {
-    out = out + "det boxes: [";
+    std::string out;
     for (int n = 0; n < boxes.size(); n++) {
-      out = out + "[" + std::to_string(boxes[n][0]) + "," +
-            std::to_string(boxes[n][1]) + "]";
-      if (n != boxes.size() - 1) {
-        out = out + ",";
+      out = out + "det boxes: [";
+      for (int i = 0; i < 4; i++) {
+        out = out + "[" + std::to_string(boxes[n][i * 2]) + "," +
+              std::to_string(boxes[n][i * 2 + 1]) + "]";
+
+        if (i != 3) {
+          out = out + ",";
+        }
       }
+      out = out + "]";
+
+      if (rec_scores.size() > 0) {
+        out = out + "rec text: " + text[n] + " rec scores:" +
+              std::to_string(rec_scores[n]) + " ";
+      }
+      if (cls_label.size() > 0) {
+        out = out + "cls label: " + std::to_string(cls_label[n]) +
+              " cls score: " + std::to_string(cls_scores[n]);
+      }
+      out = out + "\n";
     }
-    out = out + "]";
-  }
-  // rec_result
-  if (score != -1.0) {
-    out = out + "rec text: " + text + " rec scores:" + std::to_string(score) +
-          " ";
-  }
-  // cls_result
-  if (cls_label != -1) {
-    out = out + "cls label: " + std::to_string(cls_label) + " cls score: " +
-          std::to_string(cls_score) + "\n";
+    return out;
+
+  } else if (boxes.size() == 0 && rec_scores.size() > 0 &&
+             cls_scores.size() > 0) {
+    std::string out;
+    for (int i = 0; i < rec_scores.size(); i++) {
+      out = out + "rec text: " + text[i] + " rec scores:" +
+            std::to_string(rec_scores[i]) + " ";
+      out = out + "cls label: " + std::to_string(cls_label[i]) +
+            " cls score: " + std::to_string(cls_scores[i]);
+      out = out + "\n";
+    }
+    return out;
+  } else if (boxes.size() == 0 && rec_scores.size() == 0 &&
+             cls_scores.size() > 0) {
+    std::string out;
+    for (int i = 0; i < cls_scores.size(); i++) {
+      out = out + "cls label: " + std::to_string(cls_label[i]) +
+            " cls score: " + std::to_string(cls_scores[i]);
+      out = out + "\n";
+    }
+    return out;
+  } else if (boxes.size() == 0 && rec_scores.size() > 0 &&
+             cls_scores.size() == 0) {
+    std::string out;
+    for (int i = 0; i < rec_scores.size(); i++) {
+      out = out + "rec text: " + text[i] + " rec scores:" +
+            std::to_string(rec_scores[i]) + " ";
+      out = out + "\n";
+    }
+    return out;
   }
 
-  return out;
+  no_result = no_result + "No Results!";
+  return no_result;
 }
 
 }  // namespace vision

@@ -28,10 +28,13 @@ class DBDetector(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(DBDetector, self).__init__(runtime_option)
 
-        self._model = C.vision.ocr.DBDetector(
-            model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "DBDetector initialize failed."
+        if (len(model_file) == 0):
+            self._model = C.vision.ocr.DBDetector()
+        else:
+            self._model = C.vision.ocr.DBDetector(
+                model_file, params_file, self._runtime_option, model_format)
+            # 通过self.initialized判断整个模型的初始化是否成功
+            assert self.initialized, "DBDetector initialize failed."
 
     # 一些跟DBDetector模型有关的属性封装
     @property
@@ -120,10 +123,13 @@ class Classifier(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(Classifier, self).__init__(runtime_option)
 
-        self._model = C.vision.ocr.Classifier(
-            model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "Classifier initialize failed."
+        if (len(model_file) == 0):
+            self._model = C.vision.ocr.Classifier()
+        else:
+            self._model = C.vision.ocr.Classifier(
+                model_file, params_file, self._runtime_option, model_format)
+            # 通过self.initialized判断整个模型的初始化是否成功
+            assert self.initialized, "Classifier initialize failed."
 
     @property
     def cls_thresh(self):
@@ -169,11 +175,14 @@ class Recognizer(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(Recognizer, self).__init__(runtime_option)
 
-        self._model = C.vision.ocr.Recognizer(model_file, params_file,
-                                              label_path, self._runtime_option,
-                                              model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "Recognizer initialize failed."
+        if (len(model_file) == 0):
+            self._model = C.vision.ocr.Recognizer()
+        else:
+            self._model = C.vision.ocr.Recognizer(
+                model_file, params_file, label_path, self._runtime_option,
+                model_format)
+            # 通过self.initialized判断整个模型的初始化是否成功
+            assert self.initialized, "Recognizer initialize failed."
 
     @property
     def rec_img_h(self):
@@ -212,5 +221,5 @@ class PPOCRSystemv3(FastDeployModel):
 
         self._model = C.vision.ocr.PPOCRSystemv3(ocr_det, ocr_cls, ocr_rec)
 
-    def predict(self, cv_all_img_names):
-        return self._model.predict(cv_all_img_names)
+    def predict(self, input_image):
+        return self._model.predict(input_image)

@@ -25,17 +25,11 @@ void BindPPOCRSystemv3(pybind11::module& m) {
                           fastdeploy::vision::ocr::Recognizer*>())
 
       .def("predict", [](application::ocrsystem::PPOCRSystemv3& self,
-                         std::vector<pybind11::array>& data_list) {
+                         pybind11::array& data) {
 
-        std::vector<cv::Mat> img_list;
-
-        for (int i = 0; i < data_list.size(); i++) {
-          auto mat = PyArrayToCvMat(data_list[i]);
-          img_list.push_back(mat);
-        }
-
-        std::vector<std::vector<vision::OCRResult>> res(self.Predict(img_list));
-
+        auto mat = PyArrayToCvMat(data);
+        vision::OCRResult res;
+        self.Predict(&mat, &res);
         return res;
       });
 }

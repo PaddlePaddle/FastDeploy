@@ -20,14 +20,17 @@
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat Visualize::VisOcr(const cv::Mat &im,
-                          const std::vector<OCRResult> &ocr_result) {
+cv::Mat Visualize::VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
   auto vis_im = im.clone();
-  for (int n = 0; n < ocr_result.size(); n++) {
+
+  for (int n = 0; n < ocr_result.boxes.size(); n++) {
+    //遍历每一个盒子
     cv::Point rook_points[4];
-    for (int m = 0; m < ocr_result[n].boxes.size(); m++) {
-      rook_points[m] = cv::Point(int(ocr_result[n].boxes[m][0]),
-                                 int(ocr_result[n].boxes[m][1]));
+
+    for (int m = 0; m < 4; m++) {
+      //对每一个盒子 array<float,8>
+      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m * 2]),
+                                 int(ocr_result.boxes[n][m * 2 + 1]));
     }
 
     const cv::Point *ppt[1] = {rook_points};
