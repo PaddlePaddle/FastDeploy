@@ -10,13 +10,25 @@
 以Linux上uie-base模型推理为例，在本目录执行如下命令即可完成编译测试。
 
 ```
-#下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/text/uie/cpp
+# UIE目前还未发布，当前需开发者自行编译FastDeploy，通过如下脚本编译得到部署库fastdeploy-linux-x64-dev
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy
+mkdir build && cd build
+cmake .. -DENABLE_ORT_BACKEND=ON  \
+               -DENABLE_VISION=ON \
+               -DENABLE_PADDLE_BACKEND=ON \
+               -DENABLE_TEXT=ON \
+               -DWITH_GPU=ON \
+               -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-linux-x64-gpu-dev
+
+make -j8
+make install
+
+# 编译模型examples代码（SDK中包含了examples代码）
+cd ../examples/text/uie/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../fastdeploy-linux-x64-gpu-0.2.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../build/fastdeploy-linux-x64-gpu-dev
 make -j
 
 # 下载uie-base模型以及词表
