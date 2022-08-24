@@ -70,6 +70,9 @@ class RuntimeOption:
     def use_paddle_backend(self):
         return self._option.use_paddle_backend()
 
+    def use_poros_backend(self):
+        return self._option.use_poros_backend()
+
     def use_ort_backend(self):
         return self._option.use_ort_backend()
 

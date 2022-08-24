@@ -19,10 +19,10 @@ set(POROS_SOURCE_DIR
     ${THIRD_PARTY_PATH}/poros/src/${POROS_PROJECT})
 set(POROS_INSTALL_DIR ${THIRD_PARTY_PATH}/install/poros)
 set(POROS_INC_DIR
-    "${POROS_INSTALL_DIR}/poros/include"
+    "${POROS_INSTALL_DIR}/include"
     CACHE PATH "poros include directory." FORCE)
 set(POROS_LIB_DIR
-    "${POROS_INSTALL_DIR}/poros/lib/"
+    "${POROS_INSTALL_DIR}/lib/"
     CACHE PATH "poros lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${POROS_LIB_DIR}")
@@ -34,7 +34,7 @@ elseif(APPLE)
   message(FATAL_ERROR "Poros Backend doesn't support Mac OSX now.")
 else()
   set(POROS_COMPILE_LIB
-      "${POROS_INSTALL_DIR}/poros/lib/libporos.so"
+      "${POROS_INSTALL_DIR}/lib/libporos.so"
       CACHE FILEPATH "poros compile library." FORCE)
 endif(WIN32)
 
