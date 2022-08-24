@@ -7,7 +7,7 @@
 
 本目录下提供`infer.py`快速完成YOLOR在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/yolor/python/
@@ -30,7 +30,7 @@ python infer.py --model yolor-p6-paper-541-640-640.onnx --image 000000014439.jpg
 
 ## YOLOR Python接口
 
-```
+```python
 fastdeploy.vision.detection.YOLOR(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
@@ -45,7 +45,7 @@ YOLOR模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ### predict函数
 
-> ```
+> ```python
 > YOLOR.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >

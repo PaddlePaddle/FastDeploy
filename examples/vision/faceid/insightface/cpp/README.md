@@ -9,10 +9,10 @@
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
@@ -40,11 +40,14 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG">
 </div>
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## InsightFace C++接口
 
 ### ArcFace类
 
-```
+```c++
 fastdeploy::vision::faceid::ArcFace(
         const string& model_file,
         const string& params_file = "",
@@ -56,7 +59,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 
 ### CosFace类
 
-```
+```c++
 fastdeploy::vision::faceid::CosFace(
         const string& model_file,
         const string& params_file = "",
@@ -68,7 +71,7 @@ CosFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 
 ### PartialFC类
 
-```
+```c++
 fastdeploy::vision::faceid::PartialFC(
         const string& model_file,
         const string& params_file = "",
@@ -80,7 +83,7 @@ PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ### VPL类
 
-```
+```c++
 fastdeploy::vision::faceid::VPL(
         const string& model_file,
         const string& params_file = "",
@@ -98,7 +101,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

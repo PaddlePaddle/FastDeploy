@@ -9,7 +9,7 @@
 - TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
 
 ## 编译C++
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop
@@ -23,7 +23,7 @@ make install
 编译后的预测库即在当前目录下的`fastdeploy-0.0.3`
 
 ## 编译Python安装包
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop

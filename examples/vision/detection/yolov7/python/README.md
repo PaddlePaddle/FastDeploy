@@ -7,7 +7,7 @@
 
 本目录下提供`infer.py`快速完成YOLOv7在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/yolov7/python/
@@ -30,7 +30,7 @@ python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu --use_
 
 ## YOLOv7 Python接口
 
-```
+```python
 fastdeploy.vision.detection.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
@@ -45,7 +45,7 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ### predict函数
 
-> ```
+> ```python
 > YOLOv7.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >

@@ -11,7 +11,7 @@
 
   访问[YOLOR](https://github.com/WongKinYiu/yolor)官方github库，按照指引下载安装，下载`yolor.pt` 模型，利用 `models/export.py` 得到`onnx`格式文件。如果您导出的`onnx`模型出现精度不达标或者是数据维度的问题，可以参考[yolor#32](https://github.com/WongKinYiu/yolor/issues/32)的解决办法
 
-  ```
+  ```bash
   #下载yolor模型文件
   wget https://github.com/WongKinYiu/yolor/releases/download/weights/yolor-d6-paper-570.pt
 
