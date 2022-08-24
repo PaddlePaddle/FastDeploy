@@ -30,11 +30,12 @@ TensorInfo PorosBackend::GetOutputInfo(int index) {
 
 void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.device = option.use_gpu ? baidu::mirana::poros::Device::GPU : baidu::mirana::poros::Device::CPU;
-    _options.is_dynamic = option.trt_option.max_shape.empty() ? false : true;
     _options.long_to_int = option.long_to_int;
     _options.use_nvidia_tf32 = option.use_nvidia_tf32;
     _options.device_id = option.gpu_id;
     _options.unconst_ops_thres = option.unconst_ops_thres;
+#ifdef ENABLE_TRT_BACKEND
+    _options.is_dynamic = option.trt_option.max_shape.empty() ? false : true;
     _options.max_workspace_size = option.trt_option.max_workspace_size;
     _options.use_fp16 = option.trt_option.enable_fp16;
     if (_options.is_dynamic) {
@@ -82,9 +83,15 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         }
         //min
         std::vector<torch::jit::IValue> inputs_min;    
-        inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+        if (option.use_gpu) {
+            inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+        } else{
+            inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+        }
         _prewarm_datas.push_back(inputs_min);
     }
+#endif
+    return;
 }
 
 bool PorosBackend::InitFromTorchscript(const std::string& model_file, const PorosBackendOption& option) {
@@ -152,6 +159,7 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     for (size_t i = 0; i < poros_outputs.size(); ++i) {
         CopyTensorToCpu(poros_outputs[i], &((*outputs)[i]));
     }
+    return true;
 }
 
 }  // namespace fastdeploy
