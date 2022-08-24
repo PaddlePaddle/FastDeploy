@@ -45,7 +45,8 @@ set(ICUDT_LIB "${FASTERTOKENIZER_THIRD_LIB_DIR}/icudt.lib")
 set(ICUUC_LIB "${FASTERTOKENIZER_THIRD_LIB_DIR}/icuuc.lib")
 
 elseif(APPLE)
-# Not support apple so far.
+set(FASTERTOKENIZER_COMPILE_LIB "${FASTERTOKENIZER_LIB_DIR}/libcore_tokenizers.dylib"
+    CACHE FILEPATH "faster_tokenizer compile library." FORCE)
 else()
 
 set(FASTERTOKENIZER_COMPILE_LIB "${FASTERTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
@@ -63,6 +64,11 @@ if(WIN32)
     set(FASTERTOKENIZER_FILE "faster_tokenizer-win-x86-${FASTERTOKENIZER_VERSION}.zip")
   endif()
 elseif(APPLE)
+  if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
+    set(FASTERTOKENIZER_FILE "faster_tokenizer-osx-arm64-${FASTERTOKENIZER_VERSION}.tgz")
+  else()
+    set(FASTERTOKENIZER_FILE "faster_tokenizer-osx-x86_64-${FASTERTOKENIZER_VERSION}.tgz")
+  endif()
 else()
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(FASTERTOKENIZER_FILE "faster_tokenizer-linux-aarch64-${FASTERTOKENIZER_VERSION}.tgz")
