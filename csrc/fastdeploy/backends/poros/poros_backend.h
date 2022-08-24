@@ -20,13 +20,13 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#ifdef ENABLE_TRT_BACKEND
+#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#endif
 
 #include "fastdeploy/backends/poros/common/compile.h"
 #include "fastdeploy/backends/poros/common/poros_module.h"
 
-#ifdef ENABLE_TRT_BACKEND
-#include "fastdeploy/backends/tensorrt/trt_backend.h"
-#endif
 
 namespace fastdeploy {
 
