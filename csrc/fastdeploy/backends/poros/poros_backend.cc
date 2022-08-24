@@ -42,14 +42,14 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         std::vector<int64_t> min_shape;
         std::vector<int64_t> opt_shape;
         std::vector<int64_t> max_shape;
-        for (auto iter:option.trt_option.min_shape) {
-            auto max_iter = option.trt_option.max_shape.find(iter.first);
-            auto opt_iter = option.trt_option.opt_shape.find(iter.first);
-            FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find " + iter.first + " in TrtBackendOption::max_shape.");
-            FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find " + iter.first + " in TrtBackendOption::opt_shape.");
-            min_shape.assign(iter.second.begin(), iter.second.end());
-            opt_shape.assign(opt_iter.second.begin(), opt_iter.second.end());
-            max_shape.assign(max_iter.second.begin(), max_iter.second.end());
+        for (auto iter = option.trt_option.min_shape.begin(); iter != option.trt_option.min_shape.end(); ++iter) {
+            auto max_iter = option.trt_option.max_shape.find(iter->first);
+            auto opt_iter = option.trt_option.opt_shape.find(iter->first);
+            FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::max_shape.");
+            FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::opt_shape.");
+            min_shape.assign(iter->second.begin(), iter->second.end());
+            opt_shape.assign(opt_iter->second.begin(), opt_iter->second.end());
+            max_shape.assign(max_iter->second.begin(), max_iter->second.end());
         }
         //min
         std::vector<torch::jit::IValue> inputs_min;
