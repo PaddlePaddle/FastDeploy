@@ -329,11 +329,11 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
     } else {
       all_element_num = x_dims[axis];
     }
-    FDASSERT(all_element_num <= std::numeric_limits<int>::max(),
+    FDASSERT(all_element_num <= (std::numeric_limits<int>::max)(),
              "The element num of the argmin/argmax input at axis is "
              "%lld, is larger than int32 maximum value:%d, you must "
              "set the dtype of argmin/argmax to 'int64'.",
-             all_element_num, std::numeric_limits<int>::max());
+             all_element_num, (std::numeric_limits<int>::max)());
   }
   std::vector<int64_t> vec;
   if (flatten) {
