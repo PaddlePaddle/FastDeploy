@@ -10,7 +10,7 @@
 
 ## 导出ONNX模型
 
-```
+```bash
 # 下载yolov7模型文件
 wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 
