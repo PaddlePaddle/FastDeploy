@@ -76,6 +76,9 @@ class RuntimeOption:
     def use_trt_backend(self):
         return self._option.use_trt_backend()
 
+    def use_openvino_backend(self):
+        return self._option.use_openvino_backend()
+
     def enable_paddle_mkldnn(self):
         return self._option.enable_paddle_mkldnn()
 

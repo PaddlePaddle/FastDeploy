@@ -29,7 +29,11 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
-  config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
+  if (option.cpu_thread_num <= 0) {
+    config_.SetCpuMathLibraryNumThreads(8);
+  } else {
+    config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
+  }
 }
 
 bool PaddleBackend::InitFromPaddle(const std::string& model_file,
