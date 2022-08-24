@@ -420,8 +420,9 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         print(command)
         # The sw_64 not suppot patchelf, so we just disable that.
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
-            assert os.system(
-                command) == 0, "patchelf {} failed, the command: {}".format(
+            assert subprocess.Popen(
+                command,
+                shell=True) != 0, "patchelf {} failed, the command: {}".format(
                     command, pybind_so_file)
     elif platform.system().lower() == "darwin":
         pre_commands = [
@@ -450,12 +451,13 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                                             path)) + pybind_so_file)
         for command in pre_commands:
             try:
-                os.system(command)
+                subprocess.Popen(command, shell=True)
             except:
                 print("Skip execute command: " + command)
         for command in commands:
-            assert os.system(
-                command) == 0, "command execute failed! command: {}".format(
+            assert subprocess.Popen(
+                command,
+                shell=True) != 0, "command execute failed! command: {}".format(
                     command)
 
     all_files = get_all_files(os.path.join(PACKAGE_NAME, "libs"))
