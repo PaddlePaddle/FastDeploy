@@ -150,10 +150,14 @@ Schema::Schema(
 UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
-                   size_t max_length, const std::vector<std::string>& schema)
+                   size_t max_length, const std::vector<std::string>& schema,
+                   const fastdeploy::RuntimeOption& custom_option,
+                   const fastdeploy::Frontend& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
+  runtime_option_ = custom_option;
+  runtime_option_.model_format = model_format;
   runtime_option_.SetModelPath(model_file, params_file);
   runtime_.Init(runtime_option_);
   SetSchema(schema);
@@ -165,10 +169,14 @@ UIEModel::UIEModel(const std::string& model_file,
 UIEModel::UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
-    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema)
+    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema,
+    const fastdeploy::RuntimeOption& custom_option,
+    const fastdeploy::Frontend& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
+  runtime_option_ = custom_option;
+  runtime_option_.model_format = model_format;
   runtime_option_.SetModelPath(model_file, params_file);
   runtime_.Init(runtime_option_);
   SetSchema(schema);

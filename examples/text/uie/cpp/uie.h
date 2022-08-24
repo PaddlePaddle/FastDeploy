@@ -84,13 +84,20 @@ struct Schema {
 
 struct UIEModel {
  public:
-  UIEModel(const std::string& model_file, const std::string& params_file,
-           const std::string& vocab_file, float position_prob,
-           size_t max_length, const std::vector<std::string>& schema);
   UIEModel(
       const std::string& model_file, const std::string& params_file,
       const std::string& vocab_file, float position_prob, size_t max_length,
-      const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);
+      const std::vector<std::string>& schema,
+      const fastdeploy::RuntimeOption& custom_option =
+          fastdeploy::RuntimeOption(),
+      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+  UIEModel(
+      const std::string& model_file, const std::string& params_file,
+      const std::string& vocab_file, float position_prob, size_t max_length,
+      const std::unordered_map<std::string, std::vector<SchemaNode>>& schema,
+      const fastdeploy::RuntimeOption& custom_option =
+          fastdeploy::RuntimeOption(),
+      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(
       const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);

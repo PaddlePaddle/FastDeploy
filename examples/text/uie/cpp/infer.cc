@@ -22,10 +22,35 @@
 
 using namespace paddlenlp;
 
-int main() {
-  auto predictor =
-      UIEModel("uie-base/inference.pdmodel", "uie-base/inference.pdiparams",
-               "uie-base/vocab.txt", 0.5, 128, {"时间", "选手", "赛事名称"});
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
+
+int main(int argc, char* argv[]) {
+  if (argc < 3) {
+    std::cout << "Usage: infer_demo path/to/model run_option, "
+                 "e.g ./infer_demo uie-base  0"
+              << std::endl;
+    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
+                 "with gpu."
+              << std::endl;
+    return -1;
+  }
+  auto option = fastdeploy::RuntimeOption();
+  if (std::atoi(argv[2]) == 0) {
+    option.UseCpu();
+  } else {
+    option.UseGpu();
+  }
+  std::string model_dir(argv[1]);
+  std::string model_path = model_dir + sep + "inference.pdmodel";
+  std::string param_path = model_dir + sep + "inference.pdiparams";
+  std::string vocab_path = model_dir + sep + "vocab.txt";
+
+  auto predictor = UIEModel(model_path, param_path, vocab_path, 0.5, 128,
+                            {"时间", "选手", "赛事名称"}, option);
   fastdeploy::FDINFO << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition
