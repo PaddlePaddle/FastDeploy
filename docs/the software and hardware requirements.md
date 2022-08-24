@@ -2,7 +2,7 @@
 
 ## 系统平台
 
-- Linux x64
+- Linux x64/aarch64
 - Windows 10 x64
 - Mac OSX (x86 10.0以上/ arm64 12.0以上)
 

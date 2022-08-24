@@ -97,8 +97,9 @@ FDDataType Mat::Type() {
   } else if (type == 1) {
     return FDDataType::INT8;
   } else if (type == 2) {
-    FDASSERT(false, "While calling Mat::Type(), get UINT16 type which is not "
-                    "supported now.");
+    FDASSERT(false,
+             "While calling Mat::Type(), get UINT16 type which is not "
+             "supported now.");
   } else if (type == 3) {
     return FDDataType::INT16;
   } else if (type == 4) {
@@ -108,10 +109,12 @@ FDDataType Mat::Type() {
   } else if (type == 6) {
     return FDDataType::FP64;
   } else {
-    FDASSERT(false, "While calling Mat::Type(), get type = " +
-                        std::to_string(type) + ", which is not expected!.");
+    FDASSERT(
+        false,
+        "While calling Mat::Type(), get type = %d, which is not expected!.",
+        type);
   }
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

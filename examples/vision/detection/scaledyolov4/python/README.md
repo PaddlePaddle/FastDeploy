@@ -2,20 +2,19 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成ScaledYOLOv4在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision/detection/scaledyolov4/python/
+
 #下载scaledyolov4模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/detection/scaledyolov4/python/
 
 # CPU推理
 python infer.py --model scaled_yolov4-p5.onnx --image 000000014439.jpg --device cpu
@@ -31,7 +30,7 @@ python infer.py --model scaled_yolov4-p5.onnx --image 000000014439.jpg --device 
 
 ## ScaledYOLOv4 Python接口
 
-```
+```python
 fastdeploy.vision.detection.ScaledYOLOv4(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
@@ -46,7 +45,7 @@ ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格
 
 ### predict函数
 
-> ```
+> ```python
 > ScaledYOLOv4.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >

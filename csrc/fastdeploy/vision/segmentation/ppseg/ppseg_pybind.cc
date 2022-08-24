@@ -24,7 +24,6 @@ void BindPPSeg(pybind11::module& m) {
               pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::SegmentationResult* res = new vision::SegmentationResult();
-             // self.Predict(&mat, &res);
              self.Predict(&mat, res);
              return res;
            })

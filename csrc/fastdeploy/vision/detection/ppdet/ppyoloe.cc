@@ -14,7 +14,7 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const RuntimeOption& custom_option,
                  const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -99,8 +99,8 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       auto target_size = op["target_size"].as<std::vector<int>>();
       int interp = op["interp"].as<int>();
       FDASSERT(target_size.size(),
-               "Require size of target_size be 2, but now it's " +
-                   std::to_string(target_size.size()) + ".");
+               "Require size of target_size be 2, but now it's %lu.",
+               target_size.size());
       if (!keep_ratio) {
         int width = target_size[1];
         int height = target_size[0];

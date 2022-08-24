@@ -310,15 +310,16 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
   const auto& x_dims = x.shape;
   int64_t x_rank = x_dims.size();
   FDASSERT(axis >= -x_rank,
-           "'axis'(%d) must be greater than or equal to -Rank(X)(%d).", axis,
-           -x_rank);
+           "'axis'(%lld) must be greater than or equal to -Rank(X)(%lld).",
+           axis, -x_rank);
   FDASSERT(axis < x_rank,
-           "'axis'(%d) must be less than or equal to Rank(X)(%d).", axis,
+           "'axis'(%lld) must be less than or equal to Rank(X)(%lld).", axis,
            x_rank);
   FDASSERT(output_dtype == FDDataType::INT32 || FDDataType::INT64,
            "The attribute of dtype in argmin/argmax must be [%s] or [%s], but "
            "received [%s].",
-           Str(FDDataType::INT32), Str(FDDataType::INT64), Str(output_dtype));
+           Str(FDDataType::INT32).c_str(), Str(FDDataType::INT64).c_str(),
+           Str(output_dtype).c_str());
   if (axis < 0) axis += x_rank;
   if (output_dtype == FDDataType::INT32) {
     int64_t all_element_num = 0;
@@ -328,11 +329,11 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
     } else {
       all_element_num = x_dims[axis];
     }
-    FDASSERT(all_element_num <= std::numeric_limits<int>::max(),
+    FDASSERT(all_element_num <= (std::numeric_limits<int>::max)(),
              "The element num of the argmin/argmax input at axis is "
-             "%d, is larger than int32 maximum value:%d, you must "
+             "%lld, is larger than int32 maximum value:%d, you must "
              "set the dtype of argmin/argmax to 'int64'.",
-             all_element_num, std::numeric_limits<int>::max());
+             all_element_num, (std::numeric_limits<int>::max)());
   }
   std::vector<int64_t> vec;
   if (flatten) {

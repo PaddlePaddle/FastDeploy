@@ -47,9 +47,9 @@ setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
+setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND", "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
-setup_configs["BUILD_DEMO"] = os.getenv("BUILD_DEMO", "ON")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
@@ -463,12 +463,13 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     for f in all_files:
         # remove un-need ocv samples files to avoid too long file path
         # in windows which can make building process failed.
-        if f.find(".vcxproj.") > 0:
-            continue
-        if f.find("opencv") > 0 and (f.find("samples") > 0 or
-                                     f.find("java") > 0 or
-                                     f.find(".png") > 0 or f.find(".jpg")):
-            continue
+        if platform.system().lower() == "windows":
+            if f.find(".vcxproj.") > 0:
+                continue
+            if f.find("opencv") > 0 and any(
+                (f.find("samples") > 0, f.find("java") > 0, f.find(".png") > 0,
+                 f.find(".jpg") > 0)):
+                continue
         package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
 
 setuptools.setup(

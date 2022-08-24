@@ -2,8 +2,8 @@
 
 本文档说明编译C++预测库、Python预测库两种编译过程，根据编译的平台参考如下文档
 
-- [Linux & Mac 编译](linux_and_mac.md)
-- [Windows编译](windows.md)
+- [Linux & Mac 编译](how_to_build_linux_and_mac.md)
+- [Windows编译](how_to_build_windows.md)
 
 其中编译过程中，各平台上编译选项如下表所示
 

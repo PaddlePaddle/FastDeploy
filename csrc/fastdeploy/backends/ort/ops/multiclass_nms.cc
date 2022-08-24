@@ -178,11 +178,11 @@ void MultiClassNmsKernel::Compute(OrtKernelContext* context) {
   int64_t out_dim = box_dim + 2;
 
   int num_nmsed_out = 0;
-  FDASSERT(score_size == 3, "Require rank of input scores be 3, but now it's " +
-                                std::to_string(score_size) + ".");
+  FDASSERT(score_size == 3,
+           "Require rank of input scores be 3, but now it's %d.", score_size);
   FDASSERT(boxes_dim[2] == 4,
-           "Require the 3-dimension of input boxes be 4, but now it's " +
-               std::to_string(boxes_dim[2]) + ".");
+           "Require the 3-dimension of input boxes be 4, but now it's %lld.",
+           box_dim);
   std::vector<int64_t> out_num_rois_dims = {batch_size};
   OrtValue* out_num_rois = ort_.KernelContext_GetOutput(
       context, 2, out_num_rois_dims.data(), out_num_rois_dims.size());

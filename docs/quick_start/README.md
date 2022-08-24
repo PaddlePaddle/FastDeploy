@@ -2,8 +2,8 @@
 
 针对开发者的开发需求，FastDeploy目前提供了Python和C++两种安装方式，可分别参考
 
-- [Python安装](../compile/prebuilt_wheels.md)
-- [C++安装](../compile/prebuilt_libraries.md)
+- [Python安装](Python_prebuilt_wheels.md)
+- [C++安装](CPP_prebuilt_libraries.md)
 
 
 ## 其它文档
