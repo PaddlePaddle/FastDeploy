@@ -173,7 +173,7 @@ if(ENABLE_POROS_BACKEND)
   endif()
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${TORCH_LIBRARY} to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/torch/lib ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/copy_directory.py ${TORCH_LIBRARY} ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/torch/lib)
+  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/copy_directory.py ${TORCH_LIBRARY}/.. ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/torch/lib)
   # find trt
   if(NOT WITH_GPU)
   message(FATAL_ERROR "While -DENABLE_POROS_BACKEND=ON, must set -DWITH_GPU=ON, but now it's OFF")
