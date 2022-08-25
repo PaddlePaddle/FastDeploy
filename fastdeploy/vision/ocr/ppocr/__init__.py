@@ -20,7 +20,7 @@ from .... import c_lib_wrap as C
 
 class DBDetector(FastDeployModel):
     def __init__(self,
-                 model_file,
+                 model_file="",
                  params_file="",
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
@@ -115,7 +115,7 @@ class DBDetector(FastDeployModel):
 
 class Classifier(FastDeployModel):
     def __init__(self,
-                 model_file,
+                 model_file="",
                  params_file="",
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
@@ -166,7 +166,7 @@ class Classifier(FastDeployModel):
 
 class Recognizer(FastDeployModel):
     def __init__(self,
-                 model_file,
+                 model_file="",
                  params_file="",
                  label_path="",
                  runtime_option=None,

@@ -105,8 +105,8 @@ rec_label_file = args.rec_label_file
 
 #默认
 det_model = fd.vision.ocr.DBDetector("")
-cls_model = fd.vision.ocr.Classifier("")
-rec_model = fd.vision.ocr.Recognizer("")
+cls_model = fd.vision.ocr.Classifier()
+rec_model = fd.vision.ocr.Recognizer()
 
 #模型初始化
 if (len(args.det_model) != 0):

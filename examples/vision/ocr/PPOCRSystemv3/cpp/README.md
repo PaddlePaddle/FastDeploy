@@ -39,6 +39,8 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 1
 # GPU上TensorRT推理
 ./infer_demo ./ch_PP-OCRv3_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 2
+# OCR还支持det/cls/rec三个模型的组合使用，例如当我们不想使用cls模型的时候，只需要给cls模型路径的位置，传入一个空的字符串, 例子如下
+./infer_demo ./ch_PP-OCRv3_det_infer "" ./ch_PP-OCRv3_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
 ```
 
 运行完成可视化结果如下图所示
