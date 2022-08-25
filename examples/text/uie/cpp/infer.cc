@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
         // NOTE(zhoushunjie): It's necessary to explicitly use
         // std::vector to convert initializer list of SchemaNode whose size is
         // two. If not to do so, an ambiguous compliation error will occur in
-        // max x64 platform.
+        // mac x64 platform.
         std::vector<SchemaNode>{SchemaNode("观点词"),
                                 SchemaNode("情感倾向[正向，负向]")}}});
   predictor.Predict(
