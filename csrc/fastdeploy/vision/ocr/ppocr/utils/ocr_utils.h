@@ -30,13 +30,6 @@ namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat &srcimage,
                            const std::array<int, 8> &box);
-
-void cls_resize_img(const cv::Mat &img, cv::Mat &resize_img,
-                    const std::vector<int> &rec_image_shape);
-
-void crnn_resize_img(const cv::Mat &img, cv::Mat &resize_img, float wh_ratio,
-                     const std::vector<int> &rec_image_shape);
-
 }  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

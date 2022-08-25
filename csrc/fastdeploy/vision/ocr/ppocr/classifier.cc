@@ -30,7 +30,6 @@ Classifier::Classifier(const std::string& model_file,
     valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
-    // Cls模型暂不支持ORT后端推理
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::TRT, Backend::ORT};
   }

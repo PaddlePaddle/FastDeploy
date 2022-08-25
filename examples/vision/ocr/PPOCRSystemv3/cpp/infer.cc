@@ -130,7 +130,7 @@ void GpuInfer(const std::string& det_model_dir,
   }
 
   if (!cls_model_dir.empty()) {
-    auto cls_option = fastdeploy::RuntimeOption();  //只可用PaddleBackend
+    auto cls_option = fastdeploy::RuntimeOption();
     cls_option.UseGpu();
     cls_model = fastdeploy::vision::ocr::Classifier(
         cls_model_file, cls_params_file, cls_option);
