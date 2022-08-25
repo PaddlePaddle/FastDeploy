@@ -115,6 +115,7 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
       shape.push_back(sizes[i]);
     }
     fd_tensor->shape = shape;
+    fd_tensor->dtype = GetFdDtype(data_type);
     size_t numel = tensor.numel();
     std::cout << "inputs——test_wjj" << std::endl;
 
@@ -122,7 +123,9 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
         std::cout << "inputs1111111" << std::endl;
         fd_tensor->data.resize(numel * sizeof(float));
         std::cout << "inputs22222222" << std::endl;
-        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
+        // memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
+        //     numel * sizeof(float));
+        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
             numel * sizeof(float));
         std::cout << "inputs3333333" << std::endl;
         fd_tensor->dtype = FDDataType::FP32;
