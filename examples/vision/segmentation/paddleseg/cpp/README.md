@@ -25,11 +25,11 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 
 # CPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 0
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 1
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 2
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
 ```
 
 运行完成可视化结果如下图所示
