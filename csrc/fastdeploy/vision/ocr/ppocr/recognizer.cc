@@ -119,6 +119,9 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
   int imgW = rec_image_shape[2];
   float wh_ratio = imgW * 1.0 / imgH;
 
+  float ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
+  wh_ratio = std::max(wh_ratio, ori_wh_ratio);
+
   OcrRecognizerResizeImage(mat, wh_ratio, rec_image_shape);
 
   Normalize::Run(mat, mean, scale, true);
