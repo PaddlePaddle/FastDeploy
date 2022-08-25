@@ -24,27 +24,11 @@
 #include "fastdeploy/backends/poros/common/compile.h"
 #include "fastdeploy/backends/poros/common/poros_module.h"
 
-// #ifdef ENABLE_TRT_BACKEND
-// #include "fastdeploy/backends/tensorrt/trt_backend.h"
-// #endif
+#ifdef ENABLE_TRT_BACKEND
+#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#endif
 
 namespace fastdeploy {
-
-struct TrtBackendOption {
-  int gpu_id = 0;
-  bool enable_fp16 = false;
-  bool enable_int8 = false;
-  size_t max_batch_size = 32;
-  size_t max_workspace_size = 1 << 30;
-  std::map<std::string, std::vector<int32_t>> max_shape;
-  std::map<std::string, std::vector<int32_t>> min_shape;
-  std::map<std::string, std::vector<int32_t>> opt_shape;
-  std::string serialize_file = "";
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
-};
 
 struct PorosBackendOption {
 #ifdef WITH_GPU
