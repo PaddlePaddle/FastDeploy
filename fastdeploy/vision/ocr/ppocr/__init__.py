@@ -223,3 +223,12 @@ class PPOCRSystemv3(FastDeployModel):
 
     def predict(self, input_image):
         return self._model.predict(input_image)
+
+
+class PPOCRSystemv2(FastDeployModel):
+    def __init__(self, ocr_det=None, ocr_cls=None, ocr_rec=None):
+
+        self._model = C.vision.ocr.PPOCRSystemv2(ocr_det, ocr_cls, ocr_rec)
+
+    def predict(self, input_image):
+        return self._model.predict(input_image)
