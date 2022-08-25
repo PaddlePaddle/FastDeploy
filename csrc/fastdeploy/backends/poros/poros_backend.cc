@@ -34,19 +34,18 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.use_nvidia_tf32 = option.use_nvidia_tf32;
     _options.device_id = option.gpu_id;
     _options.unconst_ops_thres = option.unconst_ops_thres;
-#ifdef ENABLE_TRT_BACKEND
-    _options.is_dynamic = option.trt_option.max_shape.empty() ? false : true;
-    _options.max_workspace_size = option.trt_option.max_workspace_size;
-    _options.use_fp16 = option.trt_option.enable_fp16;
+    _options.is_dynamic = option.max_shape.empty() ? false : true;
+    _options.max_workspace_size = option.max_workspace_size;
+    _options.use_fp16 = option.enable_fp16;
     if (_options.is_dynamic) {
         std::vector<int64_t> min_shape;
         std::vector<int64_t> opt_shape;
         std::vector<int64_t> max_shape;
-        for (auto iter = option.trt_option.min_shape.begin(); iter != option.trt_option.min_shape.end(); ++iter) {
-            auto max_iter = option.trt_option.max_shape.find(iter->first);
-            auto opt_iter = option.trt_option.opt_shape.find(iter->first);
-            FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::max_shape.");
-            FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::opt_shape.");
+        for (auto iter = option.min_shape.begin(); iter != option.min_shape.end(); ++iter) {
+            auto max_iter = option.max_shape.find(iter->first);
+            auto opt_iter = option.opt_shape.find(iter->first);
+            FDASSERT(max_iter != option.max_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::max_shape.");
+            FDASSERT(opt_iter != option.opt_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::opt_shape.");
             min_shape.assign(iter->second.begin(), iter->second.end());
             opt_shape.assign(opt_iter->second.begin(), opt_iter->second.end());
             max_shape.assign(max_iter->second.begin(), max_iter->second.end());
@@ -78,7 +77,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     }
     else {
         std::vector<int64_t> min_shape;
-        for (auto iter:option.trt_option.min_shape) {
+        for (auto iter:option.min_shape) {
             min_shape.assign(iter.second.begin(), iter.second.end());
         }
         //min
@@ -90,7 +89,6 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
         }
         _prewarm_datas.push_back(inputs_min);
     }
-#endif
     return;
 }
 

@@ -148,6 +148,7 @@ if(ENABLE_POROS_BACKEND)
   include(external/poros.cmake)
   list(APPEND DEPEND_LIBS external_poros)
   set(PYTORCH_MINIMUM_VERSION 1.9)
+  set(TENSORRT_MINIMUM_VERSION 8.0)
   # find python3
   find_package(Python3 ${PYTHON_MINIMUM_VERSION} REQUIRED COMPONENTS Interpreter Development)
   message(STATUS "Found Python: ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}.${Python3_VERSION_PATCH}")
@@ -161,6 +162,10 @@ if(ENABLE_POROS_BACKEND)
   find_package(Torch ${PYTORCH_MINIMUM_VERSION} REQUIRED HINTS ${Python3_SITELIB})
   include_directories(${TORCH_INCLUDE_DIRS})
   include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/common)
+  # find trt
+  find_package(TensorRT ${TENSORRT_MINIMUM_VERSION} REQUIRED)
+  get_filename_component(TENSORRT_LIB_DIR ${TensorRT_LIBRARIES} DIRECTORY)
+  include_directories(${TensorRT_INCLUDE_DIRS})
 endif()
 
 if(WITH_GPU)

@@ -421,17 +421,12 @@ void Runtime::CreatePorosBackend() {
   poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
   poros_option.unconst_ops_thres = option.unconst_ops_thres;
   poros_option.poros_file = option.poros_file;
-#ifdef ENABLE_TRT_BACKEND
-  auto trt_option = TrtBackendOption();
-  trt_option.gpu_id = option.device_id;
-  trt_option.enable_fp16 = option.trt_enable_fp16;
-  trt_option.max_batch_size = option.trt_max_batch_size;
-  trt_option.max_workspace_size = option.trt_max_workspace_size;
-  trt_option.max_shape = option.trt_max_shape;
-  trt_option.min_shape = option.trt_min_shape;
-  trt_option.opt_shape = option.trt_opt_shape;
-  poros_option.trt_option = trt_option;
-#endif
+  poros_option.enable_fp16 = option.trt_enable_fp16;
+  poros_option.max_batch_size = option.trt_max_batch_size;
+  poros_option.max_workspace_size = option.trt_max_workspace_size;
+  poros_option.max_shape = option.trt_max_shape;
+  poros_option.min_shape = option.trt_min_shape;
+  poros_option.opt_shape = option.trt_opt_shape;
   FDASSERT(option.model_format == Frontend::TORCHSCRIPT,
            "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();

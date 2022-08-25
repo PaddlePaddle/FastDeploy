@@ -24,10 +24,6 @@
 #include "fastdeploy/backends/poros/common/compile.h"
 #include "fastdeploy/backends/poros/common/poros_module.h"
 
-#ifdef ENABLE_TRT_BACKEND
-#include "fastdeploy/backends/tensorrt/trt_backend.h"
-#endif
-
 namespace fastdeploy {
 
 struct PorosBackendOption {
@@ -50,9 +46,14 @@ struct PorosBackendOption {
   // 0: use torch.jit.script
   // 1: use torhc.jit.trace
   // int32_t preprocess_mode = 0;
-#ifdef ENABLE_TRT_BACKEND
-  TrtBackendOption trt_option;
-#endif
+  // TRT options
+  bool enable_fp16 = false;
+  bool enable_int8 = false;
+  size_t max_batch_size = 32;
+  size_t max_workspace_size = 1 << 30;
+  std::map<std::string, std::vector<int32_t>> max_shape;
+  std::map<std::string, std::vector<int32_t>> min_shape;
+  std::map<std::string, std::vector<int32_t>> opt_shape;
 };
 
 // Convert data type from fastdeploy to poros
