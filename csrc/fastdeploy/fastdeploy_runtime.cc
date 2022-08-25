@@ -246,7 +246,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::PDINFER;
     } else if (IsBackendAvailable(Backend::OPENVINO)) {
       option.backend = Backend::OPENVINO;
-    } {
+    } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
               << std::endl;
@@ -273,7 +273,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePaddleBackend();
     FDINFO << "Runtime initialized with Backend::PDINFER." << std::endl;
   } else if (option.backend == Backend::OPENVINO) {
-    FDASSERT(option.device == Device::CPU, "Backend::OPENVINO only supports Device::CPU");
+    FDASSERT(option.device == Device::CPU,
+             "Backend::OPENVINO only supports Device::CPU");
     CreateOpenVINOBackend();
     FDINFO << "Runtime initialized with Backend::OPENVINO." << std::endl;
   } else {
