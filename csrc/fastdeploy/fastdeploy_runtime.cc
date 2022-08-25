@@ -249,8 +249,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::PDINFER;
     } else if (IsBackendAvailable(Backend::OPENVINO)) {
       option.backend = Backend::OPENVINO;
-    }
-    {
+    } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
               << std::endl;
