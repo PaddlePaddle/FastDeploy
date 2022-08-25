@@ -23,7 +23,7 @@ def copy_file(src, dst):
     if not os.path.exists(src):
         raise Exception("Source {} is not exist.".format(src))
     try:
-        shutil.copyfile(src, dst, symlinks=True)
+        shutil.copyfile(src, dst)
     except:
         raise Exception("Copy {} to {} failed.".format(src, dst))
 
