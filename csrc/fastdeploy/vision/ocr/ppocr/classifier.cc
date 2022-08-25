@@ -21,7 +21,6 @@ namespace vision {
 namespace ocr {
 
 Classifier::Classifier() {}
-//构造
 Classifier::Classifier(const std::string& model_file,
                        const std::string& params_file,
                        const RuntimeOption& custom_option,
@@ -82,12 +81,10 @@ void OcrClassifierResizeImage(Mat* mat,
 }
 
 //预处理
-//预处理
 bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
   // 1. cls resizes
   // 2. normalize
   // 3. batch_permute
-  // for (int ino = cur_index; ino < end_img_no; ino++) {
   OcrClassifierResizeImage(mat, cls_image_shape);
 
   Normalize::Run(mat, mean, scale, true);
@@ -104,7 +101,6 @@ bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
 //后处理
 bool Classifier::Postprocess(FDTensor& infer_result, int& cls_labels,
                              float& cls_scores) {
-  // infer_result : n, c, h , w
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 

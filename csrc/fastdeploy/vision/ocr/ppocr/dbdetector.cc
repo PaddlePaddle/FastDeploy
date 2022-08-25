@@ -20,10 +20,7 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-//构造
-
 DBDetector::DBDetector() {}
-
 DBDetector::DBDetector(const std::string& model_file,
                        const std::string& params_file,
                        const RuntimeOption& custom_option,
@@ -49,13 +46,13 @@ bool DBDetector::Initialize() {
   max_side_len = 960;
 
   det_db_thresh = 0.3;
-  det_db_box_thresh = 0.6;    // 0.5
-  det_db_unclip_ratio = 1.5;  // 2.0
+  det_db_box_thresh = 0.6;
+  det_db_unclip_ratio = 1.5;
   det_db_score_mode = "slow";
   use_dilation = false;
 
   mean = {0.485f, 0.456f, 0.406f};
-  scale = {0.229f, 0.224f, 0.225f};  // scale即std
+  scale = {0.229f, 0.224f, 0.225f};
   is_scale = true;
 
   if (!InitRuntime()) {
@@ -117,7 +114,6 @@ bool DBDetector::Preprocess(
 bool DBDetector::Postprocess(
     FDTensor& infer_result, std::vector<std::vector<std::vector<int>>>* boxes,
     const std::map<std::string, std::array<float, 2>>& im_info) {
-  // infer_result : n, c, h , w
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
   int n2 = output_shape[2];

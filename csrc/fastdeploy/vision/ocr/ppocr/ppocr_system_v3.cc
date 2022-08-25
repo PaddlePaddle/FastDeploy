@@ -30,17 +30,15 @@ void PPOCRSystemv3::Detect(cv::Mat* img,
 
   this->detector->Predict(img, &boxes);
 
+  // vector<vector>转array
   for (int i = 0; i < boxes.size(); i++) {
-    // boxes[i]转成array<float,8>
     std::array<int, 8> new_box;
     int k = 0;
-
     for (auto& vec : boxes[i]) {
       for (auto& e : vec) {
         new_box[k++] = e;
       }
     }
-
     (result->boxes).push_back(new_box);
   }
 }
@@ -87,8 +85,6 @@ bool PPOCRSystemv3::Predict(cv::Mat* img,
   } else {
     //从DET模型开始
     //一张图,会输出多个“小图片”，送给后续模型
-    // det
-    // cv::Mat* srcimg = img;
     this->Detect(img, result);
     std::cout << "Finish Det Prediction!" << std::endl;
     // crop image
@@ -98,13 +94,10 @@ bool PPOCRSystemv3::Predict(cv::Mat* img,
       cv::Mat crop_img;
       crop_img =
           fastdeploy::vision::ocr::GetRotateCropImage(*img, (result->boxes)[j]);
-      // GetRotateCropImage已更改
       img_list.push_back(crop_img);
     }
-
     // cls
     if (this->classifier->initialized != 0) {
-      // cls模型 单张推理，在外for循环
       for (int i = 0; i < img_list.size(); i++) {
         this->Classify(&img_list[0], result);
       }
@@ -118,7 +111,6 @@ bool PPOCRSystemv3::Predict(cv::Mat* img,
       }
       std::cout << "Finish Cls Prediction!" << std::endl;
     }
-
     // rec
     if (this->recognizer->initialized != 0) {
       for (int i = 0; i < img_list.size(); i++) {

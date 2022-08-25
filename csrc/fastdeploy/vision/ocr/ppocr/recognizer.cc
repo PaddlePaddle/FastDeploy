@@ -78,7 +78,7 @@ bool Recognizer::Initialize() {
   rec_image_shape = {3, rec_img_h, rec_img_w};
 
   mean = {0.5f, 0.5f, 0.5f};
-  scale = {0.5f, 0.5f, 0.5f};  // scale即std
+  scale = {0.5f, 0.5f, 0.5f};
   is_scale = true;
 
   if (!InitRuntime()) {
@@ -137,7 +137,6 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
 //后处理
 bool Recognizer::Postprocess(FDTensor& infer_result, std::string& rec_texts,
                              float& rec_text_scores) {
-  // infer_result : n, c, h , w
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
