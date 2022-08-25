@@ -21,4 +21,5 @@ from .contrib.yolox import YOLOX
 from .contrib.yolov5 import YOLOv5
 from .contrib.yolov5lite import YOLOv5Lite
 from .contrib.yolov6 import YOLOv6
+from .contrib.yolov7end2end_trt import YOLOv7End2EndTRT
 from .ppdet import PPYOLOE, PPYOLO, PPYOLOv2, PaddleYOLOX, PicoDet, FasterRCNN, YOLOv3
