@@ -86,7 +86,12 @@ int main(int argc, char* argv[]) {
   // Opinion Extraction
   predictor.SetSchema(
       {{"评价维度",
-        {SchemaNode("观点词"), SchemaNode("情感倾向[正向，负向]")}}});
+        // NOTE(zhoushunjie): It's necessary to explicitly use
+        // std::vector to convert initializer list of SchemaNode whose size is
+        // two. If not to do so, an ambiguous compliation error will occur in
+        // max x64 platform.
+        std::vector<SchemaNode>{SchemaNode("观点词"),
+                                SchemaNode("情感倾向[正向，负向]")}}});
   predictor.Predict(
       {"店面干净，很清静，服务员服务热情，性价比很高，发现收银台有排队"},
       &results);
