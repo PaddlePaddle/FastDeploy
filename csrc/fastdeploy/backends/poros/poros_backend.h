@@ -88,9 +88,9 @@ class PorosBackend : public BaseBackend {
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 
-  int NumInputs() const { return 0; }
+  int NumInputs() const { return 1; }
 
-  int NumOutputs() const { return 0; }
+  int NumOutputs() const { return 1; }
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);

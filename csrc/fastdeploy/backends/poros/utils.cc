@@ -116,6 +116,7 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     }
     fd_tensor->shape = shape;
     size_t numel = tensor.numel();
+    std::cout << "inputs——test_wjj" << std::endl;
 
     if (data_type == at::kFloat) {
         fd_tensor->data.resize(numel * sizeof(float));

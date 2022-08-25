@@ -162,9 +162,11 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     std::cout << "inputs444444" << std::endl;
     // Convert PyTorch Tensor to FD Tensor
     for (size_t i = 0; i < poros_outputs_list.size(); ++i) {
+        std::cout << "inputs55555" << std::endl;
         CopyTensorToCpu(poros_outputs_list[i], &((*outputs)[i]));
+        std::cout << "inputs66666" << std::endl;
     }
-    std::cout << "inputs555555555" << std::endl;
+    std::cout << "inputs777777" << std::endl;
     return true;
 }
 
