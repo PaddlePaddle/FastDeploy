@@ -34,6 +34,7 @@ class FASTDEPLOY_DECL Visualize {
   static cv::Mat VisSegmentation(const cv::Mat& im,
                                  const SegmentationResult& result);
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
+                                 const cv::Mat& background = cv::Mat(),
                                  bool remove_small_connected_area = false);
 };
 

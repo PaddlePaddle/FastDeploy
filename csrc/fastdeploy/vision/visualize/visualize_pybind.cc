@@ -50,10 +50,23 @@ void BindVisualize(pybind11::module& m) {
           })
       .def_static("vis_matting_alpha",
                   [](pybind11::array& im_data, vision::MattingResult& result,
+                     pybind11::array& background_data,
                      bool remove_small_connected_area) {
                     cv::Mat im = PyArrayToCvMat(im_data);
+                    cv::Mat background = PyArrayToCvMat(background_data);
                     auto vis_im = vision::Visualize::VisMattingAlpha(
-                        im, result, remove_small_connected_area);
+                        im, result, background, remove_small_connected_area);
+                    FDTensor out;
+                    vision::Mat(vis_im).ShareWithTensor(&out);
+                    return TensorToPyArray(out);
+                  })
+      .def_static("vis_matting_alpha",
+                  [](pybind11::array& im_data, vision::MattingResult& result,
+                     bool remove_small_connected_area) {
+                    cv::Mat im = PyArrayToCvMat(im_data);
+                    cv::Mat background;
+                    auto vis_im = vision::Visualize::VisMattingAlpha(
+                        im, result, background, remove_small_connected_area);
                     FDTensor out;
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);
