@@ -119,10 +119,14 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     std::cout << "inputs——test_wjj" << std::endl;
 
     if (data_type == at::kFloat) {
+        std::cout << "inputs1111111" << std::endl;
         fd_tensor->data.resize(numel * sizeof(float));
+        std::cout << "inputs22222222" << std::endl;
         memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
             numel * sizeof(float));
+        std::cout << "inputs3333333" << std::endl;
         fd_tensor->dtype = FDDataType::FP32;
+        std::cout << "inputs444444" << std::endl;
         return;
     } else if (data_type == at::kInt) {
         fd_tensor->data.resize(numel * sizeof(int32_t));
