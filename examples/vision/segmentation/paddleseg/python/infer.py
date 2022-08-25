@@ -32,8 +32,8 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("inputs", [1, 3, 224, 224],
-                                   [1, 3, 224, 224], [1, 3, 224, 224])
+        option.set_trt_input_shape("x", [1, 3, 256, 256], [1, 3, 1024, 1024],
+                                   [1, 3, 2048, 2048])
     return option
 
 
