@@ -1,4 +1,4 @@
-![⚡️FastDeploy](docs/logo/fastdeploy-opaque.png)
+![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
 </p>
 
