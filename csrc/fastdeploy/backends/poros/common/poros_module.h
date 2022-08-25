@@ -13,9 +13,9 @@
 #pragma once
 
 #include <string>
-#include <torch/script.h>
-#include <torch/csrc/jit/jit_log.h>
-// #include <ATen/Context.h>
+#include "torch/script.h"
+#include "torch/csrc/jit/jit_log.h"
+// #include "ATen/Context.h"
 
 namespace baidu {
 namespace mirana {

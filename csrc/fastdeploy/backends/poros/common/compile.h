@@ -18,8 +18,8 @@
 #include <algorithm>
 #include <unordered_map>
 #include <set>
-#include <torch/script.h>
 
+#include "torch/script.h"
 #include "iengine.h"
 #include "poros_module.h"
 

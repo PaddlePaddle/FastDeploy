@@ -17,9 +17,9 @@
 #include <string>
 
 //from pytorch
-#include <torch/script.h>
-#include <torch/csrc/jit/ir/ir.h>
-#include <ATen/core/interned_strings.h>
+#include "torch/script.h"
+#include "torch/csrc/jit/ir/ir.h"
+#include "ATen/core/interned_strings.h"
 
 #include "plugin_create.h"
 
