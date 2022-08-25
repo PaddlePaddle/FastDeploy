@@ -215,8 +215,14 @@ if(ENABLE_TRT_BACKEND)
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
   execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
-  set(PATCHELF_CMD "ls *.so* | xargs patchelf --set-rpath '$ORIGIN'")
-  execute_process(COMMAND ${PATCHELF_CMD} WORKING_DIRECTORY ${TRT_DIRECTORY}/lib)
+  set(PATCHELF_CMD1 "ls *.so*")
+  set(PATCHELF_CMD2 "xargs patchelf --set-rpath '$ORIGIN'")
+  execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${TRT_DIRECTORY}/lib
+	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${TRT_DIRECTORY}/lib
+	          RESULT_VARIABLE result
+                  OUTPUT_VARIABLE curr_out
+                  ERROR_VARIABLE  curr_out)
+  message(STATUS "result:${result} out:${curr_out}")
 
 endif()
 
