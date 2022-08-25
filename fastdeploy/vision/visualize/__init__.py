@@ -37,6 +37,12 @@ def vis_segmentation(im_data, seg_result):
 
 def vis_matting_alpha(im_data,
                       matting_result,
+                      background_data=None,
                       remove_small_connected_area=False):
-    return C.vision.Visualize.vis_matting_alpha(im_data, matting_result,
-                                                remove_small_connected_area)
+    if background_data is None:
+        return C.vision.Visualize.vis_matting_alpha(
+            im_data, matting_result, remove_small_connected_area)
+    else:
+        return C.vision.Visualize.vis_matting_alpha(
+            im_data, matting_result, background_data,
+            remove_small_connected_area)

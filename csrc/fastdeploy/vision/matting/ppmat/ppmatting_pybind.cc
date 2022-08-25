@@ -11,18 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-
-void BindMODNet(pybind11::module& m);
-void BindPPMat(pybind11::module& m);
-
-void BindMatting(pybind11::module& m) {
-  auto matting_module =
-      m.def_submodule("matting", "Image object matting models.");
-  BindMODNet(matting_module);
-  BindPPMat(matting_module);
+void BindPPMat(pybind11::module& m) {
+  pybind11::class_<vision::matting::PPMatting, FastDeployModel>(m, "PPMatting")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          Frontend>())
+      .def("predict",
+           [](vision::matting::PPMatting& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::MattingResult* res = new vision::MattingResult();
+             self.Predict(&mat, res);
+             return res;
+           });
 }
 }  // namespace fastdeploy

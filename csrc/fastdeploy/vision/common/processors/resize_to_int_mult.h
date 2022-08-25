@@ -12,17 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/pybind/main.h"
+#pragma once
+
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
+namespace vision {
 
-void BindMODNet(pybind11::module& m);
-void BindPPMat(pybind11::module& m);
+class ResizeToIntMult : public Processor {
+ public:
+  explicit ResizeToIntMult(int mult_int = 32, int interp = 1) {
+    mult_int_ = mult_int;
+    interp_ = interp;
+  }
+  bool CpuRun(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool GpuRun(Mat* mat);
+#endif
+  std::string Name() { return "ResizeToIntMult"; }
 
-void BindMatting(pybind11::module& m) {
-  auto matting_module =
-      m.def_submodule("matting", "Image object matting models.");
-  BindMODNet(matting_module);
-  BindPPMat(matting_module);
-}
+  static bool Run(Mat* mat, int mult_int = 32, int interp = 1,
+                  ProcLib lib = ProcLib::OPENCV_CPU);
+
+ private:
+  int interp_;
+  int mult_int_;
+};
+}  // namespace vision
 }  // namespace fastdeploy

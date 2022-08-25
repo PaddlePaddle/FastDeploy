@@ -12,17 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/pybind/main.h"
+#pragma once
+
+#include "fastdeploy/vision/common/processors/base.h"
 
 namespace fastdeploy {
+namespace vision {
 
-void BindMODNet(pybind11::module& m);
-void BindPPMat(pybind11::module& m);
+class LimitShort : public Processor {
+ public:
+  explicit LimitShort(int max_short = -1, int min_short = -1, int interp = 1) {
+    max_short_ = max_short;
+    min_short_ = min_short;
+    interp_ = interp;
+  }
+  bool CpuRun(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool GpuRun(Mat* mat);
+#endif
+  std::string Name() { return "LimitShort"; }
 
-void BindMatting(pybind11::module& m) {
-  auto matting_module =
-      m.def_submodule("matting", "Image object matting models.");
-  BindMODNet(matting_module);
-  BindPPMat(matting_module);
-}
+  static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
+                  ProcLib lib = ProcLib::OPENCV_CPU);
+
+ private:
+  int max_short_;
+  int min_short_;
+  int interp_;
+};
+}  // namespace vision
 }  // namespace fastdeploy

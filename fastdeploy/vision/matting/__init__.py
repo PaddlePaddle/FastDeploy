@@ -14,3 +14,4 @@
 
 from __future__ import absolute_import
 from .contrib.modnet import MODNet
+from .ppmat import PPMatting
