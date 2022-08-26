@@ -18,7 +18,6 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FDTENSOR_FUNC
 /** Excute the softmax operation for input FDTensor along given dims.
     @param x The input tensor.
     @param out The output tensor which stores the result.
@@ -26,5 +25,4 @@ namespace fastdeploy {
 */
 FASTDEPLOY_DECL void Softmax(const FDTensor& x, FDTensor* out, int axis = -1);
 
-#endif
 }  // namespace fastdeploy
