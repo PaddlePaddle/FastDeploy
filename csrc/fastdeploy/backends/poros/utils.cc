@@ -117,35 +117,28 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     fd_tensor->shape = shape;
     fd_tensor->dtype = GetFdDtype(data_type);
     size_t numel = tensor.numel();
-    std::cout << "inputs——test_wjj" << std::endl;
 
     if (data_type == at::kFloat) {
-        std::cout << "inputs1111111" << std::endl;
         fd_tensor->data.resize(numel * sizeof(float));
-        std::cout << "inputs22222222" << std::endl;
-        // memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
-        //     numel * sizeof(float));
         memcpy(fd_tensor->data.data(), tensor.data_ptr(),
             numel * sizeof(float));
-        std::cout << "inputs3333333" << std::endl;
         fd_tensor->dtype = FDDataType::FP32;
-        std::cout << "inputs444444" << std::endl;
         return;
     } else if (data_type == at::kInt) {
         fd_tensor->data.resize(numel * sizeof(int32_t));
-        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
+        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
             numel * sizeof(int32_t));
         fd_tensor->dtype = FDDataType::INT32;
         return;
     } else if (data_type == at::kLong) {
         fd_tensor->data.resize(numel * sizeof(int64_t));
-        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
+        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
             numel * sizeof(int64_t));
         fd_tensor->dtype = FDDataType::INT64;
         return;
     } else if (data_type == at::kDouble) {
         fd_tensor->data.resize(numel * sizeof(double));
-        memcpy(static_cast<void*>(fd_tensor->Data()), tensor.data_ptr(),
+        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
             numel * sizeof(double));
         fd_tensor->dtype = FDDataType::FP64;
         return;
