@@ -21,8 +21,6 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
-
 template <typename T>
 struct ValueClip {
   T operator()(const T& x) const {
@@ -122,5 +120,4 @@ void Softmax(const FDTensor& x, FDTensor* out, int axis) {
   FD_VISIT_FLOAT_TYPES(x.dtype, "SoftmaxKernel",
                        ([&] { SoftmaxKernel<data_t>(x, out, axis); }));
 }
-#endif
 }  // namespace fastdeploy
