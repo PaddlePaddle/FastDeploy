@@ -114,15 +114,17 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     for (size_t i = 0; i < sizes.size(); i++) {
       shape.push_back(sizes[i]);
     }
-    fd_tensor->shape = shape;
-    fd_tensor->dtype = GetFdDtype(data_type);
+    // fd_tensor->shape = shape;
+    // fd_tensor->dtype = GetFdDtype(data_type);
+    auto fd_dtype = GetFdDtype(data_type);
     size_t numel = tensor.numel();
 
     if (data_type == at::kFloat) {
-        fd_tensor->data.resize(numel * sizeof(float));
-        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
-            numel * sizeof(float));
-        fd_tensor->dtype = FDDataType::FP32;
+        // fd_tensor->data.resize(numel * sizeof(float));
+        // memcpy(fd_tensor->data.data(), tensor.data_ptr(),
+        //     numel * sizeof(float));
+        fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
+        // fd_tensor->dtype = FDDataType::FP32;
         return;
     } else if (data_type == at::kInt) {
         fd_tensor->data.resize(numel * sizeof(int32_t));
