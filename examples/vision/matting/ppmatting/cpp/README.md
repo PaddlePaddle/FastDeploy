@@ -50,18 +50,18 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 ```c++
 fastdeploy::vision::matting::PPMatting(
-        const string& model_dir,
+        const string& model_file,
         const string& params_file = "",
         const string& config_file,
         const RuntimeOption& runtime_option = RuntimeOption(),
         const Frontend& model_format = Frontend::PADDLE)
 ```
 
-PPMatting模型加载和初始化，其中model_dir为导出的Paddle模型格式。
+PPMatting模型加载和初始化，其中model_file为导出的Paddle模型格式。
 
 **参数**
 
-> * **model_dir**(str): 模型文件路径
+> * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
