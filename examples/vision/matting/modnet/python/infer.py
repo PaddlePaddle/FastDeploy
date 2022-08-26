@@ -18,7 +18,7 @@ def parse_arguments():
     parser.add_argument(
         "--bg",
         type=str,
-        required=False,
+        required=True,
         default=None,
         help="Path of test background image file.")
     parser.add_argument(
@@ -49,7 +49,7 @@ model = fd.vision.matting.MODNet(args.model, runtime_option=runtime_option)
 
 #设置推理size, 必须和模型文件一致
 model.size = (256, 256)
-# 预测图片分类结果
+# 预测图片抠图结果
 im = cv2.imread(args.image)
 bg = cv2.imread(args.bg)
 result = model.predict(im.copy())

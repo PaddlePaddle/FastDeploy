@@ -14,7 +14,7 @@ def parse_arguments():
     parser.add_argument(
         "--bg",
         type=str,
-        required=False,
+        required=True,
         default=None,
         help="Path of test background image file.")
     parser.add_argument(
@@ -52,7 +52,7 @@ config_file = os.path.join(args.model, "deploy.yaml")
 model = fd.vision.matting.PPMatting(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
-# 预测图片分类结果
+# 预测图片抠图结果
 im = cv2.imread(args.image)
 bg = cv2.imread(args.bg)
 result = model.predict(im.copy())

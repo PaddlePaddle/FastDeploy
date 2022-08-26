@@ -51,7 +51,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
 }
 
 void GpuInfer(const std::string& model_dir, const std::string& image_file,
-              const std::string& background_file = std::string()) {
+              const std::string& background_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
@@ -84,7 +84,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
 }
 
 void TrtInfer(const std::string& model_dir, const std::string& image_file,
-              const std::string& background_file = std::string()) {
+              const std::string& background_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";

@@ -44,7 +44,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
 }
 
 void GpuInfer(const std::string& model_file, const std::string& image_file,
-              const std::string& background_file = std::string()) {
+              const std::string& background_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
@@ -76,7 +76,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
 }
 
 void TrtInfer(const std::string& model_file, const std::string& image_file,
-              const std::string& background_file = std::string()) {
+              const std::string& background_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
