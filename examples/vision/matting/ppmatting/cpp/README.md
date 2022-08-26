@@ -1,6 +1,6 @@
 # PPMatting C++部署示例
 
-本目录下提供`infer.cc`快速完成Unet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成PPMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 

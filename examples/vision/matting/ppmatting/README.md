@@ -27,6 +27,7 @@
 | 模型                                                               | 参数大小    | 精度    | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
 | [PPMatting](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz) | 87MB | - |
+| [PPMatting](https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-1024.tgz) | 87MB | - |
 
 
 

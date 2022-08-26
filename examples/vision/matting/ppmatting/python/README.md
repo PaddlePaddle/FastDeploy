@@ -5,14 +5,14 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-本目录下提供`infer.py`快速完成Unet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成PPMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/matting/ppmatting/python
 
-# 下载Unet模型文件和测试图片
+# 下载PPmatting模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
@@ -32,10 +32,10 @@ python infer.py --model PP-Matting-512 --image test_lite_matting_input.jpg --bg 
 <!-- <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG"> -->
 </div>
 
-## PaddleMatting Python接口
+## PPMatting Python接口
 
 ```python
-fd.vision.matting.PaddleMatting(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fd.vision.matting.PPMatting(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 ```
 
 PPMatting模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
@@ -51,7 +51,7 @@ PPMatting模型加载和初始化，其中model_file, params_file以及config_fi
 ### predict函数
 
 > ```python
-> PaddleMatting.predict(input_image)
+> PPMatting.predict(input_image)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。

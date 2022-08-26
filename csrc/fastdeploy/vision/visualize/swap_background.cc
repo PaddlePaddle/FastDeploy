@@ -76,7 +76,8 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
 
   return vis_img;
 }
-// 对SegmentationResult做背景替换，由于分割模型可以预测多个类别其中keep_label 是
+// 对SegmentationResult做背景替换，由于分割模型可以预测多个类别其中background_label
+// 是
 cv::Mat Visualize::SwapBackgroundSegmentation(
     const cv::Mat& im, const cv::Mat& background, int background_label,
     const SegmentationResult& result) {
