@@ -16,6 +16,12 @@ def parse_arguments():
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
     parser.add_argument(
+        "--bg",
+        type=str,
+        required=False,
+        default=None,
+        help="Path of test background image file.")
+    parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
         default=False,
@@ -43,11 +49,16 @@ model = fd.vision.matting.MODNet(args.model, runtime_option=runtime_option)
 
 #设置推理size, 必须和模型文件一致
 model.size = (256, 256)
-# 预测图片检测结果
+# 预测图片分类结果
 im = cv2.imread(args.image)
+bg = cv2.imread(args.bg)
 result = model.predict(im.copy())
-
-# 预测结果可视化
+print(result)
+# 可视化结果
 vis_im = fd.vision.vis_matting_alpha(im, result)
-cv2.imwrite("visualized_result.jpg", vis_im)
-print("Visualized result save in ./visualized_result.jpg")
+vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
+cv2.imwrite("visualized_result_fg.jpg", vis_im)
+cv2.imwrite("visualized_result_replaced_bg.jpg", vis_im_with_bg)
+print(
+    "Visualized result save in ./visualized_result_replaced_bg.jpg and ./visualized_result_fg.jpg"
+)

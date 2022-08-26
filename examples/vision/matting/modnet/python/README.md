@@ -15,20 +15,23 @@ cd examples/vision/matting/modnet/python/
 #下载modnet模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_bgr.jpg
 
 # CPU推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device cpu
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device cpu
 # GPU推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --device gpu --use_trt True
+python infer.py --model modnet_photographic_portrait_matting.onnx --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
-
+<div width="700">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
+<!-- <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG"> -->
+</div>
 ## MODNet Python接口
 
 ```python

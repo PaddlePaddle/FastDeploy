@@ -54,13 +54,14 @@ model = fd.vision.matting.PPMatting(
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-bg = None
-if args.bg is not None:
-    bg = cv2.imread(args.bg)
+bg = cv2.imread(args.bg)
 result = model.predict(im.copy())
 print(result)
-
 # 可视化结果
-vis_im = fd.vision.vis_matting_alpha(im, result, bg)
-cv2.imwrite("visualized_result.jpg", vis_im)
-print("Visualized result save in ./visualized_result.jpg")
+vis_im = fd.vision.vis_matting_alpha(im, result)
+vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
+cv2.imwrite("visualized_result_fg.jpg", vis_im)
+cv2.imwrite("visualized_result_replaced_bg.jpg", vis_im_with_bg)
+print(
+    "Visualized result save in ./visualized_result_replaced_bg.jpg and ./visualized_result_fg.jpg"
+)

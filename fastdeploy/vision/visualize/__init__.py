@@ -37,12 +37,26 @@ def vis_segmentation(im_data, seg_result):
 
 def vis_matting_alpha(im_data,
                       matting_result,
-                      background_data=None,
                       remove_small_connected_area=False):
-    if background_data is None:
-        return C.vision.Visualize.vis_matting_alpha(
-            im_data, matting_result, remove_small_connected_area)
-    else:
-        return C.vision.Visualize.vis_matting_alpha(
-            im_data, matting_result, background_data,
-            remove_small_connected_area)
+    return C.vision.Visualize.vis_matting_alpha(im_data, matting_result,
+                                                remove_small_connected_area)
+
+
+def swap_background_matting(im_data,
+                            background,
+                            result,
+                            remove_small_connected_area=False):
+    assert isinstance(
+        result,
+        C.vision.MattingResult), "The result must be MattingResult type"
+    return C.vision.Visualize.swap_background_matting(
+        im_data, background, result, remove_small_connected_area)
+
+
+def swap_background_segmentation(im_data, background, background_label,
+                                 result):
+    assert isinstance(
+        result, C.vision.
+        SegmentationResult), "The result must be SegmentaitonResult type"
+    return C.vision.Visualize.swap_background_segmentation(
+        im_data, background, background_label, result)

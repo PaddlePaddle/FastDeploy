@@ -48,14 +48,25 @@ void BindVisualize(pybind11::module& m) {
             vision::Mat(vis_im).ShareWithTensor(&out);
             return TensorToPyArray(out);
           })
-      .def_static("vis_matting_alpha",
-                  [](pybind11::array& im_data, vision::MattingResult& result,
-                     pybind11::array& background_data,
-                     bool remove_small_connected_area) {
+      .def_static(
+          "swap_background_matting",
+          [](pybind11::array& im_data, pybind11::array& background_data,
+             vision::MattingResult& result, bool remove_small_connected_area) {
+            cv::Mat im = PyArrayToCvMat(im_data);
+            cv::Mat background = PyArrayToCvMat(background_data);
+            auto vis_im = vision::Visualize::SwapBackgroundMatting(
+                im, background, result, remove_small_connected_area);
+            FDTensor out;
+            vision::Mat(vis_im).ShareWithTensor(&out);
+            return TensorToPyArray(out);
+          })
+      .def_static("swap_background_segmentation",
+                  [](pybind11::array& im_data, pybind11::array& background_data,
+                     int background_label, vision::SegmentationResult& result) {
                     cv::Mat im = PyArrayToCvMat(im_data);
                     cv::Mat background = PyArrayToCvMat(background_data);
-                    auto vis_im = vision::Visualize::VisMattingAlpha(
-                        im, result, background, remove_small_connected_area);
+                    auto vis_im = vision::Visualize::SwapBackgroundSegmentation(
+                        im, background, background_label, result);
                     FDTensor out;
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);
@@ -64,9 +75,8 @@ void BindVisualize(pybind11::module& m) {
                   [](pybind11::array& im_data, vision::MattingResult& result,
                      bool remove_small_connected_area) {
                     cv::Mat im = PyArrayToCvMat(im_data);
-                    cv::Mat background;
                     auto vis_im = vision::Visualize::VisMattingAlpha(
-                        im, result, background, remove_small_connected_area);
+                        im, result, remove_small_connected_area);
                     FDTensor out;
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);

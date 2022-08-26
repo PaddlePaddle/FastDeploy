@@ -10,10 +10,10 @@
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
-mkdir build
-cd build
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
+
+mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
@@ -21,20 +21,24 @@ make -j
 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/modnet_photographic_portrait_matting.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_bgr.jpg
 
 
 # CPU推理
-./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 0
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg test_lite_matting_bgr.jpg 0
 # GPU推理
-./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 1
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg test_lite_matting_bgr.jpg 1
 # GPU上TensorRT推理
-./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg 2
+./infer_demo modnet_photographic_portrait_matting.onnx test_lite_matting_input.jpg test_lite_matting_bgr.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
+<div width="700">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
+<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
+<!-- <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG"> -->
+</div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)

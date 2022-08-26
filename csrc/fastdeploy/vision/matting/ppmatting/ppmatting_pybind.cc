@@ -14,7 +14,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPMat(pybind11::module& m) {
+void BindPPMatting(pybind11::module& m) {
   pybind11::class_<vision::matting::PPMatting, FastDeployModel>(m, "PPMatting")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())

@@ -35,7 +35,7 @@
 #include "fastdeploy/vision/faceid/contrib/partial_fc.h"
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
-#include "fastdeploy/vision/matting/ppmat/ppmatting.h"
+#include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #endif
 
