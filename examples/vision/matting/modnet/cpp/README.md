@@ -34,10 +34,11 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 运行完成可视化结果如下图所示
 
-<div width="700">
-<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301892-457f7014-2dc0-4ad1-b688-43b41fac299a.jpg">
-<img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184301871-c234dfdf-3b3d-46e4-8886-e1ac156c9e4a.jpg">
-<!-- <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG"> -->
+<div width="840">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852040-759da522-fca4-4786-9205-88c622cd4a39.jpg">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851995-fe9f509f-97d4-4967-a3b0-ce2b3c2f5dca.jpg">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851964-4c9086b9-3490-4fcb-82f9-2106c63aa4f3.jpg">
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
