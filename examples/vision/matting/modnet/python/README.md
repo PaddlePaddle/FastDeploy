@@ -29,9 +29,9 @@ python infer.py --model modnet_photographic_portrait_matting.onnx --image test_l
 
 <div width="840">
 <img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852040-759da522-fca4-4786-9205-88c622cd4a39.jpg">
-<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852587-48895efc-d24a-43c9-aeec-d7b0362ab2b9.jpg">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851995-fe9f509f-97d4-4967-a3b0-ce2b3c2f5dca.jpg">
 <img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
-<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852554-6960659f-4fd7-4506-b33b-54e1a9dd89bf.jpg">
+<img width="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851964-4c9086b9-3490-4fcb-82f9-2106c63aa4f3.jpg">
 </div>
 ## MODNet Python接口
 
