@@ -123,7 +123,9 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
         // fd_tensor->data.resize(numel * sizeof(float));
         // memcpy(fd_tensor->data.data(), tensor.data_ptr(),
         //     numel * sizeof(float));
+        std::cout << "test1111111" << std::endl;
         fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
+        std::cout << "test2222222" << std::endl;
         // fd_tensor->dtype = FDDataType::FP32;
         return;
     } else if (data_type == at::kInt) {
