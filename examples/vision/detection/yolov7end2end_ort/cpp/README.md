@@ -1,6 +1,6 @@
 # YOLOv7End2EndORT C++部署示例
 
-本目录下提供`infer.cc`快速完成YOLOv7End2EndORT在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成YOLOv7End2EndORT在CPU/GPU部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -16,6 +16,7 @@ wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-gpu-0.2.0
 make -j
+# 如果预编译库还没有支持该模型，请从develop分支源码编译最新的SDK
 
 #下载官方转换好的yolov7模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-ort-nms.onnx
@@ -26,6 +27,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 0
 # GPU推理
 ./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 1
+# TensorRT + GPU 部署 (暂不支持 会回退到 ORT + GPU)
+./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 2
 ```
 
 运行完成可视化结果如下图所示
