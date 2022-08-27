@@ -18,7 +18,6 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FDTENSOR_FUNC
 /** Excute the maximum operation for input FDTensor along given dims.
     @param x The input tensor.
     @param out The output tensor which stores the result.
@@ -124,5 +123,4 @@ FASTDEPLOY_DECL void ArgMin(const FDTensor& x, FDTensor* out, int64_t axis,
                             FDDataType output_dtype = FDDataType::INT64,
                             bool keep_dim = false, bool flatten = false);
 
-#endif
 }  // namespace fastdeploy
