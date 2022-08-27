@@ -22,6 +22,7 @@ void BindSegmentation(pybind11::module& m);
 void BindMatting(pybind11::module& m);
 void BindFaceDet(pybind11::module& m);
 void BindFaceId(pybind11::module& m);
+void BindOcr(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -42,6 +43,15 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
+  pybind11::class_<vision::OCRResult>(m, "OCRResult")
+      .def(pybind11::init())
+      .def_readwrite("boxes", &vision::OCRResult::boxes)
+      .def_readwrite("text", &vision::OCRResult::text)
+      .def_readwrite("score", &vision::OCRResult::rec_scores)
+      .def_readwrite("cls_score", &vision::OCRResult::cls_scores)
+      .def_readwrite("cls_label", &vision::OCRResult::cls_label)
+      .def("__repr__", &vision::OCRResult::Str)
+      .def("__str__", &vision::OCRResult::Str);
   pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::FaceDetectionResult::boxes)
@@ -81,6 +91,7 @@ void BindVision(pybind11::module& m) {
   BindFaceDet(m);
   BindFaceId(m);
   BindMatting(m);
+  BindOcr(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

@@ -13,13 +13,8 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-from . import detection
-from . import classification
-from . import segmentation
-
-from . import matting
-from . import facedet
-from . import faceid
-from . import ocr
-from . import evaluation
-from .visualize import *
+from .ppocr import PPOCRSystemv3
+from .ppocr import PPOCRSystemv2
+from .ppocr import DBDetector
+from .ppocr import Classifier
+from .ppocr import Recognizer
