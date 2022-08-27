@@ -411,6 +411,9 @@ if(BUILD_FASTDEPLOY_PYTHON)
     target_compile_options(${PY_LIBRARY_NAME} PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
   endif()
 
+  file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/fastdeploy/libs)
+  file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/fastdeploy/libs)
+
   if(WIN32)
     add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory   ${CMAKE_CURRENT_BINARY_DIR}/Release ${PROJECT_SOURCE_DIR}/fastdeploy/libs/ DEPENDS ${PY_LIBRARY_NAME})
   elseif(APPLE)

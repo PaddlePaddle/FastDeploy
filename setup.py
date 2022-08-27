@@ -20,6 +20,7 @@ from __future__ import unicode_literals
 import shutil
 import os
 
+TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy")
 wheel_name = "fastdeploy-python"
 
@@ -40,7 +41,7 @@ import platform
 from textwrap import dedent
 import multiprocessing
 
-with open("requirements.txt") as fin:
+with open(os.path.join(TOP_DIR, "requirements.txt")) as fin:
     REQUIRED_PACKAGES = fin.read()
 
 setup_configs = dict()
@@ -66,7 +67,6 @@ if setup_configs["WITH_GPU"] == "ON":
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
-TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
 CMAKE_BUILD_DIR = os.path.join(TOP_DIR, '.setuptools-cmake-build')
 
@@ -325,9 +325,9 @@ ext_modules = [
 
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
-    packages = setuptools.find_packages(exclude=['fastdeploy*'])
+    packages = setuptools.find_packages(exclude=['fastdeploy*', 'build_scripts'])
 else:
-    packages = setuptools.find_packages()
+    packages = setuptools.find_packages(exclude=['build_scripts'])
 
 ################################################################################
 # Test
@@ -344,11 +344,12 @@ if sys.version_info[0] == 3:
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    if not os.path.exists(".setuptools-cmake-build"):
-        print("Please execute `python setup.py build` first.")
+    shutil.copy(os.path.join(TOP_DIR, "ThirdPartyNotices.txt"), os.path.join(TOP_DIR, PACKAGE_NAME))
+    shutil.copy(os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
+    if not os.path.exists(os.path.join(TOP_DIR, "fastdeploy", "libs", "third_libs")):
+        print("Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first")
         sys.exit(0)
-    shutil.copy("ThirdPartyNotices.txt", PACKAGE_NAME)
-    shutil.copy("LICENSE", PACKAGE_NAME)
+    sys.path.append(os.path.split(os.path.abspath(__file__))[0])
     from build_scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
