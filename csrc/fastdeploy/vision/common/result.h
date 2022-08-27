@@ -22,6 +22,7 @@ enum FASTDEPLOY_DECL ResultType {
   CLASSIFY,
   DETECTION,
   SEGMENTATION,
+  OCR,
   FACE_DETECTION,
   FACE_RECOGNITION,
   MATTING
@@ -55,6 +56,20 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   void Reserve(int size);
 
   void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL OCRResult : public BaseResult {
+  std::vector<std::array<int, 8>> boxes;
+
+  std::vector<std::string> text;
+  std::vector<float> rec_scores;
+
+  std::vector<float> cls_scores;
+  std::vector<int32_t> cls_label;
+
+  ResultType type = ResultType::OCR;
 
   std::string Str();
 };

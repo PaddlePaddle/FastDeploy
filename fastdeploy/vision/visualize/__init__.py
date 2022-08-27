@@ -40,3 +40,7 @@ def vis_matting_alpha(im_data,
                       remove_small_connected_area=False):
     return C.vision.Visualize.vis_matting_alpha(im_data, matting_result,
                                                 remove_small_connected_area)
+
+
+def vis_ppocr(im_data, det_result):
+    return C.vision.Visualize.vis_ppocr(im_data, det_result)
