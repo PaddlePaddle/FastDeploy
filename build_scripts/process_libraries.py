@@ -55,7 +55,7 @@ def process_on_mac(current_dir):
         filename = os.path.join(libs_path, f)
         if not os.path.isfile(filename):
             continue
-        if f.count("fastdeploy") and f.count(".dylib") > 0:
+        if f.count("fastdeploy") and (f.count(".dylib") > 0 or f.count(".so") > 0):
             fd_libs.append(filename)
 
     pre_commands = list()
@@ -65,7 +65,7 @@ def process_on_mac(current_dir):
 
     commands = list()
     third_libs_path = os.path.join(libs_path, "third_libs")
-    for root, dirs, files in os.walk(third_libs_Path):
+    for root, dirs, files in os.walk(third_libs_path):
         for d in dirs:
             if d != "lib":
                 continue
