@@ -22,7 +22,6 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FDTENSOR_FUNC
 TEST(fastdeploy, reduce_max) {
   FDTensor input, output;
   CheckShape check_shape;
@@ -372,5 +371,4 @@ TEST(fastdeploy, reduce_argmin) {
              expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
-#endif
 }  // namespace fastdeploy

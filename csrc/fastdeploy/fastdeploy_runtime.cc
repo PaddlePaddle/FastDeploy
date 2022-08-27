@@ -197,6 +197,9 @@ void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
 
+void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
+  pd_delete_pass_names.push_back(pass_name);
+}
 void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
@@ -246,7 +249,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::PDINFER;
     } else if (IsBackendAvailable(Backend::OPENVINO)) {
       option.backend = Backend::OPENVINO;
-    } {
+    } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
               << std::endl;
@@ -273,7 +276,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePaddleBackend();
     FDINFO << "Runtime initialized with Backend::PDINFER." << std::endl;
   } else if (option.backend == Backend::OPENVINO) {
-    FDASSERT(option.device == Device::CPU, "Backend::OPENVINO only supports Device::CPU");
+    FDASSERT(option.device == Device::CPU,
+             "Backend::OPENVINO only supports Device::CPU");
     CreateOpenVINOBackend();
     FDINFO << "Runtime initialized with Backend::OPENVINO." << std::endl;
   } else {
@@ -306,6 +310,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;
+  pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");

@@ -40,6 +40,8 @@ struct PaddleBackendOption {
   int gpu_mem_init_size = 100;
   // gpu device id
   int gpu_id = 0;
+
+  std::vector<std::string> delete_pass_names = {};
 };
 
 // Share memory buffer with paddle_infer::Tensor from fastdeploy::FDTensor

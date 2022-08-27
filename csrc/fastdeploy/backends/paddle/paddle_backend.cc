@@ -29,6 +29,13 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
+  if (!option.delete_pass_names.empty()) {
+    auto pass_builder = config_.pass_builder();
+    for (int i = 0; i < option.delete_pass_names.size(); i++) {
+      FDINFO << "Delete pass : " << option.delete_pass_names[i] << std::endl;
+      pass_builder->DeletePass(option.delete_pass_names[i]);
+    }
+  }
   if (option.cpu_thread_num <= 0) {
     config_.SetCpuMathLibraryNumThreads(8);
   } else {

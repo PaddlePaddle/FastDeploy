@@ -17,7 +17,6 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
 
 template <typename T>
 struct TransposeNormalKernel {
@@ -115,5 +114,5 @@ void Transpose(const FDTensor& x, FDTensor* out,
   FD_VISIT_ALL_TYPES(x.dtype, "TransposeKernel",
                      ([&] { TransposeKernel<data_t>(x, out, dims); }));
 }
-#endif
+
 }  // namespace fastdeploy
