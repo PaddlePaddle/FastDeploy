@@ -125,7 +125,7 @@ if os.name == "nt":
 
 
 try:
-    from .lib.@PY_LIBRARY_NAME@ import *
+    from .libs.@PY_LIBRARY_NAME@ import *
 except:
     raise RuntimeError("FastDeploy initalized failed!")
 
