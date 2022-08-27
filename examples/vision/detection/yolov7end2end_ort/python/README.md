@@ -5,12 +5,13 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-本目录下提供`infer.py`快速完成YOLOv7End2End在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成YOLOv7End2End在CPU/GPU部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/yolov7end2end_ort/python/
+# 如果预编译的Python wheel包还没有支持该模型，请从develop分支源码编译最新python包进行安装
 
 #下载yolov7模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-ort-nms.onnx
@@ -20,6 +21,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer.py --model yolov7-end2end-ort-nms.onnx --image 000000014439.jpg --device cpu
 # GPU推理
 python infer.py --model yolov7-end2end-ort-nms.onnx --image 000000014439.jpg --device gpu
+# TensorRT + GPU推理 (暂不支持 会回退到 ORT + GPU)
+python infer.py --model yolov7-end2end-ort-nms.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
