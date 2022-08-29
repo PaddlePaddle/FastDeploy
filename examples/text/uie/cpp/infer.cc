@@ -13,12 +13,9 @@
 // limitations under the License.
 #include <iostream>
 #include <sstream>
+#include <vector>
 
-#include "fastdeploy/function/reduce.h"
-#include "fastdeploy/function/softmax.h"
 #include "fastdeploy/text.h"
-#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
-#include "uie.h"
 
 using namespace paddlenlp;
 
@@ -48,9 +45,12 @@ int main(int argc, char* argv[]) {
   std::string model_path = model_dir + sep + "inference.pdmodel";
   std::string param_path = model_dir + sep + "inference.pdiparams";
   std::string vocab_path = model_dir + sep + "vocab.txt";
+  using fastdeploy::text::SchemaNode;
+  using fastdeploy::text::UIEResult;
 
-  auto predictor = UIEModel(model_path, param_path, vocab_path, 0.5, 128,
-                            {"时间", "选手", "赛事名称"}, option);
+  auto predictor =
+      fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
+                                 {"时间", "选手", "赛事名称"}, option);
   fastdeploy::FDINFO << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition
