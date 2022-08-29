@@ -18,8 +18,8 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-bool comparison_box(const std::array<int, 8>& result1,
-                    const std::array<int, 8>& result2) {
+bool CompareBox(const std::array<int, 8>& result1,
+                const std::array<int, 8>& result2) {
   if (result1[1] < result2[1]) {
     return true;
   } else if (result1[1] == result2[1]) {
@@ -29,8 +29,8 @@ bool comparison_box(const std::array<int, 8>& result1,
   }
 }
 
-void sorted_boxes(OCRResult* result) {
-  std::sort(result->boxes.begin(), result->boxes.end(), comparison_box);
+void SortBoxes(OCRResult* result) {
+  std::sort(result->boxes.begin(), result->boxes.end(), CompareBox);
 
   for (int i = 0; i < result->boxes.size() - 1; i++) {
     if (abs(result->boxes[i + 1][1] - result->boxes[i][1]) < 10 &&
