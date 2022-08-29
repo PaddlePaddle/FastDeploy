@@ -48,8 +48,8 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("boxes", &vision::OCRResult::boxes)
       .def_readwrite("text", &vision::OCRResult::text)
       .def_readwrite("score", &vision::OCRResult::rec_scores)
-      .def_readwrite("cls_score", &vision::OCRResult::cls_scores)
-      .def_readwrite("cls_label", &vision::OCRResult::cls_label)
+      .def_readwrite("cls_scores", &vision::OCRResult::cls_scores)
+      .def_readwrite("cls_labels", &vision::OCRResult::cls_labels)
       .def("__repr__", &vision::OCRResult::Str)
       .def("__str__", &vision::OCRResult::Str);
   pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
