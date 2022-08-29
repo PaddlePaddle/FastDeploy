@@ -215,14 +215,14 @@ if(ENABLE_TRT_BACKEND)
   endif()
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
+  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/build_scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
   if(UNIX)
-  execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-	          RESULT_VARIABLE result
-                  OUTPUT_VARIABLE curr_out
-                  ERROR_VARIABLE  curr_out)
-  message(STATUS "result:${result} out:${curr_out}")
+    execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+  	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+  	          RESULT_VARIABLE result
+                    OUTPUT_VARIABLE curr_out
+                    ERROR_VARIABLE  curr_out)
+    message(STATUS "result:${result} out:${curr_out}")
   endif()
 
 endif()
@@ -294,6 +294,11 @@ if(MSVC)
   target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
+
+if(WIN32)
+  add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+  add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+endif()
 
 # add examples after prepare include paths for third-parties
 if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
@@ -412,6 +417,17 @@ if(BUILD_FASTDEPLOY_PYTHON)
     target_compile_options(${PY_LIBRARY_NAME} PRIVATE $<$<NOT:$<CONFIG:Debug>>:/MT> $<$<CONFIG:Debug>:/MTd>)
   endif()
 
+  file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/fastdeploy/libs)
+  file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/fastdeploy/libs)
+
+  if(WIN32)
+    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory   ${CMAKE_CURRENT_BINARY_DIR}/Release ${PROJECT_SOURCE_DIR}/fastdeploy/libs/ DEPENDS ${PY_LIBRARY_NAME})
+  elseif(APPLE)
+    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so** ${CMAKE_CURRENT_BINARY_DIR}/*.dylib** ${PROJECT_SOURCE_DIR}/fastdeploy/libs/ DEPENDS ${PY_LIBRARY_NAME})
+  else()
+    add_custom_target(copy_fd_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/*.so* ${PROJECT_SOURCE_DIR}/fastdeploy/libs/ DEPENDS ${PY_LIBRARY_NAME})
+  endif()
+  add_custom_target(copy_third_libraries ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install ${PROJECT_SOURCE_DIR}/fastdeploy/libs/third_libs DEPENDS ${PY_LIBRARY_NAME})
 endif(BUILD_FASTDEPLOY_PYTHON)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
