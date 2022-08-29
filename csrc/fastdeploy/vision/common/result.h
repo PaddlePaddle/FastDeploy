@@ -67,7 +67,7 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::vector<float> rec_scores;
 
   std::vector<float> cls_scores;
-  std::vector<int32_t> cls_label;
+  std::vector<int32_t> cls_labels;
 
   ResultType type = ResultType::OCR;
 

@@ -326,8 +326,9 @@ void PostProcessor::BoxesFromBitmap(
 
 //方法根据识别结果获取目标框位置
 void PostProcessor::FilterTagDetRes(
-    std::vector<std::vector<std::vector<int>>> *boxes, float ratio_h,
-    float ratio_w, const std::map<std::string, std::array<float, 2>> &im_info) {
+    std::vector<std::vector<std::vector<int>>> *boxes, const float ratio_h,
+    const float ratio_w,
+    const std::map<std::string, std::array<float, 2>> &im_info) {
   int oriimg_h = im_info.at("input_shape")[0];
   int oriimg_w = im_info.at("input_shape")[1];
 
@@ -349,10 +350,6 @@ void PostProcessor::FilterTagDetRes(
                           pow((*boxes)[n][0][1] - (*boxes)[n][1][1], 2)));
     rect_height = int(sqrt(pow((*boxes)[n][0][0] - (*boxes)[n][3][0], 2) +
                            pow((*boxes)[n][0][1] - (*boxes)[n][3][1], 2)));
-
-    //原始实现，小于4的跳过，只return大于4的
-    // if (rect_width <= 4 || rect_height <= 4) continue;
-    // root_points.push_back((*boxes)[n]);
 
     //小于4的删除掉. erase配合逆序遍历.
     if (rect_width <= 4 || rect_height <= 4) {
