@@ -63,8 +63,8 @@ bool DBDetector::Initialize() {
   return true;
 }
 
-void OcrDetectorResizeImage(Mat* img, int max_size_len, float& ratio_h,
-                            float& ratio_w) {
+void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
+                            float* ratio_w) {
   int w = img->Width();
   int h = img->Height();
 
@@ -86,8 +86,8 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float& ratio_h,
 
   Resize::Run(img, resize_w, resize_h);
 
-  ratio_h = float(resize_h) / float(h);
-  ratio_w = float(resize_w) / float(w);
+  *ratio_h = float(resize_h) / float(h);
+  *ratio_w = float(resize_w) / float(w);
 }
 
 //预处理
@@ -95,7 +95,7 @@ bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info) {
   // Resize
-  OcrDetectorResizeImage(mat, max_side_len, ratio_h, ratio_w);
+  OcrDetectorResizeImage(mat, max_side_len, &ratio_h, &ratio_w);
   // Normalize
   Normalize::Run(mat, mean, scale, true);
 
@@ -112,7 +112,7 @@ bool DBDetector::Preprocess(
 
 //后处理
 bool DBDetector::Postprocess(
-    FDTensor& infer_result, std::vector<std::vector<std::vector<int>>>* boxes,
+    FDTensor& infer_result, std::vector<std::array<int, 8>>* boxes_result,
     const std::map<std::string, std::array<float, 2>>& im_info) {
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
@@ -142,17 +142,33 @@ bool DBDetector::Postprocess(
     cv::dilate(bit_map, bit_map, dila_ele);
   }
 
-  post_processor_.BoxesFromBitmap(pred_map, boxes, bit_map, det_db_box_thresh,
+  // boxes_result 的value，传给boxes
+
+  std::vector<std::vector<std::vector<int>>> boxes;
+
+  post_processor_.BoxesFromBitmap(pred_map, &boxes, bit_map, det_db_box_thresh,
                                   det_db_unclip_ratio, det_db_score_mode);
 
-  post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, im_info);
+  post_processor_.FilterTagDetRes(&boxes, ratio_h, ratio_w, im_info);
+
+  // boxes to boxes_result
+  for (int i = 0; i < boxes.size(); i++) {
+    std::array<int, 8> new_box;
+    int k = 0;
+    for (auto& vec : boxes[i]) {
+      for (auto& e : vec) {
+        new_box[k++] = e;
+      }
+    }
+    boxes_result->push_back(new_box);
+  }
 
   return true;
 }
 
 //预测
-bool DBDetector::Predict(
-    cv::Mat* img, std::vector<std::vector<std::vector<int>>>* boxes_result) {
+bool DBDetector::Predict(cv::Mat* img,
+                         std::vector<std::array<int, 8>>* boxes_result) {
   Mat mat(*img);
 
   std::vector<FDTensor> input_tensors(1);

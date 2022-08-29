@@ -59,8 +59,8 @@ class PostProcessor {
                        const std::string &det_db_score_mode);
 
   void FilterTagDetRes(
-      std::vector<std::vector<std::vector<int>>> *boxes, float ratio_h,
-      float ratio_w,
+      std::vector<std::vector<std::vector<int>>> *boxes, const float ratio_h,
+      const float ratio_w,
       const std::map<std::string, std::array<float, 2>> &im_info);
 
  private:
