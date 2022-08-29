@@ -87,6 +87,7 @@ void BindRuntime(pybind11::module& m) {
 
              std::vector<FDTensor> outputs(self.NumOutputs());
              self.Infer(inputs, &outputs);
+             std::cout << "test3333333" << std::endl;
 
              std::vector<pybind11::array> results;
              results.reserve(outputs.size());
@@ -94,7 +95,9 @@ void BindRuntime(pybind11::module& m) {
                auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
                results.emplace_back(
                    pybind11::array(numpy_dtype, outputs[i].shape));
-               memcpy(results[i].mutable_data(), outputs[i].data.data(),
+            //    memcpy(results[i].mutable_data(), outputs[i].data.data(),
+            //           outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
+                memcpy(results[i].mutable_data(), outputs[i].Data(),
                       outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
              }
              return results;
