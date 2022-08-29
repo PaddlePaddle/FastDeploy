@@ -49,6 +49,17 @@ def add_dll_search_dir(dir_path):
         os.add_dll_directory(dir_path)
 
 
+def try_pre_find_cudart_dll(cuda_shared_lib_dir: str, cuda_version: str) -> bool:
+    if cuda_shared_lib_dir is None or cuda_version is None:
+        print("[FastDeploy][ERROR]: cuda_shared_lib_dir and cuda_version can not be NoneTpye.")
+        return False
+    # TODO(qiuyanjun): add Linux and Mac cudart *.so|*.dylib check
+    major_version_number = int(cuda_version.strip().strip("v").split(".")[0])
+    cudart_lib_name = f"cudart64_{major_version_number}0.dll"
+    cudart_lib_path = os.path.join(cuda_shared_lib_dir, cudart_lib_name)
+    return os.path.exists(cudart_lib_path)
+
+
 def add_cuda_shared_lib_dir_windows():
     if is_built_with_gpu():
         # if FastDeploy built with gpu and want to run
@@ -63,10 +74,10 @@ def add_cuda_shared_lib_dir_windows():
         default_cuda_dir = get_default_cuda_directory()
         default_cuda_version = os.path.basename(default_cuda_dir)  # v11.2
         cuda_shared_lib_dir = os.path.join(default_cuda_dir, "bin")
+        custom_cuda_envs = ["CUDA_DIRECTORY", "CUDA_HOME", "CUDA_ROOT", "CUDA_PATH"]
+        custom_cuda_dir = "NOTFOUNDED"
         if not os.path.exists(cuda_shared_lib_dir):
             # try to get cuda directory from user's local env
-            custom_cuda_dir = "NOTFOUNDED"
-            custom_cuda_envs = ["CUDA_DIRECTORY", "CUDA_HOME", "CUDA_ROOT", "CUDA_PATH"]
             for custom_env in custom_cuda_envs:
                 custom_cuda_dir = os.getenv(custom_env, "NOTFOUNDED")
                 custom_cuda_dir = custom_cuda_dir.strip().split(";")[0]
@@ -79,36 +90,20 @@ def add_cuda_shared_lib_dir_windows():
                     \n--- this path should look like: {default_cuda_dir}. \
                     \n--- Check FAQ: {base_url + 'develop/docs/FAQ.md'}")
                 return
-            # check cuda version
-            custom_cuda_version = os.path.basename(custom_cuda_dir) # v11.2
-            if default_cuda_version != custom_cuda_version:
-                logging.warnings.warn(
-                    f"\n--- FastDeploy was built with CUDA version {default_cuda_version}, \
-                    \n--- but found custom CUDA version {custom_cuda_version} at {custom_cuda_dir} \
-                    \n--- Please setup one of {custom_cuda_envs} manually, \
-                    \n--- this path should look like: {default_cuda_dir}. \
-                    \n--- Check FAQ: {base_url + 'develop/docs/FAQ.md'}")
-                return
             # path to cuda dlls
             cuda_shared_lib_dir = os.path.join(custom_cuda_dir, "bin")
         add_dll_search_dir(cuda_shared_lib_dir)
-        print(f"[FastDeploy][CUDA]: Found valid cuda directroy and added it: -> {cuda_shared_lib_dir}")
-
-
-def try_pre_load_fastdeploy_dll(dll_name=None):
-    # Try pre-load fastdeploy dll in windows to
-    # make sure the added custom dll directory
-    # has been activated. Reference:
-    # [1] https://github.com/conda/conda/issues/10897
-    # [2] https://github.com/dhermes/bezier/issues/237
-    from ctypes import cdll
-    if dll_name is None:
-        dll_name = "fastdeploy.dll"
-    try:
-        dll = cdll.LoadLibrary(dll_name)
-        del dll
-    except Exception as e:
-        raise RuntimeError(f"Can not pre load dll: {dso_name}. {e}")
+        # try pre find cudart with major version, e.g 11.x/10.x
+        if not try_pre_find_cudart_dll(cuda_shared_lib_dir, default_cuda_version):
+            custom_cuda_version = os.path.basename(custom_cuda_dir)
+            logging.warnings.warn(
+                f"\n--- FastDeploy was built with CUDA version {default_cuda_version}, \
+                \n--- but found custom CUDA version {custom_cuda_version} at {custom_cuda_dir} \
+                \n--- Please setup one of {custom_cuda_envs} manually, \
+                \n--- this path should look like: {default_cuda_dir}. \
+                \n--- Check FAQ: {base_url + 'develop/docs/FAQ.md'}")
+            return
+        print(f"[FastDeploy][INFO]:  Successfully found CUDA ToolKit from -> {cuda_shared_lib_dir}")
 
 
 if os.name == "nt":
@@ -121,11 +116,10 @@ if os.name == "nt":
         for d in dirs:
             if d == "lib" or d == "bin":
                 add_dll_search_dir(os.path.join(dirname, root, d))
-    try_pre_load_fastdeploy_dll()
 
 
 try:
-    from .@PY_LIBRARY_NAME@ import *
+    from .libs.@PY_LIBRARY_NAME@ import *
 except:
     raise RuntimeError("FastDeploy initalized failed!")
 
