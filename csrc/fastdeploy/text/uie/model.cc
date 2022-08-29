@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "uie.h"
+#include "fastdeploy/text/uie/model.h"
 #include <algorithm>
 #include <codecvt>
 #include <locale>
@@ -21,6 +21,9 @@
 
 #include "faster_tokenizer/pretokenizers/pretokenizer.h"
 #include "faster_tokenizer/utils/utf8.h"
+
+namespace fastdeploy {
+namespace text {
 
 static std::string DBC2SBC(const std::string& content) {
   std::string result;
@@ -644,3 +647,6 @@ void UIEModel::Predict(
     }
   }
 }
+
+}  // namespace text
+}  // namespace fastdeploy
