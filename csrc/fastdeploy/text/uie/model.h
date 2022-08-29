@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
 #include <ostream>
@@ -24,7 +25,10 @@
 
 using namespace paddlenlp;
 
-struct UIEResult {
+namespace fastdeploy {
+namespace text {
+
+struct FASTDEPLOY_DECL UIEResult {
   size_t start_;
   size_t end_;
   double probability_;
@@ -35,13 +39,14 @@ struct UIEResult {
       : start_(start), end_(end), probability_(probability), text_(text) {}
 };
 
-std::ostream& operator<<(std::ostream& os, const UIEResult& result);
-std::ostream& operator<<(
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& os,
+                                         const UIEResult& result);
+FASTDEPLOY_DECL std::ostream& operator<<(
     std::ostream& os,
     const std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>&
         results);
 
-struct SchemaNode {
+struct FASTDEPLOY_DECL SchemaNode {
   std::string name_;
   std::vector<std::vector<std::string>> prefix_;
   std::vector<std::vector<UIEResult*>> relations_;
@@ -82,7 +87,7 @@ struct Schema {
   friend class UIEModel;
 };
 
-struct UIEModel {
+struct FASTDEPLOY_DECL UIEModel {
  public:
   UIEModel(
       const std::string& model_file, const std::string& params_file,
@@ -154,3 +159,6 @@ struct UIEModel {
   float position_prob_;
   faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer_;
 };
+
+}  // namespace text
+}  // namespace fastdeploy
