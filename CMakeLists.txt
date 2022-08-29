@@ -294,6 +294,11 @@ if(MSVC)
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
+if(WIN32)
+  add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+  add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+endif()
+
 # add examples after prepare include paths for third-parties
 if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   add_definitions(-DBUILD_EXAMPLES)

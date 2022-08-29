@@ -88,6 +88,14 @@ def process_on_mac(current_dir):
         assert subprocess.Popen(
             cmd, shell=True) != 0, "Execute command failed: {}".format(cmd)
 
+def process_on_windows(current_dir):
+    libs_path = os.path.join(current_dir, "fastdeploy", "libs")
+    third_libs_path = os.path.join(libs_path, "third_libs")
+    for root, dirs, files in os.walk(third_libs_path):
+        for f in files:
+            file_path = os.path.join(root, f)
+            if f.count('onnxruntime') > 0 and f.endswith('.dll'):
+                shutil.copy(file_path, libs_path)
 
 def get_all_files(dirname):
     files = list()
@@ -103,6 +111,8 @@ def process_libraries(current_dir):
         process_on_linux(current_dir)
     elif platform.system().lower() == "darwin":
         process_on_mac(current_dir)
+    elif platform.system().lower() == "windows":
+        process_on_windows(current_dir)
 
     all_files = get_all_files(os.path.join(current_dir, "fastdeploy", "libs"))
     package_data = list()

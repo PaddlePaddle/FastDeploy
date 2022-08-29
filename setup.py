@@ -357,8 +357,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     setuptools.setup(
         name=wheel_name,
         version=VersionInfo.version,
-        description="Deploy Kit Tool For Deeplearning models.",
         ext_modules=ext_modules,
+        description="Deploy Kit Tool For Deeplearning models.",
         packages=packages,
         package_data=package_data,
         include_package_data=True,
