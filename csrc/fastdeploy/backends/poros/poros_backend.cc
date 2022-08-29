@@ -118,9 +118,7 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
         mod.to(at::kCPU);
     }
     // get inputs_nums and outputs_nums
-    torch::jit::Module intermediate_module = torch::jit::freeze_module(mod);
-    auto method = intermediate_module.get_method("forward");
-    auto graph = method.graph();
+    auto graph = mod.get_method("forward").graph();
     auto inputs = graph.external_input();
     std::cout << "test_wjj1234" << inputs.size() << std::endl;
     auto outputs = graph.external_output();
