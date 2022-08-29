@@ -415,7 +415,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
                     rpaths.append("$ORIGIN/" + os.path.join("libs/third_libs",
                                                             path))
         rpaths = ":".join(rpaths)
-        command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
+        command = "patchelf --force-rpath --set-rpath '{}' ".format(rpaths) + pybind_so_file
         print(
             "=========================Set rpath for library===================")
         print(command)
