@@ -55,7 +55,8 @@ def process_on_mac(current_dir):
         filename = os.path.join(libs_path, f)
         if not os.path.isfile(filename):
             continue
-        if f.count("fastdeploy") and (f.count(".dylib") > 0 or f.count(".so") > 0):
+        if f.count("fastdeploy") and (f.count(".dylib") > 0 or
+                                      f.count(".so") > 0):
             fd_libs.append(filename)
 
     pre_commands = list()
@@ -88,6 +89,7 @@ def process_on_mac(current_dir):
         assert subprocess.Popen(
             cmd, shell=True) != 0, "Execute command failed: {}".format(cmd)
 
+
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")
     third_libs_path = os.path.join(libs_path, "third_libs")
@@ -96,6 +98,7 @@ def process_on_windows(current_dir):
             file_path = os.path.join(root, f)
             if f.count('onnxruntime') > 0 and f.endswith('.dll'):
                 shutil.copy(file_path, libs_path)
+
 
 def get_all_files(dirname):
     files = list()
@@ -116,6 +119,15 @@ def process_libraries(current_dir):
 
     all_files = get_all_files(os.path.join(current_dir, "fastdeploy", "libs"))
     package_data = list()
+
+    if platform.system().lower() == "windows":
+        for f in all_files:
+            if f.endswith(".pyd") or f.endswith("lib") or f.endswith("dll"):
+                package_data.append(
+                    os.path.relpath(f, os.path.join(current_dir,
+                                                    "fastdeploy")))
+        return package_data
+
     filters = [".vcxproj", ".png", ".java", ".h", ".cc", ".cpp", ".hpp"]
     for f in all_files:
         remain = True
