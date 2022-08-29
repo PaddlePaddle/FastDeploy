@@ -119,9 +119,9 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     }
     // get inputs_nums and outputs_nums
     auto graph = mod.get_method("forward").graph();
-    auto inputs = graph->external_input();
+    auto inputs = graph->inputs();
     std::cout << "test_wjj1234" << inputs.size() << std::endl;
-    auto outputs = graph->external_output();
+    auto outputs = graph->outputs();
     std::cout << "test_wjj5678" << outputs.size() << std::endl;
     _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
     if (_poros_module == nullptr) {
