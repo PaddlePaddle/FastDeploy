@@ -52,9 +52,7 @@ int main(int argc, char* argv[]) {
       fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
                                  {"时间", "选手", "赛事名称"}, option);
   fastdeploy::FDINFO << "After init predictor" << std::endl;
-  std::vector<
-      std::unordered_map<std::string, std::vector<fastdeploy::text::UIEResult>>>
-      results;
+  std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition
   predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷"
                      "爱凌以188.25分获得金牌！"},
