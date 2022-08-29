@@ -117,6 +117,14 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     } else {
         mod.to(at::kCPU);
     }
+    // get inputs_nums and outputs_nums
+    torch::jit::Module intermediate_module = torch::jit::freeze_module(mod);
+    auto method = intermediate_module.get_method("forward");
+    auto graph = method.graph();
+    auto inputs = graph.external_input();
+    std::cout << "test_wjj1234" << inputs.size() << std::endl;
+    auto outputs = graph.external_output();
+    std::cout << "test_wjj5678" << outputs.size() << std::endl;
     _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
@@ -153,6 +161,9 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     }
     // Infer
     auto poros_outputs = _poros_module->forward(poros_inputs);
+    std::cout << "test_wjj000000" << poros_outputs.isTensor() << std::endl;
+    std::cout << "test_wjj000000" << poros_outputs.isList() << std::endl;
+    std::cout << "test_wjj000000" << poros_outputs.isTuple() << std::endl;
     // std::vector<at::Tensor> poros_outputs_list;
     // poros_outputs_list.push_back(poros_outputs.toTensor());
     // deal with multi outputs
