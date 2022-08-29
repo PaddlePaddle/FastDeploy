@@ -30,6 +30,9 @@ namespace ocr {
 
 cv::Mat GetRotateCropImage(const cv::Mat &srcimage,
                            const std::array<int, 8> &box);
+
+void sorted_boxes(OCRResult *result);
+
 }  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
