@@ -32,7 +32,7 @@ void PPOCRSystemv3::Detect(cv::Mat* img,
 
   result->boxes = boxes_result;
 
-  fastdeploy::vision::ocr::sorted_boxes(result);
+  fastdeploy::vision::ocr::SortBoxes(result);
 }
 
 void PPOCRSystemv3::Recognize(cv::Mat* img,
