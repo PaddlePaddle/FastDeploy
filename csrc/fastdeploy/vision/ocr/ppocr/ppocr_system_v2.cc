@@ -26,45 +26,31 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* ocr_det,
 
 void PPOCRSystemv2::Detect(cv::Mat* img,
                            fastdeploy::vision::OCRResult* result) {
-  std::vector<std::vector<std::vector<int>>> boxes;
+  std::vector<std::array<int, 8>> boxes;
 
   this->detector->Predict(img, &boxes);
 
-  // vector<vector>转array
-  for (int i = 0; i < boxes.size(); i++) {
-    std::array<int, 8> new_box;
-    int k = 0;
-    for (auto& vec : boxes[i]) {
-      for (auto& e : vec) {
-        new_box[k++] = e;
-      }
-    }
-    (result->boxes).push_back(new_box);
-  }
+  result->boxes = boxes;
 }
 
 void PPOCRSystemv2::Recognize(cv::Mat* img,
                               fastdeploy::vision::OCRResult* result) {
-  std::string rec_texts = "";
-  float rec_text_scores = 0;
+  std::tuple<std::string, float> rec_result;
 
-  this->recognizer->rec_image_shape[1] =
-      32;  // OCRv2模型此处需要设置为32，其他与OCRv3一致
-  this->recognizer->Predict(img, rec_texts, rec_text_scores);
+  this->recognizer->Predict(img, &rec_result);
 
-  result->text.push_back(rec_texts);
-  result->rec_scores.push_back(rec_text_scores);
+  result->text.push_back(std::get<0>(rec_result));
+  result->rec_scores.push_back(std::get<1>(rec_result));
 }
 
 void PPOCRSystemv2::Classify(cv::Mat* img,
                              fastdeploy::vision::OCRResult* result) {
-  int cls_label = 0;
-  float cls_scores = 0;
+  std::tuple<int, float> cls_result;
 
-  this->classifier->Predict(img, cls_label, cls_scores);
+  this->classifier->Predict(img, &cls_result);
 
-  result->cls_label.push_back(cls_label);
-  result->cls_scores.push_back(cls_scores);
+  result->cls_labels.push_back(std::get<0>(cls_result));
+  result->cls_scores.push_back(std::get<1>(cls_result));
 }
 
 bool PPOCRSystemv2::Predict(cv::Mat* img,
@@ -74,7 +60,7 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
     if (this->classifier->initialized != 0) {
       this->Classify(img, result);
       //摆正单张图像
-      if ((result->cls_label)[0] % 2 == 1 &&
+      if ((result->cls_labels)[0] % 2 == 1 &&
           (result->cls_scores)[0] > this->classifier->cls_thresh) {
         cv::rotate(*img, *img, 1);
       }
@@ -88,7 +74,6 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
     //从DET模型开始
     //一张图,会输出多个“小图片”，送给后续模型
     this->Detect(img, result);
-    std::cout << "Finish Det Prediction!" << std::endl;
     // crop image
     std::vector<cv::Mat> img_list;
 
@@ -105,20 +90,18 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
       }
 
       for (int i = 0; i < img_list.size(); i++) {
-        if ((result->cls_label)[i] % 2 == 1 &&
+        if ((result->cls_labels)[i] % 2 == 1 &&
             (result->cls_scores)[i] > this->classifier->cls_thresh) {
           std::cout << "Rotate this image " << std::endl;
           cv::rotate(img_list[i], img_list[i], 1);
         }
       }
-      std::cout << "Finish Cls Prediction!" << std::endl;
     }
     // rec
     if (this->recognizer->initialized != 0) {
       for (int i = 0; i < img_list.size(); i++) {
         this->Recognize(&img_list[i], result);
       }
-      std::cout << "Finish Rec Prediction!" << std::endl;
     }
   }
 
