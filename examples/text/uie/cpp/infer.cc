@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
   std::string param_path = model_dir + sep + "inference.pdiparams";
   std::string vocab_path = model_dir + sep + "vocab.txt";
   using fastdeploy::text::SchemaNode;
+  using fastdeploy::text::UIEResult;
 
   auto predictor =
       fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
