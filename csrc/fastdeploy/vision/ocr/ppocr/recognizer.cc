@@ -89,7 +89,7 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-void OcrRecognizerResizeImage(Mat* mat, float wh_ratio,
+void OcrRecognizerResizeImage(Mat* mat, const float& wh_ratio,
                               const std::vector<int>& rec_image_shape) {
   int imgC, imgH, imgW;
   imgC = rec_image_shape[0];
@@ -135,8 +135,8 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
 }
 
 //后处理
-bool Recognizer::Postprocess(FDTensor& infer_result, std::string& rec_texts,
-                             float& rec_text_scores) {
+bool Recognizer::Postprocess(FDTensor& infer_result,
+                             std::tuple<std::string, float>* rec_result) {
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
@@ -168,15 +168,15 @@ bool Recognizer::Postprocess(FDTensor& infer_result, std::string& rec_texts,
 
   score /= count;
 
-  rec_texts = str_res;
-  rec_text_scores = score;
+  std::get<0>(*rec_result) = str_res;
+  std::get<1>(*rec_result) = score;
 
   return true;
 }
 
 //预测
-bool Recognizer::Predict(cv::Mat* img, std::string& rec_texts,
-                         float& rec_text_scores) {
+bool Recognizer::Predict(cv::Mat* img,
+                         std::tuple<std::string, float>* rec_result) {
   Mat mat(*img);
 
   std::vector<FDTensor> input_tensors(1);
@@ -194,7 +194,7 @@ bool Recognizer::Predict(cv::Mat* img, std::string& rec_texts,
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], rec_texts, rec_text_scores)) {
+  if (!Postprocess(output_tensors[0], rec_result)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
