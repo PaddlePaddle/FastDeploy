@@ -120,9 +120,15 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     // get inputs_nums and outputs_nums
     auto graph = mod.get_method("forward").graph();
     auto inputs = graph->inputs();
-    std::cout << "test_wjj1234" << inputs.size() << std::endl;
+    std::cout << "test_wjj1234 " << inputs.size() << std::endl;
+    for (int i=0;i<inputs.size();++i) {
+        std::cout << "test_wjj_aaaaa" << inputs[i]->debugName() << std::endl;
+    }
     auto outputs = graph->outputs();
-    std::cout << "test_wjj5678" << outputs.size() << std::endl;
+    std::cout << "test_wjj5678 " << outputs.size() << std::endl;
+    for (int i=0;i<outputs.size();++i) {
+        std::cout << "test_wjj_bbbbb" << outputs[i]->debugName() << std::endl;
+    }
     _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
