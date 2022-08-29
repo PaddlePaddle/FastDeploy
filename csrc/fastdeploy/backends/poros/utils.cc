@@ -108,49 +108,17 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
 }
 
 void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
+    std::cout << "test_wjj4444444" << std::endl;
     const auto data_type = tensor.scalar_type();
     std::vector<int64_t> shape;
     auto sizes = tensor.sizes();
     for (size_t i = 0; i < sizes.size(); i++) {
       shape.push_back(sizes[i]);
     }
-    // fd_tensor->shape = shape;
-    // fd_tensor->dtype = GetFdDtype(data_type);
     auto fd_dtype = GetFdDtype(data_type);
-    size_t numel = tensor.numel();
-
-    if (data_type == at::kFloat) {
-        // fd_tensor->data.resize(numel * sizeof(float));
-        // memcpy(fd_tensor->data.data(), tensor.data_ptr(),
-        //     numel * sizeof(float));
-        std::cout << "test1111111" << std::endl;
-        fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
-        std::cout << "test2222222" << std::endl;
-        // fd_tensor->dtype = FDDataType::FP32;
-        return;
-    } else if (data_type == at::kInt) {
-        fd_tensor->data.resize(numel * sizeof(int32_t));
-        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
-            numel * sizeof(int32_t));
-        fd_tensor->dtype = FDDataType::INT32;
-        return;
-    } else if (data_type == at::kLong) {
-        fd_tensor->data.resize(numel * sizeof(int64_t));
-        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
-            numel * sizeof(int64_t));
-        fd_tensor->dtype = FDDataType::INT64;
-        return;
-    } else if (data_type == at::kDouble) {
-        fd_tensor->data.resize(numel * sizeof(double));
-        memcpy(fd_tensor->data.data(), tensor.data_ptr(),
-            numel * sizeof(double));
-        fd_tensor->dtype = FDDataType::FP64;
-        return;
-    } else {
-        FDASSERT(false, "Unrecognized data type of " + AtType2String(data_type) +
-                            " while calling PorosBackend::CopyToCpu().");
-    }
+    // share memory
+    fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
+    return;
 }
 
-
-}
+} // namespace fastdeploy

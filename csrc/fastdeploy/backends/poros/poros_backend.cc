@@ -153,11 +153,17 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     }
     // Infer
     auto poros_outputs = _poros_module->forward(poros_inputs);
-    std::vector<at::Tensor> poros_outputs_list;
-    poros_outputs_list.push_back(poros_outputs.toTensor());
+    // std::vector<at::Tensor> poros_outputs_list;
+    // poros_outputs_list.push_back(poros_outputs.toTensor());
+    // deal with multi outputs
+    auto poros_outputs_list = poros_outputs.toTuple();
+    std::cout << "test_wjj11111111" << std::endl;
     // Convert PyTorch Tensor to FD Tensor
     for (size_t i = 0; i < poros_outputs_list.size(); ++i) {
-        CopyTensorToCpu(poros_outputs_list[i].to(at::kCPU), &((*outputs)[i]));
+        // CopyTensorToCpu(poros_outputs_list[i].to(at::kCPU), &((*outputs)[i]));
+        std::cout << "test_wjj22222222" << std::endl;
+        CopyTensorToCpu(poros_outputs_list->elements()[i].toTensor().to(at::kCPU), &((*outputs)[i]));
+        std::cout << "test_wjj33333333" << std::endl;
     }
     return true;
 }
