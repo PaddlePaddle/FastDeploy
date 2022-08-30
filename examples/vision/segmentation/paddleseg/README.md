@@ -1,6 +1,6 @@
 # PaddleSeg 模型部署
 
-## 模型版本说明
+## 模型版本说明 
 
 - [PaddleSeg Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6)
 
