@@ -171,38 +171,38 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     // Convert FD Tensor to PyTorch Tensor
     std::vector<torch::jit::IValue> poros_inputs;
     bool is_backend_cuda = _options.device == baidu::mirana::poros::Device::GPU ? true : false; 
-    auto start = std::chrono::system_clock::now();
+    auto start_0 = std::chrono::system_clock::now();
     for (size_t i = 0; i < inputs.size(); ++i) {
         poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
-    auto end = std::chrono::system_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double cost_time = double(duration.count()) *
+    auto end_0 = std::chrono::system_clock::now();
+    auto duration_0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end_0 - start_0);
+    double cost_time_0 = double(duration_0.count()) *
                         std::chrono::microseconds::period::num /
                         std::chrono::microseconds::period::den;
-    std::cout << "preprocess time: " << cost_time << std::endl;
+    std::cout << "preprocess time: " << cost_time_0 << std::endl;
     // Infer
-    auto start = std::chrono::system_clock::now();
+    auto start_1 = std::chrono::system_clock::now();
     auto poros_outputs = _poros_module->forward(poros_inputs);
-    auto end = std::chrono::system_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double cost_time = double(duration.count()) *
+    auto end_1 = std::chrono::system_clock::now();
+    auto duration_1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end_1 - start_1);
+    double cost_time_1 = double(duration_1.count()) *
                         std::chrono::microseconds::period::num /
                         std::chrono::microseconds::period::den;
-    std::cout << "infer time: " << cost_time << std::endl;
+    std::cout << "infer time: " << cost_time_1 << std::endl;
     // Convert PyTorch Tensor to FD Tensor
     if (_numoutputs == 1) {
-        auto start = std::chrono::system_clock::now();
+        auto start_2 = std::chrono::system_clock::now();
         CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
-        auto end = std::chrono::system_clock::now();
-        auto duration =
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        double cost_time = double(duration.count()) *
+        auto end_2 = std::chrono::system_clock::now();
+        auto duration_2 =
+            std::chrono::duration_cast<std::chrono::microseconds>(end_2 - start_2);
+        double cost_time_2 = double(duration_2.count()) *
                             std::chrono::microseconds::period::num /
                             std::chrono::microseconds::period::den;
-        std::cout << "postprocess time: " << cost_time << std::endl;
+        std::cout << "postprocess time: " << cost_time_2 << std::endl;
     }
     // deal with multi outputs
     else {
