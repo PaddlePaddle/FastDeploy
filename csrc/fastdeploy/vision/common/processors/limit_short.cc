@@ -63,8 +63,8 @@ bool LimitShort::GpuRun(Mat* mat) {
 #endif
 
 bool LimitShort::Run(Mat* mat, int max_short, int min_short, ProcLib lib) {
-  auto r = LimitShort(max_short, min_short);
-  return r(mat, lib);
+  auto l = LimitShort(max_short, min_short);
+  return l(mat, lib);
 }
 }  // namespace vision
 }  // namespace fastdeploy

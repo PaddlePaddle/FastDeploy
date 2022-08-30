@@ -21,16 +21,16 @@ make -j
 # 下载PPMatting模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_bgr.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 
 
 # CPU推理
-./infer_demo PP-Matting-512 test_lite_matting_input.jpg test_lite_matting_bgr.jpg 0
+./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 0
 # GPU推理 (TODO: ORT-GPU 推理会报错)
-./infer_demo PP-Matting-512 test_lite_matting_input.jpg test_lite_matting_bgr.jpg 1
+./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 1
 # GPU上TensorRT推理
-./infer_demo PP-Matting-512 test_lite_matting_input.jpg test_lite_matting_bgr.jpg 2
+./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
 ```
 
 运行完成可视化结果如下图所示

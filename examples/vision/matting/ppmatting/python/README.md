@@ -15,14 +15,14 @@ cd FastDeploy/examples/vision/matting/ppmatting/python
 # 下载PPmatting模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_input.jpg
-wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_matting_bgr.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 # CPU推理
-python infer.py --model PP-Matting-512 --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device cpu
+python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device cpu
 # GPU推理 (TODO: ORT-GPU 推理会报错)
-python infer.py --model PP-Matting-512 --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device gpu
+python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model PP-Matting-512 --image test_lite_matting_input.jpg --bg test_lite_matting_bgr.jpg --device gpu --use_trt True
+python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示

@@ -35,7 +35,8 @@ class FASTDEPLOY_DECL Visualize {
                                  const SegmentationResult& result);
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
                                  bool remove_small_connected_area = false);
-  static void RemoveSmallConnectedArea(cv::Mat* alpha_pred, float threshold);
+  static cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
+                                          float threshold);
   static cv::Mat SwapBackgroundMatting(
       const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
       bool remove_small_connected_area = false);

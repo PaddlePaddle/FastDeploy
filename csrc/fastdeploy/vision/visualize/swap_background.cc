@@ -45,7 +45,7 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
   float* alpha_ptr = static_cast<float*>(alpha_copy.data());
   cv::Mat alpha(out_h, out_w, CV_32FC1, alpha_ptr);
   if (remove_small_connected_area) {
-    Visualize::RemoveSmallConnectedArea(&alpha, 0.05f);
+    alpha = Visualize::RemoveSmallConnectedArea(alpha, 0.05f);
   }
   if ((vis_img).type() != CV_8UC3) {
     (vis_img).convertTo((vis_img), CV_8UC3);
@@ -76,8 +76,9 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
 
   return vis_img;
 }
-// 对SegmentationResult做背景替换，由于分割模型可以预测多个类别其中background_label
-// 是
+// 对SegmentationResult做背景替换，由于分割模型可以预测多个类别，其中
+// background_label 表示预测为背景类的标签
+// 由于不同模型和数据集训练的背景类别标签可能不同，用户可以自己输入背景类对应的标签。
 cv::Mat Visualize::SwapBackgroundSegmentation(
     const cv::Mat& im, const cv::Mat& background, int background_label,
     const SegmentationResult& result) {

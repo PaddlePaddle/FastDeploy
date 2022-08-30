@@ -60,3 +60,9 @@ def swap_background_segmentation(im_data, background, background_label,
         SegmentationResult), "The result must be SegmentaitonResult type"
     return C.vision.Visualize.swap_background_segmentation(
         im_data, background, background_label, result)
+
+
+def remove_small_connected_area(alpha_pred_data, threshold):
+    assert len(alpha_pred_data.shape) == 3, "alpha has a (h, w, 1) shape"
+    return C.vision.Visualize.remove_small_connected_area(alpha_pred_data,
+                                                          threshold)

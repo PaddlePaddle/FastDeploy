@@ -71,6 +71,15 @@ void BindVisualize(pybind11::module& m) {
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);
                   })
+      .def_static("remove_small_connected_area",
+                  [](pybind11::array& alpha_pred_data, float threshold) {
+                    cv::Mat alpha_pred = PyArrayToCvMat(alpha_pred_data);
+                    auto vis_im = vision::Visualize::RemoveSmallConnectedArea(
+                        alpha_pred, threshold);
+                    FDTensor out;
+                    vision::Mat(vis_im).ShareWithTensor(&out);
+                    return TensorToPyArray(out);
+                  })
       .def_static("vis_matting_alpha",
                   [](pybind11::array& im_data, vision::MattingResult& result,
                      bool remove_small_connected_area) {

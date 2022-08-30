@@ -39,7 +39,7 @@ cv::Mat Visualize::VisMattingAlpha(const cv::Mat& im,
   float* alpha_ptr = static_cast<float*>(alpha_copy.data());
   cv::Mat alpha(out_h, out_w, CV_32FC1, alpha_ptr);
   if (remove_small_connected_area) {
-    RemoveSmallConnectedArea(&alpha, 0.05f);
+    alpha = RemoveSmallConnectedArea(alpha, 0.05f);
   }
   if ((out_h != height) || (out_w != width)) {
     cv::resize(alpha, alpha, cv::Size(width, height));
