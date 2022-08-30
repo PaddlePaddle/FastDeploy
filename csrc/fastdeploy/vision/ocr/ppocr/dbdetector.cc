@@ -142,8 +142,6 @@ bool DBDetector::Postprocess(
     cv::dilate(bit_map, bit_map, dila_ele);
   }
 
-  // boxes_result 的value，传给boxes
-
   std::vector<std::vector<std::vector<int>>> boxes;
 
   post_processor_.BoxesFromBitmap(pred_map, &boxes, bit_map, det_db_box_thresh,

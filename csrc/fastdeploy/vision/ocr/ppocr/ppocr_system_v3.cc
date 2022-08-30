@@ -31,6 +31,8 @@ void PPOCRSystemv3::Detect(cv::Mat* img,
   this->detector->Predict(img, &boxes_result);
 
   result->boxes = boxes_result;
+
+  fastdeploy::vision::ocr::SortBoxes(result);
 }
 
 void PPOCRSystemv3::Recognize(cv::Mat* img,
