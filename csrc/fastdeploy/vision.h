@@ -23,6 +23,8 @@
 #include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/vision/detection/contrib/yolov7.h"
+#include "fastdeploy/vision/detection/contrib/yolov7end2end_trt.h"
+#include "fastdeploy/vision/detection/contrib/yolov7end2end_ort.h"
 #include "fastdeploy/vision/detection/contrib/yolox.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
 #include "fastdeploy/vision/facedet/contrib/retinaface.h"
