@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/picodet.h"
+#include "fastdeploy/vision/detection/ppdet/pptinypose.h"
 #include "fastdeploy/vision/detection/ppdet/ppyolo.h"
 #include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/detection/ppdet/rcnn.h"

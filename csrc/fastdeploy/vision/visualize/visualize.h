@@ -36,6 +36,10 @@ class FASTDEPLOY_DECL Visualize {
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
                                  bool remove_small_connected_area = false);
   static cv::Mat VisOcr(const cv::Mat& srcimg, const OCRResult& ocr_result);
+
+  static cv::Mat VisKeypointDetection(const cv::Mat& im,
+                                      const KeyPointDetectionResult& results,
+                                      float conf_threshold = 0.5f);
 };
 
 }  // namespace vision

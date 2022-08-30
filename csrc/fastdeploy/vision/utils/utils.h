@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <opencv2/opencv.hpp>
 #include <set>
 #include <vector>
 #include "fastdeploy/core/fd_tensor.h"
@@ -131,6 +132,13 @@ FASTDEPLOY_DECL std::vector<float> L2Normalize(
 FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
+
+void CropImg(cv::Mat& img, cv::Mat& crop_img, std::vector<int>& area,
+             std::vector<float>& center, std::vector<float>& scale,
+             float expandratio = 0.15);
+
+void dark_parse(std::vector<float>& heatmap, std::vector<int>& dim,
+                std::vector<float>& coords, int px, int py, int index, int ch);
 
 }  // namespace utils
 }  // namespace vision

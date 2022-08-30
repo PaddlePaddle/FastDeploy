@@ -72,6 +72,27 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+void KeyPointDetectionResult::Clear() {
+  std::vector<float>().swap(keypoints);
+  num_joints = -1;
+}
+
+void KeyPointDetectionResult::Reserve(int size) { keypoints.reserve(size); }
+
+void KeyPointDetectionResult::Resize(int size) { keypoints.resize(size); }
+
+std::string KeyPointDetectionResult::Str() {
+  std::string out;
+  out = "KeyPointDetectionResult: [x, y, conf]\n";
+  for (size_t i = 0; i < keypoints.size() / 3; ++i) {
+    int index = i * 3;
+    out = out + std::to_string(keypoints[index]) + "," +
+          std::to_string(keypoints[index + 1]) + ", " +
+          std::to_string(keypoints[index + 2]) + "\n";
+  }
+  return out;
+}
+
 FaceDetectionResult::FaceDetectionResult(const FaceDetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
   landmarks.assign(res.landmarks.begin(), res.landmarks.end());

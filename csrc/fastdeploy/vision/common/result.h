@@ -60,6 +60,20 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {
+  // Keypoints: shape(N x 3); N: number of Joints; 3: x,y,conf
+  std::vector<float> keypoints;
+  int num_joints = -1;
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
 struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::vector<std::array<int, 8>> boxes;
 

@@ -85,6 +85,13 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::MattingResult::Str)
       .def("__str__", &vision::MattingResult::Str);
 
+  pybind11::class_<vision::KeyPointDetectionResult>(m,
+                                                    "KeyPointDetectionResult")
+      .def(pybind11::init())
+      .def_readwrite("keypoints", &vision::KeyPointDetectionResult::keypoints)
+      .def("__repr__", &vision::FaceRecognitionResult::Str)
+      .def("__str__", &vision::FaceRecognitionResult::Str);
+
   BindDetection(m);
   BindClassification(m);
   BindSegmentation(m);
