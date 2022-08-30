@@ -39,10 +39,13 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.max_workspace_size = option.max_workspace_size;
     _options.use_fp16 = option.enable_fp16;
     if (_options.is_dynamic) {
-        std::vector<int64_t> min_shape;
-        std::vector<int64_t> opt_shape;
-        std::vector<int64_t> max_shape;
+        std::vector<torch::jit::IValue> inputs_min;
+        std::vector<torch::jit::IValue> inputs_opt;
+        std::vector<torch::jit::IValue> inputs_max;
         for (auto iter = option.min_shape.begin(); iter != option.min_shape.end(); ++iter) {
+            std::vector<int64_t> min_shape;
+            std::vector<int64_t> opt_shape;
+            std::vector<int64_t> max_shape;
             auto max_iter = option.max_shape.find(iter->first);
             auto opt_iter = option.opt_shape.find(iter->first);
             FDASSERT(max_iter != option.max_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::max_shape.");
@@ -50,43 +53,40 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             min_shape.assign(iter->second.begin(), iter->second.end());
             opt_shape.assign(opt_iter->second.begin(), opt_iter->second.end());
             max_shape.assign(max_iter->second.begin(), max_iter->second.end());
-        }
-        //min
-        std::vector<torch::jit::IValue> inputs_min;
-        if (option.use_gpu) {
-            inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
-        } else{
-            inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+            //min
+            if (option.use_gpu) {
+                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+            } else{
+                inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+            }
+            //opt
+            if (option.use_gpu) {
+                inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}));
+            } else {
+                inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}));
+            }
+            //max
+            if (option.use_gpu) {
+                inputs_max.push_back(at::randn(max_shape, {at::kCUDA}));
+            } else {
+                inputs_max.push_back(at::randn(max_shape, {at::kCPU}));
+            }
         }
         _prewarm_datas.push_back(inputs_min);
-        //opt
-        std::vector<torch::jit::IValue> inputs_opt;
-        if (option.use_gpu) {
-            inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}));
-        } else {
-            inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}));
-        }
         _prewarm_datas.push_back(inputs_opt);
-        //max
-        std::vector<torch::jit::IValue> inputs_max;
-        if (option.use_gpu) {
-            inputs_max.push_back(at::randn(max_shape, {at::kCUDA}));
-        } else {
-            inputs_max.push_back(at::randn(max_shape, {at::kCPU}));
-        }
         _prewarm_datas.push_back(inputs_max);
     }
     else {
-        std::vector<int64_t> min_shape;
-        for (auto iter:option.min_shape) {
-            min_shape.assign(iter.second.begin(), iter.second.end());
-        }
-        //min
         std::vector<torch::jit::IValue> inputs_min;    
-        if (option.use_gpu) {
-            inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
-        } else{
-            inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+        for (auto iter:option.min_shape) {
+            std::vector<int64_t> min_shape;
+            min_shape.assign(iter.second.begin(), iter.second.end());
+            //min
+            if (option.use_gpu) {
+                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+            } else{
+                inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+            }
         }
         _prewarm_datas.push_back(inputs_min);
     }
