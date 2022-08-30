@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/poros/poros_backend.h"
-#include <chrono>
+#include <sys/time.h>
 
 namespace fastdeploy {
 
@@ -171,38 +171,32 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     // Convert FD Tensor to PyTorch Tensor
     std::vector<torch::jit::IValue> poros_inputs;
     bool is_backend_cuda = _options.device == baidu::mirana::poros::Device::GPU ? true : false; 
-    auto start_0 = std::chrono::system_clock::now();
+    struct timeval start_0, end_0;
+    float time_use_0;
+    gettimeofday(&start_0, NULL);
     for (size_t i = 0; i < inputs.size(); ++i) {
         poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
-    auto end_0 = std::chrono::system_clock::now();
-    auto duration_0 =
-        std::chrono::duration_cast<std::chrono::microseconds>(end_0 - start_0);
-    double cost_time_0 = double(duration_0.count()) *
-                        std::chrono::microseconds::period::num /
-                        std::chrono::microseconds::period::den;
-    std::cout << "preprocess time: " << cost_time_0 << std::endl;
+    gettimeofday(&end_0, NULL);
+    time_use_0 = (end_0.tv_sec - start_0.tv_sec) + (end_0.tv_usec - start_0.tv_usec) / (double) 1000000;
+    std::cout << "preprocess time: " << time_use_0 * 1000 << std::endl;
     // Infer
-    auto start_1 = std::chrono::system_clock::now();
+    struct timeval start_1, end_1;
+    float time_use_1;
+    gettimeofday(&start_1, NULL);
     auto poros_outputs = _poros_module->forward(poros_inputs);
-    auto end_1 = std::chrono::system_clock::now();
-    auto duration_1 =
-        std::chrono::duration_cast<std::chrono::microseconds>(end_1 - start_1);
-    double cost_time_1 = double(duration_1.count()) *
-                        std::chrono::microseconds::period::num /
-                        std::chrono::microseconds::period::den;
-    std::cout << "infer time: " << cost_time_1 << std::endl;
+    gettimeofday(&end_1, NULL);
+    time_use_1 = (end_1.tv_sec - start_1.tv_sec) + (end_1.tv_usec - start_1.tv_usec) / (double) 1000000;
+    std::cout << "infer time: " << time_use_1 * 1000 << std::endl;
     // Convert PyTorch Tensor to FD Tensor
     if (_numoutputs == 1) {
-        auto start_2 = std::chrono::system_clock::now();
+        struct timeval start_2, end_2;
+        float time_use_2;
+        gettimeofday(&start_2, NULL);
         CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
-        auto end_2 = std::chrono::system_clock::now();
-        auto duration_2 =
-            std::chrono::duration_cast<std::chrono::microseconds>(end_2 - start_2);
-        double cost_time_2 = double(duration_2.count()) *
-                            std::chrono::microseconds::period::num /
-                            std::chrono::microseconds::period::den;
-        std::cout << "postprocess time: " << cost_time_2 << std::endl;
+        gettimeofday(&end_2, NULL);
+        time_use_2 = (end_2.tv_sec - start_2.tv_sec) + (end_2.tv_usec - start_2.tv_usec) / (double) 1000000;
+        std::cout << "postprocess time: " << time_use_2 * 1000 << std::endl;
     }
     // deal with multi outputs
     else {
