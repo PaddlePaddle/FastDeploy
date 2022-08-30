@@ -114,17 +114,34 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     for (size_t i = 0; i < sizes.size(); i++) {
       shape.push_back(sizes[i]);
     }
+    // TODO(wangjunjie06) Maybe skip memory copy is a better choice
+    // use SetExternalData
     auto fd_dtype = GetFdDtype(data_type);
-    // share memory
-    // fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
-    // memory copy
     fd_tensor->shape = shape;
     fd_tensor->dtype = fd_dtype;
     size_t numel = tensor.numel();
-    fd_tensor->data.resize(numel * sizeof(float));
-    memcpy(fd_tensor->Data(), tensor.data_ptr(),
-        numel * sizeof(float));
-    return;
+    // at::Tensor -> FDTensor
+    if (data_type == at::kFloat) {
+        fd_tensor->data.resize(numel * sizeof(float));
+        memcpy(fd_tensor->Data(), tensor.data_ptr(),
+            numel * sizeof(float));
+        return;
+    } else if (data_type == at::kInt) {
+        fd_tensor->data.resize(numel * sizeof(int32_t));
+        memcpy(fd_tensor->Data(), tensor.data_ptr(),
+            numel * sizeof(int32_t));
+        return;
+    } else if (data_type == at::kLong) {
+        fd_tensor->data.resize(numel * sizeof(int64_t));
+        memcpy(fd_tensor->Data(), tensor.data_ptr(),
+            numel * sizeof(int64_t));
+        return;
+    } else if (data_type == at::kDouble) {
+        fd_tensor->data.resize(numel * sizeof(double));
+        memcpy(fd_tensor->Data(), tensor.data_ptr(),
+            numel * sizeof(double));
+        return;
+    }
 }
 
 } // namespace fastdeploy

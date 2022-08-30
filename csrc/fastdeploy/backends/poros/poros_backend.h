@@ -33,19 +33,12 @@ struct PorosBackendOption {
   bool use_gpu = false;
 #endif
   int gpu_id = 0;
-  // Device device = GPU;
-  // bool is_dynamic = false;
   bool long_to_int = true;
   // There is calculation precision in tf32 mode on A10, it can bring some performance improvement, but there may be diff
   bool use_nvidia_tf32 = false;
-  // int32_t device_id = -1;
   // Threshold for the number of non-const ops
   int32_t unconst_ops_thres = -1;
   std::string poros_file = "";
-  // preprocess mode
-  // 0: use torch.jit.script
-  // 1: use torhc.jit.trace
-  // int32_t preprocess_mode = 0;
   // TRT options
   bool enable_fp16 = false;
   bool enable_int8 = false;
