@@ -116,7 +116,13 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     }
     auto fd_dtype = GetFdDtype(data_type);
     // share memory
-    fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
+    // fd_tensor->SetExternalData(shape, fd_dtype, tensor.data_ptr());
+    // memory copy
+    fd_tensor->shape = shape;
+    fd_tensor->dtype = fd_dtype;
+    fd_tensor->data.resize(numel * sizeof(float));
+    memcpy(fd_tensor->Data(), tensor.data_ptr(),
+        numel * sizeof(float));
     return;
 }
 
