@@ -5,7 +5,7 @@
 - cmake >= 3.12
 - g++ >= 8.2
 - cuda >= 11.2 (当WITH_GPU=ON)
-- cudnn >= 11.2 (当WITH_GPU=ON)
+- cudnn >= 8.0 (当WITH_GPU=ON)
 - TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
 
 ## 编译C++

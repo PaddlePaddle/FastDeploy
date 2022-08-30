@@ -13,12 +13,9 @@
 // limitations under the License.
 #include <iostream>
 #include <sstream>
+#include <vector>
 
-#include "fastdeploy/function/reduce.h"
-#include "fastdeploy/function/softmax.h"
 #include "fastdeploy/text.h"
-#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
-#include "uie.h"
 
 using namespace paddlenlp;
 
@@ -48,9 +45,12 @@ int main(int argc, char* argv[]) {
   std::string model_path = model_dir + sep + "inference.pdmodel";
   std::string param_path = model_dir + sep + "inference.pdiparams";
   std::string vocab_path = model_dir + sep + "vocab.txt";
+  using fastdeploy::text::SchemaNode;
+  using fastdeploy::text::UIEResult;
 
-  auto predictor = UIEModel(model_path, param_path, vocab_path, 0.5, 128,
-                            {"时间", "选手", "赛事名称"}, option);
+  auto predictor =
+      fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
+                                 {"时间", "选手", "赛事名称"}, option);
   fastdeploy::FDINFO << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition
@@ -86,7 +86,12 @@ int main(int argc, char* argv[]) {
   // Opinion Extraction
   predictor.SetSchema(
       {{"评价维度",
-        {SchemaNode("观点词"), SchemaNode("情感倾向[正向，负向]")}}});
+        // NOTE(zhoushunjie): It's necessary to explicitly use
+        // std::vector to convert initializer list of SchemaNode whose size is
+        // two. If not to do so, an ambiguous compliation error will occur in
+        // mac x64 platform.
+        std::vector<SchemaNode>{SchemaNode("观点词"),
+                                SchemaNode("情感倾向[正向，负向]")}}});
   predictor.Predict(
       {"店面干净，很清静，服务员服务热情，性价比很高，发现收银台有排队"},
       &results);
