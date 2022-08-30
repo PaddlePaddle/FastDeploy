@@ -88,7 +88,7 @@ bool PPOCRSystemv3::Predict(cv::Mat* img,
     // cls
     if (this->classifier->initialized != 0) {
       for (int i = 0; i < img_list.size(); i++) {
-        this->Classify(&img_list[0], result);
+        this->Classify(&img_list[i], result);
       }
 
       for (int i = 0; i < img_list.size(); i++) {
