@@ -120,6 +120,7 @@ void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
     // memory copy
     fd_tensor->shape = shape;
     fd_tensor->dtype = fd_dtype;
+    size_t numel = tensor.numel();
     fd_tensor->data.resize(numel * sizeof(float));
     memcpy(fd_tensor->Data(), tensor.data_ptr(),
         numel * sizeof(float));
