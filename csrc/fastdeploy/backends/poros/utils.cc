@@ -108,7 +108,6 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
 }
 
 void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor) {
-    std::cout << "test_wjj4444444" << std::endl;
     const auto data_type = tensor.scalar_type();
     std::vector<int64_t> shape;
     auto sizes = tensor.sizes();

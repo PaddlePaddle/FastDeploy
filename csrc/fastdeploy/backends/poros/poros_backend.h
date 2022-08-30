@@ -88,9 +88,9 @@ class PorosBackend : public BaseBackend {
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 
-  int NumInputs() const { return 1; }
+  int NumInputs() const { return _numinputs; }
 
-  int NumOutputs() const { return 1; }
+  int NumOutputs() const { return _numoutputs; }
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
@@ -99,6 +99,8 @@ class PorosBackend : public BaseBackend {
   baidu::mirana::poros::PorosOptions _options;
   std::unique_ptr<baidu::mirana::poros::PorosModule> _poros_module;
   std::vector<std::vector<c10::IValue>> _prewarm_datas;
+  int _numinputs = 1;
+  int _numoutputs = 1;
 };
 
 }  // namespace fastdeploy
