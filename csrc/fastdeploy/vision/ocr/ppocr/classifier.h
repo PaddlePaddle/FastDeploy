@@ -35,7 +35,7 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
   std::string ModelName() const { return "ppocr/ocr_cls"; }
 
   // 模型预测接口，即用户调用的接口
-  virtual bool Predict(cv::Mat* img, int& cls_labels, float& cls_socres);
+  virtual bool Predict(cv::Mat* img, std::tuple<int, float>* result);
 
   // pre & post parameters
   float cls_thresh;
@@ -56,7 +56,7 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
 
   // 后端推理结果后处理，输出给用户
   // infer_result 为后端推理后的输出Tensor
-  bool Postprocess(FDTensor& infer_result, int& cls_labels, float& cls_scores);
+  bool Postprocess(FDTensor& infer_result, std::tuple<int, float>* result);
 };
 
 }  // namespace ocr
