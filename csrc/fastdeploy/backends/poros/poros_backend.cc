@@ -157,7 +157,7 @@ bool PorosBackend::InitFromPoros(const std::string& model_file, const PorosBacke
         return false;
     }
     // get inputs_nums and outputs_nums
-    auto graph = _poros_module.get_method("forward").graph();
+    auto graph = _poros_module->get_method("forward").graph();
     auto inputs = graph->inputs();
     // remove self node
     _numinputs = inputs.size() - 1;
