@@ -66,3 +66,5 @@ def remove_small_connected_area(alpha_pred_data, threshold):
     assert len(alpha_pred_data.shape) == 3, "alpha has a (h, w, 1) shape"
     return C.vision.Visualize.remove_small_connected_area(alpha_pred_data,
                                                           threshold)
+def vis_ppocr(im_data, det_result):
+    return C.vision.Visualize.vis_ppocr(im_data, det_result)

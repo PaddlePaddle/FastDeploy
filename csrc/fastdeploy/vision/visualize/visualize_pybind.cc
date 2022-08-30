@@ -76,6 +76,10 @@ void BindVisualize(pybind11::module& m) {
                     cv::Mat alpha_pred = PyArrayToCvMat(alpha_pred_data);
                     auto vis_im = vision::Visualize::RemoveSmallConnectedArea(
                         alpha_pred, threshold);
+      .def_static("vis_ppocr",
+                  [](pybind11::array& im_data, vision::OCRResult& result) {
+                    auto im = PyArrayToCvMat(im_data);
+                    auto vis_im = vision::Visualize::VisOcr(im, result);
                     FDTensor out;
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);

@@ -12,7 +12,7 @@
 - cmake >= 3.12
 - Visual Studio 16 2019
 - cuda >= 11.2 (当WITH_GPU=ON)
-- cudnn >= 11.2 (当WITH_GPU=ON)
+- cudnn >= 8.0 (当WITH_GPU=ON)
 - TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
 
 ## 下载 FastDeploy Windows 10 C++ SDK

@@ -20,7 +20,7 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
+
 TEST(fastdeploy, softmax) {
   FDTensor input, output;
   CheckShape check_shape;
@@ -44,5 +44,5 @@ TEST(fastdeploy, softmax) {
   check_data(reinterpret_cast<const float*>(output.Data()),
              expected_result_axis1.data(), expected_result_axis1.size());
 }
-#endif
+
 }  // namespace fastdeploy

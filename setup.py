@@ -20,6 +20,7 @@ from __future__ import unicode_literals
 import shutil
 import os
 
+TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy")
 wheel_name = "fastdeploy-python"
 
@@ -40,14 +41,15 @@ import platform
 from textwrap import dedent
 import multiprocessing
 
-with open("requirements.txt") as fin:
+with open(os.path.join(TOP_DIR, "requirements.txt")) as fin:
     REQUIRED_PACKAGES = fin.read()
 
 setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
-setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND", "OFF")
+setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
+                                                     "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
@@ -65,7 +67,6 @@ if setup_configs["WITH_GPU"] == "ON":
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
-TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
 CMAKE_BUILD_DIR = os.path.join(TOP_DIR, '.setuptools-cmake-build')
 
@@ -324,9 +325,9 @@ ext_modules = [
 
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
-    packages = setuptools.find_packages(exclude=['fastdeploy*'])
+    packages = setuptools.find_packages(exclude=['fastdeploy*', 'build_scripts'])
 else:
-    packages = setuptools.find_packages()
+    packages = setuptools.find_packages(exclude=['build_scripts'])
 
 ################################################################################
 # Test
@@ -343,153 +344,55 @@ if sys.version_info[0] == 3:
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    if not os.path.exists(".setuptools-cmake-build"):
-        print("Please execute `python setup.py build` first.")
+    shutil.copy(os.path.join(TOP_DIR, "ThirdPartyNotices.txt"), os.path.join(TOP_DIR, PACKAGE_NAME))
+    shutil.copy(os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
+    if not os.path.exists(os.path.join(TOP_DIR, "fastdeploy", "libs", "third_libs")):
+        print("Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first")
         sys.exit(0)
-    import shutil
-
-    shutil.copy("ThirdPartyNotices.txt", PACKAGE_NAME)
-    shutil.copy("LICENSE", PACKAGE_NAME)
-    depend_libs = list()
-
-    # copy fastdeploy library
-    pybind_so_file = None
-    for f in os.listdir(".setuptools-cmake-build"):
-        if not os.path.isfile(os.path.join(".setuptools-cmake-build", f)):
-            continue
-        if f.count(PACKAGE_NAME) > 0:
-            shutil.copy(
-                os.path.join(".setuptools-cmake-build", f),
-                os.path.join(PACKAGE_NAME, "libs"))
-        if f.count(".cpython-") > 0:
-            pybind_so_file = os.path.join(".setuptools-cmake-build", f)
-
-    if not os.path.exists(".setuptools-cmake-build/third_libs/install"):
-        raise Exception(
-            "Cannot find directory third_libs/install in .setuptools-cmake-build."
-        )
-
-    if os.path.exists(os.path.join(PACKAGE_NAME, "libs/third_libs")):
-        shutil.rmtree(os.path.join(PACKAGE_NAME, "libs/third_libs"))
-    shutil.copytree(
-        ".setuptools-cmake-build/third_libs/install",
-        os.path.join(PACKAGE_NAME, "libs/third_libs"),
-        symlinks=True)
-
-    third_party_path = os.path.join(".setuptools-cmake-build", "third_party")
-    if os.path.exists(third_party_path):
-        for f in os.listdir(third_party_path):
-            lib_dir_name = os.path.join(third_party_path, f)
-            if os.path.isfile(lib_dir_name):
-                continue
-            for f1 in os.listdir(lib_dir_name):
-                release_dir = os.path.join(lib_dir_name, f1)
-                if f1 == "Release" and not os.path.isfile(release_dir):
-                    if os.path.exists(
-                            os.path.join(PACKAGE_NAME, "libs/third_libs", f)):
-                        shutil.rmtree(
-                            os.path.join(PACKAGE_NAME, "libs/third_libs", f))
-                    shutil.copytree(release_dir,
-                                    os.path.join(PACKAGE_NAME,
-                                                 "libs/third_libs", f, "lib"))
-
-    if platform.system().lower() == "windows":
-        release_dir = os.path.join(".setuptools-cmake-build", "Release")
-        for f in os.listdir(release_dir):
-            filename = os.path.join(release_dir, f)
-            if not os.path.isfile(filename):
-                continue
-            if filename.endswith(".pyd"):
-                continue
-            shutil.copy(filename, os.path.join(PACKAGE_NAME, "libs"))
-
-    if platform.system().lower() == "linux":
-        rpaths = ["$ORIGIN:$ORIGIN/libs"]
-        for root, dirs, files in os.walk(
-                ".setuptools-cmake-build/third_libs/install"):
-            for d in dirs:
-                if d == "lib":
-                    path = os.path.relpath(
-                        os.path.join(root, d),
-                        ".setuptools-cmake-build/third_libs/install")
-                    rpaths.append("$ORIGIN/" + os.path.join("libs/third_libs",
-                                                            path))
-        rpaths = ":".join(rpaths)
-        command = "patchelf --set-rpath '{}' ".format(rpaths) + pybind_so_file
-        print(
-            "=========================Set rpath for library===================")
-        print(command)
-        # The sw_64 not suppot patchelf, so we just disable that.
-        if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
-            assert os.system(
-                command) == 0, "patchelf {} failed, the command: {}".format(
-                    command, pybind_so_file)
-    elif platform.system().lower() == "darwin":
-        pre_commands = [
-            "install_name_tool -delete_rpath '@loader_path/libs' " +
-            pybind_so_file
-        ]
-        commands = [
-            "install_name_tool -id '@loader_path/libs' " + pybind_so_file
-        ]
-        commands.append("install_name_tool -add_rpath '@loader_path/libs' " +
-                        pybind_so_file)
-        for root, dirs, files in os.walk(
-                ".setuptools-cmake-build/third_libs/install"):
-            for d in dirs:
-                if d == "lib":
-                    path = os.path.relpath(
-                        os.path.join(root, d),
-                        ".setuptools-cmake-build/third_libs/install")
-                    pre_commands.append(
-                        "install_name_tool -delete_rpath '@loader_path/{}' ".
-                        format(os.path.join("libs/third_libs",
-                                            path)) + pybind_so_file)
-                    commands.append(
-                        "install_name_tool -add_rpath '@loader_path/{}' ".
-                        format(os.path.join("libs/third_libs",
-                                            path)) + pybind_so_file)
-        for command in pre_commands:
-            try:
-                os.system(command)
-            except:
-                print("Skip execute command: " + command)
-        for command in commands:
-            assert os.system(
-                command) == 0, "command execute failed! command: {}".format(
-                    command)
-
-    all_files = get_all_files(os.path.join(PACKAGE_NAME, "libs"))
-    for f in all_files:
-        # remove un-need ocv samples files to avoid too long file path
-        # in windows which can make building process failed.
-        if platform.system().lower() == "windows":
-            if f.find(".vcxproj.") > 0:
-                continue
-            if f.find("opencv") > 0 and any(
-                (f.find("samples") > 0, f.find("java") > 0, f.find(".png") > 0,
-                 f.find(".jpg") > 0)):
-                continue
-        package_data[PACKAGE_NAME].append(os.path.relpath(f, PACKAGE_NAME))
-
-setuptools.setup(
-    name=wheel_name,
-    version=VersionInfo.version,
-    description="Deploy Kit Tool For Deeplearning models.",
-    ext_modules=ext_modules,
-    cmdclass=cmdclass,
-    packages=packages,
-    package_data=package_data,
-    include_package_data=True,
-    setup_requires=setup_requires,
-    extras_require=extras_require,
-    author='fastdeploy',
-    author_email='fastdeploy@baidu.com',
-    url='https://github.com/PaddlePaddle/FastDeploy.git',
-    install_requires=REQUIRED_PACKAGES,
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Apache Software License",
-        "Operating System :: OS Independent",
-    ],
-    license='Apache 2.0')
+    sys.path.append(os.path.split(os.path.abspath(__file__))[0])
+    from build_scripts.process_libraries import process_libraries
+    all_lib_data = process_libraries(
+        os.path.split(os.path.abspath(__file__))[0])
+    package_data[PACKAGE_NAME].extend(all_lib_data)
+    setuptools.setup(
+        name=wheel_name,
+        version=VersionInfo.version,
+        ext_modules=ext_modules,
+        description="Deploy Kit Tool For Deeplearning models.",
+        packages=packages,
+        package_data=package_data,
+        include_package_data=True,
+        setup_requires=setup_requires,
+        extras_require=extras_require,
+        author='fastdeploy',
+        author_email='fastdeploy@baidu.com',
+        url='https://github.com/PaddlePaddle/FastDeploy.git',
+        install_requires=REQUIRED_PACKAGES,
+        classifiers=[
+            "Programming Language :: Python :: 3",
+            "License :: OSI Approved :: Apache Software License",
+            "Operating System :: OS Independent",
+        ],
+        license='Apache 2.0')
+else:
+    setuptools.setup(
+        name=wheel_name,
+        version=VersionInfo.version,
+        description="Deploy Kit Tool For Deeplearning models.",
+        ext_modules=ext_modules,
+        cmdclass=cmdclass,
+        packages=packages,
+        package_data=package_data,
+        include_package_data=True,
+        setup_requires=setup_requires,
+        extras_require=extras_require,
+        author='fastdeploy',
+        author_email='fastdeploy@baidu.com',
+        url='https://github.com/PaddlePaddle/FastDeploy.git',
+        install_requires=REQUIRED_PACKAGES,
+        classifiers=[
+            "Programming Language :: Python :: 3",
+            "License :: OSI Approved :: Apache Software License",
+            "Operating System :: OS Independent",
+        ],
+        license='Apache 2.0')
