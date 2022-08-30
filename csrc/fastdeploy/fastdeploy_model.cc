@@ -27,7 +27,9 @@ bool FastDeployModel::InitRuntime() {
   }
   if (runtime_option.backend != Backend::UNKNOWN) {
     if (!IsBackendAvailable(runtime_option.backend)) {
-      FDERROR << Str(runtime_option.backend) << " is not compiled with current FastDeploy library." << std::endl;
+      FDERROR << Str(runtime_option.backend)
+              << " is not compiled with current FastDeploy library."
+              << std::endl;
       return false;
     }
 
@@ -70,7 +72,7 @@ bool FastDeployModel::InitRuntime() {
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
       } else {
-        FDASSERT(valid_gpu_backends.size() > 0,
+        FDASSERT(valid_cpu_backends.size() > 0,
                  "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
