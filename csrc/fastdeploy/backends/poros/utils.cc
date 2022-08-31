@@ -88,6 +88,7 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(float));
   } else if (data_type == at::kInt) {
+    std::cout << "test_wjj444444444: " << std::endl;
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(int32_t));
   } else if (data_type == at::kLong) {
@@ -102,6 +103,7 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
   }
   // to cuda
   if (tensor.device == Device::GPU && is_backend_cuda) {
+    std::cout << "test_wjj55555555: " << std::endl;
     poros_value = poros_value.to(at::kCUDA);
   }
   return poros_value;

@@ -58,8 +58,8 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //min
             if (option.use_gpu) {
                 std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
-                auto min_tensor = at::randn(min_shape, {at::kCPU}).to(at::kInt);
-                min_tensor = min_tensor.to(at::kCUDA);
+                auto min_tensor = at::randn(min_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
+                std::cout << min_tensor << std::endl;
                 inputs_min.push_back(min_tensor);
                 // inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
             } else{
@@ -69,8 +69,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //opt
             if (option.use_gpu) {
                 std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
-                auto opt_tensor = at::randn(opt_shape, {at::kCPU}).to(at::kInt);
-                opt_tensor = opt_tensor.to(at::kCUDA);
+                auto opt_tensor = at::randn(opt_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
                 inputs_opt.push_back(opt_tensor);
                 // inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
             } else {
@@ -80,8 +79,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //max
             if (option.use_gpu) {
                 std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
-                auto max_tensor = at::randn(max_shape, {at::kCPU}).to(at::kInt);
-                max_tensor = max_tensor.to(at::kCUDA);
+                auto max_tensor = at::randn(max_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
                 inputs_max.push_back(max_tensor);
                 // inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
             } else {
@@ -192,7 +190,7 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     for (size_t i = 0; i < inputs.size(); ++i) {
         poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
-    std::cout << "test_wjj1111111111: " << std::endl;
+    std::cout << "test_wjj1111111111: " << poros_inputs.size() << std::endl;
     // Infer
     auto poros_outputs = _poros_module->forward(poros_inputs);
     std::cout << "test_wjj222222222: " << std::endl;
