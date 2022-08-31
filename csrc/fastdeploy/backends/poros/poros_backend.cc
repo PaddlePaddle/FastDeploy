@@ -199,8 +199,8 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     // Convert PyTorch Tensor to FD Tensor
     if (_numoutputs == 1) {
         CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
+        std::cout << "test_wjj333333333: " << std::endl;
     }
-    std::cout << "test_wjj333333333: " << std::endl;
     // deal with multi outputs
     else {
         auto poros_outputs_list = poros_outputs.toTuple();
