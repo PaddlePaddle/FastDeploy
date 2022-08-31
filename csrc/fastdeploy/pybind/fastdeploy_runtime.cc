@@ -61,7 +61,7 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
       .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
       .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
-      .def_readwrite("poros_file", &RuntimeOption::poros_file)
+      .def_readwrite("poros_file", &RuntimeOption::poros_file);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
