@@ -103,8 +103,9 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
               " while calling PorosBackend::CreatePorosValue().");
   }
   // to cuda
-  if (tensor.device == Device::GPU && is_backend_cuda) {
-    std::cout << "test_wjj55555555: " << std::endl;
+  std::cout << "test_wjj55555555: " << is_backend_cuda << std::endl;
+  if (is_backend_cuda) {
+    std::cout << "test_wjj66666666: " << std::endl;
     poros_value = poros_value.to(at::kCUDA);
   }
   return poros_value;
