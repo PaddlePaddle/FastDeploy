@@ -58,7 +58,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //min
             if (option.use_gpu) {
                 std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
-                inputs_min.push_back(at::randn(min_shape, at::device(kCUDA).dtype(at::kInt)));
+                inputs_min.push_back(at::randn(min_shape, at::device(at::kCUDA).dtype(at::kInt)));
                 // inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
             } else{
                 inputs_min.push_back(at::randn(min_shape, {at::kCPU}).to(prewarm_dtype));
@@ -66,7 +66,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //opt
             if (option.use_gpu) {
                 std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
-                inputs_opt.push_back(at::randn(opt_shape, at::device(kCUDA).dtype(at::kInt)));
+                inputs_opt.push_back(at::randn(opt_shape, at::device(at::kCUDA).dtype(at::kInt)));
                 // inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
             } else {
                 inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}).to(prewarm_dtype));
@@ -74,7 +74,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //max
             if (option.use_gpu) {
                 std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
-                inputs_max.push_back(at::randn(max_shape, at::device(kCUDA).dtype(at::kInt)));
+                inputs_max.push_back(at::randn(max_shape, at::device(at::kCUDA).dtype(at::kInt)));
                 // inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
             } else {
                 inputs_max.push_back(at::randn(max_shape, {at::kCPU}).to(prewarm_dtype));
