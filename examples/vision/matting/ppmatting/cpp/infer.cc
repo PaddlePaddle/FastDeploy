@@ -14,25 +14,32 @@
 
 #include "fastdeploy/vision.h"
 
-void CpuInfer(const std::string& model_file, const std::string& image_file,
+#ifdef WIN32
+const char sep = '\\';
+#else
+const char sep = '/';
+#endif
+
+void CpuInfer(const std::string& model_dir, const std::string& image_file,
               const std::string& background_file) {
-  auto model = fastdeploy::vision::matting::MODNet(model_file);
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
+                                                      config_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
-  model.size = {256, 256};
+
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
-
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
@@ -43,61 +50,64 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
             << std::endl;
 }
 
-void GpuInfer(const std::string& model_file, const std::string& image_file,
+void GpuInfer(const std::string& model_dir, const std::string& image_file,
               const std::string& background_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
+  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
-  model.size = {256, 256};
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
-
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
-               "and ./visualized_result_fg.jpg"
+               "and ./visualized_result_fg.jpgg"
             << std::endl;
 }
 
-void TrtInfer(const std::string& model_file, const std::string& image_file,
+void TrtInfer(const std::string& model_dir, const std::string& image_file,
               const std::string& background_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("input", {1, 3, 256, 256});
-  auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
+  option.SetTrtInputShape("img", {1, 3, 512, 512});
+  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
-  model.size = {256, 256};
+
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
-
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);

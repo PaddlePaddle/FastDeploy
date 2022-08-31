@@ -1,5 +1,6 @@
 import fastdeploy as fd
 import cv2
+import os
 
 
 def parse_arguments():
@@ -7,20 +8,20 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of modnet onnx model.")
+        "--model", required=True, help="Path of PaddleSeg model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--bg",
         type=str,
         required=True,
         default=None,
         help="Path of test background image file.")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default='cpu',
+        help="Type of inference device, support 'cpu' or 'gpu'.")
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -37,7 +38,7 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("input", [1, 3, 256, 256])
+        option.set_trt_input_shape("img", [1, 3, 512, 512])
     return option
 
 
@@ -45,10 +46,12 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.matting.MODNet(args.model, runtime_option=runtime_option)
+model_file = os.path.join(args.model, "model.pdmodel")
+params_file = os.path.join(args.model, "model.pdiparams")
+config_file = os.path.join(args.model, "deploy.yaml")
+model = fd.vision.matting.PPMatting(
+    model_file, params_file, config_file, runtime_option=runtime_option)
 
-#设置推理size, 必须和模型文件一致
-model.size = (256, 256)
 # 预测图片抠图结果
 im = cv2.imread(args.image)
 bg = cv2.imread(args.bg)
