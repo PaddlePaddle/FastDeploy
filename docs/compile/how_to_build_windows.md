@@ -17,7 +17,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DENABLE_PADDLE_FRONTEND=ON
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
@@ -32,7 +32,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.0 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DENABLE_PADDLE_FRONTEND=ON -DCUDA_DIRECTORY=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.0 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DENABLE_PADDLE_FRONTEND=ON -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64  
 
@@ -52,9 +52,12 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 
 set ENABLE_ORT_BACKEND=ON
+set ENABLE_PADDLE_BACKEND=ON
+set ENABLE_PADDLE_FRONTEND=ON
 set ENABLE_VISION=ON
+set ENABLE_VISION_VISUALIZE=ON
 
-% 这里指定用户自己的python解释器 以ptyhon3.8为例 %
+% 这里指定用户自己的python解释器 以python3.8为例 %
 C:\Python38\python.exe setup.py build
 C:\Python38\python.exe setup.py bdist_wheel
 ```
@@ -82,7 +85,7 @@ set ENABLE_VISION_VISUALIZE=ON
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 
-% 说明：这里指定用户自己的python解释器 以ptyhon3.8为例 %
+% 说明：这里指定用户自己的python解释器 以python3.8为例 %
 C:\Python38\python.exe setup.py build
 C:\Python38\python.exe setup.py bdist_wheel
 ```
