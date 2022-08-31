@@ -58,25 +58,34 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //min
             if (option.use_gpu) {
                 std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
-                inputs_min.push_back(at::randn(min_shape, at::device(at::kCUDA).dtype(at::kInt)));
+                auto min_tensor = at::randn(min_shape, {at::kCPU}).to(at::kInt);
+                min_tensor = min_tensor.to(at::kCUDA);
+                inputs_min.push_back(min_tensor);
                 // inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
             } else{
+                std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
                 inputs_min.push_back(at::randn(min_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //opt
             if (option.use_gpu) {
                 std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
-                inputs_opt.push_back(at::randn(opt_shape, at::device(at::kCUDA).dtype(at::kInt)));
+                auto opt_tensor = at::randn(opt_shape, {at::kCPU}).to(at::kInt);
+                opt_tensor = opt_tensor.to(at::kCUDA);
+                inputs_opt.push_back(opt_tensor);
                 // inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
             } else {
+                std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
                 inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //max
             if (option.use_gpu) {
                 std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
-                inputs_max.push_back(at::randn(max_shape, at::device(at::kCUDA).dtype(at::kInt)));
+                auto max_tensor = at::randn(max_shape, {at::kCPU}).to(at::kInt);
+                max_tensor = max_tensor.to(at::kCUDA);
+                inputs_max.push_back(max_tensor);
                 // inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
             } else {
+                std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
                 inputs_max.push_back(at::randn(max_shape, {at::kCPU}).to(prewarm_dtype));
             }
             input_index += 1;
