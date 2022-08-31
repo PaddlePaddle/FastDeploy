@@ -61,32 +61,32 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //min
             if (option.use_gpu) {
                 std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
-                // inputs_min.push_back(at::randn(min_shape, {at::kCUDA}).to(prewarm_dtype));
-                inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
+                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}).to(prewarm_dtype));
+                // inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
             } else{
                 inputs_min.push_back(at::randn(min_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //opt
             if (option.use_gpu) {
                 std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
-                // inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}).to(prewarm_dtype));
-                inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
+                inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}).to(prewarm_dtype));
+                // inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
             } else {
                 inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //max
             if (option.use_gpu) {
                 std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
-                // inputs_max.push_back(at::randn(max_shape, {at::kCUDA}).to(prewarm_dtype));
-                inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
+                inputs_max.push_back(at::randn(max_shape, {at::kCUDA}).to(prewarm_dtype));
+                // inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
             } else {
                 inputs_max.push_back(at::randn(max_shape, {at::kCPU}).to(prewarm_dtype));
             }
             input_index += 1;
         }
         std::cout << "test_wjj4444444: " << inputs_max.size() << std::endl;
-        std::cout << "test_wjj5555555: " << inputs_max.size() << std::endl;
-        std::cout << "test_wjj6666666: " << inputs_max.size() << std::endl;
+        std::cout << "test_wjj5555555: " << inputs_min.size() << std::endl;
+        std::cout << "test_wjj6666666: " << inputs_opt.size() << std::endl;
         _prewarm_datas.push_back(inputs_max);
         _prewarm_datas.push_back(inputs_min);
         _prewarm_datas.push_back(inputs_opt);
@@ -142,7 +142,10 @@ bool PorosBackend::InitFromTorchscript(const std::string& model_file, const Poro
     _numinputs = inputs.size() - 1;
     auto outputs = graph->outputs();
     _numoutputs = outputs.size();
+    std::cout << "test_wjj7777777777: " << _numinputs << std::endl;
+    std::cout << "test_wjj8888888888: " << _numoutputs << std::endl;
     _poros_module = baidu::mirana::poros::Compile(mod, _prewarm_datas, _options);
+    std::cout << "test_wjj9999999999: " << std::endl;
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
                 << std::endl;
