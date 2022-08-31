@@ -75,9 +75,9 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             }
             input_index += 1;
         }
+        _prewarm_datas.push_back(inputs_max);
         _prewarm_datas.push_back(inputs_min);
         _prewarm_datas.push_back(inputs_opt);
-        _prewarm_datas.push_back(inputs_max);
     }
     else {
         std::vector<torch::jit::IValue> inputs_min;    
