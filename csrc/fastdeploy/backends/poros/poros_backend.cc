@@ -198,17 +198,18 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     std::cout << "test_wjj : " << poros_outputs.isList() << std::endl;
     std::cout << "test_wjj : " << poros_outputs.isTuple() << std::endl;
     // Convert PyTorch Tensor to FD Tensor
-    if (_numoutputs == 1) {
+    if (poros_outputs.isTensor()) {
         std::cout << "test_wjj++++++: " << std::endl;
         CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
         std::cout << "test_wjj------: " << std::endl;
-    }
-    // deal with multi outputs
-    else {
+    } else if (poros_outputs.isTuple()) {
+        // deal with multi outputs
         auto poros_outputs_list = poros_outputs.toTuple();
         for (size_t i = 0; i < poros_outputs_list->elements().size(); ++i) {
             CopyTensorToCpu(poros_outputs_list->elements()[i].toTensor().to(at::kCPU), &((*outputs)[i]));
         }
+    } else {
+        FDERROR << "Convert to FDTensor Failed!!!!!" << std::endl;
     }
     return true;
 }
