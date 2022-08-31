@@ -94,16 +94,18 @@ void BindPPDet(pybind11::module& m) {
              return res;
            });
 
-  pybind11::class_<vision::ppdet::PPTINYPOSE, FastDeployModel>(ppdet_module,
-                                                               "PPTINYPOSE")
+  pybind11::class_<vision::detection::PPTINYPOSE, FastDeployModel>(m,
+                                                                   "PPTINYPOSE")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           Frontend>())
-      .def("predict", [](vision::ppdet::PPTINYPOSE& self, pybind11::array& data,
-                         vision::DetectionResult& detection_result) {
-        auto mat = PyArrayToCvMat(data);
-        vision::KeyPointDetectionResult res;
-        self.Predict(&mat, &res, &detection_result);
-        return res;
-      });
+      .def("predict",
+           [](vision::detection::PPTINYPOSE& self, pybind11::array& data,
+              vision::DetectionResult* detection_result = nullptr) {
+             auto mat = PyArrayToCvMat(data);
+             vision::KeyPointDetectionResult res;
+             self.Predict(&mat, &res, detection_result);
+             return res;
+           })
+      .def_readwrite("use_dark", &vision::detection::PPTINYPOSE::use_dark);
 }
 }  // namespace fastdeploy

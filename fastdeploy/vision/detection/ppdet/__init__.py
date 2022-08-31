@@ -28,9 +28,9 @@ class PPYOLOE(FastDeployModel):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOE model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLOE(model_file, params_file,
-                                             config_file, self._runtime_option,
-                                             model_format)
+        self._model = C.vision.detection.PPYOLOE(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLOE model initialize failed."
 
     def predict(self, input_image):
@@ -48,9 +48,9 @@ class PPYOLO(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLO model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLO(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.PPYOLO(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLO model initialize failed."
 
 
@@ -64,9 +64,9 @@ class PPYOLOv2(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOv2 model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLOv2(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.PPYOLOv2(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLOv2 model initialize failed."
 
 
@@ -80,9 +80,9 @@ class PaddleYOLOX(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PaddleYOLOX model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PaddleYOLOX(model_file, params_file,
-                                           config_file, self._runtime_option,
-                                           model_format)
+        self._model = C.vision.detection.PaddleYOLOX(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
 
@@ -96,9 +96,9 @@ class PicoDet(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PicoDet model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PicoDet(model_file, params_file,
-                                             config_file, self._runtime_option,
-                                             model_format)
+        self._model = C.vision.detection.PicoDet(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PicoDet model initialize failed."
 
 
@@ -128,7 +128,36 @@ class YOLOv3(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "YOLOv3 model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.YOLOv3(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.YOLOv3(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "YOLOv3 model initialize failed."
+
+
+class PPTINYPOSE(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(PPTINYPOSE, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "PPTINYPOSE model only support model format of Frontend.Paddle now."
+        self._model = C.vision.detection.PPTINYPOSE(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PPTINYPOSE model initialize failed."
+
+    def predict(self, input_image, detection_result):
+        assert input_image is not None, "The input image data is None."
+        if detection_result is None:
+            import warnings
+            warnings.warn(
+                "Only TinyPose model is used for inference. Please make sure the input image has been dealted with Detection model before"
+            )
+        return self._model.predict(input_image, detection_result)
+
+    @property
+    def use_dark(self):
+        return self._model.use_dark

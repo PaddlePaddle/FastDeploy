@@ -189,7 +189,6 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   for (int i = 0; i < crop_imgs_num; i++) {
     Mat mat(crop_imgs[i]);
     std::vector<FDTensor> processed_data;
-    mat.PrintInfo("Debug");
     if (!Preprocess(&mat, &processed_data, scale_bs[i])) {
       FDERROR << "Failed to preprocess input data while using model:"
               << ModelName() << "." << std::endl;
