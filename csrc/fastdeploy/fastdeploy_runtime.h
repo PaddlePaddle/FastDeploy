@@ -133,6 +133,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool long_to_int = true;
   bool use_nvidia_tf32 = false;
   int unconst_ops_thres = -1;
+  std::vector<FDDataType> input_dtypes;
   std::string poros_file = "";
 
   std::string model_file = "";   // Path of model file

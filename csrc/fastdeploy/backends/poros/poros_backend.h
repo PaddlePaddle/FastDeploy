@@ -39,6 +39,7 @@ struct PorosBackendOption {
   // Threshold for the number of non-const ops
   int32_t unconst_ops_thres = -1;
   std::string poros_file = "";
+  std::vector<FDDataType> prewarm_datatypes = {FDDataType::FP32};
   // TRT options
   bool enable_fp16 = false;
   bool enable_int8 = false;

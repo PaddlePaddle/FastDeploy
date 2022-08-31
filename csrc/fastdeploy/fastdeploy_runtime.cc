@@ -253,6 +253,29 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
 
+void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
+  for (int i=0;i<dtypes.size();++i) {
+    FDASSERT(dtypes[i] != "float16", "Float16 is not supported!");
+    if (dtypes[i] == "float32") {
+      input_dtypes.push_back(FDDataType::FP32);
+    } else if (dtypes[i] == "float64") {
+      input_dtypes.push_back(FDDataType::FP64);
+    } else if (dtypes[i] == "int16") {
+      input_dtypes.push_back(FDDataType::INT16);
+    } else if (dtypes[i] == "int32") {
+      input_dtypes.push_back(FDDataType::INT32);
+    } else if (dtypes[i] == "int64") {
+      input_dtypes.push_back(FDDataType::INT64);
+    } else if (dtypes[i] == "bool") {
+      input_dtypes.push_back(FDDataType::BOOL);
+    } else if (dtypes[i] == "uint8") {
+      input_dtypes.push_back(FDDataType::UINT8);
+    } else {
+      FDASSERT(false, "Unexpected data type: " + dtypes[i]);
+    }
+  }
+}
+
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.model_format == Frontend::AUTOREC) {
@@ -421,6 +444,7 @@ void Runtime::CreatePorosBackend() {
   poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
   poros_option.unconst_ops_thres = option.unconst_ops_thres;
   poros_option.poros_file = option.poros_file;
+  poros_option.prewarm_datatypes = option.input_dtypes;
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
   poros_option.max_workspace_size = option.trt_max_workspace_size;

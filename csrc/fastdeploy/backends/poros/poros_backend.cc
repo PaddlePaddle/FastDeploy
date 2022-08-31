@@ -38,6 +38,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.is_dynamic = option.max_shape.empty() ? false : true;
     _options.max_workspace_size = option.max_workspace_size;
     _options.use_fp16 = option.enable_fp16;
+    int input_index = 0;
     if (_options.is_dynamic) {
         std::vector<torch::jit::IValue> inputs_min;
         std::vector<torch::jit::IValue> inputs_opt;
@@ -46,6 +47,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             std::vector<int64_t> min_shape;
             std::vector<int64_t> opt_shape;
             std::vector<int64_t> max_shape;
+            auto prewarm_dtype = GetPorosDtype(option.prewarm_datatypes[input_index]);
             auto max_iter = option.max_shape.find(iter->first);
             auto opt_iter = option.opt_shape.find(iter->first);
             FDASSERT(max_iter != option.max_shape.end(), "Cannot find " + iter->first + " in TrtBackendOption::max_shape.");
@@ -55,22 +57,23 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             max_shape.assign(max_iter->second.begin(), max_iter->second.end());
             //min
             if (option.use_gpu) {
-                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}).to(prewarm_dtype));
             } else{
-                inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+                inputs_min.push_back(at::randn(min_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //opt
             if (option.use_gpu) {
-                inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}));
+                inputs_opt.push_back(at::randn(opt_shape, {at::kCUDA}).to(prewarm_dtype));
             } else {
-                inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}));
+                inputs_opt.push_back(at::randn(opt_shape, {at::kCPU}).to(prewarm_dtype));
             }
             //max
             if (option.use_gpu) {
-                inputs_max.push_back(at::randn(max_shape, {at::kCUDA}));
+                inputs_max.push_back(at::randn(max_shape, {at::kCUDA}).to(prewarm_dtype));
             } else {
-                inputs_max.push_back(at::randn(max_shape, {at::kCPU}));
+                inputs_max.push_back(at::randn(max_shape, {at::kCPU}).to(prewarm_dtype));
             }
+            input_index += 1;
         }
         _prewarm_datas.push_back(inputs_min);
         _prewarm_datas.push_back(inputs_opt);
@@ -79,14 +82,16 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     else {
         std::vector<torch::jit::IValue> inputs_min;    
         for (auto iter:option.min_shape) {
+            auto prewarm_dtype = GetPorosDtype(option.prewarm_datatypes[input_index]);
             std::vector<int64_t> min_shape;
             min_shape.assign(iter.second.begin(), iter.second.end());
             //min
             if (option.use_gpu) {
-                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}));
+                inputs_min.push_back(at::randn(min_shape, {at::kCUDA}).to(prewarm_dtype));
             } else{
-                inputs_min.push_back(at::randn(min_shape, {at::kCPU}));
+                inputs_min.push_back(at::randn(min_shape, {at::kCPU}).to(prewarm_dtype));
             }
+            input_index += 1;
         }
         _prewarm_datas.push_back(inputs_min);
     }

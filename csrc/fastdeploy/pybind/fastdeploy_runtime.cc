@@ -37,6 +37,7 @@ void BindRuntime(pybind11::module& m) {
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)
+      .def("set_input_dtypes", &RuntimeOption::SetInputDtypes)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
@@ -56,7 +57,11 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("trt_enable_int8", &RuntimeOption::trt_enable_int8)
       .def_readwrite("trt_max_batch_size", &RuntimeOption::trt_max_batch_size)
       .def_readwrite("trt_max_workspace_size",
-                     &RuntimeOption::trt_max_workspace_size);
+                     &RuntimeOption::trt_max_workspace_size)
+      .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
+      .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
+      .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
+      .def_readwrite("poros_file", &RuntimeOption::poros_file)
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -110,10 +115,12 @@ void BindRuntime(pybind11::module& m) {
       .value("UNKOWN", Backend::UNKNOWN)
       .value("ORT", Backend::ORT)
       .value("TRT", Backend::TRT)
+      .value("POROS", Backend::POROS)
       .value("PDINFER", Backend::PDINFER);
   pybind11::enum_<Frontend>(m, "Frontend", pybind11::arithmetic(),
                             "Frontend for inference.")
       .value("PADDLE", Frontend::PADDLE)
+      .value("TORCHSCRIPT", Frontend::TORCHSCRIPT)
       .value("ONNX", Frontend::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
