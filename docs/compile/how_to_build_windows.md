@@ -17,7 +17,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DENABLE_PADDLE_FRONTEND=ON
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
@@ -32,7 +32,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.0 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DENABLE_PADDLE_FRONTEND=ON -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.0 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64  
 
@@ -53,7 +53,6 @@ cd FastDeploy && git checkout develop
 
 set ENABLE_ORT_BACKEND=ON
 set ENABLE_PADDLE_BACKEND=ON
-set ENABLE_PADDLE_FRONTEND=ON
 set ENABLE_VISION=ON
 set ENABLE_VISION_VISUALIZE=ON
 
@@ -78,7 +77,6 @@ set ENABLE_ORT_BACKEND=ON
 % 说明：如果不编译TensorRT后端 此项为OFF %
 set ENABLE_TRT_BACKEND=ON
 set ENABLE_PADDLE_BACKEND=ON
-set ENABLE_PADDLE_FRONTEND=ON
 set ENABLE_VISION=ON
 set ENABLE_VISION_VISUALIZE=ON
 
