@@ -85,6 +85,7 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
   size_t numel = tensor.Numel();
   at::Tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(data_type).contiguous());
   if (data_type == at::kFloat) {
+    std::cout << "test_wjj33333333: " << std::endl;
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(float));
   } else if (data_type == at::kInt) {

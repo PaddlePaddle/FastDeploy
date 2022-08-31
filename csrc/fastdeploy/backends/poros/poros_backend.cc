@@ -58,7 +58,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //min
             if (option.use_gpu) {
                 std::cout << "test_wjj0000000: " << min_shape[0] << " " << min_shape[1] << std::endl;
-                auto min_tensor = at::randn(min_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
+                auto min_tensor = at::ones(min_shape, {at::kCPU}).to(prewarm_dtype).to(at::kCUDA);
                 std::cout << min_tensor << std::endl;
                 inputs_min.push_back(min_tensor);
                 // inputs_min.push_back(at::randint(1, 10, min_shape, {at::kCUDA}));
@@ -69,7 +69,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //opt
             if (option.use_gpu) {
                 std::cout << "test_wjj1111111: " << opt_shape[0] << " " << opt_shape[1] << std::endl;
-                auto opt_tensor = at::randn(opt_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
+                auto opt_tensor = at::ones(opt_shape, {at::kCPU}).to(prewarm_dtype).to(at::kCUDA);
                 inputs_opt.push_back(opt_tensor);
                 // inputs_opt.push_back(at::randint(1, 10, opt_shape, {at::kCUDA}));
             } else {
@@ -79,7 +79,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
             //max
             if (option.use_gpu) {
                 std::cout << "test_wjj2222222: " << max_shape[0] << " " << max_shape[1] << std::endl;
-                auto max_tensor = at::randn(max_shape, {at::kCPU}).to(at::kInt).to(at::kCUDA);
+                auto max_tensor = at::ones(max_shape, {at::kCPU}).to(prewarm_dtype).to(at::kCUDA);
                 inputs_max.push_back(max_tensor);
                 // inputs_max.push_back(at::randint(1, 10, max_shape, {at::kCUDA}));
             } else {
