@@ -98,6 +98,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  void SetInputDtypes(const std::vector<std::string>& dtypes);
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   int cpu_thread_num = 8;
