@@ -167,7 +167,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreatePorosBackend();
 
   // only for poros
-  bool Compile(const std::vector<std::vector<FDTensor>>& prewarm_tensors);
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors);
 
   int NumInputs() { return backend_->NumInputs(); }
   int NumOutputs() { return backend_->NumOutputs(); }

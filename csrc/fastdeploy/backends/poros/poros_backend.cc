@@ -114,7 +114,7 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     return;
 }
 
-bool PorosBackend::Compile(const std::string& model_file, const std::vector<std::vector<FDTensor>>& prewarm_tensors, const PorosBackendOption& option) {
+bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vector<FDTensor>>& prewarm_tensors, const PorosBackendOption& option) {
     if (initialized_) {
         FDERROR << "PorosBackend is already initlized, cannot initialize again."
                 << std::endl;
@@ -139,10 +139,10 @@ bool PorosBackend::Compile(const std::string& model_file, const std::vector<std:
     std::cout << "test_wjj7777777777: " << _numinputs << std::endl;
     std::cout << "test_wjj8888888888: " << _numoutputs << std::endl;
     // FDTensor to at::Tensor
-    std::vector<std::vector<at::Tensor>> prewarm_datas;
+    std::vector<std::vector<c10::IValue>> prewarm_datas;
     bool is_backend_cuda = option.use_gpu ? true : false;
     for (size_t i = 0; i < prewarm_tensors.size(); ++i) {
-        std::vector<at::Tensor> prewarm_data;
+        std::vector<c10::IValue> prewarm_data;
         for (size_t j = 0; j < prewarm_tensors[i].size(); ++j) {
             prewarm_data.push_back(CreatePorosValue(prewarm_tensors[i][j], is_backend_cuda));
         }
