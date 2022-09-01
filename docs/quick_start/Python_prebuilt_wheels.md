@@ -5,7 +5,7 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译Python Wheel包，开�
 目前各平台支持情况如下
 
 - Linux 支持Python3.6~3.9
-- Windows 支持Python3.8~3.9
+- Windows 支持Python3.6~3.9
 - Mac 支持Python3.6~3.9
 
 ## 安装 CPU Python 版本
