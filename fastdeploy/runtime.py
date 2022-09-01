@@ -14,6 +14,7 @@
 from __future__ import absolute_import
 import logging
 from . import c_lib_wrap as C
+import numpy as np
 
 
 class Runtime:
@@ -41,6 +42,7 @@ class Runtime:
             else:
                 warm_data = list(data.numpy() for data in warm_data)
             warm_datas[i] = warm_data
+        print(warm_datas)
         return self._runtime.compile(warm_datas)   
 
     def num_inputs(self):

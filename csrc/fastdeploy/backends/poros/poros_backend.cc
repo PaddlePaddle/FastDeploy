@@ -141,16 +141,21 @@ bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vecto
     // FDTensor to at::Tensor
     std::vector<std::vector<c10::IValue>> prewarm_datas;
     bool is_backend_cuda = option.use_gpu ? true : false;
+    std::cout << "test_wjj999999999: " << is_backend_cuda << std::endl;
+    std::cout << "test_wjj_prewarm0: " << prewarm_tensors.size() << prewarm_tensors[0].size() << std::endl;
     for (size_t i = 0; i < prewarm_tensors.size(); ++i) {
         std::vector<c10::IValue> prewarm_data;
         for (size_t j = 0; j < prewarm_tensors[i].size(); ++j) {
-            prewarm_data.push_back(CreatePorosValue(prewarm_tensors[i][j], is_backend_cuda));
+            auto tensor = CreatePorosValue(prewarm_tensors[i][j], is_backend_cuda);
+            prewarm_data.push_back(tensor);
+            std::cout << tensor << std::endl;
         }
         prewarm_datas.push_back(prewarm_data);
     }
+    std::cout << "test_wjj_prewarm1: " << prewarm_datas.size() << prewarm_datas[0].size() << std::endl;
     std::cout << "test_wjj=============: " << std::endl;
     _poros_module = baidu::mirana::poros::Compile(mod, prewarm_datas, _options);
-    std::cout << "test_wjj9999999999: " << std::endl;
+    std::cout << "test_wjjfinished: " << std::endl;
     if (_poros_module == nullptr) {
         FDERROR << "PorosBackend initlize Failed, try initialize again."
                 << std::endl;
