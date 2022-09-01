@@ -35,11 +35,21 @@ class FASTDEPLOY_DECL Visualize {
                                  const SegmentationResult& result);
   static cv::Mat VisMattingAlpha(const cv::Mat& im, const MattingResult& result,
                                  bool remove_small_connected_area = false);
+  static cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
+                                          float threshold);
+  static cv::Mat SwapBackgroundMatting(
+      const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
+      bool remove_small_connected_area = false);
+  static cv::Mat SwapBackgroundSegmentation(const cv::Mat& im,
+                                            const cv::Mat& background,
+                                            int background_label,
+                                            const SegmentationResult& result);
   static cv::Mat VisOcr(const cv::Mat& srcimg, const OCRResult& ocr_result);
 
   static cv::Mat VisKeypointDetection(const cv::Mat& im,
                                       const KeyPointDetectionResult& results,
                                       float conf_threshold = 0.5f);
+
 };
 
 }  // namespace vision
