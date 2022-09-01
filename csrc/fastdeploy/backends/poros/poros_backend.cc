@@ -35,8 +35,11 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.use_nvidia_tf32 = option.use_nvidia_tf32;
     _options.device_id = option.gpu_id;
     _options.unconst_ops_thres = option.unconst_ops_thres;
+    std::cout << "test_wjj_option: " << option.is_dynamic << std::endl;
     // _options.is_dynamic = option.max_shape.empty() ? false : true;
     _options.is_dynamic = option.is_dynamic;
+    std::cout << "test_wjj_option: " << _options.is_dynamic << std::endl;
+    _options.is_dynamic = true;
     _options.max_workspace_size = option.max_workspace_size;
     _options.use_fp16 = option.enable_fp16;
     // int input_index = 0;
@@ -153,8 +156,9 @@ bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vecto
         }
         prewarm_datas.push_back(prewarm_data);
     }
-    std::cout << "test_wjj_prewarm1: " << prewarm_datas.size() << prewarm_datas[0].size() << std::endl;
-    std::cout << "test_wjj=============: " << std::endl;
+    std::cout << "test_wjj_prewarm1: " << prewarm_datas.size() << std::endl;
+    std::cout << "test_wjj_prewarm2: " << prewarm_datas[0].size() << prewarm_datas[1].size() << prewarm_datas[2].size() << std::endl;
+    std::cout << "test_wjj=============: " << _options.is_dynamic << std::endl;
     _poros_module = baidu::mirana::poros::Compile(mod, prewarm_datas, _options);
     std::cout << "test_wjjfinished: " << std::endl;
     if (_poros_module == nullptr) {
