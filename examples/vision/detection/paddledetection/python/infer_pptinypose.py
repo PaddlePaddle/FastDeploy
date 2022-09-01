@@ -31,19 +31,18 @@ def parse_arguments():
 def build_picodet_option(args):
     option = fd.RuntimeOption()
 
-    #if args.device.lower() == "gpu":
-    #    option.use_gpu()
+    if args.device.lower() == "gpu":
+        option.use_gpu()
 
-    #if args.use_trt:
-    #    option.use_trt_backend()
-    #    option.set_trt_input_shape("image", [1, 3, 320, 320])
-    #    option.set_trt_input_shape("scale_factor", [1, 2])
-    #return option
+    if args.use_trt:
+        option.use_trt_backend()
+        option.set_trt_input_shape("image", [1, 3, 320, 320])
+        option.set_trt_input_shape("scale_factor", [1, 2])
+    return option
 
 
 def build_tinypose_option(args):
     option = fd.RuntimeOption()
-    option.use_ort_backend()
 
     if args.device.lower() == "gpu":
         option.use_gpu()
@@ -74,6 +73,11 @@ if args.det_model_dir:
     det_result = det_model.predict(im.copy())
     print("PicoDet Result:\n", det_result)
 
+    # 预测结果可视化
+    det_vis_im = fd.vision.vis_detection(im, det_result, score_threshold=0.5)
+    cv2.imwrite("det_visualized_result.jpg", det_vis_im)
+    print("Detection visualized result save in ./det_visualized_result.jpg")
+
 tinypose_model_file = os.path.join(args.tinypose_model_dir, "model.pdmodel")
 tinypose_params_file = os.path.join(args.tinypose_model_dir, "model.pdiparams")
 tinypose_config_file = os.path.join(args.tinypose_model_dir, "infer_cfg.yml")
@@ -93,4 +97,4 @@ print("Paddle TinyPose Result:\n", tinypose_result)
 vis_im = fd.vision.vis_keypoint_detection(
     im, tinypose_result, conf_threshold=0.5)
 cv2.imwrite("visualized_result.jpg", vis_im)
-print("visualized result save in ./visualized_result.jpg")
+print("TinyPose visualized result save in ./visualized_result.jpg")

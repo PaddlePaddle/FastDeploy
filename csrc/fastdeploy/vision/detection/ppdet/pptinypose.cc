@@ -129,14 +129,24 @@ bool PPTINYPOSE::Postprocess(std::vector<FDTensor>& infer_result,
     FDWARNING << "PPTinyPose No object detected." << std::endl;
   }
   float* out_data = static_cast<float*>(infer_result[0].Data());
-  int64_t* idx_data = static_cast<int64_t*>(infer_result[1].Data());
+  void* idx_data = infer_result[1].Data();
+  int idx_dtype = infer_result[1].dtype;
   std::vector<int> out_data_shape(infer_result[0].shape.begin(),
                                   infer_result[0].shape.end());
   std::vector<int> idx_data_shape(infer_result[1].shape.begin(),
                                   infer_result[1].shape.end());
   std::vector<float> preds(out_data_shape[1] * 3, 0);
   std::vector<float> heatmap(out_data, out_data + outdata_size);
-  std::vector<int64_t> idxout(idx_data, idx_data + idxdata_size);
+  std::vector<int64_t> idxout(idxdata_size);
+  if (idx_dtype == 2) {
+    std::copy(static_cast<int32_t*>(idx_data),
+              static_cast<int32_t*>(idx_data) + idxdata_size, idxout.begin());
+  } else if (idx_dtype == 3) {
+    std::copy(static_cast<int64_t*>(idx_data),
+              static_cast<int64_t*>(idx_data) + idxdata_size, idxout.begin());
+  } else {
+    FDERROR << "Don't support inference output FDDataType." << std::endl;
+  }
   get_final_preds(heatmap, out_data_shape, idxout, idx_data_shape, center,
                   scale, preds, this->use_dark);
   result->Reserve(outdata_size);
