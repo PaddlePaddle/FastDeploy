@@ -32,9 +32,10 @@ def parse_arguments():
 
 def build_option(args):
     option = fd.RuntimeOption()
-
+    option.use_ort_backend()
     if args.device.lower() == "gpu":
         option.use_gpu()
+        option.use_paddle_backend()
 
     if args.use_trt:
         option.use_trt_backend()

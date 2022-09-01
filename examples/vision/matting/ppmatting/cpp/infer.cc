@@ -25,8 +25,10 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseOrtBackend();
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
-                                                      config_file);
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -47,6 +49,40 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
                "and ./visualized_result_fg.jpg"
+            << std::endl;
+}
+
+void GpuInfer(const std::string& model_dir, const std::string& image_file,
+              const std::string& background_file) {
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+
+  auto option = fastdeploy::RuntimeOption();
+  option.UseGpu();
+  option.UsePaddleBackend();
+  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
+                                                      config_file, option);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
+  cv::Mat bg = cv::imread(background_file);
+  fastdeploy::vision::MattingResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
+  auto vis_im_with_bg =
+      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpgg"
             << std::endl;
 }
 
@@ -98,6 +134,8 @@ int main(int argc, char* argv[]) {
   }
   if (std::atoi(argv[4]) == 0) {
     CpuInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 1) {
+    GpuInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 2) {
     TrtInfer(argv[1], argv[2], argv[3]);
   }
