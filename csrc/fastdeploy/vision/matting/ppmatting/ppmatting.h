@@ -27,7 +27,7 @@ class FASTDEPLOY_DECL PPMatting : public FastDeployModel {
             const RuntimeOption& custom_option = RuntimeOption(),
             const Frontend& model_format = Frontend::PADDLE);
 
-  std::string ModelName() const { return "PaddleMat"; }
+  std::string ModelName() const { return "PaddleMatting"; }
 
   virtual bool Predict(cv::Mat* im, MattingResult* result);
 
