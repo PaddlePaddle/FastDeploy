@@ -154,7 +154,7 @@ class PPTINYPOSE(FastDeployModel):
         if detection_result is None:
             import warnings
             warnings.warn(
-                "Only TinyPose model is used for inference. Please make sure the input image has been dealted with Detection model before"
+                "No Detection boxes input. Please make sure the input image has been cropped by Detection model's boxes before"
             )
         return self._model.predict(input_image, detection_result)
 

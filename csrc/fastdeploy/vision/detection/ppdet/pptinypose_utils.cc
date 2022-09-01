@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
 #include "fastdeploy/vision/detection/ppdet/pptinypose_utils.h"
 #define PI 3.1415926535
 #define HALF_CIRCLE_DEGREE 180

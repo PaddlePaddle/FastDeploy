@@ -83,6 +83,7 @@ void KeyPointDetectionResult::Resize(int size) { keypoints.resize(size); }
 
 std::string KeyPointDetectionResult::Str() {
   std::string out;
+
   out = "KeyPointDetectionResult: [x, y, conf]\n";
   for (size_t i = 0; i < keypoints.size() / 3; ++i) {
     int index = i * 3;
@@ -90,6 +91,7 @@ std::string KeyPointDetectionResult::Str() {
           std::to_string(keypoints[index + 1]) + ", " +
           std::to_string(keypoints[index + 2]) + "\n";
   }
+  out += "num_joints:" + std::to_string(num_joints) + "\n";
   return out;
 }
 

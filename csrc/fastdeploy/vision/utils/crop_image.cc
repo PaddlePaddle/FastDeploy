@@ -46,7 +46,6 @@ void CropImg(cv::Mat& img, cv::Mat& crop_img, std::vector<int>& area,
                      static_cast<int>(center_y + half_h * (1 + expandratio)));
   crop_img =
       img(cv::Range(crop_y1, crop_y2 + 1), cv::Range(crop_x1, crop_x2 + 1));
-
   center.clear();
   center.emplace_back((crop_x1 + crop_x2) / 2);
   center.emplace_back((crop_y1 + crop_y2) / 2);

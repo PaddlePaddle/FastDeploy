@@ -16,7 +16,7 @@ PPTINYPOSE::PPTINYPOSE(const std::string& model_file,
                        const Frontend& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-  valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -176,6 +176,10 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
       }
     }
   } else {
+    std::cout << "[WARNING] No Detection boxes input. Please make sure the "
+                 "input image has been cropped by Detection model's boxes "
+                 "before"
+              << std::endl;
     cv::Mat crop_img;
     std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
     std::vector<float> center;
@@ -206,6 +210,9 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
       FDERROR << "Failed to postprocess while using model:" << ModelName()
               << "." << std::endl;
       return false;
+    }
+    if (result->num_joints == -1) {
+      result->num_joints = one_cropimg_result.num_joints;
     }
     std::copy(one_cropimg_result.keypoints.begin(),
               one_cropimg_result.keypoints.end(),
