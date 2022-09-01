@@ -99,8 +99,8 @@ bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
 }
 
 //后处理
-bool Classifier::Postprocess(FDTensor& infer_result, int& cls_labels,
-                             float& cls_scores) {
+bool Classifier::Postprocess(FDTensor& infer_result,
+                             std::tuple<int, float>* cls_result) {
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
@@ -112,14 +112,14 @@ bool Classifier::Postprocess(FDTensor& infer_result, int& cls_labels,
   float score =
       float(*std::max_element(&out_data[0], &out_data[output_shape[1]]));
 
-  cls_labels = label;
-  cls_scores = score;
+  std::get<0>(*cls_result) = label;
+  std::get<1>(*cls_result) = score;
 
   return true;
 }
 
 //预测
-bool Classifier::Predict(cv::Mat* img, int& cls_labels, float& cls_socres) {
+bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
   Mat mat(*img);
   std::vector<FDTensor> input_tensors(1);
 
@@ -135,7 +135,7 @@ bool Classifier::Predict(cv::Mat* img, int& cls_labels, float& cls_socres) {
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], cls_labels, cls_socres)) {
+  if (!Postprocess(output_tensors[0], cls_result)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

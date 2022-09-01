@@ -20,19 +20,12 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
-
-#include "fastdeploy/backends/tensorrt/common/argsParser.h"
-#include "fastdeploy/backends/tensorrt/common/buffers.h"
-#include "fastdeploy/backends/tensorrt/common/common.h"
-#include "fastdeploy/backends/tensorrt/common/logger.h"
-#include "fastdeploy/backends/tensorrt/common/parserOnnxConfig.h"
-#include "fastdeploy/backends/tensorrt/common/sampleUtils.h"
-
+#include "fastdeploy/backends/tensorrt/utils.h"
 #include <cuda_runtime_api.h>
+#include "NvOnnxParser.h"
 #include "NvInfer.h"
 
 namespace fastdeploy {
-using namespace samplesCommon;
 
 struct TrtValueInfo {
   std::string name;
@@ -86,15 +79,15 @@ class TrtBackend : public BaseBackend {
  private:
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;
-  SampleUniquePtr<nvonnxparser::IParser> parser_;
-  SampleUniquePtr<nvinfer1::IBuilder> builder_;
-  SampleUniquePtr<nvinfer1::INetworkDefinition> network_;
+  FDUniquePtr<nvonnxparser::IParser> parser_;
+  FDUniquePtr<nvinfer1::IBuilder> builder_;
+  FDUniquePtr<nvinfer1::INetworkDefinition> network_;
   cudaStream_t stream_{};
   std::vector<void*> bindings_;
   std::vector<TrtValueInfo> inputs_desc_;
   std::vector<TrtValueInfo> outputs_desc_;
-  std::map<std::string, DeviceBuffer> inputs_buffer_;
-  std::map<std::string, DeviceBuffer> outputs_buffer_;
+  std::map<std::string, FDDeviceBuffer> inputs_buffer_;
+  std::map<std::string, FDDeviceBuffer> outputs_buffer_;
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same

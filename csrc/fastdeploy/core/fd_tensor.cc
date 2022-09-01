@@ -122,7 +122,7 @@ void FDTensor::PrintInfo(const std::string& prefix) {
              "PrintInfo function doesn't support current situation, maybe you "
              "need enhance this function now.");
   }
-  std::cout << prefix << ": shape=";
+  std::cout << prefix << ": name=" << name << ", shape=";
   for (int i = 0; i < shape.size(); ++i) {
     std::cout << shape[i] << " ";
   }

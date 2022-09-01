@@ -35,7 +35,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   // 模型预测接口，即用户调用的接口
   virtual bool Predict(cv::Mat* im,
-                       std::vector<std::vector<std::vector<int>>>* boxes);
+                       std::vector<std::array<int, 8>>* boxes_result);
 
   // pre&post process parameters
   int max_side_len;
@@ -64,7 +64,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   // 后端推理结果后处理，输出给用户
   bool Postprocess(FDTensor& infer_result,
-                   std::vector<std::vector<std::vector<int>>>* boxes,
+                   std::vector<std::array<int, 8>>* boxes_result,
                    const std::map<std::string, std::array<float, 2>>& im_info);
 
   // OCR后处理类
