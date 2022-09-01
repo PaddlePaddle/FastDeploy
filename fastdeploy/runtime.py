@@ -22,9 +22,26 @@ class Runtime:
         assert self._runtime.init(
             runtime_option._option), "Initialize Runtime Failed!"
 
+    def forward(self, *inputs):
+        inputs_dict = dict()
+        for i in range(len(inputs)):
+            inputs_dict["x" + str(i)] = inputs[i]
+        return self.infer(inputs_dict)
+
     def infer(self, data):
         assert isinstance(data, dict), "The input data should be type of dict."
         return self._runtime.infer(data)
+
+    def compile(self, warm_datas):
+        assert isinstance(warm_datas, list), "The input data should be type of list."
+        for i in range(len(warm_datas)):
+            warm_data = warm_datas[i]
+            if isinstance(warm_data[0], np.ndarray):
+                warm_data = list(data for data in warm_data)
+            else:
+                warm_data = list(data.numpy() for data in warm_data)
+            warm_datas[i] = warm_data
+        return self._runtime.compile(warm_datas)   
 
     def num_inputs(self):
         return self._runtime.num_inputs()

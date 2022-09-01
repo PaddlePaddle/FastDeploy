@@ -80,6 +80,9 @@ class PorosBackend : public BaseBackend {
   bool InitFromPoros(const std::string& model_file,
                   const PorosBackendOption& option = PorosBackendOption());
 
+  bool Compile(const std::string& model_file, const std::vector<std::vector<FDTensor>>& prewarm_tensors,
+                  const PorosBackendOption& option = PorosBackendOption());
+
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 
   int NumInputs() const { return _numinputs; }

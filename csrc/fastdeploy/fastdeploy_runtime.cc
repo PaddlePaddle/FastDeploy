@@ -254,7 +254,7 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
 }
 
 void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
-  for (int i=0;i<dtypes.size();++i) {
+  for (size_t i = 0; i < dtypes.size(); ++i) {
     FDASSERT(dtypes[i] != "float16", "Float16 is not supported!");
     if (dtypes[i] == "float32") {
       input_dtypes.push_back(FDDataType::FP32);
@@ -274,6 +274,35 @@ void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
       FDASSERT(false, "Unexpected data type: " + dtypes[i]);
     }
   }
+}
+
+bool Runtime::Compile(const std::vector<std::vector<FDTensor>>& prewarm_tensors) {
+#ifdef ENABLE_POROS_BACKEND
+  auto poros_option = PorosBackendOption();
+  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
+  poros_option.gpu_id = option.device_id;
+  poros_option.long_to_int = option.long_to_int;
+  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
+  poros_option.unconst_ops_thres = option.unconst_ops_thres;
+  poros_option.poros_file = option.poros_file;
+  poros_option.prewarm_datatypes = option.input_dtypes;
+  poros_option.enable_fp16 = option.trt_enable_fp16;
+  poros_option.max_batch_size = option.trt_max_batch_size;
+  poros_option.max_workspace_size = option.trt_max_workspace_size;
+  poros_option.max_shape = option.trt_max_shape;
+  poros_option.min_shape = option.trt_min_shape;
+  poros_option.opt_shape = option.trt_opt_shape;
+  FDASSERT(option.model_format == Frontend::TORCHSCRIPT,
+           "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
+  backend_ = utils::make_unique<PorosBackend>();
+  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
+  FDASSERT(casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
+           "Load model from Torchscript failed while initliazing PorosBackend.");
+#else
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
+#endif
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
@@ -316,7 +345,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(
         option.model_format == Frontend::TORCHSCRIPT,
         "Backend::POROS only supports model format of Frontend::TORCHSCRIPT.");
-    CreatePorosBackend();
+    // CreatePorosBackend();
+    return true;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as backend now."

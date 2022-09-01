@@ -71,6 +71,24 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<Runtime>(m, "Runtime")
       .def(pybind11::init())
       .def("init", &Runtime::Init)
+      .def("compile", 
+           [](Runtime& self, std::vector<std::vector<pybind11::array>>& warm_datas) {
+             size_t rows = warm_datas.size();
+             size_t columns = warm_datas[0].size();
+             std::vector<std::vector<FDTensor>> warm_tensors(rows, std::vector<FDTensor>(columns));
+             for (size_t i = 0; i < rows; ++i) {
+                 for (size_t j = 0; j< columns; ++j) {
+                     warm_tensors[i][j].dtype = NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
+                     warm_tensors[i][j].shape.insert(
+                        warm_tensors[i][j].shape.begin(), warm_datas[i][j].shape(),
+                        warm_datas[i][j].shape() + warm_datas[i][j].ndim());
+                     warm_tensors[i][j].data.resize(warm_datas[i][j].nbytes());
+                     memcpy(warm_tensors[i][j].Data(), warm_datas[i][j].mutable_data(),
+                        warm_datas[i][j].nbytes());
+                 }
+             }
+             return self.Compile(warm_tensors);
+           })
       .def("infer",
            [](Runtime& self, std::map<std::string, pybind11::array>& data) {
              std::vector<FDTensor> inputs(data.size());
