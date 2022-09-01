@@ -43,11 +43,12 @@ struct PorosBackendOption {
   // TRT options
   bool enable_fp16 = false;
   bool enable_int8 = false;
+  bool is_dynamic = false;
   size_t max_batch_size = 32;
   size_t max_workspace_size = 1 << 30;
-  std::map<std::string, std::vector<int32_t>> max_shape;
-  std::map<std::string, std::vector<int32_t>> min_shape;
-  std::map<std::string, std::vector<int32_t>> opt_shape;
+  // std::map<std::string, std::vector<int32_t>> max_shape;
+  // std::map<std::string, std::vector<int32_t>> min_shape;
+  // std::map<std::string, std::vector<int32_t>> opt_shape;
 };
 
 // Convert data type from fastdeploy to poros

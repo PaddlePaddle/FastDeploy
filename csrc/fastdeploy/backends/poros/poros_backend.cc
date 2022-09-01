@@ -35,7 +35,8 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.use_nvidia_tf32 = option.use_nvidia_tf32;
     _options.device_id = option.gpu_id;
     _options.unconst_ops_thres = option.unconst_ops_thres;
-    _options.is_dynamic = option.max_shape.empty() ? false : true;
+    // _options.is_dynamic = option.max_shape.empty() ? false : true;
+    _options.is_dynamic = option.is_dynamic;
     _options.max_workspace_size = option.max_workspace_size;
     _options.use_fp16 = option.enable_fp16;
     // int input_index = 0;

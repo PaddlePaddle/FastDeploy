@@ -285,13 +285,14 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
   poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
   poros_option.unconst_ops_thres = option.unconst_ops_thres;
   poros_option.poros_file = option.poros_file;
-  poros_option.prewarm_datatypes = option.input_dtypes;
+  // poros_option.prewarm_datatypes = option.input_dtypes;
+  poros_option.is_dynamic = option.is_dynamic;
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
   poros_option.max_workspace_size = option.trt_max_workspace_size;
-  poros_option.max_shape = option.trt_max_shape;
-  poros_option.min_shape = option.trt_min_shape;
-  poros_option.opt_shape = option.trt_opt_shape;
+  // poros_option.max_shape = option.trt_max_shape;
+  // poros_option.min_shape = option.trt_min_shape;
+  // poros_option.opt_shape = option.trt_opt_shape;
   FDASSERT(option.model_format == Frontend::TORCHSCRIPT,
            "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();

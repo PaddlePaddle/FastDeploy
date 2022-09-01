@@ -38,10 +38,6 @@ struct PorosOptions {
     int32_t device_id = -1;
     int32_t unconst_ops_thres = -1;
     bool use_nvidia_tf32 = false;
-    // preprocess mode
-    // 0: use torch.jit.script
-    // 1: use torch.jit.trace
-    int32_t preprocess_mode = 0;
 };
 
 class PorosModule : public torch::jit::Module {

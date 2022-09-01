@@ -132,6 +132,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   size_t trt_max_workspace_size = 1 << 30;
 
   // ======Only for Poros Backend=======
+  bool is_dynamic = false;
   bool long_to_int = true;
   bool use_nvidia_tf32 = false;
   int unconst_ops_thres = -1;
