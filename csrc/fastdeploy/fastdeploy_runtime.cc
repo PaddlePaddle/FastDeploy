@@ -304,6 +304,7 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
            "PorosBackend is not available, please compiled with "
            "ENABLE_POROS_BACKEND=ON.");
 #endif
+  return true;
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
