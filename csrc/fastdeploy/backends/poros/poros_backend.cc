@@ -273,7 +273,7 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
             } else if (poros_tensor.isList()) {
                 auto poros_tensor_lists = poros_tensor.toList();
                 for (auto poros_tensor_list : poros_tensor_lists) {
-                    CopyTensorToCpu(poros_tensor_list.to(at::kCPU), &((*outputs)[index]));
+                    CopyTensorToCpu(poros_tensor_list.toTensor().to(at::kCPU), &((*outputs)[index]));
                     index += 1;
                 }
             } else if (poros_tensor.isTuple()) {
