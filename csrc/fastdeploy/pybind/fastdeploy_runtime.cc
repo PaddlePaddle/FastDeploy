@@ -106,7 +106,6 @@ void BindRuntime(pybind11::module& m) {
                memcpy(inputs[index].Data(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;
-                std::cout << "test_wjj_name: " << iter->first << std::endl;
                index += 1;
              }
 
