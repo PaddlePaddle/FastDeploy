@@ -138,6 +138,7 @@ bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vecto
     auto inputs = graph->inputs();
     // remove self node
     _numinputs = inputs.size() - 1;
+    // TODO:tuple to solve
     auto outputs = graph->outputs();
     _numoutputs = outputs.size();
     std::cout << "test_wjj7777777777: " << _numinputs << std::endl;
@@ -260,11 +261,31 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     } else if (poros_outputs.isTuple()) {
         // deal with multi outputs
         auto poros_outputs_list = poros_outputs.toTuple();
+        size_t index = 0;
         for (size_t i = 0; i < poros_outputs_list->elements().size(); ++i) {
             std::cout << "test_wjj33333: " << poros_outputs_list->elements()[i].isTensor() << std::endl;
             std::cout << "test_wjj33333: " << poros_outputs_list->elements()[i].isList() << std::endl;
             std::cout << "test_wjj33333: " << poros_outputs_list->elements()[i].isTuple() << std::endl;
-            CopyTensorToCpu(poros_outputs_list->elements()[i].toTensor().to(at::kCPU), &((*outputs)[i]));
+            auto poros_tensor = poros_outputs_list->elements()[i];
+            if (poros_tensor.isTensor()) {
+                CopyTensorToCpu(poros_tensor.toTensor().to(at::kCPU), &((*outputs)[index]));
+                index += 1;
+            } else if (poros_tensor.isList()) {
+                auto poros_tensor_list = poros_tensor.toList();
+                size_t tensor_size = poros_tensor_list.size();
+                for (size_t j=0; j < tensor_size; ++j) {
+                    CopyTensorToCpu(poros_tensor_list[j].toTensor().to(at::kCPU, &((*outputs)[index]));
+                    index += 1;
+                }
+            } else if (poros_tensor.isTuple()) {
+                auto poros_tensor_tuple = poros_tensor.toTuple();
+                for (size_t j = 0; j < poros_tensor_tuple->elements().size(); ++j) {
+                    CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor().to(at::kCPU), &((*outputs)[index]));
+                    index += 1;
+                }
+            } else {
+                continue;
+            }
             std::cout << "test_wjj finished!!! " << std::endl;
         }
     } else {

@@ -109,7 +109,8 @@ void BindRuntime(pybind11::module& m) {
                index += 1;
              }
 
-             std::vector<FDTensor> outputs(self.NumOutputs());
+            //  std::vector<FDTensor> outputs(self.NumOutputs());
+             std::vector<FDTensor> outputs(10);
              self.Infer(inputs, &outputs);
 
              std::vector<pybind11::array> results;
