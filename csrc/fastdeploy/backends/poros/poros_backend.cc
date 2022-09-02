@@ -246,18 +246,11 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     for (size_t i = 0; i < inputs.size(); ++i) {
         poros_inputs.push_back(CreatePorosValue(inputs[i], is_backend_cuda));
     }
-    std::cout << "test_wjj1111111111: " << poros_inputs.size() << std::endl;
     // Infer
     auto poros_outputs = _poros_module->forward(poros_inputs);
-    std::cout << "test_wjj222222222: " << std::endl;
-    std::cout << "test_wjj : " << poros_outputs.isTensor() << std::endl;
-    std::cout << "test_wjj : " << poros_outputs.isList() << std::endl;
-    std::cout << "test_wjj : " << poros_outputs.isTuple() << std::endl;
     // Convert PyTorch Tensor to FD Tensor
     if (poros_outputs.isTensor()) {
-        std::cout << "test_wjj++++++: " << std::endl;
         CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
-        std::cout << "test_wjj------: " << std::endl;
     } else if (poros_outputs.isTuple()) {
         // deal with multi outputs
         auto poros_outputs_list = poros_outputs.toTuple();

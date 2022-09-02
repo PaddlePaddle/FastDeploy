@@ -85,11 +85,9 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
   size_t numel = tensor.Numel();
   at::Tensor poros_value = std::move(at::empty(tensor.shape, {at::kCPU}).to(data_type).contiguous());
   if (data_type == at::kFloat) {
-    std::cout << "test_wjj33333333: " << std::endl;
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(float));
   } else if (data_type == at::kInt) {
-    std::cout << "test_wjj444444444: " << std::endl;
     memcpy(poros_value.data_ptr(), static_cast<void*>(tensor.Data()),
         numel * sizeof(int32_t));
   } else if (data_type == at::kLong) {
@@ -103,9 +101,7 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
               " while calling PorosBackend::CreatePorosValue().");
   }
   // to cuda
-  std::cout << "test_wjj55555555: " << is_backend_cuda << std::endl;
   if (is_backend_cuda) {
-    std::cout << "test_wjj66666666: " << std::endl;
     poros_value = poros_value.to(at::kCUDA);
   }
   return poros_value;
