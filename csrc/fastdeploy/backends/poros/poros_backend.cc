@@ -140,9 +140,11 @@ bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vecto
     _numinputs = inputs.size() - 1;
     // TODO:tuple to solve
     auto outputs = graph->outputs();
-    _numoutputs = outputs.size();
+    // _numoutputs = outputs.size();
+    _numoutputs = graph->return_node()->inputs().size();
+    std::cout << "test_wjj6666666666: " << graph->return_node()->inputs().size() << std::endl;
     std::cout << "test_wjj7777777777: " << _numinputs << std::endl;
-    std::cout << "test_wjj8888888888: " << _numoutputs << std::endl;
+    std::cout << "test_wjj8888888888: " << outputs.size() << std::endl;
     // FDTensor to at::Tensor
     std::vector<std::vector<c10::IValue>> prewarm_datas;
     bool is_backend_cuda = option.use_gpu ? true : false;
