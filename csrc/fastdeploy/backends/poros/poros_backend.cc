@@ -140,8 +140,12 @@ bool PorosBackend::Compile(const std::string& model_file, std::vector<std::vecto
     _numinputs = inputs.size() - 1;
     // TODO:tuple to solve
     auto outputs = graph->outputs();
+    for (int i=0;i<outputs.size();++i) {
+        std::cout << outputs[i].debugName() << std::endl;
+    }
     // _numoutputs = outputs.size();
     _numoutputs = graph->return_node()->inputs().size();
+    std::cout << "test_wjj5555555555: " << graph->return_node()->outputs().size() << std::endl;
     std::cout << "test_wjj6666666666: " << graph->return_node()->inputs().size() << std::endl;
     std::cout << "test_wjj7777777777: " << _numinputs << std::endl;
     std::cout << "test_wjj8888888888: " << outputs.size() << std::endl;
