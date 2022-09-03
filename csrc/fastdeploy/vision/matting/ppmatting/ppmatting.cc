@@ -26,7 +26,7 @@ PPMatting::PPMatting(const std::string& model_file,
                      const RuntimeOption& custom_option,
                      const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
   valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -74,10 +74,11 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         if (op["min_short"]) {
           min_short = op["min_short"].as<int>();
         }
-        std::cout << "If LimintShort in yaml file, you may transfer PPMatting "
-                     "model by yourself, please make sure your input image's "
-                     "width==hight and not smaller than "
-                  << max_short << std::endl;
+        FDINFO << "Detected LimitShort processing step in yaml file, if the "
+                  "model is exported from PaddleSeg, please make sure the "
+                  "input of your model is fixed with a square shape, and "
+                  "greater than or equal to "
+               << max_short << "." << std::endl;
         processors_.push_back(
             std::make_shared<LimitShort>(max_short, min_short));
       } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
@@ -97,15 +98,12 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
       } else if (op["type"].as<std::string>() == "ResizeByLong") {
-        int target_size = 512;
-        if (op["target_size"]) {
-          target_size = op["target_size"].as<int>();
-        }
+        int target_size = op["target_size"].as<int>();
         processors_.push_back(std::make_shared<ResizeByLong>(target_size));
       } else if (op["type"].as<std::string>() == "Pad") {
         // size: (w, h)
         auto size = op["size"].as<std::vector<int>>();
-        std::vector<float> value = {114, 114, 114};
+        std::vector<float> value = {127.5, 127.5, 127.5};
         if (op["fill_value"]) {
           auto value = op["fill_value"].as<std::vector<float>>();
         }
@@ -122,6 +120,19 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
 bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
                            std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
+    if (processors_[i]->Name().compare("LimitShort") == 0) {
+      int input_h = static_cast<int>(mat->Height());
+      int input_w = static_cast<int>(mat->Width());
+      FDASSERT(input_h == input_w,
+               "Detected LimitShort processing step in yaml file,  please make "
+               "sure the input of your model is fixed with a square shape");
+      auto processor = dynamic_cast<LimitShort*>(processors_[i].get());
+      int max_short = processor->GetMaxShort();
+      FDASSERT(input_h >= max_short && input_w >= max_short,
+               "Detected LimitShort processing step in yaml file, please make "
+               "sure the input of your model is greater than or equal to %d.",
+               max_short);
+    }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;

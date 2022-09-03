@@ -34,6 +34,7 @@ class LimitShort : public Processor {
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
+  int GetMaxShort() { return max_short_; }
 
  private:
   int max_short_;
