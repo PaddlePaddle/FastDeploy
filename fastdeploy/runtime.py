@@ -20,6 +20,7 @@ import numpy as np
 class Runtime:
     def __init__(self, runtime_option):
         self._runtime = C.Runtime()
+        self.runtime_option = runtime_option
         assert self._runtime.init(
             runtime_option._option), "Initialize Runtime Failed!"
 
@@ -42,8 +43,7 @@ class Runtime:
             else:
                 warm_data = list(data.numpy() for data in warm_data)
             warm_datas[i] = warm_data
-        print(warm_datas)
-        return self._runtime.compile(warm_datas)   
+        return self._runtime.compile(warm_datas, self.runtime_option._option)   
 
     def num_inputs(self):
         return self._runtime.num_inputs()

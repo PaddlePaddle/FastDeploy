@@ -73,7 +73,7 @@ void BindRuntime(pybind11::module& m) {
       .def(pybind11::init())
       .def("init", &Runtime::Init)
       .def("compile", 
-           [](Runtime& self, std::vector<std::vector<pybind11::array>>& warm_datas) {
+           [](Runtime& self, std::vector<std::vector<pybind11::array>>& warm_datas, const RuntimeOption& _option) {
              size_t rows = warm_datas.size();
              size_t columns = warm_datas[0].size();
              std::vector<std::vector<FDTensor>> warm_tensors(rows, std::vector<FDTensor>(columns));
@@ -88,7 +88,7 @@ void BindRuntime(pybind11::module& m) {
                         warm_datas[i][j].nbytes());
                  }
              }
-             return self.Compile(warm_tensors);
+             return self.Compile(warm_tensors, _option);
            })
       .def("infer",
            [](Runtime& self, std::map<std::string, pybind11::array>& data) {

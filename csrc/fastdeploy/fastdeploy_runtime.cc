@@ -276,7 +276,7 @@ void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
   }
 }
 
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors, const RuntimeOption& _option) {
 #ifdef ENABLE_POROS_BACKEND
   option = _option;
   auto poros_option = PorosBackendOption();
