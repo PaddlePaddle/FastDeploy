@@ -116,7 +116,7 @@ void BindRuntime(pybind11::module& m) {
              std::vector<pybind11::array> results;
              results.reserve(outputs.size());
              for (size_t i = 0; i < outputs.size(); ++i) {
-              //  if (outputs[i].shape.empty()) continue;
+               if (outputs[i].shape.empty()) continue;
                auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
                results.emplace_back(
                    pybind11::array(numpy_dtype, outputs[i].shape));
