@@ -31,14 +31,15 @@ TensorInfo PorosBackend::GetOutputInfo(int index) {
 
 void PorosBackend::BuildOption(const PorosBackendOption& option) {
     _options.device = option.use_gpu ? baidu::mirana::poros::Device::GPU : baidu::mirana::poros::Device::CPU;
+    std::cout << "test_wjj_option0: " << option.use_gpu << std::endl;
     _options.long_to_int = option.long_to_int;
     _options.use_nvidia_tf32 = option.use_nvidia_tf32;
     _options.device_id = option.gpu_id;
     _options.unconst_ops_thres = option.unconst_ops_thres;
-    std::cout << "test_wjj_option: " << option.is_dynamic << std::endl;
+    std::cout << "test_wjj_option1: " << option.is_dynamic << std::endl;
     // _options.is_dynamic = option.max_shape.empty() ? false : true;
     _options.is_dynamic = option.is_dynamic;
-    std::cout << "test_wjj_option: " << _options.is_dynamic << std::endl;
+    std::cout << "test_wjj_option2: " << _options.is_dynamic << std::endl;
     _options.is_dynamic = true;
     _options.max_workspace_size = option.max_workspace_size;
     _options.use_fp16 = option.enable_fp16;
