@@ -65,8 +65,6 @@ void CpuInfer(const std::string& det_model_dir,
   if (!rec_model_dir.empty()) {
     auto rec_option = fastdeploy::RuntimeOption();
     rec_option.UseCpu();
-    rec_option.UsePaddleBackend();  // OCRv2的rec模型暂不支持ORT后端
-
     rec_model = fastdeploy::vision::ocr::Recognizer(
         rec_model_file, rec_params_file, rec_label, rec_option);
 
