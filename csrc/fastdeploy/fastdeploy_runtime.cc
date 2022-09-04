@@ -278,6 +278,7 @@ void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
 
 bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors) {
 #ifdef ENABLE_POROS_BACKEND
+  option = _option;
   auto poros_option = PorosBackendOption();
   poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
   poros_option.gpu_id = option.device_id;

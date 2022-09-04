@@ -292,7 +292,7 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
             } else {
                 continue;
             }
-            std::cout << "test_wjj finished!!! " << std::endl;
+            // std::cout << "test_wjj finished!!! " << std::endl;
         }
     } else {
         FDERROR << "Convert to FDTensor Failed!!!!!" << std::endl;
