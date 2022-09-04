@@ -263,7 +263,11 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
     // Convert PyTorch Tensor to FD Tensor
     if (poros_outputs.isTensor()) {
         // std::cout << "test_wjj++++++: " << std::endl;
-        CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
+        if (is_backend_cuda) {
+            CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
+        } else {
+            CopyTensorToCpu(poros_outputs.toTensor(), &((*outputs)[0]));
+        }
         // std::cout << "test_wjj------: " << std::endl;
     } else if (poros_outputs.isTuple()) {
         // deal with multi outputs
@@ -275,19 +279,31 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* o
             // std::cout << "test_wjj33333: " << poros_outputs_list->elements()[i].isTuple() << std::endl;
             auto poros_tensor = poros_outputs_list->elements()[i];
             if (poros_tensor.isTensor()) {
-                CopyTensorToCpu(poros_tensor.toTensor().to(at::kCPU), &((*outputs)[index]));
+                if (is_backend_cuda) {
+                    CopyTensorToCpu(poros_tensor.toTensor().to(at::kCPU), &((*outputs)[index]));
+                } else {
+                    CopyTensorToCpu(poros_tensor.toTensor(), &((*outputs)[index]));
+                }
                 index += 1;
             } else if (poros_tensor.isList()) {
                 auto poros_tensor_list = poros_tensor.toList();
                 for (const auto list_idx : c10::irange(0, poros_tensor_list.size())) {
                     const auto& elt = poros_tensor_list.get(list_idx);
-                    CopyTensorToCpu(elt.toTensor().to(at::kCPU), &((*outputs)[index]));
+                    if (is_backend_cuda) {
+                        CopyTensorToCpu(elt.toTensor().to(at::kCPU), &((*outputs)[index]));
+                    } else {
+                        CopyTensorToCpu(elt.toTensor(), &((*outputs)[index]));
+                    }
                     index += 1;
                 }
             } else if (poros_tensor.isTuple()) {
                 auto poros_tensor_tuple = poros_tensor.toTuple();
                 for (size_t j = 0; j < poros_tensor_tuple->elements().size(); ++j) {
-                    CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor().to(at::kCPU), &((*outputs)[index]));
+                    if (is_backend_cuda) {
+                        CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor().to(at::kCPU), &((*outputs)[index]));
+                    } else {
+                        CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor(), &((*outputs)[index]));
+                    }
                     index += 1;
                 }
             } else {
