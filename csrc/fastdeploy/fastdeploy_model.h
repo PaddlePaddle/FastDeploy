@@ -53,8 +53,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     enable_record_time_of_runtime_ = false;
   }
 
-  virtual void PrintStatisInfoOfRuntime();
-
+  virtual std::map<std::string, float> PrintStatisInfoOfRuntime();
   virtual void EnableDebug();
   virtual bool DebugEnabled();
 
