@@ -130,7 +130,7 @@ Frontend GuessModelFormat(const std::string& model_file) {
     FDLogger() << "Model Format: ONNX." << std::endl;
     return Frontend::ONNX;
   } else if (model_file.size() > 3 &&
-            model_file.substr(model_file.size() - 3, 3) == ".pt") {
+             model_file.substr(model_file.size() - 3, 3) == ".pt") {
     FDLogger() << "Model Format: Torchscript." << std::endl;
     return Frontend::TORCHSCRIPT;
   }
@@ -155,7 +155,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = Frontend::TORCHSCRIPT;
   } else {
-    FDASSERT(false, "The model format only can be 'paddle' or 'onnx' or 'torchscript'.");
+    FDASSERT(
+        false,
+        "The model format only can be 'paddle' or 'onnx' or 'torchscript'.");
   }
 }
 
@@ -276,7 +278,8 @@ void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
   }
 }
 
-bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors, const RuntimeOption& _option) {
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+                      const RuntimeOption& _option) {
 #ifdef ENABLE_POROS_BACKEND
   option = _option;
   auto poros_option = PorosBackendOption();
@@ -286,7 +289,6 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors, const
   poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
   poros_option.unconst_ops_thres = option.unconst_ops_thres;
   poros_option.poros_file = option.poros_file;
-  // poros_option.prewarm_datatypes = option.input_dtypes;
   poros_option.is_dynamic = option.is_dynamic;
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
@@ -298,8 +300,9 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors, const
            "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
-  FDASSERT(casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
-           "Load model from Torchscript failed while initliazing PorosBackend.");
+  FDASSERT(
+      casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
+      "Load model from Torchscript failed while initliazing PorosBackend.");
 #else
   FDASSERT(false,
            "PorosBackend is not available, please compiled with "
@@ -352,7 +355,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     return true;
   } else {
     FDERROR << "Runtime only support "
-               "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as backend now."
+               "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
+               "backend now."
             << std::endl;
     return false;
   }
@@ -488,8 +492,9 @@ void Runtime::CreatePorosBackend() {
            "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromTorchscript(option.model_file, poros_option),
-           "Load model from Torchscript failed while initliazing PorosBackend.");
+  FDASSERT(
+      casted_backend->InitFromTorchscript(option.model_file, poros_option),
+      "Load model from Torchscript failed while initliazing PorosBackend.");
 #else
   FDASSERT(false,
            "PorosBackend is not available, please compiled with "

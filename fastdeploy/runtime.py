@@ -18,7 +18,7 @@ import numpy as np
 
 
 class Runtime:
-    def __init__(self, ls):
+    def __init__(self, runtime_option):
         self._runtime = C.Runtime()
         self.runtime_option = runtime_option
         self.to_internal()
@@ -46,7 +46,8 @@ class Runtime:
         return self._runtime.infer(data)
 
     def compile(self, warm_datas):
-        assert isinstance(warm_datas, list), "The input data should be type of list."
+        assert isinstance(warm_datas,
+                          list), "The input data should be type of list."
         for i in range(len(warm_datas)):
             warm_data = warm_datas[i]
             if isinstance(warm_data[0], np.ndarray):
@@ -54,7 +55,7 @@ class Runtime:
             else:
                 warm_data = list(data.numpy() for data in warm_data)
             warm_datas[i] = warm_data
-        return self._runtime.compile(warm_datas, self.runtime_option._option)   
+        return self._runtime.compile(warm_datas, self.runtime_option._option)
 
     def num_inputs(self):
         return self._runtime.num_inputs()
@@ -152,7 +153,7 @@ class RuntimeOption:
         return self._option.disable_trt_fp16()
 
     def set_input_dtypes(self, dtypes):
-        return self._option.set_input_dtypes(dtypes)  
+        return self._option.set_input_dtypes(dtypes)
 
     def __repr__(self):
         attrs = dir(self._option)
