@@ -123,10 +123,18 @@ struct FASTDEPLOY_DECL UIEModel {
       const std::vector<std::string>& short_prompts,
       const std::vector<std::vector<size_t>>& input_mapping_with_short_text,
       std::vector<std::vector<UIEResult>>* results);
-  void ConstructNextPromptPrefix(
+  void ConstructChildPromptPrefix(
       const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
       const std::vector<std::vector<UIEResult>>& results_list,
       std::vector<std::vector<std::string>>* prefix);
+  void ConstructChildRelations(
+      const std::vector<std::vector<UIEResult*>>& old_relations,
+      const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
+      const std::vector<std::vector<UIEResult>>& results_list,
+      const std::string& node_name,
+      std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
+          results,
+      std::vector<std::vector<UIEResult*>>* new_relations);
   void Predict(
       const std::vector<std::string>& texts,
       std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*

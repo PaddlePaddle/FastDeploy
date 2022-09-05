@@ -577,7 +577,7 @@ void UIEModel::Postprocess(
   AutoJoiner(short_input_texts, input_mapping_with_short_text, results);
 }
 
-void UIEModel::ConstructNextPromptPrefix(
+void UIEModel::ConstructChildPromptPrefix(
     const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
     const std::vector<std::vector<UIEResult>>& results_list,
     std::vector<std::vector<std::string>>* prefix) {
@@ -586,9 +586,71 @@ void UIEModel::ConstructNextPromptPrefix(
     auto&& input_mapping_item = input_mapping_with_raw_texts[i];
     for (auto&& idx : input_mapping_item) {
       for (int j = 0; j < results_list[idx].size(); ++j) {
-        // Note(zhoushunjie): It's just useful for Chinese model.
+        // Note(zhoushunjie): It's useful for Chinese model.
         auto prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
         (*prefix)[i].push_back(prefix_str);
+      }
+    }
+  }
+}
+
+void UIEModel::ConstructChildRelations(
+    const std::vector<std::vector<UIEResult*>>& old_relations,
+    const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
+    const std::vector<std::vector<UIEResult>>& results_list,
+    const std::string& node_name,
+    std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
+        results,
+    std::vector<std::vector<UIEResult*>>* new_relations) {
+  new_relations->resize(input_mapping_with_raw_texts.size());
+  if (old_relations.size() == 0) {
+    for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
+      auto&& input_mapping_item = input_mapping_with_raw_texts[i];
+      auto& curr_result = (*results)[i];
+      for (auto&& idx : input_mapping_item) {
+        if (results_list[idx].size() == 0) {
+          continue;
+        }
+        if (curr_result.count(node_name) == 0) {
+          curr_result[node_name] = results_list[idx];
+        } else {
+          curr_result[node_name].insert(curr_result[node_name].end(),
+                                        results_list[idx].begin(),
+                                        results_list[idx].end());
+        }
+      }
+      if (curr_result.count(node_name) > 0) {
+        for (auto&& curr_result_ref : curr_result[node_name]) {
+          (*new_relations)[i].push_back(&curr_result_ref);
+        }
+      }
+    }
+  } else {
+    auto& curr_relations = old_relations;
+    for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
+      auto&& input_mapping_item = input_mapping_with_raw_texts[i];
+      for (int j = 0; j < input_mapping_item.size(); ++j) {
+        auto idx = input_mapping_item[j];
+        if (results_list[idx].size() == 0) {
+          continue;
+        }
+        if (curr_relations[i][j]->relation_.count(node_name) == 0) {
+          curr_relations[i][j]->relation_[node_name] = results_list[idx];
+        } else {
+          auto& curr_result = curr_relations[i][j]->relation_[node_name];
+          curr_result.insert(curr_result.end(), results_list[idx].begin(),
+                             results_list[idx].end());
+        }
+      }
+    }
+    for (int i = 0; i < curr_relations.size(); ++i) {
+      for (int j = 0; j < new_relations[i].size(); ++j) {
+        if (curr_relations[i][j]->relation_.count(node_name)) {
+          auto& curr_relation = curr_relations[i][j]->relation_[node_name];
+          for (auto&& curr_result_ref : curr_relation) {
+            (*new_relations)[i].push_back(&curr_result_ref);
+          }
+        }
       }
     }
   }
@@ -629,65 +691,15 @@ void UIEModel::Predict(
     Postprocess(outputs, encodings, short_input_texts, short_prompts,
                 input_mapping_with_short_text, &results_list);
 
-    // 5. Organize the UIEResult with relations
+    // 5. Construct the new relation of the UIEResult
     std::vector<std::vector<UIEResult*>> relations;
-    relations.resize(texts.size());
-    if (node.relations_.size() == 0) {
-      for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
-        auto&& input_mapping_item = input_mapping_with_raw_texts[i];
-        auto& curr_result = (*results)[i];
-        for (auto&& idx : input_mapping_item) {
-          if (results_list[idx].size() == 0) {
-            continue;
-          }
-          if (curr_result.count(node.name_) == 0) {
-            curr_result[node.name_] = results_list[idx];
-          } else {
-            curr_result[node.name_].insert(curr_result[node.name_].end(),
-                                           results_list[idx].begin(),
-                                           results_list[idx].end());
-          }
-        }
-        if (curr_result.count(node.name_) > 0) {
-          for (auto&& curr_result_ref : curr_result[node.name_]) {
-            relations[i].push_back(&curr_result_ref);
-          }
-        }
-      }
-    } else {
-      auto& new_relations = node.relations_;
-      for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
-        auto&& input_mapping_item = input_mapping_with_raw_texts[i];
-        for (int j = 0; j < input_mapping_item.size(); ++j) {
-          auto idx = input_mapping_item[j];
-          if (results_list[idx].size() == 0) {
-            continue;
-          }
-          if (new_relations[i][j]->relation_.count(node.name_) == 0) {
-            new_relations[i][j]->relation_[node.name_] = results_list[idx];
-          } else {
-            auto& curr_result = new_relations[i][j]->relation_[node.name_];
-            curr_result.insert(curr_result.end(), results_list[idx].begin(),
-                               results_list[idx].end());
-          }
-        }
-      }
-      for (int i = 0; i < new_relations.size(); ++i) {
-        for (int j = 0; j < new_relations[i].size(); ++j) {
-          if (new_relations[i][j]->relation_.count(node.name_)) {
-            auto& curr_relation = new_relations[i][j]->relation_[node.name_];
-            for (auto&& curr_result_ref : curr_relation) {
-              relations[i].push_back(&curr_result_ref);
-            }
-          }
-        }
-      }
-    }
+    ConstructChildRelations(node.relations_, input_mapping_with_raw_texts,
+                            results_list, node.name_, results, &relations);
 
     // 6. Construct the next prompt prefix
     std::vector<std::vector<std::string>> prefix(texts.size());
-    ConstructNextPromptPrefix(input_mapping_with_raw_texts, results_list,
-                              &prefix);
+    ConstructChildPromptPrefix(input_mapping_with_raw_texts, results_list,
+                               &prefix);
     for (auto& node_child : node.children_) {
       node_child.relations_ = relations;
       node_child.prefix_ = prefix;
