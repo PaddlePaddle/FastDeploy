@@ -18,11 +18,22 @@ import numpy as np
 
 
 class Runtime:
-    def __init__(self, runtime_option):
+    def __init__(self, ls):
         self._runtime = C.Runtime()
         self.runtime_option = runtime_option
+        self.to_internal()
         assert self._runtime.init(
-            runtime_option._option), "Initialize Runtime Failed!"
+            self.runtime_option._option), "Initialize Runtime Failed!"
+
+    def to_internal(self):
+        assert isinstance(self.runtime_option.is_dynamic, bool)
+        self.runtime_option._option.is_dynamic = self.runtime_option.is_dynamic
+        assert isinstance(self.runtime_option.long_to_int, bool)
+        self.runtime_option._option.long_to_int = self.runtime_option.long_to_int
+        assert isinstance(self.runtime_option.use_nvidia_tf32, bool)
+        self.runtime_option._option.use_nvidia_tf32 = self.runtime_option.use_nvidia_tf32
+        assert isinstance(self.runtime_option.unconst_ops_thres, int)
+        self.runtime_option._option.unconst_ops_thres = self.runtime_option.unconst_ops_thres
 
     def forward(self, *inputs):
         inputs_dict = dict()
@@ -71,6 +82,11 @@ class Runtime:
 class RuntimeOption:
     def __init__(self):
         self._option = C.RuntimeOption()
+        # for poros
+        self.is_dynamic = False
+        self.unconst_ops_thres = -1
+        self.long_to_int = True
+        self.use_nvidia_tf32 = False
 
     def set_model_path(self, model_path, params_path="",
                        model_format="paddle"):
