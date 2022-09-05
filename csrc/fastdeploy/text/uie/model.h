@@ -108,7 +108,8 @@ struct FASTDEPLOY_DECL UIEModel {
       const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);
 
   void ConstructTextsAndPrompts(
-      const std::vector<std::string>& raw_texts, const SchemaNode& node,
+      const std::vector<std::string>& raw_texts, const std::string& node_name,
+      const std::vector<std::vector<std::string>> node_prefix,
       std::vector<std::string>* input_texts, std::vector<std::string>* prompts,
       std::vector<std::vector<size_t>>* input_mapping_with_raw_texts,
       std::vector<std::vector<size_t>>* input_mapping_with_short_text);

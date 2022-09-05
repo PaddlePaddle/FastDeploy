@@ -432,28 +432,29 @@ void UIEModel::AutoJoiner(const std::vector<std::string>& short_texts,
 }
 
 void UIEModel::ConstructTextsAndPrompts(
-    const std::vector<std::string>& raw_texts, const SchemaNode& node,
+    const std::vector<std::string>& raw_texts, const std::string& node_name,
+    const std::vector<std::vector<std::string>> node_prefix,
     std::vector<std::string>* input_texts, std::vector<std::string>* prompts,
     std::vector<std::vector<size_t>>* input_mapping_with_raw_texts,
     std::vector<std::vector<size_t>>* input_mapping) {
   size_t idx = 0;
-  if (node.prefix_.empty()) {
+  if (node_prefix.empty()) {
     for (int i = 0; i < raw_texts.size(); ++i) {
       input_texts->push_back(raw_texts[i]);
-      prompts->push_back(DBC2SBC(node.name_));
+      prompts->push_back(DBC2SBC(node_name));
       input_mapping_with_raw_texts->push_back({idx});
       idx += 1;
     }
   } else {
     for (int i = 0; i < raw_texts.size(); ++i) {
-      if (node.prefix_[i].size() == 0) {
+      if (node_prefix[i].size() == 0) {
         input_mapping_with_raw_texts->push_back({});
       } else {
-        for (auto&& pre : node.prefix_[i]) {
+        for (auto&& pre : node_prefix[i]) {
           input_texts->push_back(raw_texts[i]);
-          prompts->push_back(DBC2SBC(pre + node.name_));
+          prompts->push_back(DBC2SBC(pre + node_name));
         }
-        auto prefix_len = node.prefix_[i].size();
+        auto prefix_len = node_prefix[i].size();
         input_mapping_with_raw_texts->push_back({});
         input_mapping_with_raw_texts->back().resize(prefix_len);
         std::iota(input_mapping_with_raw_texts->back().begin(),
@@ -673,9 +674,9 @@ void UIEModel::Predict(
     std::vector<std::string> short_input_texts;
     std::vector<std::string> short_prompts;
     // 1. Construct texts and prompts from raw text
-    ConstructTextsAndPrompts(texts, node, &short_input_texts, &short_prompts,
-                             &input_mapping_with_raw_texts,
-                             &input_mapping_with_short_text);
+    ConstructTextsAndPrompts(
+        texts, node.name_, node.prefix_, &short_input_texts, &short_prompts,
+        &input_mapping_with_raw_texts, &input_mapping_with_short_text);
 
     // 2. Convert texts and prompts to FDTensor
     std::vector<FDTensor> inputs;
