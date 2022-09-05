@@ -56,7 +56,6 @@ FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
 class TrtBackend : public BaseBackend {
  public:
   TrtBackend() : engine_(nullptr), context_(nullptr) {}
-  virtual ~TrtBackend() = default;
   void BuildOption(const TrtBackendOption& option);
 
   bool InitFromPaddle(const std::string& model_file,
@@ -66,9 +65,6 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool InitFromTrt(const std::string& trt_engine_file,
-                   const TrtBackendOption& option = TrtBackendOption());
-
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 
   int NumInputs() const { return inputs_desc_.size(); }
@@ -76,7 +72,14 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
 
+  ~TrtBackend() {
+    if (parser_) {
+      parser_.reset();
+    }
+  }
+
  private:
+  TrtBackendOption option_;
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;
   FDUniquePtr<nvonnxparser::IParser> parser_;
@@ -96,11 +99,22 @@ class TrtBackend : public BaseBackend {
   // order, to help recover the rigt order
   std::map<std::string, int> outputs_order_;
 
+  // temporary store onnx model content
+  // once it used to build trt egnine done
+  // it will be released
+  std::string onnx_model_buffer_;
+  // Stores shape information of the loaded model
+  // For dynmaic shape will record its range information
+  // Also will update the range information while inferencing
+  std::map<std::string, ShapeRangeInfo> shape_range_info_;
+
   void GetInputOutputInfo();
   void AllocateBufferInDynamicShape(const std::vector<FDTensor>& inputs,
                                     std::vector<FDTensor>* outputs);
-  bool CreateTrtEngine(const std::string& onnx_model,
-                       const TrtBackendOption& option);
+  bool CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer);
+  bool BuildTrtEngine();
+  bool LoadTrtCache(const std::string& trt_engine_file);
+  int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
 };
 
 }  // namespace fastdeploy
