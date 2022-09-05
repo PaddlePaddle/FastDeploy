@@ -250,9 +250,8 @@ float PostProcessor::BoxScoreFast(std::vector<std::vector<float>> box_array,
 
 //这个应该是DB（差分二值化）相关的内容，方法从 Bitmap 图中获取检测框
 //涉及到box_thresh（低于这个阈值的boxs不予显示）和det_db_unclip_ratio（文本框扩张的系数，关系到文本框的大小）
-void PostProcessor::BoxesFromBitmap(
-    const cv::Mat pred, std::vector<std::vector<std::vector<int>>> *boxes,
-    const cv::Mat bitmap, const float &box_thresh,
+std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
+    const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
     const float &det_db_unclip_ratio, const std::string &det_db_score_mode) {
   const int min_size = 3;
   const int max_candidates = 1000;
@@ -268,6 +267,8 @@ void PostProcessor::BoxesFromBitmap(
 
   int num_contours =
       contours.size() >= max_candidates ? max_candidates : contours.size();
+
+  std::vector<std::vector<std::vector<int>>> boxes;
 
   for (int _i = 0; _i < num_contours; _i++) {
     if (contours[_i].size() <= 2) {
@@ -318,45 +319,42 @@ void PostProcessor::BoxesFromBitmap(
               0, float(dest_height)))};
       intcliparray.push_back(a);
     }
-    boxes->push_back(intcliparray);
+    boxes.push_back(intcliparray);
 
   }  // end for
-  // return true;
+  return boxes;
 }
 
-//方法根据识别结果获取目标框位置
-void PostProcessor::FilterTagDetRes(
-    std::vector<std::vector<std::vector<int>>> *boxes, const float ratio_h,
-    const float ratio_w,
-    const std::map<std::string, std::array<float, 2>> &im_info) {
+std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
+    std::vector<std::vector<std::vector<int>>> boxes, float ratio_h,
+    float ratio_w, const std::map<std::string, std::array<float, 2>> &im_info) {
   int oriimg_h = im_info.at("input_shape")[0];
   int oriimg_w = im_info.at("input_shape")[1];
 
-  for (int n = 0; n < boxes->size(); n++) {
-    (*boxes)[n] = OrderPointsClockwise((*boxes)[n]);
-    for (int m = 0; m < (*boxes)[0].size(); m++) {
-      (*boxes)[n][m][0] /= ratio_w;
-      (*boxes)[n][m][1] /= ratio_h;
+  std::vector<std::vector<std::vector<int>>> root_points;
+  for (int n = 0; n < boxes.size(); n++) {
+    boxes[n] = OrderPointsClockwise(boxes[n]);
+    for (int m = 0; m < boxes[0].size(); m++) {
+      boxes[n][m][0] /= ratio_w;
+      boxes[n][m][1] /= ratio_h;
 
-      (*boxes)[n][m][0] = int(_min(_max((*boxes)[n][m][0], 0), oriimg_w - 1));
-      (*boxes)[n][m][1] = int(_min(_max((*boxes)[n][m][1], 0), oriimg_h - 1));
+      boxes[n][m][0] = int(_min(_max(boxes[n][m][0], 0), oriimg_w - 1));
+      boxes[n][m][1] = int(_min(_max(boxes[n][m][1], 0), oriimg_h - 1));
     }
   }
 
-  //此时已经拿到所有的点. 再进行下面的筛选
-  for (int n = (*boxes).size() - 1; n >= 0; n--) {
+  for (int n = 0; n < boxes.size(); n++) {
     int rect_width, rect_height;
-    rect_width = int(sqrt(pow((*boxes)[n][0][0] - (*boxes)[n][1][0], 2) +
-                          pow((*boxes)[n][0][1] - (*boxes)[n][1][1], 2)));
-    rect_height = int(sqrt(pow((*boxes)[n][0][0] - (*boxes)[n][3][0], 2) +
-                           pow((*boxes)[n][0][1] - (*boxes)[n][3][1], 2)));
-
-    //小于4的删除掉. erase配合逆序遍历.
-    if (rect_width <= 4 || rect_height <= 4) {
-      boxes->erase(boxes->begin() + n);
-    }
+    rect_width = int(sqrt(pow(boxes[n][0][0] - boxes[n][1][0], 2) +
+                          pow(boxes[n][0][1] - boxes[n][1][1], 2)));
+    rect_height = int(sqrt(pow(boxes[n][0][0] - boxes[n][3][0], 2) +
+                           pow(boxes[n][0][1] - boxes[n][3][1], 2)));
+    if (rect_width <= 4 || rect_height <= 4) continue;
+    root_points.push_back(boxes[n]);
   }
+  return root_points;
 }
+
 }  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
