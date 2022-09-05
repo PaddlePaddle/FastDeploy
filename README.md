@@ -216,8 +216,8 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
-- [iOS 系统部署](./docs/arm_cpu/ios-sdk.md)
-- [Android 系统部署](./docs/arm_cpu/android-sdk.md)  
+- [iOS 系统部署](./docs/arm_cpu/ios_sdk.md)
+- [Android 系统部署](./docs/arm_cpu/android_sdk.md)  
 
 ### EasyEdge自定义模型部署
 
