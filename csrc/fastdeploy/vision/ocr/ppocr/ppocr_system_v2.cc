@@ -36,7 +36,7 @@ void PPOCRSystemv2::Detect(cv::Mat* img,
 void PPOCRSystemv2::Recognize(cv::Mat* img,
                               fastdeploy::vision::OCRResult* result) {
   std::tuple<std::string, float> rec_result;
-
+  this->recognizer->rec_image_shape[1] = 32;
   this->recognizer->Predict(img, &rec_result);
 
   result->text.push_back(std::get<0>(rec_result));
