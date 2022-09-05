@@ -52,7 +52,7 @@ class FastDeployModel:
         self._model.disable_record_time_of_runtime()
 
     def print_statis_info_of_runtime(self):
-        self._model.print_statis_info_of_runtime()
+        return self._model.print_statis_info_of_runtime()
 
     @property
     def runtime_option(self):
