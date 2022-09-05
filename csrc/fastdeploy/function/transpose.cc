@@ -17,7 +17,6 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
 
 template <typename T>
 struct TransposeNormalKernel {
@@ -95,12 +94,12 @@ void Transpose(const FDTensor& x, FDTensor* out,
   size_t dims_size = dims.size();
   FDASSERT(dims_size == x.shape.size(),
            "The input tensor's dimension should be equal to the dims's size. "
-           "Expect dims size is %d, but receive %d.",
+           "Expect dims size is %lu, but receive %lu.",
            x.shape.size(), dims_size);
   std::vector<int> count(dims_size, 0);
   for (size_t i = 0; i < dims_size; i++) {
     FDASSERT(dims[i] >= 0,
-             "The dims should be greater than or equal to 0, but receive %d.",
+             "The dims should be greater than or equal to 0, but receive %lld.",
              dims[i]);
     FDASSERT(dims[i] < static_cast<int>(dims_size) && ++count[dims[i]] == 1,
              "Each element of Attribute axis should be a unique value range "
@@ -115,5 +114,5 @@ void Transpose(const FDTensor& x, FDTensor* out,
   FD_VISIT_ALL_TYPES(x.dtype, "TransposeKernel",
                      ([&] { TransposeKernel<data_t>(x, out, dims); }));
 }
-#endif
+
 }  // namespace fastdeploy

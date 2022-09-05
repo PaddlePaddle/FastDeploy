@@ -15,5 +15,5 @@
 
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_TEXT
-#include "fastdeploy/text/text_model.h"
+#include "fastdeploy/text/uie/model.h"
 #endif

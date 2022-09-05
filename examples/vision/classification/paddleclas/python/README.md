@@ -2,12 +2,12 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成ResNet50_vd在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/examples/vision/classification/paddleclas/python
@@ -26,7 +26,7 @@ python infer.py --model ResNet50_vd_infer --image ILSVRC2012_val_00000010.jpeg -
 ```
 
 运行完成后返回结果如下所示
-```
+```bash
 ClassifyResult(
 label_ids: 153,
 scores: 0.686229,
@@ -35,7 +35,7 @@ scores: 0.686229,
 
 ## PaddleClasModel Python接口
 
-```
+```python
 fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 ```
 
@@ -51,19 +51,19 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 
 ### predict函数
 
-> ```
+> ```python
 > PaddleClasModel.predict(input_image, topk=1)
 > ```
-> 
+>
 > 模型预测结口，输入图像直接输出检测结果。
-> 
+>
 > **参数**
-> 
+>
 > > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
 > > * **topk**(int):返回预测概率最高的topk个分类结果，默认为1
 
 > **返回**
-> 
+>
 > > 返回`fastdeploy.vision.ClassifyResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 

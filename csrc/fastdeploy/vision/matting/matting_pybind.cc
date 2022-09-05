@@ -17,10 +17,12 @@
 namespace fastdeploy {
 
 void BindMODNet(pybind11::module& m);
+void BindPPMatting(pybind11::module& m);
 
 void BindMatting(pybind11::module& m) {
   auto matting_module =
       m.def_submodule("matting", "Image object matting models.");
   BindMODNet(matting_module);
+  BindPPMatting(matting_module);
 }
 }  // namespace fastdeploy

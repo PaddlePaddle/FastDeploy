@@ -32,6 +32,10 @@
 #include "fastdeploy/backends/poros/poros_backend.h"
 #endif
 
+#ifdef ENABLE_OPENVINO_BACKEND
+#include "fastdeploy/backends/openvino/ov_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -47,6 +51,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_POROS_BACKEND
   backends.push_back(Backend::POROS);
+#endif
+#ifdef ENABLE_OPENVINO_BACKEND
+  backends.push_back(Backend::OPENVINO);
 #endif
   return backends;
 }
@@ -70,6 +77,8 @@ std::string Str(const Backend& b) {
     return "Backend::PDINFER";
   } else if (b == Backend::POROS) {
     return "Backend::POROS";
+  } else if (b == Backend::OPENVINO) {
+    return "Backend::OPENVINO";
   }
   return "UNKNOWN-Backend";
 }
@@ -214,10 +223,20 @@ void RuntimeOption::UseTrtBackend() {
 #endif
 }
 
+void RuntimeOption::UseOpenVINOBackend() {
+#ifdef ENABLE_OPENVINO_BACKEND
+  backend = Backend::OPENVINO;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with OpenVINO.");
+#endif
+}
 void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
 
+void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
+  pd_delete_pass_names.push_back(pass_name);
+}
 void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
@@ -323,6 +342,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::PDINFER;
     } else if (IsBackendAvailable(Backend::POROS)) {
       option.backend = Backend::POROS;
+    } else if (IsBackendAvailable(Backend::OPENVINO)) {
+      option.backend = Backend::OPENVINO;
     } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
@@ -330,14 +351,17 @@ bool Runtime::Init(const RuntimeOption& _option) {
       return false;
     }
   }
+
   if (option.backend == Backend::ORT) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
-             "Backend::TRT only supports Device::CPU/Device::GPU.");
+             "Backend::ORT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
+    FDINFO << "Runtime initialized with Backend::ORT." << std::endl;
   } else if (option.backend == Backend::TRT) {
     FDASSERT(option.device == Device::GPU,
              "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
+    FDINFO << "Runtime initialized with Backend::TRT." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
@@ -352,7 +376,13 @@ bool Runtime::Init(const RuntimeOption& _option) {
         option.model_format == Frontend::TORCHSCRIPT,
         "Backend::POROS only supports model format of Frontend::TORCHSCRIPT.");
     // CreatePorosBackend();
+    FDINFO << "Runtime initialized with Backend::PDINFER." << std::endl;
     return true;
+  } else if (option.backend == Backend::OPENVINO) {
+    FDASSERT(option.device == Device::CPU,
+             "Backend::OPENVINO only supports Device::CPU");
+    CreateOpenVINOBackend();
+    FDINFO << "Runtime initialized with Backend::OPENVINO." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
@@ -384,6 +414,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
   pd_option.gpu_id = option.device_id;
+  pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
@@ -396,6 +427,32 @@ void Runtime::CreatePaddleBackend() {
   FDASSERT(false,
            "PaddleBackend is not available, please compiled with "
            "ENABLE_PADDLE_BACKEND=ON.");
+#endif
+}
+
+void Runtime::CreateOpenVINOBackend() {
+#ifdef ENABLE_OPENVINO_BACKEND
+  auto ov_option = OpenVINOBackendOption();
+  ov_option.cpu_thread_num = option.cpu_thread_num;
+  FDASSERT(option.model_format == Frontend::PADDLE ||
+               option.model_format == Frontend::ONNX,
+           "OpenVINOBackend only support model format of Frontend::PADDLE / "
+           "Frontend::ONNX.");
+  backend_ = utils::make_unique<OpenVINOBackend>();
+  auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
+
+  if (option.model_format == Frontend::ONNX) {
+    FDASSERT(casted_backend->InitFromOnnx(option.model_file, ov_option),
+             "Load model from ONNX failed while initliazing OrtBackend.");
+  } else {
+    FDASSERT(casted_backend->InitFromPaddle(option.model_file,
+                                            option.params_file, ov_option),
+             "Load model from Paddle failed while initliazing OrtBackend.");
+  }
+#else
+  FDASSERT(false,
+           "OpenVINOBackend is not available, please compiled with "
+           "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 

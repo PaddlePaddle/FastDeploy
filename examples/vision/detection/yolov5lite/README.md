@@ -12,7 +12,7 @@
 - 自动获取
   访问[YOLOv5Lite](https://github.com/ppogg/YOLOv5-Lite)
 官方github库，按照指引下载安装，下载`yolov5-lite-xx.onnx` 模型(Tips：官方提供的ONNX文件目前是没有decode模块的)
-  ```
+  ```bash
   #下载yolov5-lite模型文件(.onnx)
   Download from https://drive.google.com/file/d/1bJByk9eoS6pv8Z3N4bcLRCV3i7uk24aU/view
   官方Repo也支持百度云下载
@@ -27,7 +27,7 @@
 
   首先需要参考[YOLOv5-Lite#189](https://github.com/ppogg/YOLOv5-Lite/pull/189)的解决办法，修改代码。
 
-  ```
+  ```bash
   #下载yolov5-lite模型文件(.pt)
   Download from https://drive.google.com/file/d/1oftzqOREGqDCerf7DtD5BZp9YWELlkMe/view
   官方Repo也支持百度云下载
@@ -39,7 +39,7 @@
   ```
   - 导出无decode模块的ONNX文件(不需要修改代码)
 
-  ```
+  ```bash
   #下载yolov5-lite模型文件
   Download from https://drive.google.com/file/d/1oftzqOREGqDCerf7DtD5BZp9YWELlkMe/view
   官方Repo也支持百度云下载
@@ -56,7 +56,7 @@
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% |
 | [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% |
-| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnxx) | 18MB | 50.9% |
+| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% |
 | [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% |
 
 

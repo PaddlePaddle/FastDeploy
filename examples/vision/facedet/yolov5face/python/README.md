@@ -2,20 +2,19 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/quick_start/requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start/install.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成YOLOv5Face在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd examples/vision/facedet/yolov5face/python/
+
 #下载YOLOv5Face模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
-
-
-#下载部署示例代码
-git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/facedet/yolov5face/python/
 
 # CPU推理
 python infer.py --model yolov5s-face.onnx --image test_lite_face_detector_3.jpg --device cpu
@@ -31,7 +30,7 @@ python infer.py --model yolov5s-face.onnx --image test_lite_face_detector_3.jpg 
 
 ## YOLOv5Face Python接口
 
-```
+```python
 fastdeploy.vision.facedet.YOLOv5Face(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
 ```
 
@@ -46,7 +45,7 @@ YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 
 ### predict函数
 
-> ```
+> ```python
 > YOLOv5Face.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >

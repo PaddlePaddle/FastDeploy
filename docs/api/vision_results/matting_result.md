@@ -6,7 +6,7 @@ MattingResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用�
 
 `fastdeploy::vision::MattingResult`
 
-```
+```c++
 struct MattingResult {
   std::vector<float> alpha;
   std::vector<float> foreground;

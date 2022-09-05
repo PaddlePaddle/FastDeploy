@@ -20,6 +20,6 @@ from . import segmentation
 from . import matting
 from . import facedet
 from . import faceid
-
+from . import ocr
 from . import evaluation
 from .visualize import *

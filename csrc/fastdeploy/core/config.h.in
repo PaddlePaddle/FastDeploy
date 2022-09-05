@@ -37,6 +37,10 @@
 #cmakedefine ENABLE_POROS_BACKEND
 #endif
 
+#ifndef ENABLE_OPENVINO_BACKEND
+#cmakedefine ENABLE_OPENVINO_BACKEND
+#endif
+
 #ifndef WITH_GPU
 #cmakedefine WITH_GPU
 #endif

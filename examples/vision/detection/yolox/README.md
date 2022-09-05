@@ -15,7 +15,7 @@
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOX-s](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_s.onnx) | 35MB | 39.6% |
 | [YOLOX-m](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_m.onnx) | 97MB | 46.4.5% |
-| [YOLOX-l](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_tiny.onnx) | 207MB | 50.0% |
+| [YOLOX-l](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_l.onnx) | 207MB | 50.0% |
 | [YOLOX-x](https://bj.bcebos.com/paddlehub/fastdeploy/yolox_x.onnx) | 378MB | 51.2% |
 
 

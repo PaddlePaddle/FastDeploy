@@ -29,7 +29,18 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (!option.enable_log_info) {
     config_.DisableGlogInfo();
   }
-  config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
+  if (!option.delete_pass_names.empty()) {
+    auto pass_builder = config_.pass_builder();
+    for (int i = 0; i < option.delete_pass_names.size(); i++) {
+      FDINFO << "Delete pass : " << option.delete_pass_names[i] << std::endl;
+      pass_builder->DeletePass(option.delete_pass_names[i]);
+    }
+  }
+  if (option.cpu_thread_num <= 0) {
+    config_.SetCpuMathLibraryNumThreads(8);
+  } else {
+    config_.SetCpuMathLibraryNumThreads(option.cpu_thread_num);
+  }
 }
 
 bool PaddleBackend::InitFromPaddle(const std::string& model_file,
@@ -68,17 +79,13 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index:" + std::to_string(index) +
-                                    " should less than the number of inputs:" +
-                                    std::to_string(NumInputs()) + ".");
+  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
   return inputs_desc_[index];
 }
 
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index:" + std::to_string(index) +
-               " should less than the number of outputs:" +
-               std::to_string(NumOutputs()) + ".");
+           "The index: %d should less than the number of outputs %d.", index, NumOutputs());
   return outputs_desc_[index];
 }
 

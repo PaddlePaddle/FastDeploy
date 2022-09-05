@@ -13,12 +13,17 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
+#include <cstring>
+#include "NvInferSafeRuntime.h"
 #include "fastdeploy/utils/utils.h"
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
 
 namespace fastdeploy {
+
+FDTrtLogger* FDTrtLogger::logger = nullptr;
+
 size_t TrtDataTypeSize(const nvinfer1::DataType& dtype) {
   if (dtype == nvinfer1::DataType::kFLOAT) {
     return sizeof(float);
@@ -130,8 +135,8 @@ bool TrtBackend::InitFromTrt(const std::string& trt_engine_file,
   fin.seekg(0, std::ios::beg);
   fin.read(&(engine_buffer.at(0)), engine_buffer.size());
   fin.close();
-  SampleUniquePtr<IRuntime> runtime{
-      createInferRuntime(sample::gLogger.getTRTLogger())};
+  FDUniquePtr<nvinfer1::IRuntime> runtime{
+      nvinfer1::createInferRuntime(*FDTrtLogger::Get())};
   if (!runtime) {
     FDERROR << "Failed to call createInferRuntime()." << std::endl;
     return false;
@@ -139,7 +144,7 @@ bool TrtBackend::InitFromTrt(const std::string& trt_engine_file,
   engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(
       runtime->deserializeCudaEngine(engine_buffer.data(),
                                      engine_buffer.size()),
-      samplesCommon::InferDeleter());
+      FDInferDeleter());
   if (!engine_) {
     FDERROR << "Failed to call deserializeCudaEngine()." << std::endl;
     return false;
@@ -259,7 +264,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
              << option.serialize_file << ", will load it directly."
              << std::endl;
       fin.close();
-      return InitFromTrt(option.serialize_file);
+      return InitFromTrt(option.serialize_file, option);
     }
   }
 
@@ -320,10 +325,10 @@ void TrtBackend::GetInputOutputInfo() {
     auto dtype = engine_->getBindingDataType(i);
     if (engine_->bindingIsInput(i)) {
       inputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype});
-      inputs_buffer_[name] = DeviceBuffer(dtype);
+      inputs_buffer_[name] = FDDeviceBuffer(dtype);
     } else {
       outputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype});
-      outputs_buffer_[name] = DeviceBuffer(dtype);
+      outputs_buffer_[name] = FDDeviceBuffer(dtype);
     }
   }
   bindings_.resize(num_binds);
@@ -334,7 +339,7 @@ void TrtBackend::AllocateBufferInDynamicShape(
   for (const auto& item : inputs) {
     auto idx = engine_->getBindingIndex(item.name.c_str());
     std::vector<int> shape(item.shape.begin(), item.shape.end());
-    auto dims = sample::toDims(shape);
+    auto dims = ToDims(shape);
     context_->setBindingDimensions(idx, dims);
     if (item.Nbytes() > inputs_buffer_[item.name].nbBytes()) {
       inputs_buffer_[item.name].resize(dims);
@@ -351,14 +356,13 @@ void TrtBackend::AllocateBufferInDynamicShape(
     // find the original index of output
     auto iter = outputs_order_.find(outputs_desc_[i].name);
     FDASSERT(iter != outputs_order_.end(),
-             "Cannot find output:" + outputs_desc_[i].name +
-                 " of tensorrt network from the original model.");
+             "Cannot find output: %s of tensorrt network from the original model.", outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
     (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
     (*outputs)[ori_idx].shape.assign(output_dims.d,
                                      output_dims.d + output_dims.nbDims);
     (*outputs)[ori_idx].name = outputs_desc_[i].name;
-    (*outputs)[ori_idx].data.resize(volume(output_dims) *
+    (*outputs)[ori_idx].data.resize(Volume(output_dims) *
                                     TrtDataTypeSize(outputs_desc_[i].dtype));
     if ((*outputs)[ori_idx].Nbytes() >
         outputs_buffer_[outputs_desc_[i].name].nbBytes()) {
@@ -374,19 +378,19 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
       1U << static_cast<uint32_t>(
           nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 
-  builder_ = SampleUniquePtr<nvinfer1::IBuilder>(
-      nvinfer1::createInferBuilder(sample::gLogger.getTRTLogger()));
+  builder_ = FDUniquePtr<nvinfer1::IBuilder>(
+      nvinfer1::createInferBuilder(*FDTrtLogger::Get()));
   if (!builder_) {
     FDERROR << "Failed to call createInferBuilder()." << std::endl;
     return false;
   }
-  network_ = SampleUniquePtr<nvinfer1::INetworkDefinition>(
+  network_ = FDUniquePtr<nvinfer1::INetworkDefinition>(
       builder_->createNetworkV2(explicitBatch));
   if (!network_) {
     FDERROR << "Failed to call createNetworkV2()." << std::endl;
     return false;
   }
-  auto config = SampleUniquePtr<nvinfer1::IBuilderConfig>(
+  auto config = FDUniquePtr<nvinfer1::IBuilderConfig>(
       builder_->createBuilderConfig());
   if (!config) {
     FDERROR << "Failed to call createBuilderConfig()." << std::endl;
@@ -403,8 +407,8 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
     }
   }
 
-  parser_ = SampleUniquePtr<nvonnxparser::IParser>(
-      nvonnxparser::createParser(*network_, sample::gLogger.getTRTLogger()));
+  parser_ = FDUniquePtr<nvonnxparser::IParser>(
+      nvonnxparser::createParser(*network_, *FDTrtLogger::Get()));
   if (!parser_) {
     FDERROR << "Failed to call createParser()." << std::endl;
     return false;
@@ -430,43 +434,38 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
       // set min shape
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kMIN,
-                                      sample::toDims(item.second)),
-               "[TrtBackend] Failed to set min_shape for input: " + item.first +
-                   " in TrtBackend.");
+                                      ToDims(item.second)),
+               "[TrtBackend] Failed to set min_shape for input: %s in TrtBackend.", item.first.c_str());
 
       // set optimization shape
       auto iter = option.opt_shape.find(item.first);
       FDASSERT(iter != option.opt_shape.end(),
-               "[TrtBackend] Cannot find input name: " + item.first +
-                   " in TrtBackendOption::opt_shape.");
+               "[TrtBackend] Cannot find input name: %s in TrtBackendOption::opt_shape.", item.first.c_str());
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kOPT,
-                                      sample::toDims(iter->second)),
-               "[TrtBackend] Failed to set opt_shape for input: " + item.first +
-                   " in TrtBackend.");
+                                      ToDims(iter->second)),
+               "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.", item.first.c_str());
       // set max shape
       iter = option.max_shape.find(item.first);
       FDASSERT(iter != option.max_shape.end(),
-               "[TrtBackend] Cannot find input name: " + item.first +
-                   " in TrtBackendOption::max_shape.");
+               "[TrtBackend] Cannot find input name: %s in TrtBackendOption::max_shape.", item.first);
       FDASSERT(profile->setDimensions(item.first.c_str(),
                                       nvinfer1::OptProfileSelector::kMAX,
-                                      sample::toDims(iter->second)),
-               "[TrtBackend] Failed to set max_shape for input: " + item.first +
-                   " in TrtBackend.");
+                                      ToDims(iter->second)),
+               "[TrtBackend] Failed to set max_shape for input: %s in TrtBackend.", item.first);
     }
     config->addOptimizationProfile(profile);
   }
 
-  SampleUniquePtr<IHostMemory> plan{
+  FDUniquePtr<nvinfer1::IHostMemory> plan{
       builder_->buildSerializedNetwork(*network_, *config)};
   if (!plan) {
     FDERROR << "Failed to call buildSerializedNetwork()." << std::endl;
     return false;
   }
 
-  SampleUniquePtr<IRuntime> runtime{
-      createInferRuntime(sample::gLogger.getTRTLogger())};
+  FDUniquePtr<nvinfer1::IRuntime> runtime{
+      nvinfer1::createInferRuntime(*FDTrtLogger::Get())};
   if (!runtime) {
     FDERROR << "Failed to call createInferRuntime()." << std::endl;
     return false;
@@ -474,7 +473,7 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
 
   engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(
       runtime->deserializeCudaEngine(plan->data(), plan->size()),
-      samplesCommon::InferDeleter());
+      FDInferDeleter());
   if (!engine_) {
     FDERROR << "Failed to call deserializeCudaEngine()." << std::endl;
     return false;
@@ -502,9 +501,7 @@ bool TrtBackend::CreateTrtEngine(const std::string& onnx_model,
 }
 
 TensorInfo TrtBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index:" + std::to_string(index) +
-                                    " should less than the number of inputs:" +
-                                    std::to_string(NumInputs()) + ".");
+  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
   TensorInfo info;
   info.name = inputs_desc_[index].name;
   info.shape.assign(inputs_desc_[index].shape.begin(),
@@ -515,9 +512,7 @@ TensorInfo TrtBackend::GetInputInfo(int index) {
 
 TensorInfo TrtBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index:" + std::to_string(index) +
-               " should less than the number of outputs:" +
-               std::to_string(NumOutputs()) + ".");
+           "The index: %d should less than the number of outputs: %d.", index, NumOutputs());
   TensorInfo info;
   info.name = outputs_desc_[index].name;
   info.shape.assign(outputs_desc_[index].shape.begin(),

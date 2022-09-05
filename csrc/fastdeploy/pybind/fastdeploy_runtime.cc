@@ -27,6 +27,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
       .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
+      .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("enable_paddle_mkldnn", &RuntimeOption::EnablePaddleMKLDNN)
       .def("disable_paddle_mkldnn", &RuntimeOption::DisablePaddleMKLDNN)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
@@ -72,21 +73,26 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<Runtime>(m, "Runtime")
       .def(pybind11::init())
       .def("init", &Runtime::Init)
-      .def("compile", 
-           [](Runtime& self, std::vector<std::vector<pybind11::array>>& warm_datas, const RuntimeOption& _option) {
+      .def("compile",
+           [](Runtime& self,
+              std::vector<std::vector<pybind11::array>>& warm_datas,
+              const RuntimeOption& _option) {
              size_t rows = warm_datas.size();
              size_t columns = warm_datas[0].size();
-             std::vector<std::vector<FDTensor>> warm_tensors(rows, std::vector<FDTensor>(columns));
+             std::vector<std::vector<FDTensor>> warm_tensors(
+                 rows, std::vector<FDTensor>(columns));
              for (size_t i = 0; i < rows; ++i) {
-                 for (size_t j = 0; j< columns; ++j) {
-                     warm_tensors[i][j].dtype = NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
-                     warm_tensors[i][j].shape.insert(
-                        warm_tensors[i][j].shape.begin(), warm_datas[i][j].shape(),
-                        warm_datas[i][j].shape() + warm_datas[i][j].ndim());
-                     warm_tensors[i][j].data.resize(warm_datas[i][j].nbytes());
-                     memcpy(warm_tensors[i][j].Data(), warm_datas[i][j].mutable_data(),
+               for (size_t j = 0; j < columns; ++j) {
+                 warm_tensors[i][j].dtype =
+                     NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
+                 warm_tensors[i][j].shape.insert(
+                     warm_tensors[i][j].shape.begin(), warm_datas[i][j].shape(),
+                     warm_datas[i][j].shape() + warm_datas[i][j].ndim());
+                 warm_tensors[i][j].data.resize(warm_datas[i][j].nbytes());
+                 memcpy(warm_tensors[i][j].Data(),
+                        warm_datas[i][j].mutable_data(),
                         warm_datas[i][j].nbytes());
-                 }
+               }
              }
              return self.Compile(warm_tensors, _option);
            })
@@ -110,17 +116,15 @@ void BindRuntime(pybind11::module& m) {
              }
 
              std::vector<FDTensor> outputs(self.NumOutputs());
-            //  std::vector<FDTensor> outputs(4);
              self.Infer(inputs, &outputs);
 
              std::vector<pybind11::array> results;
              results.reserve(outputs.size());
              for (size_t i = 0; i < outputs.size(); ++i) {
-            //    if (outputs[i].shape.empty()) continue;
                auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
                results.emplace_back(
                    pybind11::array(numpy_dtype, outputs[i].shape));
-                memcpy(results[i].mutable_data(), outputs[i].Data(),
+               memcpy(results[i].mutable_data(), outputs[i].Data(),
                       outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
              }
              return results;

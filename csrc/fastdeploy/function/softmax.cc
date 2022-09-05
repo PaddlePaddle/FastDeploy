@@ -21,8 +21,6 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
-
 template <typename T>
 struct ValueClip {
   T operator()(const T& x) const {
@@ -117,10 +115,9 @@ void Softmax(const FDTensor& x, FDTensor* out, int axis) {
   FDASSERT(
       std::abs(axis) < x.shape.size(),
       "The absolute given axis should be smaller than the input's "
-      "dimension. Expected absolute axis is smaller than %d, but receive %d.",
+      "dimension. Expected absolute axis is smaller than %lu, but receive %d.",
       x.shape.size(), std::abs(axis));
   FD_VISIT_FLOAT_TYPES(x.dtype, "SoftmaxKernel",
                        ([&] { SoftmaxKernel<data_t>(x, out, axis); }));
 }
-#endif
 }  // namespace fastdeploy

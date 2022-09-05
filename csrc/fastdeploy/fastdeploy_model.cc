@@ -26,31 +26,10 @@ bool FastDeployModel::InitRuntime() {
     return false;
   }
   if (runtime_option.backend != Backend::UNKNOWN) {
-    if (runtime_option.backend == Backend::ORT) {
-      if (!IsBackendAvailable(Backend::ORT)) {
-        FDERROR
-            << "Backend::ORT is not complied with current FastDeploy library."
-            << std::endl;
-        return false;
-      }
-    } else if (runtime_option.backend == Backend::TRT) {
-      if (!IsBackendAvailable(Backend::TRT)) {
-        FDERROR
-            << "Backend::TRT is not complied with current FastDeploy library."
-            << std::endl;
-        return false;
-      }
-    } else if (runtime_option.backend == Backend::PDINFER) {
-      if (!IsBackendAvailable(Backend::PDINFER)) {
-        FDERROR << "Backend::PDINFER is not compiled with current FastDeploy "
-                   "library."
-                << std::endl;
-        return false;
-      }
-    } else {
-      FDERROR
-          << "Only support Backend::ORT / Backend::TRT / Backend::PDINFER now."
-          << std::endl;
+    if (!IsBackendAvailable(runtime_option.backend)) {
+      FDERROR << Str(runtime_option.backend)
+              << " is not compiled with current FastDeploy library."
+              << std::endl;
       return false;
     }
 
@@ -89,12 +68,12 @@ bool FastDeployModel::InitRuntime() {
                 << Str(runtime_option.backend) << "." << std::endl;
       if (use_gpu) {
         FDASSERT(valid_gpu_backends.size() > 0,
-                 "There's no valid gpu backend for " + ModelName() + ".");
+                 "There's no valid gpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
       } else {
-        FDASSERT(valid_gpu_backends.size() > 0,
-                 "There's no valid cpu backend for " + ModelName() + ".");
+        FDASSERT(valid_cpu_backends.size() > 0,
+                 "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
       }
