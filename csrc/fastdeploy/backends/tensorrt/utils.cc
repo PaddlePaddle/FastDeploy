@@ -37,7 +37,10 @@ int ShapeRangeInfo::Update(const std::vector<int64_t>& new_shape) {
     return 0;
   }
 
-  FDWARNING << "[New Shape Out of Range] input name: " << name << ", shape: " << new_shape << ", The shape range before: min_shape=" << min << ", max_shape=" << max << "." << std::endl;
+  FDWARNING << "[New Shape Out of Range] input name: " << name
+            << ", shape: " << new_shape
+            << ", The shape range before: min_shape=" << min
+            << ", max_shape=" << max << "." << std::endl;
   for (size_t i = 0; i < shape.size(); ++i) {
     if (new_shape[i] < min[i] || min[i] < 0) {
       min[i] = new_shape[i];
@@ -46,7 +49,9 @@ int ShapeRangeInfo::Update(const std::vector<int64_t>& new_shape) {
       max[i] = new_shape[i];
     }
   }
-  FDWARNING << "[New Shape Out of Range] The updated shape range now: min_shape=" << min << ", max_shape=" << max << "." << std::endl;
+  FDWARNING
+      << "[New Shape Out of Range] The updated shape range now: min_shape="
+      << min << ", max_shape=" << max << "." << std::endl;
   return need_update_engine;
 }
 
@@ -109,7 +114,8 @@ int64_t Volume(const nvinfer1::Dims& d) {
 nvinfer1::Dims ToDims(const std::vector<int>& vec) {
   int limit = static_cast<int>(nvinfer1::Dims::MAX_DIMS);
   if (static_cast<int>(vec.size()) > limit) {
-    FDWARNING << "Vector too long, only first 8 elements are used in dimension." << std::endl;
+    FDWARNING << "Vector too long, only first 8 elements are used in dimension."
+              << std::endl;
   }
   // Pick first nvinfer1::Dims::MAX_DIMS elements
   nvinfer1::Dims dims{std::min(static_cast<int>(vec.size()), limit), {}};
@@ -120,7 +126,8 @@ nvinfer1::Dims ToDims(const std::vector<int>& vec) {
 nvinfer1::Dims ToDims(const std::vector<int64_t>& vec) {
   int limit = static_cast<int>(nvinfer1::Dims::MAX_DIMS);
   if (static_cast<int>(vec.size()) > limit) {
-    FDWARNING << "Vector too long, only first 8 elements are used in dimension." << std::endl;
+    FDWARNING << "Vector too long, only first 8 elements are used in dimension."
+              << std::endl;
   }
   // Pick first nvinfer1::Dims::MAX_DIMS elements
   nvinfer1::Dims dims{std::min(static_cast<int>(vec.size()), limit), {}};
@@ -128,4 +135,4 @@ nvinfer1::Dims ToDims(const std::vector<int64_t>& vec) {
   return dims;
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy

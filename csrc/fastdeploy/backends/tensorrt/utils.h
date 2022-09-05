@@ -14,29 +14,29 @@
 
 #pragma once
 
-#include <iostream>
-#include <map>
-#include <string>
-#include <numeric>
-#include <memory>
-#include <vector>
-#include <algorithm>
-#include <cuda_runtime_api.h>
 #include "NvInfer.h"
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
+#include <algorithm>
+#include <cuda_runtime_api.h>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <string>
+#include <vector>
 
 namespace fastdeploy {
 
 struct FDInferDeleter {
-  template<typename T> void operator()(T* obj) const {
+  template <typename T> void operator()(T* obj) const {
     if (obj) {
       obj->destroy();
     }
   }
 };
 
-template<typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
+template <typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
 
 int64_t Volume(const nvinfer1::Dims& d);
 
@@ -51,8 +51,8 @@ nvinfer1::DataType ReaderDtypeToTrtDtype(int reader_dtype);
 
 std::vector<int> ToVec(const nvinfer1::Dims& dim);
 
-template<typename T>
-std::ostream& operator<< (std::ostream& out, const std::vector<T>& vec) {
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
   out << "[";
   for (size_t i = 0; i < vec.size(); ++i) {
     if (i != vec.size() - 1) {
@@ -124,9 +124,7 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   //! \brief Returns the size (in bytes) of the buffer.
   //!
-  size_t nbBytes() const {
-    return this->size() * TrtDataTypeSize(mType);
-  }
+  size_t nbBytes() const { return this->size() * TrtDataTypeSize(mType); }
 
   //!
   //! \brief Resizes the buffer. This is a no-op if the new size is smaller than
@@ -146,9 +144,7 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   //! \brief Overload of resize that accepts Dims
   //!
-  void resize(const nvinfer1::Dims& dims) {
-    return this->resize(Volume(dims));
-  }
+  void resize(const nvinfer1::Dims& dims) { return this->resize(Volume(dims)); }
 
   ~FDGenericBuffer() { freeFn(mBuffer); }
 
@@ -184,13 +180,14 @@ class FDTrtLogger : public nvinfer1::ILogger {
     logger = new FDTrtLogger();
     return logger;
   }
-  void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
+  void log(nvinfer1::ILogger::Severity severity,
+           const char* msg) noexcept override {
     if (severity == nvinfer1::ILogger::Severity::kINFO) {
-      // Disable this log 
-//      FDINFO << msg << std::endl;
+      // Disable this log
+      //      FDINFO << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kWARNING) {
       // Disable this log
-//      FDWARNING << msg << std::endl;
+      //      FDWARNING << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kERROR) {
       FDERROR << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kINTERNAL_ERROR) {
@@ -234,11 +231,12 @@ struct ShapeRangeInfo {
     return Update(new_shape_int64);
   }
 
-  friend std::ostream& operator<< (std::ostream& out, const ShapeRangeInfo& info) {
-    out << "Input name: " << info.name << ", shape=" << info.shape << ", min=" << info.min << ", max=" << info.max << std::endl;
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const ShapeRangeInfo& info) {
+    out << "Input name: " << info.name << ", shape=" << info.shape
+        << ", min=" << info.min << ", max=" << info.max << std::endl;
     return out;
   }
-
 };
 
-}  // namespace fastdeploy
+} // namespace fastdeploy

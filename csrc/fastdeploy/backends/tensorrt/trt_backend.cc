@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
-#include <cstring>
 #include "NvInferSafeRuntime.h"
 #include "fastdeploy/utils/utils.h"
+#include <cstring>
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
@@ -25,12 +25,15 @@ namespace fastdeploy {
 FDTrtLogger* FDTrtLogger::logger = nullptr;
 
 // Check if the model can build tensorrt engine now
-// If the model has dynamic input shape, it will require defined shape information
-// We can set the shape range information by function SetTrtInputShape()
-// But if the shape range is not defined, then the engine cannot build, in this case,
-// The engine will build once there's data feeded, and the shape range will be updated
-bool CanBuildEngine(const std::map<std::string, ShapeRangeInfo>& shape_range_info) {
-  for (auto iter = shape_range_info.begin(); iter != shape_range_info.end(); ++iter) {
+// If the model has dynamic input shape, it will require defined shape
+// information We can set the shape range information by function
+// SetTrtInputShape() But if the shape range is not defined, then the engine
+// cannot build, in this case, The engine will build once there's data feeded,
+// and the shape range will be updated
+bool CanBuildEngine(
+    const std::map<std::string, ShapeRangeInfo>& shape_range_info) {
+  for (auto iter = shape_range_info.begin(); iter != shape_range_info.end();
+       ++iter) {
     bool is_full_static = true;
     for (size_t i = 0; i < iter->second.shape.size(); ++i) {
       if (iter->second.shape[i] < 0) {
@@ -56,7 +59,8 @@ bool TrtBackend::LoadTrtCache(const std::string& trt_engine_file) {
 
   std::string engine_buffer;
   if (!ReadBinaryFromFile(trt_engine_file, &engine_buffer)) {
-    FDERROR << "Failed to load TensorRT Engine from " << trt_engine_file << "." << std::endl;
+    FDERROR << "Failed to load TensorRT Engine from " << trt_engine_file << "."
+            << std::endl;
     return false;
   }
 
@@ -83,18 +87,22 @@ bool TrtBackend::LoadTrtCache(const std::string& trt_engine_file) {
     if (!engine_->bindingIsInput(i)) {
       continue;
     }
-    auto min = ToVec(engine_->getProfileDimensions(i, 0, nvinfer1::OptProfileSelector::kMAX));
-    auto max = ToVec(engine_->getProfileDimensions(i, 0, nvinfer1::OptProfileSelector::kMIN));
+    auto min = ToVec(engine_->getProfileDimensions(
+        i, 0, nvinfer1::OptProfileSelector::kMAX));
+    auto max = ToVec(engine_->getProfileDimensions(
+        i, 0, nvinfer1::OptProfileSelector::kMIN));
     auto name = std::string(engine_->getBindingName(i));
     auto iter = shape_range_info_.find(name);
     if (iter == shape_range_info_.end()) {
-      FDERROR << "There's no input named '" << name << "' in loaded model." << std::endl;
+      FDERROR << "There's no input named '" << name << "' in loaded model."
+              << std::endl;
       return false;
     }
     iter->second.Update(min);
     iter->second.Update(max);
   }
-  FDINFO << "Build TensorRT Engine from cache file: " << trt_engine_file << " with shape range information as below," << std::endl;
+  FDINFO << "Build TensorRT Engine from cache file: " << trt_engine_file
+         << " with shape range information as below," << std::endl;
   for (const auto& item : shape_range_info_) {
     FDINFO << item.second << std::endl;
   }
@@ -202,7 +210,9 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   outputs_desc_.resize(onnx_reader.num_outputs);
   for (int i = 0; i < onnx_reader.num_inputs; ++i) {
     std::string name(onnx_reader.inputs[i].name);
-    std::vector<int64_t> shape(onnx_reader.inputs[i].shape, onnx_reader.inputs[i].shape + onnx_reader.inputs[i].rank);
+    std::vector<int64_t> shape(onnx_reader.inputs[i].shape,
+                               onnx_reader.inputs[i].shape +
+                                   onnx_reader.inputs[i].rank);
     inputs_desc_[i].name = name;
     inputs_desc_[i].shape.assign(shape.begin(), shape.end());
     inputs_desc_[i].dtype = ReaderDtypeToTrtDtype(onnx_reader.inputs[i].dtype);
@@ -217,15 +227,17 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
       info.opt.assign(iter_opt->second.begin(), iter_opt->second.end());
     }
     shape_range_info_.insert(std::make_pair(name, info));
-   }
+  }
   for (int i = 0; i < onnx_reader.num_outputs; ++i) {
     std::string name(onnx_reader.outputs[i].name);
-    std::vector<int64_t> shape(onnx_reader.outputs[i].shape, onnx_reader.outputs[i].shape + onnx_reader.outputs[i].rank);
+    std::vector<int64_t> shape(onnx_reader.outputs[i].shape,
+                               onnx_reader.outputs[i].shape +
+                                   onnx_reader.outputs[i].rank);
     outputs_desc_[i].name = name;
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
-    outputs_desc_[i].dtype = ReaderDtypeToTrtDtype(onnx_reader.outputs[i].dtype);
+    outputs_desc_[i].dtype =
+        ReaderDtypeToTrtDtype(onnx_reader.outputs[i].dtype);
   }
-
 
   FDASSERT(cudaStreamCreate(&stream_) == 0,
            "[ERROR] Error occurs while calling cudaStreamCreate().");
@@ -238,13 +250,13 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-
 int TrtBackend::ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs) {
   bool need_update_engine = false;
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = shape_range_info_.find(inputs[i].name);
     if (iter == shape_range_info_.end()) {
-      FDERROR << "There's no input named '" << inputs[i].name << "' in loaded model." << std::endl;
+      FDERROR << "There's no input named '" << inputs[i].name
+              << "' in loaded model." << std::endl;
     }
     if (iter->second.Update(inputs[i].shape) == 1) {
       need_update_engine = true;
@@ -256,13 +268,20 @@ int TrtBackend::ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs) {
 bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                        std::vector<FDTensor>* outputs) {
   if (inputs.size() != NumInputs()) {
-    FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size() << "." << std::endl;
+    FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size()
+            << "." << std::endl;
     return false;
   }
   if (ShapeRangeInfoUpdated(inputs)) {
     // meet new shape output of predefined max/min shape
     // rebuild the tensorrt engine
-    FDWARNING << "TensorRT engine will be rebuilt once shape range information changed, this may take lots of time, you can set a proper shape range before loading model to avoid rebuilding process. refer https://github.com/PaddlePaddle/FastDeploy/docs/backends/tensorrt.md for more details." << std::endl;
+    FDWARNING
+        << "TensorRT engine will be rebuilt once shape range information "
+           "changed, this may take lots of time, you can set a proper shape "
+           "range before loading model to avoid rebuilding process. refer "
+           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
+           "tensorrt.md for more details."
+        << std::endl;
     BuildTrtEngine();
   }
 
@@ -340,8 +359,10 @@ void TrtBackend::AllocateBufferInDynamicShape(
 
     // find the original index of output
     auto iter = outputs_order_.find(outputs_desc_[i].name);
-    FDASSERT(iter != outputs_order_.end(),
-             "Cannot find output: %s of tensorrt network from the original model.", outputs_desc_[i].name.c_str());
+    FDASSERT(
+        iter != outputs_order_.end(),
+        "Cannot find output: %s of tensorrt network from the original model.",
+        outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
     (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
     (*outputs)[ori_idx].shape.assign(output_dims.d,
@@ -358,8 +379,8 @@ void TrtBackend::AllocateBufferInDynamicShape(
 }
 
 bool TrtBackend::BuildTrtEngine() {
-  auto config = FDUniquePtr<nvinfer1::IBuilderConfig>(
-      builder_->createBuilderConfig());
+  auto config =
+      FDUniquePtr<nvinfer1::IBuilderConfig>(builder_->createBuilderConfig());
   if (!config) {
     FDERROR << "Failed to call createBuilderConfig()." << std::endl;
     return false;
@@ -386,15 +407,39 @@ bool TrtBackend::BuildTrtEngine() {
   config->setMaxWorkspaceSize(option_.max_workspace_size);
   auto profile = builder_->createOptimizationProfile();
   for (const auto& item : shape_range_info_) {
-    FDASSERT(profile->setDimensions(item.first.c_str(), nvinfer1::OptProfileSelector::kMIN, ToDims(item.second.min)), "[TrtBackend] Failed to set min_shape for input: %s in TrtBackend.", item.first.c_str());
-    FDASSERT(profile->setDimensions(item.first.c_str(), nvinfer1::OptProfileSelector::kMAX, ToDims(item.second.max)), "[TrtBackend] Failed to set max_shape for input: %s in TrtBackend.", item.first.c_str());
+    FDASSERT(
+        profile->setDimensions(item.first.c_str(),
+                               nvinfer1::OptProfileSelector::kMIN,
+                               ToDims(item.second.min)),
+        "[TrtBackend] Failed to set min_shape for input: %s in TrtBackend.",
+        item.first.c_str());
+    FDASSERT(
+        profile->setDimensions(item.first.c_str(),
+                               nvinfer1::OptProfileSelector::kMAX,
+                               ToDims(item.second.max)),
+        "[TrtBackend] Failed to set max_shape for input: %s in TrtBackend.",
+        item.first.c_str());
     if (item.second.opt.size() == 0) {
-      FDASSERT(profile->setDimensions(item.first.c_str(), nvinfer1::OptProfileSelector::kOPT, ToDims(item.second.max)), "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.", item.first.c_str());
+      FDASSERT(
+          profile->setDimensions(item.first.c_str(),
+                                 nvinfer1::OptProfileSelector::kOPT,
+                                 ToDims(item.second.max)),
+          "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.",
+          item.first.c_str());
     } else {
-      FDASSERT(item.second.opt.size() == item.second.shape.size(), "Require the dimension of opt in shape range information equal to dimension of input: %s in this model, but now it's %zu != %zu.", item.first.c_str(), item.second.opt.size(), item.second.shape.size());
-      FDASSERT(profile->setDimensions(item.first.c_str(), nvinfer1::OptProfileSelector::kOPT, ToDims(item.second.opt)), "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.", item.first.c_str());
-     }
-   }
+      FDASSERT(
+          item.second.opt.size() == item.second.shape.size(),
+          "Require the dimension of opt in shape range information equal to "
+          "dimension of input: %s in this model, but now it's %zu != %zu.",
+          item.first.c_str(), item.second.opt.size(), item.second.shape.size());
+      FDASSERT(
+          profile->setDimensions(item.first.c_str(),
+                                 nvinfer1::OptProfileSelector::kOPT,
+                                 ToDims(item.second.opt)),
+          "[TrtBackend] Failed to set opt_shape for input: %s in TrtBackend.",
+          item.first.c_str());
+    }
+  }
   config->addOptimizationProfile(profile);
 
   FDUniquePtr<nvinfer1::IHostMemory> plan{
@@ -425,8 +470,8 @@ bool TrtBackend::BuildTrtEngine() {
 
   FDINFO << "TensorRT Engine is built succussfully." << std::endl;
   if (option_.serialize_file != "") {
-    FDINFO << "Serialize TensorRTEngine to local file " << option_.serialize_file
-           << "." << std::endl;
+    FDINFO << "Serialize TensorRTEngine to local file "
+           << option_.serialize_file << "." << std::endl;
     std::ofstream engine_file(option_.serialize_file.c_str());
     if (!engine_file) {
       FDERROR << "Failed to open " << option_.serialize_file << " to write."
@@ -487,11 +532,21 @@ bool TrtBackend::CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer) {
 
   if (!CanBuildEngine(shape_range_info_)) {
     onnx_model_buffer_ = onnx_model_buffer;
-    FDWARNING << "Cannot build engine right now, because there's dynamic input shape exists, list as below," << std::endl;
+    FDWARNING << "Cannot build engine right now, because there's dynamic input "
+                 "shape exists, list as below,"
+              << std::endl;
     for (int i = 0; i < NumInputs(); ++i) {
       FDWARNING << "Input " << i << ": " << GetInputInfo(i) << std::endl;
     }
-    FDWARNING << "FastDeploy will build the engine while inference with input data, and will also collect the input shape range information. You should be noticed that FastDeploy will rebuild the engine while new input shape is out of the collected shape range, this may bring some time consuming problem, refer https://github.com/PaddlePaddle/FastDeploy/docs/backends/tensorrt.md for more details." << std::endl;
+    FDWARNING
+        << "FastDeploy will build the engine while inference with input data, "
+           "and will also collect the input shape range information. You "
+           "should be noticed that FastDeploy will rebuild the engine while "
+           "new input shape is out of the collected shape range, this may "
+           "bring some time consuming problem, refer "
+           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
+           "tensorrt.md for more details."
+        << std::endl;
     initialized_ = true;
     return true;
   }
@@ -506,7 +561,9 @@ bool TrtBackend::CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer) {
 }
 
 TensorInfo TrtBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
+  FDASSERT(index < NumInputs(),
+           "The index: %d should less than the number of inputs: %d.", index,
+           NumInputs());
   TensorInfo info;
   info.name = inputs_desc_[index].name;
   info.shape.assign(inputs_desc_[index].shape.begin(),
@@ -517,7 +574,8 @@ TensorInfo TrtBackend::GetInputInfo(int index) {
 
 TensorInfo TrtBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index: %d should less than the number of outputs: %d.", index, NumOutputs());
+           "The index: %d should less than the number of outputs: %d.", index,
+           NumOutputs());
   TensorInfo info;
   info.name = outputs_desc_[index].name;
   info.shape.assign(outputs_desc_[index].shape.begin(),
@@ -525,4 +583,4 @@ TensorInfo TrtBackend::GetOutputInfo(int index) {
   info.dtype = GetFDDataType(outputs_desc_[index].dtype);
   return info;
 }
-}  // namespace fastdeploy
+} // namespace fastdeploy
