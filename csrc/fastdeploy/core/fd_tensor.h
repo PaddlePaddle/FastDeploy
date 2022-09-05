@@ -18,12 +18,14 @@
 #include <string>
 #include <vector>
 
+#include "fastdeploy/core/allocate.h"
 #include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
-  std::vector<int8_t> data;
+  // std::vector<int8_t> data;
+  void* buffer_ = nullptr;
   std::vector<int64_t> shape;
   std::string name = "";
   FDDataType dtype;
@@ -60,14 +62,16 @@ struct FASTDEPLOY_DECL FDTensor {
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer
   void SetExternalData(const std::vector<int64_t>& new_shape,
-                       const FDDataType& data_type, void* data_buffer);
+                       const FDDataType& data_type, void* data_buffer,
+                       const Device& new_device = Device::CPU);
 
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
   void Allocate(const std::vector<int64_t>& new_shape,
                 const FDDataType& data_type,
-                const std::string& tensor_name = "");
+                const std::string& tensor_name = "",
+                const Device& new_device = Device::CPU);
 
   // Total size of tensor memory buffer in bytes
   int Nbytes() const;
@@ -75,13 +79,51 @@ struct FASTDEPLOY_DECL FDTensor {
   // Total number of elements in this tensor
   int Numel() const;
 
+  void Resize(size_t nbytes);
+
+  void Resize(const std::vector<int64_t>& new_shape);
+
+  void Resize(const std::vector<int64_t>& new_shape,
+              const FDDataType& data_type,
+              const Device& new_device = Device::CPU);
+
   // Debug function
   // Use this function to print shape, dtype, mean, max, min
   // prefix will also be printed as tag
   void PrintInfo(const std::string& prefix = "TensorInfo: ");
 
+  bool AllocFn(size_t nbytes) {
+    if (device == Device::GPU) {
+#ifdef WITH_GPU
+      return FDDeviceAllocator()(&buffer_, nbytes);
+#else
+      FDASSERT(false,
+               "The FastDeploy FDTensor allocator didn't compile under "
+               "-DWITH_GPU=ON,"
+               "so this is an unexpected problem happend.");
+#endif
+    }
+    return FDHostAllocator()(&buffer_, nbytes);
+  }
+
+  void FreeFn() {
+    if (external_data_ptr != nullptr) external_data_ptr = nullptr;
+    if (buffer_ != nullptr) {
+      if (device == Device::GPU) {
+#ifdef WITH_GPU
+        FDDeviceFree()(buffer_);
+#endif
+      } else {
+        FDHostFree()(buffer_);
+      }
+      buffer_ = nullptr;
+    }
+  }
+
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+
+  ~FDTensor() { FreeFn(); }
 };
 
 }  // namespace fastdeploy

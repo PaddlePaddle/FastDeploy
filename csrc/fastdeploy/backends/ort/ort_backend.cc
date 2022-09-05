@@ -171,22 +171,22 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
   tensor->shape = info.GetShape();
 
   if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-    tensor->data.resize(numel * sizeof(float));
+    tensor->Resize(numel * sizeof(float));
     memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
            numel * sizeof(float));
     tensor->dtype = FDDataType::FP32;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-    tensor->data.resize(numel * sizeof(int32_t));
+    tensor->Resize(numel * sizeof(int32_t));
     memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
            numel * sizeof(int32_t));
     tensor->dtype = FDDataType::INT32;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-    tensor->data.resize(numel * sizeof(int64_t));
+    tensor->Resize(numel * sizeof(int64_t));
     memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
            numel * sizeof(int64_t));
     tensor->dtype = FDDataType::INT64;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
-    tensor->data.resize(numel * sizeof(double));
+    tensor->Resize(numel * sizeof(double));
     memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
            numel * sizeof(double));
     tensor->dtype = FDDataType::FP64;
