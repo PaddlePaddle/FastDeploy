@@ -144,10 +144,11 @@ bool DBDetector::Postprocess(
 
   std::vector<std::vector<std::vector<int>>> boxes;
 
-  post_processor_.BoxesFromBitmap(pred_map, &boxes, bit_map, det_db_box_thresh,
-                                  det_db_unclip_ratio, det_db_score_mode);
+  boxes =
+      post_processor_.BoxesFromBitmap(pred_map, bit_map, det_db_box_thresh,
+                                      det_db_unclip_ratio, det_db_score_mode);
 
-  post_processor_.FilterTagDetRes(&boxes, ratio_h, ratio_w, im_info);
+  boxes = post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, im_info);
 
   // boxes to boxes_result
   for (int i = 0; i < boxes.size(); i++) {
