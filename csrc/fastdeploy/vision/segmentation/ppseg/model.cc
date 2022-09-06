@@ -13,8 +13,8 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const RuntimeOption& custom_option,
                                const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+  valid_cpu_backends = {Backend::PDINFER};
+  valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -70,6 +70,11 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
         is_resized = true;
         processors_.push_back(
             std::make_shared<Resize>(resize_width, resize_height));
+      } else {
+        std::string op_name = op["type"].as<std::string>();
+        FDERROR << "Unexcepted preprocess operator: " << op_name << "."
+                << std::endl;
+        return false;
       }
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
