@@ -94,7 +94,6 @@ bool PPOCRSystemv3::Predict(cv::Mat* img,
       for (int i = 0; i < img_list.size(); i++) {
         if ((result->cls_labels)[i] % 2 == 1 &&
             (result->cls_scores)[i] > this->classifier->cls_thresh) {
-          std::cout << "Rotate this image " << std::endl;
           cv::rotate(img_list[i], img_list[i], 1);
         }
       }
