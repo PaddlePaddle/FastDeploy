@@ -34,11 +34,11 @@ def build_option(args):
     option = fd.RuntimeOption()
     if args.device.lower() == "gpu":
         option.use_gpu()
-        if args.use_trt:
-            option.use_trt_backend()
-            option.set_trt_input_shape("img", [1, 3, 512, 512])
-        else:
-            option.use_paddle_backend()
+        option.use_paddle_backend()
+
+    if args.use_trt:
+        option.use_trt_backend()
+        option.set_trt_input_shape("img", [1, 3, 512, 512])
 
     return option
 

@@ -123,24 +123,22 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
     if (processors_[i]->Name().compare("LimitShort") == 0) {
       int input_h = static_cast<int>(mat->Height());
       int input_w = static_cast<int>(mat->Width());
-      FDASSERT(input_h == input_w,
-               "Detected LimitShort processing step in yaml file,  please make "
-               "sure the input of your model is fixed with a square shape");
       auto processor = dynamic_cast<LimitShort*>(processors_[i].get());
       int max_short = processor->GetMaxShort();
-      FDASSERT(input_h >= max_short && input_w >= max_short,
-               "Detected LimitShort processing step in yaml file, please make "
-               "sure the input of your model is greater than or equal to %d.",
-               max_short);
+      if (runtime_option.backend != Backend::PDINFER) {
+        if (input_w != input_h || input_h < max_short || input_w < max_short) {
+          FDWARNING << "Detected LimitShort processing step in yaml file and "
+                       "the size of input image is Unqualified, Fastdeploy "
+                       "will resize the input image into ("
+                    << max_short << "," << max_short << ")." << std::endl;
+          Resize::Run(mat, max_short, max_short);
+        }
+      }
     }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
-    }
-    if (processors_[i]->Name().compare("PadToSize") == 0) {
-      (*im_info)["pad_to_size"] = {static_cast<int>(mat->Height()),
-                                   static_cast<int>(mat->Width())};
     }
     if (processors_[i]->Name().compare("ResizeByLong") == 0) {
       (*im_info)["resize_by_long"] = {static_cast<int>(mat->Height()),
@@ -174,7 +172,6 @@ bool PPMatting::Postprocess(
   // 先获取alpha并resize (使用opencv)
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
-  auto pad_to_size = im_info.find("output_shape");
   auto resize_by_long = im_info.find("resize_by_long");
   FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
            "Cannot find input_shape or output_shape from im_info.");
@@ -187,11 +184,9 @@ bool PPMatting::Postprocess(
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   cv::Mat cropped_alpha;
-  if (pad_to_size != im_info.end() && resize_by_long != im_info.end()) {
+  if (resize_by_long != im_info.end()) {
     int resize_h = resize_by_long->second[0];
     int resize_w = resize_by_long->second[1];
-    int pad_h = pad_to_size->second[0];
-    int pad_w = pad_to_size->second[1];
     alpha_zero_copy_ref(cv::Rect(0, 0, resize_w, resize_h))
         .copyTo(cropped_alpha);
   } else {

@@ -47,7 +47,7 @@ else()
 endif(WIN32)
 
 set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/paddle2onnx/libs/")
-set(PADDLEINFERENCE_VERSION "2.3.2")
+set(PADDLEINFERENCE_VERSION "2.3.1")
 if(WIN32)
   if (WITH_GPU)
     set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-${PADDLEINFERENCE_VERSION}.zip")
