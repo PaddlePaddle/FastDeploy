@@ -14,7 +14,10 @@
 
 #pragma once
 
+#include <cuda_runtime_api.h>
+
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <string>
 #include <vector>
@@ -23,7 +26,43 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
-#include <cuda_runtime_api.h>
+
+class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
+ public:
+  explicit Int8EntropyCalibrator2(const std::string& calibration_cache_path) {
+    mCalibrationTableName = calibration_cache_path;
+  }
+
+  int getBatchSize() const noexcept override { return 0; }
+
+  bool getBatch(void* bindings[], const char* names[],
+                int nbBindings) noexcept override {
+    return false;
+  }
+
+  const void* readCalibrationCache(size_t& length) noexcept override {
+    mCalibrationCache.clear();
+    std::ifstream input(mCalibrationTableName, std::ios::binary);
+    input >> std::noskipws;
+    if (input.good()) {
+      std::copy(std::istream_iterator<char>(input),
+                std::istream_iterator<char>(),
+                std::back_inserter(mCalibrationCache));
+    }
+    length = mCalibrationCache.size();
+    return length ? mCalibrationCache.data() : nullptr;
+  }
+
+  void writeCalibrationCache(const void* cache,
+                             size_t length) noexcept override {
+    std::ofstream output(mCalibrationTableName, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(cache), length);
+  }
+
+ private:
+  std::string mCalibrationTableName = "";
+  std::vector<char> mCalibrationCache = {};
+};
 
 namespace fastdeploy {
 
@@ -47,6 +86,12 @@ struct TrtBackendOption {
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
   std::map<std::string, std::string> custom_op_info_;
+
+  // Calibration file path for quantize model
+  std::string calibration_file_path_ = "";
+
+  // Cache file path for TRT to load
+  std::string calibration_cache_file_path_ = "";
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);
@@ -117,4 +162,4 @@ class TrtBackend : public BaseBackend {
   int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

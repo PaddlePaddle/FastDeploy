@@ -45,6 +45,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     const std::string& params_path = "",
                     const std::string& _model_format = "paddle");
 
+  // set calibration file path for paddle quantize model
+  void SetCalibrationPath(const std::string& calibration_file_path = "");
+
+  // set quantize model cache file path for TRT backend
+  void SetTRTCalibrationCachePath(
+      const std::string& calibration_cache_file_path = "");
+
   // set model inference in GPU
   void UseCpu();
 
@@ -132,6 +139,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+  // Quantize model cache file path for trt to load
+  std::string calibration_cache_file_path_ = "";
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
@@ -142,6 +151,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool remove_multiclass_nms_ = false;
   // for Paddle2ONNX to export custom operators
   std::map<std::string, std::string> custom_op_info_;
+
+  // Calibration file path for quantize model
+  std::string calibration_file_path_ = "";
 };
 
 struct FASTDEPLOY_DECL Runtime {

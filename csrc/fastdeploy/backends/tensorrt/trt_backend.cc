@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
+
+#include <cstring>
+
 #include "NvInferSafeRuntime.h"
 #include "fastdeploy/utils/utils.h"
-#include <cstring>
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
@@ -132,7 +134,9 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size())) {
+                           custom_ops.size(), "tensorrt",
+                           option.calibration_file_path_.c_str(),
+                           option.calibration_cache_file_path_.c_str())) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -210,9 +214,9 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
   outputs_desc_.resize(onnx_reader.num_outputs);
   for (int i = 0; i < onnx_reader.num_inputs; ++i) {
     std::string name(onnx_reader.inputs[i].name);
-    std::vector<int64_t> shape(onnx_reader.inputs[i].shape,
-                               onnx_reader.inputs[i].shape +
-                                   onnx_reader.inputs[i].rank);
+    std::vector<int64_t> shape(
+        onnx_reader.inputs[i].shape,
+        onnx_reader.inputs[i].shape + onnx_reader.inputs[i].rank);
     inputs_desc_[i].name = name;
     inputs_desc_[i].shape.assign(shape.begin(), shape.end());
     inputs_desc_[i].dtype = ReaderDtypeToTrtDtype(onnx_reader.inputs[i].dtype);
@@ -231,9 +235,9 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
 
   for (int i = 0; i < onnx_reader.num_outputs; ++i) {
     std::string name(onnx_reader.outputs[i].name);
-    std::vector<int64_t> shape(onnx_reader.outputs[i].shape,
-                               onnx_reader.outputs[i].shape +
-                                   onnx_reader.outputs[i].rank);
+    std::vector<int64_t> shape(
+        onnx_reader.outputs[i].shape,
+        onnx_reader.outputs[i].shape + onnx_reader.outputs[i].rank);
     outputs_desc_[i].name = name;
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype =
@@ -365,8 +369,10 @@ void TrtBackend::AllocateBufferInDynamicShape(
         "Cannot find output: %s of tensorrt network from the original model.",
         outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
-    std::vector<int64_t> shape(output_dims.d, output_dims.d + output_dims.nbDims);
-    (*outputs)[ori_idx].Allocate(shape, GetFDDataType(outputs_desc_[i].dtype), outputs_desc_[i].name);
+    std::vector<int64_t> shape(output_dims.d,
+                               output_dims.d + output_dims.nbDims);
+    (*outputs)[ori_idx].Allocate(shape, GetFDDataType(outputs_desc_[i].dtype),
+                                 outputs_desc_[i].name);
     if ((*outputs)[ori_idx].Nbytes() >
         outputs_buffer_[outputs_desc_[i].name].nbBytes()) {
       outputs_buffer_[outputs_desc_[i].name].resize(output_dims);
@@ -438,7 +444,20 @@ bool TrtBackend::BuildTrtEngine() {
     }
   }
   config->addOptimizationProfile(profile);
-
+  if (option_.calibration_cache_file_path_.size()) {
+    if (!builder_->platformHasFastInt8()) {
+      FDWARNING << "Detected INT8 is not supported in the current GPU, "
+                   "will use FP32 instead."
+                << std::endl;
+    } else {
+      FDINFO << "Calibration_cache for quantize model: "
+             << option_.calibration_cache_file_path_ << std::endl;
+      config->setFlag(nvinfer1::BuilderFlag::kINT8);
+      Int8EntropyCalibrator2* calibrator =
+          new Int8EntropyCalibrator2(option_.calibration_cache_file_path_);
+      config->setInt8Calibrator(calibrator);
+    }
+  }
   FDUniquePtr<nvinfer1::IHostMemory> plan{
       builder_->buildSerializedNetwork(*network_, *config)};
   if (!plan) {
@@ -580,4 +599,4 @@ TensorInfo TrtBackend::GetOutputInfo(int index) {
   info.dtype = GetFDDataType(outputs_desc_[index].dtype);
   return info;
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

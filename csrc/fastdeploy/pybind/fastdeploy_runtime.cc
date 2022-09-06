@@ -20,6 +20,9 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())
       .def("set_model_path", &RuntimeOption::SetModelPath)
+      .def("set_calibration_path", &RuntimeOption::SetCalibrationPath)
+      .def("set_trt_calibration_cache_path",
+           &RuntimeOption::SetTRTCalibrationCachePath)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
@@ -44,6 +47,10 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
+      .def_readwrite("calibration_file_path",
+                     &RuntimeOption::calibration_file_path_)
+      .def_readwrite("calibration_cache_file_path",
+                     &RuntimeOption::calibration_cache_file_path_)
       .def_readwrite("ort_graph_opt_level", &RuntimeOption::ort_graph_opt_level)
       .def_readwrite("ort_inter_op_num_threads",
                      &RuntimeOption::ort_inter_op_num_threads)
@@ -134,4 +141,4 @@ void BindRuntime(pybind11::module& m) {
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

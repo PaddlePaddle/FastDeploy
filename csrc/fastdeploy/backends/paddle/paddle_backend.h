@@ -40,6 +40,8 @@ struct PaddleBackendOption {
   int gpu_mem_init_size = 100;
   // gpu device id
   int gpu_id = 0;
+  // Calibration file path for quantize model
+  std::string calibration_file_path_ = "";
 
   std::vector<std::string> delete_pass_names = {};
 };

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/fastdeploy_runtime.h"
+
 #include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
@@ -151,6 +152,16 @@ void RuntimeOption::UseGpu(int gpu_id) {
             << std::endl;
   device = Device::CPU;
 #endif
+}
+
+void RuntimeOption::SetCalibrationPath(
+    const std::string& calibration_file_path) {
+  calibration_file_path_ = calibration_file_path;
+}
+
+void RuntimeOption::SetTRTCalibrationCachePath(
+    const std::string& calibration_cache_file_path) {
+  calibration_cache_file_path_ = calibration_cache_file_path;
 }
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
@@ -312,8 +323,15 @@ void Runtime::CreatePaddleBackend() {
   pd_option.gpu_id = option.device_id;
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
+  // calibration file path for quantize model
+  pd_option.calibration_file_path_ = option.calibration_file_path_;
   FDASSERT(option.model_format == Frontend::PADDLE,
            "PaddleBackend only support model format of Frontend::PADDLE.");
+  if (pd_option.calibration_file_path_.size()) {
+    FDASSERT(pd_option.enable_mkldnn && !pd_option.use_gpu,
+             "PaddleBackend only support deploy paddle quantize model on CPU "
+             "with MKLDNN lib.");
+  }
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
@@ -362,6 +380,13 @@ void Runtime::CreateOrtBackend() {
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
 
+  // calibration file path for quantize model
+  ort_option.calibration_file_path_ = option.calibration_file_path_;
+  if (ort_option.calibration_file_path_.size()) {
+    FDINFO << "Calibration file for paddle quantize model: "
+           << ort_option.calibration_file_path_ << std::endl;
+  }
+
   // TODO(jiangjiajun): inside usage, maybe remove this later
   ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
   ort_option.custom_op_info_ = option.custom_op_info_;
@@ -399,6 +424,8 @@ void Runtime::CreateTrtBackend() {
   trt_option.min_shape = option.trt_min_shape;
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
+  trt_option.calibration_file_path_ = option.calibration_file_path_;
+  trt_option.calibration_cache_file_path_ = option.calibration_cache_file_path_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;

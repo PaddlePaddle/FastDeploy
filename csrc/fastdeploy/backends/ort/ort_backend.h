@@ -45,6 +45,9 @@ struct OrtBackendOption {
   bool use_gpu = false;
   int gpu_id = 0;
 
+  // Calibration file path for quantize model
+  std::string calibration_file_path_ = "";
+
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
   std::map<std::string, std::string> custom_op_info_;
@@ -88,6 +91,7 @@ class OrtBackend : public BaseBackend {
   Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
 #endif
   OrtBackendOption option_;
-  void CopyToCpu(const Ort::Value& value, FDTensor* tensor, const std::string& name);
+  void CopyToCpu(const Ort::Value& value, FDTensor* tensor,
+                 const std::string& name);
 };
 }  // namespace fastdeploy

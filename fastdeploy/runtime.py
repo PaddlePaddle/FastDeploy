@@ -58,6 +58,13 @@ class RuntimeOption:
         return self._option.set_model_path(model_path, params_path,
                                            model_format)
 
+    def set_calibration_path(self, calibration_file_path):
+        return self._option.set_calibration_path(calibration_file_path)
+
+    def set_trt_calibration_cache_path(self, trt_calibration_cache_path):
+        return self._option.set_trt_calibration_cache_path(
+            trt_calibration_cache_path)
+
     def use_gpu(self, device_id=0):
         return self._option.use_gpu(device_id)
 

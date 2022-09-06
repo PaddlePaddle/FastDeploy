@@ -24,6 +24,10 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
     if (option.enable_mkldnn) {
       config_.EnableMKLDNN();
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
+      if (option.calibration_file_path_.size()) {
+        config_.SetCalibrationFilePath(option.calibration_file_path_);
+        config_.EnableMkldnnInt8();
+      }
     }
   }
   if (!option.enable_log_info) {
@@ -79,13 +83,16 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
+  FDASSERT(index < NumInputs(),
+           "The index: %d should less than the number of inputs: %d.", index,
+           NumInputs());
   return inputs_desc_[index];
 }
 
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index: %d should less than the number of outputs %d.", index, NumOutputs());
+           "The index: %d should less than the number of outputs %d.", index,
+           NumOutputs());
   return outputs_desc_[index];
 }
 
