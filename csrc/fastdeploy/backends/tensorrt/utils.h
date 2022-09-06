@@ -14,53 +14,54 @@
 
 #pragma once
 
-#include <iostream>
-#include <map>
-#include <string>
-#include <vector>
+#include "NvInfer.h"
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
 #include <algorithm>
 #include <cuda_runtime_api.h>
-#include "NvInfer.h"
-#include "fastdeploy/utils/utils.h"
+#include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <string>
+#include <vector>
 
 namespace fastdeploy {
 
 struct FDInferDeleter {
-  template<typename T> void operator()(T* obj) const {
-    delete obj;
+  template <typename T> void operator()(T* obj) const {
+    if (obj) {
+      obj->destroy();
+    }
   }
 };
 
-template<typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
+template <typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
 
-inline uint32_t GetElementSize(nvinfer1::DataType t) noexcept {
-  switch (t) {
-  case nvinfer1::DataType::kINT32:
-    return 4;
-  case nvinfer1::DataType::kFLOAT:
-    return 4;
-  case nvinfer1::DataType::kHALF:
-    return 2;
-  case nvinfer1::DataType::kBOOL:
-  case nvinfer1::DataType::kINT8:
-    return 1;
+int64_t Volume(const nvinfer1::Dims& d);
+
+nvinfer1::Dims ToDims(const std::vector<int>& vec);
+nvinfer1::Dims ToDims(const std::vector<int64_t>& vec);
+
+size_t TrtDataTypeSize(const nvinfer1::DataType& dtype);
+
+FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
+
+nvinfer1::DataType ReaderDtypeToTrtDtype(int reader_dtype);
+
+std::vector<int> ToVec(const nvinfer1::Dims& dim);
+
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
+  out << "[";
+  for (size_t i = 0; i < vec.size(); ++i) {
+    if (i != vec.size() - 1) {
+      out << vec[i] << ", ";
+    } else {
+      out << vec[i] << "]";
+    }
   }
-  return 0;
-}
-
-inline int64_t Volume(const nvinfer1::Dims& d) {
-  return std::accumulate(d.d, d.d + d.nbDims, 1, std::multiplies<int64_t>());
-}
-
-inline nvinfer1::Dims ToDims(const std::vector<int>& vec) {
-  int limit = static_cast<int>(nvinfer1::Dims::MAX_DIMS);
-  if (static_cast<int>(vec.size()) > limit) {
-    FDWARNING << "Vector too long, only first 8 elements are used in dimension." << std::endl;
-  }
-  // Pick first nvinfer1::Dims::MAX_DIMS elements
-  nvinfer1::Dims dims{std::min(static_cast<int>(vec.size()), limit), {}};
-  std::copy_n(vec.begin(), dims.nbDims, std::begin(dims.d));
-  return dims;
+  return out;
 }
 
 template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
@@ -123,9 +124,7 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   //! \brief Returns the size (in bytes) of the buffer.
   //!
-  size_t nbBytes() const {
-    return this->size() * GetElementSize(mType);
-  }
+  size_t nbBytes() const { return this->size() * TrtDataTypeSize(mType); }
 
   //!
   //! \brief Resizes the buffer. This is a no-op if the new size is smaller than
@@ -145,9 +144,7 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   //! \brief Overload of resize that accepts Dims
   //!
-  void resize(const nvinfer1::Dims& dims) {
-    return this->resize(Volume(dims));
-  }
+  void resize(const nvinfer1::Dims& dims) { return this->resize(Volume(dims)); }
 
   ~FDGenericBuffer() { freeFn(mBuffer); }
 
@@ -183,11 +180,14 @@ class FDTrtLogger : public nvinfer1::ILogger {
     logger = new FDTrtLogger();
     return logger;
   }
-  void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
+  void log(nvinfer1::ILogger::Severity severity,
+           const char* msg) noexcept override {
     if (severity == nvinfer1::ILogger::Severity::kINFO) {
-      FDINFO << msg << std::endl;
+      // Disable this log
+      //      FDINFO << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kWARNING) {
-      FDWARNING << msg << std::endl;
+      // Disable this log
+      //      FDWARNING << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kERROR) {
       FDERROR << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kINTERNAL_ERROR) {
@@ -196,4 +196,47 @@ class FDTrtLogger : public nvinfer1::ILogger {
   }
 };
 
-}  // namespace fastdeploy
+struct ShapeRangeInfo {
+  ShapeRangeInfo(const std::vector<int64_t>& new_shape) {
+    shape.assign(new_shape.begin(), new_shape.end());
+    min.resize(new_shape.size());
+    max.resize(new_shape.size());
+    is_static.resize(new_shape.size());
+    for (size_t i = 0; i < new_shape.size(); ++i) {
+      if (new_shape[i] > 0) {
+        min[i] = new_shape[i];
+        max[i] = new_shape[i];
+        is_static[i] = 1;
+      } else {
+        min[i] = -1;
+        max[i] = -1;
+        is_static[i] = 0;
+      }
+    }
+  }
+
+  std::string name;
+  std::vector<int64_t> shape;
+  std::vector<int64_t> min;
+  std::vector<int64_t> max;
+  std::vector<int64_t> opt;
+  std::vector<int8_t> is_static;
+  // return
+  // -1: new shape is inillegal
+  // 0 : new shape is able to inference
+  // 1 : new shape is out of range, need to update engine
+  int Update(const std::vector<int64_t>& new_shape);
+  int Update(const std::vector<int>& new_shape) {
+    std::vector<int64_t> new_shape_int64(new_shape.begin(), new_shape.end());
+    return Update(new_shape_int64);
+  }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const ShapeRangeInfo& info) {
+    out << "Input name: " << info.name << ", shape=" << info.shape
+        << ", min=" << info.min << ", max=" << info.max << std::endl;
+    return out;
+  }
+};
+
+} // namespace fastdeploy

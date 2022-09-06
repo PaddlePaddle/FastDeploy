@@ -46,7 +46,7 @@ bool Classifier::Initialize() {
   cls_thresh = 0.9;
   cls_image_shape = {3, 48, 192};
   cls_batch_num = 1;
-  mean = {0.485f, 0.456f, 0.406f};
+  mean = {0.5f, 0.5f, 0.5f};
   scale = {0.5f, 0.5f, 0.5f};
   is_scale = true;
 

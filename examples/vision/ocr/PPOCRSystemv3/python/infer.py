@@ -65,7 +65,6 @@ def build_det_option(args):
 
 def build_cls_option(args):
     option = fd.RuntimeOption()
-    option.use_paddle_backend()
 
     if args.device.lower() == "gpu":
         option.use_gpu()

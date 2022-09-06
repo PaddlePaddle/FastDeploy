@@ -22,8 +22,8 @@ import time
 
 def eval_segmentation(model, data_dir):
     import cv2
-    from utils import Cityscapes
-    from utils import f1_score, calculate_area, mean_iou, accuracy, kappa
+    from .utils import Cityscapes
+    from .utils import f1_score, calculate_area, mean_iou, accuracy, kappa
     assert os.path.isdir(
         data_dir), "The image_file_path:{} is not a directory.".format(
             data_dir)
@@ -76,20 +76,3 @@ def eval_segmentation(model, data_dir):
             average_inference_time
         ]))
     return eval_metrics
-
-
-import fastdeploy as fd
-#model = fd.vision.segmentation.PaddleSegModel("/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/unet/unet_Cityscapes/model.pdmodel",
-#                              "/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/unet/unet_Cityscapes//model.pdiparams",
-#                              "/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/unet/unet_Cityscapes/deploy.yaml")
-#
-option = fd.RuntimeOption()
-option.use_paddle_backend()
-option.use_gpu(3)
-model = fd.vision.segmentation.PaddleSegModel(
-    "/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/PP-LiteSeg/output_no_static_size/model.pdmodel",
-    "/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/PP-LiteSeg/output_no_static_size/model.pdiparams",
-    "/huangjianhui/temp/FastDeploy/model_zoo/vision/ppseg/PP-LiteSeg/output_no_static_size/deploy.yaml",
-    option)
-
-result = eval_segmentation(model, "/huangjianhui/PaddleSeg/data/cityscapes/")
