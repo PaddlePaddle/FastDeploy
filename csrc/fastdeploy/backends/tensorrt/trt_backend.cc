@@ -365,12 +365,8 @@ void TrtBackend::AllocateBufferInDynamicShape(
         "Cannot find output: %s of tensorrt network from the original model.",
         outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
-    (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
-    (*outputs)[ori_idx].shape.assign(output_dims.d,
-                                     output_dims.d + output_dims.nbDims);
-    (*outputs)[ori_idx].name = outputs_desc_[i].name;
-    (*outputs)[ori_idx].data.resize(Volume(output_dims) *
-                                    TrtDataTypeSize(outputs_desc_[i].dtype));
+    std::vector<int64_t> shape(output_dims.d, output_dims.d + output_dims.nbDims);
+    (*outputs)[ori_idx].Allocate(shape, GetFDDataType(outputs_desc_[i].dtype), outputs_desc_[i].name);
     if ((*outputs)[ori_idx].Nbytes() >
         outputs_buffer_[outputs_desc_[i].name].nbBytes()) {
       outputs_buffer_[outputs_desc_[i].name].resize(output_dims);
