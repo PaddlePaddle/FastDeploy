@@ -16,23 +16,39 @@ include(ExternalProject)
 
 set(OPENVINO_PROJECT "extern_openvino")
 set(OPENVINO_PREFIX_DIR ${THIRD_PARTY_PATH}/openvino)
-set(OPENVINO_SOURCE_DIR
-    ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT})
 set(OPENVINO_INSTALL_DIR ${THIRD_PARTY_PATH}/install/openvino)
-set(OPENVINO_INC_DIR
+set(OPENVINO_INSTALL_INC_DIR
+  "${OPENVINO_INSTALL_DIR}/include"
+  CACHE PATH "openvino install include directory." FORCE)
+
+if (WIN32)
+  set(OPENVINO_SOURCE_DIR
+      ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT}/openvino-win-x64-2022.1.0)
+  set(OPENVINO_INC_DIR
     "${OPENVINO_INSTALL_DIR}/include"
+    "${OPENVINO_INSTALL_DIR}/include/ie"
     CACHE PATH "openvino include directory." FORCE)
-set(OPENVINO_LIB_DIR
+  set(OPENVINO_LIB_DIR
     "${OPENVINO_INSTALL_DIR}/lib/"
     CACHE PATH "openvino lib directory." FORCE)
+else()
+  set(OPENVINO_SOURCE_DIR
+      ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT})
+  set(OPENVINO_INC_DIR
+    "${OPENVINO_INSTALL_DIR}/include"
+    CACHE PATH "openvino include directory." FORCE)
+  set(OPENVINO_LIB_DIR
+      "${OPENVINO_INSTALL_DIR}/lib/"
+      CACHE PATH "openvino lib directory." FORCE)
+endif()
+
+
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
 
 set(OPENVINO_VERSION "2022.3.0")
 set(OPENVINO_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs/")
 
 if(WIN32)
-  set(OPENVINO_SOURCE_DIR
-    ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT}/openvino-win-x64-2022.1.0)
   set(OPENVINO_FILENAME "openvino-win-x64-${OPENVINO_VERSION}.zip")
   if(NOT CMAKE_CL_64)
     message(FATAL_ERROR "FastDeploy cannot ENABLE_OPENVINO_BACKEND in win32 now.")
@@ -58,7 +74,7 @@ include_directories(${OPENVINO_INC_DIR}
 
 if(WIN32)
   set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/openvino.lib"
+      "${OPENVINO_INSTALL_DIR}/lib/Release/openvino.lib"
       CACHE FILEPATH "OPENVINO static library." FORCE)
 elseif(APPLE)
   set(OPENVINO_LIB
@@ -82,9 +98,9 @@ ExternalProject_Add(
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
     ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-    ${CMAKE_COMMAND} -E rename ${OPENVINO_SOURCE_DIR}/lib/intel64 ${OPENVINO_INSTALL_DIR}/lib &&
+    ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/lib/intel64 ${OPENVINO_INSTALL_DIR}/lib &&
     ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include
-    ${OPENVINO_INC_DIR}
+    ${OPENVINO_INSTALL_INC_DIR}
   BUILD_BYPRODUCTS ${OPENVINO_LIB})
 
 add_library(external_openvino STATIC IMPORTED GLOBAL)

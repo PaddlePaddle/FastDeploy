@@ -23,7 +23,6 @@ set(FASTERTOKENIZER_INSTALL_DIR ${THIRD_PARTY_PATH}/install/faster_tokenizer)
 set(FASTERTOKENIZER_INC_DIR
     "${FASTERTOKENIZER_INSTALL_DIR}/include"
     "${FASTERTOKENIZER_INSTALL_DIR}/third_party/include"
-    "${FASTERTOKENIZER_INSTALL_DIR}/include/faster_tokenizer" # TODO (zhoushunjie): Will remove it later.
     CACHE PATH "faster_tokenizer include directory." FORCE)
 set(FASTERTOKENIZER_LIB_DIR
     "${FASTERTOKENIZER_INSTALL_DIR}/lib/"
