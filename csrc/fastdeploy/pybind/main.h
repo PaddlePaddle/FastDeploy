@@ -17,6 +17,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
 #include <type_traits>
 
 #include "fastdeploy/fastdeploy_runtime.h"
@@ -42,7 +43,8 @@ pybind11::array TensorToPyArray(const FDTensor& tensor);
 cv::Mat PyArrayToCvMat(pybind11::array& pyarray);
 #endif
 
-template <typename T> FDDataType CTypeToFDDataType() {
+template <typename T>
+FDDataType CTypeToFDDataType() {
   if (std::is_same<T, int32_t>::value) {
     return FDDataType::INT32;
   } else if (std::is_same<T, int64_t>::value) {
@@ -58,16 +60,17 @@ template <typename T> FDDataType CTypeToFDDataType() {
 }
 
 template <typename T>
-std::vector<pybind11::array>
-PyBackendInfer(T& self, const std::vector<std::string>& names,
-               std::vector<pybind11::array>& data) {
+std::vector<pybind11::array> PyBackendInfer(
+    T& self, const std::vector<std::string>& names,
+    std::vector<pybind11::array>& data) {
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
+    std::vector<int64_t> data_shape;
     // TODO(jiangjiajun) here is considered to use user memory directly
     inputs[i].dtype = NumpyDataTypeToFDDataType(data[i].dtype());
-    inputs[i].shape.insert(inputs[i].shape.begin(), data[i].shape(),
-                           data[i].shape() + data[i].ndim());
-    inputs[i].data.resize(data[i].nbytes());
+    data_shape.insert(data_shape.begin(), data[i].shape(),
+                      data[i].shape() + data[i].ndim());
+    inputs[i].Resize(data_shape);
     memcpy(inputs[i].MutableData(), data[i].mutable_data(), data[i].nbytes());
     inputs[i].name = names[i];
   }
@@ -86,4 +89,4 @@ PyBackendInfer(T& self, const std::vector<std::string>& names,
   return results;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

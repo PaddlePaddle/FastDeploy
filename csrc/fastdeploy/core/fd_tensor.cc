@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/core/fd_tensor.h"
+
 #include "fastdeploy/utils/utils.h"
 
 #ifdef WITH_GPU
@@ -22,6 +23,13 @@
 namespace fastdeploy {
 
 void* FDTensor::MutableData() {
+  if (external_data_ptr != nullptr) {
+    return external_data_ptr;
+  }
+  return buffer_;
+}
+
+const void* FDTensor::MutableData() const {
   if (external_data_ptr != nullptr) {
     return external_data_ptr;
   }
@@ -53,12 +61,31 @@ void* FDTensor::Data() {
   return MutableData();
 }
 
-// const void* FDTensor::Data() const {
-//   if (external_data_ptr != nullptr) {
-//     return external_data_ptr;
-//   }
-//   return data.data();
-// }
+const void* FDTensor::Data() const {
+  if (device == Device::GPU) {
+#ifdef WITH_GPU
+    auto* cpu_ptr = const_cast<std::vector<int8_t>*>(&temporary_cpu_buffer);
+    cpu_ptr->resize(Nbytes());
+    // need to copy cuda mem to cpu first
+    if (external_data_ptr != nullptr) {
+      FDASSERT(cudaMemcpy(cpu_ptr->data(), external_data_ptr, Nbytes(),
+                          cudaMemcpyDeviceToHost) == 0,
+               "[ERROR] Error occurs while copy memory from GPU to CPU");
+
+    } else {
+      FDASSERT(cudaMemcpy(cpu_ptr->data(), buffer_, Nbytes(),
+                          cudaMemcpyDeviceToHost) == 0,
+               "[ERROR] Error occurs while buffer copy memory from GPU to CPU");
+    }
+    return cpu_ptr->data();
+#else
+    FDASSERT(false,
+             "The FastDeploy didn't compile under -DWITH_GPU=ON, so this is "
+             "an unexpected problem happend.");
+#endif
+  }
+  return MutableData();
+}
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,

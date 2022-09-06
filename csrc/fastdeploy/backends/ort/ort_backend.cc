@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/ort/ort_backend.h"
+
 #include <memory>
+
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/backends/ort/utils.h"
 #include "fastdeploy/utils/utils.h"
@@ -164,33 +166,32 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor, const std::string& name) {
+void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
 
   if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-    tensor->Resize(numel * sizeof(float));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
-           numel * sizeof(float));
+    tensor->dtype = FDDataType::FP32;
+    numel *= sizeof(float);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-    tensor->Resize(numel * sizeof(int32_t));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
-           numel * sizeof(int32_t));
+    tensor->dtype = FDDataType::INT32;
+    numel *= sizeof(int32_t);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-    tensor->Resize(numel * sizeof(int64_t));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
-           numel * sizeof(int64_t));
+    tensor->dtype = FDDataType::INT64;
+    numel *= sizeof(int64_t);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
-    tensor->Resize(numel * sizeof(double));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
-           numel * sizeof(double));
+    tensor->dtype = FDDataType::FP64;
+    numel *= sizeof(double);
   } else {
     FDASSERT(
         false,
         "Unrecognized data type of %d while calling OrtBackend::CopyToCpu().",
         data_type);
   }
+  tensor->Resize(numel);
+  tensor->shape = info.GetShape();
+  memcpy(tensor->MutableData(), value.GetTensorData<void*>(), numel);
 }
 
 bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
@@ -226,7 +227,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    CopyToCpu(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name);
+    CopyToCpu(ort_outputs[i], &((*outputs)[i]));
   }
 
   return true;

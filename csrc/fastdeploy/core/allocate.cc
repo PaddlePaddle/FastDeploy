@@ -13,32 +13,25 @@
 // limitations under the License.
 #pragma once
 
-#include <memory>
-#include <new>
-#include <numeric>
-#include <string>
-#include <vector>
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
 
-class FDHostAllocator {
- public:
-  bool operator()(void** ptr, size_t size) const;
-};
+#include "fastdeploy/core/allocate.h"
 
-class FDHostFree {
- public:
-  void operator()(void* ptr) const;
-};
+bool FDHostAllocator::operator()(void** ptr, size_t size) const {
+  *ptr = malloc(size);
+  return *ptr != nullptr;
+}
+
+void FDHostFree::operator()(void* ptr) const { free(ptr); }
 
 #ifdef WITH_GPU
 
-class FDDeviceAllocator {
- public:
-  bool operator()(void** ptr, size_t size) const;
-};
+bool FDDeviceAllocator::operator()(void** ptr, size_t size) const {
+  return cudaMalloc(ptr, size) == cudaSuccess;
+}
 
-class FDDeviceFree {
- public:
-  void operator()(void* ptr) const;
-};
+void FDDeviceFree::operator()(void* ptr) const { cudaFree(ptr); }
 
 #endif

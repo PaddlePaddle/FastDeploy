@@ -71,14 +71,14 @@ void BindRuntime(pybind11::module& m) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
              for (auto iter = data.begin(); iter != data.end(); ++iter) {
+               std::vector<int64_t> data_shape;
                inputs[index].dtype =
                    NumpyDataTypeToFDDataType(iter->second.dtype());
-               inputs[index].shape.insert(
-                   inputs[index].shape.begin(), iter->second.shape(),
-                   iter->second.shape() + iter->second.ndim());
+               data_shape.insert(data_shape.begin(), iter->second.shape(),
+                                 iter->second.shape() + iter->second.ndim());
                // TODO(jiangjiajun) Maybe skip memory copy is a better choice
                // use SetExternalData
-               inputs[index].data.resize(iter->second.nbytes());
+               inputs[index].Resize(data_shape);
                memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;
@@ -134,4 +134,4 @@ void BindRuntime(pybind11::module& m) {
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

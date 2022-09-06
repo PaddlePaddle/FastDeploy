@@ -26,9 +26,9 @@ namespace fastdeploy {
 struct FASTDEPLOY_DECL FDTensor {
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
-  std::vector<int64_t> shape;
+  std::vector<int64_t> shape = {0};
   std::string name = "";
-  FDDataType dtype;
+  FDDataType dtype = FDDataType::FP32;
 
   // This use to skip memory copy step
   // the external_data_ptr will point to the user allocated memory
@@ -47,6 +47,8 @@ struct FASTDEPLOY_DECL FDTensor {
 
   // Get data buffer pointer
   void* MutableData();
+
+  const void* MutableData() const;
 
   // Use this data to get the tensor data to process
   // Since the most senario is process data in CPU
