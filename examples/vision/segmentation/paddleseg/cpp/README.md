@@ -4,18 +4,18 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
 wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/segmentation/paddleseg/cpp/build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0 
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
 make -j
 
 # 下载Unet模型文件和测试图片
@@ -25,23 +25,26 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 
 # CPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 0
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 1
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
-./infer_demo Unet_cityscapes_without_argmax_infer infer.cc cityscapes_demo.png 2
+./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
 ```
 
 运行完成可视化结果如下图所示
-<div  align="center">    
+<div  align="center">  
 <img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
 </div>
+
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
 
 ## PaddleSeg C++接口
 
 ### PaddleSeg类
 
-```
+```c++
 fastdeploy::vision::segmentation::PaddleSegModel(
         const string& model_file,
         const string& params_file = "",
@@ -62,7 +65,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 
 #### Predict函数
 
-> ```
+> ```c++
 > PaddleSegModel::Predict(cv::Mat* im, DetectionResult* result)
 > ```
 >

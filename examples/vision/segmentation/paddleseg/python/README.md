@@ -2,12 +2,12 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成Unet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/segmentation/paddleseg/python
@@ -26,13 +26,13 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 ```
 
 运行完成可视化结果如下图所示
-<div  align="center">    
+<div  align="center">  
 <img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
 </div>
 
 ## PaddleSegModel Python接口
 
-```
+```python
 fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 ```
 
@@ -48,7 +48,7 @@ PaddleSeg模型加载和初始化，其中model_file, params_file以及config_fi
 
 ### predict函数
 
-> ```
+> ```python
 > PaddleSegModel.predict(input_image)
 > ```
 >

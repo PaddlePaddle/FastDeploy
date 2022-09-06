@@ -18,7 +18,7 @@
 访问[ArcFace](https://github.com/deepinsight/insightface/tree/master/recognition/arcface_torch)官方github库，按照指引下载安装，下载pt模型文件，利用 `torch2onnx.py` 得到`onnx`格式文件。
 
 * 下载ArcFace模型文件
-  ```
+  ```bash
   Link: https://pan.baidu.com/share/init?surl=CL-l4zWqsI1oDuEEYVhj-g code: e8pw  
   ```
 

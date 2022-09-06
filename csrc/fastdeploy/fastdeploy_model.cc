@@ -26,31 +26,10 @@ bool FastDeployModel::InitRuntime() {
     return false;
   }
   if (runtime_option.backend != Backend::UNKNOWN) {
-    if (runtime_option.backend == Backend::ORT) {
-      if (!IsBackendAvailable(Backend::ORT)) {
-        FDERROR
-            << "Backend::ORT is not complied with current FastDeploy library."
-            << std::endl;
-        return false;
-      }
-    } else if (runtime_option.backend == Backend::TRT) {
-      if (!IsBackendAvailable(Backend::TRT)) {
-        FDERROR
-            << "Backend::TRT is not complied with current FastDeploy library."
-            << std::endl;
-        return false;
-      }
-    } else if (runtime_option.backend == Backend::PDINFER) {
-      if (!IsBackendAvailable(Backend::PDINFER)) {
-        FDERROR << "Backend::PDINFER is not compiled with current FastDeploy "
-                   "library."
-                << std::endl;
-        return false;
-      }
-    } else {
-      FDERROR
-          << "Only support Backend::ORT / Backend::TRT / Backend::PDINFER now."
-          << std::endl;
+    if (!IsBackendAvailable(runtime_option.backend)) {
+      FDERROR << Str(runtime_option.backend)
+              << " is not compiled with current FastDeploy library."
+              << std::endl;
       return false;
     }
 
@@ -93,7 +72,7 @@ bool FastDeployModel::InitRuntime() {
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
       } else {
-        FDASSERT(valid_gpu_backends.size() > 0,
+        FDASSERT(valid_cpu_backends.size() > 0,
                  "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
@@ -183,12 +162,13 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
   return ret;
 }
 
-void FastDeployModel::PrintStatisInfoOfRuntime() {
+std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
+  std::map<std::string, float> statis_info_of_runtime_dict;
+
   if (time_of_runtime_.size() < 10) {
     FDWARNING << "PrintStatisInfoOfRuntime require the runtime ran 10 times at "
                  "least, but now you only ran "
               << time_of_runtime_.size() << " times." << std::endl;
-    return;
   }
   double warmup_time = 0.0;
   double remain_time = 0.0;
@@ -209,8 +189,16 @@ void FastDeployModel::PrintStatisInfoOfRuntime() {
   std::cout << "Warmup iterations: " << warmup_iter << std::endl;
   std::cout << "Total time of runtime in warmup step: " << warmup_time << "s."
             << std::endl;
-  std::cout << "Average time of runtime exclude warmup step: " << avg_time
-            << "s." << std::endl;
+  std::cout << "Average time of runtime exclude warmup step: "
+            << avg_time * 1000 << "ms." << std::endl;
+
+  statis_info_of_runtime_dict["total_time"] = warmup_time + remain_time;
+  statis_info_of_runtime_dict["warmup_time"] = warmup_time;
+  statis_info_of_runtime_dict["remain_time"] = remain_time;
+  statis_info_of_runtime_dict["warmup_iter"] = warmup_iter;
+  statis_info_of_runtime_dict["avg_time"] = avg_time;
+  statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
+  return statis_info_of_runtime_dict;
 }
 
 void FastDeployModel::EnableDebug() {

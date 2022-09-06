@@ -14,7 +14,8 @@
 
 #include "fastdeploy/vision.h"
 
-void CpuInfer(const std::string& model_file, const std::string& image_file) {
+void CpuInfer(const std::string& model_file, const std::string& image_file,
+              const std::string& background_file) {
   auto model = fastdeploy::vision::matting::MODNet(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -24,6 +25,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
+  cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
@@ -32,11 +34,17 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  auto vis_im_with_bg =
+      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpg"
+            << std::endl;
 }
 
-void GpuInfer(const std::string& model_file, const std::string& image_file) {
+void GpuInfer(const std::string& model_file, const std::string& image_file,
+              const std::string& background_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   auto model = fastdeploy::vision::matting::MODNet(model_file, "", option);
@@ -49,6 +57,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
+  cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
@@ -57,11 +66,17 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  auto vis_im_with_bg =
+      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpg"
+            << std::endl;
 }
 
-void TrtInfer(const std::string& model_file, const std::string& image_file) {
+void TrtInfer(const std::string& model_file, const std::string& image_file,
+              const std::string& background_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
@@ -75,6 +90,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
+  cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
   if (!model.Predict(&im, &res)) {
@@ -83,27 +99,32 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   }
 
   auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  auto vis_im_with_bg =
+      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpg"
+            << std::endl;
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./modnet_photographic_portrait_matting.onnx ./test.jpeg 0"
-              << std::endl;
+  if (argc < 5) {
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./PP-Matting-512 ./test.jpg ./test_bg.jpg 0"
+        << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
               << std::endl;
     return -1;
   }
-
-  if (std::atoi(argv[3]) == 0) {
-    CpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 1) {
-    GpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 2) {
-    TrtInfer(argv[1], argv[2]);
+  if (std::atoi(argv[4]) == 0) {
+    CpuInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 1) {
+    GpuInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 2) {
+    TrtInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

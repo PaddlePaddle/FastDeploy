@@ -24,8 +24,6 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FDTENSOR_FUNC
-
 template <typename T, size_t D, size_t R_D, typename Functor>
 void ReduceFunctor(const FDTensor& input, FDTensor* output,
                    const std::vector<int64_t>& dims, bool keep_dim) {
@@ -329,11 +327,11 @@ void ArgMinMax(const FDTensor& x, FDTensor* out, int64_t axis,
     } else {
       all_element_num = x_dims[axis];
     }
-    FDASSERT(all_element_num <= std::numeric_limits<int>::max(),
+    FDASSERT(all_element_num <= (std::numeric_limits<int>::max)(),
              "The element num of the argmin/argmax input at axis is "
              "%lld, is larger than int32 maximum value:%d, you must "
              "set the dtype of argmin/argmax to 'int64'.",
-             all_element_num, std::numeric_limits<int>::max());
+             all_element_num, (std::numeric_limits<int>::max)());
   }
   std::vector<int64_t> vec;
   if (flatten) {
@@ -403,7 +401,5 @@ void ArgMin(const FDTensor& x, FDTensor* out, int64_t axis,
                                  x, out, axis, output_dtype, keep_dim, flatten);
                            }));
 }
-
-#endif
 
 }  // namespace fastdeploy

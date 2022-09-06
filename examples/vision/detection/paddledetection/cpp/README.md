@@ -4,12 +4,12 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 以ppyoloe为例进行推理部署
 
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
@@ -34,12 +34,15 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
 ```
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## PaddleDetection C++接口
 
 ### 模型类
 
 PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
-```
+```c++
 fastdeploy::vision::detection::PPYOLOE(
         const string& model_file,
         const string& params_file,
@@ -60,7 +63,7 @@ PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ON
 
 #### Predict函数
 
-> ```
+> ```c++
 > PPYOLOE::Predict(cv::Mat* im, DetectionResult* result)
 > ```
 >

@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER };
+enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO };
 // AUTOREC will according to the name of model file
 // to decide which Frontend is
 enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
@@ -63,14 +63,17 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // use tensorrt backend
   void UseTrtBackend();
 
-  // use paddle to tensorrt directly
-  // otherwise use onnx to tensorrt
   void EnablePaddleToTrt();
+  
+  // use openvino backend
+  void UseOpenVINOBackend();
 
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
   // disable mkldnn while use paddle inference in CPU
   void DisablePaddleMKLDNN();
+  // Enable delete in pass
+  void DeletePaddleBackendPass(const std::string& delete_pass_name);
 
   // enable debug information of paddle backend
   void EnablePaddleLogInfo();
@@ -101,7 +104,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
-  int cpu_thread_num = 8;
+  // default will let the backend choose their own default value
+  int cpu_thread_num = -1;
   int device_id = 0;
 
   Device device = Device::CPU;
@@ -120,6 +124,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int pd_mkldnn_cache_size = 1;
   bool pd_enable_trt = false;
   bool pd_enable_log_info = false;
+  std::vector<std::string> pd_delete_pass_names;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
@@ -156,6 +161,8 @@ struct FASTDEPLOY_DECL Runtime {
   void CreatePaddleBackend();
 
   void CreateTrtBackend();
+
+  void CreateOpenVINOBackend();
 
   int NumInputs() { return backend_->NumInputs(); }
   int NumOutputs() { return backend_->NumOutputs(); }

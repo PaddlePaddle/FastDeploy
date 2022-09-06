@@ -32,10 +32,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     session_options_.SetGraphOptimizationLevel(
         GraphOptimizationLevel(option.graph_optimization_level));
   }
-  if (option.intra_op_num_threads >= 0) {
+  if (option.intra_op_num_threads > 0) {
     session_options_.SetIntraOpNumThreads(option.intra_op_num_threads);
   }
-  if (option.inter_op_num_threads >= 0) {
+  if (option.inter_op_num_threads > 0) {
     session_options_.SetInterOpNumThreads(option.inter_op_num_threads);
   }
   if (option.execution_mode >= 0) {
@@ -164,32 +164,27 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
+void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor, const std::string& name) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
-  tensor->shape = info.GetShape();
 
   if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-    tensor->data.resize(numel * sizeof(float));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
+    tensor->Allocate(info.GetShape(), FDDataType::FP32, name);
+    memcpy(static_cast<void*>(tensor->MutableData()), value.GetTensorData<void*>(),
            numel * sizeof(float));
-    tensor->dtype = FDDataType::FP32;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-    tensor->data.resize(numel * sizeof(int32_t));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
+    tensor->Allocate(info.GetShape(), FDDataType::INT32, name);
+    memcpy(static_cast<void*>(tensor->MutableData()), value.GetTensorData<void*>(),
            numel * sizeof(int32_t));
-    tensor->dtype = FDDataType::INT32;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-    tensor->data.resize(numel * sizeof(int64_t));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
+    tensor->Allocate(info.GetShape(), FDDataType::INT64, name);
+    memcpy(static_cast<void*>(tensor->MutableData()), value.GetTensorData<void*>(),
            numel * sizeof(int64_t));
-    tensor->dtype = FDDataType::INT64;
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
-    tensor->data.resize(numel * sizeof(double));
-    memcpy(static_cast<void*>(tensor->Data()), value.GetTensorData<void*>(),
+    tensor->Allocate(info.GetShape(), FDDataType::FP64, name);
+    memcpy(static_cast<void*>(tensor->MutableData()), value.GetTensorData<void*>(),
            numel * sizeof(double));
-    tensor->dtype = FDDataType::FP64;
   } else {
     FDASSERT(
         false,
@@ -231,8 +226,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    (*outputs)[i].name = outputs_desc_[i].name;
-    CopyToCpu(ort_outputs[i], &((*outputs)[i]));
+    CopyToCpu(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name);
   }
 
   return true;

@@ -2,12 +2,12 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer_xxx.py`快速完成PPYOLOE/PicoDet等模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
-```
+```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/paddledetection/python/
@@ -26,13 +26,13 @@ python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439
 ```
 
 运行完成可视化结果如下图所示
-<div  align="center">    
+<div  align="center">  
 <img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
 </div>
 
 ## PaddleDetection Python接口
 
-```
+```python
 fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 fastdeploy.vision.detection.PicoDet(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 fastdeploy.vision.detection.PaddleYOLOX(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
@@ -54,7 +54,7 @@ PaddleDetection模型加载和初始化，其中model_file， params_file为导�
 ### predict函数
 
 PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO/FasterRCNN，均提供如下同样的成员函数用于进行图像的检测
-> ```
+> ```python
 > PPYOLOE.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >

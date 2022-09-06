@@ -4,15 +4,15 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
-```
+```bash
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-0.2.0.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
@@ -34,11 +34,14 @@ wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/li
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301789-1981d065-208f-4a6b-857c-9a0f9a63e0b1.jpg">
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 ## SCRFD C++接口
 
 ### SCRFD类
 
-```
+```c++
 fastdeploy::vision::facedet::SCRFD(
         const string& model_file,
         const string& params_file = "",
@@ -57,7 +60,7 @@ SCRFD模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 #### Predict函数
 
-> ```
+> ```c++
 > SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                 float conf_threshold = 0.25,
 >                 float nms_iou_threshold = 0.5)

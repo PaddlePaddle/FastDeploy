@@ -19,20 +19,13 @@
 #include <string>
 #include <vector>
 
-#include "fastdeploy/backends/backend.h"
-
-#include "fastdeploy/backends/tensorrt/common/argsParser.h"
-#include "fastdeploy/backends/tensorrt/common/buffers.h"
-#include "fastdeploy/backends/tensorrt/common/common.h"
-#include "fastdeploy/backends/tensorrt/common/logger.h"
-#include "fastdeploy/backends/tensorrt/common/parserOnnxConfig.h"
-#include "fastdeploy/backends/tensorrt/common/sampleUtils.h"
-
-#include <cuda_runtime_api.h>
 #include "NvInfer.h"
+#include "NvOnnxParser.h"
+#include "fastdeploy/backends/backend.h"
+#include "fastdeploy/backends/tensorrt/utils.h"
+#include <cuda_runtime_api.h>
 
 namespace fastdeploy {
-using namespace samplesCommon;
 
 struct TrtValueInfo {
   std::string name;
@@ -63,7 +56,6 @@ FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
 class TrtBackend : public BaseBackend {
  public:
   TrtBackend() : engine_(nullptr), context_(nullptr) {}
-  virtual ~TrtBackend() = default;
   void BuildOption(const TrtBackendOption& option);
 
   bool InitFromPaddle(const std::string& model_file,
@@ -73,9 +65,6 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool InitFromTrt(const std::string& trt_engine_file,
-                   const TrtBackendOption& option = TrtBackendOption());
-
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 
   int NumInputs() const { return inputs_desc_.size(); }
@@ -83,18 +72,25 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
 
+  ~TrtBackend() {
+    if (parser_) {
+      parser_.reset();
+    }
+  }
+
  private:
+  TrtBackendOption option_;
   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
   std::shared_ptr<nvinfer1::IExecutionContext> context_;
-  SampleUniquePtr<nvonnxparser::IParser> parser_;
-  SampleUniquePtr<nvinfer1::IBuilder> builder_;
-  SampleUniquePtr<nvinfer1::INetworkDefinition> network_;
+  FDUniquePtr<nvonnxparser::IParser> parser_;
+  FDUniquePtr<nvinfer1::IBuilder> builder_;
+  FDUniquePtr<nvinfer1::INetworkDefinition> network_;
   cudaStream_t stream_{};
   std::vector<void*> bindings_;
   std::vector<TrtValueInfo> inputs_desc_;
   std::vector<TrtValueInfo> outputs_desc_;
-  std::map<std::string, DeviceBuffer> inputs_buffer_;
-  std::map<std::string, DeviceBuffer> outputs_buffer_;
+  std::map<std::string, FDDeviceBuffer> inputs_buffer_;
+  std::map<std::string, FDDeviceBuffer> outputs_buffer_;
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
@@ -103,11 +99,22 @@ class TrtBackend : public BaseBackend {
   // order, to help recover the rigt order
   std::map<std::string, int> outputs_order_;
 
+  // temporary store onnx model content
+  // once it used to build trt egnine done
+  // it will be released
+  std::string onnx_model_buffer_;
+  // Stores shape information of the loaded model
+  // For dynmaic shape will record its range information
+  // Also will update the range information while inferencing
+  std::map<std::string, ShapeRangeInfo> shape_range_info_;
+
   void GetInputOutputInfo();
   void AllocateBufferInDynamicShape(const std::vector<FDTensor>& inputs,
                                     std::vector<FDTensor>* outputs);
-  bool CreateTrtEngine(const std::string& onnx_model,
-                       const TrtBackendOption& option);
+  bool CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer);
+  bool BuildTrtEngine();
+  bool LoadTrtCache(const std::string& trt_engine_file);
+  int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
 };
 
-}  // namespace fastdeploy
+} // namespace fastdeploy

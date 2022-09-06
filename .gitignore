@@ -7,6 +7,8 @@ FastDeploy.cmake
 build-debug.sh
 *dist
 fastdeploy.egg-info
+fastdeploy_python.egg-info
+fastdeploy_gpu_python.egg-info
 .setuptools-cmake-build
 fastdeploy/version.py
 fastdeploy/core/config.h
@@ -15,5 +17,5 @@ fastdeploy/LICENSE*
 fastdeploy/ThirdPartyNotices*
 *.so*
 fastdeploy/libs/third_libs
-csrcs/fastdeploy/core/config.h
-csrcs/fastdeploy/pybind/main.cc
+csrc/fastdeploy/core/config.h
+csrc/fastdeploy/pybind/main.cc
