@@ -29,5 +29,6 @@ class Permute : public Processor {
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV_CPU);
 };
+ 
 }  // namespace vision
 }  // namespace fastdeploy
