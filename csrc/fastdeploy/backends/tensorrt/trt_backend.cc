@@ -228,6 +228,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
     }
     shape_range_info_.insert(std::make_pair(name, info));
   }
+
   for (int i = 0; i < onnx_reader.num_outputs; ++i) {
     std::string name(onnx_reader.outputs[i].name);
     std::vector<int64_t> shape(onnx_reader.outputs[i].shape,
