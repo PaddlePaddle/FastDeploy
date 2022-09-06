@@ -42,8 +42,7 @@ pybind11::array TensorToPyArray(const FDTensor& tensor);
 cv::Mat PyArrayToCvMat(pybind11::array& pyarray);
 #endif
 
-template <typename T>
-FDDataType CTypeToFDDataType() {
+template <typename T> FDDataType CTypeToFDDataType() {
   if (std::is_same<T, int32_t>::value) {
     return FDDataType::INT32;
   } else if (std::is_same<T, int64_t>::value) {
@@ -59,9 +58,9 @@ FDDataType CTypeToFDDataType() {
 }
 
 template <typename T>
-std::vector<pybind11::array> PyBackendInfer(
-    T& self, const std::vector<std::string>& names,
-    std::vector<pybind11::array>& data) {
+std::vector<pybind11::array>
+PyBackendInfer(T& self, const std::vector<std::string>& names,
+               std::vector<pybind11::array>& data) {
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
     // TODO(jiangjiajun) here is considered to use user memory directly
@@ -69,7 +68,7 @@ std::vector<pybind11::array> PyBackendInfer(
     inputs[i].shape.insert(inputs[i].shape.begin(), data[i].shape(),
                            data[i].shape() + data[i].ndim());
     inputs[i].data.resize(data[i].nbytes());
-    memcpy(inputs[i].data.data(), data[i].mutable_data(), data[i].nbytes());
+    memcpy(inputs[i].MutableData(), data[i].mutable_data(), data[i].nbytes());
     inputs[i].name = names[i];
   }
 
@@ -81,10 +80,10 @@ std::vector<pybind11::array> PyBackendInfer(
   for (size_t i = 0; i < outputs.size(); ++i) {
     auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
     results.emplace_back(pybind11::array(numpy_dtype, outputs[i].shape));
-    memcpy(results[i].mutable_data(), outputs[i].data.data(),
+    memcpy(results[i].mutable_data(), outputs[i].Data(),
            outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
   }
   return results;
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy
