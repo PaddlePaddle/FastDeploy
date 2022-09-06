@@ -79,7 +79,7 @@ void BindRuntime(pybind11::module& m) {
                // TODO(jiangjiajun) Maybe skip memory copy is a better choice
                // use SetExternalData
                inputs[index].data.resize(iter->second.nbytes());
-               memcpy(inputs[index].data.data(), iter->second.mutable_data(),
+               memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;
                index += 1;
@@ -94,7 +94,7 @@ void BindRuntime(pybind11::module& m) {
                auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
                results.emplace_back(
                    pybind11::array(numpy_dtype, outputs[i].shape));
-               memcpy(results[i].mutable_data(), outputs[i].data.data(),
+               memcpy(results[i].mutable_data(), outputs[i].Data(),
                       outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
              }
              return results;
@@ -134,4 +134,4 @@ void BindRuntime(pybind11::module& m) {
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy

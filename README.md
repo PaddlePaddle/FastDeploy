@@ -207,23 +207,23 @@ int main(int argc, char* argv[]) {
 <div id="fastdeploy-edge-sdk-arm-linux"></div>
 
 - ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Inference.md)
-  - [C++ 服务化部署](./docs/ARM-CPU/ARM-Linux-CPP-SDK-Serving.md)
-  - [Python Inference部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Inference.md)
-  - [Python 服务化部署](./docs/ARM-CPU/ARM-Linux-Python-SDK-Serving.md)
+  - [C++ Inference部署（含视频流）](./docs/arm_cpu/arm_linux_cpp_sdk_inference.md)
+  - [C++ 服务化部署](./docs/arm_cpu/arm_linux_cpp_sdk_serving.md)
+  - [Python Inference部署](./docs/arm_cpu/arm_linux_python_sdk_inference.md)
+  - [Python 服务化部署](./docs/arm_cpu/arm_linux_python_sdk_serving.md)
 
 ### EasyEdge移动端部署
 
 <div id="fastdeploy-edge-sdk-ios-android"></div>
 
-- [iOS 系统部署](./docs/ARM-CPU/iOS-SDK.md)
-- [Android 系统部署](./docs/ARM-CPU/Android-SDK.md)  
+- [iOS 系统部署](./docs/arm_cpu/ios_sdk.md)
+- [Android 系统部署](./docs/arm_cpu/android_sdk.md)  
 
 ### EasyEdge自定义模型部署
 
 <div id="fastdeploy-edge-sdk-custom"></div>
 
-- [快速实现个性化模型替换](./docs/ARM-CPU/Replace-Model-With-Anther-One.md)
+- [快速实现个性化模型替换](./docs/arm_cpu/replace_model_with_another_one.md)
 
 ### Paddle Lite NPU部署
 
@@ -277,10 +277,10 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-community"></div>
 
-- **加入社区👬：** 微信扫描二维码后，填写问卷加入交流群，与开发者共同讨论推理部署痛点问题
+- **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/175854075-2c0f9997-ed18-4b17-9aaf-1b43266d3996.jpeg"  width = "200" height = "200" />
+<img src="https://user-images.githubusercontent.com/54695910/188544891-0ba025e5-61bd-425e-8097-8e982af9080e.jpeg"  width = "225" height = "288" />
 </div>
 
 ## Acknowledge

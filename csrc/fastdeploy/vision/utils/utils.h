@@ -15,11 +15,11 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-#include <set>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
+#include <set>
+#include <vector>
 
 namespace fastdeploy {
 namespace vision {
@@ -88,8 +88,7 @@ void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result,
   }
 }
 
-template <typename T>
-void NCHW2NHWC(FDTensor& infer_result) {
+template <typename T> void NCHW2NHWC(FDTensor& infer_result) {
   T* infer_result_buffer = reinterpret_cast<T*>(infer_result.MutableData());
   int num = infer_result.shape[0];
   int channel = infer_result.shape[1];
@@ -126,8 +125,8 @@ void SortDetectionResult(DetectionResult* output);
 void SortDetectionResult(FaceDetectionResult* result);
 
 // L2 Norm / cosine similarity  (for face recognition, ...)
-FASTDEPLOY_DECL std::vector<float> L2Normalize(
-    const std::vector<float>& values);
+FASTDEPLOY_DECL std::vector<float>
+L2Normalize(const std::vector<float>& values);
 
 FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,

@@ -115,7 +115,7 @@ bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
                                   ClassifyResult* result, int topk) {
   int num_classes = infer_result.shape[1];
   const float* infer_result_buffer =
-      reinterpret_cast<const float*>(infer_result.data.data());
+      reinterpret_cast<const float*>(infer_result.Data());
   topk = std::min(num_classes, topk);
   result->label_ids =
       utils::TopKIndices(infer_result_buffer, num_classes, topk);
@@ -150,6 +150,6 @@ bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   return true;
 }
 
-}  // namespace classification
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace classification
+} // namespace vision
+} // namespace fastdeploy
