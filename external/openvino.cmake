@@ -31,7 +31,8 @@ set(OPENVINO_VERSION "2022.3.0")
 set(OPENVINO_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs/")
 
 if(WIN32)
-  message(FATAL_ERROR "FastDeploy cannot ENABLE_OPENVINO_BACKEND in windows now.")
+  set(OPENVINO_SOURCE_DIR
+    ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT}/openvino-win-x64-2022.1.0)
   set(OPENVINO_FILENAME "openvino-win-x64-${OPENVINO_VERSION}.zip")
   if(NOT CMAKE_CL_64)
     message(FATAL_ERROR "FastDeploy cannot ENABLE_OPENVINO_BACKEND in win32 now.")
