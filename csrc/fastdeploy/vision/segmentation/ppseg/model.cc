@@ -70,6 +70,11 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
         is_resized = true;
         processors_.push_back(
             std::make_shared<Resize>(resize_width, resize_height));
+      } else {
+        std::string op_name = op["type"].as<std::string>();
+        FDERROR << "Unexcepted preprocess operator: " << op_name << "."
+                << std::endl;
+        return false;
       }
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
