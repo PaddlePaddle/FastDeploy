@@ -74,7 +74,7 @@ include_directories(${OPENVINO_INC_DIR}
 
 if(WIN32)
   set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/Release/openvino.lib"
+      "${OPENVINO_INSTALL_DIR}/lib/openvino.lib"
       CACHE FILEPATH "OPENVINO static library." FORCE)
 elseif(APPLE)
   set(OPENVINO_LIB
@@ -99,10 +99,10 @@ if (WIN32)
     INSTALL_COMMAND
       ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
       ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E rename ${OPENVINO_SOURCE_DIR}/lib/intel64 ${OPENVINO_INSTALL_DIR}/lib &&
-      ${CMAKE_COMMAND} -E rename ${OPENVINO_SOURCE_DIR}/bin ${OPENVINO_INSTALL_DIR}/bin &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include
-      ${OPENVINO_INSTALL_INC_DIR}
+      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/lib/intel64/Release ${OPENVINO_INSTALL_DIR}/lib &&
+      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/bin/intel64/Release ${OPENVINO_INSTALL_DIR}/bin &&
+      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include ${OPENVINO_INSTALL_INC_DIR} &&
+      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/3rdparty ${OPENVINO_INSTALL_DIR}/3rdparty
     BUILD_BYPRODUCTS ${OPENVINO_LIB})
 else()
   ExternalProject_Add(
