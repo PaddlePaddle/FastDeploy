@@ -326,7 +326,6 @@ void TrtBackend::GetInputOutputInfo() {
 }
 
 void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
-  void* data_ptr = nullptr;
   for (const auto& item : inputs) {
     auto idx = engine_->getBindingIndex(item.name.c_str());
     std::vector<int> shape(item.shape.begin(), item.shape.end());
@@ -338,11 +337,11 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
         // TODO(liqi): cast int64 to int32
         // TRT don't support INT64
         FDASSERT(false,
-                 "[ERROR] TRT don't support INT64 input on GPU, "
+                 "TRT don't support INT64 input on GPU, "
                  "please use INT32 input");
       } else {
         // no copy
-        inputs_buffer_[item.name].SetExternalData(dims, item.MutableData());
+        inputs_buffer_[item.name].SetExternalData(dims, item.Data());
       }
     } else {
       // Allocate input buffer memory
@@ -350,25 +349,23 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
 
       // copy from cpu to gpu
       if (item.dtype == FDDataType::INT64) {
-        int64_t* data =
-            static_cast<int64_t*>(const_cast<void*>(item.MutableData()));
+        int64_t* data = static_cast<int64_t*>(const_cast<void*>(item.Data()));
         std::vector<int32_t> casted_data(data, data + item.Numel());
         FDASSERT(cudaMemcpyAsync(inputs_buffer_[item.name].data(),
                                  static_cast<void*>(casted_data.data()),
                                  item.Nbytes() / 2, cudaMemcpyHostToDevice,
                                  stream_) == 0,
-                 "[ERROR] Error occurs while copy memory from CPU to GPU.");
+                 "Error occurs while copy memory from CPU to GPU.");
       } else {
-        FDASSERT(cudaMemcpyAsync(inputs_buffer_[item.name].data(),
-                                 item.MutableData(), item.Nbytes(),
-                                 cudaMemcpyHostToDevice, stream_) == 0,
-                 "[ERROR] Error occurs while copy memory from CPU to GPU.");
+        FDASSERT(cudaMemcpyAsync(inputs_buffer_[item.name].data(), item.Data(),
+                                 item.Nbytes(), cudaMemcpyHostToDevice,
+                                 stream_) == 0,
+                 "Error occurs while copy memory from CPU to GPU.");
       }
     }
     // binding input buffer
     bindings_[idx] = inputs_buffer_[item.name].data();
   }
-  data_ptr = nullptr;
 }
 
 void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
@@ -387,12 +384,10 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
         outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
     // set user's outputs info
-    (*outputs)[ori_idx].name = outputs_desc_[i].name;
-    (*outputs)[ori_idx].Resize(Volume(output_dims) *
-                               TrtDataTypeSize(outputs_desc_[i].dtype));
-    (*outputs)[ori_idx].dtype = GetFDDataType(outputs_desc_[i].dtype);
-    (*outputs)[ori_idx].shape.assign(output_dims.d,
-                                     output_dims.d + output_dims.nbDims);
+    std::vector<int64_t> shape(output_dims.d,
+                               output_dims.d + output_dims.nbDims);
+    (*outputs)[ori_idx].Resize(shape, GetFDDataType(outputs_desc_[i].dtype),
+                               outputs_desc_[i].name);
     // Allocate output buffer memory
     outputs_buffer_[outputs_desc_[i].name].resize(output_dims);
     // binding output buffer

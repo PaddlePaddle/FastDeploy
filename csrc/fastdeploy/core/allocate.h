@@ -21,6 +21,8 @@
 
 #include "fastdeploy/utils/utils.h"
 
+namespace fastdeploy {
+
 class FASTDEPLOY_DECL FDHostAllocator {
  public:
   bool operator()(void** ptr, size_t size) const;
@@ -44,3 +46,5 @@ class FASTDEPLOY_DECL FDDeviceFree {
 };
 
 #endif
+
+}  // namespace fastdeploy

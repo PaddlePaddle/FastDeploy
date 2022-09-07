@@ -19,6 +19,8 @@
 
 #include "fastdeploy/core/allocate.h"
 
+namespace fastdeploy {
+
 bool FDHostAllocator::operator()(void** ptr, size_t size) const {
   *ptr = malloc(size);
   return *ptr != nullptr;
@@ -35,3 +37,5 @@ bool FDDeviceAllocator::operator()(void** ptr, size_t size) const {
 void FDDeviceFree::operator()(void* ptr) const { cudaFree(ptr); }
 
 #endif
+
+}  // namespace fastdeploy

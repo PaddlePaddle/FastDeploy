@@ -166,22 +166,25 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
+void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
+                           const std::string& name) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
+  auto shape = info.GetShape();
+  FDDataType dtype;
 
   if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-    tensor->dtype = FDDataType::FP32;
+    dtype = FDDataType::FP32;
     numel *= sizeof(float);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-    tensor->dtype = FDDataType::INT32;
+    dtype = FDDataType::INT32;
     numel *= sizeof(int32_t);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-    tensor->dtype = FDDataType::INT64;
+    dtype = FDDataType::INT64;
     numel *= sizeof(int64_t);
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
-    tensor->dtype = FDDataType::FP64;
+    dtype = FDDataType::FP64;
     numel *= sizeof(double);
   } else {
     FDASSERT(
@@ -189,8 +192,7 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor) {
         "Unrecognized data type of %d while calling OrtBackend::CopyToCpu().",
         data_type);
   }
-  tensor->Resize(numel);
-  tensor->shape = info.GetShape();
+  tensor->Resize(shape, dtype, name);
   memcpy(tensor->MutableData(), value.GetTensorData<void*>(), numel);
 }
 
@@ -227,7 +229,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    CopyToCpu(ort_outputs[i], &((*outputs)[i]));
+    CopyToCpu(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name);
   }
 
   return true;

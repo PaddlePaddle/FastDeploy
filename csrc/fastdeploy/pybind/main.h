@@ -65,12 +65,12 @@ std::vector<pybind11::array> PyBackendInfer(
     std::vector<pybind11::array>& data) {
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
-    std::vector<int64_t> data_shape;
     // TODO(jiangjiajun) here is considered to use user memory directly
-    inputs[i].dtype = NumpyDataTypeToFDDataType(data[i].dtype());
+    auto dtype = NumpyDataTypeToFDDataType(data[i].dtype());
+    std::vector<int64_t> data_shape;
     data_shape.insert(data_shape.begin(), data[i].shape(),
                       data[i].shape() + data[i].ndim());
-    inputs[i].Resize(data_shape);
+    inputs[i].Resize(data_shape, dtype);
     memcpy(inputs[i].MutableData(), data[i].mutable_data(), data[i].nbytes());
     inputs[i].name = names[i];
   }

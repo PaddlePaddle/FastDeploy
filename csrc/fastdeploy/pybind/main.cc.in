@@ -59,16 +59,16 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype) {
 
 void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
                      bool share_buffer) {
-  tensor->dtype = NumpyDataTypeToFDDataType(pyarray.dtype());
+  auto dtype = NumpyDataTypeToFDDataType(pyarray.dtype());
+  std::vector<int64_t> data_shape;
+  data_shape.insert(data_shape.begin(), pyarray.shape(),
+                    pyarray.shape() + pyarray.ndim());
   if (share_buffer) {
-    tensor->shape.insert(tensor->shape.begin(), pyarray.shape(),
-                       pyarray.shape() + pyarray.ndim());
-    tensor->external_data_ptr = pyarray.mutable_data();
+    tensor-> SetExternalData(data_shape, dtype,
+                             pyarray.mutable_data());
   } else {
-    std::vector<int64_t> data_shape;
-    data_shape.insert(data_shape.begin(), pyarray.shape(),
-                      pyarray.shape() + pyarray.ndim());
-    tensor->Resize(data_shape);
+
+    tensor->Resize(data_shape, dtype);
     memcpy(tensor->MutableData(), pyarray.mutable_data(), pyarray.nbytes());
   }
 }

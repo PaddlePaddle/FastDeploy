@@ -72,13 +72,12 @@ void BindRuntime(pybind11::module& m) {
              int index = 0;
              for (auto iter = data.begin(); iter != data.end(); ++iter) {
                std::vector<int64_t> data_shape;
-               inputs[index].dtype =
-                   NumpyDataTypeToFDDataType(iter->second.dtype());
                data_shape.insert(data_shape.begin(), iter->second.shape(),
                                  iter->second.shape() + iter->second.ndim());
+               auto dtype = NumpyDataTypeToFDDataType(iter->second.dtype());
                // TODO(jiangjiajun) Maybe skip memory copy is a better choice
                // use SetExternalData
-               inputs[index].Resize(data_shape);
+               inputs[index].Resize(data_shape, dtype);
                memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;

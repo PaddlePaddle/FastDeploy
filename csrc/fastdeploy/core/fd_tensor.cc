@@ -29,39 +29,21 @@ void* FDTensor::MutableData() {
   return buffer_;
 }
 
-const void* FDTensor::MutableData() const {
+void* FDTensor::Data() {
   if (external_data_ptr != nullptr) {
     return external_data_ptr;
   }
   return buffer_;
 }
 
-void* FDTensor::Data() {
-  if (device == Device::GPU) {
-#ifdef WITH_GPU
-    temporary_cpu_buffer.resize(Nbytes());
-    // need to copy cuda mem to cpu first
-    if (external_data_ptr != nullptr) {
-      FDASSERT(cudaMemcpy(temporary_cpu_buffer.data(), external_data_ptr,
-                          Nbytes(), cudaMemcpyDeviceToHost) == 0,
-               "[ERROR] Error occurs while copy memory from GPU to CPU");
-
-    } else {
-      FDASSERT(cudaMemcpy(temporary_cpu_buffer.data(), buffer_, Nbytes(),
-                          cudaMemcpyDeviceToHost) == 0,
-               "[ERROR] Error occurs while buffer copy memory from GPU to CPU");
-    }
-    return temporary_cpu_buffer.data();
-#else
-    FDASSERT(false,
-             "The FastDeploy didn't compile under -DWITH_GPU=ON, so this is "
-             "an unexpected problem happend.");
-#endif
+const void* FDTensor::Data() const {
+  if (external_data_ptr != nullptr) {
+    return external_data_ptr;
   }
-  return MutableData();
+  return buffer_;
 }
 
-const void* FDTensor::Data() const {
+const void* FDTensor::CpuData() const {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
     auto* cpu_ptr = const_cast<std::vector<int8_t>*>(&temporary_cpu_buffer);
@@ -84,7 +66,7 @@ const void* FDTensor::Data() const {
              "an unexpected problem happend.");
 #endif
   }
-  return MutableData();
+  return Data();
 }
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
@@ -136,7 +118,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
-                      const FDDataType& data_type, const Device& new_device) {
+                      const FDDataType& data_type,
+                      const std::string& tensor_name,
+                      const Device& new_device) {
+  name = tensor_name;
+  device = new_device;
   size_t nbytes = Nbytes();
   int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                    std::multiplies<int>()) *
@@ -147,7 +133,6 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
     FreeFn();
     AllocFn(new_nbytes);
   }
-  device = new_device;
 }
 
 template <typename T>

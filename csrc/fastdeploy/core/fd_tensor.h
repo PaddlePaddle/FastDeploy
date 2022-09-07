@@ -28,7 +28,7 @@ struct FASTDEPLOY_DECL FDTensor {
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
   std::string name = "";
-  FDDataType dtype = FDDataType::FP32;
+  FDDataType dtype = FDDataType::INT8;
 
   // This use to skip memory copy step
   // the external_data_ptr will point to the user allocated memory
@@ -48,17 +48,17 @@ struct FASTDEPLOY_DECL FDTensor {
   // Get data buffer pointer
   void* MutableData();
 
-  const void* MutableData() const;
-
-  // Use this data to get the tensor data to process
-  // Since the most senario is process data in CPU
-  // this function weill return a pointer to cpu memory
-  // buffer.
-  // If the original data is on other device, the data
-  // will copy to cpu store in `temporary_cpu_buffer`
   void* Data();
 
   const void* Data() const;
+
+  // Use this data to get the tensor data to process
+  // Since the most senario is process data in CPU
+  // this function will return a pointer to cpu memory
+  // buffer.
+  // If the original data is on other device, the data
+  // will copy to cpu store in `temporary_cpu_buffer`
+  const void* CpuData() const;
 
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
@@ -86,7 +86,7 @@ struct FASTDEPLOY_DECL FDTensor {
   void Resize(const std::vector<int64_t>& new_shape);
 
   void Resize(const std::vector<int64_t>& new_shape,
-              const FDDataType& data_type,
+              const FDDataType& data_type, const std::string& tensor_name = "",
               const Device& new_device = Device::CPU);
 
   // Debug function
