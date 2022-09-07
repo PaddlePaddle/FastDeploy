@@ -27,7 +27,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 
 # CPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 0
-# GPU推理 (TODO: ORT-GPU 推理会报错)
+# GPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 1
 # GPU上TensorRT推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
