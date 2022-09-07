@@ -128,11 +128,11 @@ if __name__ == '__main__':
 
     print(dump_result)
     if args.device == "cpu":
-        file_path = args.model.strip().split("/")[1] + "_" + args.backend + "_" + args.device + "_" + str(args.cpu_num_thread) + ".txt"
+        file_path = args.model + "_" + args.backend + "_" + args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
-        file_path = args.model.strip().split("/")[1] + "_" + args.backend + "_" + args.device + ".txt"
+        file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
     with open(file_path, "w") as f:
-        f.writelines("===={}====: \n".format(file_path[:-4]))
+        f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         f.writelines("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
