@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
+
 #include "fastdeploy/vision.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
@@ -127,10 +128,11 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
       int max_short = processor->GetMaxShort();
       if (runtime_option.backend != Backend::PDINFER) {
         if (input_w != input_h || input_h < max_short || input_w < max_short) {
-          FDWARNING << "Detected LimitShort processing step in yaml file and "
-                       "the size of input image is Unqualified, Fastdeploy "
-                       "will resize the input image into ("
-                    << max_short << "," << max_short << ")." << std::endl;
+          // FDWARNING << "Detected LimitShort processing step in yaml file and
+          // "
+          //              "the size of input image is Unqualified, Fastdeploy "
+          //              "will resize the input image into ("
+          //           << max_short << "," << max_short << ")." << std::endl;
           Resize::Run(mat, max_short, max_short);
         }
       }
