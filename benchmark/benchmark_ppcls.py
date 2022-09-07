@@ -52,6 +52,11 @@ def parse_arguments():
         type=str,
         default="ort",
         help="inference backend, ort, ov, trt, paddle.")
+    parser.add_argument(
+        "--enable_trt_fp16",
+        type=bool,
+        default=False,
+        help="whether enable fp16 in trt backend")
     args = parser.parse_args()
     return args
 
@@ -67,6 +72,8 @@ def build_option(args):
     if backend == "trt":
         assert device == "gpu", "the trt backend need device==gpu"
         option.use_trt_backend()
+        if args.enable_trt_fp16:
+            option.enable_trt_fp16()
     elif backend == "ov":
         assert device == "cpu", "the openvino backend need device==cpu"
         option.use_openvino_backend()
@@ -114,35 +121,41 @@ if __name__ == '__main__':
     gpu_id = args.device_id
     end2end_statis = list()
     cpu_mem, gpu_mem, gpu_util = 0, 0, 0
-    for i in range(args.iter_num):
-        im = cv2.imread(args.image)
-        start = time.time()
-        result = model.predict(im)
-        end2end_statis.append(time.time() - start)
-        gpu_util += get_current_gputil(gpu_id)
-        cm, gm = get_current_memory_mb(gpu_id)
-        cpu_mem += cm
-        gpu_mem += gm
-
-    runtime_statis = model.print_statis_info_of_runtime()
-
-    warmup_iter = args.iter_num // 5
-    repeat_iter = args.iter_num - warmup_iter
-    end2end_statis = end2end_statis[warmup_iter:]
-
-    dump_result = dict()
-    dump_result["runtime"] = runtime_statis["avg_time"] * 1000
-    dump_result["end2end"] = np.mean(end2end_statis) * 1000
-    dump_result["cpu_rss_mb"] = cpu_mem / repeat_iter
-    dump_result["gpu_rss_mb"] = gpu_mem / repeat_iter
-    dump_result["gpu_util"] = gpu_util / repeat_iter
-
     if args.device == "cpu":
         file_path = args.model + "_" + args.backend + "_" + \
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
-        file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
-    with open(file_path, "w") as f:
+        if args.enable_trt_fp16:
+            file_path = args.model + "_" + args.backend + "_fp16_" + args.device + ".txt"
+        else:
+            file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
+    f = open(file_path, "w")
+    f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
+
+    try:
+        for i in range(args.iter_num):
+            im = cv2.imread(args.image)
+            start = time.time()
+            result = model.predict(im)
+            end2end_statis.append(time.time() - start)
+            gpu_util += get_current_gputil(gpu_id)
+            cm, gm = get_current_memory_mb(gpu_id)
+            cpu_mem += cm
+            gpu_mem += gm
+
+        runtime_statis = model.print_statis_info_of_runtime()
+
+        warmup_iter = args.iter_num // 5
+        repeat_iter = args.iter_num - warmup_iter
+        end2end_statis = end2end_statis[warmup_iter:]
+
+        dump_result = dict()
+        dump_result["runtime"] = runtime_statis["avg_time"] * 1000
+        dump_result["end2end"] = np.mean(end2end_statis) * 1000
+        dump_result["cpu_rss_mb"] = cpu_mem / repeat_iter
+        dump_result["gpu_rss_mb"] = gpu_mem / repeat_iter
+        dump_result["gpu_util"] = gpu_util / repeat_iter
+
         f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
@@ -151,5 +164,7 @@ if __name__ == '__main__':
         f.writelines("gpu_rss_mb: {} \n".format(
             str(dump_result["gpu_rss_mb"])))
         f.writelines("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
+    except:
+        f.writelines("!!!!!Infer Failed\n")
 
     f.close()
