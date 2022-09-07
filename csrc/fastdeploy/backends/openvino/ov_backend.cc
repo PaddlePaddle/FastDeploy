@@ -62,6 +62,19 @@ ov::element::Type FDDataTypeToOV(const FDDataType& type) {
   return ov::element::f32;
 }
 
+void OpenVINOBackend::InitTensorInfo(
+    const std::vector<ov::Output<ov::Node>>& ov_outputs,
+    std::vector<TensorInfo>* tensor_infos) {
+  for (size_t i = 0; i < ov_outputs.size(); ++i) {
+    TensorInfo info;
+    auto partial_shape = PartialShapeToVec(ov_outputs[i].get_partial_shape());
+    info.shape.assign(partial_shape.begin(), partial_shape.end());
+    info.name = ov_outputs[i].get_any_name();
+    info.dtype = OpenVINODataTypeToFD(ov_outputs[i].get_element_type());
+    tensor_infos->emplace_back(info);
+  }
+}
+
 bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
                                      const std::string& params_file,
                                      const OpenVINOBackendOption& option) {
@@ -80,23 +93,10 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
 
   // Get inputs/outputs information from loaded model
   const std::vector<ov::Output<ov::Node>> inputs = model->inputs();
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    TensorInfo info;
-    auto partial_shape = PartialShapeToVec(inputs[i].get_partial_shape());
-    info.shape.assign(partial_shape.begin(), partial_shape.end());
-    info.name = inputs[i].get_any_name();
-    info.dtype = OpenVINODataTypeToFD(inputs[i].get_element_type());
-    input_infos_.emplace_back(info);
-  }
+  InitTensorInfo(inputs, &input_infos_);
+
   const std::vector<ov::Output<ov::Node>> outputs = model->outputs();
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    TensorInfo info;
-    auto partial_shape = PartialShapeToVec(outputs[i].get_partial_shape());
-    info.shape.assign(partial_shape.begin(), partial_shape.end());
-    info.name = outputs[i].get_any_name();
-    info.dtype = OpenVINODataTypeToFD(outputs[i].get_element_type());
-    output_infos_.emplace_back(info);
-  }
+  InitTensorInfo(outputs, &output_infos_);
 
   compiled_model_ = core_.compile_model(model, "CPU", properties);
   request_ = compiled_model_.create_infer_request();
@@ -135,23 +135,10 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
 
   // Get inputs/outputs information from loaded model
   const std::vector<ov::Output<ov::Node>> inputs = model->inputs();
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    TensorInfo info;
-    auto partial_shape = PartialShapeToVec(inputs[i].get_partial_shape());
-    info.shape.assign(partial_shape.begin(), partial_shape.end());
-    info.name = inputs[i].get_any_name();
-    info.dtype = OpenVINODataTypeToFD(inputs[i].get_element_type());
-    input_infos_.emplace_back(info);
-  }
+  InitTensorInfo(inputs, &input_infos_);
+
   const std::vector<ov::Output<ov::Node>> outputs = model->outputs();
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    TensorInfo info;
-    auto partial_shape = PartialShapeToVec(outputs[i].get_partial_shape());
-    info.shape.assign(partial_shape.begin(), partial_shape.end());
-    info.name = outputs[i].get_any_name();
-    info.dtype = OpenVINODataTypeToFD(outputs[i].get_element_type());
-    output_infos_.emplace_back(info);
-  }
+  InitTensorInfo(outputs, &output_infos_);
 
   compiled_model_ = core_.compile_model(model, "CPU", properties);
   request_ = compiled_model_.create_infer_request();
@@ -196,4 +183,4 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
