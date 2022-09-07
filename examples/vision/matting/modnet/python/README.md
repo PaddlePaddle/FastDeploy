@@ -2,7 +2,7 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成MODNet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
@@ -33,6 +33,7 @@ python infer.py --model modnet_photographic_portrait_matting.onnx --image mattin
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851964-4c9086b9-3490-4fcb-82f9-2106c63aa4f3.jpg">
 </div>
+
 ## MODNet Python接口
 
 ```python

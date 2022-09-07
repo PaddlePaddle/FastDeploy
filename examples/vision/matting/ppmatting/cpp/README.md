@@ -4,7 +4,7 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
 以Linux上 PPMatting 推理为例，在本目录执行如下命令即可完成编译测试（如若只需在CPU上部署，可在[Fastdeploy C++预编译库](../../../../../docs/quick_start/CPP_prebuilt_libraries.md)下载CPU推理库）
@@ -27,7 +27,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 
 # CPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 0
-# GPU推理 (TODO: ORT-GPU 推理会报错)
+# GPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 1
 # GPU上TensorRT推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2

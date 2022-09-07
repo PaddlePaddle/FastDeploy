@@ -2,7 +2,7 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`infer.py`快速完成PPMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
@@ -19,7 +19,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 # CPU推理
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device cpu
-# GPU推理 (TODO: ORT-GPU 推理会报错)
+# GPU推理
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
