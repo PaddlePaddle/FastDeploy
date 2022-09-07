@@ -19,24 +19,26 @@
 #include <string>
 #include <vector>
 
-class FDHostAllocator {
+#include "fastdeploy/utils/utils.h"
+
+class FASTDEPLOY_DECL FDHostAllocator {
  public:
   bool operator()(void** ptr, size_t size) const;
 };
 
-class FDHostFree {
+class FASTDEPLOY_DECL FDHostFree {
  public:
   void operator()(void* ptr) const;
 };
 
 #ifdef WITH_GPU
 
-class FDDeviceAllocator {
+class FASTDEPLOY_DECL FDDeviceAllocator {
  public:
   bool operator()(void** ptr, size_t size) const;
 };
 
-class FDDeviceFree {
+class FASTDEPLOY_DECL FDDeviceFree {
  public:
   void operator()(void* ptr) const;
 };
