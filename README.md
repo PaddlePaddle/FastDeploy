@@ -67,7 +67,8 @@
 ##### 安装GPU版本: [Anaconda配置GPU环境(推荐)](docs/quick_start/Python_prebuilt_wheels.md)
 
 ```bash
-conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
+conda config --add channels conda-forge 
+conda create -n fastdeploy python=3.8 cudatoolkit=11.2 cudnn=8.2 && conda activate fastdeploy
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 ##### 安装CPU版本
