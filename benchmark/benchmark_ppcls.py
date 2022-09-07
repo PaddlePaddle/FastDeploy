@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     runtime_statis = model.print_statis_info_of_runtime()
 
-    warmup_iter = args.iter_num / 5
+    warmup_iter = args.iter_num // 5
     repeat_iter = args.iter_num - warmup_iter
     end2end_statis = end2end_statis[warmup_iter:]
 
@@ -128,9 +128,9 @@ if __name__ == '__main__':
 
     print(dump_result)
     if args.device == "cpu":
-        file_path = args.model + "_" + args.backend + "_" + args.device + "_" + args.cpu_num_thread + ".txt"
+        file_path = args.model.strip().split("/")[1] + "_" + args.backend + "_" + args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
-        file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
+        file_path = args.model.strip().split("/")[1] + "_" + args.backend + "_" + args.device + ".txt"
     with open(file_path, "w") as f:
         f.writelines("===={}====: \n".format(file_path[:-4]))
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
