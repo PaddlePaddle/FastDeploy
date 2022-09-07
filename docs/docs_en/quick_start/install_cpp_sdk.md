@@ -2,7 +2,7 @@
 
 FastDeploy provides prebuilt CPP deployment libraries on Windows/Linux/Mac. Developers can download and use it directly or compile the code manually.
 
-## Dependency
+## Dependencies
 
 - cuda >= 11.2
 - cudnn >= 8.0
