@@ -25,7 +25,7 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 - Please choose either `fastdeploy-python`or `fastdeploy-gpu-python`for installation.
 - If you have installed CPU `fastdeploy-python`, please execute `pip uninstall fastdeploy-python` to uninstall the existing version to install GPU `fastdeploy-gpu-python`. 
 
-## Dependency
+## Dependencies
 
 - cuda >= 11.2
 - cudnn >= 8.0
