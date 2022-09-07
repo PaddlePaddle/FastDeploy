@@ -24,10 +24,7 @@ def parse_arguments():
         default=8,
         help="default number of cpu thread.")
     parser.add_argument(
-        "--device_id",
-        type=int,
-        default=0,
-        help="device(gpu) id")
+        "--device_id", type=int, default=0, help="device(gpu) id")
     parser.add_argument(
         "--iter_num",
         required=True,
@@ -70,6 +67,7 @@ def build_option(args):
 
     return option
 
+
 def get_current_memory_mb(gpu_id=None):
     pid = os.getpid()
     p = psutil.Process(pid)
@@ -97,7 +95,8 @@ if __name__ == '__main__':
     model_file = os.path.join(args.model, "inference.pdmodel")
     params_file = os.path.join(args.model, "inference.pdiparams")
     config_file = os.path.join(args.model, "inference_cls.yaml")
-    model = fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=option)
+    model = fd.vision.classification.PaddleClasModel(
+        model_file, params_file, config_file, runtime_option=option)
     model.enable_record_time_of_runtime()
 
     gpu_id = args.device_id
@@ -128,15 +127,18 @@ if __name__ == '__main__':
 
     print(dump_result)
     if args.device == "cpu":
-        file_path = args.model + "_" + args.backend + "_" + args.device + "_" + str(args.cpu_num_thread) + ".txt"
+        file_path = args.model + "_" + args.backend + "_" + \
+            args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
         file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
     with open(file_path, "w") as f:
         f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
-        f.writelines("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
-        f.writelines("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
+        f.writelines("cpu_rss_mb: {} \n".format(
+            str(dump_result["cpu_rss_mb"])))
+        f.writelines("gpu_rss_mb: {} \n".format(
+            str(dump_result["gpu_rss_mb"])))
         f.writelines("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
 
     f.close()
