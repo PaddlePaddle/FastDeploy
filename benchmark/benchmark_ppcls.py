@@ -102,6 +102,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     end2end_statis = list()
+    cpu_mem, gpu_mem, gpu_util = 0, 0, 0
     for i in range(args.iter_num):
         im = cv2.imread(args.image)
         start = time.time()
