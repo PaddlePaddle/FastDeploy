@@ -125,7 +125,6 @@ if __name__ == '__main__':
     dump_result["gpu_rss_mb"] = gpu_mem / repeat_iter
     dump_result["gpu_util"] = gpu_util / repeat_iter
 
-    print(dump_result)
     if args.device == "cpu":
         file_path = args.model + "_" + args.backend + "_" + \
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
