@@ -19,27 +19,31 @@
 namespace fastdeploy {
 namespace vision {
 
-class LimitShort : public Processor {
+class ResizeByLong : public Processor {
  public:
-  explicit LimitShort(int max_short = -1, int min_short = -1, int interp = 1) {
-    max_short_ = max_short;
-    min_short_ = min_short;
+  ResizeByLong(int target_size, int interp = 1, bool use_scale = true,
+               int max_size = -1) {
+    target_size_ = target_size;
+    max_size_ = max_size;
     interp_ = interp;
+    use_scale_ = use_scale;
   }
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "LimitShort"; }
+  std::string Name() { return "ResizeByLong"; }
 
-  static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
+  static bool Run(Mat* mat, int target_size, int interp = 1,
+                  bool use_scale = true, int max_size = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
-  int GetMaxShort() { return max_short_; }
 
  private:
-  int max_short_;
-  int min_short_;
+  double GenerateScale(const int origin_w, const int origin_h);
+  int target_size_;
+  int max_size_;
   int interp_;
+  bool use_scale_;
 };
 }  // namespace vision
 }  // namespace fastdeploy
