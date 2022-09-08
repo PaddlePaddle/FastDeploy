@@ -27,6 +27,6 @@ done
 
 wait
 
-rm -rf result.txt
-touch result.txt
-cat ppcls_model/*.txt >> ./result.txt
+rm -rf result_cls.txt
+touch result_cls.txt
+cat ppcls_model/*.txt >> ./result_cls.txt

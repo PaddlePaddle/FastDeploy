@@ -23,8 +23,8 @@ PPYOLO::PPYOLO(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER};
+  valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
   has_nms_ = true;
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
