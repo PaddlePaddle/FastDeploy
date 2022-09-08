@@ -122,6 +122,16 @@ else()
       ${OPENVINO_INSTALL_INC_DIR}
     BUILD_BYPRODUCTS ${OPENVINO_LIB})
 endif()
+
+if(UNIX)
+execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${OPENVINO_INSTALL_DIR}/lib
+          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${OPENVINO_INSTALL_DIR}/lib
+          RESULT_VARIABLE result
+                OUTPUT_VARIABLE curr_out
+                ERROR_VARIABLE  curr_out)
+message(STATUS "result:${result} out:${curr_out}")
+endif()
+
 add_library(external_openvino STATIC IMPORTED GLOBAL)
 set_property(TARGET external_openvino PROPERTY IMPORTED_LOCATION ${OPENVINO_LIB})
 add_dependencies(external_openvino ${OPENVINO_PROJECT})
