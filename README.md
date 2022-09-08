@@ -14,14 +14,14 @@
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
-**⚡️FastDeploy**是一款**易用高效**的推理部署开发套件。覆盖业界主流**优质预训练模型**并提供**开箱即用**的部署体验，包括图像分类、目标检测、图像分割、人脸检测、人脸识别、人体关键点识别、文字识别等多任务，满足开发者**多场景**，**多硬件**、**多平台**的便捷高效的产业级部署需求。
+**⚡️FastDeploy**是一款**易用高效**的推理部署开发套件。覆盖业界🔥**热门AI模型**并提供📦**开箱即用**的部署体验，包括图像分类、目标检测、图像分割、人脸检测、人脸识别、人体关键点识别、文字识别、语义理解等多任务，满足开发者**多场景**，**多硬件**、**多平台**的产业部署需求。
 
-| Human Segmentation                                                                                        | Image Matting                                                                                             | Semantic Segmentation                                                                                                                                                                                                      | Real-Time Matting                                                                                                                                                                                                                         |
+| Potrait Segmentation                                                                                        | Image Matting                                                                                             | Semantic Segmentation                                                                                                                                                                                                      | Real-Time Matting                                                                                                                                                                                                                         |
 |:---------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
 | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">                                                                                                                    | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px">                                                                                                                                 |
-| **PP-OCR**                                                                                                                                                                                             |  **Behavior Recognition**                                                                                                                                                                                                       | **Object Detection**                                                                                                                                                                                         |**TinyPose** 
+| **OCR**                 |  **Behavior Recognition**           | **Object Detection**                  |**Pose Estimation** 
 | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"> |<img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"  >                                                                                                                              |<img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">  | 
-| **Face Alignment**                                                                                        | **3D Object Detection**                                                                                        |  **Face Editing**                                                                                                                                                                                                           | **FOM**                                                                                                                                                                                                                           
+| **Face Alignment**                                                                                        | **3D Object Detection**                                                                                        |  **Face Editing**                                                                                                                                                                                                           | **Image Animation**                                                                                                                                                                                                                           
 | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054663-b0c9c037-6d12-4e90-a7e4-e9abf4cf9b97.gif' height="126px" width="126px">  |  <img src='https://user-images.githubusercontent.com/54695910/188056800-2190e05e-ad1f-40ef-bf71-df24c3407b2d.gif' height="126px" width="190px"> 
 
 ## 近期更新
@@ -34,12 +34,12 @@
         - 支持人脸检测、人脸识别、实时人像抠图、图像分割等40+重点模型及[Demo示例](examples/vision/)
         - 支持Python和C++两种语言部署
     - **端侧部署新增瑞芯微、晶晨、恩智浦等NPU芯片部署能力**
-        - 发布轻量化目标检测[Picodet-NPU部署Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)，提供低门槛INT8全量化能力
+        - 发布轻量化目标检测[Picodet-NPU部署Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)，提供极致的INT8全量化推理能力
 
 ## 目录
 * **服务端部署**
-    * [FastDeploy Python SDK快速开始](#fastdeploy-quick-start-python)  
-    * [FastDeploy C++ SDK快速开始](#fastdeploy-quick-start-cpp)
+    * [Python SDK快速开始](#fastdeploy-quick-start-python)  
+    * [C++ SDK快速开始](#fastdeploy-quick-start-cpp)
     * [服务端模型支持列表](#fastdeploy-server-models)
 * **端侧部署**
     * [EasyEdge边缘端部署](#fastdeploy-edge-sdk-arm-linux)  
@@ -53,7 +53,7 @@
 
 ## 服务端部署
 
-### FastDeploy Python SDK快速开始
+### Python SDK快速开始
 <div id="fastdeploy-quick-start-python"></div>
 
 #### 快速安装
@@ -69,7 +69,10 @@
 ```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
-
+##### [Conda安装(推荐)](docs/quick_start/Python_prebuilt_wheels.md)
+```bash
+conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
+```
 ##### 安装CPU版本
 
 ```bash
@@ -103,7 +106,7 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
-### FastDeploy C++ SDK快速开始
+### C++ SDK快速开始
 <div id="fastdeploy-quick-start-cpp"></div>
 
 #### 安装
