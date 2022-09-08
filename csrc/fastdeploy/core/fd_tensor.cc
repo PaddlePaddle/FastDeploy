@@ -124,11 +124,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
   name = tensor_name;
   device = new_device;
   size_t nbytes = Nbytes();
-  int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                   std::multiplies<int>()) *
-                   FDDataTypeSize(dtype);
   shape.assign(new_shape.begin(), new_shape.end());
   dtype = data_type;
+  int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                   std::multiplies<int>()) *
+                   FDDataTypeSize(data_type);
   if (new_nbytes > nbytes) {
     FreeFn();
     AllocFn(new_nbytes);

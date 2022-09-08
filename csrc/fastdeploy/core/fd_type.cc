@@ -34,6 +34,8 @@ int FDDataTypeSize(const FDDataType& data_type) {
     return sizeof(double);
   } else if (data_type == FDDataType::UINT8) {
     return sizeof(uint8_t);
+  } else if (data_type == FDDataType::INT8) {
+    return sizeof(int8_t);
   } else {
     FDASSERT(false, "Unexpected data type: %s", Str(data_type).c_str());
   }

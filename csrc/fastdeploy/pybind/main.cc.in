@@ -67,7 +67,6 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
     tensor-> SetExternalData(data_shape, dtype,
                              pyarray.mutable_data());
   } else {
-
     tensor->Resize(data_shape, dtype);
     memcpy(tensor->MutableData(), pyarray.mutable_data(), pyarray.nbytes());
   }
