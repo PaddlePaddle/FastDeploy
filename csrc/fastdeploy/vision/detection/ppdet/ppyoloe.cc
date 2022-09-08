@@ -93,7 +93,18 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     if (op_name == "NormalizeImage") {
       auto mean = op["mean"].as<std::vector<float>>();
       auto std = op["std"].as<std::vector<float>>();
-      bool is_scale = op["is_scale"].as<bool>();
+      bool is_scale = true;
+      if (op["is_scale"]) {
+        is_scale = op["is_scale"].as<bool>();
+      }
+      std::string norm_type = "mean_std";
+      if (op["norm_type"]) {
+        norm_type = op["norm_type"].as<std::string>();
+      }
+      if (norm_type != "mean_std") {
+        std::fill(mean.begin(), mean.end(), 0.0);
+        std::fill(std.begin(), std.end(), 1.0);
+      }
       processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
     } else if (op_name == "Resize") {
       bool keep_ratio = op["keep_ratio"].as<bool>();
