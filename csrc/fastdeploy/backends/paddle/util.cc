@@ -15,20 +15,29 @@
 #include "fastdeploy/backends/paddle/paddle_backend.h"
 
 namespace fastdeploy {
-void ShareTensorFromCpu(paddle_infer::Tensor* tensor, FDTensor& fd_tensor) {
+paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device) {
+  if (device == Device::GPU) {
+    return paddle_infer::PlaceType::kGPU;
+  }
+  return paddle_infer::PlaceType::kCPU;
+}
+
+void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
+                             FDTensor& fd_tensor) {
   std::vector<int> shape(fd_tensor.shape.begin(), fd_tensor.shape.end());
   tensor->Reshape(shape);
+  auto place = ConvertFDDeviceToPlace(fd_tensor.device);
   if (fd_tensor.dtype == FDDataType::FP32) {
     tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
-                              shape, paddle_infer::PlaceType::kCPU);
+                              shape, place);
     return;
   } else if (fd_tensor.dtype == FDDataType::INT32) {
     tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
-                              shape, paddle_infer::PlaceType::kCPU);
+                              shape, place);
     return;
   } else if (fd_tensor.dtype == FDDataType::INT64) {
     tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
-                              shape, paddle_infer::PlaceType::kCPU);
+                              shape, place);
     return;
   } else if (fd_tensor.dtype == FDDataType::UINT8) {
     tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cuda_runtime_api.h>
+
 #include <iostream>
 #include <map>
 #include <string>
@@ -23,7 +25,6 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
-#include <cuda_runtime_api.h>
 
 namespace fastdeploy {
 
@@ -109,12 +110,12 @@ class TrtBackend : public BaseBackend {
   std::map<std::string, ShapeRangeInfo> shape_range_info_;
 
   void GetInputOutputInfo();
-  void AllocateBufferInDynamicShape(const std::vector<FDTensor>& inputs,
-                                    std::vector<FDTensor>* outputs);
   bool CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer);
   bool BuildTrtEngine();
   bool LoadTrtCache(const std::string& trt_engine_file);
   int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
+  void SetInputs(const std::vector<FDTensor>& inputs);
+  void AllocateOutputsBuffer(std::vector<FDTensor>* outputs);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
