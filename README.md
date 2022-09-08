@@ -33,12 +33,12 @@ English | [简体中文](README_ch.md)
 - 🔥 **2022.8.18：Release FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
   - **New server-side deployment upgrade: faster inference performance, support more visual model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
-    - Integrate Paddle Inference, ONNXRuntime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos]](examples/vision/detection/)
+    - Integrate Paddle Inference, ONNX Runtime, TensorRT and other inference engines and provide a seamless deployment experience
+    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
     - Support over 40 key models and [Demo Examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
     - Support deployment in both Python and C++
   - **Supports Rexchip, Amlogic, NXP and other NPU chip deployment capabilities on end-side deployment**
-    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_ detection), providing the full quantized inference capability for INT8.
+    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
@@ -105,7 +105,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
   # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
   import cv2
   import fastdeploy.vision as vision
-  ```
+  
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
@@ -116,6 +116,7 @@ print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
+```
 
 ### A Quick Start for C++ SDK
 
