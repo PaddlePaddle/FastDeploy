@@ -101,22 +101,21 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 * Test inference resultsTest inference results
   
-  ```python
+```python
   # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
   import cv2
   import fastdeploy.vision as vision
-  ```
-
-model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
+  
+  model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
-im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
-print(result)
+ im = cv2.imread("000000014439.jpg")
+ result = model.predict(im.copy())
+ print(result)
 
-vis_im = vision.vis_detection(im, result, score_threshold=0.5)
-cv2.imwrite("vis_image.jpg", vis_im)
-
+ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
+ cv2.imwrite("vis_image.jpg", vis_im)
+```
 ### A Quick Start for C++ SDK
 
 #### Installation
