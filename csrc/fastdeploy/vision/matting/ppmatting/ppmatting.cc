@@ -98,7 +98,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
       } else if (op["type"].as<std::string>() == "ResizeByLong") {
-        int target_size = op["target_size"].as<int>();
+        int target_size = op["long_size"].as<int>();
         processors_.push_back(std::make_shared<ResizeByLong>(target_size));
       } else if (op["type"].as<std::string>() == "Pad") {
         // size: (w, h)
@@ -110,6 +110,9 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<Cast>("float"));
         processors_.push_back(
             std::make_shared<PadToSize>(size[1], size[0], value));
+      } else if (op["type"].as<std::string>() == "ResizeByShort") {
+        int target_size = op["short_size"].as<int>();
+        processors_.push_back(std::make_shared<ResizeByShort>(target_size));
       }
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
@@ -127,10 +130,6 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
       int max_short = processor->GetMaxShort();
       if (runtime_option.backend != Backend::PDINFER) {
         if (input_w != input_h || input_h < max_short || input_w < max_short) {
-          FDWARNING << "Detected LimitShort processing step in yaml file and "
-                       "the size of input image is Unqualified, Fastdeploy "
-                       "will resize the input image into ("
-                    << max_short << "," << max_short << ")." << std::endl;
           Resize::Run(mat, max_short, max_short);
         }
       }
