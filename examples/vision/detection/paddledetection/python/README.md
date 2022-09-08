@@ -10,7 +10,7 @@
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/detection/paddledetection/python/
+cd FastDeploy/examples/vision/detection/paddledetection/python/
 
 #下载PPYOLOE模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
