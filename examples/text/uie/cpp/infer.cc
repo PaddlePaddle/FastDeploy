@@ -26,12 +26,15 @@ const char sep = '/';
 #endif
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
-    std::cout << "Usage: infer_demo path/to/model run_option, "
-                 "e.g ./infer_demo uie-base  0"
+  if (argc != 3 && argc != 4) {
+    std::cout << "Usage: infer_demo /path/to/model device [backend], "
+                 "e.g ./infer_demo uie-base 0 [0]"
               << std::endl;
-    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
+    std::cout << "The data type of device is int, 0: run with cpu; 1: run "
                  "with gpu."
+              << std::endl;
+    std::cout << "The data type of backend is int, 0: use paddle backend; 1: "
+                 "use onnxruntime backend; 2: use openvino backend. Default 0."
               << std::endl;
     return -1;
   }
@@ -40,6 +43,23 @@ int main(int argc, char* argv[]) {
     option.UseCpu();
   } else {
     option.UseGpu();
+  }
+  auto backend_type = 0;
+  if (argc == 4) {
+    backend_type = std::atoi(argv[3]);
+  }
+  switch (backend_type) {
+    case 0:
+      option.UsePaddleBackend();
+      break;
+    case 1:
+      option.UseOrtBackend();
+      break;
+    case 2:
+      option.UseOpenVINOBackend();
+      break;
+    default:
+      break;
   }
   std::string model_dir(argv[1]);
   std::string model_path = model_dir + sep + "inference.pdmodel";
