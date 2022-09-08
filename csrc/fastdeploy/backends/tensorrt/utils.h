@@ -14,11 +14,9 @@
 
 #pragma once
 
-#include "NvInfer.h"
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
-#include <algorithm>
 #include <cuda_runtime_api.h>
+
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -26,17 +24,24 @@
 #include <string>
 #include <vector>
 
+#include "NvInfer.h"
+#include "fastdeploy/core/allocate.h"
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
+
 namespace fastdeploy {
 
 struct FDInferDeleter {
-  template <typename T> void operator()(T* obj) const {
+  template <typename T>
+  void operator()(T* obj) const {
     if (obj) {
       obj->destroy();
     }
   }
 };
 
-template <typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
+template <typename T>
+using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
 
 int64_t Volume(const nvinfer1::Dims& d);
 
@@ -64,13 +69,18 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
   return out;
 }
 
-template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
+template <typename AllocFunc, typename FreeFunc>
+class FDGenericBuffer {
  public:
   //!
   //! \brief Construct an empty buffer.
   //!
   explicit FDGenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
-      : mSize(0), mCapacity(0), mType(type), mBuffer(nullptr) {}
+      : mSize(0),
+        mCapacity(0),
+        mType(type),
+        mBuffer(nullptr),
+        mExternal_buffer(nullptr) {}
 
   //!
   //! \brief Construct a buffer with the specified allocation size in bytes.
@@ -82,8 +92,18 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
     }
   }
 
+  //!
+  //! \brief This use to skip memory copy step.
+  //!
+  FDGenericBuffer(size_t size, nvinfer1::DataType type, void* buffer)
+      : mSize(size), mCapacity(size), mType(type) {
+    mExternal_buffer = buffer;
+  }
+
   FDGenericBuffer(FDGenericBuffer&& buf)
-      : mSize(buf.mSize), mCapacity(buf.mCapacity), mType(buf.mType),
+      : mSize(buf.mSize),
+        mCapacity(buf.mCapacity),
+        mType(buf.mType),
         mBuffer(buf.mBuffer) {
     buf.mSize = 0;
     buf.mCapacity = 0;
@@ -109,12 +129,18 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   //! \brief Returns pointer to underlying array.
   //!
-  void* data() { return mBuffer; }
+  void* data() {
+    if (mExternal_buffer != nullptr) return mExternal_buffer;
+    return mBuffer;
+  }
 
   //!
   //! \brief Returns pointer to underlying array.
   //!
-  const void* data() const { return mBuffer; }
+  const void* data() const {
+    if (mExternal_buffer != nullptr) return mExternal_buffer;
+    return mBuffer;
+  }
 
   //!
   //! \brief Returns the size (in number of elements) of the buffer.
@@ -127,10 +153,28 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   size_t nbBytes() const { return this->size() * TrtDataTypeSize(mType); }
 
   //!
+  //! \brief Set user memory buffer for TRT Buffer
+  //!
+  void SetExternalData(size_t size, nvinfer1::DataType type, void* buffer) {
+    mSize = mCapacity = size;
+    mType = type;
+    mExternal_buffer = const_cast<void*>(buffer);
+  }
+
+  //!
+  //! \brief Set user memory buffer for TRT Buffer
+  //!
+  void SetExternalData(const nvinfer1::Dims& dims, const void* buffer) {
+    mSize = mCapacity = Volume(dims);
+    mExternal_buffer = const_cast<void*>(buffer);
+  }
+
+  //!
   //! \brief Resizes the buffer. This is a no-op if the new size is smaller than
   //! or equal to the current capacity.
   //!
   void resize(size_t newSize) {
+    mExternal_buffer = nullptr;
     mSize = newSize;
     if (mCapacity < newSize) {
       freeFn(mBuffer);
@@ -146,26 +190,18 @@ template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
   //!
   void resize(const nvinfer1::Dims& dims) { return this->resize(Volume(dims)); }
 
-  ~FDGenericBuffer() { freeFn(mBuffer); }
+  ~FDGenericBuffer() {
+    mExternal_buffer = nullptr;
+    freeFn(mBuffer);
+  }
 
  private:
   size_t mSize{0}, mCapacity{0};
   nvinfer1::DataType mType;
   void* mBuffer;
+  void* mExternal_buffer;
   AllocFunc allocFn;
   FreeFunc freeFn;
-};
-
-class FDDeviceAllocator {
- public:
-  bool operator()(void** ptr, size_t size) const {
-    return cudaMalloc(ptr, size) == cudaSuccess;
-  }
-};
-
-class FDDeviceFree {
- public:
-  void operator()(void* ptr) const { cudaFree(ptr); }
 };
 
 using FDDeviceBuffer = FDGenericBuffer<FDDeviceAllocator, FDDeviceFree>;
@@ -197,7 +233,7 @@ class FDTrtLogger : public nvinfer1::ILogger {
 };
 
 struct ShapeRangeInfo {
-  ShapeRangeInfo(const std::vector<int64_t>& new_shape) {
+  explicit ShapeRangeInfo(const std::vector<int64_t>& new_shape) {
     shape.assign(new_shape.begin(), new_shape.end());
     min.resize(new_shape.size());
     max.resize(new_shape.size());
@@ -239,4 +275,4 @@ struct ShapeRangeInfo {
   }
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
