@@ -54,7 +54,7 @@ class OpenVINOBackend : public BaseBackend {
 
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
-                      std::vector<TensorInfo>* tensor_infos);
+                      std::map<std::string, TensorInfo>* tensor_infos);
   ov::Core core_;
   ov::CompiledModel compiled_model_;
   ov::InferRequest request_;
