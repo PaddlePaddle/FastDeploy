@@ -152,6 +152,7 @@ int main(int argc, char* argv[]) {
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
+ }
 ```
 
 ### For more deployment models, please refer to [Visual Model Deployment Examples](examples/vision) .
