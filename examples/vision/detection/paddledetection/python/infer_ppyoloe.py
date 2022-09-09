@@ -18,11 +18,17 @@ def parse_arguments():
         type=str,
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
+    #parser.add_argument(
+    #    "--use_trt",
+    #    type=ast.literal_eval,
+    #    default=False,
+    #    help="Wether to use tensorrt.")
     parser.add_argument(
-        "--use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
+        "--backend",
+        nargs='?',
+        type=str,
+        help="Set inference backend, support one of ['default', 'ort', 'paddle', 'trt']."
+    )
     return parser.parse_args()
 
 
@@ -32,10 +38,23 @@ def build_option(args):
     if args.device.lower() == "gpu":
         option.use_gpu()
 
-    if args.use_trt:
+    if args.backend == "ort":
+        option.use_ort_backend()
+    elif args.backend == "paddle":
+        option.use_paddle_backend()
+    elif args.backend == "trt":
+        assert args.device.lower(
+        ) == "gpu", "Set trt backend must use gpu for inference"
         option.use_trt_backend()
         option.set_trt_input_shape("image", [1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", [1, 2])
+    else:
+        raise Exception, "Don't support backend type, please use one of ['default', 'ort', 'paddle', 'trt']."
+
+    #if args.use_trt:
+    #    option.use_trt_backend()
+    #    option.set_trt_input_shape("image", [1, 3, 640, 640])
+    #    option.set_trt_input_shape("scale_factor", [1, 2])
     return option
 
 
