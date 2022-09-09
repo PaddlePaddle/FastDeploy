@@ -18,11 +18,6 @@ def parse_arguments():
         type=str,
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
-    #parser.add_argument(
-    #    "--use_trt",
-    #    type=ast.literal_eval,
-    #    default=False,
-    #    help="Wether to use tensorrt.")
     parser.add_argument(
         "--backend",
         nargs='?',
@@ -49,16 +44,12 @@ def build_option(args):
         option.set_trt_input_shape("image", [1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", [1, 2])
     elif args.backend == "default":
-        continue
+        pass
     else:
         raise Exception(
             "Don't support backend type, please use one of ['default', 'ort', 'paddle', 'trt']."
         )
 
-    #if args.use_trt:
-    #    option.use_trt_backend()
-    #    option.set_trt_input_shape("image", [1, 3, 640, 640])
-    #    option.set_trt_input_shape("scale_factor", [1, 2])
     return option
 
 

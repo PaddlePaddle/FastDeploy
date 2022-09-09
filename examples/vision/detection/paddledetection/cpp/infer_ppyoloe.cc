@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <gflags/gflags.h>
 #include "fastdeploy/vision.h"
 
 #ifdef WIN32
@@ -20,10 +21,29 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
+DEFINE_string(model_dir, "", "Path of inference model");
+DEFINE_string(image_file, "", "Path of input image");
+DEFINE_string(device, "CPU",
+              "Choose the device you want to run, it can be: CPU/GPU, "
+              "default is CPU.");
+DEFINE_string(backend, "default",
+              "Set inference backend, support one of ['default', 'ort', "
+              "'paddle', 'trt']");
+
 void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+
+  if (FLAGS_backend == "ort") {
+    option.UseOrtBackend();
+  } else if (FLAGS_backend == "paddle") {
+    option.UsePaddleBackend();
+  } else {
+    std::cerr << "Don't support backend type: ." + FLAGS_backend << std::endl;
+  }
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file);
   if (!model.Initialized()) {
@@ -53,38 +73,17 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
 
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
-                                                      config_file, option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
+  if (FLAGS_backend == "ort") {
+    option.UseOrtBackend();
+  } else if (FLAGS_backend == "paddle") {
+    option.UsePaddleBackend();
+  } else if (FLAGS_backend == "trt") {
+    option.UseTrtBackend();
+    option.SetTrtInputShape("image", {1, 3, 640, 640});
+    option.SetTrtInputShape("scale_factor", {1, 2});
+  } else {
+    std::cerr << "Don't support backend type: ." + FLAGS_backend << std::endl;
   }
-
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-
-  std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-}
-
-void TrtInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
-  auto config_file = model_dir + sep + "infer_cfg.yml";
-
-  auto option = fastdeploy::RuntimeOption();
-  option.UseGpu();
-  option.UseTrtBackend();
-  option.SetTrtInputShape("image", {1, 3, 640, 640});
-  option.SetTrtInputShape("scale_factor", {1, 2});
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
@@ -108,23 +107,24 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
 }
 
 int main(int argc, char* argv[]) {
+  // Parsing command-line
+  google::ParseCommandLineFlags(&argc, &argv, true);
   if (argc < 4) {
-    std::cout
-        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-           "e.g ./infer_model ./ppyoloe_model_dir ./test.jpeg 0"
-        << std::endl;
-    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
+    std::cout << "Usage: infer_demo --model_dir=/path/to/model_dir "
+                 "--image_file=/path/to/image --device=device, "
+                 "e.g ./infer_model --model_dir=./ppyoloe_model_dir "
+                 "--image_file=./test.jpeg --device=cpu"
               << std::endl;
+    std::cout << "For more information, use ./infer_model --help" << std::endl;
     return -1;
   }
 
-  if (std::atoi(argv[3]) == 0) {
-    CpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 1) {
-    GpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 2) {
-    TrtInfer(argv[1], argv[2]);
+  if (FLAGS_device == "cpu") {
+    CpuInfer(FLAGS_model_dir, FLAGS_image_file);
+  } else if (FLAGS_device == "gpu") {
+    GpuInfer(FLAGS_model_dir, FLAGS_image_file);
+  } else {
+    std::cerr << "Don't support device type:" + FLAGS_device << std::endl;
   }
   return 0;
 }
