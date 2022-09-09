@@ -124,6 +124,12 @@ std::ostream& operator<<(
   return os;
 }
 
+std::string UIEResult::Str() const {
+  std::ostringstream oss;
+  oss << *this;
+  return oss.str();
+}
+
 void Schema::CreateRoot(const std::string& name) {
   root_ = fastdeploy::utils::make_unique<SchemaNode>(name);
 }

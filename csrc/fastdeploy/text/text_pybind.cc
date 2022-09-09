@@ -18,6 +18,16 @@ namespace fastdeploy {
 
 void BindUIE(pybind11::module& m);
 
-void BindText(pybind11::module& m) { BindUIE(m); }
+void BindText(pybind11::module& m) {
+  pybind11::class_<text::UIEResult>(m, "UIEResult")
+      .def(pybind11::init())
+      .def_readwrite("start", &text::UIEResult::start_)
+      .def_readwrite("end", &text::UIEResult::end_)
+      .def_readwrite("probability_", &text::UIEResult::probability_)
+      .def_readwrite("text", &text::UIEResult::text_)
+      .def("__repr__", &text::UIEResult::Str)
+      .def("__str__", &text::UIEResult::Str);
+  BindUIE(m);
+}
 
 }  // namespace fastdeploy

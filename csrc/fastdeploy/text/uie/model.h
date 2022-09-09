@@ -37,6 +37,7 @@ struct FASTDEPLOY_DECL UIEResult {
   UIEResult() = default;
   UIEResult(size_t start, size_t end, double probability, std::string text)
       : start_(start), end_(end), probability_(probability), text_(text) {}
+  std::string Str() const;
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& os,
