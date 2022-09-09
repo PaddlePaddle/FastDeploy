@@ -296,7 +296,7 @@ Notes:
 <div id="fastdeploy-community"></div>
 
 - If you have any question or suggestion, please give us your valuable input via GitHub Issues
-- **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group** （you ）
+- **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group**
 
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/188544891-0ba025e5-61bd-425e-8097-8e982af9080e.jpeg"  width = "225" height = "288" />
