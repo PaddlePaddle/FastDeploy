@@ -25,6 +25,7 @@ void BindText(pybind11::module& m) {
       .def_readwrite("end", &text::UIEResult::end_)
       .def_readwrite("probability_", &text::UIEResult::probability_)
       .def_readwrite("text", &text::UIEResult::text_)
+      .def_readwrite("relation", &text::UIEResult::relation_)
       .def("__repr__", &text::UIEResult::Str)
       .def("__str__", &text::UIEResult::Str);
   BindUIE(m);

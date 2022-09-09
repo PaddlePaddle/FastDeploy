@@ -19,7 +19,7 @@ namespace py = pybind11;
 namespace fastdeploy {
 
 void BindUIE(pybind11::module& m) {
-  py::class_<text::UIEModel>(m, "UIE")
+  py::class_<text::UIEModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
                     std::vector<std::string>, RuntimeOption, Frontend>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),

@@ -13,3 +13,28 @@
 # limitations under the License.
 
 from __future__ import absolute_import
+
+import logging
+from ... import Frontend
+from ... import c_lib_wrap as C
+
+
+class UIEModel(object):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 vocab_file,
+                 position_prob,
+                 max_length,
+                 schema=None,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        self._model = C.text.UIEModel(model_file, params_file, vocab_file,
+                                      position_prob, max_length, schema,
+                                      runtime_option, model_format)
+
+    def set_schema(self, schema):
+        pass
+
+    def predict(self, texts):
+        return self._model.predict(texts)
