@@ -34,11 +34,11 @@ English | [简体中文](README_ch.md)
   - **New server-side deployment upgrade: faster inference performance, support more visual model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
     - Integrate Paddle Inference, ONNXRuntime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos]](examples/vision/detection/)
+    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
     - Support over 40 key models and [Demo Examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
     - Support deployment in both Python and C++
   - **Supports Rexchip, Amlogic, NXP and other NPU chip deployment capabilities on end-side deployment**
-    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_ detection), providing the full quantized inference capability for INT8.
+    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
