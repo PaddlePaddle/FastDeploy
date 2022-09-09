@@ -18,7 +18,7 @@ English | [简体中文](README_ch.md)
 
 
 
-**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**hot AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers‘ industrial deployment needs for **multi-scenario**, **multi-hardware**, **multi-platform** .
+**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**hot AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers‘ industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform** .
 
 | Potrait Segmentation                                                                                                                           | Image Matting                                                                                                                                  | Semantic Segmentation                                                                                                                            | Real-Time Matting                                                                                                                              |
 |:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|
@@ -99,7 +99,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* Test inference resultsTest inference results
+* Test inference results
  
 ```python
 # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
