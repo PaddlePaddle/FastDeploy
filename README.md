@@ -18,7 +18,7 @@ English | [简体中文](README_CN.md)
 
 
 
-**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**hot AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers‘ industrial deployment needs for **multi-scenario**, **multi-hardware**, **multi-platform** .
+**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**hot AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers‘ industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform** .
 
 | Potrait Segmentation                                                                                                                           | Image Matting                                                                                                                                  | Semantic Segmentation                                                                                                                            | Real-Time Matting                                                                                                                              |
 |:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|
@@ -34,11 +34,11 @@ English | [简体中文](README_CN.md)
   - **New server-side deployment upgrade: faster inference performance, support more visual model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
     - Integrate Paddle Inference, ONNXRuntime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos]](examples/vision/detection/)
+    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
     - Support over 40 key models and [Demo Examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
     - Support deployment in both Python and C++
   - **Supports Rexchip, Amlogic, NXP and other NPU chip deployment capabilities on end-side deployment**
-    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_ detection), providing the full quantized inference capability for INT8.
+    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
@@ -99,13 +99,13 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* Test inference resultsTest inference results
+* Test inference results
+ 
+```python
+# For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
+import cv2
+import fastdeploy.vision as vision
   
-  ```python
-  # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
-  import cv2
-  import fastdeploy.vision as vision
-  ```
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
@@ -116,6 +116,7 @@ print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
+```
 
 ### A Quick Start for C++ SDK
 
@@ -151,6 +152,7 @@ int main(int argc, char* argv[]) {
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
+ }
 ```
 
 ### For more deployment models, please refer to [Visual Model Deployment Examples](examples/vision) .
