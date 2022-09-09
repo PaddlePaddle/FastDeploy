@@ -48,8 +48,12 @@ def build_option(args):
         option.use_trt_backend()
         option.set_trt_input_shape("image", [1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", [1, 2])
+    elif args.backend == "default":
+        continue
     else:
-        raise Exception, "Don't support backend type, please use one of ['default', 'ort', 'paddle', 'trt']."
+        raise Exception(
+            "Don't support backend type, please use one of ['default', 'ort', 'paddle', 'trt']."
+        )
 
     #if args.use_trt:
     #    option.use_trt_backend()
