@@ -1,3 +1,17 @@
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import fastdeploy as fd
 import cv2
 import os
@@ -21,7 +35,6 @@ def parse_arguments():
         "--rec_label_file",
         required=True,
         help="Path of Recognization model of PPOCR.")
-
     parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
@@ -30,112 +43,70 @@ def parse_arguments():
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
     parser.add_argument(
-        "--det_use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
+        "--backend",
+        type=str,
+        default="default",
+        help="Type of inference backend, support ort/trt/paddle/openvino, default 'openvino' for cpu, 'tensorrt' for gpu")
     parser.add_argument(
-        "--cls_use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
+        "--device_id",
+        type=int,
+        default=0,
+        help="Define which GPU card used to run model.")
     parser.add_argument(
-        "--rec_use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
+        "--cpu_thread_num",
+        type=int,
+        default=9,
+        help="Number of threads while inference on CPU.")
     return parser.parse_args()
 
 
-def build_det_option(args):
+def build_option(args):
     option = fd.RuntimeOption()
-
     if args.device.lower() == "gpu":
-        option.use_gpu()
+        option.use_gpu(0)
 
-    if args.det_use_trt:
+    option.set_cpu_thread_num(args.cpu_thread_num)
+
+    if args.backend.lower() == "trt":
+        assert args.device.lower() == "gpu", "TensorRT backend require inference on device GPU."
         option.use_trt_backend()
-        #det_max_side_len 默认为960,当用户更改DET模型的max_side_len参数时，请将此参数同时更改
-        det_max_side_len = 960
-        option.set_trt_input_shape("x", [1, 3, 50, 50], [1, 3, 640, 640],
-                                   [1, 3, det_max_side_len, det_max_side_len])
-
-    return option
-
-
-def build_cls_option(args):
-    option = fd.RuntimeOption()
-
-    if args.device.lower() == "gpu":
-        option.use_gpu()
-
-    if args.cls_use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("x", [1, 3, 32, 100])
-
-    return option
-
-
-def build_rec_option(args):
-    option = fd.RuntimeOption()
-
-    if args.device.lower() == "gpu":
-        option.use_gpu()
-
-    if args.rec_use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("x", [1, 3, 48, 10], [1, 3, 48, 320],
-                                   [1, 3, 48, 2000])
-    return option
-
+    elif args.backend.lower() == "ort":
+        option.use_ort_backend()
+    elif args.backend.lower() == "paddle":
+        option.use_paddle_backend()
+    elif args.backend.lower() == "openvino":
+        assert args.device.lower() == "cpu", "OpenVINO backend require inference on device CPU."
+        option.use_openvino_backend()
 
 args = parse_arguments()
 
-#Det模型
+# Detection模型, 检测文字框
 det_model_file = os.path.join(args.det_model, "inference.pdmodel")
 det_params_file = os.path.join(args.det_model, "inference.pdiparams")
-#Cls模型
+# Classification模型，方向分类，可选
 cls_model_file = os.path.join(args.cls_model, "inference.pdmodel")
 cls_params_file = os.path.join(args.cls_model, "inference.pdiparams")
-#Rec模型
+# Recognition模型，文字识别模型
 rec_model_file = os.path.join(args.rec_model, "inference.pdmodel")
 rec_params_file = os.path.join(args.rec_model, "inference.pdiparams")
 rec_label_file = args.rec_label_file
 
-#默认
-det_model = fd.vision.ocr.DBDetector()
-cls_model = fd.vision.ocr.Classifier()
-rec_model = fd.vision.ocr.Recognizer()
+# 对于三个模型，均采用同样的部署配置
+# 用户也可根据自行需求分别配置
+runtime_option = build_option(args)
 
-#模型初始化
-if (len(args.det_model) != 0):
-    det_runtime_option = build_det_option(args)
-    det_model = fd.vision.ocr.DBDetector(
-        det_model_file, det_params_file, runtime_option=det_runtime_option)
+det_model = fd.vision.ocr.DBDetector(det_model_file, det_params_file, runtime_option=runtime_option)
+cls_model = fd.vision.ocr.Classifier(cls_model_file, cls_params_file, runtime_option=runtime_option)
+rec_model = fd.vision.ocr.Recognizer(rec_model_file, rec_params_file, rec_label_file, runtime_option=runtime_option)
 
-if (len(args.cls_model) != 0):
-    cls_runtime_option = build_cls_option(args)
-    cls_model = fd.vision.ocr.Classifier(
-        cls_model_file, cls_params_file, runtime_option=cls_runtime_option)
-
-if (len(args.rec_model) != 0):
-    rec_runtime_option = build_rec_option(args)
-    rec_model = fd.vision.ocr.Recognizer(
-        rec_model_file,
-        rec_params_file,
-        rec_label_file,
-        runtime_option=rec_runtime_option)
-
-ppocrsysv3 = fd.vision.ocr.PPOCRSystemv3(
-    ocr_det=det_model._model,
-    ocr_cls=cls_model._model,
-    ocr_rec=rec_model._model)
+# 创建OCR系统，串联3个模型，其中cls_model可选，如无需求，可设置为None
+ocr_system = fd.vision.ocr.PPOCRSystemv2(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 
 # 预测图片准备
 im = cv2.imread(args.image)
 
 #预测并打印结果
-result = ppocrsysv3.predict(im)
+result = ocr_system.predict(im)
 
 print(result)
 
