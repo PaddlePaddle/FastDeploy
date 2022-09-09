@@ -16,6 +16,7 @@ from __future__ import absolute_import
 
 import logging
 from ... import Frontend
+from ... import RuntimeOption
 from ... import c_lib_wrap as C
 
 
@@ -24,14 +25,14 @@ class UIEModel(object):
                  model_file,
                  params_file,
                  vocab_file,
-                 position_prob,
-                 max_length,
-                 schema=None,
-                 runtime_option=None,
+                 position_prob=0.5,
+                 max_length=128,
+                 schema=[],
+                 runtime_option=RuntimeOption(),
                  model_format=Frontend.PADDLE):
         self._model = C.text.UIEModel(model_file, params_file, vocab_file,
                                       position_prob, max_length, schema,
-                                      runtime_option, model_format)
+                                      runtime_option._option, model_format)
 
     def set_schema(self, schema):
         pass
