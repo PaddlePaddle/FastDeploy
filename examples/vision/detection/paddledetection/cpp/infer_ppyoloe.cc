@@ -92,6 +92,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   } else {
     std::cerr << "Don't support backend type: " + FLAGS_backend << std::endl;
   }
+
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
