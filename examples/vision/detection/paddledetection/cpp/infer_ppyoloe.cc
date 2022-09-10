@@ -41,8 +41,14 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     option.UseOrtBackend();
   } else if (FLAGS_backend == "paddle") {
     option.UsePaddleBackend();
+  } else if (FLAGS_backend == "trt") {
+    std::cerr << "Use --backend=trt for inference must set --device=gpu"
+              << std::endl;
+    return;
+  } else if (FLAGS_backend == "default") {
+    std::cout << "Use default backend for inference" << std::endl;
   } else {
-    std::cerr << "Don't support backend type: ." + FLAGS_backend << std::endl;
+    std::cerr << "Don't support backend type: " + FLAGS_backend << std::endl;
   }
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file);
@@ -81,8 +87,10 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     option.UseTrtBackend();
     option.SetTrtInputShape("image", {1, 3, 640, 640});
     option.SetTrtInputShape("scale_factor", {1, 2});
+  } else if (FLAGS_backend == "default") {
+    std::cout << "Use default backend for inference" << std::endl;
   } else {
-    std::cerr << "Don't support backend type: ." + FLAGS_backend << std::endl;
+    std::cerr << "Don't support backend type: " + FLAGS_backend << std::endl;
   }
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
@@ -109,7 +117,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
 int main(int argc, char* argv[]) {
   // Parsing command-line
   google::ParseCommandLineFlags(&argc, &argv, true);
-  if (argc < 4) {
+  if (FLAGS_model_dir.empty() || FLAGS_image_file.empty()) {
     std::cout << "Usage: infer_demo --model_dir=/path/to/model_dir "
                  "--image_file=/path/to/image --device=device, "
                  "e.g ./infer_model --model_dir=./ppyoloe_model_dir "
