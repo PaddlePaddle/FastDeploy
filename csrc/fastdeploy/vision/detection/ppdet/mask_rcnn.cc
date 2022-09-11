@@ -124,7 +124,7 @@ std::vector<float> MaskRCNN::GetScaleFactorData(const Mat& mat, int origin_h,
   float H = static_cast<float>(mat.Height());
   float W = static_cast<float>(mat.Width());
   float h = static_cast<float>(origin_h);
-  float w = static_cast<float>(origin_h);
+  float w = static_cast<float>(origin_w);
   return {H / h, W / w};
 }
 
@@ -157,6 +157,7 @@ bool MaskRCNN::Preprocess(Mat* mat, std::vector<FDTensor>* inputs) {
       std::memcpy((*inputs)[i].MutableData(), im_shape_data.data(),
                   (*inputs)[i].Nbytes());
     } else if (input_name == "image") {
+      (*inputs)[i].name = input_name;
       mat->ShareWithTensor(&((*inputs)[i]));
       (*inputs)[i].ExpandDim(0);  // (1,3,H,W)
     } else if (input_name == "scale_factor") {
@@ -205,7 +206,7 @@ bool MaskRCNN::Postprocess(std::vector<FDTensor>& infer_result,
   result->Resize(box_num_after_nms);
   float* box_data = static_cast<float*>(box_tensor.Data());
   for (size_t i = 0; i < box_num_after_nms; ++i) {
-    result->label_ids[i] = box_data[i * 6];
+    result->label_ids[i] = static_cast<int>(box_data[i * 6]);
     result->scores[i] = box_data[i * 6 + 1];
     result->boxes[i] =
         std::array<float, 4>{box_data[i * 6 + 2], box_data[i * 6 + 3],

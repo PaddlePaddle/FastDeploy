@@ -55,6 +55,7 @@ std::string Mask::Str() {
     }
   }
   out += ")\n";
+  return out;
 }
 
 DetectionResult::DetectionResult(const DetectionResult& res) {
@@ -102,7 +103,7 @@ std::string DetectionResult::Str() {
     if (!contain_masks) {
       out += "\n";
     } else {
-      out += masks[i].Str();
+      out += ", " + masks[i].Str();
     }
   }
   return out;

@@ -44,7 +44,7 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
     int x2 = static_cast<int>(result.boxes[i][2]);
     int y2 = static_cast<int>(result.boxes[i][3]);
     int box_h = y2 - y1;
-    int box_w = x2 - x2;
+    int box_w = x2 - x1;
     int c0 = color_map[3 * result.label_ids[i] + 0];
     int c1 = color_map[3 * result.label_ids[i] + 1];
     int c2 = color_map[3 * result.label_ids[i] + 2];
@@ -75,8 +75,13 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
       if ((mask_h != box_h) || (mask_w != box_w)) {
         cv::resize(mask, mask, cv::Size(box_w, box_h));
       }
+      // use a bright color for mask
+      int mc0 = 255 - c0 >= 127 ? 255 - c0 : 127;
+      int mc1 = 255 - c1 >= 127 ? 255 - c1 : 127;
+      int mc2 = 255 - c2 >= 127 ? 255 - c2 : 127;
+      cv::Scalar mask_color(mc0, mc1, mc2);
       cv::Mat box_im = vis_im(rect).clone();  // allocate continuous memory
-      cv::Mat mask_im(mask_h, mask_w, CV_8UC3, rect_color);
+      cv::Mat mask_im(mask_h, mask_w, CV_8UC3, mask_color);
       uchar* box_im_data = static_cast<uchar*>(box_im.data);
       uchar* mask_im_data = static_cast<uchar*>(mask_im.data);
       int32_t* mask_data = reinterpret_cast<int32_t*>(mask.data);
