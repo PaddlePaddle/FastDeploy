@@ -52,7 +52,8 @@ struct FASTDEPLOY_DECL SchemaNode {
   std::vector<std::vector<std::string>> prefix_;
   std::vector<std::vector<UIEResult*>> relations_;
   std::vector<SchemaNode> children_;
-
+  SchemaNode() = default;
+  SchemaNode(const SchemaNode&) = default;
   explicit SchemaNode(const std::string& name,
                       const std::vector<SchemaNode>& children = {})
       : name_(name), children_(children) {}
@@ -78,9 +79,12 @@ struct Schema {
   explicit Schema(const std::string& schema, const std::string& name = "root");
   explicit Schema(const std::vector<std::string>& schema_list,
                   const std::string& name = "root");
+  explicit Schema(const std::vector<SchemaNode>& schema_list,
+                  const std::string& name = "root");
   explicit Schema(const std::unordered_map<std::string,
                                            std::vector<SchemaNode>>& schema_map,
                   const std::string& name = "root");
+  explicit Schema(const SchemaNode& schema);
 
  private:
   void CreateRoot(const std::string& name);
@@ -100,13 +104,28 @@ struct FASTDEPLOY_DECL UIEModel {
   UIEModel(
       const std::string& model_file, const std::string& params_file,
       const std::string& vocab_file, float position_prob, size_t max_length,
+      const SchemaNode& schema, const fastdeploy::RuntimeOption& custom_option =
+                                    fastdeploy::RuntimeOption(),
+      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+  UIEModel(
+      const std::string& model_file, const std::string& params_file,
+      const std::string& vocab_file, float position_prob, size_t max_length,
+      const std::vector<SchemaNode>& schema,
+      const fastdeploy::RuntimeOption& custom_option =
+          fastdeploy::RuntimeOption(),
+      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+  UIEModel(
+      const std::string& model_file, const std::string& params_file,
+      const std::string& vocab_file, float position_prob, size_t max_length,
       const std::unordered_map<std::string, std::vector<SchemaNode>>& schema,
       const fastdeploy::RuntimeOption& custom_option =
           fastdeploy::RuntimeOption(),
       const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
   void SetSchema(const std::vector<std::string>& schema);
+  void SetSchema(const std::vector<SchemaNode>& schema);
   void SetSchema(
       const std::unordered_map<std::string, std::vector<SchemaNode>>& schema);
+  void SetSchema(const SchemaNode& schema);
 
   void ConstructTextsAndPrompts(
       const std::vector<std::string>& raw_texts, const std::string& node_name,
