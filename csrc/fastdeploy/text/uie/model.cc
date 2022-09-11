@@ -197,10 +197,10 @@ void UIEModel::SetSchema(
   schema_ = fastdeploy::utils::make_unique<Schema>(schema);
 }
 
-void UIEModel::AutoSplitter(
-    const std::vector<std::string>& texts, size_t max_length,
-    std::vector<std::string>* short_texts,
-    std::unordered_map<size_t, std::vector<size_t>>* input_mapping) {
+void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
+                            size_t max_length,
+                            std::vector<std::string>* short_texts,
+                            std::vector<std::vector<size_t>>* input_mapping) {
   size_t cnt_org = 0;
   size_t cnt_short = 0;
   for (auto& text : texts) {
@@ -208,8 +208,8 @@ void UIEModel::AutoSplitter(
         text.c_str(), text.length());
     if (text_len <= max_length) {
       short_texts->push_back(text);
-      if (input_mapping->count(cnt_org) == 0) {
-        (*input_mapping)[cnt_org] = {cnt_short};
+      if (input_mapping->size() <= cnt_org) {
+        input_mapping->push_back({cnt_short});
       } else {
         (*input_mapping)[cnt_org].push_back(cnt_short);
       }
@@ -234,8 +234,8 @@ void UIEModel::AutoSplitter(
       }
       std::vector<size_t> temp_text_id(cnt_short - short_idx);
       std::iota(temp_text_id.begin(), temp_text_id.end(), short_idx);
-      if (input_mapping->count(cnt_org) == 0) {
-        (*input_mapping)[cnt_org] = std::move(temp_text_id);
+      if (input_mapping->size() <= cnt_org) {
+        input_mapping->push_back(std::move(temp_text_id));
       } else {
         (*input_mapping)[cnt_org].insert((*input_mapping)[cnt_org].end(),
                                          temp_text_id.begin(),
@@ -358,10 +358,9 @@ void UIEModel::ConvertSpanToUIEResult(
   }
 }
 
-void UIEModel::AutoJoiner(
-    const std::vector<std::string>& short_texts,
-    const std::unordered_map<size_t, std::vector<size_t>>& input_mapping,
-    std::vector<std::vector<UIEResult>>* results) {
+void UIEModel::AutoJoiner(const std::vector<std::string>& short_texts,
+                          const std::vector<std::vector<size_t>>& input_mapping,
+                          std::vector<std::vector<UIEResult>>* results) {
   bool is_cls_task = false;
   // 1. Detect if it's a cls task
   for (auto&& short_result : *results) {
@@ -378,9 +377,8 @@ void UIEModel::AutoJoiner(
   std::vector<std::vector<UIEResult>> final_result;
   if (is_cls_task) {
     for (auto&& input_mapping_item : input_mapping) {
-      auto curr_mapping = input_mapping_item.second;
       std::unordered_map<std::string, std::pair<int, float>> cls_options;
-      for (auto&& result_idx : curr_mapping) {
+      for (auto&& result_idx : input_mapping_item) {
         if ((*results)[result_idx].size() == 0) {
           continue;
         }
@@ -409,10 +407,9 @@ void UIEModel::AutoJoiner(
     }
   } else {
     for (auto&& input_mapping_item : input_mapping) {
-      auto curr_mapping = input_mapping_item.second;
       size_t offset = 0;
       std::vector<UIEResult> result_list;
-      for (auto&& result_idx : curr_mapping) {
+      for (auto&& result_idx : input_mapping_item) {
         if (result_idx == 0) {
           result_list = std::move((*results)[result_idx]);
           offset += faster_tokenizer::utils::GetUnicodeLenFromUTF8(
@@ -434,12 +431,42 @@ void UIEModel::AutoJoiner(
   *results = std::move(final_result);
 }
 
-void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
-                               const std::vector<std::string>& prompts,
-                               std::vector<std::vector<UIEResult>>* results) {
-  // 1. Shortten the input texts and prompts
+void UIEModel::ConstructTextsAndPrompts(
+    const std::vector<std::string>& raw_texts, const std::string& node_name,
+    const std::vector<std::vector<std::string>> node_prefix,
+    std::vector<std::string>* input_texts, std::vector<std::string>* prompts,
+    std::vector<std::vector<size_t>>* input_mapping_with_raw_texts,
+    std::vector<std::vector<size_t>>* input_mapping) {
+  size_t idx = 0;
+  if (node_prefix.empty()) {
+    for (int i = 0; i < raw_texts.size(); ++i) {
+      input_texts->push_back(raw_texts[i]);
+      prompts->push_back(DBC2SBC(node_name));
+      input_mapping_with_raw_texts->push_back({idx});
+      idx += 1;
+    }
+  } else {
+    for (int i = 0; i < raw_texts.size(); ++i) {
+      if (node_prefix[i].size() == 0) {
+        input_mapping_with_raw_texts->push_back({});
+      } else {
+        for (auto&& pre : node_prefix[i]) {
+          input_texts->push_back(raw_texts[i]);
+          prompts->push_back(DBC2SBC(pre + node_name));
+        }
+        auto prefix_len = node_prefix[i].size();
+        input_mapping_with_raw_texts->push_back({});
+        input_mapping_with_raw_texts->back().resize(prefix_len);
+        std::iota(input_mapping_with_raw_texts->back().begin(),
+                  input_mapping_with_raw_texts->back().end(), idx);
+        idx += prefix_len;
+      }
+    }
+  }
+
+  // Shortten the input texts and prompts
   auto max_prompt_iter = std::max_element(
-      prompts.begin(), prompts.end(),
+      prompts->begin(), prompts->end(),
       [](const std::string& lhs, const std::string& rhs) {
         auto lhs_ulen = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
             lhs.c_str(), lhs.length());
@@ -453,71 +480,92 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
   auto max_predict_len = max_length_ - 3 - max_prompt_len;
 
   std::vector<std::string> short_texts;
-  std::unordered_map<size_t, std::vector<size_t>> input_mapping;
-  AutoSplitter(input_texts, max_predict_len, &short_texts, &input_mapping);
+  AutoSplitter(*input_texts, max_predict_len, &short_texts, input_mapping);
 
   std::vector<std::string> short_texts_prompts;
-  for (auto& item : input_mapping) {
-    short_texts_prompts.insert(short_texts_prompts.end(), item.second.size(),
-                               prompts[item.first]);
+  for (int i = 0; i < input_mapping->size(); ++i) {
+    short_texts_prompts.insert(short_texts_prompts.end(),
+                               (*input_mapping)[i].size(), (*prompts)[i]);
   }
+  (*input_texts) = std::move(short_texts);
+  (*prompts) = std::move(short_texts_prompts);
+}
+
+void UIEModel::Preprocess(
+    const std::vector<std::string>& input_texts,
+    const std::vector<std::string>& prompts,
+    std::vector<faster_tokenizer::core::Encoding>* encodings,
+    std::vector<fastdeploy::FDTensor>* inputs) {
+  // 1. Tokenize the short texts and short prompts
   std::vector<faster_tokenizer::core::EncodeInput> text_pair_input;
-  for (int i = 0; i < short_texts.size(); ++i) {
-    text_pair_input.emplace_back(std::pair<std::string, std::string>(
-        short_texts_prompts[i], short_texts[i]));
+  for (int i = 0; i < input_texts.size(); ++i) {
+    text_pair_input.emplace_back(
+        std::pair<std::string, std::string>(prompts[i], input_texts[i]));
   }
-
-  // 2. Tokenize the short texts and short prompts
-  std::vector<faster_tokenizer::core::Encoding> encodings;
-  tokenizer_.EncodeBatchStrings(text_pair_input, &encodings);
-  // 3. Construct the input vector tensor
-  // 3.1 Convert encodings to input_ids, token_type_ids, position_ids, attn_mask
-  std::vector<int64_t> input_ids, token_type_ids, position_ids, attn_mask;
-  std::vector<std::vector<faster_tokenizer::core::Offset>> offset_mapping;
-  for (int i = 0; i < encodings.size(); ++i) {
-    auto&& curr_input_ids = encodings[i].GetIds();
-    auto&& curr_type_ids = encodings[i].GetTypeIds();
-    auto&& curr_attn_mask = encodings[i].GetAttentionMask();
-    auto&& curr_offsets = encodings[i].GetOffsets();
-    input_ids.insert(input_ids.end(), curr_input_ids.begin(),
-                     curr_input_ids.end());
-    token_type_ids.insert(token_type_ids.end(), curr_type_ids.begin(),
-                          curr_type_ids.end());
-    attn_mask.insert(attn_mask.end(), curr_attn_mask.begin(),
-                     curr_attn_mask.end());
-    offset_mapping.push_back(curr_offsets);
-    std::vector<int64_t> curr_position_ids(curr_input_ids.size());
-    std::iota(curr_position_ids.begin(), curr_position_ids.end(), 0);
-    position_ids.insert(position_ids.end(), curr_position_ids.begin(),
-                        curr_position_ids.end());
+  tokenizer_.EncodeBatchStrings(text_pair_input, encodings);
+  // 2. Construct the input vector tensor
+  // 2.1 Allocate input tensor
+  int64_t batch_size = input_texts.size();
+  int64_t seq_len = 0;
+  if (batch_size > 0) {
+    seq_len = (*encodings)[0].GetIds().size();
   }
-
-  // 3.2 Set data to input vector
-  int64_t batch_size = short_texts.size();
-  int64_t seq_len = input_ids.size() / batch_size;
-  std::vector<fastdeploy::FDTensor> inputs(runtime_.NumInputs());
-  int64_t* inputs_ptrs[] = {input_ids.data(), token_type_ids.data(),
-                            position_ids.data(), attn_mask.data()};
+  inputs->resize(runtime_.NumInputs());
   for (int i = 0; i < runtime_.NumInputs(); ++i) {
-    inputs[i].SetExternalData({batch_size, seq_len},
-                              fastdeploy::FDDataType::INT64, inputs_ptrs[i]);
-    inputs[i].name = runtime_.GetInputInfo(i).name;
+    (*inputs)[i].Allocate({batch_size, seq_len}, fastdeploy::FDDataType::INT64,
+                          runtime_.GetInputInfo(i).name);
   }
 
-  std::vector<fastdeploy::FDTensor> outputs(runtime_.NumOutputs());
-  // 4. Infer
-  runtime_.Infer(inputs, &outputs);
-  auto* start_prob = reinterpret_cast<float*>(outputs[0].Data());
-  auto* end_prob = reinterpret_cast<float*>(outputs[1].Data());
+  // 2.2 Set the value of data
+  size_t start = 0;
+  int64_t* input_ids_ptr =
+      reinterpret_cast<int64_t*>((*inputs)[0].MutableData());
+  int64_t* type_ids_ptr =
+      reinterpret_cast<int64_t*>((*inputs)[1].MutableData());
+  int64_t* pos_ids_ptr = reinterpret_cast<int64_t*>((*inputs)[2].MutableData());
+  int64_t* attn_mask_ptr =
+      reinterpret_cast<int64_t*>((*inputs)[3].MutableData());
 
-  // 5. Postprocess
+  for (int i = 0; i < encodings->size(); ++i) {
+    auto&& curr_input_ids = (*encodings)[i].GetIds();
+    auto&& curr_type_ids = (*encodings)[i].GetTypeIds();
+    auto&& curr_attn_mask = (*encodings)[i].GetAttentionMask();
+
+    std::copy(curr_input_ids.begin(), curr_input_ids.end(),
+              input_ids_ptr + start);
+    std::copy(curr_type_ids.begin(), curr_type_ids.end(), type_ids_ptr + start);
+    std::iota(pos_ids_ptr + start, pos_ids_ptr + start + seq_len, 0);
+    std::copy(curr_attn_mask.begin(), curr_attn_mask.end(),
+              attn_mask_ptr + start);
+    start += seq_len;
+  }
+}
+
+void UIEModel::Postprocess(
+    const std::vector<fastdeploy::FDTensor>& outputs,
+    const std::vector<faster_tokenizer::core::Encoding>& encodings,
+    const std::vector<std::string>& short_input_texts,
+    const std::vector<std::string>& short_prompts,
+    const std::vector<std::vector<size_t>>& input_mapping_with_short_text,
+    std::vector<std::vector<UIEResult>>* results) {
+  auto* start_prob = reinterpret_cast<const float*>(outputs[0].Data());
+  auto* end_prob = reinterpret_cast<const float*>(outputs[1].Data());
+
   std::vector<std::vector<std::pair<int64_t, float>>> start_candidate_idx_prob,
       end_candidate_idx_prob;
   GetCandidateIdx(start_prob, outputs[0].shape[0], outputs[0].shape[1],
                   &start_candidate_idx_prob, position_prob_);
   GetCandidateIdx(end_prob, outputs[1].shape[0], outputs[1].shape[1],
                   &end_candidate_idx_prob, position_prob_);
+
+  std::vector<std::vector<faster_tokenizer::core::Offset>> offset_mapping;
+  for (int i = 0; i < encodings.size(); ++i) {
+    auto&& curr_offsets = encodings[i].GetOffsets();
+    offset_mapping.push_back(curr_offsets);
+  }
+
   SPAN_SET span_set;
+  auto batch_size = outputs[0].shape[0];
   std::vector<std::vector<float>> probs(batch_size);
   std::vector<std::vector<SpanIdx>> span_idxs(batch_size);
   for (int i = 0; i < batch_size; ++i) {
@@ -525,9 +573,88 @@ void UIEModel::PredictUIEInput(const std::vector<std::string>& input_texts,
     GetSpanIdxAndProbs(span_set, offset_mapping[i], &span_idxs[i], &probs[i]);
     span_set.clear();
   }
-  ConvertSpanToUIEResult(short_texts, short_texts_prompts, span_idxs, probs,
+  ConvertSpanToUIEResult(short_input_texts, short_prompts, span_idxs, probs,
                          results);
-  AutoJoiner(short_texts, input_mapping, results);
+  AutoJoiner(short_input_texts, input_mapping_with_short_text, results);
+}
+
+void UIEModel::ConstructChildPromptPrefix(
+    const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
+    const std::vector<std::vector<UIEResult>>& results_list,
+    std::vector<std::vector<std::string>>* prefix) {
+  prefix->resize(input_mapping_with_raw_texts.size());
+  for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
+    auto&& input_mapping_item = input_mapping_with_raw_texts[i];
+    for (auto&& idx : input_mapping_item) {
+      for (int j = 0; j < results_list[idx].size(); ++j) {
+        // Note(zhoushunjie): It's useful for Chinese model.
+        auto prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
+        (*prefix)[i].push_back(prefix_str);
+      }
+    }
+  }
+}
+
+void UIEModel::ConstructChildRelations(
+    const std::vector<std::vector<UIEResult*>>& old_relations,
+    const std::vector<std::vector<size_t>>& input_mapping_with_raw_texts,
+    const std::vector<std::vector<UIEResult>>& results_list,
+    const std::string& node_name,
+    std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
+        results,
+    std::vector<std::vector<UIEResult*>>* new_relations) {
+  new_relations->resize(input_mapping_with_raw_texts.size());
+  if (old_relations.size() == 0) {
+    for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
+      auto&& input_mapping_item = input_mapping_with_raw_texts[i];
+      auto& curr_result = (*results)[i];
+      for (auto&& idx : input_mapping_item) {
+        if (results_list[idx].size() == 0) {
+          continue;
+        }
+        if (curr_result.count(node_name) == 0) {
+          curr_result[node_name] = results_list[idx];
+        } else {
+          curr_result[node_name].insert(curr_result[node_name].end(),
+                                        results_list[idx].begin(),
+                                        results_list[idx].end());
+        }
+      }
+      if (curr_result.count(node_name) > 0) {
+        for (auto&& curr_result_ref : curr_result[node_name]) {
+          (*new_relations)[i].push_back(&curr_result_ref);
+        }
+      }
+    }
+  } else {
+    auto& curr_relations = old_relations;
+    for (int i = 0; i < input_mapping_with_raw_texts.size(); ++i) {
+      auto&& input_mapping_item = input_mapping_with_raw_texts[i];
+      for (int j = 0; j < input_mapping_item.size(); ++j) {
+        auto idx = input_mapping_item[j];
+        if (results_list[idx].size() == 0) {
+          continue;
+        }
+        if (curr_relations[i][j]->relation_.count(node_name) == 0) {
+          curr_relations[i][j]->relation_[node_name] = results_list[idx];
+        } else {
+          auto& curr_result = curr_relations[i][j]->relation_[node_name];
+          curr_result.insert(curr_result.end(), results_list[idx].begin(),
+                             results_list[idx].end());
+        }
+      }
+    }
+    for (int i = 0; i < curr_relations.size(); ++i) {
+      for (int j = 0; j < new_relations[i].size(); ++j) {
+        if (curr_relations[i][j]->relation_.count(node_name)) {
+          auto& curr_relation = curr_relations[i][j]->relation_[node_name];
+          for (auto&& curr_result_ref : curr_relation) {
+            (*new_relations)[i].push_back(&curr_result_ref);
+          }
+        }
+      }
+    }
+  }
 }
 
 void UIEModel::Predict(
@@ -542,104 +669,38 @@ void UIEModel::Predict(
   while (!nodes.empty()) {
     auto node = nodes.front();
     nodes.pop();
-    std::vector<std::vector<size_t>> input_mapping;
-    size_t idx = 0;
-    std::vector<std::string> input_texts;
-    std::vector<std::string> prompts;
-    // 1. Construct input data from raw text
-    if (node.prefix_.empty()) {
-      for (int i = 0; i < texts.size(); ++i) {
-        input_texts.push_back(texts[i]);
-        prompts.push_back(DBC2SBC(node.name_));
-        input_mapping.push_back({idx});
-        idx += 1;
-      }
-    } else {
-      for (int i = 0; i < texts.size(); ++i) {
-        if (node.prefix_[i].size() == 0) {
-          input_mapping.push_back({});
-        } else {
-          for (auto&& pre : node.prefix_[i]) {
-            input_texts.push_back(texts[i]);
-            prompts.push_back(DBC2SBC(pre + node.name_));
-          }
-          auto prefix_len = node.prefix_[i].size();
-          input_mapping.push_back({});
-          input_mapping.back().resize(prefix_len);
-          std::iota(input_mapping.back().begin(), input_mapping.back().end(),
-                    idx);
-          idx += prefix_len;
-        }
-      }
-    }
+    std::vector<std::vector<size_t>> input_mapping_with_raw_texts;
+    std::vector<std::vector<size_t>> input_mapping_with_short_text;
+    std::vector<std::string> short_input_texts;
+    std::vector<std::string> short_prompts;
+    // 1. Construct texts and prompts from raw text
+    ConstructTextsAndPrompts(
+        texts, node.name_, node.prefix_, &short_input_texts, &short_prompts,
+        &input_mapping_with_raw_texts, &input_mapping_with_short_text);
 
-    // 2. Predict from UIEInput
+    // 2. Convert texts and prompts to FDTensor
+    std::vector<FDTensor> inputs;
+    std::vector<faster_tokenizer::core::Encoding> encodings;
+    Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
+
+    // 3. Infer
+    std::vector<fastdeploy::FDTensor> outputs(runtime_.NumOutputs());
+    runtime_.Infer(inputs, &outputs);
+
+    // 4. Convert FDTensor to UIEResult
     std::vector<std::vector<UIEResult>> results_list;
-    PredictUIEInput(input_texts, prompts, &results_list);
-    // 3. Postprocess
+    Postprocess(outputs, encodings, short_input_texts, short_prompts,
+                input_mapping_with_short_text, &results_list);
+
+    // 5. Construct the new relation of the UIEResult
     std::vector<std::vector<UIEResult*>> relations;
-    relations.resize(texts.size());
-    if (node.relations_.size() == 0) {
-      for (int i = 0; i < input_mapping.size(); ++i) {
-        auto&& input_mapping_item = input_mapping[i];
-        auto& curr_result = (*results)[i];
-        for (auto&& idx : input_mapping_item) {
-          if (results_list[idx].size() == 0) {
-            continue;
-          }
-          if (curr_result.count(node.name_) == 0) {
-            curr_result[node.name_] = results_list[idx];
-          } else {
-            curr_result[node.name_].insert(curr_result[node.name_].end(),
-                                           results_list[idx].begin(),
-                                           results_list[idx].end());
-          }
-        }
-        if (curr_result.count(node.name_) > 0) {
-          for (auto&& curr_result_ref : curr_result[node.name_]) {
-            relations[i].push_back(&curr_result_ref);
-          }
-        }
-      }
-    } else {
-      auto& new_relations = node.relations_;
-      for (int i = 0; i < input_mapping.size(); ++i) {
-        auto&& input_mapping_item = input_mapping[i];
-        for (int j = 0; j < input_mapping_item.size(); ++j) {
-          auto idx = input_mapping_item[j];
-          if (results_list[idx].size() == 0) {
-            continue;
-          }
-          if (new_relations[i][j]->relation_.count(node.name_) == 0) {
-            new_relations[i][j]->relation_[node.name_] = results_list[idx];
-          } else {
-            auto& curr_result = new_relations[i][j]->relation_[node.name_];
-            curr_result.insert(curr_result.end(), results_list[idx].begin(),
-                               results_list[idx].end());
-          }
-        }
-      }
-      for (int i = 0; i < new_relations.size(); ++i) {
-        for (int j = 0; j < new_relations[i].size(); ++j) {
-          if (new_relations[i][j]->relation_.count(node.name_)) {
-            auto& curr_relation = new_relations[i][j]->relation_[node.name_];
-            for (auto&& curr_result_ref : curr_relation) {
-              relations[i].push_back(&curr_result_ref);
-            }
-          }
-        }
-      }
-    }
+    ConstructChildRelations(node.relations_, input_mapping_with_raw_texts,
+                            results_list, node.name_, results, &relations);
+
+    // 6. Construct the next prompt prefix
     std::vector<std::vector<std::string>> prefix(texts.size());
-    for (int i = 0; i < input_mapping.size(); ++i) {
-      auto&& input_mapping_item = input_mapping[i];
-      for (auto&& idx : input_mapping_item) {
-        for (int j = 0; j < results_list[idx].size(); ++j) {
-          auto prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
-          prefix[i].push_back(prefix_str);
-        }
-      }
-    }
+    ConstructChildPromptPrefix(input_mapping_with_raw_texts, results_list,
+                               &prefix);
     for (auto& node_child : node.children_) {
       node_child.relations_ = relations;
       node_child.prefix_ = prefix;

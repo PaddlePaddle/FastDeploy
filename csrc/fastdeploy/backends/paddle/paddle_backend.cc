@@ -79,15 +79,22 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
+  FDASSERT(index < NumInputs(),
+           "The index: %d should less than the number of inputs: %d.", index,
+           NumInputs());
   return inputs_desc_[index];
 }
 
+std::vector<TensorInfo> PaddleBackend::GetInputInfo() { return inputs_desc_; }
+
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index: %d should less than the number of outputs %d.", index, NumOutputs());
+           "The index: %d should less than the number of outputs %d.", index,
+           NumOutputs());
   return outputs_desc_[index];
 }
+
+std::vector<TensorInfo> PaddleBackend::GetOutputInfo() { return outputs_desc_; }
 
 bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs) {
@@ -100,7 +107,7 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
 
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto handle = predictor_->GetInputHandle(inputs[i].name);
-    ShareTensorFromCpu(handle.get(), inputs[i]);
+    ShareTensorFromFDTensor(handle.get(), inputs[i]);
   }
 
   predictor_->Run();

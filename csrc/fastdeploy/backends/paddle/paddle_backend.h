@@ -44,8 +44,11 @@ struct PaddleBackendOption {
   std::vector<std::string> delete_pass_names = {};
 };
 
+// convert FD device to paddle place type
+paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device);
+
 // Share memory buffer with paddle_infer::Tensor from fastdeploy::FDTensor
-void ShareTensorFromCpu(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
+void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
 
 // Copy memory data from paddle_infer::Tensor to fastdeploy::FDTensor
 void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
@@ -72,6 +75,8 @@ class PaddleBackend : public BaseBackend {
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
+  std::vector<TensorInfo> GetInputInfo();
+  std::vector<TensorInfo> GetOutputInfo();
 
  private:
   paddle_infer::Config config_;

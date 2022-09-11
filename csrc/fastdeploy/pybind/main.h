@@ -17,6 +17,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
 #include <type_traits>
 
 #include "fastdeploy/fastdeploy_runtime.h"
@@ -65,11 +66,12 @@ std::vector<pybind11::array> PyBackendInfer(
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
     // TODO(jiangjiajun) here is considered to use user memory directly
-    inputs[i].dtype = NumpyDataTypeToFDDataType(data[i].dtype());
-    inputs[i].shape.insert(inputs[i].shape.begin(), data[i].shape(),
-                           data[i].shape() + data[i].ndim());
-    inputs[i].data.resize(data[i].nbytes());
-    memcpy(inputs[i].data.data(), data[i].mutable_data(), data[i].nbytes());
+    auto dtype = NumpyDataTypeToFDDataType(data[i].dtype());
+    std::vector<int64_t> data_shape;
+    data_shape.insert(data_shape.begin(), data[i].shape(),
+                      data[i].shape() + data[i].ndim());
+    inputs[i].Resize(data_shape, dtype);
+    memcpy(inputs[i].MutableData(), data[i].mutable_data(), data[i].nbytes());
     inputs[i].name = names[i];
   }
 
@@ -81,7 +83,7 @@ std::vector<pybind11::array> PyBackendInfer(
   for (size_t i = 0; i < outputs.size(); ++i) {
     auto numpy_dtype = FDDataTypeToNumpyDataType(outputs[i].dtype);
     results.emplace_back(pybind11::array(numpy_dtype, outputs[i].shape));
-    memcpy(results[i].mutable_data(), outputs[i].data.data(),
+    memcpy(results[i].mutable_data(), outputs[i].Data(),
            outputs[i].Numel() * FDDataTypeSize(outputs[i].dtype));
   }
   return results;

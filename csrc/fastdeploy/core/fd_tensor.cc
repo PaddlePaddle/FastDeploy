@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/core/fd_tensor.h"
-#include <algorithm>
-#include <deque>
 #include "fastdeploy/utils/utils.h"
 
 #ifdef WITH_GPU
@@ -26,43 +24,56 @@ void* FDTensor::MutableData() {
   if (external_data_ptr != nullptr) {
     return external_data_ptr;
   }
-  return data.data();
+  return buffer_;
 }
 
 void* FDTensor::Data() {
   if (external_data_ptr != nullptr) {
-    if (device == Device::GPU) {
-#ifdef WITH_GPU
-      // need to copy cuda mem to cpu first
-      temporary_cpu_buffer.resize(Nbytes());
-      FDASSERT(cudaMemcpy(temporary_cpu_buffer.data(), external_data_ptr,
-                          Nbytes(), cudaMemcpyDeviceToHost) == 0,
-               "[ERROR] Error occurs while copy memory from GPU to CPU");
-      return temporary_cpu_buffer.data();
-#else
-      FDASSERT(false,
-               "The FastDeploy didn't compile under -DWITH_GPU=ON, so this is "
-               "an unexpected problem happend.");
-#endif
-    } else {
-      return external_data_ptr;
-    }
+    return external_data_ptr;
   }
-  return data.data();
+  return buffer_;
 }
 
 const void* FDTensor::Data() const {
   if (external_data_ptr != nullptr) {
     return external_data_ptr;
   }
-  return data.data();
+  return buffer_;
+}
+
+const void* FDTensor::CpuData() const {
+  if (device == Device::GPU) {
+#ifdef WITH_GPU
+    auto* cpu_ptr = const_cast<std::vector<int8_t>*>(&temporary_cpu_buffer);
+    cpu_ptr->resize(Nbytes());
+    // need to copy cuda mem to cpu first
+    if (external_data_ptr != nullptr) {
+      FDASSERT(cudaMemcpy(cpu_ptr->data(), external_data_ptr, Nbytes(),
+                          cudaMemcpyDeviceToHost) == 0,
+               "[ERROR] Error occurs while copy memory from GPU to CPU");
+
+    } else {
+      FDASSERT(cudaMemcpy(cpu_ptr->data(), buffer_, Nbytes(),
+                          cudaMemcpyDeviceToHost) == 0,
+               "[ERROR] Error occurs while buffer copy memory from GPU to CPU");
+    }
+    return cpu_ptr->data();
+#else
+    FDASSERT(false,
+             "The FastDeploy didn't compile under -DWITH_GPU=ON, so this is "
+             "an unexpected problem happend.");
+#endif
+  }
+  return Data();
 }
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
-                               const FDDataType& data_type, void* data_buffer) {
+                               const FDDataType& data_type, void* data_buffer,
+                               const Device& new_device) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
+  device = new_device;
 }
 
 void FDTensor::ExpandDim(int64_t axis) {
@@ -74,20 +85,59 @@ void FDTensor::ExpandDim(int64_t axis) {
 
 void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
                         const FDDataType& data_type,
-                        const std::string& tensor_name) {
+                        const std::string& tensor_name,
+                        const Device& new_device) {
   dtype = data_type;
   name = tensor_name;
   shape.assign(new_shape.begin(), new_shape.end());
-  int unit = FDDataTypeSize(data_type);
-  int total_size =
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
-  data.resize(total_size * unit);
+  device = new_device;
+  size_t nbytes = Nbytes();
+  FDASSERT(AllocFn(nbytes),
+           "The FastDeploy FDTensor allocate cpu memory error");
 }
 
 int FDTensor::Nbytes() const { return Numel() * FDDataTypeSize(dtype); }
 
 int FDTensor::Numel() const {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
+}
+
+void FDTensor::Resize(size_t new_nbytes) {
+  size_t nbytes = Nbytes();
+  if (new_nbytes > nbytes) {
+    FreeFn();
+    AllocFn(new_nbytes);
+  }
+}
+
+void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
+  int numel = Numel();
+  int new_numel = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                  std::multiplies<int>());
+  shape.assign(new_shape.begin(), new_shape.end());
+  if (new_numel > numel) {
+    FreeFn();
+    size_t nbytes = new_numel * FDDataTypeSize(dtype);
+    AllocFn(nbytes);
+  }
+}
+
+void FDTensor::Resize(const std::vector<int64_t>& new_shape,
+                      const FDDataType& data_type,
+                      const std::string& tensor_name,
+                      const Device& new_device) {
+  name = tensor_name;
+  device = new_device;
+  size_t nbytes = Nbytes();
+  shape.assign(new_shape.begin(), new_shape.end());
+  dtype = data_type;
+  int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                   std::multiplies<int>()) *
+                   FDDataTypeSize(data_type);
+  if (new_nbytes > nbytes) {
+    FreeFn();
+    AllocFn(new_nbytes);
+  }
 }
 
 template <typename T>
