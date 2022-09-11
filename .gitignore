@@ -19,3 +19,4 @@ fastdeploy/ThirdPartyNotices*
 fastdeploy/libs/third_libs
 csrc/fastdeploy/core/config.h
 csrc/fastdeploy/pybind/main.cc
+__pycache__

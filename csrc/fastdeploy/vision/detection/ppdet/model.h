@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/vision/detection/ppdet/mask_rcnn.h"
 #include "fastdeploy/vision/detection/ppdet/picodet.h"
 #include "fastdeploy/vision/detection/ppdet/ppyolo.h"
 #include "fastdeploy/vision/detection/ppdet/ppyoloe.h"

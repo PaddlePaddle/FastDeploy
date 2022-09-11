@@ -27,6 +27,10 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
                                 const DetectionResult& result,
                                 float score_threshold, int line_size,
                                 float font_size) {
+  if (result.contain_masks) {
+    FDASSERT(result.boxes.size() == result.masks.size(),
+             "The size of masks must be same as the size of boxes!");
+  }
   auto color_map = GetColorMap();
   int h = im.rows;
   int w = im.cols;
@@ -35,9 +39,12 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
     if (result.scores[i] < score_threshold) {
       continue;
     }
-    cv::Rect rect(result.boxes[i][0], result.boxes[i][1],
-                  result.boxes[i][2] - result.boxes[i][0],
-                  result.boxes[i][3] - result.boxes[i][1]);
+    int x1 = static_cast<int>(result.boxes[i][0]);
+    int y1 = static_cast<int>(result.boxes[i][1]);
+    int x2 = static_cast<int>(result.boxes[i][2]);
+    int y2 = static_cast<int>(result.boxes[i][3]);
+    int box_h = y2 - y1;
+    int box_w = x2 - x2;
     int c0 = color_map[3 * result.label_ids[i] + 0];
     int c1 = color_map[3 * result.label_ids[i] + 1];
     int c2 = color_map[3 * result.label_ids[i] + 2];
@@ -51,14 +58,49 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
     int font = cv::FONT_HERSHEY_SIMPLEX;
     cv::Size text_size = cv::getTextSize(text, font, font_size, 1, nullptr);
     cv::Point origin;
-    origin.x = rect.x;
-    origin.y = rect.y;
-    cv::Rect text_background =
-        cv::Rect(result.boxes[i][0], result.boxes[i][1] - text_size.height,
-                 text_size.width, text_size.height);
+    origin.x = x1;
+    origin.y = y1;
+    cv::Rect rect(x1, y1, box_w, box_h);
     cv::rectangle(vis_im, rect, rect_color, line_size);
     cv::putText(vis_im, text, origin, font, font_size,
                 cv::Scalar(255, 255, 255), 1);
+    // draw instance mask
+    if (result.contain_masks) {
+      int mask_h = static_cast<int>(result.masks[i].shape[0]);
+      int mask_w = static_cast<int>(result.masks[i].shape[1]);
+      // non-const pointer for cv:Mat constructor.
+      int32_t* mask_raw_data = const_cast<int32_t*>(
+          static_cast<const int32_t*>(result.masks[i].Data()));
+      cv::Mat mask(mask_h, mask_w, CV_32SC1, mask_raw_data);  // ref only
+      if ((mask_h != box_h) || (mask_w != box_w)) {
+        cv::resize(mask, mask, cv::Size(box_w, box_h));
+      }
+      cv::Mat box_im = vis_im(rect).clone();  // allocate continuous memory
+      cv::Mat mask_im(mask_h, mask_w, CV_8UC3, rect_color);
+      uchar* box_im_data = static_cast<uchar*>(box_im.data);
+      uchar* mask_im_data = static_cast<uchar*>(mask_im.data);
+      int32_t* mask_data = reinterpret_cast<int32_t*>(mask.data);
+      for (size_t i = 0; i < mask_h; ++i) {
+        for (size_t j = 0; j < mask_w; ++j) {
+          // add mask color values
+          int32_t mask_value = mask_data[i * mask_w + j];
+          for (size_t c = 0; c < 3; ++c) {
+            uchar mask_im_value = mask_im_data[i * mask_w * 3 + j * 3 + c];
+            uchar box_im_value = box_im_data[i * mask_w * 3 + j * 3 + c];
+            if (mask_value == 0) {
+              mask_im_data[i * mask_w * 3 + j * 3 + c] = box_im_value;
+            } else {
+              mask_im_data[i * mask_w * 3 + j * 3 + c] =
+                  cv::saturate_cast<uchar>(
+                      static_cast<float>(mask_im_value) * 0.5f +
+                      static_cast<float>(box_im_value) * 0.5f);
+            }
+          }
+        }
+      }
+      // replace mask
+      mask_im.copyTo(vis_im(rect));
+    }
   }
   return vis_im;
 }

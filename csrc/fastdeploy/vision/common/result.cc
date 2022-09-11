@@ -35,6 +35,28 @@ std::string ClassifyResult::Str() {
   return out;
 }
 
+void Mask::Reserve(int size) { data.reserve(size); }
+
+void Mask::Resize(int size) { data.resize(size); }
+
+void Mask::Clear() {
+  std::vector<int32_t>().swap(data);
+  std::vector<int64_t>().swap(shape);
+}
+
+std::string Mask::Str() {
+  std::string out = "Mask(";
+  size_t ndim = shape.size();
+  for (size_t i = 0; i < ndim; ++i) {
+    if (i < ndim - 1) {
+      out += std::to_string(shape[i]) + ",";
+    } else {
+      out += std::to_string(shape[i]);
+    }
+  }
+  out += ")\n";
+}
+
 DetectionResult::DetectionResult(const DetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
   scores.assign(res.scores.begin(), res.scores.end());
@@ -45,29 +67,43 @@ void DetectionResult::Clear() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);
   std::vector<int32_t>().swap(label_ids);
+  std::vector<Mask>().swap(masks);
+  contain_masks = false;
 }
 
 void DetectionResult::Reserve(int size) {
   boxes.reserve(size);
   scores.reserve(size);
   label_ids.reserve(size);
+  masks.reserve(size);
 }
 
 void DetectionResult::Resize(int size) {
   boxes.resize(size);
   scores.resize(size);
   label_ids.resize(size);
+  masks.resize(size);
 }
 
 std::string DetectionResult::Str() {
   std::string out;
-  out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+  if (!contain_masks) {
+    out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
+  } else {
+    out =
+        "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
+        "mask_shape]\n";
+  }
   for (size_t i = 0; i < boxes.size(); ++i) {
     out = out + std::to_string(boxes[i][0]) + "," +
           std::to_string(boxes[i][1]) + ", " + std::to_string(boxes[i][2]) +
           ", " + std::to_string(boxes[i][3]) + ", " +
-          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]) +
-          "\n";
+          std::to_string(scores[i]) + ", " + std::to_string(label_ids[i]);
+    if (!contain_masks) {
+      out += "\n";
+    } else {
+      out += masks[i].Str();
+    }
   }
   return out;
 }

@@ -28,9 +28,9 @@ class PPYOLOE(FastDeployModel):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOE model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLOE(model_file, params_file,
-                                             config_file, self._runtime_option,
-                                             model_format)
+        self._model = C.vision.detection.PPYOLOE(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLOE model initialize failed."
 
     def predict(self, input_image):
@@ -48,9 +48,9 @@ class PPYOLO(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLO model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLO(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.PPYOLO(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLO model initialize failed."
 
 
@@ -64,9 +64,9 @@ class PPYOLOv2(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PPYOLOv2 model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPYOLOv2(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.PPYOLOv2(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PPYOLOv2 model initialize failed."
 
 
@@ -80,9 +80,9 @@ class PaddleYOLOX(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PaddleYOLOX model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PaddleYOLOX(model_file, params_file,
-                                           config_file, self._runtime_option,
-                                           model_format)
+        self._model = C.vision.detection.PaddleYOLOX(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
 
@@ -96,9 +96,9 @@ class PicoDet(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "PicoDet model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PicoDet(model_file, params_file,
-                                             config_file, self._runtime_option,
-                                             model_format)
+        self._model = C.vision.detection.PicoDet(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "PicoDet model initialize failed."
 
 
@@ -128,7 +128,27 @@ class YOLOv3(PPYOLOE):
         super(PPYOLOE, self).__init__(runtime_option)
 
         assert model_format == Frontend.PADDLE, "YOLOv3 model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.YOLOv3(model_file, params_file,
-                                            config_file, self._runtime_option,
-                                            model_format)
+        self._model = C.vision.detection.YOLOv3(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
         assert self.initialized, "YOLOv3 model initialize failed."
+
+
+class MaskRCNN(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=Frontend.PADDLE):
+        super(MaskRCNN, self).__init__(runtime_option)
+
+        assert model_format == Frontend.PADDLE, "MaskRCNN model only support model format of Frontend.Paddle now."
+        self._model = C.vision.detection.MaskRCNN(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "MaskRCNN model initialize failed."
+
+    def predict(self, input_image):
+        assert input_image is not None, "The input image data is None."
+        return self._model.predict(input_image)

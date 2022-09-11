@@ -98,7 +98,7 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       bool keep_ratio = op["keep_ratio"].as<bool>();
       auto target_size = op["target_size"].as<std::vector<int>>();
       int interp = op["interp"].as<int>();
-      FDASSERT(target_size.size(),
+      FDASSERT(target_size.size() == 2,
                "Require size of target_size be 2, but now it's %lu.",
                target_size.size());
       if (!keep_ratio) {

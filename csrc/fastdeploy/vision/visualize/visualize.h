@@ -45,7 +45,6 @@ class FASTDEPLOY_DECL Visualize {
                                             int background_label,
                                             const SegmentationResult& result);
   static cv::Mat VisOcr(const cv::Mat& srcimg, const OCRResult& ocr_result);
-
 };
 
 }  // namespace vision

@@ -25,7 +25,8 @@ enum FASTDEPLOY_DECL ResultType {
   OCR,
   FACE_DETECTION,
   FACE_RECOGNITION,
-  MATTING
+  MATTING,
+  MASK
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -41,11 +42,31 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
   std::string Str();
 };
 
+struct FASTDEPLOY_DECL Mask : public BaseResult {
+  std::vector<int32_t> data;
+  std::vector<int64_t> shape;  // (H,W) ...
+  ResultType type = ResultType::MASK;
+
+  void Clear();
+
+  void* Data() { return data.data(); }
+
+  const void* Data() const { return data.data(); }
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
 struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   // box: xmin, ymin, xmax, ymax
   std::vector<std::array<float, 4>> boxes;
   std::vector<float> scores;
   std::vector<int32_t> label_ids;
+  std::vector<Mask> masks;
+  bool contain_masks = false;
   ResultType type = ResultType::DETECTION;
 
   DetectionResult() {}
