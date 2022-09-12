@@ -62,6 +62,14 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
   scores.assign(res.scores.begin(), res.scores.end());
   label_ids.assign(res.label_ids.begin(), res.label_ids.end());
+  contain_masks = res.contain_masks;
+  if (contain_masks) {
+    masks.clear();
+    size_t mask_size = res.masks.size();
+    for (size_t i = 0; i < mask_size; ++i) {
+      masks.emplace_back(res.masks[i]);
+    }
+  }
 }
 
 void DetectionResult::Clear() {

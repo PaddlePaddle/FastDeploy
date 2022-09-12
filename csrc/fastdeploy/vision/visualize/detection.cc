@@ -29,7 +29,7 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
                                 float font_size) {
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
-             "The size of masks must be same as the size of boxes!");
+             "The size of masks must be equal the size of boxes!");
   }
   auto color_map = GetColorMap();
   int h = im.rows;
@@ -64,47 +64,39 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
     cv::rectangle(vis_im, rect, rect_color, line_size);
     cv::putText(vis_im, text, origin, font, font_size,
                 cv::Scalar(255, 255, 255), 1);
-    // draw instance mask
     if (result.contain_masks) {
       int mask_h = static_cast<int>(result.masks[i].shape[0]);
       int mask_w = static_cast<int>(result.masks[i].shape[1]);
-      // non-const pointer for cv:Mat constructor.
+      // non-const pointer for cv:Mat constructor
       int32_t* mask_raw_data = const_cast<int32_t*>(
           static_cast<const int32_t*>(result.masks[i].Data()));
-      cv::Mat mask(mask_h, mask_w, CV_32SC1, mask_raw_data);  // ref only
+      // only reference to mask data (zero copy operation)
+      cv::Mat mask(mask_h, mask_w, CV_32SC1, mask_raw_data);
       if ((mask_h != box_h) || (mask_w != box_w)) {
         cv::resize(mask, mask, cv::Size(box_w, box_h));
       }
-      // use a bright color for mask
+      // use a bright color for instance mask
       int mc0 = 255 - c0 >= 127 ? 255 - c0 : 127;
       int mc1 = 255 - c1 >= 127 ? 255 - c1 : 127;
       int mc2 = 255 - c2 >= 127 ? 255 - c2 : 127;
-      cv::Scalar mask_color(mc0, mc1, mc2);
-      cv::Mat box_im = vis_im(rect).clone();  // allocate continuous memory
-      cv::Mat mask_im(mask_h, mask_w, CV_8UC3, mask_color);
-      uchar* box_im_data = static_cast<uchar*>(box_im.data);
-      uchar* mask_im_data = static_cast<uchar*>(mask_im.data);
       int32_t* mask_data = reinterpret_cast<int32_t*>(mask.data);
-      for (size_t i = 0; i < mask_h; ++i) {
-        for (size_t j = 0; j < mask_w; ++j) {
-          // add mask color values
-          int32_t mask_value = mask_data[i * mask_w + j];
-          for (size_t c = 0; c < 3; ++c) {
-            uchar mask_im_value = mask_im_data[i * mask_w * 3 + j * 3 + c];
-            uchar box_im_value = box_im_data[i * mask_w * 3 + j * 3 + c];
-            if (mask_value == 0) {
-              mask_im_data[i * mask_w * 3 + j * 3 + c] = box_im_value;
-            } else {
-              mask_im_data[i * mask_w * 3 + j * 3 + c] =
-                  cv::saturate_cast<uchar>(
-                      static_cast<float>(mask_im_value) * 0.5f +
-                      static_cast<float>(box_im_value) * 0.5f);
-            }
+      // fast inplace blending (zero copy operation)
+      uchar* vis_im_data = static_cast<uchar*>(vis_im.data);
+      for (size_t i = y1; i < y2; ++i) {
+        for (size_t j = x1; j < x2; ++j) {
+          if (mask_data[(i - y1) * mask_w + (j - x1)] != 0) {
+            vis_im_data[i * w * 3 + j * 3 + 0] = cv::saturate_cast<uchar>(
+                static_cast<float>(mc0) * 0.5f +
+                static_cast<float>(vis_im_data[i * w * 3 + j * 3 + 0]) * 0.5f);
+            vis_im_data[i * w * 3 + j * 3 + 1] = cv::saturate_cast<uchar>(
+                static_cast<float>(mc1) * 0.5f +
+                static_cast<float>(vis_im_data[i * w * 3 + j * 3 + 1]) * 0.5f);
+            vis_im_data[i * w * 3 + j * 3 + 2] = cv::saturate_cast<uchar>(
+                static_cast<float>(mc2) * 0.5f +
+                static_cast<float>(vis_im_data[i * w * 3 + j * 3 + 2]) * 0.5f);
           }
         }
       }
-      // replace mask
-      mask_im.copyTo(vis_im(rect));
     }
   }
   return vis_im;

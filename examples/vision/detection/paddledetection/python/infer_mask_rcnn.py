@@ -30,14 +30,18 @@ def build_option(args):
     option = fd.RuntimeOption()
 
     if args.device.lower() == "gpu":
-        option.use_gpu()
+        # option.use_gpu()
+        print(
+            """GPU inference with Backend::Paddle in python has not been supported yet. \
+          \nWill ignore this option.""")
 
     if args.use_trt:
         # TODO(qiuyanjun): may remove TRT option
         # Backend::TRT has not been supported yet.
-        raise RuntimeWarning(
-            """Backend::TRT has not been supported yet, will ignore this option.
-              PaddleDetection/MaskRCNN has only support Backend::Paddle now.""")
+        print(
+            """Backend::TRT has not been supported yet, will ignore this option.\
+              \nPaddleDetection/MaskRCNN has only support Backend::Paddle now."""
+        )
 
     return option
 
@@ -62,3 +66,4 @@ print(result)
 vis_im = fd.vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")
+print(runtime_option)
