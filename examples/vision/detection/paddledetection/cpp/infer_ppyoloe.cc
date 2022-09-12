@@ -49,6 +49,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     std::cout << "Use default backend for inference" << std::endl;
   } else {
     std::cerr << "Don't support backend type: " + FLAGS_backend << std::endl;
+    return;
   }
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file);
@@ -91,6 +92,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     std::cout << "Use default backend for inference" << std::endl;
   } else {
     std::cerr << "Don't support backend type: " + FLAGS_backend << std::endl;
+    return;
   }
 
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
@@ -134,6 +136,7 @@ int main(int argc, char* argv[]) {
     GpuInfer(FLAGS_model_dir, FLAGS_image_file);
   } else {
     std::cerr << "Don't support device type:" + FLAGS_device << std::endl;
+    return -1;
   }
   return 0;
 }

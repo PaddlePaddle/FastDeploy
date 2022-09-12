@@ -22,6 +22,7 @@ def parse_arguments():
         "--backend",
         nargs='?',
         type=str,
+        default='default',
         help="Set inference backend, support one of ['default', 'ort', 'paddle', 'trt']."
     )
     return parser.parse_args()
@@ -46,10 +47,7 @@ def build_option(args):
     elif args.backend == "default":
         pass
     else:
-        raise Exception(
-            "Don't support backend type, please use one of ['default', 'ort', 'paddle', 'trt']."
-        )
-
+        raise Exception("Don't support backend type: {}, please use one of ['default', 'ort', 'paddle', 'trt'].".format(args.backend))
     return option
 
 
