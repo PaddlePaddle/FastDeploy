@@ -126,6 +126,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 ## 其它文档
 
-- [YOLOv5 模型介绍](..)
-- [YOLOv5 C++部署](../cpp)
+- [PPOCR系列模型介绍](../../)
+- [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
