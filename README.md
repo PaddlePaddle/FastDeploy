@@ -299,7 +299,7 @@ Notes:
 - **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/188544891-0ba025e5-61bd-425e-8097-8e982af9080e.jpeg"  width = "225" height = "288" />
+<img src="https://user-images.githubusercontent.com/54695910/189557528-a7dea57c-a0d6-424f-b457-1d599af24e21.jpeg"  width = "225" height = "288" />
 </div>
 
 ## Acknowledge
