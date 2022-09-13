@@ -9,19 +9,19 @@
 
 ```
 
-# 下载模型,图片和label文件
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
-tar xvf ch_PP-OCRv2_det_infer.tar
+# 下载模型,图片和字典文件
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
+tar -xvf ch_PP-OCRv2_det_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
-tar xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
-tar xvf ch_PP-OCRv2_rec_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
+tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/doc/imgs/12.jpg
+wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/utils/ppocr_keys_v1.txt
+wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 
 #下载部署示例代码
@@ -126,6 +126,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 ## 其它文档
 
-- [YOLOv5 模型介绍](..)
-- [YOLOv5 C++部署](../cpp)
+- [PPOCR系列模型介绍](../../)
+- [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)

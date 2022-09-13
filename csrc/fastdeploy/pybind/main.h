@@ -26,10 +26,15 @@
 #include "fastdeploy/vision.h"
 #endif
 
+#ifdef ENABLE_TEXT
+#include "fastdeploy/text.h"
+#endif
+
 namespace fastdeploy {
 
 void BindBackend(pybind11::module&);
 void BindVision(pybind11::module&);
+void BindText(pybind11::module& m);
 
 pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype);
 

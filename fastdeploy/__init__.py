@@ -24,4 +24,5 @@ from .runtime import Runtime, RuntimeOption
 from .model import FastDeployModel
 from . import c_lib_wrap as C
 from . import vision
+from . import text
 from .download import download, download_and_decompress
