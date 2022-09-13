@@ -47,14 +47,6 @@ void BindUIE(pybind11::module& m) {
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
            py::arg("model_format") = fastdeploy::Frontend::PADDLE)
-      .def(py::init<
-               std::string, std::string, std::string, float, size_t,
-               std::unordered_map<std::string, std::vector<text::SchemaNode>>,
-               RuntimeOption, Frontend>(),
-           py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
-           py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
-           py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::Frontend::PADDLE)
       .def("set_schema",
            static_cast<void (text::UIEModel::*)(
                const std::vector<std::string>&)>(&text::UIEModel::SetSchema),
@@ -62,12 +54,6 @@ void BindUIE(pybind11::module& m) {
       .def("set_schema", static_cast<void (text::UIEModel::*)(
                              const std::vector<text::SchemaNode>&)>(
                              &text::UIEModel::SetSchema),
-           py::arg("schema"))
-      .def("set_schema",
-           static_cast<void (text::UIEModel::*)(
-               const std::unordered_map<std::string,
-                                        std::vector<text::SchemaNode>>&)>(
-               &text::UIEModel::SetSchema),
            py::arg("schema"))
       .def("set_schema",
            static_cast<void (text::UIEModel::*)(const text::SchemaNode&)>(

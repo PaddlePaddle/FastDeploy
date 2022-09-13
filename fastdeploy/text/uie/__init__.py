@@ -33,6 +33,7 @@ class SchemaNode(object):
             else:
                 assert "The type of child of SchemaNode should be str or dict."
         self._schema_node = C.text.SchemaNode(name, schema_node_children)
+        self._schema_node_children = schema_node_children
 
 
 class UIEModel(object):
@@ -46,7 +47,7 @@ class UIEModel(object):
                  runtime_option=RuntimeOption(),
                  model_format=Frontend.PADDLE):
         if isinstance(schema, list):
-            schema = SchemaNode("root", schema)._schema_node
+            schema = SchemaNode("", schema)._schema_node_children
         elif isinstance(schema, dict):
             schema_tmp = []
             for key, val in schema.items():
@@ -60,7 +61,7 @@ class UIEModel(object):
 
     def set_schema(self, schema):
         if isinstance(schema, list):
-            schema = SchemaNode("root", schema)._schema_node
+            schema = SchemaNode("", schema)._schema_node_children
         elif isinstance(schema, dict):
             schema_tmp = []
             for key, val in schema.items():
