@@ -124,12 +124,7 @@ else()
 endif()
 
 if(UNIX)
-execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${OPENVINO_INSTALL_DIR}/lib
-          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${OPENVINO_INSTALL_DIR}/lib
-          RESULT_VARIABLE result
-                OUTPUT_VARIABLE curr_out
-                ERROR_VARIABLE  curr_out)
-message(STATUS "result:${result} out:${curr_out}")
+  add_custom_target(patchelf_openvino ALL COMMAND bash -c "sh ${PROJECT_SOURCE_DIR}/build_scripts/patch_lib.sh ${OPENVINO_INSTALL_DIR}/lib" DEPENDS ${LIBRARY_NAME})
 endif()
 
 add_library(external_openvino STATIC IMPORTED GLOBAL)
