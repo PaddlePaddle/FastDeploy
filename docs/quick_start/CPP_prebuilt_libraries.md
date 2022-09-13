@@ -1,6 +1,6 @@
 # FastDeploy 预编译 C++ 库
 
-FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发者可以直接下载后使用，也可以自行编译代码。
+FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发者可以直接下载后使用，也可以自行编译代码，参考[编译文档](https://github.com/PaddlePaddle/FastDeploy/tree/develop/docs/compile)
 
 ## 环境依赖
 
