@@ -46,7 +46,8 @@ def parse_arguments():
         "--backend",
         type=str,
         default="default",
-        help="Type of inference backend, support ort/trt/paddle/openvino, default 'openvino' for cpu, 'tensorrt' for gpu")
+        help="Type of inference backend, support ort/trt/paddle/openvino, default 'openvino' for cpu, 'tensorrt' for gpu"
+    )
     parser.add_argument(
         "--device_id",
         type=int,
@@ -68,15 +69,19 @@ def build_option(args):
     option.set_cpu_thread_num(args.cpu_thread_num)
 
     if args.backend.lower() == "trt":
-        assert args.device.lower() == "gpu", "TensorRT backend require inference on device GPU."
+        assert args.device.lower(
+        ) == "gpu", "TensorRT backend require inference on device GPU."
         option.use_trt_backend()
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
         option.use_paddle_backend()
     elif args.backend.lower() == "openvino":
-        assert args.device.lower() == "cpu", "OpenVINO backend require inference on device CPU."
+        assert args.device.lower(
+        ) == "cpu", "OpenVINO backend require inference on device CPU."
         option.use_openvino_backend()
+    return option
+
 
 args = parse_arguments()
 
@@ -95,12 +100,19 @@ rec_label_file = args.rec_label_file
 # 用户也可根据自行需求分别配置
 runtime_option = build_option(args)
 
-det_model = fd.vision.ocr.DBDetector(det_model_file, det_params_file, runtime_option=runtime_option)
-cls_model = fd.vision.ocr.Classifier(cls_model_file, cls_params_file, runtime_option=runtime_option)
-rec_model = fd.vision.ocr.Recognizer(rec_model_file, rec_params_file, rec_label_file, runtime_option=runtime_option)
+det_model = fd.vision.ocr.DBDetector(
+    det_model_file, det_params_file, runtime_option=runtime_option)
+cls_model = fd.vision.ocr.Classifier(
+    cls_model_file, cls_params_file, runtime_option=runtime_option)
+rec_model = fd.vision.ocr.Recognizer(
+    rec_model_file,
+    rec_params_file,
+    rec_label_file,
+    runtime_option=runtime_option)
 
 # 创建OCR系统，串联3个模型，其中cls_model可选，如无需求，可设置为None
-ocr_system = fd.vision.ocr.PPOCRSystemv2(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+ocr_system = fd.vision.ocr.PPOCRSystemv3(
+    det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 
 # 预测图片准备
 im = cv2.imread(args.image)
