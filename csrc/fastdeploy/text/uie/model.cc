@@ -124,6 +124,12 @@ std::ostream& operator<<(
   return os;
 }
 
+std::string UIEResult::Str() const {
+  std::ostringstream oss;
+  oss << *this;
+  return oss.str();
+}
+
 void Schema::CreateRoot(const std::string& name) {
   root_ = fastdeploy::utils::make_unique<SchemaNode>(name);
 }
@@ -141,13 +147,17 @@ Schema::Schema(const std::vector<std::string>& schema_list,
   }
 }
 
-Schema::Schema(
-    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema_map,
-    const std::string& name) {
+Schema::Schema(const std::vector<SchemaNode>& schema_list,
+               const std::string& name) {
   CreateRoot(name);
-  for (auto& schema_item : schema_map) {
-    root_->AddChild(schema_item.first, schema_item.second);
+  for (const auto& schema : schema_list) {
+    root_->AddChild(schema);
   }
+}
+
+Schema::Schema(const SchemaNode& schema, const std::string& name) {
+  CreateRoot(name);
+  root_->AddChild(schema);
 }
 
 UIEModel::UIEModel(const std::string& model_file,
@@ -169,12 +179,31 @@ UIEModel::UIEModel(const std::string& model_file,
       faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
 }
 
-UIEModel::UIEModel(
-    const std::string& model_file, const std::string& params_file,
-    const std::string& vocab_file, float position_prob, size_t max_length,
-    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema,
-    const fastdeploy::RuntimeOption& custom_option,
-    const fastdeploy::Frontend& model_format)
+UIEModel::UIEModel(const std::string& model_file,
+                   const std::string& params_file,
+                   const std::string& vocab_file, float position_prob,
+                   size_t max_length, const std::vector<SchemaNode>& schema,
+                   const fastdeploy::RuntimeOption& custom_option,
+                   const fastdeploy::Frontend& model_format)
+    : max_length_(max_length),
+      position_prob_(position_prob),
+      tokenizer_(vocab_file) {
+  runtime_option_ = custom_option;
+  runtime_option_.model_format = model_format;
+  runtime_option_.SetModelPath(model_file, params_file);
+  runtime_.Init(runtime_option_);
+  SetSchema(schema);
+  tokenizer_.EnableTruncMethod(
+      max_length, 0, faster_tokenizer::core::Direction::RIGHT,
+      faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+}
+
+UIEModel::UIEModel(const std::string& model_file,
+                   const std::string& params_file,
+                   const std::string& vocab_file, float position_prob,
+                   size_t max_length, const SchemaNode& schema,
+                   const fastdeploy::RuntimeOption& custom_option,
+                   const fastdeploy::Frontend& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
@@ -192,8 +221,11 @@ void UIEModel::SetSchema(const std::vector<std::string>& schema) {
   schema_ = fastdeploy::utils::make_unique<Schema>(schema);
 }
 
-void UIEModel::SetSchema(
-    const std::unordered_map<std::string, std::vector<SchemaNode>>& schema) {
+void UIEModel::SetSchema(const std::vector<SchemaNode>& schema) {
+  schema_ = fastdeploy::utils::make_unique<Schema>(schema);
+}
+
+void UIEModel::SetSchema(const SchemaNode& schema) {
   schema_ = fastdeploy::utils::make_unique<Schema>(schema);
 }
 
