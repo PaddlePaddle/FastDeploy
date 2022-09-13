@@ -20,17 +20,17 @@ make -j
 
 # 下载模型,图片和label文件
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
-tar xvf ch_PP-OCRv3_det_infer.tar
+tar -xvf ch_PP-OCRv3_det_infer.tar
 
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
-tar xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
-tar xvf ch_PP-OCRv3_rec_infer.tar
+tar -xvf ch_PP-OCRv3_rec_infer.tar
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/doc/imgs/12.jpg
+wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/utils/ppocr_keys_v1.txt
+wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 
 # CPU推理
