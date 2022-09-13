@@ -66,7 +66,6 @@ class UIEModel(object):
             for key, val in schema.items():
                 schema_tmp += [SchemaNode(key, val)._schema_node]
             schema = schema_tmp
-        print(f"schema = {schema}", flush=True)
         self._model.set_schema(schema)
 
     def predict(self, texts):
