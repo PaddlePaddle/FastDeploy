@@ -70,7 +70,7 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
       // non-const pointer for cv:Mat constructor
       int32_t* mask_raw_data = const_cast<int32_t*>(
           static_cast<const int32_t*>(result.masks[i].Data()));
-      // only reference to mask data (zero copy operation)
+      // only reference to mask data (zero copy)
       cv::Mat mask(mask_h, mask_w, CV_32SC1, mask_raw_data);
       if ((mask_h != box_h) || (mask_w != box_w)) {
         cv::resize(mask, mask, cv::Size(box_w, box_h));
@@ -80,7 +80,7 @@ cv::Mat Visualize::VisDetection(const cv::Mat& im,
       int mc1 = 255 - c1 >= 127 ? 255 - c1 : 127;
       int mc2 = 255 - c2 >= 127 ? 255 - c2 : 127;
       int32_t* mask_data = reinterpret_cast<int32_t*>(mask.data);
-      // fast inplace blending (zero copy operation)
+      // inplace blending (zero copy)
       uchar* vis_im_data = static_cast<uchar*>(vis_im.data);
       for (size_t i = y1; i < y2; ++i) {
         for (size_t j = x1; j < x2; ++j) {

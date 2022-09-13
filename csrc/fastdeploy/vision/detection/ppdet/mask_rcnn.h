@@ -13,17 +13,13 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/processors/transform.h"
-#include "fastdeploy/vision/common/result.h"
-
-#include "fastdeploy/vision/utils/utils.h"
+#include "fastdeploy/vision/detection/ppdet/rcnn.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-class FASTDEPLOY_DECL MaskRCNN : public FastDeployModel {
+class FASTDEPLOY_DECL MaskRCNN : public FasterRCNN {
  public:
   MaskRCNN(const std::string& model_file, const std::string& params_file,
            const std::string& config_file,
@@ -32,27 +28,11 @@ class FASTDEPLOY_DECL MaskRCNN : public FastDeployModel {
 
   virtual std::string ModelName() const { return "PaddleDetection/MaskRCNN"; }
 
-  virtual bool Initialize();
-
-  virtual bool BuildPreprocessPipelineFromConfig();
-
-  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* inputs);
-
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result);
 
-  virtual bool Predict(cv::Mat* im, DetectionResult* result);
-
  protected:
   MaskRCNN() {}
-
-  std::vector<std::shared_ptr<Processor>> processors_;
-  std::string config_file_;
-
-  std::vector<float> GetScaleFactorData(const Mat& mat, int origin_h,
-                                        int origin_w);
-
-  std::vector<float> GetImShapeData(const Mat& mat);
 };
 
 }  // namespace detection
