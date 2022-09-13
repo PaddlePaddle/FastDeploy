@@ -53,6 +53,7 @@ setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
+setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "ON")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
@@ -325,7 +326,8 @@ ext_modules = [
 
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
-    packages = setuptools.find_packages(exclude=['fastdeploy*', 'build_scripts'])
+    packages = setuptools.find_packages(
+        exclude=['fastdeploy*', 'build_scripts'])
 else:
     packages = setuptools.find_packages(exclude=['build_scripts'])
 
@@ -344,10 +346,16 @@ if sys.version_info[0] == 3:
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
 
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
-    shutil.copy(os.path.join(TOP_DIR, "ThirdPartyNotices.txt"), os.path.join(TOP_DIR, PACKAGE_NAME))
-    shutil.copy(os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
-    if not os.path.exists(os.path.join(TOP_DIR, "fastdeploy", "libs", "third_libs")):
-        print("Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first")
+    shutil.copy(
+        os.path.join(TOP_DIR, "ThirdPartyNotices.txt"),
+        os.path.join(TOP_DIR, PACKAGE_NAME))
+    shutil.copy(
+        os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
+    if not os.path.exists(
+            os.path.join(TOP_DIR, "fastdeploy", "libs", "third_libs")):
+        print(
+            "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
+        )
         sys.exit(0)
     sys.path.append(os.path.split(os.path.abspath(__file__))[0])
     from build_scripts.process_libraries import process_libraries
