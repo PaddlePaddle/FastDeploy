@@ -26,13 +26,11 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* ocr_det,
 
 void PPOCRSystemv2::Detect(cv::Mat* img,
                            fastdeploy::vision::OCRResult* result) {
-  std::vector<std::array<int, 8>> boxes_result;
+  std::vector<std::array<int, 8>> boxes;
 
-  this->detector->Predict(img, &boxes_result);
+  this->detector->Predict(img, &boxes);
 
-  result->boxes = boxes_result;
-
-  fastdeploy::vision::ocr::SortBoxes(result);
+  result->boxes = boxes;
 }
 
 void PPOCRSystemv2::Recognize(cv::Mat* img,
@@ -88,12 +86,13 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
     // cls
     if (this->classifier->initialized != 0) {
       for (int i = 0; i < img_list.size(); i++) {
-        this->Classify(&img_list[i], result);
+        this->Classify(&img_list[0], result);
       }
 
       for (int i = 0; i < img_list.size(); i++) {
         if ((result->cls_labels)[i] % 2 == 1 &&
             (result->cls_scores)[i] > this->classifier->cls_thresh) {
+          std::cout << "Rotate this image " << std::endl;
           cv::rotate(img_list[i], img_list[i], 1);
         }
       }
