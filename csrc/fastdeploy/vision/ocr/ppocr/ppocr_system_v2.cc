@@ -23,14 +23,12 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Classifier* cls_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
-  FDERROR << "???????1" << std::endl;
   recognizer_->rec_image_shape[1] = 32;
 }
 
 PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
-  FDERROR << "???????2" << std::endl;
   recognizer_->rec_image_shape[1] = 32;
 }
 
