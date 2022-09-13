@@ -23,12 +23,14 @@ from ... import c_lib_wrap as C
 class SchemaNode(object):
     def __init__(self, name, children=[]):
         schema_node_children = []
+        if isinstance(children, str):
+            children = [children]
         for child in children:
             if isinstance(child, str):
                 schema_node_children += [C.text.SchemaNode(child, [])]
             elif isinstance(child, dict):
-                for key, val in child.item():
-                    schema_node_child = SchemaNode(key, val)
+                for key, val in child.items():
+                    schema_node_child = SchemaNode(key, list(val))
                     schema_node_children += [schema_node_child._schema_node]
             else:
                 assert "The type of child of SchemaNode should be str or dict."
