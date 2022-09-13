@@ -13,51 +13,38 @@
 // limitations under the License.
 #pragma once
 
-#include <ostream>
-#include <sstream>
+#include <memory>
+#include <new>
+#include <numeric>
 #include <string>
+#include <vector>
 
-#include "fastdeploy/core/config.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device { CPU, GPU };
-
-FASTDEPLOY_DECL std::string Str(const Device& d);
-
-enum FASTDEPLOY_DECL FDDataType {
-  BOOL,
-  INT16,
-  INT32,
-  INT64,
-  FP16,
-  FP32,
-  FP64,
-  UNKNOWN1,
-  UNKNOWN2,
-  UNKNOWN3,
-  UNKNOWN4,
-  UNKNOWN5,
-  UNKNOWN6,
-  UNKNOWN7,
-  UNKNOWN8,
-  UNKNOWN9,
-  UNKNOWN10,
-  UNKNOWN11,
-  UNKNOWN12,
-  UNKNOWN13,
-  UINT8,
-  INT8
+class FASTDEPLOY_DECL FDHostAllocator {
+ public:
+  bool operator()(void** ptr, size_t size) const;
 };
 
-FASTDEPLOY_DECL std::string Str(const FDDataType& fdt);
-
-FASTDEPLOY_DECL int32_t FDDataTypeSize(const FDDataType& data_dtype);
-
-template <typename PlainType>
-struct FASTDEPLOY_DECL TypeToDataType {
-  static const FDDataType dtype;
+class FASTDEPLOY_DECL FDHostFree {
+ public:
+  void operator()(void* ptr) const;
 };
+
+#ifdef WITH_GPU
+
+class FASTDEPLOY_DECL FDDeviceAllocator {
+ public:
+  bool operator()(void** ptr, size_t size) const;
+};
+
+class FASTDEPLOY_DECL FDDeviceFree {
+ public:
+  void operator()(void* ptr) const;
+};
+
+#endif
 
 }  // namespace fastdeploy
