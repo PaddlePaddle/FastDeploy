@@ -19,9 +19,9 @@ tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
 tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/utils/ppocr_keys_v1.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 
 #下载部署示例代码

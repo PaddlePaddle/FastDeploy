@@ -23,12 +23,14 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Classifier* cls_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
+  FDERROR << "???????1" << std::endl;
   recognizer_->rec_image_shape[1] = 32;
 }
 
 PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
+  FDERROR << "???????2" << std::endl;
   recognizer_->rec_image_shape[1] = 32;
 }
 
@@ -92,7 +94,7 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
       FDERROR << "Failed to classify croped image of index " << i << "." << std::endl;
       return false;
     }
-    if (result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
+    if (nullptr != classifier_ && result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
       cv::rotate(image_list[i], image_list[i], 1);
     }
 
