@@ -18,7 +18,7 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
 
-# 下载模型,图片和label文件
+# 下载模型,图片和字典文件
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
 tar -xvf ch_PP-OCRv2_det_infer.tar.gz
 

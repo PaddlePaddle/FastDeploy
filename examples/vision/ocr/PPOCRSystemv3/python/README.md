@@ -9,7 +9,7 @@
 
 ```
 
-# 下载模型,图片和label文件
+# 下载模型,图片和字典文件
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
 tar xvf ch_PP-OCRv3_det_infer.tar
 
