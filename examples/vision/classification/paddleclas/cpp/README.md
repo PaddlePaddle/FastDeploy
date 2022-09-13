@@ -11,7 +11,7 @@
 
 ```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/classification/paddleclas/cpp
 mkdir build
