@@ -114,25 +114,26 @@ if __name__ == '__main__':
     model_file = os.path.join(args.model, "inference.pdmodel")
     params_file = os.path.join(args.model, "inference.pdiparams")
     config_file = os.path.join(args.model, "inference_cls.yaml")
-    model = fd.vision.classification.PaddleClasModel(
-        model_file, params_file, config_file, runtime_option=option)
-    model.enable_record_time_of_runtime()
 
     gpu_id = args.device_id
     end2end_statis = list()
     cpu_mem, gpu_mem, gpu_util = 0, 0, 0
     if args.device == "cpu":
-        file_path = args.model + "_" + args.backend + "_" + \
+        file_path = args.model + "_model_" + args.backend + "_" + \
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
         if args.enable_trt_fp16:
-            file_path = args.model + "_" + args.backend + "_fp16_" + args.device + ".txt"
+            file_path = args.model + "_model_" + \
+                args.backend + "_fp16_" + args.device + ".txt"
         else:
-            file_path = args.model + "_" + args.backend + "_" + args.device + ".txt"
+            file_path = args.model + "_model_" + args.backend + "_" + args.device + ".txt"
     f = open(file_path, "w")
     f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
 
     try:
+        model = fd.vision.classification.PaddleClasModel(
+            model_file, params_file, config_file, runtime_option=option)
+        model.enable_record_time_of_runtime()
         for i in range(args.iter_num):
             im = cv2.imread(args.image)
             start = time.time()
@@ -156,7 +157,6 @@ if __name__ == '__main__':
         dump_result["gpu_rss_mb"] = gpu_mem / repeat_iter
         dump_result["gpu_util"] = gpu_util / repeat_iter
 
-        f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         f.writelines("cpu_rss_mb: {} \n".format(

@@ -27,6 +27,8 @@ done
 
 wait
 
-rm -rf result_cls.txt
-touch result_cls.txt
-cat ppcls_model/*.txt >> ./result_cls.txt
+rm -rf result_ppcls.txt
+touch result_ppcls.txt
+cat ppcls_model/*.txt >> ./result_ppcls.txt
+
+python convert_info.py --txt_path result_ppcls.txt --domain ppcls
