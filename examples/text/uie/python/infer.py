@@ -145,8 +145,9 @@ if __name__ == "__main__":
     print()
 
     print("6. Cross Task Extraction Task")
+    schema = ["法院", {"原告": "委托代理人"}, {"被告": "委托代理人"}]
     print(f"The extraction schema: {schema}")
-    uie.set_schema(["法院", {"原告": "委托代理人"}, {"被告": "委托代理人"}])
+    uie.set_schema(schema)
     results = uie.predict(
         [
             "北京市海淀区人民法院\n民事判决书\n(199x)建初字第xxx号\n原告：张三。\n委托代理人李四，北京市 A律师"
