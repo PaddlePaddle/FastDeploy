@@ -2,8 +2,8 @@
 
 This document outlines the compilation process for C++ predictive libraries and Python predictive libraries. Please refer to the following documentation according to your platform:
 
-- [build on Linux & Mac ](build_linux_and_mac.md)
-- [build on Windows](build_windows.md)
+- [build on Linux & Mac ](how_to_build_linux_and_mac.md)
+- [build on Windows](how_to_build_windows.md)
 
 The compilation options on each platform are listed in the table below:
 
