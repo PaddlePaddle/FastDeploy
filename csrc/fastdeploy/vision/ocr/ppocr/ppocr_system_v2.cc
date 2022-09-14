@@ -92,23 +92,8 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
       FDERROR << "Failed to classify croped image of index " << i << "." << std::endl;
       return false;
     }
-<<<<<<< HEAD
-    // cls
-    if (this->classifier->initialized != 0) {
-      for (int i = 0; i < img_list.size(); i++) {
-        this->Classify(&img_list[i], result);
-      }
-
-      for (int i = 0; i < img_list.size(); i++) {
-        if ((result->cls_labels)[i] % 2 == 1 &&
-            (result->cls_scores)[i] > this->classifier->cls_thresh) {
-          cv::rotate(img_list[i], img_list[i], 1);
-        }
-      }
-=======
     if (nullptr != classifier_ && result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
       cv::rotate(image_list[i], image_list[i], 1);
->>>>>>> 0dd9ecee65b16b2dcf72633b49af041a5e94dc55
     }
 
     if (nullptr != recognizer_ && !Recognize(&(image_list[i]), result)) {
