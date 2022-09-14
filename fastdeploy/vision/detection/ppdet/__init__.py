@@ -134,20 +134,20 @@ class YOLOv3(PPYOLOE):
         assert self.initialized, "YOLOv3 model initialize failed."
 
 
-class PPTINYPOSE(FastDeployModel):
+class PPTinyPose(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
                  config_file,
                  runtime_option=None,
                  model_format=Frontend.PADDLE):
-        super(PPTINYPOSE, self).__init__(runtime_option)
+        super(PPTinyPose, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPTINYPOSE model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPTINYPOSE(
+        assert model_format == Frontend.PADDLE, "PPTinyPose model only support model format of Frontend.Paddle now."
+        self._model = C.vision.detection.PPTinyPose(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
-        assert self.initialized, "PPTINYPOSE model initialize failed."
+        assert self.initialized, "PPTinyPose model initialize failed."
 
     def predict(self, input_image, detection_result):
         assert input_image is not None, "The input image data is None."

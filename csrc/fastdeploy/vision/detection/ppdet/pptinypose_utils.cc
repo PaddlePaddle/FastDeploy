@@ -20,13 +20,13 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-cv::Point2f get_3rd_point(cv::Point2f& a, cv::Point2f& b) {
+cv::Point2f Get3dPoint(const cv::Point2f& a, const cv::Point2f& b) {
   cv::Point2f direct{a.x - b.x, a.y - b.y};
   return cv::Point2f(a.x - direct.y, a.y + direct.x);
 }
 
-std::vector<float> get_dir(float src_point_x, float src_point_y,
-                           float rot_rad) {
+std::vector<float> GetDir(const float src_point_x, const float src_point_y,
+                          const float rot_rad) {
   float sn = sin(rot_rad);
   float cs = cos(rot_rad);
   std::vector<float> src_result{0.0, 0.0};
@@ -35,54 +35,60 @@ std::vector<float> get_dir(float src_point_x, float src_point_y,
   return src_result;
 }
 
-void affine_tranform(float pt_x, float pt_y, cv::Mat& trans,
-                     std::vector<float>& preds, int p) {
+void AffineTransform(const float pt_x, const float pt_y, const cv::Mat& trans,
+                     std::vector<float>* preds, const int p) {
   double new1[3] = {pt_x, pt_y, 1.0};
   cv::Mat new_pt(3, 1, trans.type(), new1);
   cv::Mat w = trans * new_pt;
-  preds[p * 3 + 1] = static_cast<float>(w.at<double>(0, 0));
-  preds[p * 3 + 2] = static_cast<float>(w.at<double>(1, 0));
+  (*preds)[p * 3 + 1] = static_cast<float>(w.at<double>(0, 0));
+  (*preds)[p * 3 + 2] = static_cast<float>(w.at<double>(1, 0));
 }
 
-void get_affine_transform(std::vector<float>& center, std::vector<float>& scale,
-                          float rot, std::vector<int>& output_size,
-                          cv::Mat& trans, int inv) {
+void GetAffineTransform(const std::vector<float>& center,
+                        const std::vector<float>& scale, const float rot,
+                        const std::vector<int>& output_size, cv::Mat* trans,
+                        const int inv) {
   float src_w = scale[0];
   float dst_w = static_cast<float>(output_size[0]);
   float dst_h = static_cast<float>(output_size[1]);
   float rot_rad = rot * PI / HALF_CIRCLE_DEGREE;
-  std::vector<float> src_dir = get_dir(-0.5 * src_w, 0, rot_rad);
+  std::vector<float> src_dir = GetDir(-0.5 * src_w, 0, rot_rad);
   std::vector<float> dst_dir{-0.5f * dst_w, 0.0};
   cv::Point2f srcPoint2f[3], dstPoint2f[3];
   srcPoint2f[0] = cv::Point2f(center[0], center[1]);
   srcPoint2f[1] = cv::Point2f(center[0] + src_dir[0], center[1] + src_dir[1]);
-  srcPoint2f[2] = get_3rd_point(srcPoint2f[0], srcPoint2f[1]);
+  srcPoint2f[2] = Get3dPoint(srcPoint2f[0], srcPoint2f[1]);
 
   dstPoint2f[0] = cv::Point2f(dst_w * 0.5, dst_h * 0.5);
   dstPoint2f[1] =
       cv::Point2f(dst_w * 0.5 + dst_dir[0], dst_h * 0.5 + dst_dir[1]);
-  dstPoint2f[2] = get_3rd_point(dstPoint2f[0], dstPoint2f[1]);
+  dstPoint2f[2] = Get3dPoint(dstPoint2f[0], dstPoint2f[1]);
   if (inv == 0) {
-    trans = cv::getAffineTransform(srcPoint2f, dstPoint2f);
+    (*trans) = cv::getAffineTransform(srcPoint2f, dstPoint2f);
   } else {
-    trans = cv::getAffineTransform(dstPoint2f, srcPoint2f);
+    (*trans) = cv::getAffineTransform(dstPoint2f, srcPoint2f);
   }
 }
 
-void transform_preds(std::vector<float>& coords, std::vector<float>& center,
-                     std::vector<float>& scale, std::vector<int>& output_size,
-                     std::vector<int>& dim, std::vector<float>& target_coords) {
+void TransformPreds(std::vector<float>& coords,
+                    const std::vector<float>& center,
+                    const std::vector<float>& scale,
+                    const std::vector<int>& output_size,
+                    const std::vector<int>& dim,
+                    std::vector<float>* target_coords) {
   cv::Mat trans(2, 3, CV_64FC1);
-  get_affine_transform(center, scale, 0, output_size, trans, 1);
+  GetAffineTransform(center, scale, 0, output_size, &trans, 1);
   for (int p = 0; p < dim[1]; ++p) {
-    affine_tranform(coords[p * 2], coords[p * 2 + 1], trans, target_coords, p);
+    AffineTransform(coords[p * 2], coords[p * 2 + 1], trans, target_coords, p);
   }
 }
 
-void get_final_preds(std::vector<float>& heatmap, std::vector<int>& dim,
-                     std::vector<int64_t>& idxout, std::vector<int>& idxdim,
-                     std::vector<float>& center, std::vector<float> scale,
-                     std::vector<float>& preds, bool DARK) {
+void GetFinalPredictions(const std::vector<float>& heatmap,
+                         const std::vector<int>& dim,
+                         const std::vector<int64_t>& idxout,
+                         const std::vector<float>& center,
+                         const std::vector<float> scale,
+                         std::vector<float>* preds, const bool DARK) {
   std::vector<float> coords(dim[1] * 2);
 
   int heatmap_height = dim[2];
@@ -90,13 +96,13 @@ void get_final_preds(std::vector<float>& heatmap, std::vector<int>& dim,
   for (int j = 0; j < dim[1]; ++j) {
     int index = j * dim[2] * dim[3];
     int idx = idxout[j];
-    preds[j * 3] = heatmap[index + idx];
+    (*preds)[j * 3] = heatmap[index + idx];
     coords[j * 2] = idx % heatmap_width;
     coords[j * 2 + 1] = idx / heatmap_width;
     int px = int(coords[j * 2] + 0.5);
     int py = int(coords[j * 2 + 1] + 0.5);
     if (DARK && px > 1 && px < heatmap_width - 2) {
-      utils::dark_parse(heatmap, dim, coords, px, py, index, j);
+      utils::DarkParse(heatmap, dim, &coords, px, py, index, j);
     } else {
       if (px > 0 && px < heatmap_width - 1) {
         float diff_x = heatmap[index + py * dim[3] + px + 1] -
@@ -111,7 +117,7 @@ void get_final_preds(std::vector<float>& heatmap, std::vector<int>& dim,
     }
   }
   std::vector<int> img_size{heatmap_width, heatmap_height};
-  transform_preds(coords, center, scale, img_size, dim, preds);
+  TransformPreds(coords, center, scale, img_size, dim, preds);
 }
 
 }  // namespace detection

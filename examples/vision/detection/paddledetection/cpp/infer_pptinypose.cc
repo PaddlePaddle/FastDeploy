@@ -50,7 +50,7 @@ void CpuInfer(const std::string& det_model_dir,
   auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
   auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
   auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
-  auto tinypose_model = fastdeploy::vision::detection::PPTINYPOSE(
+  auto tinypose_model = fastdeploy::vision::detection::PPTinyPose(
       tinypose_model_file, tinypose_params_file, tinypose_config_file);
   if (!tinypose_model.Initialized()) {
     std::cerr << "TinyPose Model Failed to initialize." << std::endl;
@@ -109,7 +109,7 @@ void GpuInfer(const std::string& det_model_dir,
   auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
   auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
   auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
-  auto tinypose_model = fastdeploy::vision::detection::PPTINYPOSE(
+  auto tinypose_model = fastdeploy::vision::detection::PPTinyPose(
       tinypose_model_file, tinypose_params_file, tinypose_config_file, option);
   if (!tinypose_model.Initialized()) {
     std::cerr << "TinyPose Model Failed to initialize." << std::endl;
@@ -174,8 +174,7 @@ void TrtInfer(const std::string& det_model_dir,
   auto tinypose_option = fastdeploy::RuntimeOption();
   tinypose_option.UseGpu();
   tinypose_option.UseTrtBackend();
-  tinypose_option.SetTrtInputShape("image", {1, 3, 128, 96});
-  auto tinypose_model = fastdeploy::vision::detection::PPTINYPOSE(
+  auto tinypose_model = fastdeploy::vision::detection::PPTinyPose(
       tinypose_model_file, tinypose_params_file, tinypose_config_file,
       tinypose_option);
   if (!tinypose_model.Initialized()) {

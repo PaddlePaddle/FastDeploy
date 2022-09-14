@@ -15,11 +15,11 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <set>
+#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
-#include <set>
-#include <vector>
 
 namespace fastdeploy {
 namespace vision {
@@ -88,7 +88,8 @@ void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result,
   }
 }
 
-template <typename T> void NCHW2NHWC(FDTensor& infer_result) {
+template <typename T>
+void NCHW2NHWC(FDTensor& infer_result) {
   T* infer_result_buffer = reinterpret_cast<T*>(infer_result.MutableData());
   int num = infer_result.shape[0];
   int channel = infer_result.shape[1];
@@ -125,19 +126,31 @@ void SortDetectionResult(DetectionResult* output);
 void SortDetectionResult(FaceDetectionResult* result);
 
 // L2 Norm / cosine similarity  (for face recognition, ...)
-FASTDEPLOY_DECL std::vector<float>
-L2Normalize(const std::vector<float>& values);
+FASTDEPLOY_DECL std::vector<float> L2Normalize(
+    const std::vector<float>& values);
 
 FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-void CropImg(cv::Mat& img, cv::Mat& crop_img, std::vector<int>& area,
-             std::vector<float>& center, std::vector<float>& scale,
-             float expandratio = 0.15);
+void CropImage(const cv::Mat& img, cv::Mat* crop_img,
+               const std::vector<int>& area, std::vector<float>* center,
+               std::vector<float>* scale, const float expandratio = 0.15);
 
-void dark_parse(std::vector<float>& heatmap, std::vector<int>& dim,
-                std::vector<float>& coords, int px, int py, int index, int ch);
+// 功能：关键点检测模型，后处理中对关键点做精细定位
+// 参数：
+// heatmap：关键点检测模型的模型推理结果
+// dim：推理结果的shape信息
+// coords：精细化定位后的坐标
+// px：px = int(coords[ch * 2] + 0.5) 参考detection::GetFinalPredictions
+// py：px = int(coords[ch * 2 + 1] + 0.5) 参考detection::GetFinalPredictions
+// index：heatmap像素点的index信息
+// ch：channel
+// 论文参考：DARK postpocessing, Zhang et al. Distribution-Aware Coordinate
+//         Representation for Human Pose Estimation (CVPR 2020).
+void DarkParse(const std::vector<float>& heatmap, const std::vector<int>& dim,
+               std::vector<float>* coords, const int px, const int py,
+               const int index, const int ch);
 
 }  // namespace utils
 }  // namespace vision

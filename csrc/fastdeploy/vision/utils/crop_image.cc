@@ -18,9 +18,9 @@ namespace fastdeploy {
 namespace vision {
 namespace utils {
 
-void CropImg(cv::Mat& img, cv::Mat& crop_img, std::vector<int>& area,
-             std::vector<float>& center, std::vector<float>& scale,
-             float expandratio) {
+void CropImage(const cv::Mat& img, cv::Mat* crop_img,
+               const std::vector<int>& area, std::vector<float>* center,
+               std::vector<float>* scale, const float expandratio) {
   int crop_x1 = std::max(0, area[0]);
   int crop_y1 = std::max(0, area[1]);
   int crop_x2 = std::min(img.cols - 1, area[2]);
@@ -44,15 +44,15 @@ void CropImg(cv::Mat& img, cv::Mat& crop_img, std::vector<int>& area,
                      static_cast<int>(center_x + half_w * (1 + expandratio)));
   crop_y2 = std::min(img.rows - 1,
                      static_cast<int>(center_y + half_h * (1 + expandratio)));
-  crop_img =
+  *crop_img =
       img(cv::Range(crop_y1, crop_y2 + 1), cv::Range(crop_x1, crop_x2 + 1));
-  center.clear();
-  center.emplace_back((crop_x1 + crop_x2) / 2);
-  center.emplace_back((crop_y1 + crop_y2) / 2);
+  center->clear();
+  center->emplace_back((crop_x1 + crop_x2) / 2);
+  center->emplace_back((crop_y1 + crop_y2) / 2);
 
-  scale.clear();
-  scale.emplace_back((crop_x2 - crop_x1));
-  scale.emplace_back((crop_y2 - crop_y1));
+  scale->clear();
+  scale->emplace_back((crop_x2 - crop_x1));
+  scale->emplace_back((crop_y2 - crop_y1));
 }
 
 }  // namespace utils

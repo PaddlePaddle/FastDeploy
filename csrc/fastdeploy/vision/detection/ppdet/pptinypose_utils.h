@@ -19,24 +19,32 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-cv::Point2f get_3rd_point(cv::Point2f& a, cv::Point2f& b);
+cv::Point2f Get3dPoint(const cv::Point2f& a, const cv::Point2f& b);
 
-std::vector<float> get_dir(float src_point_x, float src_point_y, float rot_rad);
+std::vector<float> GetDir(const float src_point_x, const float src_point_y,
+                          const float rot_rad);
 
-void get_affine_transform(std::vector<float>& center, std::vector<float>& scale,
-                          float rot, std::vector<int>& output_size,
-                          cv::Mat& trans, int inv);
-void affine_tranform(float pt_x, float pt_y, cv::Mat& trans,
-                     std::vector<float>& preds, int p);
+void GetAffineTransform(const std::vector<float>& center,
+                        const std::vector<float>& scale, const float rot,
+                        const std::vector<int>& output_size, cv::Mat* trans,
+                        const int inv);
 
-void transform_preds(std::vector<float>& coords, std::vector<float>& center,
-                     std::vector<float>& scale, std::vector<int>& output_size,
-                     std::vector<int>& dim, std::vector<float>& target_coords);
+void AffineTransform(const float pt_x, const float pt_y, const cv::Mat& trans,
+                     std::vector<float>* preds, const int p);
 
-void get_final_preds(std::vector<float>& heatmap, std::vector<int>& dim,
-                     std::vector<int64_t>& idxout, std::vector<int>& idxdim,
-                     std::vector<float>& center, std::vector<float> scale,
-                     std::vector<float>& preds, bool DARK);
+void TransformPreds(std::vector<float>& coords,
+                    const std::vector<float>& center,
+                    const std::vector<float>& scale,
+                    const std::vector<int>& output_size,
+                    const std::vector<int>& dim,
+                    std::vector<float>* target_coords);
+
+void GetFinalPredictions(const std::vector<float>& heatmap,
+                         const std::vector<int>& dim,
+                         const std::vector<int64_t>& idxout,
+                         const std::vector<float>& center,
+                         const std::vector<float> scale,
+                         std::vector<float>* preds, const bool DARK);
 
 }  // namespace detection
 }  // namespace vision

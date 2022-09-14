@@ -24,25 +24,25 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-class FASTDEPLOY_DECL PPTINYPOSE : public FastDeployModel {
+class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  public:
-  PPTINYPOSE(const std::string& model_file, const std::string& params_file,
+  PPTinyPose(const std::string& model_file, const std::string& params_file,
              const std::string& config_file,
              const RuntimeOption& custom_option = RuntimeOption(),
              const Frontend& model_format = Frontend::PADDLE);
 
-  std::string ModelName() const { return "PaddleDetection/PPTINYPOSE"; }
+  std::string ModelName() const { return "PaddleDetection/PPTinyPose"; }
 
   bool Initialize();
 
   bool BuildPreprocessPipelineFromConfig();
 
-  bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs,
-                  std::vector<float>& scale);
+  bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 
   bool Postprocess(std::vector<FDTensor>& infer_result,
-                   KeyPointDetectionResult* result, std::vector<float>& center,
-                   std::vector<float>& scale);
+                   KeyPointDetectionResult* result,
+                   const std::vector<float>& center,
+                   const std::vector<float>& scale);
 
   bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
                DetectionResult* detection_result = nullptr);

@@ -9,7 +9,7 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-PPTINYPOSE::PPTINYPOSE(const std::string& model_file,
+PPTinyPose::PPTinyPose(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& config_file,
                        const RuntimeOption& custom_option,
@@ -24,7 +24,7 @@ PPTINYPOSE::PPTINYPOSE(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool PPTINYPOSE::Initialize() {
+bool PPTinyPose::Initialize() {
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -38,7 +38,7 @@ bool PPTINYPOSE::Initialize() {
   return true;
 }
 
-bool PPTINYPOSE::BuildPreprocessPipelineFromConfig() {
+bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   try {
@@ -88,8 +88,7 @@ bool PPTINYPOSE::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
-bool PPTINYPOSE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs,
-                            std::vector<float>& scale) {
+bool PPTinyPose::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   int origin_w = mat->Width();
   int origin_h = mat->Height();
   for (size_t i = 0; i < processors_.size(); ++i) {
@@ -110,10 +109,10 @@ bool PPTINYPOSE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs,
   return true;
 }
 
-bool PPTINYPOSE::Postprocess(std::vector<FDTensor>& infer_result,
+bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
                              KeyPointDetectionResult* result,
-                             std::vector<float>& center,
-                             std::vector<float>& scale) {
+                             const std::vector<float>& center,
+                             const std::vector<float>& scale) {
   FDASSERT(infer_result[1].shape[0] == 1,
            "Only support batch = 1 in FastDeploy now.");
   result->Clear();
@@ -138,17 +137,17 @@ bool PPTINYPOSE::Postprocess(std::vector<FDTensor>& infer_result,
   std::vector<float> preds(out_data_shape[1] * 3, 0);
   std::vector<float> heatmap(out_data, out_data + outdata_size);
   std::vector<int64_t> idxout(idxdata_size);
-  if (idx_dtype == 2) {
+  if (idx_dtype == FDDataType::INT32) {
     std::copy(static_cast<int32_t*>(idx_data),
               static_cast<int32_t*>(idx_data) + idxdata_size, idxout.begin());
-  } else if (idx_dtype == 3) {
+  } else if (idx_dtype == FDDataType::INT64) {
     std::copy(static_cast<int64_t*>(idx_data),
               static_cast<int64_t*>(idx_data) + idxdata_size, idxout.begin());
   } else {
     FDERROR << "Don't support inference output FDDataType." << std::endl;
   }
-  get_final_preds(heatmap, out_data_shape, idxout, idx_data_shape, center,
-                  scale, preds, this->use_dark);
+  GetFinalPredictions(heatmap, out_data_shape, idxout, center, scale, &preds,
+                      this->use_dark);
   result->Reserve(outdata_size);
   result->num_joints = out_data_shape[1];
   result->keypoints.clear();
@@ -160,7 +159,7 @@ bool PPTINYPOSE::Postprocess(std::vector<FDTensor>& infer_result,
   return true;
 }
 
-bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
+bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
                          DetectionResult* detection_result) {
   std::vector<cv::Mat> crop_imgs;
   std::vector<std::vector<float>> center_bs;
@@ -178,7 +177,7 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
       std::vector<float> center;
       std::vector<float> scale;
       if (label_id == 0) {
-        utils::CropImg(*im, crop_img, rect, center, scale);
+        utils::CropImage(*im, &crop_img, rect, &center, &scale);
         center_bs.emplace_back(center);
         scale_bs.emplace_back(scale);
         crop_imgs.emplace_back(crop_img);
@@ -186,15 +185,11 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
       }
     }
   } else {
-    std::cout << "[WARNING] No Detection boxes input. Please make sure the "
-                 "input image has been cropped by Detection model's boxes "
-                 "before"
-              << std::endl;
     cv::Mat crop_img;
     std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
     std::vector<float> center;
     std::vector<float> scale;
-    utils::CropImg(*im, crop_img, rect, center, scale);
+    utils::CropImage(*im, &crop_img, rect, &center, &scale);
     center_bs.emplace_back(center);
     scale_bs.emplace_back(scale);
     crop_imgs.emplace_back(crop_img);
@@ -203,7 +198,7 @@ bool PPTINYPOSE::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   for (int i = 0; i < crop_imgs_num; i++) {
     Mat mat(crop_imgs[i]);
     std::vector<FDTensor> processed_data;
-    if (!Preprocess(&mat, &processed_data, scale_bs[i])) {
+    if (!Preprocess(&mat, &processed_data)) {
       FDERROR << "Failed to preprocess input data while using model:"
               << ModelName() << "." << std::endl;
       return false;

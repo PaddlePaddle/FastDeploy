@@ -146,10 +146,9 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     }
   }
   if (has_permute) {
-    processors_.push_back(std::make_shared<Permute>());
-  } else {
-    processors_.push_back(std::make_shared<HWC2CHW>());
+    processors_.push_back(std::make_shared<Cast>("float"));
   }
+  processors_.push_back(std::make_shared<HWC2CHW>());
 
   return true;
 }

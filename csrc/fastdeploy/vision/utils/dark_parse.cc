@@ -18,8 +18,9 @@ namespace fastdeploy {
 namespace vision {
 namespace utils {
 
-void dark_parse(std::vector<float>& heatmap, std::vector<int>& dim,
-                std::vector<float>& coords, int px, int py, int index, int ch) {
+void DarkParse(const std::vector<float>& heatmap, const std::vector<int>& dim,
+               std::vector<float>* coords, const int px, const int py,
+               const int index, const int ch) {
   /*DARK postpocessing, Zhang et al. Distribution-Aware Coordinate
   Representation for Human Pose Estimation (CVPR 2020).
   1) offset = - hassian.inv() * derivative
@@ -70,8 +71,8 @@ void dark_parse(std::vector<float>& heatmap, std::vector<int>& dim,
     cv::Mat hassian(2, 2, CV_32F, M);
     cv::Mat derivative(2, 1, CV_32F, D);
     cv::Mat offset = -hassian.inv() * derivative;
-    coords[ch * 2] += offset.at<float>(0, 0);
-    coords[ch * 2 + 1] += offset.at<float>(1, 0);
+    (*coords)[ch * 2] += offset.at<float>(0, 0);
+    (*coords)[ch * 2 + 1] += offset.at<float>(1, 0);
   }
 }
 

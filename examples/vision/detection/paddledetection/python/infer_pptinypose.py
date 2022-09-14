@@ -83,7 +83,7 @@ tinypose_params_file = os.path.join(args.tinypose_model_dir, "model.pdiparams")
 tinypose_config_file = os.path.join(args.tinypose_model_dir, "infer_cfg.yml")
 # 配置runtime，加载模型
 runtime_option = build_tinypose_option(args)
-tinypose_model = fd.vision.detection.PPTINYPOSE(
+tinypose_model = fd.vision.detection.PPTinyPose(
     tinypose_model_file,
     tinypose_params_file,
     tinypose_config_file,
