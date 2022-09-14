@@ -21,6 +21,7 @@ import shutil
 import os
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
+TOP_DIR = os.path.split(TOP_DIR)[0]
 PACKAGE_NAME = os.getenv("PACKAGE_NAME", "fastdeploy")
 wheel_name = "fastdeploy-python"
 
@@ -41,7 +42,7 @@ import platform
 from textwrap import dedent
 import multiprocessing
 
-with open(os.path.join(TOP_DIR, "requirements.txt")) as fin:
+with open(os.path.join(TOP_DIR, "python", "requirements.txt")) as fin:
     REQUIRED_PACKAGES = fin.read()
 
 setup_configs = dict()
@@ -352,12 +353,12 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
         os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
     if not os.path.exists(
-            os.path.join(TOP_DIR, "fastdeploy", "libs", "third_libs")):
+            os.path.join(TOP_DIR, "python", "fastdeploy", "libs", "third_libs")):
         print(
             "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
         )
         sys.exit(0)
-    sys.path.append(os.path.split(os.path.abspath(__file__))[0])
+    sys.path.append(TOP_DIR)
     from build_scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
