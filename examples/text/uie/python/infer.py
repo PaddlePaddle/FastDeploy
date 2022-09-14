@@ -60,6 +60,7 @@ def build_option(args):
         runtime_option.use_paddle_backend()
     elif args.backend == 'openvino':
         runtime_option.use_openvino_backend()
+    runtime_option.set_cpu_thread_num(args.cpu_num_threads)
     return runtime_option
 
 
