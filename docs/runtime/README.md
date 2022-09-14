@@ -3,7 +3,7 @@
 FastDeploy当前已集成多种推理后端，如下表格列出FastDeploy集成的各后端，与在FastDeploy中其支持的平台、硬件等信息
 
 | 推理后端 | 支持平台 | 支持硬件 | 支持模型格式 |
-| :------- | :------- | :------- | :---- | :----- |
+| :------- | :------- | :------- | :---- | 
 | Paddle Inference | Windows(x64)/Linux(x64) | GPU/CPU | Paddle |
 | ONNX Runtime | Windows(x64)/Linux(x64/aarch64) | GPU/CPU | Paddle/ONNX |
 | TensorRT | Windows(x64)/Linux(x64/jetson) | GPU | Paddle/ONNX |
