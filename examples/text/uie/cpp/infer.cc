@@ -71,11 +71,21 @@ int main(int argc, char* argv[]) {
   auto predictor =
       fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
                                  {"时间", "选手", "赛事名称"}, option);
-  fastdeploy::FDINFO << "After init predictor" << std::endl;
+  std::cout << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition
   predictor.Predict({"2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷"
                      "爱凌以188.25分获得金牌！"},
+                    &results);
+  std::cout << results << std::endl;
+  results.clear();
+
+  predictor.SetSchema(
+      {"肿瘤的大小", "肿瘤的个数", "肝癌级别", "脉管内癌栓分级"});
+  predictor.Predict({"（右肝肿瘤）肝细胞性肝癌（II-"
+                     "III级，梁索型和假腺管型），肿瘤包膜不完整，紧邻肝被膜，侵"
+                     "及周围肝组织，未见脉管内癌栓（MVI分级：M0级）及卫星子灶形"
+                     "成。（肿物1个，大小4.2×4.0×2.8cm）。"},
                     &results);
   std::cout << results << std::endl;
   results.clear();

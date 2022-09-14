@@ -30,7 +30,7 @@ class SchemaNode(object):
                 schema_node_children += [C.text.SchemaNode(child, [])]
             elif isinstance(child, dict):
                 for key, val in child.items():
-                    schema_node_child = SchemaNode(key, list(val))
+                    schema_node_child = SchemaNode(key, val)
                     schema_node_children += [schema_node_child._schema_node]
             else:
                 assert "The type of child of SchemaNode should be str or dict."
