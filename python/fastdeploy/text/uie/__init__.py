@@ -71,5 +71,15 @@ class UIEModel(object):
             schema = schema_tmp
         self._model.set_schema(schema)
 
-    def predict(self, texts):
-        return self._model.predict(texts)
+    def predict(self, texts, return_dict=False):
+        results = self._model.predict(texts)
+        if not return_dict:
+            return results
+        new_results = []
+        for result in results:
+            uie_result = dict()
+            for key, uie_results in result.items():
+                for uie_res in uie_results:
+                    uie_result[key] = uie_res.get_dict()
+            new_results += [uie_result]
+        return new_results
