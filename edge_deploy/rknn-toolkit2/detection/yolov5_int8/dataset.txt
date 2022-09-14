@@ -1,0 +1,12 @@
+./dataset/000000000139.jpg
+./dataset/000000000285.jpg
+./dataset/000000000632.jpg
+./dataset/000000000724.jpg
+./dataset/000000000776.jpg
+./dataset/000000000785.jpg
+./dataset/000000000802.jpg
+./dataset/000000000872.jpg
+./dataset/000000000885.jpg
+./dataset/000000001000.jpg
+./dataset/000000001268.jpg
+
