@@ -37,6 +37,11 @@ def parse_arguments():
         default='onnx_runtime',
         choices=['onnx_runtime', 'paddle_inference', 'openvino'],
         help="The inference runtime backend.")
+    parser.add_argument(
+        "--cpu_num_threads",
+        type=int,
+        default=8,
+        help="The number of threads to execute inference in cpu device.")
     return parser.parse_args()
 
 
