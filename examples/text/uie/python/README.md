@@ -372,7 +372,7 @@ UIEModel模型加载和初始化，其中`model_file`, `params_file`为训练模
 > > * **return_dict**(bool): 是否以字典形式输出UIE结果，默认为False。
 > **返回**
 >
-> > 返回`dict(schema_key, list(fastdeploy.text.UIEResult))`。
+> > 返回`dict(str, list(fastdeploy.text.C.UIEResult))`, 详细可见[UIEResult说明](../../../../docs/api/text_results/uie_result.md)。
 
 ## 相关文档
 
