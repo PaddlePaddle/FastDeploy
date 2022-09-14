@@ -117,6 +117,14 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+void OCRResult::Clear() {
+  boxes.clear();
+  text.clear();
+  rec_scores.clear();
+  cls_scores.clear();
+  cls_labels.clear();
+}
+
 FaceDetectionResult::FaceDetectionResult(const FaceDetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
   landmarks.assign(res.landmarks.begin(), res.landmarks.end());
