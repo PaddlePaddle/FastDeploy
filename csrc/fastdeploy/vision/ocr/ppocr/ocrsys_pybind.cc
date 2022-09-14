@@ -23,10 +23,10 @@ void BindPPOCRSystemv3(pybind11::module& m) {
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Classifier*,
                           fastdeploy::vision::ocr::Recognizer*>())
-
+      .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
+                          fastdeploy::vision::ocr::Recognizer*>())
       .def("predict", [](application::ocrsystem::PPOCRSystemv3& self,
                          pybind11::array& data) {
-
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;
         self.Predict(&mat, &res);
@@ -38,14 +38,13 @@ void BindPPOCRSystemv2(pybind11::module& m) {
   // OCRSys
   pybind11::class_<application::ocrsystem::PPOCRSystemv2, FastDeployModel>(
       m, "PPOCRSystemv2")
-
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Classifier*,
                           fastdeploy::vision::ocr::Recognizer*>())
-
+      .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
+                          fastdeploy::vision::ocr::Recognizer*>())
       .def("predict", [](application::ocrsystem::PPOCRSystemv2& self,
                          pybind11::array& data) {
-
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;
         self.Predict(&mat, &res);

@@ -217,18 +217,24 @@ class Recognizer(FastDeployModel):
 
 
 class PPOCRSystemv3(FastDeployModel):
-    def __init__(self, ocr_det=None, ocr_cls=None, ocr_rec=None):
-
-        self._model = C.vision.ocr.PPOCRSystemv3(ocr_det, ocr_cls, ocr_rec)
+    def __init__(self, det_model=None, cls_model=None, rec_model=None):
+        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None." 
+        if cls_model is None:
+            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model, rec_model._model)
+        else:
+            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
-        return self._model.predict(input_image)
+        return self.system.predict(input_image)
 
 
 class PPOCRSystemv2(FastDeployModel):
-    def __init__(self, ocr_det=None, ocr_cls=None, ocr_rec=None):
-
-        self._model = C.vision.ocr.PPOCRSystemv2(ocr_det, ocr_cls, ocr_rec)
+    def __init__(self, det_model=None, cls_model=None, rec_model=None):
+        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None." 
+        if cls_model is None:
+            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model, rec_model._model)
+        else:
+            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
-        return self._model.predict(input_image)
+        return self.system.predict(input_image)

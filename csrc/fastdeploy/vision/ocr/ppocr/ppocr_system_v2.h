@@ -31,20 +31,23 @@ namespace ocrsystem {
 
 class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
  public:
-  PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
+  PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Classifier* cls_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
 
-  fastdeploy::vision::ocr::DBDetector* detector = nullptr;
-  fastdeploy::vision::ocr::Classifier* classifier = nullptr;
-  fastdeploy::vision::ocr::Recognizer* recognizer = nullptr;
+  PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
 
-  bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 
- private:
-  void Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  void Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  void Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+ protected:
+  fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
+  fastdeploy::vision::ocr::Classifier* classifier_ = nullptr;
+  fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
+
+  virtual bool Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 };
 
 }  // namespace ocrsystem

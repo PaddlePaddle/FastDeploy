@@ -14,37 +14,25 @@
 
 #pragma once
 
-#include <vector>
-
-#include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/processors/transform.h"
-#include "fastdeploy/vision/common/result.h"
-
-#include "fastdeploy/vision/ocr/ppocr/classifier.h"
-#include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
-#include "fastdeploy/vision/ocr/ppocr/recognizer.h"
-#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_system_v2.h"
 
 namespace fastdeploy {
 namespace application {
 namespace ocrsystem {
 
-class FASTDEPLOY_DECL PPOCRSystemv3 : public FastDeployModel {
+class FASTDEPLOY_DECL PPOCRSystemv3 : public PPOCRSystemv2 {
  public:
-  PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
+  PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Classifier* cls_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model) : PPOCRSystemv2(det_model, cls_model, rec_model) {
+    // The only difference between v2 and v3
+    recognizer_->rec_image_shape[1] = 48;
+  }
 
-  fastdeploy::vision::ocr::DBDetector* detector = nullptr;
-  fastdeploy::vision::ocr::Classifier* classifier = nullptr;
-  fastdeploy::vision::ocr::Recognizer* recognizer = nullptr;
-
-  bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-
- private:
-  void Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  void Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  void Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model) : PPOCRSystemv2(det_model, rec_model) {
+    recognizer_->rec_image_shape[1] = 48;
+  }
 };
 
 }  // namespace ocrsystem

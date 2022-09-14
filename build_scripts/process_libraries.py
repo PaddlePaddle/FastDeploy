@@ -144,6 +144,9 @@ def process_libraries(current_dir):
         for flt in filters:
             if f.count(flt) > 0:
                 remain = False
+        filename = os.path.split(f)[-1]
+        if filename in ["libnvinfer_plugin.so", "libnvinfer_plugin.so.8.4.1", "libnvinfer.so", "libnvinfer.so.8.4.1", "libnvonnxparser.so", "libnvonnxparser.so.8.4.1", "libnvparsers.so", "libnvparsers.so.8.4.1"]:
+            continue
         if remain:
             package_data.append(
                 os.path.relpath(f, os.path.join(current_dir, "fastdeploy")))

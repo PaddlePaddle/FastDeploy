@@ -28,10 +28,9 @@ tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
 tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/utils/ppocr_keys_v1.txt
-
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 # CPU推理
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
@@ -39,8 +38,6 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 1
 # GPU上TensorRT推理
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 2
-# OCR还支持det/cls/rec三个模型的组合使用，例如当我们不想使用cls模型的时候，只需要给cls模型路径的位置，传入一个空的字符串, 例子如下
-./infer_demo ./ch_PP-OCRv2_det_infer "" ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
 ```
 
 运行完成可视化结果如下图所示
@@ -53,9 +50,9 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.6/ppocr/
 ### PPOCRSystemv2类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
+fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Classifier* cls_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
 PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
@@ -65,6 +62,18 @@ PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
 > * **DBDetector**(model): OCR中的检测模型
 > * **Classifier**(model): OCR中的分类模型
 > * **Recognizer**(model): OCR中的识别模型
+
+```
+fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
+```
+PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
+
+**参数**
+
+> * **DBDetector**(model): OCR中的检测模型
+> * **Recognizer**(model): OCR中的识别模型
+
 
 #### Predict函数
 
