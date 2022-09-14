@@ -121,8 +121,18 @@ def process_libraries(current_dir):
     package_data = list()
 
     if platform.system().lower() == "windows":
+
+        def check_windows_legal_file(f):
+            # Note(zhoushunjie): Special case for some library
+            # File 'plugins.xml' is special case of openvino.
+            for special_file in ['plugins.xml']:
+                if special_file in f:
+                    return True
+            return False
+
         for f in all_files:
-            if f.endswith(".pyd") or f.endswith("lib") or f.endswith("dll"):
+            if f.endswith(".pyd") or f.endswith("lib") or f.endswith(
+                    "dll") or check_windows_legal_file(f):
                 package_data.append(
                     os.path.relpath(f, os.path.join(current_dir,
                                                     "fastdeploy")))
@@ -134,6 +144,9 @@ def process_libraries(current_dir):
         for flt in filters:
             if f.count(flt) > 0:
                 remain = False
+        filename = os.path.split(f)[-1]
+        if filename in ["libnvinfer_plugin.so", "libnvinfer_plugin.so.8.4.1", "libnvinfer.so", "libnvinfer.so.8.4.1", "libnvonnxparser.so", "libnvonnxparser.so.8.4.1", "libnvparsers.so", "libnvparsers.so.8.4.1"]:
+            continue
         if remain:
             package_data.append(
                 os.path.relpath(f, os.path.join(current_dir, "fastdeploy")))
