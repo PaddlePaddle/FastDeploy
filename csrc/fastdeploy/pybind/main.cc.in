@@ -19,6 +19,7 @@ namespace fastdeploy {
 void BindRuntime(pybind11::module&);
 void BindFDModel(pybind11::module&);
 void BindVision(pybind11::module&);
+void BindText(pybind11::module&);
 
 pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
   pybind11::dtype dt;
@@ -142,6 +143,11 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
   auto vision_module =
       m.def_submodule("vision", "Vision module of FastDeploy.");
   BindVision(vision_module);
+#endif
+#ifdef ENABLE_TEXT
+  auto text_module =
+      m.def_submodule("text", "Text module of FastDeploy.");
+  BindText(text_module);
 #endif
 }
 
