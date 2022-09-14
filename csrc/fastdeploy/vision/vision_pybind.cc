@@ -28,6 +28,13 @@ void BindVisualize(pybind11::module& m);
 #endif
 
 void BindVision(pybind11::module& m) {
+  pybind11::class_<vision::Mask>(m, "Mask")
+      .def(pybind11::init())
+      .def_readwrite("data", &vision::Mask::data)
+      .def_readwrite("shape", &vision::Mask::shape)
+      .def("__repr__", &vision::Mask::Str)
+      .def("__str__", &vision::Mask::Str);
+
   pybind11::class_<vision::ClassifyResult>(m, "ClassifyResult")
       .def(pybind11::init())
       .def_readwrite("label_ids", &vision::ClassifyResult::label_ids)
@@ -40,6 +47,8 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("boxes", &vision::DetectionResult::boxes)
       .def_readwrite("scores", &vision::DetectionResult::scores)
       .def_readwrite("label_ids", &vision::DetectionResult::label_ids)
+      .def_readwrite("masks", &vision::DetectionResult::masks)
+      .def_readwrite("contain_masks", &vision::DetectionResult::contain_masks)
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
@@ -52,6 +61,7 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("cls_labels", &vision::OCRResult::cls_labels)
       .def("__repr__", &vision::OCRResult::Str)
       .def("__str__", &vision::OCRResult::Str);
+
   pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::FaceDetectionResult::boxes)

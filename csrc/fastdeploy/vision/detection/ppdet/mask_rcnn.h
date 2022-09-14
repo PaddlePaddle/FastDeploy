@@ -13,10 +13,28 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/detection/ppdet/mask_rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/picodet.h"
-#include "fastdeploy/vision/detection/ppdet/ppyolo.h"
-#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/detection/ppdet/rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/yolov3.h"
-#include "fastdeploy/vision/detection/ppdet/yolox.h"
+
+namespace fastdeploy {
+namespace vision {
+namespace detection {
+
+class FASTDEPLOY_DECL MaskRCNN : public FasterRCNN {
+ public:
+  MaskRCNN(const std::string& model_file, const std::string& params_file,
+           const std::string& config_file,
+           const RuntimeOption& custom_option = RuntimeOption(),
+           const Frontend& model_format = Frontend::PADDLE);
+
+  virtual std::string ModelName() const { return "PaddleDetection/MaskRCNN"; }
+
+  virtual bool Postprocess(std::vector<FDTensor>& infer_result,
+                           DetectionResult* result);
+
+ protected:
+  MaskRCNN() {}
+};
+
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

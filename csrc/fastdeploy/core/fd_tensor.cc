@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/core/fd_tensor.h"
-
 #include "fastdeploy/utils/utils.h"
 
 #ifdef WITH_GPU
@@ -76,6 +74,13 @@ void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
   device = new_device;
+}
+
+void FDTensor::ExpandDim(int64_t axis) {
+  size_t ndim = shape.size();
+  FDASSERT(axis >= 0 && axis <= ndim,
+           "The allowed 'axis' must be in range of (0, %lu)!", ndim);
+  shape.insert(shape.begin() + axis, 1);
 }
 
 void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
