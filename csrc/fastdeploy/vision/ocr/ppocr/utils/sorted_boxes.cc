@@ -32,6 +32,10 @@ bool CompareBox(const std::array<int, 8>& result1,
 void SortBoxes(OCRResult* result) {
   std::sort(result->boxes.begin(), result->boxes.end(), CompareBox);
 
+  if (result->boxes.size() == 0) {
+    return;
+  }
+
   for (int i = 0; i < result->boxes.size() - 1; i++) {
     if (abs(result->boxes[i + 1][1] - result->boxes[i][1]) < 10 &&
         (result->boxes[i + 1][0] < result->boxes[i][0])) {

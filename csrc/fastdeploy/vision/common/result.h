@@ -71,6 +71,8 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
 
   ResultType type = ResultType::OCR;
 
+  void Clear();
+
   std::string Str();
 };
 
