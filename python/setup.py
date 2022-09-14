@@ -70,7 +70,7 @@ if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
-CMAKE_BUILD_DIR = os.path.join(TOP_DIR, '.setuptools-cmake-build')
+CMAKE_BUILD_DIR = os.path.join(TOP_DIR, 'python', '.setuptools-cmake-build')
 
 WINDOWS = (os.name == 'nt')
 
@@ -328,9 +328,9 @@ ext_modules = [
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
     packages = setuptools.find_packages(
-        exclude=['fastdeploy*', 'build_scripts'])
+        exclude=['fastdeploy*', 'scripts'])
 else:
-    packages = setuptools.find_packages(exclude=['build_scripts'])
+    packages = setuptools.find_packages(exclude=['scripts'])
 
 ################################################################################
 # Test
@@ -359,7 +359,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         )
         sys.exit(0)
     sys.path.append(TOP_DIR)
-    from build_scripts.process_libraries import process_libraries
+    from scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
     package_data[PACKAGE_NAME].extend(all_lib_data)
