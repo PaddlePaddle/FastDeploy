@@ -45,3 +45,11 @@ tar -xvfz uie-base.tgz
 
 ## 模型获取
 UIE 模型介绍可以参考https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/uie 。其中，在完成训练后，需要将训练后的模型导出成推理模型。该步骤可参考该文档完成导出：https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/uie#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2 。
+
+## 相关文档
+
+[UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
+
+[UIE模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
+
+[UIE C++部署方法](../cpp/README.md)

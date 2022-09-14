@@ -262,11 +262,6 @@ add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
 add_dependencies(${LIBRARY_NAME} extern_eigen3)
 
 redefine_file_macro(${LIBRARY_NAME})
-set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-if(NOT APPLE)
-  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-Wl,--start-group,--exclude-libs,ALL")
-endif()
-set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
