@@ -1,5 +1,4 @@
 echo "[FastDeploy]    Running Yolo benchmark..."
-find . -name "*.txt" | xargs rm -rf
 
 num_of_models=$(ls -d yolo_model/* | wc -l)
 

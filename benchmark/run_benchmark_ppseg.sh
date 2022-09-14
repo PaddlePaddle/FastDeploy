@@ -1,5 +1,4 @@
 echo "[FastDeploy]    Running PPseg benchmark..."
-find . -name "*.txt" | xargs rm -rf
 
 num_of_models=$(ls -d ppseg_model/* | wc -l)
 

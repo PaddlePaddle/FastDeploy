@@ -53,30 +53,48 @@ for i in range(line_nums):
             # two decimal places
             end2end_list = end2end_ori.split(".")
             end2end = end2end_list[0] + "." + end2end_list[1][:2]
+        if "cpu_rss_mb" in lines[i + 3]:
+            cpu_rss_mb_ori = lines[i + 3].split(": ")[1]
+            # two decimal places
+            cpu_rss_mb_list = cpu_rss_mb_ori.split(".")
+            cpu_rss_mb = cpu_rss_mb_list[0] + "." + cpu_rss_mb_list[1][:2]
+        if "gpu_rss_mb" in lines[i + 4]:
+            gpu_rss_mb_ori = lines[i + 4].split(": ")[1]
+            # two decimal places
+            gpu_rss_mb_list = gpu_rss_mb_ori.split(".")
+            gpu_rss_mb = gpu_rss_mb_list[0] + "." + gpu_rss_mb_list[1][:2]
         if "ort_cpu_1" in lines[i]:
-            ort_cpu_thread1[model_name] = runtime + "\t" + end2end
+            ort_cpu_thread1[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "ort_cpu_8" in lines[i]:
-            ort_cpu_thread8[model_name] = runtime + "\t" + end2end
+            ort_cpu_thread8[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "ort_gpu" in lines[i]:
-            ort_gpu[model_name] = runtime + "\t" + end2end
+            ort_gpu[model_name] = runtime + "\t" + end2end + "\t" + gpu_rss_mb
         elif "ov_cpu_1" in lines[i]:
-            ov_cpu_thread1[model_name] = runtime + "\t" + end2end
+            ov_cpu_thread1[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "ov_cpu_8" in lines[i]:
-            ov_cpu_thread8[model_name] = runtime + "\t" + end2end
+            ov_cpu_thread8[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "paddle_cpu_1" in lines[i]:
-            paddle_cpu_thread1[model_name] = runtime + "\t" + end2end
+            paddle_cpu_thread1[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "paddle_cpu_8" in lines[i]:
-            paddle_cpu_thread8[model_name] = runtime + "\t" + end2end
+            paddle_cpu_thread8[
+                model_name] = runtime + "\t" + end2end + "\t" + cpu_rss_mb
         elif "paddle_gpu" in lines[i]:
-            paddle_gpu[model_name] = runtime + "\t" + end2end
+            paddle_gpu[
+                model_name] = runtime + "\t" + end2end + "\t" + gpu_rss_mb
         elif "trt_gpu" in lines[i]:
-            trt_gpu[model_name] = runtime + "\t" + end2end
+            trt_gpu[model_name] = runtime + "\t" + end2end + "\t" + gpu_rss_mb
         elif "trt_fp16_gpu" in lines[i]:
-            trt_gpu_fp16[model_name] = runtime + "\t" + end2end
+            trt_gpu_fp16[
+                model_name] = runtime + "\t" + end2end + "\t" + gpu_rss_mb
 
 f2 = open("struct_cpu_" + domain + ".txt", "w")
 f2.writelines(
-    "model_name\tthread_nums\tort_run\tort_end2end\tov_run\tov_end2end\tpaddle_run\tpaddle_end2end\n"
+    "model_name\tthread_nums\tort_run\tort_end2end\tcpu_rss_mb\tov_run\tov_end2end\tcpu_rss_mb\tpaddle_run\tpaddle_end2end\tcpu_rss_mb\n"
 )
 for model_name in model_name_set:
     lines1 = model_name + '\t1\t'
@@ -84,54 +102,54 @@ for model_name in model_name_set:
     if model_name in ort_cpu_thread1 and ort_cpu_thread1[model_name] != "":
         lines1 += ort_cpu_thread1[model_name] + '\t'
     else:
-        lines1 += "-\t-\t"
+        lines1 += "-\t-\t-\t"
     if model_name in ov_cpu_thread1 and ov_cpu_thread1[model_name] != "":
         lines1 += ov_cpu_thread1[model_name] + '\t'
     else:
-        lines1 += "-\t-\t"
+        lines1 += "-\t-\t-\t"
     if model_name in paddle_cpu_thread1 and paddle_cpu_thread1[
             model_name] != "":
         lines1 += paddle_cpu_thread1[model_name] + '\n'
     else:
-        lines1 += "-\t-\n"
+        lines1 += "-\t-\t-\n"
     f2.writelines(lines1)
     if model_name in ort_cpu_thread8 and ort_cpu_thread8[model_name] != "":
         lines2 += ort_cpu_thread8[model_name] + '\t'
     else:
-        lines2 += "-\t-\t"
+        lines2 += "-\t-\t-\t"
     if model_name in ov_cpu_thread8 and ov_cpu_thread8[model_name] != "":
         lines2 += ov_cpu_thread8[model_name] + '\t'
     else:
-        lines2 += "-\t-\t"
+        lines2 += "-\t-\t-\t"
     if model_name in paddle_cpu_thread8 and paddle_cpu_thread8[
             model_name] != "":
         lines2 += paddle_cpu_thread8[model_name] + '\n'
     else:
-        lines2 += "-\t-\n"
+        lines2 += "-\t-\t-\n"
     f2.writelines(lines2)
 f2.close()
 
 f3 = open("struct_gpu_" + domain + ".txt", "w")
 f3.writelines(
-    "model_name\tort_run\tort_end2end\tpaddle_run\tpaddle_end2end\ttrt_run\ttrt_end2end\ttrt_fp16_run\ttrt_fp16_end2end\n"
+    "model_name\tort_run\tort_end2end\tgpu_rss_mb\tpaddle_run\tpaddle_end2end\tgpu_rss_mb\ttrt_run\ttrt_end2end\tgpu_rss_mb\ttrt_fp16_run\ttrt_fp16_end2end\tgpu_rss_mb\n"
 )
 for model_name in model_name_set:
     lines1 = model_name + '\t'
     if model_name in ort_gpu and ort_gpu[model_name] != "":
         lines1 += ort_gpu[model_name] + '\t'
     else:
-        lines1 += "-\t-\t"
+        lines1 += "-\t-\t-\t"
     if model_name in paddle_gpu and paddle_gpu[model_name] != "":
         lines1 += paddle_gpu[model_name] + '\t'
     else:
-        lines1 += "-\t-\t"
+        lines1 += "-\t-\t-\t"
     if model_name in trt_gpu and trt_gpu[model_name] != "":
         lines1 += trt_gpu[model_name] + '\t'
     else:
-        lines1 += "-\t-\t"
+        lines1 += "-\t-\t-\t"
     if model_name in trt_gpu_fp16 and trt_gpu_fp16[model_name] != "":
         lines1 += trt_gpu_fp16[model_name] + '\n'
     else:
-        lines1 += "-\t-\n"
+        lines1 += "-\t-\t-\n"
     f3.writelines(lines1)
 f3.close()
