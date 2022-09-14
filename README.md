@@ -74,7 +74,7 @@ English | [简体中文](README_CN.md)
 ##### Install the GPU Version
 
 ```bash
-pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
 ##### [Conda Installation (Recommended)](docs/quick_start/Python_prebuilt_wheels.md)
@@ -86,7 +86,7 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 ##### Install the CPU Version
 
 ```bash
-pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
 #### Python Inference Example
