@@ -67,6 +67,10 @@ struct FASTDEPLOY_DECL FDTensor {
                        const FDDataType& data_type, void* data_buffer,
                        const Device& new_device = Device::CPU);
 
+  // Expand the shape of a Tensor. Insert a new axis that will appear
+  // at the `axis` position in the expanded Tensor shape.
+  void ExpandDim(int64_t axis = 0);
+
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
