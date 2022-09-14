@@ -14,18 +14,47 @@
 
 #include "fastdeploy/pybind/main.h"
 
+namespace py = pybind11;
+using namespace py::literals;
+
 namespace fastdeploy {
 
-void BindUIE(pybind11::module& m);
+void BindUIE(py::module& m);
 
-void BindText(pybind11::module& m) {
-  pybind11::class_<text::UIEResult>(m, "UIEResult")
-      .def(pybind11::init())
+py::dict ConvertUIEResultToDict(const text::UIEResult& self) {
+  py::dict d;
+  d["start"] = self.start_;
+  d["end"] = self.end_;
+  d["probability"] = self.probability_;
+  d["text"] = self.text_;
+
+  if (!self.relation_.empty()) {
+    d["relation"] = py::dict();
+    for (auto iter = self.relation_.begin(); iter != self.relation_.end();
+         ++iter) {
+      py::list l;
+      for (auto result_iter = iter->second.begin();
+           result_iter != iter->second.end(); ++result_iter) {
+        l.append(ConvertUIEResultToDict(*result_iter));
+      }
+      d["relation"][iter->first.c_str()] = l;
+    }
+  }
+  return d;
+}
+
+void BindText(py::module& m) {
+  py::class_<text::UIEResult>(m, "UIEResult", py::dynamic_attr())
+      .def(py::init())
       .def_readwrite("start", &text::UIEResult::start_)
       .def_readwrite("end", &text::UIEResult::end_)
-      .def_readwrite("probability_", &text::UIEResult::probability_)
+      .def_readwrite("probability", &text::UIEResult::probability_)
       .def_readwrite("text", &text::UIEResult::text_)
       .def_readwrite("relation", &text::UIEResult::relation_)
+      .def("get_dict",
+           [](const text::UIEResult& self) {
+             return ConvertUIEResultToDict(self);
+           })
       .def("__repr__", &text::UIEResult::Str)
       .def("__str__", &text::UIEResult::Str);
   BindUIE(m);

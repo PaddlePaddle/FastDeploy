@@ -23,11 +23,13 @@ from ... import c_lib_wrap as C
 class SchemaNode(object):
     def __init__(self, name, children=[]):
         schema_node_children = []
+        if isinstance(children, str):
+            children = [children]
         for child in children:
             if isinstance(child, str):
                 schema_node_children += [C.text.SchemaNode(child, [])]
             elif isinstance(child, dict):
-                for key, val in child.item():
+                for key, val in child.items():
                     schema_node_child = SchemaNode(key, val)
                     schema_node_children += [schema_node_child._schema_node]
             else:
@@ -69,5 +71,15 @@ class UIEModel(object):
             schema = schema_tmp
         self._model.set_schema(schema)
 
-    def predict(self, texts):
-        return self._model.predict(texts)
+    def predict(self, texts, return_dict=False):
+        results = self._model.predict(texts)
+        if not return_dict:
+            return results
+        new_results = []
+        for result in results:
+            uie_result = dict()
+            for key, uie_results in result.items():
+                for uie_res in uie_results:
+                    uie_result[key] = uie_res.get_dict()
+            new_results += [uie_result]
+        return new_results
