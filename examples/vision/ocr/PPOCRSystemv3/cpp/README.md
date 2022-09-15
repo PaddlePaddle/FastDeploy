@@ -55,7 +55,7 @@ fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ocr::DBDet
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
-PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
+PPOCRSystemv3 的初始化，由检测，分类和识别模型串联构成
 
 **参数**
 
@@ -67,7 +67,7 @@ PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
 fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
-PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
+PPOCRSystemv3 的初始化，由检测，识别模型串联构成(无分类器)
 
 **参数**
 
@@ -76,18 +76,16 @@ PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 #### Predict函数
 
-> ```
-> std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-> PPOCRSystemv3.Predict(std::vector<cv::Mat> cv_all_imgs);
->  
+> ```  
+> bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 > ```
 >
-> 模型预测接口，输入一个可装入多张图片的图片列表，后可输出检测结果。
+> 模型预测接口，输入一张图片，返回OCR预测结果
 >
 > **参数**
 >
-> > * **cv_all_imgs**: 输入图像，注意需为HWC，BGR格式
-> > * **ocr_results**: OCR结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **img**: 输入图像，注意需为HWC，BGR格式
+> > * **result**: OCR预测结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 ## DBDetector C++接口
@@ -141,7 +139,8 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 
 > > * **cls_thresh**(double): 当分类模型输出的得分超过此阈值，输入的图片将被翻转，默认为0.9
 
+## 其它文档
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [PPOCR 系列模型介绍](../../)
+- [PPOCRv3 Python部署](../python)
+- [模型预测结果说明](../../../../../docs/api/vision_results/)
