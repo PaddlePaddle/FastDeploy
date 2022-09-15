@@ -85,7 +85,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   option.UseTrtBackend();
   option.SetTrtInputShape("image", {1, 3, 640, 640});
   option.SetTrtInputShape("scale_factor", {1, 2});
-  option.EnablePaddleToTrt();
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
