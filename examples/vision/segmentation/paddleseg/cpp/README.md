@@ -7,7 +7,7 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
@@ -25,11 +25,11 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 
 # CPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
 ```
 
 运行完成可视化结果如下图所示
