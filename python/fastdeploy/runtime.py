@@ -116,6 +116,9 @@ class RuntimeOption:
     def disable_trt_fp16(self):
         return self._option.disable_trt_fp16()
 
+    def enable_paddle_to_trt(self):
+        return self._option.enable_paddle_to_trt()
+
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"

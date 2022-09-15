@@ -100,6 +100,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  // While UseTrtBackend and EnablePaddle2Trt
+  // FastDeploy will call Paddle Inference Backend
+  // to use tensorrt engine
+  void EnablePaddleToTrt();
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   // default will let the backend choose their own default value
@@ -120,6 +125,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
   bool pd_enable_log_info = false;
+  bool pd_enable_trt = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 
@@ -132,6 +138,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+  
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
