@@ -22,7 +22,7 @@ void BindUIE(pybind11::module& m) {
   py::class_<text::SchemaNode>(m, "SchemaNode")
       .def(py::init<>())
       .def(py::init<std::string, std::vector<text::SchemaNode>>(),
-           py::arg("name"), py::arg("children") = {})
+           py::arg("name"), py::arg("children"))
       .def_readwrite("name", &text::SchemaNode::name_)
       .def_readwrite("prefix", &text::SchemaNode::prefix_)
       .def_readwrite("relations", &text::SchemaNode::relations_)
