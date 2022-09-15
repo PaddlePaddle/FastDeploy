@@ -65,7 +65,7 @@ cat *.txt >> ./result_ppcls.txt
 python convert_info.py --txt_path result_ppcls.txt --domain ppcls
 ```
 
-得到 CPU 结果`` `struct_cpu_ppcls.txt` ` `以及 GPU 结果` ` `struct_gpu_ppcls.txt` ``如下所示
+得到 CPU 结果```struct_cpu_ppcls.txt```以及 GPU 结果```struct_gpu_ppcls.txt```如下所示
 
 ```bash
 # struct_cpu_ppcls.txt
