@@ -17,8 +17,3 @@
 | PPOCRv2_mobile |[ch_ppocr_mobile_v2.0_det](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_det_infer.tar.gz) | [ch_ppocr_mobile_v2.0_cls](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz) | [ch_ppocr_mobile_v2.0_rec](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_rec_infer.tar.gz) | [ppocr_keys_v1.txt](https://bj.bcebos.com/paddlehub/fastdeploy/ppocr_keys_v1.txt) | OCRv2系列原始超轻量模型，支持中英文、多语种文本检测,比PPOCRv2更加轻量 |
 | PPOCRv2_server |[ch_ppocr_server_v2.0_det](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_server_v2.0_det_infer.tar.gz) | [ch_ppocr_mobile_v2.0_cls](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz) | [ch_ppocr_server_v2.0_rec](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_server_v2.0_rec_infer.tar.gz) |[ppocr_keys_v1.txt](https://bj.bcebos.com/paddlehub/fastdeploy/ppocr_keys_v1.txt) | OCRv2服务器系列模型, 支持中英文、多语种文本检测，比超轻量模型更大，但效果更好|
 
-
-## 详细部署文档
-
-- [Python部署](python)
-- [C++部署](cpp)
