@@ -80,10 +80,10 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 #### 预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`True`表明输入图片是竖屏，即height大于width的图片
+> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`True`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 - [模型介绍](../../)
 - [Python部署](../python)
