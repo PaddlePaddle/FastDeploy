@@ -1,4 +1,4 @@
-# YOLOv5准备部署模型
+# YOLOv5s量化模型部署
 FastDeploy 提供已经量化完成的yolov5s模型，供用户体验推理加速.
 
 ## 下载量化完成的YOLOv5s模型
