@@ -51,6 +51,8 @@ class OpenVINOBackend : public BaseBackend {
 
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,

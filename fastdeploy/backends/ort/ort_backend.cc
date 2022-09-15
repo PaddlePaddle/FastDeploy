@@ -247,6 +247,16 @@ TensorInfo OrtBackend::GetInputInfo(int index) {
   return info;
 }
 
+std::vector<TensorInfo> OrtBackend::GetInputInfos() {
+  auto size = inputs_desc_.size();
+  std::vector<TensorInfo> infos;
+  infos.reserve(size);
+  for (auto i = 0; i < size; i++) {
+    infos.emplace_back(GetInputInfo(i));
+  }
+  return infos;
+}
+
 TensorInfo OrtBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
            "The index: %d should less than the number of outputs: %d.", index,
@@ -257,6 +267,14 @@ TensorInfo OrtBackend::GetOutputInfo(int index) {
                     outputs_desc_[index].shape.end());
   info.dtype = GetFdDtype(outputs_desc_[index].dtype);
   return info;
+}
+
+std::vector<TensorInfo> OrtBackend::GetOutputInfos() {
+  std::vector<TensorInfo> infos;
+  for (auto i = 0; i < outputs_desc_.size(); i++) {
+    infos.emplace_back(GetOutputInfo(i));
+  }
+  return infos;
 }
 
 void OrtBackend::InitCustomOperators() {
