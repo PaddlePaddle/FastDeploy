@@ -56,30 +56,6 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
   return res;
 }
 
-template <typename T>
-void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result) {
-  int64_t height = result->shape[0];
-  int64_t width = result->shape[1];
-  int64_t num_classes = result->shape[2];
-  int index = 0;
-  for (size_t i = 0; i < height; ++i) {
-    for (size_t j = 0; j < width; ++j) {
-      int64_t s = (i * width + j) * num_classes;
-      T max_class_score = std::max_element(
-          infer_result_buffer + s, infer_result_buffer + s + num_classes);
-      int label_id = std::distance(infer_result_buffer + s, max_class_score);
-      if (label_id >= 255) {
-        FDWARNING << "label_id is stored by uint8_t, now the value is bigger "
-                     "than 255, it's "
-                  << static_cast<int>(label_id) << "." << std::endl;
-      }
-      result->label_map[index] = static_cast<uint8_t>(label_id);
-      result->score_map[index] = static_cast<float>(*max_class_score);
-      index++;
-    }
-  }
-}
-
 void NMS(DetectionResult* output, float iou_threshold = 0.5);
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
