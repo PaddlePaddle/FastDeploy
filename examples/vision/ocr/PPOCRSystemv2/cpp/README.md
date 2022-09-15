@@ -18,20 +18,19 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
 make -j
 
 
-# 下载模型,图片和label文件
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
-tar xvf ch_PP-OCRv2_det_infer.tar
+# 下载模型,图片和字典文件
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
+tar -xvf ch_PP-OCRv2_det_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
-tar xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
-tar xvf ch_PP-OCRv2_rec_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
+tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/utils/ppocr_keys_v1.txt
-
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 # CPU推理
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
@@ -39,9 +38,10 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 1
 # GPU上TensorRT推理
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 2
-# OCR还支持det/cls/rec三个模型的组合使用，例如当我们不想使用cls模型的时候，只需要给cls模型路径的位置，传入一个空的字符串, 例子如下
-./infer_demo ./ch_PP-OCRv2_det_infer "" ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 0
 ```
+
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
 
 运行完成可视化结果如下图所示
 
@@ -53,9 +53,9 @@ wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/
 ### PPOCRSystemv2类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* ocr_det = nullptr,
-                fastdeploy::vision::ocr::Classifier* ocr_cls = nullptr,
-                fastdeploy::vision::ocr::Recognizer* ocr_rec = nullptr);
+fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Classifier* cls_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
 PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
@@ -66,20 +66,29 @@ PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
 > * **Classifier**(model): OCR中的分类模型
 > * **Recognizer**(model): OCR中的识别模型
 
+```
+fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+                fastdeploy::vision::ocr::Recognizer* rec_model);
+```
+PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
+
+**参数**
+
+> * **DBDetector**(model): OCR中的检测模型
+> * **Recognizer**(model): OCR中的识别模型
+
 #### Predict函数
 
-> ```
-> std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-> PPOCRSystemv2.Predict(std::vector<cv::Mat> cv_all_imgs);
->  
+> ```  
+> bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 > ```
 >
-> 模型预测接口，输入一个可装入多张图片的图片列表，后可输出检测结果。
+> 模型预测接口，输入一张图片，返回OCR预测结果
 >
 > **参数**
 >
-> > * **cv_all_imgs**: 输入图像，注意需为HWC，BGR格式
-> > * **ocr_results**: OCR结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **img**: 输入图像，注意需为HWC，BGR格式
+> > * **result**: OCR预测结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 ## DBDetector C++接口
@@ -133,7 +142,8 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 
 > > * **cls_thresh**(double): 当分类模型输出的得分超过此阈值，输入的图片将被翻转，默认为0.9
 
+## 其它文档
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [PPOCR 系列模型介绍](../../)
+- [PPOCRv2 Python部署](../python)
+- [模型预测结果说明](../../../../../docs/api/vision_results/)

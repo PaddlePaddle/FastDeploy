@@ -19,11 +19,7 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void CpuInfer(const std::string& det_model_dir,
-              const std::string& cls_model_dir,
-              const std::string& rec_model_dir,
-              const std::string& rec_label_file,
-              const std::string& image_file) {
+void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model_dir, const std::string& rec_model_dir, const std::string& rec_label_file, const std::string& image_file, const fastdeploy::RuntimeOption& option) {
   auto det_model_file = det_model_dir + sep + "inference.pdmodel";
   auto det_params_file = det_model_dir + sep + "inference.pdiparams";
 
@@ -32,238 +28,32 @@ void CpuInfer(const std::string& det_model_dir,
 
   auto rec_model_file = rec_model_dir + sep + "inference.pdmodel";
   auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
-  auto rec_label = rec_label_file;
 
-  fastdeploy::vision::ocr::DBDetector det_model;
-  fastdeploy::vision::ocr::Classifier cls_model;
-  fastdeploy::vision::ocr::Recognizer rec_model;
+  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, option);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, option);
 
-  if (!det_model_dir.empty()) {
-    auto det_option = fastdeploy::RuntimeOption();
-    det_option.UseCpu();
-    det_model = fastdeploy::vision::ocr::DBDetector(
-        det_model_file, det_params_file, det_option);
+  assert(det_model.Initialized());
+  assert(cls_model.Initialized());
+  assert(rec_model.Initialized());
 
-    if (!det_model.Initialized()) {
-      std::cerr << "Failed to initialize det_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!cls_model_dir.empty()) {
-    auto cls_option = fastdeploy::RuntimeOption();
-    cls_option.UseCpu();
-    cls_model = fastdeploy::vision::ocr::Classifier(
-        cls_model_file, cls_params_file, cls_option);
-
-    if (!cls_model.Initialized()) {
-      std::cerr << "Failed to initialize cls_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!rec_model_dir.empty()) {
-    auto rec_option = fastdeploy::RuntimeOption();
-    rec_option.UseCpu();
-    rec_model = fastdeploy::vision::ocr::Recognizer(
-        rec_model_file, rec_params_file, rec_label, rec_option);
-
-    if (!rec_model.Initialized()) {
-      std::cerr << "Failed to initialize rec_model." << std::endl;
-      return;
-    }
-  }
-
-  auto ocrv2_app = fastdeploy::application::ocrsystem::PPOCRSystemv2(
-      &det_model, &cls_model, &rec_model);
+  // 其中分类模型可选，因此也可使用如下方式串联OCR系统
+  // auto ocr_system_v2 = fastdeploy::application::ocrsystem::PPOCRSystemv2(&det_model, &rec_model);
+  auto ocr_system_v2 = fastdeploy::application::ocrsystem::PPOCRSystemv2(&det_model, &cls_model, &rec_model);
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
-
-  fastdeploy::vision::OCRResult res;
-  //开始预测
-  if (!ocrv2_app.Predict(&im, &res)) {
+  
+  fastdeploy::vision::OCRResult result;
+  if (!ocr_system_v2.Predict(&im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
-  //输出预测信息
-  std::cout << res.Str() << std::endl;
+  std::cout << result.Str() << std::endl;
 
-  //可视化
-  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
-
-  cv::imwrite("vis_result.jpg", vis_img);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-}
-
-void GpuInfer(const std::string& det_model_dir,
-              const std::string& cls_model_dir,
-              const std::string& rec_model_dir,
-              const std::string& rec_label_file,
-              const std::string& image_file) {
-  auto det_model_file = det_model_dir + sep + "inference.pdmodel";
-  auto det_params_file = det_model_dir + sep + "inference.pdiparams";
-
-  auto cls_model_file = cls_model_dir + sep + "inference.pdmodel";
-  auto cls_params_file = cls_model_dir + sep + "inference.pdiparams";
-
-  auto rec_model_file = rec_model_dir + sep + "inference.pdmodel";
-  auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
-  auto rec_label = rec_label_file;
-
-  fastdeploy::vision::ocr::DBDetector det_model;
-  fastdeploy::vision::ocr::Classifier cls_model;
-  fastdeploy::vision::ocr::Recognizer rec_model;
-
-  //准备模型
-  if (!det_model_dir.empty()) {
-    auto det_option = fastdeploy::RuntimeOption();
-    det_option.UseGpu();
-    det_model = fastdeploy::vision::ocr::DBDetector(
-        det_model_file, det_params_file, det_option);
-
-    if (!det_model.Initialized()) {
-      std::cerr << "Failed to initialize det_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!cls_model_dir.empty()) {
-    auto cls_option = fastdeploy::RuntimeOption();
-    cls_option.UseGpu();
-    cls_model = fastdeploy::vision::ocr::Classifier(
-        cls_model_file, cls_params_file, cls_option);
-
-    if (!cls_model.Initialized()) {
-      std::cerr << "Failed to initialize cls_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!rec_model_dir.empty()) {
-    auto rec_option = fastdeploy::RuntimeOption();
-    rec_option.UseGpu();
-    rec_option
-        .UsePaddleBackend();  // OCRv2的rec模型暂不支持ORT后端与PaddleInference
-                              // v2.3.2
-    rec_model = fastdeploy::vision::ocr::Recognizer(
-        rec_model_file, rec_params_file, rec_label, rec_option);
-
-    if (!rec_model.Initialized()) {
-      std::cerr << "Failed to initialize rec_model." << std::endl;
-      return;
-    }
-  }
-
-  auto ocrv2_app = fastdeploy::application::ocrsystem::PPOCRSystemv2(
-      &det_model, &cls_model, &rec_model);
-
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::OCRResult res;
-  //开始预测
-  if (!ocrv2_app.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  //输出预测信息
-  std::cout << res.Str() << std::endl;
-
-  //可视化
-  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
-
-  cv::imwrite("vis_result.jpg", vis_img);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-}
-
-void TrtInfer(const std::string& det_model_dir,
-              const std::string& cls_model_dir,
-              const std::string& rec_model_dir,
-              const std::string& rec_label_file,
-              const std::string& image_file) {
-  auto det_model_file = det_model_dir + sep + "inference.pdmodel";
-  auto det_params_file = det_model_dir + sep + "inference.pdiparams";
-
-  auto cls_model_file = cls_model_dir + sep + "inference.pdmodel";
-  auto cls_params_file = cls_model_dir + sep + "inference.pdiparams";
-
-  auto rec_model_file = rec_model_dir + sep + "inference.pdmodel";
-  auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
-  auto rec_label = rec_label_file;
-
-  fastdeploy::vision::ocr::DBDetector det_model;
-  fastdeploy::vision::ocr::Classifier cls_model;
-  fastdeploy::vision::ocr::Recognizer rec_model;
-
-  //准备模型
-  if (!det_model_dir.empty()) {
-    auto det_option = fastdeploy::RuntimeOption();
-    det_option.UseGpu();
-    det_option.UseTrtBackend();
-    det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
-                                {1, 3, 960, 960});
-
-    det_model = fastdeploy::vision::ocr::DBDetector(
-        det_model_file, det_params_file, det_option);
-
-    if (!det_model.Initialized()) {
-      std::cerr << "Failed to initialize det_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!cls_model_dir.empty()) {
-    auto cls_option = fastdeploy::RuntimeOption();
-    cls_option.UseGpu();
-    cls_option.UseTrtBackend();
-    cls_option.SetTrtInputShape("x", {1, 3, 48, 192});
-
-    cls_model = fastdeploy::vision::ocr::Classifier(
-        cls_model_file, cls_params_file, cls_option);
-
-    if (!cls_model.Initialized()) {
-      std::cerr << "Failed to initialize cls_model." << std::endl;
-      return;
-    }
-  }
-
-  if (!rec_model_dir.empty()) {
-    auto rec_option = fastdeploy::RuntimeOption();
-    rec_option.UseGpu();
-    rec_option.UseTrtBackend();
-    rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320},
-                                {1, 3, 48, 2000});
-
-    rec_model = fastdeploy::vision::ocr::Recognizer(
-        rec_model_file, rec_params_file, rec_label, rec_option);
-
-    if (!rec_model.Initialized()) {
-      std::cerr << "Failed to initialize rec_model." << std::endl;
-      return;
-    }
-  }
-
-  auto ocrv2_app = fastdeploy::application::ocrsystem::PPOCRSystemv2(
-      &det_model, &cls_model, &rec_model);
-
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::OCRResult res;
-  //开始预测
-  if (!ocrv2_app.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  //输出预测信息
-  std::cout << res.Str() << std::endl;
-
-  //可视化
-  auto vis_img = fastdeploy::vision::Visualize::VisOcr(im_bak, res);
-
-  cv::imwrite("vis_result.jpg", vis_img);
+  auto vis_im = fastdeploy::vision::Visualize::VisOcr(im_bak, result);
+  cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
@@ -282,12 +72,23 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  if (std::atoi(argv[6]) == 0) {
-    CpuInfer(argv[1], argv[2], argv[3], argv[4], argv[5]);
-  } else if (std::atoi(argv[6]) == 1) {
-    GpuInfer(argv[1], argv[2], argv[3], argv[4], argv[5]);
-  } else if (std::atoi(argv[6]) == 2) {
-    TrtInfer(argv[1], argv[2], argv[3], argv[4], argv[5]);
+  fastdeploy::RuntimeOption option;
+  int flag = std::atoi(argv[6]);
+
+  if (flag == 0) {
+    option.UseCpu(); 
+  } else if (flag == 1) {
+    option.UseGpu();
+  } else if (flag == 2) {
+    option.UseGpu();
+    option.UseTrtBackend();
   }
+
+  std::string det_model_dir = argv[1];
+  std::string cls_model_dir = argv[2];
+  std::string rec_model_dir = argv[3];
+  std::string rec_label_file = argv[4];
+  std::string test_image = argv[5];
+  InitAndInfer(det_model_dir, cls_model_dir, rec_model_dir, rec_label_file, test_image, option);
   return 0;
 }

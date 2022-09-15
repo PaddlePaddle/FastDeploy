@@ -35,7 +35,7 @@
         - 支持YOLOv7、YOLOv6、YOLOv5、PP-YOLOE等全系列目标检测模型并提供[端到端部署示例](examples/vision/detection/)
         - 支持人脸检测、人脸识别、实时人像抠图、图像分割等40+重点模型及[Demo示例](examples/vision/)
         - 支持Python和C++两种语言部署
-    - **端侧部署新增瑞芯微、晶晨、恩智浦等NPU芯片部署能力**
+    - **边缘移动端部署新增瑞芯微、晶晨、恩智浦等NPU芯片部署能力**
         - 发布轻量化目标检测[Picodet-NPU部署Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)，提供极致的INT8全量化推理能力
 
 ## 目录
@@ -192,14 +192,14 @@ int main(int argc, char* argv[]) {
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/PP-HumanSegServer](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Segmentation | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceDetection | <font size=2> [biubug6/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceDetection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/ultraface/python)/[C++](./examples/vision/facedet/ultraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Detection | <font size=2> [biubug6/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Detection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/ultraface/python)/[C++](./examples/vision/facedet/ultraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> FaceDetection | <font size=2> [deepcam-cn/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceDetection | <font size=2> [deepinsight/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceRecognition | <font size=2> [deepinsight/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceRecognition | <font size=2> [deepinsight/CosFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceRecognition | <font size=2> [deepinsight/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
-| <font size=2> FaceRecognition | <font size=2> [deepinsight/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Detection | <font size=2> [deepinsight/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Recognition | <font size=2> [deepinsight/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Recognition | <font size=2> [deepinsight/CosFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Recognition | <font size=2> [deepinsight/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
+| <font size=2> Face Recognition | <font size=2> [deepinsight/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ❔ |
 
 
@@ -265,9 +265,9 @@ int main(int argc, char* argv[]) {
 | Detection          | PP-YOLOv2_ResNet50vd         | 218.7                 | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
 | Detection          | PP-YOLO_crn_l_300e_coco      | 209.1                 | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
 | Detection          | YOLOv5s                      | 29.3                  | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
-| FaceDetection      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
-| FaceDetection      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |--  | --  | --    |--|
-| KeypointsDetection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |❔ | ❔ | ❔ |❔|
+| Face Detection      | BlazeFace                    | 1.5                   | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
+| Face Detection      | RetinaFace                   | 1.7                   | ✅                     | ❌                      | ❌                     |--  | --  | --    |--|
+| Keypoint Detection | PP-TinyPose                  | 5.5                   | ✅                     | ✅                      | ✅                     |❔ | ❔ | ❔ |❔|
 | Segmentation       | PP-LiteSeg(STDC1)            | 32.2                  | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
 | Segmentation       | PP-HumanSeg-Lite             | 0.556                 | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
 | Segmentation       | HRNet-w18                    | 38.7                  | ✅                     | ✅                      | ✅                     |--  | --  | --    |--|
