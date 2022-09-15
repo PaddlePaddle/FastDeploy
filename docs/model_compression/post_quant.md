@@ -34,5 +34,9 @@ https://github.com/PaddlePaddle/PaddleSlim/tree/develop/example/post_training_qu
 ## 3. FastDeploy 部署量化模型
 用户只需要简单地传入量化后的模型路径及相应参数，即可以使用FastDeploy进行部署.
 具体请用户参考示例文档:
-- [YOLO系列量化模型Python部署](../../)
-- [YOLO系列量化模型C++部署](../cpp)
+- [YOLOv5s 量化模型Python部署](../../examples/slim/yolov5s/python/)
+- [YOLOv5s 量化模型C++部署](../../examples/slim/yolov5s/cpp/)
+- [YOLOv6s 量化模型Python部署](../../examples/slim/yolov6s/python/)
+- [YOLOv6s 量化模型C++部署](../../examples/slim/yolov6s/cpp/)
+- [YOLOv7 量化模型Python部署](../../examples/slim/yolov7/python/)
+- [YOLOv7 量化模型C++部署](../../examples/slim/yolov7/cpp/)
