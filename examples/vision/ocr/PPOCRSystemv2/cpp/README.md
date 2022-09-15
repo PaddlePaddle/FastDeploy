@@ -40,6 +40,9 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 ./infer_demo ./ch_PP-OCRv2_det_infer ./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer ./ppocr_keys_v1.txt ./12.jpg 2
 ```
 
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
@@ -74,21 +77,18 @@ PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
 > * **DBDetector**(model): OCR中的检测模型
 > * **Recognizer**(model): OCR中的识别模型
 
-
 #### Predict函数
 
-> ```
-> std::vector<std::vector<fastdeploy::vision::OCRResult>> ocr_results =
-> PPOCRSystemv2.Predict(std::vector<cv::Mat> cv_all_imgs);
->  
+> ```  
+> bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 > ```
 >
-> 模型预测接口，输入一个可装入多张图片的图片列表，后可输出检测结果。
+> 模型预测接口，输入一张图片，返回OCR预测结果
 >
 > **参数**
 >
-> > * **cv_all_imgs**: 输入图像，注意需为HWC，BGR格式
-> > * **ocr_results**: OCR结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **img**: 输入图像，注意需为HWC，BGR格式
+> > * **result**: OCR预测结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果, OCRResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
 ## DBDetector C++接口
@@ -142,7 +142,8 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 
 > > * **cls_thresh**(double): 当分类模型输出的得分超过此阈值，输入的图片将被翻转，默认为0.9
 
+## 其它文档
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [PPOCR 系列模型介绍](../../)
+- [PPOCRv2 Python部署](../python)
+- [模型预测结果说明](../../../../../docs/api/vision_results/)
