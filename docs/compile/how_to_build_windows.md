@@ -49,7 +49,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 Windows菜单打开x64 Native Tools Command Prompt for VS 2019命令工具。Python编译时，通过环境变量获取编译选项，在命令行终端运行以下命令
 ```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy && git checkout develop
+cd FastDeploy/python && git checkout develop
 
 set ENABLE_ORT_BACKEND=ON
 set ENABLE_PADDLE_BACKEND=ON

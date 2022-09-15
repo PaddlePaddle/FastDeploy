@@ -9,19 +9,19 @@
 
 ```
 
-# 下载模型,图片和label文件
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
-tar xvf ch_PP-OCRv2_det_infer.tar
+# 下载模型,图片和字典文件
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
+tar -xvf ch_PP-OCRv2_det_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
-tar xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
-tar xvf ch_PP-OCRv2_rec_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
+tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/doc/imgs/12.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-wget https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.5/ppocr/utils/ppocr_keys_v1.txt
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 
 #下载部署示例代码
@@ -33,9 +33,7 @@ python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2
 # GPU推理
 python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu --det_use_trt True --cls_use_trt True --rec_use_trt True
-# OCR还支持det/cls/rec三个模型的组合使用，例如当我们不想使用cls模型的时候，只需要给--cls_model传入一个空的字符串, 例子如下：
-python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model "" --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device cpu
+python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示
@@ -126,6 +124,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 ## 其它文档
 
-- [YOLOv5 模型介绍](..)
-- [YOLOv5 C++部署](../cpp)
+- [PPOCR系列模型介绍](../../)
+- [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
