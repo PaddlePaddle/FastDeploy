@@ -20,6 +20,11 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
 
+// #include "unsupported/Eigen/CXX11/Tensor"
+#include "fastdeploy/function/reduce.h"
+#include "fastdeploy/function/softmax.h"
+#include "fastdeploy/function/transpose.h"
+
 namespace fastdeploy {
 namespace vision {
 namespace utils {
@@ -52,8 +57,7 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
 }
 
 template <typename T>
-void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result,
-                    bool with_softmax) {
+void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result) {
   int64_t height = result->shape[0];
   int64_t width = result->shape[1];
   int64_t num_classes = result->shape[2];
@@ -70,49 +74,10 @@ void ArgmaxScoreMap(T infer_result_buffer, SegmentationResult* result,
                   << static_cast<int>(label_id) << "." << std::endl;
       }
       result->label_map[index] = static_cast<uint8_t>(label_id);
-
-      if (with_softmax) {
-        double_t total = 0;
-        for (int k = 0; k < num_classes; k++) {
-          total += exp(*(infer_result_buffer + s + k) - *max_class_score);
-        }
-        double_t softmax_class_score = 1 / total;
-        result->score_map[index] = static_cast<float>(softmax_class_score);
-
-      } else {
-        result->score_map[index] = static_cast<float>(*max_class_score);
-      }
+      result->score_map[index] = static_cast<float>(*max_class_score);
       index++;
     }
   }
-}
-
-template <typename T>
-void NCHW2NHWC(FDTensor& infer_result) {
-  T* infer_result_buffer = reinterpret_cast<T*>(infer_result.MutableData());
-  int num = infer_result.shape[0];
-  int channel = infer_result.shape[1];
-  int height = infer_result.shape[2];
-  int width = infer_result.shape[3];
-  int chw = channel * height * width;
-  int wc = width * channel;
-  int wh = width * height;
-  std::vector<T> hwc_data(chw);
-  int index = 0;
-  for (int n = 0; n < num; n++) {
-    for (int c = 0; c < channel; c++) {
-      for (int h = 0; h < height; h++) {
-        for (int w = 0; w < width; w++) {
-          hwc_data[n * chw + h * wc + w * channel + c] =
-              *(infer_result_buffer + index);
-          index++;
-        }
-      }
-    }
-  }
-  std::memcpy(infer_result.MutableData(), hwc_data.data(),
-              num * chw * sizeof(T));
-  infer_result.shape = {num, height, width, channel};
 }
 
 void NMS(DetectionResult* output, float iou_threshold = 0.5);

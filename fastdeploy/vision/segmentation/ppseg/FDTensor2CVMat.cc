@@ -18,8 +18,8 @@ namespace fastdeploy {
 namespace vision {
 namespace segmentation {
 
-void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
-                        bool contain_score_map) {
+void FDTensor2FP32CVMat(cv::Mat* mat, FDTensor& infer_result,
+                        const bool contain_score_map) {
   // output with argmax channel is 1
   int channel = 1;
   int height = infer_result.shape[1];
@@ -36,21 +36,21 @@ void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
                      Str(infer_result.dtype) +
                      ". If you want the edge of segmentation image more "
                      "smoother. Please export model with --without_argmax "
-                     "--with_softmax."
+                     "--apply_softmax."
               << std::endl;
     int64_t chw = channel * height * width;
     int64_t* infer_result_buffer = static_cast<int64_t*>(infer_result.Data());
     std::vector<float_t> float_result_buffer(chw);
-    mat = cv::Mat(height, width, CV_32FC(channel));
+    *mat = cv::Mat(height, width, CV_32FC(channel));
     int index = 0;
     for (int i = 0; i < height; i++) {
       for (int j = 0; j < width; j++) {
-        mat.at<float_t>(i, j) =
+        mat->at<float_t>(i, j) =
             static_cast<float_t>(infer_result_buffer[index++]);
       }
     }
   } else if (infer_result.dtype == FDDataType::FP32) {
-    mat = cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
+    *mat = cv::Mat(height, width, CV_32FC(channel), infer_result.Data());
   }
 }
 

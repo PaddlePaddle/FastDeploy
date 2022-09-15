@@ -79,6 +79,12 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
+  if (cfg["Deploy"]["with_argmax"]) {
+    is_with_softmax = cfg["Deploy"]["with_argmax"].as<bool>();
+  }
+  if (cfg["Deploy"]["with_softmax"]) {
+    is_with_argmax = cfg["Deploy"]["with_softmax"].as<bool>();
+  }
   return true;
 }
 
@@ -116,8 +122,8 @@ bool PaddleSegModel::Preprocess(
 }
 
 bool PaddleSegModel::Postprocess(
-    FDTensor& infer_result, SegmentationResult* result,
-    std::map<std::string, std::array<int, 2>>* im_info) {
+    FDTensor* infer_result, SegmentationResult* result,
+    const std::map<std::string, std::array<int, 2>>& im_info) {
   // PaddleSeg has three types of inference output:
   //     1. output with argmax and without softmax. 3-D matrix CHW, Channel
   //     always 1, the element in matrix is classified label_id INT64 Type.
@@ -130,17 +136,36 @@ bool PaddleSegModel::Postprocess(
   //     1. label_map
   //     2. score_map(optional)
   //     3. shape: 2-D HW
-  FDASSERT(infer_result.dtype == FDDataType::INT64 ||
-               infer_result.dtype == FDDataType::FP32,
+  FDASSERT(infer_result->dtype == FDDataType::INT64 ||
+               infer_result->dtype == FDDataType::FP32,
            "Require the data type of output is int64 or fp32, but now it's %s.",
-           Str(infer_result.dtype).c_str());
+           Str(infer_result->dtype).c_str());
   result->Clear();
 
-  if (infer_result.shape.size() == 4) {
-    FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
+  int num = infer_result->shape[0];
+  int channel = infer_result->shape[1];
+  int height = infer_result->shape[2];
+  int width = infer_result->shape[3];
+  int chw = channel * height * width;
+
+  if (is_with_softmax == false && apply_softmax == true) {
+    FDTensor softmax_infer_result;
+    Softmax(*infer_result, &softmax_infer_result, 1);
+    std::memcpy(infer_result->MutableData(), softmax_infer_result.MutableData(),
+                num * chw * sizeof(float_t));
+  }
+  if (is_with_argmax == false) {
+    FDASSERT(infer_result->shape[0] == 1, "Only support batch size = 1.");
     // output without argmax
     result->contain_score_map = true;
-    utils::NCHW2NHWC<float_t>(infer_result);
+
+    std::vector<int64_t> dim{0, 2, 3, 1};
+    FDTensor transpose_infer_result;
+    Transpose(*infer_result, &transpose_infer_result, dim);
+    std::memcpy(infer_result->MutableData(),
+                transpose_infer_result.MutableData(),
+                num * chw * sizeof(float_t));
+    infer_result->shape = {num, height, width, channel};
   }
 
   // for resize mat below
@@ -148,11 +173,10 @@ bool PaddleSegModel::Postprocess(
   Mat* mat = nullptr;
   if (is_resized) {
     cv::Mat temp_mat;
-    FDTensor2FP32CVMat(temp_mat, infer_result, result->contain_score_map);
-
+    FDTensor2FP32CVMat(&temp_mat, *infer_result, result->contain_score_map);
     // original image shape
-    auto iter_ipt = (*im_info).find("input_shape");
-    FDASSERT(iter_ipt != im_info->end(),
+    auto iter_ipt = im_info.find("input_shape");
+    FDASSERT(iter_ipt != im_info.end(),
              "Cannot find input_shape from im_info.");
     int ipt_h = iter_ipt->second[0];
     int ipt_w = iter_ipt->second[1];
@@ -164,7 +188,7 @@ bool PaddleSegModel::Postprocess(
     new_infer_result.shape.insert(new_infer_result.shape.begin(), 1);
     result->shape = new_infer_result.shape;
   } else {
-    result->shape = infer_result.shape;
+    result->shape = infer_result->shape;
   }
   int out_num =
       std::accumulate(result->shape.begin(), result->shape.begin() + 3, 1,
@@ -174,14 +198,28 @@ bool PaddleSegModel::Postprocess(
   result->Resize(out_num);
   if (result->contain_score_map) {
     // output with label_map and score_map
-    float_t* infer_result_buffer = nullptr;
-    if (is_resized) {
-      infer_result_buffer = static_cast<float_t*>(new_infer_result.Data());
-    } else {
-      infer_result_buffer = static_cast<float_t*>(infer_result.Data());
-    }
+    int32_t* argmax_infer_result_buffer = nullptr;
+    float_t* score_infer_result_buffer = nullptr;
+    FDTensor argmax_infer_result;
+    FDTensor max_score_result;
+    std::vector<int64_t> reduce_dim{-1};
     // argmax
-    utils::ArgmaxScoreMap(infer_result_buffer, result, with_softmax);
+    if (is_resized) {
+      ArgMax(new_infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      Max(new_infer_result, &max_score_result, reduce_dim);
+    } else {
+      ArgMax(*infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      Max(*infer_result, &max_score_result, reduce_dim);
+    }
+    argmax_infer_result_buffer =
+        static_cast<int32_t*>(argmax_infer_result.Data());
+    score_infer_result_buffer = static_cast<float_t*>(max_score_result.Data());
+    for (int i = 0; i < out_num; i++) {
+      result->label_map[i] =
+          static_cast<uint8_t>(*(argmax_infer_result_buffer + i));
+    }
+    std::memcpy(result->score_map.data(), score_infer_result_buffer,
+                out_num * sizeof(float_t));
     result->shape.erase(result->shape.begin() + 2);
   } else {
     // output only with label_map
@@ -193,7 +231,7 @@ bool PaddleSegModel::Postprocess(
       }
     } else {
       const int64_t* infer_result_buffer =
-          reinterpret_cast<const int64_t*>(infer_result.Data());
+          reinterpret_cast<const int64_t*>(infer_result->Data());
       for (int i = 0; i < out_num; i++) {
         result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
       }
@@ -227,7 +265,7 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
             << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result[0], result, &im_info)) {
+  if (!Postprocess(&infer_result[0], result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

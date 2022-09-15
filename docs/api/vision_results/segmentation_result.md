@@ -18,7 +18,7 @@ struct DetectionResult {
 ```
 
 - **label_map**: 成员变量，表示单张图片每个像素点的分割类别，`label_map.size()`表示图片像素点的个数
-- **score_map**: 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`without_argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`without_argmax`以及`with_softmax`或者导出模型时指定`without_argmax`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/cpp/)`with_softmax=True`)
+- **score_map**: 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`without_argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`without_argmax`以及`with_softmax`或者导出模型时指定`without_argmax`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/cpp/)`apply_softmax=True`)
 - **shape**: 成员变量，表示输出图片的shape，为H\*W
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
@@ -28,5 +28,5 @@ struct DetectionResult {
 `fastdeploy.vision.SegmentationResult`
 
 - **label_map**(list of int): 成员变量，表示单张图片每个像素点的分割类别
-- **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`without_argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`without_argmax`以及`with_softmax`或者导出模型时指定`without_argmax`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/python/)`with_softmax=true`)
+- **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`without_argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`without_argmax`以及`with_softmax`或者导出模型时指定`without_argmax`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/python/)`apply_softmax=true`)
 - **shape**(list of int): 成员变量，表示输出图片的shape，为H\*W
