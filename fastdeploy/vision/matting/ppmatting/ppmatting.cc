@@ -74,11 +74,6 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         if (op["min_short"]) {
           min_short = op["min_short"].as<int>();
         }
-        FDINFO << "Detected LimitShort processing step in yaml file, if the "
-                  "model is exported from PaddleSeg, please make sure the "
-                  "input of your model is fixed with a square shape, and "
-                  "greater than or equal to "
-               << max_short << "." << std::endl;
         processors_.push_back(
             std::make_shared<LimitShort>(max_short, min_short));
       } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
@@ -88,6 +83,26 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         }
         processors_.push_back(std::make_shared<ResizeToIntMult>(mult_int));
       } else if (op["type"].as<std::string>() == "Normalize") {
+        if (cfg["Deploy"]["input_shape"]) {
+          // b c h w
+          auto input_shape =
+              cfg["Deploy"]["input_shape"].as<std::vector<int>>();
+          FDASSERT(input_shape.size() == 4,
+                   "The input_shape in yaml file need to be 4-dimensions.");
+          if (input_shape[2] > 0 and input_shape[3] > 0) {
+            processors_.push_back(std::make_shared<ResizeByInputShape>(
+                input_shape[3], input_shape[2]));
+            std::vector<float> value = {127.5, 127.5, 127.5};
+            processors_.push_back(std::make_shared<Cast>("float"));
+            processors_.push_back(std::make_shared<PadToSize>(
+                input_shape[3], input_shape[2], value));
+          } else {
+            FDINFO << " Detected dynamic input, please ensure the inference "
+                      "engine support dynamic input."
+                   << std::endl;
+          }
+        }
+
         std::vector<float> mean = {0.5, 0.5, 0.5};
         std::vector<float> std = {0.5, 0.5, 0.5};
         if (op["mean"]) {
@@ -97,19 +112,6 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
           std = op["std"].as<std::vector<float>>();
         }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
-      } else if (op["type"].as<std::string>() == "ResizeByLong") {
-        int target_size = op["long_size"].as<int>();
-        processors_.push_back(std::make_shared<ResizeByLong>(target_size));
-      } else if (op["type"].as<std::string>() == "Pad") {
-        // size: (w, h)
-        auto size = op["size"].as<std::vector<int>>();
-        std::vector<float> value = {127.5, 127.5, 127.5};
-        if (op["fill_value"]) {
-          auto value = op["fill_value"].as<std::vector<float>>();
-        }
-        processors_.push_back(std::make_shared<Cast>("float"));
-        processors_.push_back(
-            std::make_shared<PadToSize>(size[1], size[0], value));
       } else if (op["type"].as<std::string>() == "ResizeByShort") {
         int target_size = op["short_size"].as<int>();
         processors_.push_back(std::make_shared<ResizeByShort>(target_size));
@@ -117,31 +119,21 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
+
   return true;
 }
 
 bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
                            std::map<std::string, std::array<int, 2>>* im_info) {
   for (size_t i = 0; i < processors_.size(); ++i) {
-    if (processors_[i]->Name().compare("LimitShort") == 0) {
-      int input_h = static_cast<int>(mat->Height());
-      int input_w = static_cast<int>(mat->Width());
-      auto processor = dynamic_cast<LimitShort*>(processors_[i].get());
-      int max_short = processor->GetMaxShort();
-      if (runtime_option.backend != Backend::PDINFER) {
-        if (input_w != input_h || input_h < max_short || input_w < max_short) {
-          Resize::Run(mat, max_short, max_short);
-        }
-      }
-    }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-    if (processors_[i]->Name().compare("ResizeByLong") == 0) {
-      (*im_info)["resize_by_long"] = {static_cast<int>(mat->Height()),
-                                      static_cast<int>(mat->Width())};
+    if (processors_[i]->Name().compare("ResizeByInputShape") == 0) {
+      (*im_info)["resize_by_input_shape"] = {static_cast<int>(mat->Height()),
+                                             static_cast<int>(mat->Width())};
     }
   }
 
@@ -171,7 +163,7 @@ bool PPMatting::Postprocess(
   // 先获取alpha并resize (使用opencv)
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
-  auto resize_by_long = im_info.find("resize_by_long");
+  auto resize_by_input_shape = im_info.find("resize_by_input_shape");
   FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
            "Cannot find input_shape or output_shape from im_info.");
   int out_h = iter_out->second[0];
@@ -183,9 +175,9 @@ bool PPMatting::Postprocess(
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   cv::Mat cropped_alpha;
-  if (resize_by_long != im_info.end()) {
-    int resize_h = resize_by_long->second[0];
-    int resize_w = resize_by_long->second[1];
+  if (resize_by_input_shape != im_info.end()) {
+    int resize_h = resize_by_input_shape->second[0];
+    int resize_w = resize_by_input_shape->second[1];
     alpha_zero_copy_ref(cv::Rect(0, 0, resize_w, resize_h))
         .copyTo(cropped_alpha);
   } else {
