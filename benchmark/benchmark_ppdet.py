@@ -119,7 +119,9 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     end2end_statis = list()
-    cpu_mem, gpu_mem, gpu_util = 0, 0, 0
+    cpu_mem = list()
+    gpu_mem = list()
+    gpu_util = list()
     if args.device == "cpu":
         file_path = args.model + "_model_" + args.backend + "_" + \
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
@@ -159,23 +161,26 @@ if __name__ == '__main__':
             start = time.time()
             result = model.predict(im)
             end2end_statis.append(time.time() - start)
-            gpu_util += get_current_gputil(gpu_id)
+            gpu_util.append(get_current_gputil(gpu_id))
             cm, gm = get_current_memory_mb(gpu_id)
-            cpu_mem += cm
-            gpu_mem += gm
+            cpu_mem.append(cm)
+            gpu_mem.append(gm)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
         warmup_iter = args.iter_num // 5
         repeat_iter = args.iter_num - warmup_iter
-        end2end_statis = end2end_statis[warmup_iter:]
+        end2end_statis_repeat = end2end_statis[warmup_iter:]
+        cpu_mem_repeat = cpu_mem[warmup_iter:]
+        gpu_mem_repeat = gpu_mem[warmup_iter:]
+        gpu_util_repeat = gpu_util[warmup_iter:]
 
         dump_result = dict()
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
-        dump_result["end2end"] = np.mean(end2end_statis) * 1000
-        dump_result["cpu_rss_mb"] = cpu_mem / repeat_iter
-        dump_result["gpu_rss_mb"] = gpu_mem / repeat_iter
-        dump_result["gpu_util"] = gpu_util / repeat_iter
+        dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
+        dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
+        dump_result["gpu_rss_mb"] = np.mean(gpu_mem_repeat)
+        dump_result["gpu_util"] = np.mean(gpu_util_repeat)
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
