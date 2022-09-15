@@ -42,29 +42,27 @@ python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2
 ## PPOCRSystemv2 Python接口
 
 ```
-fastdeploy.vision.ocr.PPOCRSystemv2(ocr_det = det_model._model, ocr_cls = cls_model._model, ocr_rec = rec_model._model)
+fd.vision.ocr.PPOCRSystemv2(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 ```
-
-PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别模型
+PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
 
 **参数**
 
-> * **ocr_det**(model): OCR中的检测模型
-> * **ocr_cls**(model): OCR中的分类模型
-> * **ocr_rec**(model): OCR中的识别模型
+> * **det_model**(model): OCR中的检测模型
+> * **cls_model**(model): OCR中的分类模型
+> * **rec_model**(model): OCR中的识别模型
 
 ### predict函数
 
 > ```
-> result = PPOCRSystemv2.predict(img_list)
+> result = ocr_system.predict(im)
 > ```
 >
-> 模型预测接口，输入的是一个可包含多个图像的list
+> 模型预测接口，输入是一张图片
 >
 > **参数**
 >
-> > * **img_list**(list[np.ndarray]): 输入数据的list，每张图片注意需为HWC，BGR格式
-> > * **result**(float): OCR结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果,
+> > * **im**(np.ndarray): 输入数据，每张图片注意需为HWC，BGR格式
 
 > **返回**
 >
@@ -124,6 +122,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 ## 其它文档
 
-- [PPOCR系列模型介绍](../../)
+- [PPOCR 系列模型介绍](../../)
 - [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
