@@ -72,6 +72,8 @@ class TrtBackend : public BaseBackend {
   int NumOutputs() const { return outputs_desc_.size(); }
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
 
   ~TrtBackend() {
     if (parser_) {

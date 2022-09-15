@@ -84,8 +84,8 @@ class PaddleBackend : public BaseBackend {
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
-  std::vector<TensorInfo> GetInputInfo();
-  std::vector<TensorInfo> GetOutputInfo();
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
   paddle_infer::Config config_;

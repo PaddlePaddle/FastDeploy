@@ -172,6 +172,8 @@ struct FASTDEPLOY_DECL Runtime {
   int NumOutputs() { return backend_->NumOutputs(); }
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
+  std::vector<TensorInfo> GetInputInfos();
+  std::vector<TensorInfo> GetOutputInfos();
 
   RuntimeOption option;
 
