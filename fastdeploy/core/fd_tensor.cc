@@ -188,5 +188,33 @@ void FDTensor::PrintInfo(const std::string& prefix) {
             << ", min=" << min << std::endl;
 }
 
+bool FDTensor::AllocFn(size_t nbytes) {
+  if (device == Device::GPU) {
+#ifdef WITH_GPU
+    return FDDeviceAllocator()(&buffer_, nbytes);
+#else
+    FDASSERT(false,
+             "The FastDeploy FDTensor allocator didn't compile under "
+             "-DWITH_GPU=ON,"
+             "so this is an unexpected problem happend.");
+#endif
+  }
+  return FDHostAllocator()(&buffer_, nbytes);
+}
+
+void FDTensor::FreeFn() {
+  if (external_data_ptr != nullptr) external_data_ptr = nullptr;
+  if (buffer_ != nullptr) {
+    if (device == Device::GPU) {
+#ifdef WITH_GPU
+      FDDeviceFree()(buffer_);
+#endif
+    } else {
+      FDHostFree()(buffer_);
+    }
+    buffer_ = nullptr;
+  }
+}
+
 FDTensor::FDTensor(const std::string& tensor_name) { name = tensor_name; }
 }  // namespace fastdeploy

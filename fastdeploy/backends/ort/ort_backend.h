@@ -74,6 +74,8 @@ class OrtBackend : public BaseBackend {
 
   TensorInfo GetInputInfo(int index);
   TensorInfo GetOutputInfo(int index);
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
   static std::vector<OrtCustomOp*> custom_operators_;
   void InitCustomOperators();
 
