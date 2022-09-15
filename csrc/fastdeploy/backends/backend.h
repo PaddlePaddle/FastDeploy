@@ -14,12 +14,13 @@
 
 #pragma once
 
-#include "fastdeploy/backends/common/multiclass_nms.h"
-#include "fastdeploy/core/fd_tensor.h"
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "fastdeploy/backends/common/multiclass_nms.h"
+#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 
@@ -56,6 +57,8 @@ class BaseBackend {
   virtual int NumOutputs() const = 0;
   virtual TensorInfo GetInputInfo(int index) = 0;
   virtual TensorInfo GetOutputInfo(int index) = 0;
+  virtual std::vector<TensorInfo> GetInputInfos() = 0;
+  virtual std::vector<TensorInfo> GetOutputInfos() = 0;
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs) = 0;
 };

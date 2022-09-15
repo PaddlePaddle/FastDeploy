@@ -94,33 +94,9 @@ struct FASTDEPLOY_DECL FDTensor {
   // prefix will also be printed as tag
   void PrintInfo(const std::string& prefix = "TensorInfo: ");
 
-  bool AllocFn(size_t nbytes) {
-    if (device == Device::GPU) {
-#ifdef WITH_GPU
-      return FDDeviceAllocator()(&buffer_, nbytes);
-#else
-      FDASSERT(false,
-               "The FastDeploy FDTensor allocator didn't compile under "
-               "-DWITH_GPU=ON,"
-               "so this is an unexpected problem happend.");
-#endif
-    }
-    return FDHostAllocator()(&buffer_, nbytes);
-  }
+  bool AllocFn(size_t nbytes);
 
-  void FreeFn() {
-    if (external_data_ptr != nullptr) external_data_ptr = nullptr;
-    if (buffer_ != nullptr) {
-      if (device == Device::GPU) {
-#ifdef WITH_GPU
-        FDDeviceFree()(buffer_);
-#endif
-      } else {
-        FDHostFree()(buffer_);
-      }
-      buffer_ = nullptr;
-    }
-  }
+  void FreeFn();
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
