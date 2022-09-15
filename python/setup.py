@@ -48,13 +48,13 @@ with open(os.path.join(TOP_DIR, "python", "requirements.txt")) as fin:
 setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
-setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
+setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "OFF")
 setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
-setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
-setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "ON")
+setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
+setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
@@ -70,7 +70,7 @@ if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
 
 SRC_DIR = os.path.join(TOP_DIR, PACKAGE_NAME)
-CMAKE_BUILD_DIR = os.path.join(TOP_DIR, '.setuptools-cmake-build')
+CMAKE_BUILD_DIR = os.path.join(TOP_DIR, 'python', '.setuptools-cmake-build')
 
 WINDOWS = (os.name == 'nt')
 
@@ -328,9 +328,9 @@ ext_modules = [
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
     packages = setuptools.find_packages(
-        exclude=['fastdeploy*', 'build_scripts'])
+        exclude=['fastdeploy*', 'scripts'])
 else:
-    packages = setuptools.find_packages(exclude=['build_scripts'])
+    packages = setuptools.find_packages(exclude=['scripts'])
 
 ################################################################################
 # Test
@@ -359,7 +359,7 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
         )
         sys.exit(0)
     sys.path.append(TOP_DIR)
-    from build_scripts.process_libraries import process_libraries
+    from scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
     package_data[PACKAGE_NAME].extend(all_lib_data)

@@ -10,11 +10,11 @@
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
+cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/segmentation/paddleseg/cpp/
 mkdir build
 cd build
-wget https://bj.bcebos.com/paddlehub/fastdeploy/libs/0.2.0/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/segmentation/paddleseg/cpp/build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
 make -j
 
