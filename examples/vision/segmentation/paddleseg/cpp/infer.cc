@@ -27,8 +27,6 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file);
 
-  // Apply softmax to the infer result
-  model.apply_softmax = true;
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -59,8 +57,6 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
 
-  // Apply softmax to the infer result
-  model.apply_softmax = true;
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -94,8 +90,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
 
-  // Apply softmax to the infer result
-  model.apply_softmax = true;
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
