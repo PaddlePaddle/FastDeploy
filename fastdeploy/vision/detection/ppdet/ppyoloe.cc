@@ -157,6 +157,8 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
       return false;
     }
   }
+  
+  Cast::Run(mat, "float");
 
   outputs->resize(2);
   (*outputs)[0].name = InputInfoOfRuntime(0).name;
