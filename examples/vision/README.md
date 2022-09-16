@@ -24,3 +24,5 @@ FastDeploy针对飞桨的视觉套件，以及外部热门模型，提供端到�
 
 - 加载模型
 - 调用`predict`接口
+
+FastDeploy在各视学模型部署，也支持一键切换后端推理引擎，详情参阅[如何切换模型推理引擎](how_to_change_backend.md)。
