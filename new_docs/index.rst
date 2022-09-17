@@ -13,3 +13,4 @@ FastDeploy
     :titlesonly:
 
     build_and_install/index
+    quick_start/index
