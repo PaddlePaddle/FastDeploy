@@ -75,6 +75,8 @@ Windows编译需要满足条件
 - cuda >= 11.2
 - cudnn >= 8.2
 
+在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -133,6 +135,8 @@ python setup.py bdist_wheel
 - python >= 3.6
 - cuda >= 11.2
 - cudnn >= 8.2
+
+在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git

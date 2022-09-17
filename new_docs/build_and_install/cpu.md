@@ -67,6 +67,8 @@ Windows编译需要满足条件
 - Windows 10/11 x64
 - Visual Studio 2019
 
+在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -113,6 +115,8 @@ python setup.py bdist_wheel
 - Windows 10/11 x64
 - Visual Studio 2019
 - python >= 3.6
+
+在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
