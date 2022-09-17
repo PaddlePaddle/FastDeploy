@@ -10,12 +10,12 @@
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/segmentation/paddleseg/cpp/
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.2.1.tgz
+cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/segmentation/paddleseg/cpp/
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
 make -j
 
 # 下载Unet模型文件和测试图片
