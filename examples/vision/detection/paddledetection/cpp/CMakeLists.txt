@@ -26,3 +26,6 @@ target_link_libraries(infer_yolov3_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_ppyolo_demo ${PROJECT_SOURCE_DIR}/infer_ppyolo.cc)
 target_link_libraries(infer_ppyolo_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_mask_rcnn_demo ${PROJECT_SOURCE_DIR}/infer_mask_rcnn.cc)
+target_link_libraries(infer_mask_rcnn_demo ${FASTDEPLOY_LIBS})

@@ -6,7 +6,7 @@
 
 Python示例
 
-```
+```python
 import fastdeploy as fd
 import numpy as np
 option = fd.RuntimeOption()
@@ -23,7 +23,7 @@ results = runtime.infer({input_name: np.random.rand(1, 3, 224, 224).astype("floa
 ```
 
 ## GPU推理
-```
+```python
 import fastdeploy as fd
 import numpy as np
 option = fd.RuntimeOption()
@@ -32,7 +32,7 @@ option.set_model_path("resnet50/inference.pdmodel", "resnet50/inference.pdiparam
 # 使用GPU，并且使用第0张GPU卡
 option.use_gpu(0)
 # 使用Paddle Inference后端
-option.use_openvino_backend()
+option.use_paddle_backend()
 # 初始化runtime
 runtime = fd.Runtime(option)
 # 获取输入名

@@ -39,6 +39,8 @@ FDDataType OpenVINODataTypeToFD(const ov::element::Type& type) {
     return FDDataType::FP64;
   } else if (type == ov::element::i8) {
     return FDDataType::INT8;
+  } else if (type == ov::element::u8) {
+    return FDDataType::UINT8;
   } else if (type == ov::element::i32) {
     return FDDataType::INT32;
   } else if (type == ov::element::i64) {
@@ -56,12 +58,14 @@ ov::element::Type FDDataTypeToOV(const FDDataType& type) {
     return ov::element::f64;
   } else if (type == FDDataType::INT8) {
     return ov::element::i8;
+  } else if (type == FDDataType::UINT8) {
+    return ov::element::u8;
   } else if (type == FDDataType::INT32) {
     return ov::element::i32;
   } else if (type == FDDataType::INT64) {
     return ov::element::i64;
   }
-  FDASSERT(false, "Only support float/double/int8/int32/int64 now.");
+  FDASSERT(false, "Only support float/double/int8/uint8/int32/int64 now.");
   return ov::element::f32;
 }
 
