@@ -14,8 +14,8 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 | 部署库下载地址 | 硬件 | 说明 |
 | :------------- | :--- | :--- |
-| [fastdeploy-linux-x64-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz) | CPU | g++ 8.2编译产出 |
-| [fastdeploy-linux-x64-gpu-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz) | CPU/GPU | g++ 8.2, cuda 11.2, cudnn 8.2编译产出 |
+| [fastdeploy-linux-x64-0.2.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.1.tgz) | CPU | g++ 8.2编译产出 |
+| [fastdeploy-linux-x64-gpu-0.2.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz) | CPU/GPU | g++ 8.2, cuda 11.2, cudnn 8.2编译产出 |
 
 ### Windows 10 x64平台
 
