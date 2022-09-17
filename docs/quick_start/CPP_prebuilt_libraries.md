@@ -21,8 +21,8 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 | 部署库下载地址 | 硬件 | 说明 |
 | :------------- | :--- | :--- |
-| [fastdeploy-win-x64-0.2.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-0.2.0.zip) | CPU | Visual Studio 16 2019 编译产出 |
-| [fastdeploy-win-x64-gpu-0.2.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.0.zip) | CPU/GPU | Visual Studio 16 2019，cuda 11.2, cudnn 8.2编译产出 |
+| [fastdeploy-win-x64-0.2.1.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-0.2.1.zip) | CPU | Visual Studio 16 2019 编译产出 |
+| [fastdeploy-win-x64-gpu-0.2.1.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.1.zip) | CPU/GPU | Visual Studio 16 2019，cuda 11.2, cudnn 8.2编译产出 |
 
 ### Linux aarch64平台
 
@@ -35,8 +35,8 @@ FastDeploy提供了在Windows/Linux/Mac上的预先编译CPP部署库，开发�
 
 | 部署库下载地址 | 架构 |硬件 |
 | :----  | :-- | :------ |
-| [fastdeploy-osx-x86_64-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.2.0.tgz) | x86 | CPU |
-| [fastdeploy-osx-arm64-0.2.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.2.0.tgz) | arm64 | CPU |
+| [fastdeploy-osx-x86_64-0.2.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.2.1.tgz) | x86 | CPU |
+| [fastdeploy-osx-arm64-0.2.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.2.1.tgz) | arm64 | CPU |
 
 ## 其它文档
 
