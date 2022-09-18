@@ -27,8 +27,7 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   bool BuildPreprocessPipelineFromConfig();
 
-  bool Preprocess(Mat* mat, FDTensor* outputs,
-                  std::map<std::string, std::array<int, 2>>* im_info);
+  bool Preprocess(Mat* mat, FDTensor* outputs);
 
   bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
