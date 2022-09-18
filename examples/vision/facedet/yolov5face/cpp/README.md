@@ -12,9 +12,9 @@
 ```bash
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-0.2.1.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
 #下载官方转换好的YOLOv5Face模型文件和测试图片
