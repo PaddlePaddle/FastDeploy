@@ -26,7 +26,11 @@ class ResizeByInputShape : public Processor {
     height_ = height;
     interp_ = interp;
   }
-
+  // Resize input Mat* mat(origin_w, origin_h) by the input_shape (width_,
+  // height_).
+  // If any edge of mat is larger than that of input_shape, ResizeByInputShape
+  // will compute the smallest scale(s) of {width_/origin_w, height_/origin_h}
+  // and resize mat by s.
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);

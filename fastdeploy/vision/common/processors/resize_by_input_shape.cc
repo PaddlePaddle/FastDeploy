@@ -26,10 +26,12 @@ bool ResizeByInputShape::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
-  float scale_w = width_ * 1.0 / origin_w;
-  float scale_h = height_ * 1.0 / origin_h;
-  float scale = std::min(scale_w, scale_h);
-  cv::resize(*im, *im, cv::Size(0, 0), scale, scale, interp_);
+  if (origin_w > width_ || origin_h > height_) {
+    float scale_w = width_ * 1.0 / origin_w;
+    float scale_h = height_ * 1.0 / origin_h;
+    float scale = std::min(scale_w, scale_h);
+    cv::resize(*im, *im, cv::Size(0, 0), scale, scale, interp_);
+  }
   mat->SetWidth(im->cols);
   mat->SetHeight(im->rows);
   return true;
@@ -45,10 +47,12 @@ bool ResizeByInputShape::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
-  float scale_w = width_ * 1.0 / origin_w;
-  float scale_h = height_ * 1.0 / origin_h;
-  float scale = std::min(scale_w, scale_h);
-  cv::cuda::resize(*im, *im, cv::Size(0, 0), scale, scale, interp_);
+  if (origin_w > width_ || origin_h > height_) {
+    float scale_w = width_ * 1.0 / origin_w;
+    float scale_h = height_ * 1.0 / origin_h;
+    float scale = std::min(scale_w, scale_h);
+    cv::cuda::resize(*im, *im, cv::Size(0, 0), scale, scale, interp_);
+  }
   mat->SetWidth(im->cols);
   mat->SetHeight(im->rows);
   return true;

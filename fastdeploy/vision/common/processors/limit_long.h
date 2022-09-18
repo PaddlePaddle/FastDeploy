@@ -26,6 +26,12 @@ class LimitLong : public Processor {
     min_long_ = min_long;
     interp_ = interp;
   }
+
+  // Limit the long edge of image.
+  // If the long edge is larger than max_long_, resize the long edge
+  // to max_long_, while scale the short edge proportionally.
+  // If the long edge is smaller than min_long_, resize the long edge
+  // to min_long_, while scale the short edge proportionally.
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
@@ -34,7 +40,7 @@ class LimitLong : public Processor {
 
   static bool Run(Mat* mat, int max_long = -1, int min_long = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
-  int GetMaxLong() { return max_long_; }
+  int GetMaxLong() const { return max_long_; }
 
  private:
   int max_long_;

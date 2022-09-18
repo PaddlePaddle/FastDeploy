@@ -25,6 +25,9 @@ class ResizeToIntMult : public Processor {
     mult_int_ = mult_int;
     interp_ = interp;
   }
+
+  // Resize Mat* mat to make the size divisible by mult_int_.
+
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);

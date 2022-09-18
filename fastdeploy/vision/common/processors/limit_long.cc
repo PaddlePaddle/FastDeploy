@@ -44,7 +44,7 @@ bool LimitLong::GpuRun(Mat* mat) {
   int origin_w = im->cols;
   int origin_h = im->rows;
   im->convertTo(*im, CV_32FC(im->channels()));
-  int im_size_max = std::min(origin_w, origin_h);
+  int im_size_max = std::max(origin_w, origin_h);
   int target = im_size_max;
   if (max_long_ > 0 && im_size_max > max_long_) {
     target = max_long_;
