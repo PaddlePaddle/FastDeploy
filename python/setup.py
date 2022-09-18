@@ -358,7 +358,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
         )
         sys.exit(0)
-    sys.path.append(TOP_DIR)
     from scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
