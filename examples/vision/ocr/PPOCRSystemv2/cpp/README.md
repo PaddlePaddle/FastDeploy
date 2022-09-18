@@ -12,9 +12,9 @@
 ```
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-0.2.1.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
 
@@ -147,3 +147,4 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv2 Python部署](../python)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)
