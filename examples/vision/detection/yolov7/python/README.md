@@ -1,3 +1,5 @@
+简体中文 | [English](README_EN.md)
+
 # YOLOv7 Python部署示例
 
 在部署前，需确认以下两个步骤
