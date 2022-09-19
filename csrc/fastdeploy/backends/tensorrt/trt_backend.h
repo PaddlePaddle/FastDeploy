@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cuda_runtime_api.h>
+
 #include <iostream>
 #include <map>
 #include <string>
@@ -23,7 +25,42 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
-#include <cuda_runtime_api.h>
+
+class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
+ public:
+  explicit Int8EntropyCalibrator2(const std::string& calibration_cache)
+      : calibration_cache_(calibration_cache) {}
+
+  int getBatchSize() const noexcept override { return 0; }
+
+  bool getBatch(void* bindings[], const char* names[],
+                int nbBindings) noexcept override {
+    return false;
+  }
+
+  const void* readCalibrationCache(size_t& length) noexcept override {
+    // mCalibrationCache.clear();
+    // std::ifstream input(mCalibrationTableName, std::ios::binary);
+    // input >> std::noskipws;
+    // if (input.good()) {
+    //   std::copy(std::istream_iterator<char>(input),
+    //             std::istream_iterator<char>(),
+    //             std::back_inserter(mCalibrationCache));
+    // }
+    // length = mCalibrationCache.size();
+    // return length ? mCalibrationCache.data() : nullptr;
+    length = calibration_cache_.size();
+    return length ? calibration_cache_.data() : nullptr;
+  }
+
+  void writeCalibrationCache(const void* cache,
+                             size_t length) noexcept override {
+    std::cout << "NOT IMPLEMENT." << std::endl;
+  }
+
+ private:
+  const std::string calibration_cache_;
+};
 
 namespace fastdeploy {
 
@@ -92,6 +129,8 @@ class TrtBackend : public BaseBackend {
   std::map<std::string, FDDeviceBuffer> inputs_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_buffer_;
 
+  std::string calibration_str_;
+
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
   // with the original onnx model
@@ -117,4 +156,4 @@ class TrtBackend : public BaseBackend {
   int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

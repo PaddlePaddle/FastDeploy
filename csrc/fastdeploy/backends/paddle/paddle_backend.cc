@@ -16,13 +16,20 @@
 
 namespace fastdeploy {
 
-void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
+void PaddleBackend::BuildOption(const PaddleBackendOption& option,
+                                const std::string& model_file,
+                                const std::string& params_file) {
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
       config_.EnableMKLDNN();
+      if (paddle2onnx::IsQuantizedModel(model_file.c_str(), model_file.size(),
+                                        params_file.c_str(),
+                                        params_file.size())) {
+        config_.EnableMkldnnInt8();
+      }
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
@@ -52,7 +59,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
-  BuildOption(option);
+  BuildOption(option, model_file, params_file);
   predictor_ = paddle_infer::CreatePredictor(config_);
   std::vector<std::string> input_names = predictor_->GetInputNames();
   std::vector<std::string> output_names = predictor_->GetOutputNames();
@@ -79,13 +86,16 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
-  FDASSERT(index < NumInputs(), "The index: %d should less than the number of inputs: %d.", index, NumInputs());
+  FDASSERT(index < NumInputs(),
+           "The index: %d should less than the number of inputs: %d.", index,
+           NumInputs());
   return inputs_desc_[index];
 }
 
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
-           "The index: %d should less than the number of outputs %d.", index, NumOutputs());
+           "The index: %d should less than the number of outputs %d.", index,
+           NumOutputs());
   return outputs_desc_[index];
 }
 

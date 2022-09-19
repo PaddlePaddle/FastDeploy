@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#include "paddle2onnx/converter.h"
 #include "paddle_inference_api.h"  // NOLINT
 
 namespace fastdeploy {
@@ -58,7 +59,9 @@ class PaddleBackend : public BaseBackend {
  public:
   PaddleBackend() {}
   virtual ~PaddleBackend() = default;
-  void BuildOption(const PaddleBackendOption& option);
+  void BuildOption(const PaddleBackendOption& option,
+                   const std::string& model_file,
+                   const std::string& params_file);
 
   bool InitFromPaddle(
       const std::string& model_file, const std::string& params_file,
