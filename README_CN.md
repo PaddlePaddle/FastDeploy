@@ -63,7 +63,7 @@
 ##### 前置依赖
 - CUDA >= 11.2
 - cuDNN >= 8.0
-- python >= 3.8
+- python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
 ##### 安装GPU版本
@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
 - **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/189557528-a7dea57c-a0d6-424f-b457-1d599af24e21.jpeg"  width = "225" height = "288" />
+<img src="https://user-images.githubusercontent.com/54695910/190932769-f36c0173-0fe6-4cab-9bba-f05e550b834f.jpg"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge
