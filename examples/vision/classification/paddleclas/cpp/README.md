@@ -11,12 +11,12 @@
 
 ```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/classification/paddleclas/cpp
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.2.1.tgz
+cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/classification/paddleclas/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
 make -j
 
 # 下载ResNet50_vd模型文件和测试图片
@@ -77,3 +77,4 @@ PaddleClas模型加载和初始化，其中model_file, params_file为训练模�
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)

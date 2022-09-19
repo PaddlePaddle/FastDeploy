@@ -48,13 +48,13 @@ with open(os.path.join(TOP_DIR, "python", "requirements.txt")) as fin:
 setup_configs = dict()
 setup_configs["ENABLE_PADDLE_FRONTEND"] = os.getenv("ENABLE_PADDLE_FRONTEND",
                                                     "ON")
-setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "ON")
+setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "OFF")
 setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
-setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "ON")
-setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "ON")
+setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
+setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
@@ -358,7 +358,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
             "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
         )
         sys.exit(0)
-    sys.path.append(TOP_DIR)
     from scripts.process_libraries import process_libraries
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])

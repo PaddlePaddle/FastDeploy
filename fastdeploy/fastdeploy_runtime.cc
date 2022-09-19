@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/fastdeploy_runtime.h"
+
 #include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
@@ -295,6 +296,14 @@ TensorInfo Runtime::GetInputInfo(int index) {
 
 TensorInfo Runtime::GetOutputInfo(int index) {
   return backend_->GetOutputInfo(index);
+}
+
+std::vector<TensorInfo> Runtime::GetInputInfos() {
+  return backend_->GetInputInfos();
+}
+
+std::vector<TensorInfo> Runtime::GetOutputInfos() {
+  return backend_->GetOutputInfos();
 }
 
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,

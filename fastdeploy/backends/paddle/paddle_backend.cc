@@ -85,7 +85,7 @@ TensorInfo PaddleBackend::GetInputInfo(int index) {
   return inputs_desc_[index];
 }
 
-std::vector<TensorInfo> PaddleBackend::GetInputInfo() { return inputs_desc_; }
+std::vector<TensorInfo> PaddleBackend::GetInputInfos() { return inputs_desc_; }
 
 TensorInfo PaddleBackend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
@@ -94,7 +94,9 @@ TensorInfo PaddleBackend::GetOutputInfo(int index) {
   return outputs_desc_[index];
 }
 
-std::vector<TensorInfo> PaddleBackend::GetOutputInfo() { return outputs_desc_; }
+std::vector<TensorInfo> PaddleBackend::GetOutputInfos() {
+  return outputs_desc_;
+}
 
 bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs) {

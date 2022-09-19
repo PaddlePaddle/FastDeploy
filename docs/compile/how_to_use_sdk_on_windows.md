@@ -18,7 +18,7 @@
 ## 下载 FastDeploy Windows 10 C++ SDK
 可以从以下链接下载编译好的 FastDeploy Windows 10 C++ SDK，SDK中包含了examples代码。
 ```text
-https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.0.zip
+https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.1.zip
 ```
 ## 准备模型文件和测试图片  
 可以从以下链接下载模型文件和测试图片，并解压缩
@@ -34,7 +34,7 @@ cd fastdeploy-win-x64-gpu-0.2.0\examples\vision\detection\paddledetection\cpp
 ```
 ```bat
 mkdir build && cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.0 -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
+cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1 -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
 ```
 然后执行
 ```bat
@@ -44,7 +44,7 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 #### 方式一：命令行设置环境变量
 编译好的exe保存在Release目录下，在运行demo前，需要将模型和测试图片拷贝至该目录。另外，需要在终端指定DLL的搜索路径。请在build目录下执行以下命令。
 ```bat
-set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.0
+set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
 set PATH=%FASTDEPLOY_PATH%\lib;%FASTDEPLOY_PATH%\third_libs\install\onnxruntime\lib;%FASTDEPLOY_PATH%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\paddle\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mklml\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle2onnx\lib;%FASTDEPLOY_PATH%\third_libs\install\tensorrt\lib;%FASTDEPLOY_PATH%\third_libs\install\yaml-cpp\lib;%PATH%
 ```
 注意，需要拷贝onnxruntime.dll到exe所在的目录。
@@ -59,7 +59,7 @@ C:\Windows\System32\onnxruntime.dll  # windows自带的onnxruntime.dll
 #### 方式二：拷贝依赖库到exe的目录下
 手动拷贝，或者在build目录下执行以下命令：
 ```bat
-set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.0
+set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
 copy /Y %FASTDEPLOY_PATH%\lib\*.dll Release\
 copy /Y %FASTDEPLOY_PATH%\third_libs\install\onnxruntime\lib\*.dll Release\
 copy /Y %FASTDEPLOY_PATH%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin\*.dll Release\

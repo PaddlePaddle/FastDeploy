@@ -17,12 +17,12 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0 -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.1-DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
 
-After compilation, the FastDeploy CPU C++ SDK is in the `D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.0` directory
+After compilation, the FastDeploy CPU C++ SDK is in the `D:\Paddle\FastDeploy\build\fastdeploy-win-x64-0.2.1` directory
 
 ## Compile C++ SDK for GPU
 
@@ -33,7 +33,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy && git checkout develop
 mkdir build && cd build
 
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.0 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=D:\Paddle\FastDeploy\build\fastdeploy-win-x64-gpu-0.2.1 -DWITH_GPU=ON -DENABLE_ORT_BACKEND=ON -DENABLE_PADDLE_BACKEND=ON -DENABLE_VISION=ON -DENABLE_VISION_VISUALIZE=ON -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64  
 
