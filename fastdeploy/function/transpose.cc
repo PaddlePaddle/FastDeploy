@@ -112,8 +112,8 @@ void Transpose(const FDTensor& x, FDTensor* out,
   }
 
   // Note(zhoushunjie): The FDTensor out may equal to FDTensor x, so firstly we
-  // use out_temp to get the
-  // transposed result, then we move the out_temp to out.
+  // use out_temp to get the transposed result, then we move the out_temp to
+  // out.
   FDTensor out_temp;
   out_temp.Allocate(out_dims, x.dtype);
   FD_VISIT_ALL_TYPES(x.dtype, "TransposeKernel",
