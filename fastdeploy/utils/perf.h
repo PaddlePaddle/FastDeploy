@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL TimeCounter {
     if (!print_out) {
       return;
     }
-    FDLogger() << prefix << " duration = " << Duration() << "s." << std::endl;
+    std::cout << prefix << " duration = " << Duration() << "s." << std::endl;
   }
 
  private:

@@ -114,11 +114,11 @@ bool CheckModelFormat(const std::string& model_file,
 Frontend GuessModelFormat(const std::string& model_file) {
   if (model_file.size() > 8 &&
       model_file.substr(model_file.size() - 8, 8) == ".pdmodel") {
-    FDLogger() << "Model Format: PaddlePaddle." << std::endl;
+    FDINFO << "Model Format: PaddlePaddle." << std::endl;
     return Frontend::PADDLE;
   } else if (model_file.size() > 5 &&
              model_file.substr(model_file.size() - 5, 5) == ".onnx") {
-    FDLogger() << "Model Format: ONNX." << std::endl;
+    FDINFO << "Model Format: ONNX." << std::endl;
     return Frontend::ONNX;
   }
 
