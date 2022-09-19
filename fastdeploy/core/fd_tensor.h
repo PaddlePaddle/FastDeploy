@@ -104,8 +104,20 @@ struct FASTDEPLOY_DECL FDTensor {
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+  // Deep copy
+  FDTensor(const FDTensor& other);
+  // Move constructor
+  FDTensor(FDTensor&& other);
+
+  // Deep copy assignment
+  FDTensor& operator=(const FDTensor& other);
+  // Move assignment
+  FDTensor& operator=(FDTensor&& other);
 
   ~FDTensor() { FreeFn(); }
+
+ private:
+  void CopyBuffer(void* dst, const void* src, size_t nbytes);
 };
 
 }  // namespace fastdeploy

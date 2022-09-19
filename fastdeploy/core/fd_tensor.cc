@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <cstring>
+
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 
@@ -216,5 +218,90 @@ void FDTensor::FreeFn() {
   }
 }
 
+void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes) {
+  if (device == Device::GPU) {
+#ifdef WITH_GPU
+    FDASSERT(cudaMemcpy(dst, src, nbytes, cudaMemcpyDeviceToDevice) == 0,
+             "[ERROR] Error occurs while copy memory from GPU to GPU");
+
+#else
+    FDASSERT(false,
+             "The FastDeploy didn't compile under -DWITH_GPU=ON, so copying "
+             "gpu buffer is "
+             "an unexpected problem happend.");
+#endif
+  } else {
+    std::memcpy(dst, src, nbytes);
+  }
+}
+
 FDTensor::FDTensor(const std::string& tensor_name) { name = tensor_name; }
+
+FDTensor::FDTensor(const FDTensor& other)
+    : shape(other.shape),
+      name(other.name),
+      dtype(other.dtype),
+      device(other.device),
+      external_data_ptr(other.external_data_ptr) {
+  // Copy buffer
+  if (other.buffer_ == nullptr) {
+    buffer_ = nullptr;
+  } else {
+    size_t nbytes = Nbytes();
+    FDASSERT(AllocFn(nbytes), "The FastDeploy FDTensor allocate memory error");
+    CopyBuffer(buffer_, other.buffer_, nbytes);
+  }
+}
+
+FDTensor::FDTensor(FDTensor&& other)
+    : buffer_(other.buffer_),
+      shape(std::move(other.shape)),
+      name(std::move(other.name)),
+      dtype(other.dtype),
+      external_data_ptr(other.external_data_ptr),
+      device(other.device) {
+  other.name = "";
+  other.buffer_ = nullptr;
+  other.external_data_ptr = nullptr;
+}
+
+FDTensor& FDTensor::operator=(const FDTensor& other) {
+  if (&other != this) {
+    // Copy buffer
+    if (other.buffer_ == nullptr) {
+      FreeFn();
+      buffer_ = nullptr;
+    } else {
+      Resize(other.shape);
+      size_t nbytes = Nbytes();
+      CopyBuffer(buffer_, other.buffer_, nbytes);
+    }
+
+    shape = other.shape;
+    name = other.name;
+    dtype = other.dtype;
+    device = other.device;
+    external_data_ptr = other.external_data_ptr;
+  }
+  return *this;
+}
+
+FDTensor& FDTensor::operator=(FDTensor&& other) {
+  if (&other != this) {
+    FreeFn();
+    buffer_ = other.buffer_;
+    external_data_ptr = other.external_data_ptr;
+
+    shape = std::move(other.shape);
+    name = std::move(other.name);
+    dtype = other.dtype;
+    device = other.device;
+
+    other.name = "";
+    other.buffer_ = nullptr;
+    other.external_data_ptr = nullptr;
+  }
+  return *this;
+}
+
 }  // namespace fastdeploy
