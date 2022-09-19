@@ -116,12 +116,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   int numel = Numel();
   int new_numel = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                   std::multiplies<int>());
-  shape.assign(new_shape.begin(), new_shape.end());
   if (new_numel > numel) {
-    FreeFn();
     size_t nbytes = new_numel * FDDataTypeSize(dtype);
-    AllocFn(nbytes);
+    ReallocFn(nbytes);
   }
+  shape.assign(new_shape.begin(), new_shape.end());
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
@@ -130,16 +129,12 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const Device& new_device) {
   name = tensor_name;
   device = new_device;
-  size_t nbytes = Nbytes();
-  shape.assign(new_shape.begin(), new_shape.end());
   dtype = data_type;
   int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                    std::multiplies<int>()) *
                    FDDataTypeSize(data_type);
-  if (new_nbytes > nbytes) {
-    FreeFn();
-    AllocFn(new_nbytes);
-  }
+  ReallocFn(new_nbytes);
+  shape.assign(new_shape.begin(), new_shape.end());
 }
 
 template <typename T>
@@ -202,6 +197,26 @@ bool FDTensor::AllocFn(size_t nbytes) {
 #endif
   }
   return FDHostAllocator()(&buffer_, nbytes);
+}
+
+bool FDTensor::ReallocFn(size_t nbytes) {
+  if (device == Device::GPU) {
+#ifdef WITH_GPU
+    size_t original_nbytes = Nbytes();
+    if (nbytes > original_nbytes) {
+      FDDeviceFree()(buffer_);
+      FDDeviceAllocator()(&buffer_, nbytes);
+    }
+    return buffer_ != nullptr;
+#else
+    FDASSERT(false,
+             "The FastDeploy FDTensor allocator didn't compile under "
+             "-DWITH_GPU=ON,"
+             "so this is an unexpected problem happend.");
+#endif
+  }
+  buffer_ = realloc(buffer_, nbytes);
+  return buffer_ != nullptr;
 }
 
 void FDTensor::FreeFn() {

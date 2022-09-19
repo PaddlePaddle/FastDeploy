@@ -100,6 +100,8 @@ struct FASTDEPLOY_DECL FDTensor {
 
   bool AllocFn(size_t nbytes);
 
+  bool ReallocFn(size_t nbytes);
+
   void FreeFn();
 
   FDTensor() {}
