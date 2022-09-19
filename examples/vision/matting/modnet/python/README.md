@@ -33,6 +33,7 @@ python infer.py --model modnet_photographic_portrait_matting.onnx --image mattin
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186851964-4c9086b9-3490-4fcb-82f9-2106c63aa4f3.jpg">
 </div>
+
 ## MODNet Python接口
 
 ```python
@@ -83,3 +84,4 @@ MODNet模型加载和初始化，其中model_file为导出的ONNX模型格式
 - [MODNet 模型介绍](..)
 - [MODNet C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)

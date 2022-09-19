@@ -1,3 +1,5 @@
+简体中文 | [English](README_EN.md)
+
 # YOLOv7 Python部署示例
 
 在部署前，需确认以下两个步骤
@@ -78,3 +80,4 @@ YOLOv7模型加载和初始化，其中model_file为导出的ONNX模型格式
 - [YOLOv7 模型介绍](..)
 - [YOLOv7 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../how_to_change_backend.md)

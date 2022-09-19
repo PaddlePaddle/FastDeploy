@@ -39,6 +39,7 @@ fastdeploy.vision.detection.PaddleYOLOX(model_file, params_file, config_file, ru
 fastdeploy.vision.detection.YOLOv3(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 fastdeploy.vision.detection.PPYOLO(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 fastdeploy.vision.detection.FasterRCNN(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fastdeploy.vision.detection.MaskRCNN(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
 ```
 
 PaddleDetection模型加载和初始化，其中model_file， params_file为导出的Paddle部署模型格式, config_file为PaddleDetection同时导出的部署配置yaml文件
@@ -73,3 +74,4 @@ PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO
 - [PaddleDetection 模型介绍](..)
 - [PaddleDetection C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)

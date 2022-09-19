@@ -12,9 +12,9 @@
 ```bash
 mkdir build
 cd build
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-0.2.1.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
 #下载官方转换好的YOLOv5Lite模型文件和测试图片
@@ -88,3 +88,4 @@ YOLOv5Lite模型加载和初始化，其中model_file为导出的ONNX模型格�
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)

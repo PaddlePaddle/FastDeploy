@@ -19,7 +19,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 # CPU推理
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device cpu
-# GPU推理 (TODO: ORT-GPU 推理会报错)
+# GPU推理
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
@@ -75,3 +75,4 @@ PPMatting模型加载和初始化，其中model_file, params_file以及config_fi
 - [PPMatting 模型介绍](..)
 - [PPMatting C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)
