@@ -52,7 +52,7 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
 
 # Please don't open this flag now, some bugs exists.
-option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
+# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
