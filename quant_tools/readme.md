@@ -35,7 +35,7 @@ tar -xvf COCO_val_320.tar.gz
 #### 2.使用fdquant命令，执行一键模型量化:
 
 ```shell
-fdquant --model_type=YOLOV5 --model_file=./yolov5s.onnx --save_dir=./yolov5s_quant_out --data_dir=./COCO_val_320 --calibration_method=avg
+fdquant --model_type=YOLOv5 --model_file=./yolov5s.onnx --save_dir=./yolov5s_quant_out --data_dir=./COCO_val_320 --calibration_method=avg
 ```
 注意: 在执行以上命令时, 如果遇到input shape检查提示, 用户请直接输入'N'跳过即可.
 
@@ -43,7 +43,7 @@ fdquant --model_type=YOLOV5 --model_file=./yolov5s.onnx --save_dir=./yolov5s_qua
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --model_type          | 待量化的模型系列, 上例为YOLOV5系列模型                         |
+| --model_type          | 待量化的模型系列, 上例为YOLOv5系列模型                         |
 | --model_file           | 输入的模型文件, 上例为yolov5s.onnx     |
 | --save_dir             | 产出的量化后模型路径, 上例为yolov5s_quant_out      |
 | --data_dir             | 用于模型量化的calibration数据集, 用户自行准备验证集中的少量数据即可，默认为320张图片|
