@@ -37,6 +37,7 @@ tar -xvf COCO_val_320.tar.gz
 ```shell
 fdquant --model_type=YOLOV5 --model_file=./yolov5s.onnx --save_dir=./yolov5s_quant_out --data_dir=./COCO_val_320 --calibration_method=avg
 ```
+注意: 在执行以上命令时, 如果遇到input shape检查提示, 用户请直接输入'N'跳过即可.
 
 ### 参数说明
 
