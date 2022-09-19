@@ -36,6 +36,11 @@ TEST(fastdeploy, transpose_2d) {
   check_shape(output.shape, {3, 2});
   check_data(reinterpret_cast<const float*>(output.Data()),
              expected_result.data(), expected_result.size());
+
+  Transpose(input, &input, {1, 0});
+  check_shape(input.shape, {3, 2});
+  check_data(reinterpret_cast<const float*>(input.Data()),
+             expected_result.data(), expected_result.size());
 }
 
 TEST(fastdeploy, transpose_5d) {
@@ -55,6 +60,11 @@ TEST(fastdeploy, transpose_5d) {
   check_shape(output.shape, {2, 1, 2, 1, 3});
   check_data(reinterpret_cast<const int*>(output.Data()),
              expected_result.data(), expected_result.size());
+
+  Transpose(input, &input, {0, 1, 4, 3, 2});
+  check_shape(input.shape, {2, 1, 2, 1, 3});
+  check_data(reinterpret_cast<const int*>(input.Data()), expected_result.data(),
+             expected_result.size());
 }
 
 }  // namespace fastdeploy

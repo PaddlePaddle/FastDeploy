@@ -298,6 +298,7 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     device = other.device;
 
     other.name = "";
+    // Note(zhoushunjie): Avoid double free.
     other.buffer_ = nullptr;
     other.external_data_ptr = nullptr;
   }
