@@ -48,6 +48,7 @@ fdquant --model_type=YOLOV5 --model_file=./yolov5s.onnx --save_dir=./yolov5s_qua
 | --data_dir             | 用于模型量化的calibration数据集, 用户自行准备验证集中的少量数据即可，默认为320张图片|
 | --calibration_method   | 离线量化中，用于对activation层获取量化信息的方法, 用户可选: avg, max_abs, hist, mse, KL. 默认为avg|
 
+注意：目前fdquant暂时只支持YOLOv5,YOLOv6和YOLOv7模型的量化
 
 ## 3. FastDeploy 部署量化模型
 用户在获得量化模型之后，只需要简单地传入量化后的模型路径及相应参数，即可以使用FastDeploy进行部署.
