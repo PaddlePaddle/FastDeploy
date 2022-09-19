@@ -33,7 +33,7 @@ def process_on_linux(current_dir):
     third_libs_path = os.path.join(libs_path, "third_libs")
     for root, dirs, files in os.walk(third_libs_path):
         for d in dirs:
-            if d != "lib":
+            if d not in ["lib", "lib64"]:
                 continue
             rel_path = os.path.relpath(os.path.join(root, d), libs_path)
             rpath = "$ORIGIN/" + rel_path
@@ -145,7 +145,12 @@ def process_libraries(current_dir):
             if f.count(flt) > 0:
                 remain = False
         filename = os.path.split(f)[-1]
-        if filename in ["libnvinfer_plugin.so", "libnvinfer_plugin.so.8.4.1", "libnvinfer.so", "libnvinfer.so.8.4.1", "libnvonnxparser.so", "libnvonnxparser.so.8.4.1", "libnvparsers.so", "libnvparsers.so.8.4.1"]:
+        if filename in [
+                "libnvinfer_plugin.so", "libnvinfer_plugin.so.8.4.1",
+                "libnvinfer.so", "libnvinfer.so.8.4.1", "libnvonnxparser.so",
+                "libnvonnxparser.so.8.4.1", "libnvparsers.so",
+                "libnvparsers.so.8.4.1"
+        ]:
             continue
         if remain:
             package_data.append(
