@@ -68,7 +68,7 @@ English | [简体中文](README_CN.md)
 
 - CUDA >= 11.2
 - cuDNN >= 8.0
-- python >= 3.8
+- python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
 ##### Install Library with GPU Support
