@@ -1,3 +1,5 @@
+[简体中文](README.md) | English
+
 # YOLOv7 Prepare the model for Deployment
 
 - YOLOv7 deployment is based on [YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1) branching code, and [COCO Pre-Trained Models](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1).
