@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import platform
 
+user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
 
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
@@ -31,13 +32,15 @@ def process_on_linux(current_dir):
             fd_libs.append(filename)
 
     third_libs_path = os.path.join(libs_path, "third_libs")
-    for root, dirs, files in os.walk(third_libs_path):
-        for d in dirs:
-            if d not in ["lib", "lib64"]:
-                continue
-            rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-            rpath = "$ORIGIN/" + rel_path
-            rpaths.append(rpath)
+    all_libs_paths = [third_libs_path] + user_specified_dirs
+    for path in all_libs_paths:
+        for root, dirs, files in os.walk(path):
+            for d in dirs:
+                if d not in ["lib", "lib64"]:
+                    continue
+                rel_path = os.path.relpath(os.path.join(root, d), libs_path)
+                rpath = "$ORIGIN/" + rel_path
+                rpaths.append(rpath)
 
     for lib in fd_libs:
         command = "patchelf --set-rpath '{}' {}".format(":".join(rpaths), lib)
@@ -66,18 +69,20 @@ def process_on_mac(current_dir):
 
     commands = list()
     third_libs_path = os.path.join(libs_path, "third_libs")
-    for root, dirs, files in os.walk(third_libs_path):
-        for d in dirs:
-            if d not in ["lib", "lib64"]:
-                continue
-        rel_path = rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-        rpath = "$loader_path/" + rel_path
-        for lib in fd_libs:
-            pre_commands.append(
-                "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
-                    rpath, lib))
-            commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
-                            format(rpath, lib))
+    all_libs_paths = [third_libs_path] + user_specified_dirs
+    for path in all_libs_paths:
+        for root, dirs, files in os.walk(path):
+            for d in dirs:
+                if d not in ["lib", "lib64"]:
+                    continue
+            rel_path = rel_path = os.path.relpath(os.path.join(root, d), libs_path)
+            rpath = "$loader_path/" + rel_path
+            for lib in fd_libs:
+                pre_commands.append(
+                    "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
+                        rpath, lib))
+                commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
+                                format(rpath, lib))
 
     for cmd in pre_commands:
         try:
@@ -93,11 +98,13 @@ def process_on_mac(current_dir):
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")
     third_libs_path = os.path.join(libs_path, "third_libs")
-    for root, dirs, files in os.walk(third_libs_path):
-        for f in files:
-            file_path = os.path.join(root, f)
-            if f.count('onnxruntime') > 0 and f.endswith('.dll'):
-                shutil.copy(file_path, libs_path)
+    all_libs_paths = [third_libs_path] + user_specified_dirs
+    for path in all_libs_paths:
+        for root, dirs, files in os.walk(path):
+            for f in files:
+                file_path = os.path.join(root, f)
+                if f.count('onnxruntime') > 0 and f.endswith('.dll'):
+                    shutil.copy(file_path, libs_path)
 
 
 def get_all_files(dirname):
