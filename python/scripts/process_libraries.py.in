@@ -135,15 +135,13 @@ def process_libraries(current_dir):
                     return True
             return False
 
-        for dirs in user_specified_dirs:
-            all_files += get_all_files(dirs)
-
         for f in all_files:
             if f.endswith(".pyd") or f.endswith("lib") or f.endswith(
                     "dll") or check_windows_legal_file(f):
                 package_data.append(
                     os.path.relpath(f, os.path.join(current_dir,
                                                     "fastdeploy")))
+
         return package_data
 
     filters = [".vcxproj", ".png", ".java", ".h", ".cc", ".cpp", ".hpp"]
