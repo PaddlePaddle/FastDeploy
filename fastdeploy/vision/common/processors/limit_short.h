@@ -21,9 +21,12 @@ namespace vision {
 
 class LimitShort : public Processor {
  public:
-  explicit LimitShort(int max_short = -1, int min_short = -1, int interp = 1) {
+  explicit LimitShort(int max_short = -1, int min_short = -1, int input_w = -1,
+                      int input_h = -1, int interp = 1) {
     max_short_ = max_short;
     min_short_ = min_short;
+    input_w_ = input_w;
+    input_h_ = input_h;
     interp_ = interp;
   }
 
@@ -39,12 +42,15 @@ class LimitShort : public Processor {
   std::string Name() { return "LimitShort"; }
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
+                  int input_w = -1, int input_h = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
   int GetMaxShort() const { return max_short_; }
 
  private:
   int max_short_;
   int min_short_;
+  int input_w_;
+  int input_h_;
   int interp_;
 };
 }  // namespace vision

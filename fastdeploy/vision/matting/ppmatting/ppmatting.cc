@@ -60,6 +60,22 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
     return false;
   }
 
+  FDASSERT((cfg["Deploy"]["input_shape"]),
+           "The yaml file should include input_shape parameters");
+  // input_shape
+  // b c h w
+  auto input_shape = cfg["Deploy"]["input_shape"].as<std::vector<int>>();
+  FDASSERT(input_shape.size() == 4,
+           "The input_shape in yaml file need to be 4-dimensions.");
+  bool resize_once = false;
+  if (input_shape[2] > 0 && input_shape[3] > 0) {
+    resize_once = true;
+  }
+  if (input_shape[2] < 0 || input_shape[3] < 0) {
+    FDINFO << " Detected dynamic input, please ensure the inference "
+              "engine support dynamic input."
+           << std::endl;
+  }
   if (cfg["Deploy"]["transforms"]) {
     auto preprocess_cfg = cfg["Deploy"]["transforms"];
     for (const auto& op : preprocess_cfg) {
@@ -74,35 +90,18 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         if (op["min_short"]) {
           min_short = op["min_short"].as<int>();
         }
-        processors_.push_back(
-            std::make_shared<LimitShort>(max_short, min_short));
+        processors_.push_back(std::make_shared<LimitShort>(
+            max_short, min_short, input_shape[3], input_shape[2]));
       } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
+        if (resize_once) {
+          continue;
+        }
         int mult_int = 32;
         if (op["mult_int"]) {
           mult_int = op["mult_int"].as<int>();
         }
         processors_.push_back(std::make_shared<ResizeToIntMult>(mult_int));
       } else if (op["type"].as<std::string>() == "Normalize") {
-        if (cfg["Deploy"]["input_shape"]) {
-          // b c h w
-          auto input_shape =
-              cfg["Deploy"]["input_shape"].as<std::vector<int>>();
-          FDASSERT(input_shape.size() == 4,
-                   "The input_shape in yaml file need to be 4-dimensions.");
-          if (input_shape[2] > 0 and input_shape[3] > 0) {
-            processors_.push_back(std::make_shared<ResizeByInputShape>(
-                input_shape[3], input_shape[2]));
-            std::vector<float> value = {127.5, 127.5, 127.5};
-            processors_.push_back(std::make_shared<Cast>("float"));
-            processors_.push_back(std::make_shared<PadToSize>(
-                input_shape[3], input_shape[2], value));
-          } else {
-            FDINFO << " Detected dynamic input, please ensure the inference "
-                      "engine support dynamic input."
-                   << std::endl;
-          }
-        }
-
         std::vector<float> mean = {0.5, 0.5, 0.5};
         std::vector<float> std = {0.5, 0.5, 0.5};
         if (op["mean"]) {
@@ -117,6 +116,12 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<ResizeByShort>(target_size));
       }
     }
+    // the default padding value is {127.5,127.5,127.5} so after normalizing,
+    // ((127.5/255)-0.5)/0.5 = 0.0
+    std::vector<float> value = {0.0, 0.0, 0.0};
+    processors_.push_back(std::make_shared<Cast>("float"));
+    processors_.push_back(
+        std::make_shared<PadToSize>(input_shape[3], input_shape[2], value));
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
 
@@ -131,9 +136,9 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
               << "." << std::endl;
       return false;
     }
-    if (processors_[i]->Name().compare("ResizeByInputShape") == 0) {
-      (*im_info)["resize_by_input_shape"] = {static_cast<int>(mat->Height()),
-                                             static_cast<int>(mat->Width())};
+    if (processors_[i]->Name().compare("LimitShort") == 0) {
+      (*im_info)["size_before_pad"] = {static_cast<int>(mat->Height()),
+                                       static_cast<int>(mat->Width())};
     }
   }
 
@@ -163,7 +168,7 @@ bool PPMatting::Postprocess(
   // 先获取alpha并resize (使用opencv)
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
-  auto resize_by_input_shape = im_info.find("resize_by_input_shape");
+  auto size_before_pad = im_info.find("size_before_pad");
   FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
            "Cannot find input_shape or output_shape from im_info.");
   int out_h = iter_out->second[0];
@@ -175,9 +180,9 @@ bool PPMatting::Postprocess(
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   cv::Mat cropped_alpha;
-  if (resize_by_input_shape != im_info.end()) {
-    int resize_h = resize_by_input_shape->second[0];
-    int resize_w = resize_by_input_shape->second[1];
+  if (size_before_pad != im_info.end()) {
+    int resize_h = size_before_pad->second[0];
+    int resize_w = size_before_pad->second[1];
     alpha_zero_copy_ref(cv::Rect(0, 0, resize_w, resize_h))
         .copyTo(cropped_alpha);
   } else {
