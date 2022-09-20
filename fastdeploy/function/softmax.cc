@@ -117,7 +117,11 @@ void Softmax(const FDTensor& x, FDTensor* out, int axis) {
       "The absolute given axis should be smaller than the input's "
       "dimension. Expected absolute axis is smaller than %lu, but receive %d.",
       x.shape.size(), std::abs(axis));
+  // Note(zhoushunjie): The FDTensor out may equal to FDTensor x, so firstly we
+  // use out_temp to get the softmax result, then we move the out_temp to out.
+  FDTensor out_tmp;
   FD_VISIT_FLOAT_TYPES(x.dtype, "SoftmaxKernel",
-                       ([&] { SoftmaxKernel<data_t>(x, out, axis); }));
+                       ([&] { SoftmaxKernel<data_t>(x, &out_tmp, axis); }));
+  *out = std::move(out_tmp);
 }
 }  // namespace fastdeploy
