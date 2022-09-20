@@ -113,7 +113,8 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<Normalize>(mean, std));
       } else if (op["type"].as<std::string>() == "ResizeByShort") {
         int target_size = op["short_size"].as<int>();
-        processors_.push_back(std::make_shared<ResizeByShort>(target_size));
+        processors_.push_back(std::make_shared<ResizeByShort>(
+            target_size, input_shape[3], input_shape[2]));
       }
     }
     // the default padding value is {127.5,127.5,127.5} so after normalizing,
@@ -136,7 +137,8 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
               << "." << std::endl;
       return false;
     }
-    if (processors_[i]->Name().compare("LimitShort") == 0) {
+    if (processors_[i]->Name().compare("LimitShort") == 0 ||
+        processors_[i]->Name().compare("ResizeByShort") == 0) {
       (*im_info)["size_before_pad"] = {static_cast<int>(mat->Height()),
                                        static_cast<int>(mat->Width())};
     }

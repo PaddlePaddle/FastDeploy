@@ -21,9 +21,11 @@ namespace vision {
 
 class ResizeByShort : public Processor {
  public:
-  ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
-                int max_size = -1) {
+  ResizeByShort(int target_size, int input_w, int input_h, int interp = 1,
+                bool use_scale = true, int max_size = -1) {
     target_size_ = target_size;
+    input_h_ = input_h;
+    input_w_ = input_w;
     max_size_ = max_size;
     interp_ = interp;
     use_scale_ = use_scale;
@@ -34,16 +36,18 @@ class ResizeByShort : public Processor {
 #endif
   std::string Name() { return "ResizeByShort"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
-                  bool use_scale = true, int max_size = -1,
+  static bool Run(Mat* mat, int target_size, int input_w = -1, int input_h = -1,
+                  int interp = 1, bool use_scale = true, int max_size = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
  private:
   double GenerateScale(const int origin_w, const int origin_h);
   int target_size_;
+  int input_h_;
+  int input_w_;
   int max_size_;
   int interp_;
   bool use_scale_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

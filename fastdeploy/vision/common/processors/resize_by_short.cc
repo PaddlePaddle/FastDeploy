@@ -22,6 +22,15 @@ bool ResizeByShort::CpuRun(Mat* mat) {
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
+  if (input_w_ > 0 && input_h_ > 0) {
+    // 给出的input_shape 大于原始的shape(origin_w, origin_h) 则直接返回。
+    if (origin_w <= input_w_ && origin_h <= input_h_) {
+      return true;
+    }
+    float scale_w = input_w_ * 1.0 / origin_w;
+    float scale_h = input_h_ * 1.0 / origin_h;
+    scale = std::min(scale_w, scale_h);
+  }
   if (use_scale_) {
     cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
   } else {
@@ -41,6 +50,15 @@ bool ResizeByShort::GpuRun(Mat* mat) {
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
   im->convertTo(*im, CV_32FC(im->channels()));
+  if (input_w_ > 0 && input_h_ > 0) {
+    // 给出的input_shape 大于原始的shape(origin_w, origin_h) 则直接返回。
+    if (origin_w <= input_w_ && origin_h <= input_h_) {
+      return true;
+    }
+    float scale_w = input_w_ * 1.0 / origin_w;
+    float scale_h = input_h_ * 1.0 / origin_h;
+    scale = std::min(scale_w, scale_h);
+  }
   if (use_scale_) {
     cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
   } else {
@@ -67,10 +85,11 @@ double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   return scale;
 }
 
-bool ResizeByShort::Run(Mat* mat, int target_size, int interp, bool use_scale,
-                        int max_size, ProcLib lib) {
-  auto r = ResizeByShort(target_size, interp, use_scale, max_size);
+bool ResizeByShort::Run(Mat* mat, int target_size, int input_w, int input_h,
+                        int interp, bool use_scale, int max_size, ProcLib lib) {
+  auto r =
+      ResizeByShort(target_size, input_w, input_h, interp, use_scale, max_size);
   return r(mat, lib);
 }
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
