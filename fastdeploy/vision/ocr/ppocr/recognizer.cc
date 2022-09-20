@@ -48,8 +48,8 @@ Recognizer::Recognizer(const std::string& model_file,
                           Backend::OPENVINO};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
-    valid_cpu_backends = {Backend::ORT, Backend::PDINFER, Backend::OPENVINO};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
 
   runtime_option = custom_option;
