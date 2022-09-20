@@ -68,7 +68,7 @@ def process_on_mac(current_dir):
     third_libs_path = os.path.join(libs_path, "third_libs")
     for root, dirs, files in os.walk(third_libs_path):
         for d in dirs:
-            if d != "lib":
+            if d not in ["lib", "lib64"]:
                 continue
         rel_path = rel_path = os.path.relpath(os.path.join(root, d), libs_path)
         rpath = "$loader_path/" + rel_path
