@@ -42,7 +42,7 @@ option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernc
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
-option(ENABLE_OPENVINO_BACKEND "Whether to enable paddle inference backend." OFF)
+option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
 option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
