@@ -37,16 +37,31 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FDLogger {
  public:
+  static bool disable_info;
+  static bool disable_warning;
   FDLogger() {
     line_ = "";
     prefix_ = "[FastDeploy]";
-    verbose_ = true;
+    level_ = 0;
   }
-  explicit FDLogger(bool verbose, const std::string& prefix = "[FastDeploy]");
+  // 0: INFO
+  // 1: WARNING
+  // 2: ERROR
+  explicit FDLogger(int level = 0, const std::string& prefix = "[FastDeploy]");
+
+  bool verbose() {
+    if (disable_info && level_ == 0) {
+      return false;
+    }
+    if (disable_warning && level_ == 1) {
+      return false;
+    }
+    return true;
+  }
 
   template <typename T>
   FDLogger& operator<<(const T& val) {
-    if (!verbose_) {
+    if (!verbose()) {
       return *this;
     }
     std::stringstream ss;
@@ -56,7 +71,7 @@ class FASTDEPLOY_DECL FDLogger {
   }
   FDLogger& operator<<(std::ostream& (*os)(std::ostream&));
   ~FDLogger() {
-    if (!verbose_ && line_ != "") {
+    if (!verbose() && line_ != "") {
       std::cout << line_ << std::endl;
     }
   }
@@ -64,7 +79,7 @@ class FASTDEPLOY_DECL FDLogger {
  private:
   std::string line_;
   std::string prefix_;
-  bool verbose_ = true;
+  int level_ = 0;
 };
 
 FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
@@ -75,15 +90,15 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 #endif
 
 #define FDERROR                                                \
-  FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(2, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
                             << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                \
-  FDLogger(true, "[WARNING]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(1, "[WARNING]") << __REL_FILE__ << "(" << __LINE__ \
                               << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                \
-  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(0, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                        \

@@ -75,7 +75,7 @@ class FASTDEPLOY_DECL FastDeployModel {
 #define TIMERECORD_END(id, prefix)                                           \
   if (DebugEnabled()) {                                                      \
     tc_##id.End();                                                           \
-    FDLogger() << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " " \
+    FDINFO << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " " \
                << prefix << " duration = " << tc_##id.Duration() << "s."     \
                << std::endl;                                                 \
   }

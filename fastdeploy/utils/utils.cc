@@ -16,14 +16,17 @@
 
 namespace fastdeploy {
 
-FDLogger::FDLogger(bool verbose, const std::string& prefix) {
-  verbose_ = verbose;
+bool FDLogger::disable_info = false;
+bool FDLogger::disable_warning = false;
+
+FDLogger::FDLogger(int level, const std::string& prefix) {
   line_ = "";
+  level_ = level;
   prefix_ = prefix;
 }
 
 FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
-  if (!verbose_) {
+  if (!verbose()) {
     return *this;
   }
   std::cout << prefix_ << " " << line_ << std::endl;
