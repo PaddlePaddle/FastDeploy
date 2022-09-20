@@ -154,10 +154,13 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
     delete[] model_content_ptr;
     std::string onnx_model_proto(new_model, new_model + new_model_size);
     delete[] new_model;
-    std::string calibration_str(calibration_cache_ptr,
-                                calibration_cache_ptr + calibration_cache_size);
-    calibration_str_ = calibration_str;
-    delete[] calibration_cache_ptr;
+    if (calibration_cache_size) {
+      std::string calibration_str(
+          calibration_cache_ptr,
+          calibration_cache_ptr + calibration_cache_size);
+      calibration_str_ = calibration_str;
+      delete[] calibration_cache_ptr;
+    }
     return InitFromOnnx(onnx_model_proto, option, true);
   }
 
@@ -165,10 +168,12 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
-  std::string calibration_str(calibration_cache_ptr,
-                              calibration_cache_ptr + calibration_cache_size);
-  calibration_str_ = calibration_str;
-  delete[] calibration_cache_ptr;
+  if (calibration_cache_size) {
+    std::string calibration_str(calibration_cache_ptr,
+                                calibration_cache_ptr + calibration_cache_size);
+    calibration_str_ = calibration_str;
+    delete[] calibration_cache_ptr;
+  }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
   FDERROR << "Didn't compile with PaddlePaddle frontend, you can try to "
