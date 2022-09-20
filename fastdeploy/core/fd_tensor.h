@@ -98,8 +98,6 @@ struct FASTDEPLOY_DECL FDTensor {
   // prefix will also be printed as tag
   void PrintInfo(const std::string& prefix = "TensorInfo: ");
 
-  bool AllocFn(size_t nbytes);
-
   bool ReallocFn(size_t nbytes);
 
   void FreeFn();

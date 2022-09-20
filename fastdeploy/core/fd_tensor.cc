@@ -94,7 +94,7 @@ void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
   shape.assign(new_shape.begin(), new_shape.end());
   device = new_device;
   size_t nbytes = Nbytes();
-  FDASSERT(AllocFn(nbytes),
+  FDASSERT(ReallocFn(nbytes),
            "The FastDeploy FDTensor allocate cpu memory error");
 }
 
@@ -104,13 +104,7 @@ int FDTensor::Numel() const {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
 }
 
-void FDTensor::Resize(size_t new_nbytes) {
-  size_t nbytes = Nbytes();
-  if (new_nbytes > nbytes) {
-    FreeFn();
-    AllocFn(new_nbytes);
-  }
-}
+void FDTensor::Resize(size_t new_nbytes) { ReallocFn(new_nbytes); }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   int numel = Numel();
@@ -185,26 +179,14 @@ void FDTensor::PrintInfo(const std::string& prefix) {
             << ", min=" << min << std::endl;
 }
 
-bool FDTensor::AllocFn(size_t nbytes) {
-  if (device == Device::GPU) {
-#ifdef WITH_GPU
-    return FDDeviceAllocator()(&buffer_, nbytes);
-#else
-    FDASSERT(false,
-             "The FastDeploy FDTensor allocator didn't compile under "
-             "-DWITH_GPU=ON,"
-             "so this is an unexpected problem happend.");
-#endif
-  }
-  return FDHostAllocator()(&buffer_, nbytes);
-}
-
 bool FDTensor::ReallocFn(size_t nbytes) {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
     size_t original_nbytes = Nbytes();
     if (nbytes > original_nbytes) {
-      FDDeviceFree()(buffer_);
+      if (buffer_ != nullptr) {
+        FDDeviceFree()(buffer_);
+      }
       FDDeviceAllocator()(&buffer_, nbytes);
     }
     return buffer_ != nullptr;
@@ -263,7 +245,8 @@ FDTensor::FDTensor(const FDTensor& other)
     buffer_ = nullptr;
   } else {
     size_t nbytes = Nbytes();
-    FDASSERT(AllocFn(nbytes), "The FastDeploy FDTensor allocate memory error");
+    FDASSERT(ReallocFn(nbytes),
+             "The FastDeploy FDTensor allocate memory error");
     CopyBuffer(buffer_, other.buffer_, nbytes);
   }
 }
