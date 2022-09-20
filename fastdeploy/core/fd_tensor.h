@@ -98,14 +98,26 @@ struct FASTDEPLOY_DECL FDTensor {
   // prefix will also be printed as tag
   void PrintInfo(const std::string& prefix = "TensorInfo: ");
 
-  bool AllocFn(size_t nbytes);
+  bool ReallocFn(size_t nbytes);
 
   void FreeFn();
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+  // Deep copy
+  FDTensor(const FDTensor& other);
+  // Move constructor
+  FDTensor(FDTensor&& other);
+
+  // Deep copy assignment
+  FDTensor& operator=(const FDTensor& other);
+  // Move assignment
+  FDTensor& operator=(FDTensor&& other);
 
   ~FDTensor() { FreeFn(); }
+
+ private:
+  void CopyBuffer(void* dst, const void* src, size_t nbytes);
 };
 
 }  // namespace fastdeploy

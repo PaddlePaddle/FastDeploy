@@ -88,6 +88,10 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
   BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
 
+if(UNIX)
+  add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
+endif()
+
 add_library(external_paddle_inference STATIC IMPORTED GLOBAL)
 set_property(TARGET external_paddle_inference PROPERTY IMPORTED_LOCATION
                                          ${PADDLEINFERENCE_COMPILE_LIB})
