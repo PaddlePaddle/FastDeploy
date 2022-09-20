@@ -98,13 +98,11 @@ def process_on_mac(current_dir):
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")
     third_libs_path = os.path.join(libs_path, "third_libs")
-    all_libs_paths = [third_libs_path] + user_specified_dirs
-    for path in all_libs_paths:
-        for root, dirs, files in os.walk(path):
-            for f in files:
-                file_path = os.path.join(root, f)
-                if f.count('onnxruntime') > 0 and f.endswith('.dll'):
-                    shutil.copy(file_path, libs_path)
+    for root, dirs, files in os.walk(third_libs_path):
+        for f in files:
+            file_path = os.path.join(root, f)
+            if f.count('onnxruntime') > 0 and f.endswith('.dll'):
+                shutil.copy(file_path, libs_path)
 
 
 def get_all_files(dirname):
@@ -136,6 +134,9 @@ def process_libraries(current_dir):
                 if special_file in f:
                     return True
             return False
+
+        for dirs in user_specified_dirs:
+            all_files += get_all_files(dirs)
 
         for f in all_files:
             if f.endswith(".pyd") or f.endswith("lib") or f.endswith(
