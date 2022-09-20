@@ -63,8 +63,7 @@ class PaddleBackend : public BaseBackend {
   PaddleBackend() {}
   virtual ~PaddleBackend() = default;
   void BuildOption(const PaddleBackendOption& option,
-                   const std::string& model_file,
-                   const std::string& params_file);
+                   const std::string& model_file);
 
   bool InitFromPaddle(
       const std::string& model_file, const std::string& params_file,
