@@ -137,6 +137,10 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
 
+  pybind11::class_<FDLogger>(m, "FDLogger")
+      .def_readwrite_static("disable_info", &FDLogger::disable_info)
+      .def_readwrite_static("disable_warning", &FDLogger::disable_warning);
+
   BindRuntime(m);
   BindFDModel(m);
 #ifdef ENABLE_VISION
