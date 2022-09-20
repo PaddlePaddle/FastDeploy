@@ -28,7 +28,7 @@ DEFINE_string(device, "CPU",
               "default is CPU.");
 DEFINE_string(backend, "default",
               "Set inference backend, support one of ['default', 'ort', "
-              "'paddle', 'trt']");
+              "'paddle', 'trt', 'openvino']");
 
 void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
@@ -45,6 +45,8 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Use --backend=trt for inference must set --device=gpu"
               << std::endl;
     return;
+  } else if (FLAGS_backend == "openvino") {
+    option.UseOpenVINOBackend();
   } else if (FLAGS_backend == "default") {
     std::cout << "Use default backend for inference" << std::endl;
   } else {
@@ -88,6 +90,10 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     option.UseTrtBackend();
     option.SetTrtInputShape("image", {1, 3, 640, 640});
     option.SetTrtInputShape("scale_factor", {1, 2});
+  } else if (FLAGS_backend == "openvino") {
+    std::cerr << "Use --backend=openvino for inference must set --device=cpu"
+              << std::endl;
+    return
   } else if (FLAGS_backend == "default") {
     std::cout << "Use default backend for inference" << std::endl;
   } else {

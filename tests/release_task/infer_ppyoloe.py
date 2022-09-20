@@ -23,7 +23,7 @@ def parse_arguments():
         nargs='?',
         type=str,
         default='default',
-        help="Set inference backend, support one of ['default', 'ort', 'paddle', 'trt']."
+        help="Set inference backend, support one of ['default', 'ort', 'paddle', 'trt', 'openvino']."
     )
     return parser.parse_args()
 
@@ -44,6 +44,10 @@ def build_option(args):
         option.use_trt_backend()
         option.set_trt_input_shape("image", [1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", [1, 2])
+    elif args.backend == 'openvino':
+        assert args.device.lower(
+        ) == "cpu", "Set openvino backend must use cpu for inference"
+        option.use_openvino_backend()
     elif args.backend == "default":
         pass
     else:

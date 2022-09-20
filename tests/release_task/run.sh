@@ -15,11 +15,9 @@ echo $CPP_FASTDEPLOY_PACKAGE
 echo $PY_FASTDEPLOY_PACKAGE
 PY_VERSION_CASE=('python3.6' 'python3.7' 'python3.8' 'python3.9' 'python3.10')
 LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
-LINUX_X64_CPU_CASE=('ort' 'paddle')
-LINUX_AARCH_CPU_CASE=('ort')
-WIN_10_X64_GPU_CASE=('ort' 'paddle' 'trt')
-WIN_10_X64_CPU_CASE=('ort' 'paddle')
-MACOS_INTEL_CPU_CASE=('ort' 'paddle')
+LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
+LINUX_AARCH_CPU_CASE=('ort' 'openvino')
+MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -30,7 +28,6 @@ MODEL_PATH=$CURRENT_DIR/ppyoloe_crn_l_300e_coco
 GROUND_TRUTH_PATH=$CURRENT_DIR/release_task_groud_truth_result.txt
 COMPARE_SHELL=$CURRENT_DIR/compare_with_gt.py
 
-
 RUN_CASE=()
 if [ "$DEVICE" = "gpu" ] && [ "$PLATFORM" = "linux-x64" ];then
 	RUN_CASE=(${LINUX_X64_GPU_CASE[*]})
@@ -38,10 +35,6 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "linux-x64" ];then
 	RUN_CASE=(${LINUX_X64_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "linux-aarch64" ];then
 	RUN_CASE=(${LINUX_AARCH_CPU_CASE[*]})
-elif [ "$DEVICE" = "gpu" ] && [ "$PLATFORM" = "win-x64" ];then
-	RUN_CASE=(${WIN_10_X64_GPU_CASE[*]})
-elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "win-x64" ];then
-	RUN_CASE=(${WIN_10_X64_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-x86_64" ];then
 	RUN_CASE=(${MACOS_INTEL_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
