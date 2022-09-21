@@ -21,6 +21,8 @@ set(ONNXRUNTIME_SOURCE_DIR
 set(ONNXRUNTIME_INSTALL_DIR ${THIRD_PARTY_PATH}/install/onnxruntime)
 
 if (ORT_DIRECTORY)
+  message(STATUS "Use the onnxruntime lib specified by user. The ONNXRuntime path: ${ORT_DIRECTORY}")
+  STRING(REGEX REPLACE "\\\\" "/" ORT_DIRECTORY ${ORT_DIRECTORY})
   set(ONNXRUNTIME_INC_DIR
     "${ORT_DIRECTORY}/include"
     CACHE PATH "onnxruntime include directory." FORCE)
@@ -29,6 +31,7 @@ if (ORT_DIRECTORY)
     "${ORT_DIRECTORY}/lib"
     CACHE PATH "onnxruntime lib directory." FORCE)
 else()
+  message(STATUS "Use the default onnxruntime lib. The ONNXRuntime path: ${ONNXRUNTIME_INSTALL_DIR}")
   set(ONNXRUNTIME_INC_DIR
       "${ONNXRUNTIME_INSTALL_DIR}/include"
       CACHE PATH "onnxruntime include directory." FORCE)
