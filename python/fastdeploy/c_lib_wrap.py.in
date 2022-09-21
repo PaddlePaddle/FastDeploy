@@ -16,6 +16,8 @@ import logging
 import os
 import sys
 
+user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
+
 
 def is_built_with_gpu() -> bool:
     return True if "@WITH_GPU@" == "ON" else False
@@ -143,11 +145,13 @@ if os.name == "nt":
     current_path = os.path.abspath(__file__)
     dirname = os.path.dirname(current_path)
     third_libs_dir = os.path.join(dirname, "libs")
-    add_dll_search_dir(third_libs_dir)
-    for root, dirs, filenames in os.walk(third_libs_dir):
-        for d in dirs:
-            if d == "lib" or d == "bin":
-                add_dll_search_dir(os.path.join(dirname, root, d))
+    all_dirs = user_specified_dirs + [third_libs_dir]
+    for dir in all_dirs:
+        add_dll_search_dir(dir)
+        for root, dirs, filenames in os.walk(dir):
+            for d in dirs:
+                if d == "lib" or d == "bin":
+                    add_dll_search_dir(os.path.join(dirname, root, d))
 
 
 try:

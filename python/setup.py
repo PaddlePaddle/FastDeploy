@@ -62,6 +62,7 @@ setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
                                             "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
+setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 
 if setup_configs["WITH_GPU"] == "ON":
     wheel_name = "fastdeploy-gpu-python"
@@ -327,8 +328,7 @@ ext_modules = [
 
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
-    packages = setuptools.find_packages(
-        exclude=['fastdeploy*', 'scripts'])
+    packages = setuptools.find_packages(exclude=['fastdeploy*', 'scripts'])
 else:
     packages = setuptools.find_packages(exclude=['scripts'])
 
@@ -353,7 +353,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
         os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
     if not os.path.exists(
-            os.path.join(TOP_DIR, "python", "fastdeploy", "libs", "third_libs")):
+            os.path.join(TOP_DIR, "python", "fastdeploy", "libs",
+                         "third_libs")):
         print(
             "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
         )
