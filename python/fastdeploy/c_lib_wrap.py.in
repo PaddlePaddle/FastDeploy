@@ -147,11 +147,12 @@ if os.name == "nt":
     third_libs_dir = os.path.join(dirname, "libs")
     all_dirs = user_specified_dirs + [third_libs_dir]
     for dir in all_dirs:
-        add_dll_search_dir(dir)
-        for root, dirs, filenames in os.walk(dir):
-            for d in dirs:
-                if d == "lib" or d == "bin":
-                    add_dll_search_dir(os.path.join(dirname, root, d))
+        if os.path.exists(dir):
+            add_dll_search_dir(dir)
+            for root, dirs, filenames in os.walk(dir):
+                for d in dirs:
+                    if d == "lib" or d == "bin":
+                        add_dll_search_dir(os.path.join(dirname, root, d))
 
 
 try:
