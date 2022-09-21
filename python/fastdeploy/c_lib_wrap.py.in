@@ -16,7 +16,7 @@ import logging
 import os
 import sys
 
-user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
+user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 
 
 def is_built_with_gpu() -> bool:
