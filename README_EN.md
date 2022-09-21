@@ -68,7 +68,7 @@ English | [简体中文](README_CN.md)
 
 - CUDA >= 11.2
 - cuDNN >= 8.0
-- python >= 3.8
+- python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
 ##### Install Library with GPU Support
@@ -299,7 +299,7 @@ Notes:
 - **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/189557528-a7dea57c-a0d6-424f-b457-1d599af24e21.jpeg"  width = "225" height = "288" />
+<img src="https://user-images.githubusercontent.com/54695910/190932769-f36c0173-0fe6-4cab-9bba-f05e550b834f.jpg"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge

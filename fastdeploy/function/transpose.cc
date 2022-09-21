@@ -110,9 +110,15 @@ void Transpose(const FDTensor& x, FDTensor* out,
   for (size_t i = 0; i < dims_size; i++) {
     out_dims[i] = x.shape[dims[i]];
   }
-  out->Allocate(out_dims, x.dtype);
+
+  // Note(zhoushunjie): The FDTensor out may equal to FDTensor x, so firstly we
+  // use out_temp to get the transposed result, then we move the out_temp to
+  // out.
+  FDTensor out_temp;
+  out_temp.Allocate(out_dims, x.dtype);
   FD_VISIT_ALL_TYPES(x.dtype, "TransposeKernel",
-                     ([&] { TransposeKernel<data_t>(x, out, dims); }));
+                     ([&] { TransposeKernel<data_t>(x, &out_temp, dims); }));
+  *out = std::move(out_temp);
 }
 
 }  // namespace fastdeploy
