@@ -39,19 +39,22 @@ void BindYOLOv5(pybind11::module& m) {
                         &fd_mat, &output, &im_info, size, padding_value,
                         is_mini_pad, is_no_pad, is_scale_up, stride, max_wh,
                         multi_label);
-                    return make_pair(output, im_info);
+                    return make_pair(TensorToPyArray(output), im_info);
                   })
-      .def_static("postprocess",
-                  [](FDTensor& infer_result,
-                     const std::map<std::string, std::array<float, 2>>& im_info,
-                     float conf_threshold, float nms_iou_threshold,
-                     bool multi_label, float max_wh) {
-                    vision::DetectionResult result;
-                    vision::detection::YOLOv5::Postprocess(
-                        infer_result, &result, im_info, conf_threshold,
-                        nms_iou_threshold, multi_label, max_wh);
-                    return result;
-                  })
+      .def_static(
+          "postprocess",
+          [](std::vector<pybind11::array> infer_results,
+             const std::map<std::string, std::array<float, 2>>& im_info,
+             float conf_threshold, float nms_iou_threshold, bool multi_label,
+             float max_wh) {
+            std::vector<FDTensor> fd_infer_results(infer_results.size());
+            PyArrayToTensorList(infer_results, &fd_infer_results, true);
+            vision::DetectionResult result;
+            vision::detection::YOLOv5::Postprocess(
+                fd_infer_results, &result, im_info, conf_threshold,
+                nms_iou_threshold, multi_label, max_wh);
+            return result;
+          })
       .def_readwrite("size", &vision::detection::YOLOv5::size_)
       .def_readwrite("padding_value",
                      &vision::detection::YOLOv5::padding_value_)

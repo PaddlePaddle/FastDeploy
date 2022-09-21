@@ -35,7 +35,7 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
     dt = pybind11::dtype::of<uint8_t>();
   } else {
     FDASSERT(false, "The function doesn't support data type of %s.",
-                        Str(fd_dtype).c_str());
+             Str(fd_dtype).c_str());
   }
   return dt;
 }
@@ -65,17 +65,16 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
   data_shape.insert(data_shape.begin(), pyarray.shape(),
                     pyarray.shape() + pyarray.ndim());
   if (share_buffer) {
-    tensor-> SetExternalData(data_shape, dtype,
-                             pyarray.mutable_data());
+    tensor->SetExternalData(data_shape, dtype, pyarray.mutable_data());
   } else {
     tensor->Resize(data_shape, dtype);
     memcpy(tensor->MutableData(), pyarray.mutable_data(), pyarray.nbytes());
   }
 }
 
-void PyArrayToTensorList(std::vector<pybind11::array>& pyarrays, std::vector<FDTensor>* tensors,
-                     bool share_buffer) {
-  for(auto i = 0; i < pyarrays.size(); ++i) {
+void PyArrayToTensorList(std::vector<pybind11::array>& pyarrays,
+                         std::vector<FDTensor>* tensors, bool share_buffer) {
+  for (auto i = 0; i < pyarrays.size(); ++i) {
     PyArrayToTensor(pyarrays[i], &(*tensors)[i], share_buffer);
   }
 }
@@ -83,7 +82,8 @@ void PyArrayToTensorList(std::vector<pybind11::array>& pyarrays, std::vector<FDT
 pybind11::array TensorToPyArray(const FDTensor& tensor) {
   auto numpy_dtype = FDDataTypeToNumpyDataType(tensor.dtype);
   auto out = pybind11::array(numpy_dtype, tensor.shape);
-  memcpy(out.mutable_data(), tensor.Data(), tensor.Numel() * FDDataTypeSize(tensor.dtype));
+  memcpy(out.mutable_data(), tensor.Data(),
+         tensor.Numel() * FDDataTypeSize(tensor.dtype));
   return out;
 }
 
@@ -139,7 +139,7 @@ cv::Mat PyArrayToCvMat(pybind11::array& pyarray) {
 }
 #endif
 
-PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
+PYBIND11_MODULE(fastdeploy_main, m) {
   m.doc() =
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
@@ -152,8 +152,7 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
   BindVision(vision_module);
 #endif
 #ifdef ENABLE_TEXT
-  auto text_module =
-      m.def_submodule("text", "Text module of FastDeploy.");
+  auto text_module = m.def_submodule("text", "Text module of FastDeploy.");
   BindText(text_module);
 #endif
 }

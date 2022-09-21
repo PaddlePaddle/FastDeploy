@@ -62,7 +62,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // nms_iou_threshold 后处理时NMS设定的iou阈值
   // multi_label 后处理时box选取是否采用多标签方式
   static bool Postprocess(
-      FDTensor& infer_result, DetectionResult* result,
+      std::vector<FDTensor>& infer_results, DetectionResult* result,
       const std::map<std::string, std::array<float, 2>>& im_info,
       float conf_threshold, float nms_iou_threshold, bool multi_label,
       float max_wh = 7680.0);

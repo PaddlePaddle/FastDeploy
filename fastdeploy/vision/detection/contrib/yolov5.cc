@@ -157,10 +157,11 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
 }
 
 bool YOLOv5::Postprocess(
-    FDTensor& infer_result, DetectionResult* result,
+    std::vector<FDTensor>& infer_results, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
     float conf_threshold, float nms_iou_threshold, bool multi_label,
     float max_wh) {
+  auto& infer_result = infer_results[0];
   FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
   result->Clear();
   if (multi_label) {
@@ -287,7 +288,7 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   TIMERECORD_START(2)
 #endif
 
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(output_tensors, result, im_info, conf_threshold,
                    nms_iou_threshold, multi_label_)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
