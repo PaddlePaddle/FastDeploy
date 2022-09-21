@@ -26,13 +26,40 @@ void BindYOLOv5(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
-      .def_readwrite("size", &vision::detection::YOLOv5::size)
-      .def_readwrite("padding_value", &vision::detection::YOLOv5::padding_value)
-      .def_readwrite("is_mini_pad", &vision::detection::YOLOv5::is_mini_pad)
-      .def_readwrite("is_no_pad", &vision::detection::YOLOv5::is_no_pad)
-      .def_readwrite("is_scale_up", &vision::detection::YOLOv5::is_scale_up)
-      .def_readwrite("stride", &vision::detection::YOLOv5::stride)
-      .def_readwrite("max_wh", &vision::detection::YOLOv5::max_wh)
-      .def_readwrite("multi_label", &vision::detection::YOLOv5::multi_label);
+      .def_static("preprocess",
+                  [](pybind11::array& data, const std::vector<int>& size,
+                     const std::vector<float> padding_value, bool is_mini_pad,
+                     bool is_no_pad, bool is_scale_up, int stride, float max_wh,
+                     bool multi_label) {
+                    auto mat = PyArrayToCvMat(data);
+                    fastdeploy::vision::Mat fd_mat(mat);
+                    FDTensor output;
+                    std::map<std::string, std::array<float, 2>> im_info;
+                    vision::detection::YOLOv5::Preprocess(
+                        &fd_mat, &output, &im_info, size, padding_value,
+                        is_mini_pad, is_no_pad, is_scale_up, stride, max_wh,
+                        multi_label);
+                    return make_pair(output, im_info);
+                  })
+      .def_static("postprocess",
+                  [](FDTensor& infer_result,
+                     const std::map<std::string, std::array<float, 2>>& im_info,
+                     float conf_threshold, float nms_iou_threshold,
+                     bool multi_label, float max_wh) {
+                    vision::DetectionResult result;
+                    vision::detection::YOLOv5::Postprocess(
+                        infer_result, &result, im_info, conf_threshold,
+                        nms_iou_threshold, multi_label, max_wh);
+                    return result;
+                  })
+      .def_readwrite("size", &vision::detection::YOLOv5::size_)
+      .def_readwrite("padding_value",
+                     &vision::detection::YOLOv5::padding_value_)
+      .def_readwrite("is_mini_pad", &vision::detection::YOLOv5::is_mini_pad_)
+      .def_readwrite("is_no_pad", &vision::detection::YOLOv5::is_no_pad_)
+      .def_readwrite("is_scale_up", &vision::detection::YOLOv5::is_scale_up_)
+      .def_readwrite("stride", &vision::detection::YOLOv5::stride_)
+      .def_readwrite("max_wh", &vision::detection::YOLOv5::max_wh_)
+      .def_readwrite("multi_label", &vision::detection::YOLOv5::multi_label_);
 }
 }  // namespace fastdeploy
