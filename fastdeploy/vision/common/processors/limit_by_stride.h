@@ -19,31 +19,27 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByInputShape : public Processor {
+class LimitByStride : public Processor {
  public:
-  ResizeByInputShape(int width, int height, int interp = 1) {
-    width_ = width;
-    height_ = height;
+  explicit LimitByStride(int stride = 32, int interp = 1) {
+    stride_ = stride;
     interp_ = interp;
   }
-  // Resize input Mat* mat(origin_w, origin_h) by the input_shape (width_,
-  // height_).
-  // If any edge of mat is larger than that of input_shape, ResizeByInputShape
-  // will compute the smallest scale(s) of {width_/origin_w, height_/origin_h}
-  // and resize mat by s.
+
+  // Resize Mat* mat to make the size divisible by stride_.
+
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "ResizeByInputShape"; }
+  std::string Name() { return "LimitByStride"; }
 
-  static bool Run(Mat* mat, int width, int height, int interp = 1,
+  static bool Run(Mat* mat, int stride = 32, int interp = 1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
  private:
-  int width_;
-  int height_;
-  int interp_ = 1;
+  int interp_;
+  int stride_;
 };
 }  // namespace vision
 }  // namespace fastdeploy

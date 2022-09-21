@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/resize_to_int_mult.h"
+#include "fastdeploy/vision/common/processors/limit_by_stride.h"
 
 namespace fastdeploy {
 namespace vision {
 
-bool ResizeToIntMult::CpuRun(Mat* mat) {
+bool LimitByStride::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
-  int rw = origin_w - origin_w % mult_int_;
-  int rh = origin_h - origin_h % mult_int_;
+  int rw = origin_w - origin_w % stride_;
+  int rh = origin_h - origin_h % stride_;
   if (rw != origin_w || rh != origin_w) {
     cv::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
     mat->SetWidth(im->cols);
@@ -32,13 +32,13 @@ bool ResizeToIntMult::CpuRun(Mat* mat) {
 }
 
 #ifdef ENABLE_OPENCV_CUDA
-bool ResizeToIntMult::GpuRun(Mat* mat) {
+bool LimitByStride::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   im->convertTo(*im, CV_32FC(im->channels()));
-  int rw = origin_w - origin_w % mult_int_;
-  int rh = origin_h - origin_h % mult_int_;
+  int rw = origin_w - origin_w % stride_;
+  int rh = origin_h - origin_h % stride_;
   if (rw != origin_w || rh != origin_w) {
     cv::cuda::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
     mat->SetWidth(im->cols);
@@ -48,8 +48,8 @@ bool ResizeToIntMult::GpuRun(Mat* mat) {
 }
 #endif
 
-bool ResizeToIntMult::Run(Mat* mat, int mult_int, int interp, ProcLib lib) {
-  auto r = ResizeToIntMult(mult_int, interp);
+bool LimitByStride::Run(Mat* mat, int stride, int interp, ProcLib lib) {
+  auto r = LimitByStride(stride, interp);
   return r(mat, lib);
 }
 }  // namespace vision

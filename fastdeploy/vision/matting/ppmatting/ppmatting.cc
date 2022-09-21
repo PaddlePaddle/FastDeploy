@@ -100,7 +100,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         if (op["mult_int"]) {
           mult_int = op["mult_int"].as<int>();
         }
-        processors_.push_back(std::make_shared<ResizeToIntMult>(mult_int));
+        processors_.push_back(std::make_shared<LimitByStride>(mult_int));
       } else if (op["type"].as<std::string>() == "Normalize") {
         std::vector<float> mean = {0.5, 0.5, 0.5};
         std::vector<float> std = {0.5, 0.5, 0.5};
@@ -138,7 +138,8 @@ bool PPMatting::Preprocess(Mat* mat, FDTensor* output,
       return false;
     }
     if (processors_[i]->Name().compare("LimitShort") == 0 ||
-        processors_[i]->Name().compare("ResizeByShort") == 0) {
+        processors_[i]->Name().compare("ResizeByShort") == 0 ||
+        processors_[i]->Name().compare("LimitByStride") == 0) {
       (*im_info)["size_before_pad"] = {static_cast<int>(mat->Height()),
                                        static_cast<int>(mat->Width())};
     }
@@ -158,8 +159,7 @@ bool PPMatting::Postprocess(
     std::vector<FDTensor>& infer_result, MattingResult* result,
     const std::map<std::string, std::array<int, 2>>& im_info) {
   FDASSERT((infer_result.size() == 1),
-           "The default number of output tensor must be 1 according to "
-           "modnet.");
+           "The default number of output tensor must be 1 ");
   FDTensor& alpha_tensor = infer_result.at(0);  // (1,h,w,1)
   FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch =1 now.");
   if (alpha_tensor.dtype != FDDataType::FP32) {
@@ -197,7 +197,6 @@ bool PPMatting::Postprocess(
     // cv::resize(alpha_resized, alpha_resized, cv::Size(ipt_w, ipt_h));
     Resize::Run(&alpha_resized, ipt_w, ipt_h, -1, -1);
   }
-
   result->Clear();
   // note: must be setup shape before Resize
   result->contain_foreground = false;
@@ -221,7 +220,6 @@ bool PPMatting::Predict(cv::Mat* im, MattingResult* result) {
                             static_cast<int>(mat.Width())};
   im_info["output_shape"] = {static_cast<int>(mat.Height()),
                              static_cast<int>(mat.Width())};
-
   if (!Preprocess(&mat, &(processed_data[0]), &im_info)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
