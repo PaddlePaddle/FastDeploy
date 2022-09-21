@@ -39,11 +39,6 @@ class FASTDEPLOY_DECL FDLogger {
  public:
   static bool disable_info;
   static bool disable_warning;
-  FDLogger() {
-    line_ = "";
-    prefix_ = "[FastDeploy]";
-    level_ = 0;
-  }
   // 0: INFO
   // 1: WARNING
   // 2: ERROR
