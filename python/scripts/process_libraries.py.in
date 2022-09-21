@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import platform
 
-user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
+user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
