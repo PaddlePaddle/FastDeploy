@@ -50,9 +50,10 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
 
 # Please don't open this flag now, some bugs exists.
-option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
+# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
@@ -242,9 +243,17 @@ if(ENABLE_VISION)
   list(APPEND DEPEND_LIBS yaml-cpp)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
-  include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
-  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
-
+  if (OPENCV_DIRECTORY)
+    message(STATUS "Use the opencv lib specified by user. The OpenCV path: ${OPENCV_DIRECTORY}")
+    STRING(REGEX REPLACE "\\\\" "/" OPENCV_DIRECTORY ${OPENCV_DIRECTORY})
+    find_package(OpenCV REQUIRED PATHS ${OPENCV_DIRECTORY})
+    list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
+    include_directories(${OpenCV_INCLUDE_DIRS})
+  else()
+    message(STATUS "Use the default opencv lib.")
+    include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
+    list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
+  endif()
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
   endif()
@@ -263,6 +272,7 @@ endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
+configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
 
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
