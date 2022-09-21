@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL TimeCounter {
     if (!print_out) {
       return;
     }
-    std::cout << prefix << " duration = " << Duration() << "s." << std::endl;
+    FDLogger() << prefix << " duration = " << Duration() << "s." << std::endl;
   }
 
  private:
@@ -46,4 +46,4 @@ class FASTDEPLOY_DECL TimeCounter {
   std::chrono::time_point<std::chrono::system_clock> end_;
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

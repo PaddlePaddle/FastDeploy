@@ -24,6 +24,7 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
 }
 
 void PPYOLOE::GetNmsInfo() {
+#ifdef ENABLE_PADDLE_FRONTEND
   if (runtime_option.model_format == Frontend::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
@@ -41,6 +42,7 @@ void PPYOLOE::GetNmsInfo() {
       normalized = reader.nms_params.normalized;
     }
   }
+#endif
 }
 
 bool PPYOLOE::Initialize() {

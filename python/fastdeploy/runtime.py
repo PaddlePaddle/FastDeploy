@@ -80,6 +80,9 @@ class RuntimeOption:
     def use_openvino_backend(self):
         return self._option.use_openvino_backend()
 
+    def use_lite_backend(self):
+        return self._option.use_lite_backend()
+
     def enable_paddle_mkldnn(self):
         return self._option.enable_paddle_mkldnn()
 
