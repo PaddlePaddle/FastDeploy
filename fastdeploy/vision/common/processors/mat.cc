@@ -144,7 +144,6 @@ Mat CreateFromTensor(const FDTensor& tensor) {
     case FDDataType::INT32:
       temp_mat = cv::Mat(height, width, CV_32SC(channel),
                          const_cast<void*>(tensor.Data()));
-      std::cout << "test" << std::endl;
       break;
 
     case FDDataType::FP32:
