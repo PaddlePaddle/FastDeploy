@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO };
+enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO, LITE };
 // AUTOREC will according to the name of model file
 // to decide which Frontend is
 enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
@@ -65,6 +65,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // use openvino backend
   void UseOpenVINOBackend();
+
+  // use paddle lite backend
+  void UseLiteBackend();
 
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
@@ -167,6 +170,8 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateTrtBackend();
 
   void CreateOpenVINOBackend();
+
+  void CreateLiteBackend();
 
   int NumInputs() { return backend_->NumInputs(); }
   int NumOutputs() { return backend_->NumOutputs(); }

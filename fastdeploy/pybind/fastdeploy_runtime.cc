@@ -27,6 +27,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
+      .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
       .def("enable_paddle_mkldnn", &RuntimeOption::EnablePaddleMKLDNN)
       .def("disable_paddle_mkldnn", &RuntimeOption::DisablePaddleMKLDNN)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
@@ -110,7 +111,8 @@ void BindRuntime(pybind11::module& m) {
       .value("UNKOWN", Backend::UNKNOWN)
       .value("ORT", Backend::ORT)
       .value("TRT", Backend::TRT)
-      .value("PDINFER", Backend::PDINFER);
+      .value("PDINFER", Backend::PDINFER)
+      .value("LITE", Backend::LITE);
   pybind11::enum_<Frontend>(m, "Frontend", pybind11::arithmetic(),
                             "Frontend for inference.")
       .value("PADDLE", Frontend::PADDLE)
