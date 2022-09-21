@@ -166,7 +166,7 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   std::map<std::string, float> statis_info_of_runtime_dict;
 
   if (time_of_runtime_.size() < 10) {
-    std::cout << "[FastDeploy] [WARNING] PrintStatisInfoOfRuntime require the runtime ran 10 times at "
+    FDWARNING << "PrintStatisInfoOfRuntime require the runtime ran 10 times at "
                  "least, but now you only ran "
               << time_of_runtime_.size() << " times." << std::endl;
   }

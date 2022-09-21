@@ -33,6 +33,10 @@
 #include "fastdeploy/backends/openvino/ov_backend.h"
 #endif
 
+#ifdef ENABLE_LITE_BACKEND
+#include "fastdeploy/backends/lite/lite_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -48,6 +52,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_OPENVINO_BACKEND
   backends.push_back(Backend::OPENVINO);
+#endif
+#ifdef ENABLE_LITE_BACKEND
+  backends.push_back(Backend::LITE);
 #endif
   return backends;
 }
@@ -71,6 +78,8 @@ std::string Str(const Backend& b) {
     return "Backend::PDINFER";
   } else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
+  } else if (b == Backend::LITE) {
+    return "Backend::LITE";
   }
   return "UNKNOWN-Backend";
 }
@@ -194,6 +203,15 @@ void RuntimeOption::UseOpenVINOBackend() {
   FDASSERT(false, "The FastDeploy didn't compile with OpenVINO.");
 #endif
 }
+
+void RuntimeOption::UseLiteBackend() {
+#ifdef ENABLE_LITE_BACKEND
+  backend = Backend::LITE;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with Paddle Lite.");
+#endif
+}
+
 void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
@@ -262,12 +280,12 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::ORT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
-    FDINFO << "Runtime initialized with Backend::ORT in device " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::ORT in " << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::TRT) {
     FDASSERT(option.device == Device::GPU,
              "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
-    FDINFO << "Runtime initialized with Backend::TRT in device " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::TRT in " << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
@@ -275,12 +293,16 @@ bool Runtime::Init(const RuntimeOption& _option) {
         option.model_format == Frontend::PADDLE,
         "Backend::PDINFER only supports model format of Frontend::PADDLE.");
     CreatePaddleBackend();
-    FDINFO << "Runtime initialized with Backend::PDINFER in device " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::PDINFER in " << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::OPENVINO) {
     FDASSERT(option.device == Device::CPU,
              "Backend::OPENVINO only supports Device::CPU");
     CreateOpenVINOBackend();
-    FDINFO << "Runtime initialized with Backend::OPENVINO in device " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::OPENVINO in " << Str(option.device) << "." << std::endl;
+  } else if (option.backend == Backend::LITE) {
+    FDASSERT(option.device == Device::CPU, "Backend::LITE only supports Device::CPU");
+    CreateLiteBackend();
+    FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device) << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER as backend now."
@@ -433,4 +455,21 @@ void Runtime::CreateTrtBackend() {
            "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
+
+void Runtime::CreateLiteBackend() {
+#ifdef ENABLE_LITE_BACKEND
+  auto lite_option = LiteBackendOption();
+  FDASSERT(option.model_format == Frontend::PADDLE,
+           "LiteBackend only support model format of Frontend::PADDLE");
+  backend_ = utils::make_unique<LiteBackend>();
+  auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
+  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file, lite_option),
+           "Load model from nb file failed while initializing LiteBackend.");
+#else
+  FDASSERT(false,
+           "LiteBackend is not available, please compiled with "
+           "ENABLE_LITE_BACKEND=ON.");
+#endif
+}
+
 }  // namespace fastdeploy
