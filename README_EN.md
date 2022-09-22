@@ -255,7 +255,7 @@ Notes:
 
 |                    | Model                        | Size (MB) | Linux   | Android | iOS     | Linux                                     | Linux                                   | Linux                    | TBD...  |
 |:------------------:|:----------------------------:|:---------:|:-------:|:-------:|:-------:|:-----------------------------------------:|:---------------------------------------:|:------------------------:|:-------:|
-| ---                | ---                          | ---       | ARM CPU | ARM CPU | ARM CPU | Rexchip-NPU<br>RV1109<br>RV1126<br>RK1808 | Amlogic-NPU <br>A311D<br>S905D<br>C308X | NXPNPU<br>  i.MX 8M Plus | TBD...｜ |
+| ---                | ---                          | ---       | ARM CPU | ARM CPU | ARM CPU | Rockchip-NPU<br>RV1109<br>RV1126<br>RK1808 | Amlogic-NPU <br>A311D<br>S905D<br>C308X | NXPNPU<br>  i.MX 8M Plus | TBD...｜ |
 | Classification     | PP-LCNet                     | 11.9      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
 | Classification     | PP-LCNetv2                   | 26.6      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
 | Classification     | EfficientNet                 | 31.4      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
