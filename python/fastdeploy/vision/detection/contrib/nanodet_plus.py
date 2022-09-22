@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -23,7 +23,7 @@ class NanoDetPlus(FastDeployModel):
                  model_file,
                  params_file="",
                  runtime_option=None,
-                 model_format=Frontend.ONNX):
+                 model_format=ModelFormat.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(NanoDetPlus, self).__init__(runtime_option)

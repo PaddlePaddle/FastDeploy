@@ -31,7 +31,7 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionModel {
   // ArcFace支持IResNet, IResNet2060, VIT, MobileFaceNet骨干
   ArcFace(const std::string& model_file, const std::string& params_file = "",
           const RuntimeOption& custom_option = RuntimeOption(),
-          const Frontend& model_format = Frontend::ONNX);
+          const ModelFormat& model_format = ModelFormat::ONNX);
 
   // 定义模型的名称
   std::string ModelName() const override {

@@ -19,7 +19,8 @@ void BindArcFace(pybind11::module& m) {
   // Bind ArcFace
   pybind11::class_<vision::faceid::ArcFace,
                    vision::faceid::InsightFaceRecognitionModel>(m, "ArcFace")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::faceid::ArcFace& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);

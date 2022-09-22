@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 
 import logging
-from ... import Frontend
+from ... import ModelFormat
 from ... import RuntimeOption
 from ... import c_lib_wrap as C
 
@@ -47,7 +47,7 @@ class UIEModel(object):
                  max_length=128,
                  schema=[],
                  runtime_option=RuntimeOption(),
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         if isinstance(schema, list):
             schema = SchemaNode("", schema)._schema_node_children
         elif isinstance(schema, dict):
