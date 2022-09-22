@@ -20,7 +20,7 @@
 
 #include <type_traits>
 
-#include "fastdeploy/fastdeploy_runtime.h"
+#include "fastdeploy/runtime.h"
 
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision.h"

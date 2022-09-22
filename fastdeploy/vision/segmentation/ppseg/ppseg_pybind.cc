@@ -18,7 +18,7 @@ void BindPPSeg(pybind11::module& m) {
   pybind11::class_<vision::segmentation::PaddleSegModel, FastDeployModel>(
       m, "PaddleSegModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def("predict",
            [](vision::segmentation::PaddleSegModel& self,
               pybind11::array& data) {

@@ -1,7 +1,7 @@
 # 简介
 
 本文档介绍FastDeploy中的模型SDK，在ARM Linux C++环境下 ： （1）推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。
-其中ARM Linux Python请参考[ARM Linux Python环境下的推理部署](./ARM-Linux-Python-SDK-Inference.md)文档。
+其中ARM Linux Python请参考[ARM Linux Python环境下的推理部署](./arm_linux_python_sdk_inference.md)文档。
 
 **注意**：部分模型（如Tinypose、OCR等）仅支持图像推理，不支持视频推理。
 
@@ -88,7 +88,7 @@
 
 1. 【OCR需要编译】因为OCR任务的特殊性，本次SDK没有提供bin文件夹可执行文件。开发者根据需要，满足文档中gcc和cmake要求后，在`src/demo*`路径编译获取可执行文件，具体可参考。
 2. 【OCR仅支持图像推理，不支持视频流推理】
-3. ARM-Linux-Python的环境要求和使用，请参考[ARM Linux Python环境下的推理部署](./ARM-Linux-Python-SDK.md)文档。
+3. ARM-Linux-Python的环境要求和使用，请参考[ARM Linux Python环境下的推理部署](./arm_linux_python_sdk_inference.md)文档。
 
 ## 2. 测试Demo
 

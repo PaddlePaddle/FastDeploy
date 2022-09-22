@@ -23,7 +23,7 @@ namespace vision {
 namespace faceid {
 
 VPL::VPL(const std::string& model_file, const std::string& params_file,
-         const RuntimeOption& custom_option, const Frontend& model_format)
+         const RuntimeOption& custom_option, const ModelFormat& model_format)
     : InsightFaceRecognitionModel(model_file, params_file, custom_option,
                                   model_format) {
   initialized = Initialize();

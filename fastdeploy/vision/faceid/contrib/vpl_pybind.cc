@@ -19,7 +19,8 @@ void BindVPL(pybind11::module& m) {
   // Bind VPL
   pybind11::class_<vision::faceid::VPL,
                    vision::faceid::InsightFaceRecognitionModel>(m, "VPL")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::faceid::VPL& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
