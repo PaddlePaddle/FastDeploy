@@ -34,7 +34,7 @@ The visualisation of the results is as follows.
 ## YOLOv7 Python Interface
 
 ```python
-fastdeploy.vision.detection.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.detection.YOLOv7(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 YOLOv7 model loading and initialisation, with model_file being the exported ONNX model format.
@@ -44,7 +44,7 @@ YOLOv7 model loading and initialisation, with model_file being the exported ONNX
 > * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path. If the model format is ONNX, the parameter can be filled with an empty string.
 > * **runtime_option**(RuntimeOption): Back-end inference configuration. The default is None, i.e. the default is applied
-> * **model_format**(Frontend): Model format. The default is ONNX format
+> * **model_format**(ModelFormat): Model format. The default is ONNX format
 
 ### Predict Function
 

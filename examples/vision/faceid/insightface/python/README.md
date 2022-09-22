@@ -47,10 +47,10 @@ Detect Done! Cosine 01: 0.814385, Cosine 02:-0.059388
 ## InsightFace Python接口
 
 ```python
-fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
@@ -60,7 +60,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
 
 ### predict函数
 
