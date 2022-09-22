@@ -34,7 +34,11 @@ def convert2numpy(result_file):
 
 
 def write2file(error_file):
-    with open(error_file, "w+") as f:
+    import os
+    if not os.path.exists(error_file):
+        with open(error_file, "w+") as f:
+            f.write("Failed Cases:\n")
+    with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
         f.write(args.platform + " " + py_version + " " +
