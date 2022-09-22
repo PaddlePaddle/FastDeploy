@@ -32,5 +32,5 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 
 ## Other related docs
 
-- [FastDeploy Prebuilt C++ Libraries](./CPP_prebuilt_libraries.md)
-- [Example Vision Model deployment with C++/Python](../../examples/vision/)
+- [FastDeploy Prebuilt C++ Libraries](./install_cpp_sdk.md)
+- [Example Vision Model deployment with C++/Python](../../../examples/vision/)
