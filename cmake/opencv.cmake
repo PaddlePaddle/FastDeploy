@@ -102,7 +102,7 @@ else()
     else()
       # Installing OpenCV shared lib to FastDeploy third_libs/install dir.
       download_and_decompress(${OPENCV_URL} ${CMAKE_CURRENT_BINARY_DIR}/${OPENCV_LIB}${COMPRESSED_SUFFIX} ${THIRD_PARTY_PATH}/install)
-      set(OpenCV_DIR ${THIRD_PARTY_PATH}/${OPENCV_LIB}/sdk/native/jni)
+      set(OpenCV_DIR ${THIRD_PARTY_PATH}/install/${OPENCV_LIB}/sdk/native/jni)
       get_filename_component(OpenCV_NATIVE_DIR ${OpenCV_DIR} DIRECTORY)
       set(OpenCV_INCLUDE_DIRS ${OpenCV_DIR}/include)
       set(OpenCV_LIBS_DIR ${OpenCV_NATIVE_DIR}/libs)
