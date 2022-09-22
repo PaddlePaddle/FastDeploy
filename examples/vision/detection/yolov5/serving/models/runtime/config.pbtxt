@@ -1,0 +1,40 @@
+# 服务名(可不填),必须与目录名称一致
+name: "runtime"
+# backend名称
+backend: "fastdeploy"
+# runtime推理时允许最大batch数量
+max_batch_size: 16
+
+# 模型输入配置
+input [
+  # 第一个输入
+  {
+    # 输入名
+    name: "images"
+    # 输入类型 常用类型有:TYPE_FP32、TYPE_UINT8、TYPE_INT8、TYPE_INT16、TYPE_INT32、TYPE_INT64、TYPE_FP16、TYPE_STRING
+    data_type: TYPE_FP32
+    # 输入shape， batch纬度可不填写. 实际shape是:[batch, c, h, w]
+    dims: [ 3, -1, -1 ]
+  }
+]
+
+# 输出配置，跟输入一致
+output [
+  {
+    name: "output"
+    data_type: TYPE_FP32
+    dims: [ -1, -1 ]
+  }
+]
+
+# 配置模型实例个数
+instance_group [
+  {
+    # 实例数量
+    count: 1
+    # 使用GPU推理。 CPU推理为:KIND_CPU
+    kind: KIND_GPU
+    # 实例部署在卡0上
+    gpus: [0]
+  }
+]

@@ -62,6 +62,31 @@ class TritonPythonModel:
             self.output_dtype.append(dtype)
         print("postprocess output names:", self.output_names)
 
+    def yolov5_postprocess(self, infer_outputs, im_infos):
+        """
+        Parameters
+        ----------
+        infer_outputs : numpy.array
+          Contains the batch of inference results
+        im_infos : numpy.array(b'{}')
+         Returns
+        -------
+        numpy.array
+           yolov5 postprocess result
+        """
+        results = []
+        for i_batch in range(len(im_infos)):
+            new_infer_output = infer_outputs[i_batch:i_batch + 1]
+            new_im_info = im_infos[i_batch].decode('utf-8').replace("'", '"')
+            new_im_info = json.loads(new_im_info)
+
+            result = fd.vision.detection.YOLOv5.postprocess(
+                [new_infer_output, ], new_im_info)
+
+            r_str = fd.fd_result_to_json(result)
+            results.append(r_str)
+        return np.array(results, dtype=np.object)
+
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
         function receives a list of pb_utils.InferenceRequest as the only
@@ -81,30 +106,18 @@ class TritonPythonModel:
           A list of pb_utils.InferenceResponse. The length of this list must
           be the same as `requests`
         """
-        print("-----------post---process------------")
         responses = []
         # print("num:", len(requests), flush=True)
         for request in requests:
-            infer_output = pb_utils.get_input_tensor_by_name(
+            infer_outputs = pb_utils.get_input_tensor_by_name(
                 request, self.input_names[0])
-            im_info = pb_utils.get_input_tensor_by_name(request,
-                                                        self.input_names[1])
-            infer_output = infer_output.as_numpy()
-            im_info = im_info.as_numpy()
+            im_infos = pb_utils.get_input_tensor_by_name(request,
+                                                         self.input_names[1])
+            infer_outputs = infer_outputs.as_numpy()
+            im_infos = im_infos.as_numpy()
 
-            results = []
-            for i_batch in range(len(im_info)):
-                new_infer_output = infer_output[i_batch:i_batch + 1]
-                new_im_info = im_info[i_batch].decode('utf-8').replace("'",
-                                                                       '"')
-                new_im_info = json.loads(new_im_info)
+            results = self.yolov5_postprocess(infer_outputs, im_infos)
 
-                result = fd.vision.detection.YOLOv5.postprocess(
-                    [new_infer_output, ], new_im_info)
-
-                r_str = fd.fd_result_to_json(result)
-                results.append(r_str)
-            results = np.array(results, dtype=np.object)
             out_tensor = pb_utils.Tensor(self.output_names[0], results)
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])

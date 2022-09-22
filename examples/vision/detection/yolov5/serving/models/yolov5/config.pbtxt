@@ -34,7 +34,7 @@ ensemble_scheduling {
       }
     },
     {
-      model_name: "infer"
+      model_name: "runtime"
       model_version: 1
       input_map {
         key: "images"

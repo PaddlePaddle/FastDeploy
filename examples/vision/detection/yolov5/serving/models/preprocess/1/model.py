@@ -62,6 +62,21 @@ class TritonPythonModel:
             self.output_dtype.append(dtype)
         print("preprocess output names:", self.output_names)
 
+    def yolov5_preprocess(self, input_data):
+        """
+        According to Triton input, the preprocessing results of YoloV5 model are obtained.
+        """
+        im_infos = []
+        pre_outputs = []
+        for i_batch in input_data:
+            pre_output, im_info = fd.vision.detection.YOLOv5.preprocess(
+                i_batch)
+            pre_outputs.append(pre_output)
+            im_infos.append(im_info)
+        im_infos = np.array(im_infos, dtype=np.object)
+        pre_outputs = np.concatenate(pre_outputs, axis=0)
+        return pre_outputs, im_infos
+
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
         function receives a list of pb_utils.InferenceRequest as the only
@@ -87,19 +102,13 @@ class TritonPythonModel:
             data = pb_utils.get_input_tensor_by_name(request,
                                                      self.input_names[0])
             data = data.as_numpy()
-            im_infos = []
-            pre_outputs = []
-            for i_batch in data:
-                pre_output, im_info = fd.vision.detection.YOLOv5.preprocess(
-                    i_batch)
-                pre_outputs.append(pre_output)
-                im_infos.append(im_info)
-            im_infos = np.array(im_infos, dtype=np.object)
-            pre_outputs = np.concatenate(pre_outputs, axis=0)
-            out_tensor1 = pb_utils.Tensor(self.output_names[0], pre_outputs)
-            out_tensor2 = pb_utils.Tensor(self.output_names[1], im_infos)
+            outputs = self.yolov5_preprocess(data)
+            output_tensors = []
+            for idx, output in enumerate(outputs):
+                output_tensors.append(
+                    pb_utils.Tensor(self.output_names[idx], output))
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=[out_tensor1, out_tensor2])
+                output_tensors=output_tensors)
             responses.append(inference_response)
         return responses
 
