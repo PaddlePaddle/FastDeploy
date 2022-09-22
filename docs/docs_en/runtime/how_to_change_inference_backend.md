@@ -44,4 +44,4 @@ option.UseOrtBackend(); // ONNX Runtime
 
 Please refer to `FastDeploy/examples/vision` for python or c++ inference code of different models.
 
-For more deployment methods of `RuntimeOption`, please refer to [RuntimeOption API](../../docs/api/runtime/runtime_option.md)
+For more deployment methods of `RuntimeOption`, please refer to [RuntimeOption API](../api/runtime/runtime_option.md)
