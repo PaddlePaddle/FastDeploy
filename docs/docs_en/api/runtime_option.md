@@ -31,7 +31,7 @@ RuntimeOption(
   device_id : 0                        # Inference hardware id (for GPU)
   model_file : yolov5s.onnx            # Path to the model file
   params_file :                        # Parameter file path
-  model_format : Frontend.ONNX         # odel format
+  model_format : ModelFormat.ONNX         # odel format
   ort_execution_mode : -1              # The prefix ort indicates ONNXRuntime backend parameters
   ort_graph_opt_level : -1
   ort_inter_op_num_threads : -1
@@ -61,7 +61,7 @@ RuntimeOption(
 > * **device_id**(int): Device id, used on GPU
 > * **model_file**(str): Model file path
 > * **params_file**(str): Parameter file path
-> * **model_format**(Frontend): Model format, `fd.Frontend.PADDLE`/`fd.Frontend.ONNX`
+> * **model_format**(ModelFormat): Model format, `fd.ModelFormat.PADDLE`/`fd.ModelFormat.ONNX`
 > * **ort_execution_mode**(int): ORT back-end execution mode, 0 for sequential execution of all operators, 1 for parallel execution of operators, default is -1, i.e. execution in the ORT default configuration
 > * **ort_graph_opt_level**(int): ORT back-end image optimisation level; 0: disable image optimisation; 1: basic optimisation 2: additional expanded optimisation; 99: all optimisation; default is -1, i.e. executed in the ORT default configuration
 > * **ort_inter_op_num_threads**(int): When `ort_execution_mode` is 1, this parameter sets the number of threads in parallel between operators
@@ -106,7 +106,7 @@ model = fd.vision.classification.PaddleClasModel(
 > * **device_id**(int): Device id, used on GPU
 > * **model_file**(string): Model file path
 > * **params_file**(string): Parameter file path
-> * **model_format**(fastdeploy::Frontend): Model format,`Frontend::PADDLE`/`Frontend::ONNX`
+> * **model_format**(fastdeploy::ModelFormat): Model format,`ModelFormat::PADDLE`/`ModelFormat::ONNX`
 > * **ort_execution_mode**(int): ORT back-end execution mode, 0 for sequential execution of all operators, 1 for parallel execution of operators, default is -1, i.e. execution in the ORT default configuration
 > * **ort_graph_opt_level**(int): ORT back-end image optimisation level; 0: disable image optimisation; 1: basic optimisation 2: additional expanded optimisation; 99: all optimisation; default is -1, i.e. executed in the ORT default configuration
 > * **ort_inter_op_num_threads**(int): When `ort_execution_mode` is 1, this parameter sets the number of threads in parallel between operators

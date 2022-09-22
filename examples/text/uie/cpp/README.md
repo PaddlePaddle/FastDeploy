@@ -85,20 +85,20 @@ UIEModel(
     const std::vector<std::string>& schema,
     const fastdeploy::RuntimeOption& custom_option =
         fastdeploy::RuntimeOption(),
-    const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
 UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
     const SchemaNode& schema, const fastdeploy::RuntimeOption& custom_option =
                                   fastdeploy::RuntimeOption(),
-    const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
 UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
     const std::vector<SchemaNode>& schema,
     const fastdeploy::RuntimeOption& custom_option =
         fastdeploy::RuntimeOption(),
-    const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
 ```
 
 UIE模型加载和初始化，其中model_file, params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)。
@@ -112,7 +112,7 @@ UIE模型加载和初始化，其中model_file, params_file为训练模型导出
 > * **max_length**(int): 输入文本的最大长度。输入文本下标超过`max_length`的部分将被截断。默认为128
 > * **schema**(list(SchemaNode) | SchemaNode | list(str)): 抽取任务的目标模式。
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 #### SetSchema函数
 
