@@ -42,9 +42,10 @@ Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& label_path,
                        const RuntimeOption& custom_option,
-                       const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
-    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};  // 指定可用的CPU后端
+                       const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT,
+                          Backend::OPENVINO};  // 指定可用的CPU后端
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
     // NOTE:此模型暂不支持paddle-inference-Gpu推理

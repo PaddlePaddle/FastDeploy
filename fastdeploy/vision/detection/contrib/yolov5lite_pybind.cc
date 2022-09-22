@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindYOLOv5Lite(pybind11::module& m) {
   pybind11::class_<vision::detection::YOLOv5Lite, FastDeployModel>(m,
                                                                    "YOLOv5Lite")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::detection::YOLOv5Lite& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {

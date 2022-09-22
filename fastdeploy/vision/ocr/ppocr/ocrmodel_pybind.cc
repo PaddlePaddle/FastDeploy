@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindPPOCRModel(pybind11::module& m) {
   // DBDetector
   pybind11::class_<vision::ocr::DBDetector, FastDeployModel>(m, "DBDetector")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def(pybind11::init<>())
 
       .def_readwrite("max_side_len", &vision::ocr::DBDetector::max_side_len)
@@ -36,7 +37,8 @@ void BindPPOCRModel(pybind11::module& m) {
 
   // Classifier
   pybind11::class_<vision::ocr::Classifier, FastDeployModel>(m, "Classifier")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def(pybind11::init<>())
 
       .def_readwrite("cls_thresh", &vision::ocr::Classifier::cls_thresh)
@@ -48,7 +50,7 @@ void BindPPOCRModel(pybind11::module& m) {
   pybind11::class_<vision::ocr::Recognizer, FastDeployModel>(m, "Recognizer")
 
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def(pybind11::init<>())
 
       .def_readwrite("rec_img_h", &vision::ocr::Recognizer::rec_img_h)
