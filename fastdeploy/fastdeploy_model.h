@@ -54,30 +54,15 @@ class FASTDEPLOY_DECL FastDeployModel {
   }
 
   virtual std::map<std::string, float> PrintStatisInfoOfRuntime();
-  virtual void EnableDebug();
-  virtual bool DebugEnabled();
 
  private:
   std::unique_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-  bool debug_ = false;
 
   // record inference time for backend
   std::vector<double> time_of_runtime_;
 };
-
-#define TIMERECORD_START(id) \
-  TimeCounter tc_##id;       \
-  tc_##id.Start();
-
-#define TIMERECORD_END(id, prefix)                                           \
-  if (DebugEnabled()) {                                                      \
-    tc_##id.End();                                                           \
-    FDLogger() << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " " \
-               << prefix << " duration = " << tc_##id.Duration() << "s."     \
-               << std::endl;                                                 \
-  }
 
 }  // namespace fastdeploy
