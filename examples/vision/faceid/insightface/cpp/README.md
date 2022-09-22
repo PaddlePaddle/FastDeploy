@@ -52,7 +52,7 @@ fastdeploy::vision::faceid::ArcFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
 ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -64,7 +64,7 @@ fastdeploy::vision::faceid::CosFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
 CosFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -76,7 +76,7 @@ fastdeploy::vision::faceid::PartialFC(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
 PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -88,7 +88,7 @@ fastdeploy::vision::faceid::VPL(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
 VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -97,7 +97,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX格式
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX格式
 
 #### Predict函数
 

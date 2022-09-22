@@ -33,7 +33,7 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 ## PaddleSegModel Python接口
 
 ```python
-fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 PaddleSeg模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/docs/model_export_cn.md)
@@ -44,7 +44,7 @@ PaddleSeg模型加载和初始化，其中model_file, params_file以及config_fi
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 ### predict函数
 
