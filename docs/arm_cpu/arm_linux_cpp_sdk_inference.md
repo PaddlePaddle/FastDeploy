@@ -1,7 +1,7 @@
 # 简介
 
 本文档介绍FastDeploy中的模型SDK，在ARM Linux C++环境下 ： （1）推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。
-其中ARM Linux Python请参考[ARM Linux Python环境下的推理部署](./ARM-Linux-Python-SDK-Inference.md)文档。
+其中ARM Linux Python请参考[ARM Linux Python环境下的推理部署](./arm_linux_python_sdk_inference.md)文档。
 
 **注意**：部分模型（如Tinypose、OCR等）仅支持图像推理，不支持视频推理。
 
