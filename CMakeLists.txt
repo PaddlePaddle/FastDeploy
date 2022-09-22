@@ -55,7 +55,6 @@ option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 
 # Please don't open this flag now, some bugs exists.
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
-option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
 # Whether to build fastdeply with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
@@ -90,9 +89,6 @@ if(WIN32 AND ENABLE_VISION)
   set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 endif()
 
-if(ENABLE_DEBUG)
-  add_definitions(-DFASTDEPLOY_DEBUG)
-endif()
 if(NOT CUDA_DIRECTORY)
   set(CUDA_DIRECTORY "/usr/local/cuda")
 endif()
