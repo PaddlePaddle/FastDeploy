@@ -13,10 +13,6 @@
 // limitations under the License.
 #pragma once
 
-#ifndef FASTDEPLOY_DEBUG
-#cmakedefine FASTDEPLOY_DEBUG
-#endif
-
 #ifndef FASTDEPLOY_LIB
 #cmakedefine FASTDEPLOY_LIB
 #endif

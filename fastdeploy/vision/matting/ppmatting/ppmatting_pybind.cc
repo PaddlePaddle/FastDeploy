@@ -17,7 +17,7 @@ namespace fastdeploy {
 void BindPPMatting(pybind11::module& m) {
   pybind11::class_<vision::matting::PPMatting, FastDeployModel>(m, "PPMatting")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def("predict",
            [](vision::matting::PPMatting& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);

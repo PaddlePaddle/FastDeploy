@@ -73,6 +73,13 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
   }
 }
 
+void PyArrayToTensorList(std::vector<pybind11::array>& pyarrays, std::vector<FDTensor>* tensors,
+                     bool share_buffer) {
+  for(auto i = 0; i < pyarrays.size(); ++i) {
+    PyArrayToTensor(pyarrays[i], &(*tensors)[i], share_buffer);
+  }
+}
+
 pybind11::array TensorToPyArray(const FDTensor& tensor) {
   auto numpy_dtype = FDDataTypeToNumpyDataType(tensor.dtype);
   auto out = pybind11::array(numpy_dtype, tensor.shape);
