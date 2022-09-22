@@ -31,7 +31,7 @@ Classifier::Classifier(const std::string& model_file,
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
-    valid_gpu_backends = {Backend::PDINFER, Backend::TRT, Backend::ORT};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
