@@ -41,4 +41,4 @@ FastDeploy provides prebuilt CPP deployment libraries on Windows/Linux/Mac. Deve
 ## Other related docs
 
 - [Install Python SDK](./install_python_sdk.md)
-- [Example Vision and NLP Model deployment with C++/Python](../../examples/)
+- [Example Vision and NLP Model deployment with C++/Python](../../../examples/)
