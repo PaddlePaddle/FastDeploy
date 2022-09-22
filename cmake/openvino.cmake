@@ -15,13 +15,6 @@
 include(ExternalProject)
 
 set(OPENVINO_PROJECT "extern_openvino")
-set(OPENVINO_PREFIX_DIR ${THIRD_PARTY_PATH}/openvino)
-set(OPENVINO_INSTALL_DIR ${THIRD_PARTY_PATH}/install/openvino)
-set(OPENVINO_INSTALL_INC_DIR
-  "${OPENVINO_INSTALL_DIR}/include"
-  CACHE PATH "openvino install include directory." FORCE)
-
-set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
 
 set(OPENVINO_VERSION "2022.2.0.dev20220829")
 set(OPENVINO_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs/")
@@ -48,73 +41,50 @@ else()
 endif()
 set(OPENVINO_URL "${OPENVINO_URL_PREFIX}${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}")
 
-set(OPENVINO_SOURCE_DIR
-    ${THIRD_PARTY_PATH}/openvino/src/${OPENVINO_PROJECT}/runtime)
-set(OPENVINO_INC_DIR
+
+set(OPENVINO_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/runtime)
+set(OPENVINO_INSTALL_INC_DIR
   "${OPENVINO_INSTALL_DIR}/include"
   "${OPENVINO_INSTALL_DIR}/include/ie"
-  CACHE PATH "openvino include directory." FORCE)
+  CACHE PATH "openvino install include directory." FORCE)
+  
 set(OPENVINO_LIB_DIR
   "${OPENVINO_INSTALL_DIR}/lib/"
+  "${OPENVINO_INSTALL_DIR}/3rdparty/tbb/lib/"
   CACHE PATH "openvino lib directory." FORCE)
+set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
 
 # For OPENVINO code to include internal headers.
-include_directories(${OPENVINO_INC_DIR})
+include_directories(${OPENVINO_INSTALL_INC_DIR})
+
+download_and_decompress(${OPENVINO_URL}
+    ${CMAKE_CURRENT_BINARY_DIR}/${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}
+    ${THIRD_PARTY_PATH}/install)
 
 if(WIN32)
   set(OPENVINO_LIB
       "${OPENVINO_INSTALL_DIR}/lib/openvino.lib"
       CACHE FILEPATH "OPENVINO shared library." FORCE)
-  set(INSTALL_CMD ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/lib/intel64/Release ${OPENVINO_INSTALL_DIR}/lib &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/bin/intel64/Release ${OPENVINO_INSTALL_DIR}/bin &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include ${OPENVINO_INSTALL_INC_DIR} &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/3rdparty ${OPENVINO_INSTALL_DIR}/3rdparty)
+  file(RENAME ${OPENVINO_INSTALL_DIR}/lib/intel64/Release ${OPENVINO_INSTALL_DIR}/lib)
+  file(RENAME ${OPENVINO_INSTALL_DIR}/bin/intel64/Release ${OPENVINO_INSTALL_DIR}/bin)
 elseif(APPLE)
   set(OPENVINO_LIB
       "${OPENVINO_INSTALL_DIR}/lib/libopenvino.dylib"
       CACHE FILEPATH "OPENVINO shared library." FORCE)
-  set(INSTALL_CMD ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/lib/intel64/Release ${OPENVINO_INSTALL_DIR}/lib &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include ${OPENVINO_INSTALL_INC_DIR} &&
-      ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/3rdparty ${OPENVINO_INSTALL_DIR}/3rdparty)
-
+  file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/Release/*)
+  file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
+  file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
 else()
   set(OPENVINO_LIB
       "${OPENVINO_INSTALL_DIR}/lib/libopenvino.so"
       CACHE FILEPATH "OPENVINO shared library." FORCE)
-  
-  set(INSTALL_CMD ${CMAKE_COMMAND} -E remove_directory ${OPENVINO_INSTALL_DIR} &&
-              ${CMAKE_COMMAND} -E make_directory ${OPENVINO_INSTALL_DIR} &&
-              ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/lib/intel64 ${OPENVINO_INSTALL_DIR}/lib &&
-              ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/include ${OPENVINO_INSTALL_INC_DIR} &&
-              ${CMAKE_COMMAND} -E copy_directory ${OPENVINO_SOURCE_DIR}/3rdparty ${OPENVINO_INSTALL_DIR}/3rdparty)
-endif()
-
-ExternalProject_Add(
-    ${OPENVINO_PROJECT}
-    ${EXTERNAL_PROJECT_LOG_ARGS}
-    URL ${OPENVINO_URL}
-    PREFIX ${OPENVINO_PREFIX_DIR}
-    DOWNLOAD_NO_PROGRESS 1
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    UPDATE_COMMAND ""
-    INSTALL_COMMAND ${INSTALL_CMD}
-    BUILD_BYPRODUCTS ${OPENVINO_LIB})
-
-
-if(UNIX)
-  if (NOT APPLE)
-    add_custom_target(patchelf_openvino_tbb ALL COMMAND bash -c "patchelf --set-rpath '${ORIGIN}/../third_libs/install/openvino/3rdparty/tbb/lib' ${OPENVINO_INSTALL_DIR}/lib/*.so*" DEPENDS ${OPENVINO_PROJECT})
-  endif()
+  file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/*)
+  file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
+  file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
 endif()
 
 add_library(external_openvino STATIC IMPORTED GLOBAL)
 set_property(TARGET external_openvino PROPERTY IMPORTED_LOCATION ${OPENVINO_LIB})
-add_dependencies(external_openvino ${OPENVINO_PROJECT})
 
 find_package(TBB REQUIRED PATHS "${OPENVINO_INSTALL_DIR}/3rdparty/tbb/")
 set(OPENVINO_LIBS external_openvino ${TBB_IMPORTED_TARGETS})
