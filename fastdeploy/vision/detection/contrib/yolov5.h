@@ -27,7 +27,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // 当model_format为Paddle时，则需同时指定model_file & params_file
   YOLOv5(const std::string& model_file, const std::string& params_file = "",
          const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::ONNX);
+         const ModelFormat& model_format = ModelFormat::ONNX);
 
   // 定义模型的名称
   std::string ModelName() const { return "yolov5"; }
