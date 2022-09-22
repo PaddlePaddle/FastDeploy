@@ -95,7 +95,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << "." << std::endl;
     }
   }
-  if (is_with_argmax == true) {
+  if (is_with_argmax) {
     FDWARNING << "The PaddleSeg model is exported with argmax."
               << " If you want the edge of segmentation image more"
               << " smoother. Please export model with parameters"
