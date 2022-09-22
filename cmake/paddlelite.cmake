@@ -18,7 +18,8 @@ set(PADDLELITE_PROJECT "extern_paddlelite")
 set(PADDLELITE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddlelite)
 set(PADDLELITE_SOURCE_DIR
     ${THIRD_PARTY_PATH}/paddlelite/src/${PADDLELITE_PROJECT})
-set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddlelite)
+# TODO(qiuyanjun): install all paddle library to 'paddlelibs' dir.    
+set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddlelite)  
 set(PADDLELITE_INC_DIR
     "${PADDLELITE_INSTALL_DIR}/include"
     CACHE PATH "paddlelite include directory." FORCE)
@@ -27,28 +28,42 @@ set(PADDLELITE_LIB_DIR
     CACHE PATH "paddlelite lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${PADDLELITE_LIB_DIR}")
 
-#set(PADDLELITE_URL "https://github.com/PaddlePaddle/Paddle-Lite/releases/download/v2.11/inference_lite_lib.armlinux.armv8.gcc.with_extra.with_cv.tar.gz")
-set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-arm64-20220920.tgz")
+set(PADDLELITE_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")
 
-if(WIN32)
-  message(FATAL_ERROR "Doesn't support windows platform with backend Paddle-Lite.")
-elseif(APPLE)
-  message(FATAL_ERROR "Doesn't support Mac OSX platform with backend Paddle-Lite.")
-else()
+if(ANDROID)
+  if(WITH_LITE_STATIC)
+      message(FATAL_ERROR "Doesn't support WTIH_LITE_STATIC=ON for Paddle-Lite now.")
+  endif()
+  # check ABI, toolchain
+  if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))
+    message(FATAL_ERROR "FastDeploy with Paddle-Lite only support armeabi-v7a, arm64-v8a now.")
+  endif()
+  if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
+     message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with Paddle-Lite backend, but found ${ANDROID_TOOLCHAIN}.")
+  endif()  
+endif()
+
+if(WIN32 OR APPLE OR IOS)
+  message(FATAL_ERROR "Doesn't support windows/mac/ios platform with backend Paddle-Lite now.")
+elseif(ANDROID)
+  set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-android-${ANDROID_ABI}-2.11.tgz")
+else() # Linux
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-arm64-20220920.tgz")
+    set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-linux-arm64-20220920.tgz")
   else()
     message(FATAL_ERROR "Only support Linux aarch64 now, x64 is not supported with backend Paddle-Lite.")
   endif()
 endif()
 
-include_directories(${PADDLELITE_INC_DIR})
-
-if(WIN32)
-elseif(APPLE)
+if(WIN32 OR APPLE OR IOS)
+  message(FATAL_ERROR "Doesn't support windows/mac/ios platform with backend Paddle-Lite now.")
+elseif(ANDROID AND WITH_LITE_STATIC)
+  set(PADDLELITE_LIB "${PADDLELITE_LIB_DIR}/libpaddle_full_api_shared.a")
 else()
-  set(PADDLELITE_LIB "${PADDLELITE_INSTALL_DIR}/lib/libpaddle_full_api_shared.so")
+  set(PADDLELITE_LIB "${PADDLELITE_LIB_DIR}/libpaddle_full_api_shared.so")
 endif()
+
+include_directories(${PADDLELITE_INC_DIR})
 
 ExternalProject_Add(
   ${PADDLELITE_PROJECT}
