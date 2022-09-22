@@ -43,7 +43,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // model_format support 'paddle' / 'onnx' now.
   void SetModelPath(const std::string& model_path,
                     const std::string& params_path = "",
-                    const std::string& _model_format = "paddle");
+                    const ModelFormat& format = ModelFormat::PADDLE);
 
   // set model inference in GPU
   void UseCpu();
