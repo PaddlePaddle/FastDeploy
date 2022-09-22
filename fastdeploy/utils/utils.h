@@ -37,26 +37,16 @@ namespace fastdeploy {
 
 class FASTDEPLOY_DECL FDLogger {
  public:
-  static bool disable_info;
-  static bool disable_warning;
-  // 0: INFO
-  // 1: WARNING
-  // 2: ERROR
-  explicit FDLogger(int level = 0, const std::string& prefix = "[FastDeploy]");
-
-  bool verbose() {
-    if (disable_info && level_ == 0) {
-      return false;
-    }
-    if (disable_warning && level_ == 1) {
-      return false;
-    }
-    return true;
+  FDLogger() {
+    line_ = "";
+    prefix_ = "[FastDeploy]";
+    verbose_ = true;
   }
+  explicit FDLogger(bool verbose, const std::string& prefix = "[FastDeploy]");
 
   template <typename T>
   FDLogger& operator<<(const T& val) {
-    if (!verbose()) {
+    if (!verbose_) {
       return *this;
     }
     std::stringstream ss;
@@ -66,7 +56,7 @@ class FASTDEPLOY_DECL FDLogger {
   }
   FDLogger& operator<<(std::ostream& (*os)(std::ostream&));
   ~FDLogger() {
-    if (!verbose() && line_ != "") {
+    if (!verbose_ && line_ != "") {
       std::cout << line_ << std::endl;
     }
   }
@@ -74,7 +64,7 @@ class FASTDEPLOY_DECL FDLogger {
  private:
   std::string line_;
   std::string prefix_;
-  int level_ = 0;
+  bool verbose_ = true;
 };
 
 FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
@@ -85,15 +75,15 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 #endif
 
 #define FDERROR                                                \
-  FDLogger(2, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(true, "[ERROR]") << __REL_FILE__ << "(" << __LINE__ \
                             << ")::" << __FUNCTION__ << "\t"
 
 #define FDWARNING                                                \
-  FDLogger(1, "[WARNING]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(true, "[WARNING]") << __REL_FILE__ << "(" << __LINE__ \
                               << ")::" << __FUNCTION__ << "\t"
 
 #define FDINFO                                                \
-  FDLogger(0, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
+  FDLogger(true, "[INFO]") << __REL_FILE__ << "(" << __LINE__ \
                            << ")::" << __FUNCTION__ << "\t"
 
 #define FDASSERT(condition, format, ...)                        \

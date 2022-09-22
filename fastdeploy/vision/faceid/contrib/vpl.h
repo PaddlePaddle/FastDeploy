@@ -31,7 +31,7 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionModel {
   // VPL支持IResNet, IResNet1024骨干
   VPL(const std::string& model_file, const std::string& params_file = "",
       const RuntimeOption& custom_option = RuntimeOption(),
-      const Frontend& model_format = Frontend::ONNX);
+      const ModelFormat& model_format = ModelFormat::ONNX);
 
   // 定义模型的名称
   std::string ModelName() const override {

@@ -73,6 +73,13 @@ void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
   }
 }
 
+void PyArrayToTensorList(std::vector<pybind11::array>& pyarrays, std::vector<FDTensor>* tensors,
+                     bool share_buffer) {
+  for(auto i = 0; i < pyarrays.size(); ++i) {
+    PyArrayToTensor(pyarrays[i], &(*tensors)[i], share_buffer);
+  }
+}
+
 pybind11::array TensorToPyArray(const FDTensor& tensor) {
   auto numpy_dtype = FDDataTypeToNumpyDataType(tensor.dtype);
   auto out = pybind11::array(numpy_dtype, tensor.shape);
@@ -136,10 +143,6 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
   m.doc() =
       "Make programer easier to deploy deeplearning model, save time to save "
       "the world!";
-
-  pybind11::class_<FDLogger>(m, "FDLogger")
-      .def_readwrite_static("disable_info", &FDLogger::disable_info)
-      .def_readwrite_static("disable_warning", &FDLogger::disable_warning);
 
   BindRuntime(m);
   BindFDModel(m);

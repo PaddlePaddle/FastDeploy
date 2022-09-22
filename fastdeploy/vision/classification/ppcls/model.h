@@ -24,9 +24,9 @@ namespace classification {
 class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
  public:
   PaddleClasModel(const std::string& model_file, const std::string& params_file,
-        const std::string& config_file,
-        const RuntimeOption& custom_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::PADDLE);
+                  const std::string& config_file,
+                  const RuntimeOption& custom_option = RuntimeOption(),
+                  const ModelFormat& model_format = ModelFormat::PADDLE);
 
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 

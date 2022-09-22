@@ -30,23 +30,24 @@ void BindUIE(pybind11::module& m) {
 
   py::class_<text::UIEModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    std::vector<std::string>, RuntimeOption, Frontend>(),
+                    std::vector<std::string>, RuntimeOption, ModelFormat>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::Frontend::PADDLE)
+           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
+      .def(
+          py::init<std::string, std::string, std::string, float, size_t,
+                   std::vector<text::SchemaNode>, RuntimeOption, ModelFormat>(),
+          py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
+          py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
+          py::arg("custom_option") = fastdeploy::RuntimeOption(),
+          py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    std::vector<text::SchemaNode>, RuntimeOption, Frontend>(),
+                    text::SchemaNode, RuntimeOption, ModelFormat>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::Frontend::PADDLE)
-      .def(py::init<std::string, std::string, std::string, float, size_t,
-                    text::SchemaNode, RuntimeOption, Frontend>(),
-           py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
-           py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
-           py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::Frontend::PADDLE)
+           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
       .def("set_schema",
            static_cast<void (text::UIEModel::*)(
                const std::vector<std::string>&)>(&text::UIEModel::SetSchema),

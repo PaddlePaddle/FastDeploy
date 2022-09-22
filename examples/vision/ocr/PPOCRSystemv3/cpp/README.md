@@ -146,4 +146,5 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv3 Python部署](../python)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [模型预测结果说明](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
