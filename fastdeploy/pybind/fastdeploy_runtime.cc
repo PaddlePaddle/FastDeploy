@@ -118,10 +118,10 @@ void BindRuntime(pybind11::module& m) {
       .value("TRT", Backend::TRT)
       .value("PDINFER", Backend::PDINFER)
       .value("LITE", Backend::LITE);
-  pybind11::enum_<Frontend>(m, "Frontend", pybind11::arithmetic(),
-                            "Frontend for inference.")
-      .value("PADDLE", Frontend::PADDLE)
-      .value("ONNX", Frontend::ONNX);
+  pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
+                               "ModelFormat for inference.")
+      .value("PADDLE", ModelFormat::PADDLE)
+      .value("ONNX", ModelFormat::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)

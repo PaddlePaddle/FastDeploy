@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindMODNet(pybind11::module& m) {
   // Bind MODNet
   pybind11::class_<vision::matting::MODNet, FastDeployModel>(m, "MODNet")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::matting::MODNet& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);

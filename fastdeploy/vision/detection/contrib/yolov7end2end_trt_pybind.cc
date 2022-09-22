@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindYOLOv7End2EndTRT(pybind11::module& m) {
   pybind11::class_<vision::detection::YOLOv7End2EndTRT, FastDeployModel>(
       m, "YOLOv7End2EndTRT")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::detection::YOLOv7End2EndTRT& self, pybind11::array& data,
               float conf_threshold) {

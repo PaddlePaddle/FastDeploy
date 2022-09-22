@@ -12,7 +12,7 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
   PaddleSegModel(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
                  const RuntimeOption& custom_option = RuntimeOption(),
-                 const Frontend& model_format = Frontend::PADDLE);
+                 const ModelFormat& model_format = ModelFormat::PADDLE);
 
   std::string ModelName() const { return "PaddleSeg"; }
 

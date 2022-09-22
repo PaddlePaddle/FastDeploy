@@ -24,9 +24,10 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& params_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
-                                 const Frontend& model_format) {
+                                 const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
+  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
+                        Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -150,6 +151,6 @@ bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   return true;
 }
 
-} // namespace classification
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace classification
+}  // namespace vision
+}  // namespace fastdeploy
