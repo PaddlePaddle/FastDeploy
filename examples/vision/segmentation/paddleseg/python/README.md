@@ -27,7 +27,7 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 
 运行完成可视化结果如下图所示
 <div  align="center">  
-<img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
+<img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
 </div>
 
 ## PaddleSegModel Python接口
