@@ -88,7 +88,7 @@
 
 1. 【OCR需要编译】因为OCR任务的特殊性，本次SDK没有提供bin文件夹可执行文件。开发者根据需要，满足文档中gcc和cmake要求后，在`src/demo*`路径编译获取可执行文件，具体可参考。
 2. 【OCR仅支持图像推理，不支持视频流推理】
-3. ARM-Linux-Python的环境要求和使用，请参考[ARM Linux Python环境下的推理部署](./ARM-Linux-Python-SDK.md)文档。
+3. ARM-Linux-Python的环境要求和使用，请参考[ARM Linux Python环境下的推理部署](./arm_linux_python_sdk.md)文档。
 
 ## 2. 测试Demo
 
