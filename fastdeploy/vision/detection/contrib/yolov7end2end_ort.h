@@ -26,7 +26,7 @@ class FASTDEPLOY_DECL YOLOv7End2EndORT : public FastDeployModel {
   YOLOv7End2EndORT(const std::string& model_file,
                    const std::string& params_file = "",
                    const RuntimeOption& custom_option = RuntimeOption(),
-                   const Frontend& model_format = Frontend::ONNX);
+                   const ModelFormat& model_format = ModelFormat::ONNX);
 
   // 定义模型的名称
   virtual std::string ModelName() const { return "yolov7end2end_ort"; }

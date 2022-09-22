@@ -4,7 +4,7 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
@@ -89,3 +89,4 @@ NanoDetPlus模型加载和初始化，其中model_file为导出的ONNX模型格�
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

@@ -22,9 +22,9 @@ namespace detection {
 class FASTDEPLOY_DECL PaddleYOLOX : public PPYOLOE {
  public:
   PaddleYOLOX(const std::string& model_file, const std::string& params_file,
-        const std::string& config_file,
-        const RuntimeOption& custom_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::PADDLE);
+              const std::string& config_file,
+              const RuntimeOption& custom_option = RuntimeOption(),
+              const ModelFormat& model_format = ModelFormat::PADDLE);
 
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 

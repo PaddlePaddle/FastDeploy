@@ -60,6 +60,7 @@ option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
 ######################### Options for Android cross compiling ####################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
+option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 
 # Please don't open this flag now, some bugs exists.
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)

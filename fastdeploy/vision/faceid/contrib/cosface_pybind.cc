@@ -19,7 +19,8 @@ void BindCosFace(pybind11::module& m) {
   // Bind CosFace
   pybind11::class_<vision::faceid::CosFace,
                    vision::faceid::InsightFaceRecognitionModel>(m, "CosFace")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::faceid::CosFace& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
