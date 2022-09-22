@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -24,10 +24,10 @@ class PPYOLOE(FastDeployModel):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPYOLOE model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PPYOLOE model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PPYOLOE(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -44,10 +44,10 @@ class PPYOLO(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPYOLO model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PPYOLO model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PPYOLO(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -60,10 +60,10 @@ class PPYOLOv2(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPYOLOv2 model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PPYOLOv2 model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PPYOLOv2(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -76,10 +76,10 @@ class PaddleYOLOX(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PaddleYOLOX model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PaddleYOLOX model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PaddleYOLOX(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -92,10 +92,10 @@ class PicoDet(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PicoDet model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PicoDet model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PicoDet(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -108,10 +108,10 @@ class FasterRCNN(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "FasterRCNN model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "FasterRCNN model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.FasterRCNN(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -124,10 +124,10 @@ class YOLOv3(PPYOLOE):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "YOLOv3 model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "YOLOv3 model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.YOLOv3(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -140,10 +140,10 @@ class MaskRCNN(FastDeployModel):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(MaskRCNN, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "MaskRCNN model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "MaskRCNN model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.MaskRCNN(
             model_file, params_file, config_file, self._runtime_option,
             model_format)

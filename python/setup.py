@@ -63,6 +63,7 @@ setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
+setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 
 if setup_configs["WITH_GPU"] == "ON":
     wheel_name = "fastdeploy-gpu-python"

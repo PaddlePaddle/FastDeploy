@@ -68,6 +68,12 @@ void BindRuntime(pybind11::module& m) {
       .def(pybind11::init())
       .def("init", &Runtime::Init)
       .def("infer",
+           [](Runtime& self, std::vector<FDTensor>& inputs) {
+             std::vector<FDTensor> outputs(self.NumOutputs());
+             self.Infer(inputs, &outputs);
+             return outputs;
+           })
+      .def("infer",
            [](Runtime& self, std::map<std::string, pybind11::array>& data) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
@@ -112,10 +118,10 @@ void BindRuntime(pybind11::module& m) {
       .value("TRT", Backend::TRT)
       .value("PDINFER", Backend::PDINFER)
       .value("LITE", Backend::LITE);
-  pybind11::enum_<Frontend>(m, "Frontend", pybind11::arithmetic(),
-                            "Frontend for inference.")
-      .value("PADDLE", Frontend::PADDLE)
-      .value("ONNX", Frontend::ONNX);
+  pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
+                               "ModelFormat for inference.")
+      .value("PADDLE", ModelFormat::PADDLE)
+      .value("ONNX", ModelFormat::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
@@ -131,6 +137,32 @@ void BindRuntime(pybind11::module& m) {
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
+
+  pybind11::class_<FDTensor>(m, "FDTensor", pybind11::buffer_protocol())
+      .def(pybind11::init())
+      .def("cpu_data",
+           [](FDTensor& self) {
+             auto ptr = self.CpuData();
+             auto numel = self.Numel();
+             auto dtype = FDDataTypeToNumpyDataType(self.dtype);
+             auto base = pybind11::array(dtype, self.shape);
+             return pybind11::array(dtype, self.shape, ptr, base);
+           })
+      .def("resize", static_cast<void (FDTensor::*)(size_t)>(&FDTensor::Resize))
+      .def("resize",
+           static_cast<void (FDTensor::*)(const std::vector<int64_t>&)>(
+               &FDTensor::Resize))
+      .def(
+          "resize",
+          [](FDTensor& self, const std::vector<int64_t>& shape,
+             const FDDataType& dtype, const std::string& name,
+             const Device& device) { self.Resize(shape, dtype, name, device); })
+      .def("numel", &FDTensor::Numel)
+      .def("nbytes", &FDTensor::Nbytes)
+      .def_readwrite("name", &FDTensor::name)
+      .def_readonly("shape", &FDTensor::shape)
+      .def_readonly("dtype", &FDTensor::dtype)
+      .def_readonly("device", &FDTensor::device);
 
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }
