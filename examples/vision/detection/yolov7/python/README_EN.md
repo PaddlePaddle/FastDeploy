@@ -4,8 +4,8 @@ English | [简体中文](README.md)
 
 Two steps before deployment:
 
-- 1. The hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs_en/environment.md)
-- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs_en/quick_start)
+- 1. The hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/docs_en/environment.md)
+- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs/docs_en/quick_start)
 
 
 This doc provides a quick `infer.py` demo of YOLOv7 deployment on CPU/GPU, and accelerated GPU deployment by TensorRT. Run the following command:
@@ -62,7 +62,7 @@ YOLOv7 model loading and initialisation, with model_file being the exported ONNX
 
 > **Return**
 > 
-> > Return to`fastdeploy.vision.DetectionResult`Struct. For more details, please refer to [Vision Model Results](../../../../../docs/api/vision_results/)
+> > Return to`fastdeploy.vision.DetectionResult`Struct. For more details, please refer to [Vision Model Results](../../../../../docs/docs_en/api/vision_results/)
 
 ### Class Member Variables
 
@@ -80,4 +80,5 @@ Users can modify the following pre-processing parameters for their needs. This w
 
 - [YOLOv7 Model Introduction](..)
 - [YOLOv7 C++ Deployment](../cpp)
-- [Vision Model Results](../../../../../docs_en/api/vision_results/)
+- [Vision Model Results](../../../../../docs/docs_en/api/vision_results/)
+- [how to change inference backend](../../../../../docs/docs_en/runtime/how_to_change_inference_backend.md)
