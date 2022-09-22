@@ -125,4 +125,4 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

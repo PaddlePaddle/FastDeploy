@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/contrib/yolov5.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -74,14 +75,14 @@ YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
 
 bool YOLOv5::Initialize() {
   // parameters for preprocess
-  size = {640, 640};
-  padding_value = {114.0, 114.0, 114.0};
-  is_mini_pad = false;
-  is_no_pad = false;
-  is_scale_up = false;
-  stride = 32;
-  max_wh = 7680.0;
-  multi_label = true;
+  size_ = {640, 640};
+  padding_value_ = {114.0, 114.0, 114.0};
+  is_mini_pad_ = false;
+  is_no_pad_ = false;
+  is_scale_up_ = false;
+  stride_ = 32;
+  max_wh_ = 7680.0;
+  multi_label_ = true;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -90,23 +91,34 @@ bool YOLOv5::Initialize() {
   // Check if the input shape is dynamic after Runtime already initialized,
   // Note that, We need to force is_mini_pad 'false' to keep static
   // shape after padding (LetterBox) when the is_dynamic_shape is 'false'.
-  is_dynamic_input_ = false;
-  auto shape = InputInfoOfRuntime(0).shape;
-  for (int i = 0; i < shape.size(); ++i) {
-    // if height or width is dynamic
-    if (i >= 2 && shape[i] <= 0) {
-      is_dynamic_input_ = true;
-      break;
-    }
-  }
-  if (!is_dynamic_input_) {
-    is_mini_pad = false;
-  }
+  // TODO(qiuyanjun): remove
+  // is_dynamic_input_ = false;
+  // auto shape = InputInfoOfRuntime(0).shape;
+  // for (int i = 0; i < shape.size(); ++i) {
+  //   // if height or width is dynamic
+  //   if (i >= 2 && shape[i] <= 0) {
+  //     is_dynamic_input_ = true;
+  //     break;
+  //   }
+  // }
+  // if (!is_dynamic_input_) {
+  //   is_mini_pad_ = false;
+  // }
   return true;
 }
 
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
-                        std::map<std::string, std::array<float, 2>>* im_info) {
+                        std::map<std::string, std::array<float, 2>>* im_info,
+                        const std::vector<int>& size,
+                        const std::vector<float> padding_value,
+                        bool is_mini_pad, bool is_no_pad, bool is_scale_up,
+                        int stride, float max_wh, bool multi_label) {
+  // Record the shape of image and the shape of preprocessed image
+  (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
+                               static_cast<float>(mat->Width())};
+  (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
+                                static_cast<float>(mat->Width())};
+
   // process after image load
   double ratio = (size[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
                                             static_cast<float>(mat->Width()));
@@ -145,9 +157,11 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
 }
 
 bool YOLOv5::Postprocess(
-    FDTensor& infer_result, DetectionResult* result,
+    std::vector<FDTensor>& infer_results, DetectionResult* result,
     const std::map<std::string, std::array<float, 2>>& im_info,
-    float conf_threshold, float nms_iou_threshold, bool multi_label) {
+    float conf_threshold, float nms_iou_threshold, bool multi_label,
+    float max_wh) {
+  auto& infer_result = infer_results[0];
   FDASSERT(infer_result.shape[0] == 1, "Only support batch =1 now.");
   result->Clear();
   if (multi_label) {
@@ -251,13 +265,9 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 
   std::map<std::string, std::array<float, 2>> im_info;
 
-  // Record the shape of image and the shape of preprocessed image
-  im_info["input_shape"] = {static_cast<float>(mat.Height()),
-                            static_cast<float>(mat.Width())};
-  im_info["output_shape"] = {static_cast<float>(mat.Height()),
-                             static_cast<float>(mat.Width())};
-
-  if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+  if (!Preprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
+                  is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
+                  multi_label_)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
@@ -278,8 +288,8 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   TIMERECORD_START(2)
 #endif
 
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
-                   nms_iou_threshold, multi_label)) {
+  if (!Postprocess(output_tensors, result, im_info, conf_threshold,
+                   nms_iou_threshold, multi_label_)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

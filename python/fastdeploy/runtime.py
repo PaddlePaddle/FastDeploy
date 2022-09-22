@@ -23,7 +23,8 @@ class Runtime:
             runtime_option._option), "Initialize Runtime Failed!"
 
     def infer(self, data):
-        assert isinstance(data, dict), "The input data should be type of dict."
+        assert isinstance(data, dict) or isinstance(
+            data, list), "The input data should be type of dict or list."
         return self._runtime.infer(data)
 
     def num_inputs(self):
@@ -78,6 +79,9 @@ class RuntimeOption:
 
     def use_openvino_backend(self):
         return self._option.use_openvino_backend()
+
+    def use_lite_backend(self):
+        return self._option.use_lite_backend()
 
     def enable_paddle_mkldnn(self):
         return self._option.enable_paddle_mkldnn()
