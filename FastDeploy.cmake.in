@@ -59,20 +59,10 @@ if(ENABLE_OPENVINO_BACKEND)
   find_library(OPENVINO_LIB openvino ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/lib/
       ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/3rdparty/tbb/lib/ NO_DEFAULT_PATH)
   # Find tbb libs
-  set(TBB_LIBS_PREFIX "")
-  set(TBB_LIBS_SUFFIX "")
-  if ((NOT WIN32) AND (NOT APPLE))
-    set(TBB_LIBS_PREFIX "lib")
-    set(TBB_LIBS_SUFFIX ".so.2")
-  endif()
-  find_library(TBB_LIB NAMES ${TBB_LIBS_PREFIX}tbb${TBB_LIBS_SUFFIX}
-        PATHS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/3rdparty/tbb/lib/ NO_DEFAULT_PATH)
-  find_library(TBB_MALLOC_LIB NAMES ${TBB_LIBS_PREFIX}tbbmalloc${TBB_LIBS_SUFFIX}
-        PATHS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/3rdparty/tbb/lib/ NO_DEFAULT_PATH)
-  message(STATUS "The path of openvino is ${OPENVINO_LIB}.")
-  message(STATUS "The path of tbb is ${TBB_LIB}.")
-  message(STATUS "The path of tbbmalloc is ${TBB_MALLOC_LIB}.")
-  list(APPEND FASTDEPLOY_LIBS ${OPENVINO_LIB} ${TBB_LIB} ${TBB_MALLOC_LIB})
+  find_package(TBB REQUIRED PATHS "${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/3rdparty/tbb/")
+  set(OPENVINO_LIBS ${OPENVINO_LIB} ${TBB_IMPORTED_TARGETS})
+  message(STATUS "OPENVINO_LIBS = ${OPENVINO_LIBS}")
+  list(APPEND FASTDEPLOY_LIBS ${OPENVINO_LIBS})
 endif()
 
 if(WITH_GPU)
