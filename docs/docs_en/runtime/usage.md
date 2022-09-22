@@ -42,4 +42,4 @@ input_name = runtime.get_input_info(0).name
 results = runtime.infer({input_name: np.random.rand(1, 3, 224, 224).astype("float32")})
 ```
 
-More Python/C++ inference demo, please refer to [FastDeploy/examples/runtime](../../examples/runtime)
+More Python/C++ inference demo, please refer to [FastDeploy/examples/runtime](../../../examples/runtime)
