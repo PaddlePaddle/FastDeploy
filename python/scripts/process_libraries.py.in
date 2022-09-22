@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import platform
 
-user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
+user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
@@ -39,9 +39,12 @@ def process_on_linux(current_dir):
                 if d not in ["lib", "lib64"]:
                     continue
                 rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-                rpath = "$ORIGIN/" + rel_path
+                if path in  user_specified_dirs:
+                    # Note(zhoushunjie): Use the absolute path for user_specified_dirs
+                    rpath = os.path.join(root, d)
+                else:
+                    rpath = "$ORIGIN/" + rel_path
                 rpaths.append(rpath)
-
     for lib in fd_libs:
         command = "patchelf --set-rpath '{}' {}".format(":".join(rpaths), lib)
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
