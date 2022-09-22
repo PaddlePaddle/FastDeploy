@@ -54,7 +54,7 @@ fastdeploy::vision::matting::PPMatting(
         const string& params_file = "",
         const string& config_file,
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::PADDLE)
+        const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
 PPMatting模型加载和初始化，其中model_file为导出的Paddle模型格式。
@@ -65,7 +65,7 @@ PPMatting模型加载和初始化，其中model_file为导出的Paddle模型格�
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 #### Predict函数
 
