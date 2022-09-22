@@ -70,7 +70,7 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       bool use_scale = false;
       int interp = 1;
       processors_.push_back(
-          std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+          std::make_shared<ResizeByShort>(target_size, -1, -1, 1, use_scale));
     } else if (op_name == "CropImage") {
       int width = op.begin()->second["size"].as<int>();
       int height = op.begin()->second["size"].as<int>();

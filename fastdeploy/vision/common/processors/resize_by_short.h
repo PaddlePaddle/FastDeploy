@@ -21,8 +21,8 @@ namespace vision {
 
 class ResizeByShort : public Processor {
  public:
-  ResizeByShort(int target_size, int input_w, int input_h, int interp = 1,
-                bool use_scale = true, int max_size = -1) {
+  ResizeByShort(int target_size, int input_w = -1, int input_h = -1,
+                int interp = 1, bool use_scale = true, int max_size = -1) {
     target_size_ = target_size;
     input_h_ = input_h;
     input_w_ = input_w;
