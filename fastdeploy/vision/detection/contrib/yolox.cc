@@ -73,8 +73,9 @@ void LetterBoxWithRightBottomPad(Mat* mat, std::vector<int> size,
 }
 
 YOLOX::YOLOX(const std::string& model_file, const std::string& params_file,
-             const RuntimeOption& custom_option, const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
+             const RuntimeOption& custom_option,
+             const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {

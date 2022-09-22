@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   DBDetector(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+             const ModelFormat& model_format = ModelFormat::PADDLE);
 
   // 定义模型的名称
   std::string ModelName() const { return "ppocr/ocr_det"; }

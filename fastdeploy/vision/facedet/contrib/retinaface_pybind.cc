@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindRetinaFace(pybind11::module& m) {
   pybind11::class_<vision::facedet::RetinaFace, FastDeployModel>(m,
                                                                  "RetinaFace")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::facedet::RetinaFace& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {

@@ -50,7 +50,7 @@ fastdeploy::vision::segmentation::PaddleSegModel(
         const string& params_file = "",
         const string& config_file,
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::PADDLE)
+        const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
 PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模型格式。
@@ -61,7 +61,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 #### Predict函数
 
@@ -88,4 +88,4 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

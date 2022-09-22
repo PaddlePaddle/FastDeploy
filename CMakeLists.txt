@@ -51,6 +51,7 @@ option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result 
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
+option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 
 # Please don't open this flag now, some bugs exists.
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
