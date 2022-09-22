@@ -31,7 +31,7 @@ python infer.py --model scaled_yolov4-p5.onnx --image 000000014439.jpg --device 
 ## ScaledYOLOv4 Python接口
 
 ```python
-fastdeploy.vision.detection.ScaledYOLOv4(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.detection.ScaledYOLOv4(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格式
@@ -41,7 +41,7 @@ ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
 
 ### predict函数
 

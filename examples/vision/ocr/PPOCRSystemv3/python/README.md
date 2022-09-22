@@ -74,7 +74,7 @@ PPOCRSystemv3的初始化,输入的参数是检测模型，分类模型和识别
 ### DBDetector类
 
 ```
-fastdeploy.vision.ocr.DBDetector(model_file, params_file, runtime_option=None, model_format=Frontend.PADDLE)
+fastdeploy.vision.ocr.DBDetector(model_file, params_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 DBDetector模型加载和初始化，其中模型为paddle模型格式。
@@ -84,14 +84,14 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为PADDLE格式
+> * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
 
 ### Classifier类与DBDetector类相同
 
 ### Recognizer类
 ```
 fastdeploy.vision.ocr.Recognizer(rec_model_file,rec_params_file,rec_label_file,
-                                  runtime_option=rec_runtime_option,model_format=Frontend.PADDLE)
+                                  runtime_option=rec_runtime_option,model_format=ModelFormat.PADDLE)
 ```
 Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所需的label文件路径，其他参数均与DBDetector类相同
 
