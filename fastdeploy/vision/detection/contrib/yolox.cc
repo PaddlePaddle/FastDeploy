@@ -279,10 +279,6 @@ bool YOLOX::PostprocessWithDecode(
 
 bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                     float nms_iou_threshold) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
-
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
@@ -299,21 +295,12 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (is_decode_exported) {
     if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
@@ -328,10 +315,6 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
       return false;
     }
   }
-
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 
