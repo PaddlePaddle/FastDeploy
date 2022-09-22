@@ -39,8 +39,7 @@ fi
 
 case_number=${#RUN_CASE[@]}
 
-#wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
-#wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-build-dev.tar.gz
+wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
 
 tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
 mkdir build && cd build
