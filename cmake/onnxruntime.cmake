@@ -19,12 +19,26 @@ set(ONNXRUNTIME_PREFIX_DIR ${THIRD_PARTY_PATH}/onnxruntime)
 set(ONNXRUNTIME_SOURCE_DIR
     ${THIRD_PARTY_PATH}/onnxruntime/src/${ONNXRUNTIME_PROJECT})
 set(ONNXRUNTIME_INSTALL_DIR ${THIRD_PARTY_PATH}/install/onnxruntime)
-set(ONNXRUNTIME_INC_DIR
-    "${ONNXRUNTIME_INSTALL_DIR}/include"
+
+if (ORT_DIRECTORY)
+  message(STATUS "Use the onnxruntime lib specified by user. The ONNXRuntime path: ${ORT_DIRECTORY}")
+  STRING(REGEX REPLACE "\\\\" "/" ORT_DIRECTORY ${ORT_DIRECTORY})
+  set(ONNXRUNTIME_INC_DIR
+    "${ORT_DIRECTORY}/include"
     CACHE PATH "onnxruntime include directory." FORCE)
-set(ONNXRUNTIME_LIB_DIR
-    "${ONNXRUNTIME_INSTALL_DIR}/lib"
+
+  set(ONNXRUNTIME_LIB_DIR
+    "${ORT_DIRECTORY}/lib"
     CACHE PATH "onnxruntime lib directory." FORCE)
+else()
+  message(STATUS "Use the default onnxruntime lib. The ONNXRuntime path: ${ONNXRUNTIME_INSTALL_DIR}")
+  set(ONNXRUNTIME_INC_DIR
+      "${ONNXRUNTIME_INSTALL_DIR}/include"
+      CACHE PATH "onnxruntime include directory." FORCE)
+  set(ONNXRUNTIME_LIB_DIR
+      "${ONNXRUNTIME_INSTALL_DIR}/lib"
+      CACHE PATH "onnxruntime lib directory." FORCE)
+endif()
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${ONNXRUNTIME_LIB_DIR}")
 
 set(ONNXRUNTIME_VERSION "1.12.0")
@@ -68,34 +82,36 @@ include_directories(${ONNXRUNTIME_INC_DIR}
 
 if(WIN32)
   set(ONNXRUNTIME_LIB
-      "${ONNXRUNTIME_INSTALL_DIR}/lib/onnxruntime.lib"
-      CACHE FILEPATH "ONNXRUNTIME static library." FORCE)
+      "${ONNXRUNTIME_LIB_DIR}/onnxruntime.lib"
+      CACHE FILEPATH "ONNXRUNTIME shared library." FORCE)
 elseif(APPLE)
   set(ONNXRUNTIME_LIB
-      "${ONNXRUNTIME_INSTALL_DIR}/lib/libonnxruntime.dylib"
-      CACHE FILEPATH "ONNXRUNTIME static library." FORCE)
+      "${ONNXRUNTIME_LIB_DIR}/libonnxruntime.dylib"
+      CACHE FILEPATH "ONNXRUNTIME shared library." FORCE)
 else()
   set(ONNXRUNTIME_LIB
-      "${ONNXRUNTIME_INSTALL_DIR}/lib/libonnxruntime.so"
-      CACHE FILEPATH "ONNXRUNTIME static library." FORCE)
+      "${ONNXRUNTIME_LIB_DIR}/libonnxruntime.so"
+      CACHE FILEPATH "ONNXRUNTIME shared library." FORCE)
 endif()
 
-ExternalProject_Add(
-  ${ONNXRUNTIME_PROJECT}
-  ${EXTERNAL_PROJECT_LOG_ARGS}
-  URL ${ONNXRUNTIME_URL}
-  PREFIX ${ONNXRUNTIME_PREFIX_DIR}
-  DOWNLOAD_NO_PROGRESS 1
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E remove_directory ${ONNXRUNTIME_INSTALL_DIR} &&
-    ${CMAKE_COMMAND} -E make_directory ${ONNXRUNTIME_INSTALL_DIR} &&
-    ${CMAKE_COMMAND} -E rename ${ONNXRUNTIME_SOURCE_DIR}/lib/ ${ONNXRUNTIME_INSTALL_DIR}/lib &&
-    ${CMAKE_COMMAND} -E copy_directory ${ONNXRUNTIME_SOURCE_DIR}/include
-    ${ONNXRUNTIME_INC_DIR}
-  BUILD_BYPRODUCTS ${ONNXRUNTIME_LIB})
+if (NOT ORT_DIRECTORY)
+  ExternalProject_Add(
+    ${ONNXRUNTIME_PROJECT}
+    ${EXTERNAL_PROJECT_LOG_ARGS}
+    URL ${ONNXRUNTIME_URL}
+    PREFIX ${ONNXRUNTIME_PREFIX_DIR}
+    DOWNLOAD_NO_PROGRESS 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND
+      ${CMAKE_COMMAND} -E remove_directory ${ONNXRUNTIME_INSTALL_DIR} &&
+      ${CMAKE_COMMAND} -E make_directory ${ONNXRUNTIME_INSTALL_DIR} &&
+      ${CMAKE_COMMAND} -E rename ${ONNXRUNTIME_SOURCE_DIR}/lib/ ${ONNXRUNTIME_INSTALL_DIR}/lib &&
+      ${CMAKE_COMMAND} -E copy_directory ${ONNXRUNTIME_SOURCE_DIR}/include
+      ${ONNXRUNTIME_INC_DIR}
+    BUILD_BYPRODUCTS ${ONNXRUNTIME_LIB})
+endif()
 
 add_library(external_onnxruntime STATIC IMPORTED GLOBAL)
 set_property(TARGET external_onnxruntime PROPERTY IMPORTED_LOCATION ${ONNXRUNTIME_LIB})
