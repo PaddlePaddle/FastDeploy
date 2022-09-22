@@ -1,6 +1,6 @@
 # 简介
 
-本文档以[千分类模型_MobileNetV3](https://ai.baidu.com/easyedge/app/openSource)为例，介绍FastDeploy中的模型SDK， 在**ARM Linux Python** 环境下:（1)图像推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。其中ARM Linux C++请参考[ARM Linux C++环境下的推理部署](./ARM-Linux-CPP-SDK-Inference.md)文档。
+本文档以[千分类模型_MobileNetV3](https://ai.baidu.com/easyedge/app/openSource)为例，介绍FastDeploy中的模型SDK， 在**ARM Linux Python** 环境下:（1)图像推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。其中ARM Linux C++请参考[ARM Linux C++环境下的推理部署](./arm_linux_cpp_sdk_inference.md)文档。
 
 **注意**：部分模型（如Tinypose、OCR等）仅支持图像推理，不支持视频推理。
 
