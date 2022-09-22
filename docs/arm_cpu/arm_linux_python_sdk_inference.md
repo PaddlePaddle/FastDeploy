@@ -38,7 +38,7 @@
 
 ## 1.SDK下载
 
-根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GIthub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。
+根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GitHub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。
 
 ```shell
 EasyEdge-Linux-x86--[部署芯片]
