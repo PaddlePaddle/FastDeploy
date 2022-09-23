@@ -70,7 +70,7 @@ option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
 # Whether to build fastdeploy on device Nvidia Jetson
 # Only support CPU Inference & GPU(TensorRT) Inference Now
-option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson") 
+option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF) 
 if(BUILD_ON_JETSON)
   set(WITH_GPU ON)
   set(ENABLE_TRT_BACKEND ON)
