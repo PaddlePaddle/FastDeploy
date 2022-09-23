@@ -27,8 +27,8 @@ Classifier::Classifier(const std::string& model_file,
                        const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+                          Backend::OPENVINO}; 
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -81,7 +81,6 @@ void OcrClassifierResizeImage(Mat* mat,
   }
 }
 
-//预处理
 bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
   // 1. cls resizes
   // 2. normalize
@@ -99,7 +98,6 @@ bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
   return true;
 }
 
-//后处理
 bool Classifier::Postprocess(FDTensor& infer_result,
                              std::tuple<int, float>* cls_result) {
   std::vector<int64_t> output_shape = infer_result.shape;
@@ -119,7 +117,6 @@ bool Classifier::Postprocess(FDTensor& infer_result,
   return true;
 }
 
-//预测
 bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
   Mat mat(*img);
   std::vector<FDTensor> input_tensors(1);
