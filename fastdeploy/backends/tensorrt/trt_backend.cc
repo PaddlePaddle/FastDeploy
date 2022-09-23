@@ -16,7 +16,7 @@
 
 #include <cstring>
 
-#include "NvInferSafeRuntime.h"
+#include "NvInferRuntime.h"
 #include "fastdeploy/utils/utils.h"
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
