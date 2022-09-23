@@ -14,7 +14,7 @@ echo "DEVICE: " %DEVICE%
 echo "VERSION: " %VERSION%
 
 for /f "delims=" %%a in ('python -V') do set py_version=%%a
-echo "py_version:" %oy_version%
+echo "py_version:" %py_version%
 
 if "%DEVICE%" == "gpu" (
     set PY_FASTDEPLOY_PACKAGE=fastdeploy-%DEVICE%-python
@@ -24,7 +24,7 @@ if "%DEVICE%" == "gpu" (
     set RUN_CASES=ort paddle openvino
 )
 
-echo "PY_FASTDEPLOY_PACKAGE: " %CPP_FASTDEPLOY_PACKAGE%
+echo "PY_FASTDEPLOY_PACKAGE: " %PY_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -36,9 +36,6 @@ set IMAGE_PATH=%CURRENT_DIR%\000000014439.jpg
 set MODEL_PATH=%CURRENT_DIR%\ppyoloe_crn_l_300e_coco
 set GROUND_TRUTH_PATH=%CURRENT_DIR%\release_task_groud_truth_result.txt
 set COMPARE_SHELL=%CURRENT_DIR%\compare_with_gt.py
-
-python -m pip freeze | grep fastdeploy | xargs pip uninstall -y
-python -m pip install %PY_FASTDEPLOY_PACKAGE% -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
 
 for %%b in (%RUN_CASES%) do (
     echo "Python Backend:" %%b
