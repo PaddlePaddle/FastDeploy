@@ -40,8 +40,8 @@ fi
 case_number=${#RUN_CASE[@]}
 py_version=$(python -V | awk '{print $2}')
 echo "py_version:" $py_version
-# python -m pip freeze | grep fastdeploy | xargs pip uninstall -y
-# python -m pip install $PY_FASTDEPLOY_PACKAGE -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
+python -m pip freeze | grep fastdeploy | xargs pip uninstall -y
+python -m pip install $PY_FASTDEPLOY_PACKAGE -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
 for((j=0;j<case_number;j+=1))
 do
        backend=${RUN_CASE[j]}

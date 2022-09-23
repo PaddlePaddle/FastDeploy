@@ -16,4 +16,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/gflags.cmake)
 include_directories(${FASTDEPLOY_INCS} ${GFLAGS_INCLUDE_DIR})
 
 add_executable(infer_ppyoloe_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
-target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT} Shlwapi.lib)
+if(WIN32)
+    target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT} Shlwapi.lib)
+else()
+    target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT})
+endif
