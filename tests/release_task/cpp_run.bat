@@ -80,7 +80,7 @@ for %%b in (%RUN_CASES%) do (
     ) 
 )
 
-set res_file=%cd%result.txt
+set res_file=%cd%\result.txt
 
 if exist %res_file% (
     for /f "delims=" %%i in (%res_file%) do echo %%i
