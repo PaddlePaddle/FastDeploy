@@ -6,6 +6,9 @@ option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 
 find_package(Threads)
 
+if(WIN32)
+    add_definitions(/DGOOGLE_GLOG_DLL_DECL=)
+endif()
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/gflags.cmake)
 
@@ -13,4 +16,4 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/gflags.cmake)
 include_directories(${FASTDEPLOY_INCS} ${GFLAGS_INCLUDE_DIR})
 
 add_executable(infer_ppyoloe_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cc)
-target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT} Shlwapi.lib)

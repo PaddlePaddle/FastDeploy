@@ -49,7 +49,7 @@ def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    if (diff > 1e-5).all():
+    if (diff > 1e-5).any():
         print(args.platform, args.device, "diff ", diff)
         write2file("result.txt")
     else:
