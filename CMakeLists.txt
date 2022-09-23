@@ -54,8 +54,17 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
 
-# Whether to build fastdeply with vision/text/... examples, only for testings.
-option(BUILD_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
+# Whether to build fastdeploy with vision/text/... examples, only for testings.
+option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+
+# Whether to build fastdeploy on device Nvidia Jetson
+# Only support CPU Inference & GPU(TensorRT) Inference Now
+option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson") 
+if(BUILD_ON_JETSON)
+  set(WITH_GPU ON)
+  set(ENABLE_TRT_BACKEND ON)
+  set(ENABLE_ORT_BACKEND ON)
+endif()
 
 # config GIT_URL with github mirrors to speed up dependent repos clone
 option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
@@ -190,36 +199,46 @@ if(ENABLE_TRT_BACKEND)
   if(NOT WITH_GPU)
     message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must set -DWITH_GPU=ON, but now it's OFF")
   endif()
-  if(NOT TRT_DIRECTORY)
-    message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must define -DTRT_DIRECTORY, e.g -DTRT_DIRECTORY=/Downloads/TensorRT-8.4")
+  if(NOT BUILD_ON_JETSON)
+    if(NOT TRT_DIRECTORY)
+      message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must define -DTRT_DIRECTORY, e.g -DTRT_DIRECTORY=/Downloads/TensorRT-8.4")
+    endif()
   endif()
+  set(TRT_INC_DIR /usr/include/aarch64-linux-gnu/)
+  set(TRT_LIB_DIR /usr/lib/aarch64-linux-gnu/)
+  if(NOT BUILD_ON_JETSON)
+    set(TRT_INC_DIR ${TRT_DIRECTORY}/include)
+    set(TRT_LIB_DIR ${TRT_DIRECTORY}/lib)
+  endif()
+
   add_definitions(-DENABLE_TRT_BACKEND)
-  include_directories(${TRT_DIRECTORY}/include)
+  include_directories(${TRT_INC_DIR})
   include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/common)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
-  find_library(TRT_INFER_LIB nvinfer ${TRT_DIRECTORY}/lib)
-  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_DIRECTORY}/lib)
-  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_DIRECTORY}/lib)
+  find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR})
+  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR})
+  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR})
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
 
-  if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
-    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+  if(NOT BUILD_ON_JETSON)
+    if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+      file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+      file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+    endif()
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
+    execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
+    if(UNIX)
+      execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+    	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+    	          RESULT_VARIABLE result
+                      OUTPUT_VARIABLE curr_out
+                      ERROR_VARIABLE  curr_out)
+      message(STATUS "result:${result} out:${curr_out}")
+    endif()
   endif()
-  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-  endif()
-  find_package(Python COMPONENTS Interpreter Development REQUIRED)
-  message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
-  if(UNIX)
-    execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-  	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-  	          RESULT_VARIABLE result
-                    OUTPUT_VARIABLE curr_out
-                    ERROR_VARIABLE  curr_out)
-    message(STATUS "result:${result} out:${curr_out}")
-  endif()
-
 endif()
 
 if(ENABLE_VISION)
