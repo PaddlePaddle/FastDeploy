@@ -57,11 +57,14 @@ setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
+setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
                                             "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
+setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
+setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 
 if setup_configs["WITH_GPU"] == "ON":
     wheel_name = "fastdeploy-gpu-python"
@@ -327,8 +330,7 @@ ext_modules = [
 
 # no need to do fancy stuff so far
 if PACKAGE_NAME != "fastdeploy":
-    packages = setuptools.find_packages(
-        exclude=['fastdeploy*', 'scripts'])
+    packages = setuptools.find_packages(exclude=['fastdeploy*', 'scripts'])
 else:
     packages = setuptools.find_packages(exclude=['scripts'])
 
@@ -353,7 +355,8 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
         os.path.join(TOP_DIR, "LICENSE"), os.path.join(TOP_DIR, PACKAGE_NAME))
     if not os.path.exists(
-            os.path.join(TOP_DIR, "python", "fastdeploy", "libs", "third_libs")):
+            os.path.join(TOP_DIR, "python", "fastdeploy", "libs",
+                         "third_libs")):
         print(
             "Didn't detect path: fastdeploy/libs/third_libs exist, please execute `python setup.py build` first"
         )

@@ -165,7 +165,7 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<std::string>& schema,
                    const fastdeploy::RuntimeOption& custom_option,
-                   const fastdeploy::Frontend& model_format)
+                   const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
@@ -184,7 +184,7 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<SchemaNode>& schema,
                    const fastdeploy::RuntimeOption& custom_option,
-                   const fastdeploy::Frontend& model_format)
+                   const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
@@ -203,7 +203,7 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const SchemaNode& schema,
                    const fastdeploy::RuntimeOption& custom_option,
-                   const fastdeploy::Frontend& model_format)
+                   const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {

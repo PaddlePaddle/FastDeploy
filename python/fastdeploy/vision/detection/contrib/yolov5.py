@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -23,7 +23,7 @@ class YOLOv5(FastDeployModel):
                  model_file,
                  params_file="",
                  runtime_option=None,
-                 model_format=Frontend.ONNX):
+                 model_format=ModelFormat.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(YOLOv5, self).__init__(runtime_option)
@@ -36,6 +36,31 @@ class YOLOv5(FastDeployModel):
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
+
+    @staticmethod
+    def preprocess(input_image,
+                   size=[640, 640],
+                   padding_value=[114.0, 114.0, 114.0],
+                   is_mini_pad=False,
+                   is_no_pad=False,
+                   is_scale_up=False,
+                   stride=32,
+                   max_wh=7680.0,
+                   multi_label=True):
+        return C.vision.detection.YOLOv5.preprocess(
+            input_image, size, padding_value, is_mini_pad, is_no_pad,
+            is_scale_up, stride, max_wh, multi_label)
+
+    @staticmethod
+    def postprocess(infer_result,
+                    im_info,
+                    conf_threshold=0.25,
+                    nms_iou_threshold=0.5,
+                    multi_label=True,
+                    max_wh=7680.0):
+        return C.vision.detection.YOLOv5.postprocess(
+            infer_result, im_info, conf_threshold, nms_iou_threshold,
+            multi_label, max_wh)
 
     # 一些跟YOLOv5模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
@@ -96,21 +121,19 @@ class YOLOv5(FastDeployModel):
     @is_mini_pad.setter
     def is_mini_pad(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `is_mini_pad` must be type of bool."
+            value, bool), "The value to set `is_mini_pad` must be type of bool."
         self._model.is_mini_pad = value
 
     @is_scale_up.setter
     def is_scale_up(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `is_scale_up` must be type of bool."
+            value, bool), "The value to set `is_scale_up` must be type of bool."
         self._model.is_scale_up = value
 
     @stride.setter
     def stride(self, value):
-        assert isinstance(
-            value, int), "The value to set `stride` must be type of int."
+        assert isinstance(value,
+                          int), "The value to set `stride` must be type of int."
         self._model.stride = value
 
     @max_wh.setter
@@ -122,6 +145,5 @@ class YOLOv5(FastDeployModel):
     @multi_label.setter
     def multi_label(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `multi_label` must be type of bool."
+            value, bool), "The value to set `multi_label` must be type of bool."
         self._model.multi_label = value

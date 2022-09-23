@@ -11,10 +11,10 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const std::string& params_file,
                                const std::string& config_file,
                                const RuntimeOption& custom_option,
-                               const Frontend& model_format) {
+                               const ModelFormat& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
+  valid_gpu_backends = {Backend::PDINFER};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -79,12 +79,32 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
+  if (cfg["Deploy"]["output_op"]) {
+    std::string output_op = cfg["Deploy"]["output_op"].as<std::string>();
+    if (output_op == "softmax") {
+      is_with_softmax = true;
+      is_with_argmax = false;
+    } else if (output_op == "argmax") {
+      is_with_softmax = false;
+      is_with_argmax = true;
+    } else if (output_op == "none") {
+      is_with_softmax = false;
+      is_with_argmax = false;
+    } else {
+      FDERROR << "Unexcepted output_op operator in deploy.yml: " << output_op
+              << "." << std::endl;
+    }
+  }
+  if (is_with_argmax) {
+    FDWARNING << "The PaddleSeg model is exported with argmax."
+              << " If you want the edge of segmentation image more"
+              << " smoother. Please export model with parameters"
+              << "  --output_op softmax." << std::endl;
+  }
   return true;
 }
 
-bool PaddleSegModel::Preprocess(
-    Mat* mat, FDTensor* output,
-    std::map<std::string, std::array<int, 2>>* im_info) {
+bool PaddleSegModel::Preprocess(Mat* mat, FDTensor* output) {
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (processors_[i]->Name().compare("Resize") == 0) {
       auto processor = dynamic_cast<Resize*>(processors_[i].get());
@@ -105,10 +125,6 @@ bool PaddleSegModel::Preprocess(
     }
   }
 
-  // Record output shape of preprocessed image
-  (*im_info)["output_shape"] = {static_cast<int>(mat->Height()),
-                                static_cast<int>(mat->Width())};
-
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);
   output->name = InputInfoOfRuntime(0).name;
@@ -116,13 +132,15 @@ bool PaddleSegModel::Preprocess(
 }
 
 bool PaddleSegModel::Postprocess(
-    FDTensor& infer_result, SegmentationResult* result,
-    std::map<std::string, std::array<int, 2>>* im_info) {
+    FDTensor* infer_result, SegmentationResult* result,
+    const std::map<std::string, std::array<int, 2>>& im_info) {
   // PaddleSeg has three types of inference output:
-  //     1. output with argmax and without softmax. 3-D matrix CHW, Channel
+  //     1. output with argmax and without softmax. 3-D matrix N(C)HW, Channel
   //     always 1, the element in matrix is classified label_id INT64 Type.
-  //     2. output without argmax and without softmax. 4-D matrix NCHW, N always
-  //     1, Channel is the num of classes. The element is the logits of classes
+  //     2. output without argmax and without softmax. 4-D matrix NCHW, N(batch)
+  //     always
+  //     1(only support batch size 1), Channel is the num of classes. The
+  //     element is the logits of classes
   //     FP32
   //     3. output without argmax and with softmax. 4-D matrix NCHW, the result
   //     of 2 with softmax layer
@@ -130,59 +148,117 @@ bool PaddleSegModel::Postprocess(
   //     1. label_map
   //     2. score_map(optional)
   //     3. shape: 2-D HW
-  FDASSERT(infer_result.dtype == FDDataType::INT64 ||
-               infer_result.dtype == FDDataType::FP32,
-           "Require the data type of output is int64 or fp32, but now it's %s.",
-           Str(infer_result.dtype).c_str());
+  FDASSERT(infer_result->dtype == FDDataType::INT64 ||
+               infer_result->dtype == FDDataType::FP32 ||
+               infer_result->dtype == FDDataType::INT32,
+           "Require the data type of output is int64, fp32 or int32, but now "
+           "it's %s.",
+           Str(infer_result->dtype).c_str());
   result->Clear();
+  FDASSERT(infer_result->shape[0] == 1, "Only support batch size = 1.");
 
-  if (infer_result.shape.size() == 4) {
-    FDASSERT(infer_result.shape[0] == 1, "Only support batch size = 1.");
+  int64_t batch = infer_result->shape[0];
+  int64_t channel = 0;
+  int64_t height = 0;
+  int64_t width = 0;
+
+  if (is_with_argmax) {
+    channel = 1;
+    height = infer_result->shape[1];
+    width = infer_result->shape[2];
+  } else {
+    channel = infer_result->shape[1];
+    height = infer_result->shape[2];
+    width = infer_result->shape[3];
+  }
+  int64_t chw = channel * height * width;
+
+  if (!is_with_softmax && apply_softmax) {
+    Softmax(*infer_result, infer_result, 1);
+  }
+
+  if (!is_with_argmax) {
     // output without argmax
     result->contain_score_map = true;
-    utils::NCHW2NHWC<float_t>(infer_result);
+
+    std::vector<int64_t> dim{0, 2, 3, 1};
+    Transpose(*infer_result, infer_result, dim);
   }
+  // batch always 1, so ignore
+  infer_result->shape = {height, width, channel};
 
   // for resize mat below
   FDTensor new_infer_result;
   Mat* mat = nullptr;
+  std::vector<float_t>* fp32_result_buffer = nullptr;
   if (is_resized) {
-    cv::Mat temp_mat;
-    FDTensor2FP32CVMat(temp_mat, infer_result, result->contain_score_map);
-
-    // original image shape
-    auto iter_ipt = (*im_info).find("input_shape");
-    FDASSERT(iter_ipt != im_info->end(),
+    if (infer_result->dtype == FDDataType::INT64 ||
+        infer_result->dtype == FDDataType::INT32) {
+      if (infer_result->dtype == FDDataType::INT64) {
+        int64_t* infer_result_buffer =
+            static_cast<int64_t*>(infer_result->Data());
+        // cv::resize don't support `CV_8S` or `CV_32S`
+        // refer to https://github.com/opencv/opencv/issues/20991
+        // https://github.com/opencv/opencv/issues/7862
+        fp32_result_buffer = new std::vector<float_t>(
+            infer_result_buffer, infer_result_buffer + chw);
+      }
+      if (infer_result->dtype == FDDataType::INT32) {
+        int32_t* infer_result_buffer =
+            static_cast<int32_t*>(infer_result->Data());
+        // cv::resize don't support `CV_8S` or `CV_32S`
+        // refer to https://github.com/opencv/opencv/issues/20991
+        // https://github.com/opencv/opencv/issues/7862
+        fp32_result_buffer = new std::vector<float_t>(
+            infer_result_buffer, infer_result_buffer + chw);
+      }
+      infer_result->Resize(infer_result->shape, FDDataType::FP32);
+      infer_result->SetExternalData(
+          infer_result->shape, FDDataType::FP32,
+          static_cast<void*>(fp32_result_buffer->data()));
+    }
+    auto iter_ipt = im_info.find("input_shape");
+    FDASSERT(iter_ipt != im_info.end(),
              "Cannot find input_shape from im_info.");
     int ipt_h = iter_ipt->second[0];
     int ipt_w = iter_ipt->second[1];
-
-    mat = new Mat(temp_mat);
-
-    Resize::Run(mat, ipt_w, ipt_h, -1, -1, 1);
+    mat = new Mat(CreateFromTensor(*infer_result));
+    Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
     mat->ShareWithTensor(&new_infer_result);
-    new_infer_result.shape.insert(new_infer_result.shape.begin(), 1);
     result->shape = new_infer_result.shape;
   } else {
-    result->shape = infer_result.shape;
+    result->shape = infer_result->shape;
   }
+  // output shape is 2-D HW layout, so out_num = H * W
   int out_num =
-      std::accumulate(result->shape.begin(), result->shape.begin() + 3, 1,
+      std::accumulate(result->shape.begin(), result->shape.begin() + 2, 1,
                       std::multiplies<int>());
-  // NCHW remove N or CHW remove C
-  result->shape.erase(result->shape.begin());
   result->Resize(out_num);
   if (result->contain_score_map) {
     // output with label_map and score_map
-    float_t* infer_result_buffer = nullptr;
-    if (is_resized) {
-      infer_result_buffer = static_cast<float_t*>(new_infer_result.Data());
-    } else {
-      infer_result_buffer = static_cast<float_t*>(infer_result.Data());
-    }
+    int32_t* argmax_infer_result_buffer = nullptr;
+    float_t* score_infer_result_buffer = nullptr;
+    FDTensor argmax_infer_result;
+    FDTensor max_score_result;
+    std::vector<int64_t> reduce_dim{-1};
     // argmax
-    utils::ArgmaxScoreMap(infer_result_buffer, result, with_softmax);
-    result->shape.erase(result->shape.begin() + 2);
+    if (is_resized) {
+      ArgMax(new_infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      Max(new_infer_result, &max_score_result, reduce_dim);
+    } else {
+      ArgMax(*infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      Max(*infer_result, &max_score_result, reduce_dim);
+    }
+    argmax_infer_result_buffer =
+        static_cast<int32_t*>(argmax_infer_result.Data());
+    score_infer_result_buffer = static_cast<float_t*>(max_score_result.Data());
+    for (int i = 0; i < out_num; i++) {
+      result->label_map[i] =
+          static_cast<uint8_t>(*(argmax_infer_result_buffer + i));
+    }
+    std::memcpy(result->score_map.data(), score_infer_result_buffer,
+                out_num * sizeof(float_t));
+
   } else {
     // output only with label_map
     if (is_resized) {
@@ -192,13 +268,27 @@ bool PaddleSegModel::Postprocess(
         result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
       }
     } else {
-      const int64_t* infer_result_buffer =
-          reinterpret_cast<const int64_t*>(infer_result.Data());
-      for (int i = 0; i < out_num; i++) {
-        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+      if (infer_result->dtype == FDDataType::INT64) {
+        const int64_t* infer_result_buffer =
+            static_cast<const int64_t*>(infer_result->Data());
+        for (int i = 0; i < out_num; i++) {
+          result->label_map[i] =
+              static_cast<uint8_t>(*(infer_result_buffer + i));
+        }
+      }
+      if (infer_result->dtype == FDDataType::INT32) {
+        const int32_t* infer_result_buffer =
+            static_cast<const int32_t*>(infer_result->Data());
+        for (int i = 0; i < out_num; i++) {
+          result->label_map[i] =
+              static_cast<uint8_t>(*(infer_result_buffer + i));
+        }
       }
     }
   }
+  // HWC remove C
+  result->shape.erase(result->shape.begin() + 2);
+  delete fp32_result_buffer;
   delete mat;
   mat = nullptr;
   return true;
@@ -213,10 +303,8 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   // Record the shape of image and the shape of preprocessed image
   im_info["input_shape"] = {static_cast<int>(mat.Height()),
                             static_cast<int>(mat.Width())};
-  im_info["output_shape"] = {static_cast<int>(mat.Height()),
-                             static_cast<int>(mat.Width())};
 
-  if (!Preprocess(&mat, &(processed_data[0]), &im_info)) {
+  if (!Preprocess(&mat, &(processed_data[0]))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
@@ -227,7 +315,7 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
             << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result[0], result, &im_info)) {
+  if (!Postprocess(&infer_result[0], result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

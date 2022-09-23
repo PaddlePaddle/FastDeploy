@@ -46,4 +46,4 @@ class FASTDEPLOY_DECL TimeCounter {
   std::chrono::time_point<std::chrono::system_clock> end_;
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
