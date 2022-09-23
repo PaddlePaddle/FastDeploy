@@ -63,8 +63,8 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
              const RuntimeOption& custom_option,
              const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+    valid_cpu_backends = {Backend::ORT};  
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -218,7 +218,6 @@ bool SCRFD::Postprocess(
   float pad_h = (out_h - ipt_h * scale) / 2.0f;
   float pad_w = (out_w - ipt_w * scale) / 2.0f;
   if (is_mini_pad) {
-    // 和 LetterBox中_auto=true的处理逻辑对应
     pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }
