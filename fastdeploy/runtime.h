@@ -21,20 +21,20 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO };
+enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO, LITE };
 // AUTOREC will according to the name of model file
-// to decide which Frontend is
-enum FASTDEPLOY_DECL Frontend { AUTOREC, PADDLE, ONNX };
+// to decide which ModelFormat is
+enum FASTDEPLOY_DECL ModelFormat { AUTOREC, PADDLE, ONNX };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
-FASTDEPLOY_DECL std::string Str(const Frontend& f);
+FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
 FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
 
 FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
 
 bool CheckModelFormat(const std::string& model_file,
-                      const Frontend& model_format);
-Frontend GuessModelFormat(const std::string& model_file);
+                      const ModelFormat& model_format);
+ModelFormat GuessModelFormat(const std::string& model_file);
 
 struct FASTDEPLOY_DECL RuntimeOption {
   // set path of model file and params file
@@ -43,7 +43,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // model_format support 'paddle' / 'onnx' now.
   void SetModelPath(const std::string& model_path,
                     const std::string& params_path = "",
-                    const std::string& _model_format = "paddle");
+                    const ModelFormat& format = ModelFormat::PADDLE);
 
   // set model inference in GPU
   void UseCpu();
@@ -65,6 +65,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // use openvino backend
   void UseOpenVINOBackend();
+
+  // use paddle lite backend
+  void UseLiteBackend();
 
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
@@ -135,7 +138,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
-  Frontend model_format = Frontend::AUTOREC;  // format of input model
+  ModelFormat model_format = ModelFormat::AUTOREC;  // format of input model
 
   // inside parameters, only for inside usage
   // remove multiclass_nms in Paddle2ONNX
@@ -160,6 +163,8 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateTrtBackend();
 
   void CreateOpenVINOBackend();
+
+  void CreateLiteBackend();
 
   int NumInputs() { return backend_->NumInputs(); }
   int NumOutputs() { return backend_->NumOutputs(); }

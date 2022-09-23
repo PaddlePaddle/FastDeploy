@@ -20,7 +20,7 @@
 
 #include <type_traits>
 
-#include "fastdeploy/fastdeploy_runtime.h"
+#include "fastdeploy/runtime.h"
 
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision.h"
@@ -42,6 +42,9 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype);
 
 void PyArrayToTensor(pybind11::array& pyarray, FDTensor* tensor,
                      bool share_buffer = false);
+void PyArrayToTensorList(std::vector<pybind11::array>& pyarray,
+                         std::vector<FDTensor>* tensor,
+                         bool share_buffer = false);
 pybind11::array TensorToPyArray(const FDTensor& tensor);
 
 #ifdef ENABLE_VISION

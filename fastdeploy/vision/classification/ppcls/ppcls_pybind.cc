@@ -18,7 +18,7 @@ void BindPaddleClas(pybind11::module& m) {
   pybind11::class_<vision::classification::PaddleClasModel, FastDeployModel>(
       m, "PaddleClasModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def("predict", [](vision::classification::PaddleClasModel& self,
                          pybind11::array& data, int topk = 1) {
         auto mat = PyArrayToCvMat(data);

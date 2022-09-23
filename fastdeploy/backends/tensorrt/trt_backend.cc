@@ -489,7 +489,7 @@ bool TrtBackend::BuildTrtEngine() {
   if (option_.serialize_file != "") {
     FDINFO << "Serialize TensorRTEngine to local file "
            << option_.serialize_file << "." << std::endl;
-    std::ofstream engine_file(option_.serialize_file.c_str());
+    std::ofstream engine_file(option_.serialize_file.c_str(), std::ios::binary | std::ios::out);  
     if (!engine_file) {
       FDERROR << "Failed to open " << option_.serialize_file << " to write."
               << std::endl;

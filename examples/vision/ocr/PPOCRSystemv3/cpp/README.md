@@ -12,9 +12,9 @@
 ```
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-0.2.1.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
 
@@ -98,7 +98,7 @@ PPOCRSystemv3 的初始化，由检测，识别模型串联构成(无分类器)
 ```
 fastdeploy::vision::ocr::DBDetector(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+             const ModelFormat& model_format = ModelFormat::PADDLE);
 ```
 
 DBDetector模型加载和初始化，其中模型为paddle模型格式。
@@ -108,7 +108,7 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 ### Classifier类与DBDetector类相同
 
@@ -118,7 +118,7 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
              const std::string& params_file = "",
              const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+             const ModelFormat& model_format = ModelFormat::PADDLE);
 ```
 Recognizer类初始化时,需要在label_path参数中,输入识别模型所需的label文件，其他参数均与DBDetector类相同
 
@@ -146,4 +146,5 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv3 Python部署](../python)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [模型预测结果说明](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

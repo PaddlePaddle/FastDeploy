@@ -18,7 +18,7 @@ void BindPPSeg(pybind11::module& m) {
   pybind11::class_<vision::segmentation::PaddleSegModel, FastDeployModel>(
       m, "PaddleSegModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def("predict",
            [](vision::segmentation::PaddleSegModel& self,
               pybind11::array& data) {
@@ -27,8 +27,8 @@ void BindPPSeg(pybind11::module& m) {
              self.Predict(&mat, res);
              return res;
            })
-      .def_readwrite("with_softmax",
-                     &vision::segmentation::PaddleSegModel::with_softmax)
+      .def_readwrite("apply_softmax",
+                     &vision::segmentation::PaddleSegModel::apply_softmax)
       .def_readwrite("is_vertical_screen",
                      &vision::segmentation::PaddleSegModel::is_vertical_screen);
 }

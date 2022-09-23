@@ -11,6 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 2d3e61582d61c4edd4ff42cc1c87d68e59d9ad7c
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif

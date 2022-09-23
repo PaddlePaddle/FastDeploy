@@ -76,5 +76,7 @@ struct FASTDEPLOY_DECL Mat {
   Device device = Device::CPU;
 };
 
+Mat CreateFromTensor(const FDTensor& tensor);
+
 }  // namespace vision
 }  // namespace fastdeploy

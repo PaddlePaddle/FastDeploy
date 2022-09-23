@@ -24,10 +24,10 @@ namespace faceid {
 
 InsightFaceRecognitionModel::InsightFaceRecognitionModel(
     const std::string& model_file, const std::string& params_file,
-    const RuntimeOption& custom_option, const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
-    valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+    const RuntimeOption& custom_option, const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT}; 
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -109,10 +109,6 @@ bool InsightFaceRecognitionModel::Postprocess(
 
 bool InsightFaceRecognitionModel::Predict(cv::Mat* im,
                                           FaceRecognitionResult* result) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
-
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
@@ -121,30 +117,17 @@ bool InsightFaceRecognitionModel::Predict(cv::Mat* im,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (!Postprocess(output_tensors, result)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
-
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 
