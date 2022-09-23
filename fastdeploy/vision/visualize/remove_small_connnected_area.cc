@@ -23,8 +23,6 @@ namespace vision {
 
 cv::Mat Visualize::RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
                                             float threshold) {
-  // 移除小的联通区域和噪点 开闭合形态学处理
-  // 假设输入的是透明度alpha, 值域(0.,1.)
   cv::Mat gray, binary;
   alpha_pred.convertTo(gray, CV_8UC1, 255.f);
   cv::Mat alpha_pred_clone = alpha_pred.clone();

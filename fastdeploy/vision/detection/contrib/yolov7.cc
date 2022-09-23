@@ -59,8 +59,8 @@ void YOLOv7::LetterBox(Mat* mat, const std::vector<int>& size,
 
 YOLOv7::YOLOv7(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
-               const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
+               const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
@@ -191,7 +191,6 @@ bool YOLOv7::Postprocess(
   float pad_h = (out_h - ipt_h * scale) / 2.0f;
   float pad_w = (out_w - ipt_w * scale) / 2.0f;
   if (is_mini_pad) {
-    // 和 LetterBox中_auto=true的处理逻辑对应
     pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }

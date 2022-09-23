@@ -27,13 +27,13 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 
 运行完成可视化结果如下图所示
 <div  align="center">  
-<img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
+<img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
 </div>
 
 ## PaddleSegModel Python接口
 
 ```python
-fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fd.vision.segmentation.PaddleSegModel(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 PaddleSeg模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/docs/model_export_cn.md)
@@ -44,7 +44,7 @@ PaddleSeg模型加载和初始化，其中model_file, params_file以及config_fi
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 ### predict函数
 
@@ -69,7 +69,7 @@ PaddleSeg模型加载和初始化，其中model_file, params_file以及config_fi
 > > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **with_softmax**(bool): 当模型导出时，并未指定`with_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **apply_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 ## 其它文档
 

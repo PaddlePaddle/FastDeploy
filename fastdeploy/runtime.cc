@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/fastdeploy_runtime.h"
+#include "fastdeploy/runtime.h"
 
 #include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
@@ -84,71 +84,71 @@ std::string Str(const Backend& b) {
   return "UNKNOWN-Backend";
 }
 
-std::string Str(const Frontend& f) {
-  if (f == Frontend::PADDLE) {
-    return "Frontend::PADDLE";
-  } else if (f == Frontend::ONNX) {
-    return "Frontend::ONNX";
+std::string Str(const ModelFormat& f) {
+  if (f == ModelFormat::PADDLE) {
+    return "ModelFormat::PADDLE";
+  } else if (f == ModelFormat::ONNX) {
+    return "ModelFormat::ONNX";
   }
-  return "UNKNOWN-Frontend";
+  return "UNKNOWN-ModelFormat";
 }
 
 bool CheckModelFormat(const std::string& model_file,
-                      const Frontend& model_format) {
-  if (model_format == Frontend::PADDLE) {
+                      const ModelFormat& model_format) {
+  if (model_format == ModelFormat::PADDLE) {
     if (model_file.size() < 8 ||
         model_file.substr(model_file.size() - 8, 8) != ".pdmodel") {
-      FDERROR << "With model format of Frontend::PADDLE, the model file "
+      FDERROR << "With model format of ModelFormat::PADDLE, the model file "
                  "should ends with `.pdmodel`, but now it's "
               << model_file << std::endl;
       return false;
     }
-  } else if (model_format == Frontend::ONNX) {
+  } else if (model_format == ModelFormat::ONNX) {
     if (model_file.size() < 5 ||
         model_file.substr(model_file.size() - 5, 5) != ".onnx") {
-      FDERROR << "With model format of Frontend::ONNX, the model file "
+      FDERROR << "With model format of ModelFormat::ONNX, the model file "
                  "should ends with `.onnx`, but now it's "
               << model_file << std::endl;
       return false;
     }
   } else {
-    FDERROR << "Only support model format with frontend Frontend::PADDLE / "
-               "Frontend::ONNX."
+    FDERROR << "Only support model format with frontend ModelFormat::PADDLE / "
+               "ModelFormat::ONNX."
             << std::endl;
     return false;
   }
   return true;
 }
 
-Frontend GuessModelFormat(const std::string& model_file) {
+ModelFormat GuessModelFormat(const std::string& model_file) {
   if (model_file.size() > 8 &&
       model_file.substr(model_file.size() - 8, 8) == ".pdmodel") {
     FDINFO << "Model Format: PaddlePaddle." << std::endl;
-    return Frontend::PADDLE;
+    return ModelFormat::PADDLE;
   } else if (model_file.size() > 5 &&
              model_file.substr(model_file.size() - 5, 5) == ".onnx") {
     FDINFO << "Model Format: ONNX." << std::endl;
-    return Frontend::ONNX;
+    return ModelFormat::ONNX;
   }
 
   FDERROR << "Cannot guess which model format you are using, please set "
              "RuntimeOption::model_format manually."
           << std::endl;
-  return Frontend::PADDLE;
+  return ModelFormat::PADDLE;
 }
 
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
-                                 const std::string& _model_format) {
-  if (_model_format == "paddle") {
+                                 const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
     model_file = model_path;
     params_file = params_path;
-    model_format = Frontend::PADDLE;
-  } else if (_model_format == "onnx") {
+    model_format = ModelFormat::PADDLE;
+  } else if (format == ModelFormat::ONNX) {
     model_file = model_path;
-    model_format = Frontend::ONNX;
+    model_format = ModelFormat::ONNX;
   } else {
-    FDASSERT(false, "The model format only can be 'paddle' or 'onnx'.");
+    FDASSERT(false, "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 
@@ -258,7 +258,7 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
-  if (option.model_format == Frontend::AUTOREC) {
+  if (option.model_format == ModelFormat::AUTOREC) {
     option.model_format = GuessModelFormat(_option.model_file);
   }
   if (option.backend == Backend::UNKNOWN) {
@@ -280,29 +280,35 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::ORT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
-    FDINFO << "Runtime initialized with Backend::ORT in " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::ORT in " << Str(option.device)
+           << "." << std::endl;
   } else if (option.backend == Backend::TRT) {
     FDASSERT(option.device == Device::GPU,
              "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
-    FDINFO << "Runtime initialized with Backend::TRT in " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::TRT in " << Str(option.device)
+           << "." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
     FDASSERT(
-        option.model_format == Frontend::PADDLE,
-        "Backend::PDINFER only supports model format of Frontend::PADDLE.");
+        option.model_format == ModelFormat::PADDLE,
+        "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
     CreatePaddleBackend();
-    FDINFO << "Runtime initialized with Backend::PDINFER in " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::PDINFER in "
+           << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::OPENVINO) {
     FDASSERT(option.device == Device::CPU,
              "Backend::OPENVINO only supports Device::CPU");
     CreateOpenVINOBackend();
-    FDINFO << "Runtime initialized with Backend::OPENVINO in " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::OPENVINO in "
+           << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU, "Backend::LITE only supports Device::CPU");
+    FDASSERT(option.device == Device::CPU,
+             "Backend::LITE only supports Device::CPU");
     CreateLiteBackend();
-    FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device) << "." << std::endl;
+    FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
+           << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER as backend now."
@@ -343,8 +349,8 @@ void Runtime::CreatePaddleBackend() {
   pd_option.gpu_id = option.device_id;
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
-  FDASSERT(option.model_format == Frontend::PADDLE,
-           "PaddleBackend only support model format of Frontend::PADDLE.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE,
+           "PaddleBackend only support model format of ModelFormat::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
   FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
@@ -361,14 +367,14 @@ void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
-  FDASSERT(option.model_format == Frontend::PADDLE ||
-               option.model_format == Frontend::ONNX,
-           "OpenVINOBackend only support model format of Frontend::PADDLE / "
-           "Frontend::ONNX.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(backend_.get());
 
-  if (option.model_format == Frontend::ONNX) {
+  if (option.model_format == ModelFormat::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, ov_option),
              "Load model from ONNX failed while initliazing OrtBackend.");
   } else {
@@ -397,13 +403,13 @@ void Runtime::CreateOrtBackend() {
   ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
   ort_option.custom_op_info_ = option.custom_op_info_;
 
-  FDASSERT(option.model_format == Frontend::PADDLE ||
-               option.model_format == Frontend::ONNX,
-           "OrtBackend only support model format of Frontend::PADDLE / "
-           "Frontend::ONNX.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "OrtBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<OrtBackend>();
   auto casted_backend = dynamic_cast<OrtBackend*>(backend_.get());
-  if (option.model_format == Frontend::ONNX) {
+  if (option.model_format == ModelFormat::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, ort_option),
              "Load model from ONNX failed while initliazing OrtBackend.");
   } else {
@@ -435,13 +441,13 @@ void Runtime::CreateTrtBackend() {
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
   trt_option.custom_op_info_ = option.custom_op_info_;
 
-  FDASSERT(option.model_format == Frontend::PADDLE ||
-               option.model_format == Frontend::ONNX,
-           "TrtBackend only support model format of Frontend::PADDLE / "
-           "Frontend::ONNX.");
+  FDASSERT(option.model_format == ModelFormat::PADDLE ||
+               option.model_format == ModelFormat::ONNX,
+           "TrtBackend only support model format of ModelFormat::PADDLE / "
+           "ModelFormat::ONNX.");
   backend_ = utils::make_unique<TrtBackend>();
   auto casted_backend = dynamic_cast<TrtBackend*>(backend_.get());
-  if (option.model_format == Frontend::ONNX) {
+  if (option.model_format == ModelFormat::ONNX) {
     FDASSERT(casted_backend->InitFromOnnx(option.model_file, trt_option),
              "Load model from ONNX failed while initliazing TrtBackend.");
   } else {
@@ -459,11 +465,12 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
-  FDASSERT(option.model_format == Frontend::PADDLE,
-           "LiteBackend only support model format of Frontend::PADDLE");
+  FDASSERT(option.model_format == ModelFormat::PADDLE,
+           "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
   auto casted_backend = dynamic_cast<LiteBackend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file, lite_option),
+  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
+                                          lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false,

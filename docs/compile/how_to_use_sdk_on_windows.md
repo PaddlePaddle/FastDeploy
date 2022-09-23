@@ -44,8 +44,20 @@ msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 #### 方式一：命令行设置环境变量
 编译好的exe保存在Release目录下，在运行demo前，需要将模型和测试图片拷贝至该目录。另外，需要在终端指定DLL的搜索路径。请在build目录下执行以下命令。
 ```bat
-set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
-set PATH=%FASTDEPLOY_PATH%\lib;%FASTDEPLOY_PATH%\third_libs\install\onnxruntime\lib;%FASTDEPLOY_PATH%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\paddle\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mklml\lib;%FASTDEPLOY_PATH%\third_libs\install\paddle2onnx\lib;%FASTDEPLOY_PATH%\third_libs\install\tensorrt\lib;%FASTDEPLOY_PATH%\third_libs\install\yaml-cpp\lib;%PATH%
+set FASTDEPLOY_HOME=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
+set PATH=%FASTDEPLOY_HOME%\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\paddle\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mklml\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle2onnx\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\tensorrt\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\third_party\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin;%PATH%
 ```
 注意，需要拷贝onnxruntime.dll到exe所在的目录。
 ```bat
@@ -59,16 +71,21 @@ C:\Windows\System32\onnxruntime.dll  # windows自带的onnxruntime.dll
 #### 方式二：拷贝依赖库到exe的目录下
 手动拷贝，或者在build目录下执行以下命令：
 ```bat
-set FASTDEPLOY_PATH=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
-copy /Y %FASTDEPLOY_PATH%\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\onnxruntime\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\paddle_inference\paddle\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\paddle_inference\third_party\install\mklml\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\paddle2onnx\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\tensorrt\lib\*.dll Release\
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\yaml-cpp\lib\*.dll Release\
+set FASTDEPLOY_HOME=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1
+copy /Y %FASTDEPLOY_HOME%\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\paddle_inference\paddle\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mklml\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\paddle2onnx\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\tensorrt\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\third_party\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.xml Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin\*.dll Release\
 ```
 
 ## 运行 demo
