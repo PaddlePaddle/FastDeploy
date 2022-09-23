@@ -31,7 +31,6 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
     tmp.push_back(box[2 * i + 1]);
     points.push_back(tmp);
   }
-  // box转points
   int x_collect[4] = {box[0], box[2], box[4], box[6]};
   int y_collect[4] = {box[1], box[3], box[5], box[7]};
   int left = int(*std::min_element(x_collect, x_collect + 4));
@@ -39,7 +38,6 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
   int top = int(*std::min_element(y_collect, y_collect + 4));
   int bottom = int(*std::max_element(y_collect, y_collect + 4));
 
-  //得到rect矩形
   cv::Mat img_crop;
   image(cv::Rect(left, top, right - left, bottom - top)).copyTo(img_crop);
 
@@ -65,14 +63,12 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
   pointsf[2] = cv::Point2f(points[2][0], points[2][1]);
   pointsf[3] = cv::Point2f(points[3][0], points[3][1]);
 
-  //透视变换矩阵
   cv::Mat M = cv::getPerspectiveTransform(pointsf, pts_std);
 
   cv::Mat dst_img;
   cv::warpPerspective(img_crop, dst_img, M,
                       cv::Size(img_crop_width, img_crop_height),
                       cv::BORDER_REPLICATE);
-  //完成透视变换
 
   if (float(dst_img.rows) >= float(dst_img.cols) * 1.5) {
     cv::Mat srcCopy = cv::Mat(dst_img.rows, dst_img.cols, dst_img.depth());

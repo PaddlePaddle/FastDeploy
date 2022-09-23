@@ -20,7 +20,6 @@ namespace utils {
 
 float CosineSimilarity(const std::vector<float>& a, const std::vector<float>& b,
                        bool normalized) {
-  // 计算余弦相似度
   FDASSERT((a.size() == b.size()) && (a.size() != 0),
            "The size of a and b must be equal and >= 1.");
   size_t num_val = a.size();

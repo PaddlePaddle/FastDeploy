@@ -168,7 +168,6 @@ bool PPMatting::Postprocess(
     return false;
   }
 
-  // 先获取alpha并resize (使用opencv)
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
   auto resize_by_long = im_info.find("resize_by_long");
@@ -179,7 +178,6 @@ bool PPMatting::Postprocess(
   int ipt_h = iter_ipt->second[0];
   int ipt_w = iter_ipt->second[1];
 
-  // TODO: 需要修改成FDTensor或Mat的运算 现在依赖cv::Mat
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   cv::Mat cropped_alpha;
@@ -202,7 +200,6 @@ bool PPMatting::Postprocess(
   result->Clear();
   // note: must be setup shape before Resize
   result->contain_foreground = false;
-  // 和输入原图大小对应的alpha
   result->shape = {static_cast<int64_t>(ipt_h), static_cast<int64_t>(ipt_w)};
   int numel = ipt_h * ipt_w;
   int nbytes = numel * sizeof(float);
