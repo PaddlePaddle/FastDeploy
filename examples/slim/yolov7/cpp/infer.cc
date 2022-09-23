@@ -25,7 +25,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto params_file = model_dir + sep + "model.pdiparams";
 
   auto model = fastdeploy::vision::detection::YOLOv7(
-      model_file, params_file, option, fastdeploy::Frontend::PADDLE);
+      model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);

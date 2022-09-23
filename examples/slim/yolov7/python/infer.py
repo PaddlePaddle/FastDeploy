@@ -1,7 +1,7 @@
 import fastdeploy as fd
 import cv2
 import os
-from fastdeploy.c_lib_wrap import Frontend
+from fastdeploy.c_lib_wrap import ModelFormat
 
 
 def parse_arguments():
@@ -68,7 +68,7 @@ model = fd.vision.detection.YOLOv7(
     model_file,
     params_file,
     runtime_option=runtime_option,
-    model_format=Frontend.PADDLE)
+    model_format=ModelFormat.PADDLE)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)

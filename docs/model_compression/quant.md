@@ -21,9 +21,9 @@
 |   离线量化      |  无需训练，耗时短 |  比量化训练稍低       | 两者一致   | 两者一致   |  
 |   量化训练      |  需要训练，耗时高 |  较未量化模型有少量损失 | 两者一致   |两者一致   |  
 
-### 用户使用fdquant命令量化模型
-Fastdeploy 为用户提供了一键离线量化的功能，请参考如下文档进行模型量化.
-- [FastDeploy 一键模型量化](../../quant_tools/)
+### 用户使用fastdeploy_quant命令量化模型
+Fastdeploy 为用户提供了一键模型量化的功能，请参考如下文档进行模型量化.
+- [FastDeploy 一键模型量化](../../tools/quantization/)
 当用户获得产出的量化模型之后，即可以使用FastDeploy来部署量化模型.
 
 ## 3. FastDeploy 部署量化模型
