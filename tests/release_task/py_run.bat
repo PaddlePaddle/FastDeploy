@@ -40,16 +40,16 @@ set COMPARE_SHELL=%CURRENT_DIR%\compare_with_gt.py
 for %%b in (%RUN_CASES%) do (
     echo "Python Backend:" %%b
     if %%b  NEQ trt (
-        python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=cpu --backend=%%b >> cpp_%%b_cpu_result.txt
-        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_cpu_result.txt --platform %PLATFORM% --device cpu
+        python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=cpu --backend=%%b >> py_%%b_cpu_result.txt
+        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_cpu_result.txt --platform %PLATFORM% --device cpu
     )
     if  "%DEVICE%" == "gpu" (
         if %%b == trt (
-            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_trt_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt
+            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_trt_result.txt
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_trt_result.txt --platform %PLATFORM% --device trt
         ) else (
-            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_gpu_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu
+            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_gpu_result.txt
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_gpu_result.txt --platform %PLATFORM% --device gpu
         )
     ) 
 )
