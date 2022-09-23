@@ -25,22 +25,24 @@ bool Resize::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
+  cv::Mat new_im;
   if (width_ > 0 && height_ > 0) {
     if (use_scale_) {
       float scale_w = width_ * 1.0 / origin_w;
       float scale_h = height_ * 1.0 / origin_h;
-      cv::resize(*im, *im, cv::Size(0, 0), scale_w, scale_h, interp_);
+      cv::resize(*im, new_im, cv::Size(0, 0), scale_w, scale_h, interp_);
     } else {
-      cv::resize(*im, *im, cv::Size(width_, height_), 0, 0, interp_);
+      cv::resize(*im, new_im, cv::Size(width_, height_), 0, 0, interp_);
     }
   } else if (scale_w_ > 0 && scale_h_ > 0) {
-    cv::resize(*im, *im, cv::Size(0, 0), scale_w_, scale_h_, interp_);
+    cv::resize(*im, new_im, cv::Size(0, 0), scale_w_, scale_h_, interp_);
   } else {
     FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
                "or (scale_w > 0 && scale_h > 0)."
             << std::endl;
     return false;
   }
+  mat->SetMat(new_im);
   mat->SetWidth(im->cols);
   mat->SetHeight(im->rows);
   return true;
@@ -86,5 +88,5 @@ bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
   return r(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

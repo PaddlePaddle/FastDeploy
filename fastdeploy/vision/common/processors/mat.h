@@ -37,6 +37,8 @@ struct FASTDEPLOY_DECL Mat {
     channels = cpu_mat.channels();
   }
 
+  void SetMat(const cv::Mat& mat) { cpu_mat = mat; }
+
  private:
   int channels;
   int height;

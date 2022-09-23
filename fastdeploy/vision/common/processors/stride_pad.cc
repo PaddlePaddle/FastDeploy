@@ -56,8 +56,11 @@ bool StridePad::CpuRun(Mat* mat) {
   } else {
     value = cv::Scalar(value_[0], value_[1], value_[2], value_[3]);
   }
+  cv::Mat new_im;
   // top, bottom, left, right
-  cv::copyMakeBorder(*im, *im, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT, value);
+  cv::copyMakeBorder(*im, new_im, 0, pad_h, 0, pad_w, cv::BORDER_CONSTANT,
+                     value);
+  mat->SetMat(new_im);
   mat->SetHeight(origin_h + pad_h);
   mat->SetWidth(origin_w + pad_w);
   return true;

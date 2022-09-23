@@ -18,7 +18,9 @@ namespace fastdeploy {
 namespace vision {
 bool BGR2RGB::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
-  cv::cvtColor(*im, *im, cv::COLOR_BGR2RGB);
+  cv::Mat new_im;
+  cv::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
+  mat->SetMat(new_im);
   return true;
 }
 
@@ -54,5 +56,5 @@ bool RGB2BGR::Run(Mat* mat, ProcLib lib) {
   return r(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

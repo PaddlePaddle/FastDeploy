@@ -22,11 +22,15 @@ bool Cast::CpuRun(Mat* mat) {
   int c = im->channels();
   if (dtype_ == "float") {
     if (im->type() != CV_32FC(c)) {
-      im->convertTo(*im, CV_32FC(c));
+      cv::Mat new_im;
+      im->convertTo(new_im, CV_32FC(c));
+      mat->SetMat(new_im);
     }
   } else if (dtype_ == "double") {
     if (im->type() != CV_64FC(c)) {
-      im->convertTo(*im, CV_64FC(c));
+      cv::Mat new_im;
+      im->convertTo(new_im, CV_64FC(c));
+      mat->SetMat(new_im);
     }
   } else {
     FDWARNING << "Cast not support for " << dtype_

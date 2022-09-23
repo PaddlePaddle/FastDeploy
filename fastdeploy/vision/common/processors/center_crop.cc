@@ -28,7 +28,9 @@ bool CenterCrop::CpuRun(Mat* mat) {
   int offset_x = static_cast<int>((width - width_) / 2);
   int offset_y = static_cast<int>((height - height_) / 2);
   cv::Rect crop_roi(offset_x, offset_y, width_, height_);
-  *im = (*im)(crop_roi);
+  cv::Mat new_im;
+  new_im = (*im)(crop_roi);
+  mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   return true;
@@ -59,5 +61,5 @@ bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
   return c(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

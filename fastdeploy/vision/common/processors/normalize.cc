@@ -59,7 +59,9 @@ bool Normalize::CpuRun(Mat* mat) {
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
-  cv::merge(split_im, *im);
+  cv::Mat new_im;
+  cv::merge(split_im, new_im);
+  mat->SetMat(new_im);
   return true;
 }
 
@@ -84,5 +86,5 @@ bool Normalize::Run(Mat* mat, const std::vector<float>& mean,
   return n(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

@@ -22,13 +22,15 @@ bool ResizeByShort::CpuRun(Mat* mat) {
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
+  cv::Mat new_im;
   if (use_scale_) {
-    cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
+    cv::resize(*im, new_im, cv::Size(), scale, scale, interp_);
   } else {
     int width = static_cast<int>(round(scale * im->cols));
     int height = static_cast<int>(round(scale * im->rows));
-    cv::resize(*im, *im, cv::Size(width, height), 0, 0, interp_);
+    cv::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_);
   }
+  mat->SetMat(new_im);
   mat->SetWidth(im->cols);
   mat->SetHeight(im->rows);
   return true;
@@ -72,5 +74,5 @@ bool ResizeByShort::Run(Mat* mat, int target_size, int interp, bool use_scale,
   auto r = ResizeByShort(target_size, interp, use_scale, max_size);
   return r(mat, lib);
 }
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

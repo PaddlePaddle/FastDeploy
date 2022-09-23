@@ -45,8 +45,10 @@ bool Pad::CpuRun(Mat* mat) {
   } else {
     value = cv::Scalar(value_[0], value_[1], value_[2], value_[3]);
   }
-  cv::copyMakeBorder(*im, *im, top_, bottom_, left_, right_,
+  cv::Mat new_im;
+  cv::copyMakeBorder(*im, new_im, top_, bottom_, left_, right_,
                      cv::BORDER_CONSTANT, value);
+  mat->SetMat(new_im);
   mat->SetHeight(im->rows);
   mat->SetWidth(im->cols);
   return true;
@@ -90,11 +92,10 @@ bool Pad::GpuRun(Mat* mat) {
 #endif
 
 bool Pad::Run(Mat* mat, const int& top, const int& bottom, const int& left,
-              const int& right, const std::vector<float>& value,
-              ProcLib lib) {
+              const int& right, const std::vector<float>& value, ProcLib lib) {
   auto p = Pad(top, bottom, left, right, value);
   return p(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
