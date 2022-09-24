@@ -50,14 +50,14 @@ option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
-option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
-option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
-option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
+# option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
+# option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
+# option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
+# option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 ######################### Options for Android cross compiling ####################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
@@ -67,6 +67,13 @@ option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+
+######################### Paths to user's custom libraries directory #####################
+set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
+set(TRT_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of tensorrt library.")
+set(ORT_DIRECTORY "" CACHE PATH "User can specify the installed onnxruntime directory.")
+set(OPENCV_DIRECTORY "" CACHE PATH "User can specify the installed opencv directory.")
+
 
 # Whether to build fastdeploy on device Nvidia Jetson
 # Only support CPU Inference & GPU(TensorRT) Inference Now

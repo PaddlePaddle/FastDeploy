@@ -2,12 +2,22 @@
 
 在 Windows 下使用 FastDeploy C++ SDK 与在 Linux 下使用稍有不同。以下以 PPYOLOE 为例进行演示在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
+## 目录
+- [环境依赖](#Environment)  
+- [下载 FastDeploy Windows 10 C++ SDK](#Download)
+- [命令行方式使用 C++ SDK](#CommandLine)
+- [fpm-cli.bat依赖库管理脚本小工具](#FpmCli)
+- [Visual Studio 2019 IDE 方式使用 C++ SDK](#VisualStudio2019)
+- [CLion IDE 方式使用 C++ SDK](#CLion)  
+- [Visual Studio Code IDE 方式使用 C++ SDK](#VisualStudioCode)
+
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../quick_start)
 
 ## 环境依赖
+<div id="Environment"></div>  
 
 - cmake >= 3.12
 - Visual Studio 16 2019
@@ -16,18 +26,23 @@
 - TensorRT >= 8.4 (当ENABLE_TRT_BACKEND=ON)
 
 ## 下载 FastDeploy Windows 10 C++ SDK
+<div id="Download"></div>  
+
 可以从以下链接下载编译好的 FastDeploy Windows 10 C++ SDK，SDK中包含了examples代码。
 ```text
 https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.1.zip
 ```
-## 准备模型文件和测试图片  
+## 准备模型文件和测试图片
 可以从以下链接下载模型文件和测试图片，并解压缩
 ```text
 https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (下载后解压缩)
 https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-## 在 Windows 上编译 PPYOLOE
+## 命令行方式使用 C++ SDK
+<div id="CommandLine"></div>  
+
+### 在 Windows 上编译 PPYOLOE
 Windows菜单打开`x64 Native Tools Command Prompt for VS 2019`命令工具，cd到ppyoloe的demo路径  
 ```bat  
 cd fastdeploy-win-x64-gpu-0.2.0\examples\vision\detection\paddledetection\cpp
@@ -40,7 +55,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\..\.
 ```bat
 msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```
-## 配置依赖库路径
+### 配置依赖库路径
 #### 方式一：命令行设置环境变量
 编译好的exe保存在Release目录下，在运行demo前，需要将模型和测试图片拷贝至该目录。另外，需要在终端指定DLL的搜索路径。请在build目录下执行以下命令。
 ```bat
@@ -58,16 +73,21 @@ set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\third_party\lib;%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\bin;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin;%PATH%
-```
+```  
 注意，需要拷贝onnxruntime.dll到exe所在的目录。
 ```bat
-copy /Y %FASTDEPLOY_PATH%\third_libs\install\onnxruntime\lib\onnxruntime* Release\
-```
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\onnxruntime* Release\
+```    
 由于较新的Windows在System32系统目录下自带了onnxruntime.dll，因此就算设置了PATH，系统依然会出现onnxruntime的加载冲突。因此需要先拷贝demo用到的onnxruntime.dll到exe所在的目录。如下
 ```bat
 where onnxruntime.dll
 C:\Windows\System32\onnxruntime.dll  # windows自带的onnxruntime.dll
+```  
+可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中(包含copy onnxruntime)，如`setup_fastdeploy_dll.bat`，方便多次使用。
+```bat
+setup_fastdeploy_dll.bat 
 ```
+
 #### 方式二：拷贝依赖库到exe的目录下
 手动拷贝，或者在build目录下执行以下命令：
 ```bat
@@ -87,11 +107,49 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.xml Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin\*.dll Release\
 ```
+可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中，如`copy_fastdeploy_dll.bat`，方便多次使用。
+```bat
+copy_fastdeploy_dll.bat 
+```
+特别说明：上述的set和copy命令对应的依赖库路径，需要用户根据自己使用SDK中的依赖库进行适当地修改。比如，若是CPU版本的SDK，则不需要TensorRT相关的设置。
 
-## 运行 demo
+
+### 运行 demo
 ```bat
 cd Release
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 0  # CPU
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 1  # GPU
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + TensorRT
 ```
+
+## fpm-cli.bat依赖库管理脚本小工具
+<div id="FpmCli"></div>  
+
+由于Windows下C++开发的特殊性，如经常需要拷贝所有的lib或dll文件到某个指定的目录，因此，为方便用户管理FastDeploy C++ SDK依赖库中的dll和lib文件，提高用户的开发体验，我们提供一个临时的依赖库管理脚本小工具`fpm-cli.bat`，对于下载GPU版本预编译库的用户可以直接使用，而自定义编译SDK的用户也只需根据实际情况稍加修改即可，脚本代码详见[fpm-cli.bat](./fpm-cli.bat) 。用法简介如下：
+```bat
+fpm-cli.bat help  % 查看用法 %
+fpm-cli.bat init path-to-fastdepploy-installed-dir  % 需要先初始化 %
+fpm-cli.bat show  % 查看依赖库信息 DLLs 以及 LIBs %
+fpm-cli.bat install dlls path-to-your-exe-or-dll-dir % 安装所有dlls到指定路径 比如您的需要运行exe目录 %
+fpm-cli.bat install libs path-to-lib-dir % 安装所有libs到指定目录 比如当您想在VS中使用时 可以先把libs都先安装到某个目录 方便在后续在VS中设置 %
+```  
+
+![07da97750988429ac346d15237d75c9f](https://user-images.githubusercontent.com/31974251/192093131-1dc7580a-8716-4bd9-91c5-a7a50559889a.jpg)
+
+
+## Visual Studio 2019 IDE 方式使用 C++ SDK
+<div id="VisualStudio2019"></div>  
+
+- TODO  
+
+
+## CLion 2022 IDE 方式使用 C++ SDK
+<div id="CLion"></div>  
+
+- TODO  
+
+
+## Visual Studio Code IDE 方式使用 C++ SDK
+<div id="VisualStudioCode"></div>  
+
+- TODO    
