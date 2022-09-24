@@ -165,5 +165,5 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 FOREACH(LIB ${FASTDEPLOY_LIBS})
-  message(get_filename_component(directory ${LIB})
+  message(STATUS get_filename_component(directory ${LIB}))
 ENDFOREACH(LIB)
