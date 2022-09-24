@@ -170,8 +170,7 @@ C:\Python38\python.exe -m pip install dist\fastdeploy_gpu_python-0.2.1-cp38-cp38
 
 步骤一：勾选GPU版本对应的编译选项。注意GPU版本，请`需要`勾选WITH_GPU
 
-![image](https://user-images.githubusercontent.com/31974251/192095848-b3cfdf19-e378-41e0-b44e-5edb49461eeb.png)
-
+![image](https://user-images.githubusercontent.com/31974251/192099254-9f82abb0-8a29-41ce-a0ce-da6aacf23582.png) 
 
 这个示例中，我们开启ORT、Paddle、OpenVINO和TRT等推理后端，并且选择了需要编译TEXT和VISION的API。并且，由于开启了GPU和TensorRT，此时需要额外指定CUDA_DIRECTORY和TRT_DIRECTORY，在GUI界面中找到这两个变量，点击右侧的选项框，分别选择您安装CUDA的路径和TensorRT的路径    
 
@@ -188,10 +187,6 @@ C:\Python38\python.exe -m pip install dist\fastdeploy_gpu_python-0.2.1-cp38-cp38
 
 
 由于默认的安装路径是C盘，我们可以修改CMAKE_INSTALL_PREFIX来指定自己的安装路径，这里我们将安装路径修改到`build\fastdeploy-win-x64-gpu-0.2.1`目录下。  
-
-最后，完整的GPU配置如下图所示：
-
-![image](https://user-images.githubusercontent.com/31974251/192099254-9f82abb0-8a29-41ce-a0ce-da6aacf23582.png)
 
 
 ### 使用Visual Studio 2019 IDE进行编译
