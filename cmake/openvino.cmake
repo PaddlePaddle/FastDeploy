@@ -96,9 +96,18 @@ file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/tools)
 
 add_library(external_openvino STATIC IMPORTED GLOBAL)
 set_property(TARGET external_openvino PROPERTY IMPORTED_LOCATION ${OPENVINO_LIB})
+set(OPENVINO_LIBS external_openvino)
 
-find_package(TBB REQUIRED PATHS "${OPENVINO_INSTALL_DIR}/3rdparty/tbb/")
-set(OPENVINO_LIBS external_openvino ${TBB_IMPORTED_TARGETS})
+find_package(TBB PATHS "${OPENVINO_INSTALL_DIR}/3rdparty/tbb")
+if (TBB_FOUND)
+  list(APPEND OPENVINO_LIBS ${TBB_IMPORTED_TARGETS})
+else()
+  set(OMP_LIB "${OPENVINO_INSTALL_DIR}/3rdparty/omp/lib/libiomp5.so")
+  add_library(omp STATIC IMPORTED GLOBAL)
+  set_property(TARGET omp PROPERTY IMPORTED_LOCATION
+                                          ${OMP_LIB})
+  list(APPEND OPENVINO_LIBS omp)
+endif()
 message(STATUS "OPENVINO_LIBS = ${OPENVINO_LIBS}")
 
 list(APPEND DEPEND_LIBS ${OPENVINO_LIBS})
