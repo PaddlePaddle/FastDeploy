@@ -55,7 +55,7 @@ class RuntimeOption:
         self._option = C.RuntimeOption()
 
     def set_model_path(self, model_path, params_path="",
-                       model_format="paddle"):
+                       model_format=C.ModelFormat.PADDLE):
         return self._option.set_model_path(model_path, params_path,
                                            model_format)
 
