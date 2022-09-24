@@ -233,8 +233,19 @@ GPU版本SDK编译成功！
 
 ![image](https://user-images.githubusercontent.com/31974251/192097122-d675ae39-35fb-4dbb-9c75-eefb0597ec2e.png)  
 
-SDK成功安装到指定目录！  
+SDK成功安装到指定目录！   
 
-## 4. 特别提示  
+### 编译所有examples（可选）
+可以在CMake GUI中勾选BUILD_EXAMPLES选项，连带编译所有的examples，编译完成后所有example的可执行文件保存在build/bin/Release目录下 
 
-如果是用户自行编译SDK，理论上支持Windows 10/11，VS 2019/2022，CUDA 11.x 以及 TensorRT 8.x等配置，但建议使用我们推荐的默认配置，即：Windows 10, VS 2019, CUDA 11.2 和 TensorRT 8.4.x版本。
+![image](https://user-images.githubusercontent.com/31974251/192110769-a4f0940d-dea3-4524-831b-1c2a6ab8e871.png)
+
+![image](https://user-images.githubusercontent.com/31974251/192110930-e7e49bc6-c271-4076-be74-3d103f27bc78.png)
+
+
+
+## 4. 特别提示
+
+如果是用户自行编译SDK，理论上支持Windows 10/11，VS 2019/2022，CUDA 11.x 以及 TensorRT 8.x等配置，但建议使用我们推荐的默认配置，即：Windows 10, VS 2019, CUDA 11.2 和 TensorRT 8.4.x版本。另外，如果编译过程中遇到中文字符的编码问题（如UIE example必须传入中文字符进行预测），可以参考Visual Studio的官方文档，设置源字符集为`/utf-8`解决：  
+- [/utf-8（将源字符集和执行字符集设置为 UTF-8）](https://learn.microsoft.com/zh-cn/cpp/build/reference/utf-8-set-source-and-executable-character-sets-to-utf-8?view=msvc-170)
+

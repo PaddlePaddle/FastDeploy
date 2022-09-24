@@ -37,7 +37,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
 
-  // 其中分类模型可选，因此也可使用如下方式串联OCR系统
+  // The classification model is optional, so the OCR system can also be connected in series as follows
   // auto ocr_system_v3 = fastdeploy::application::ocrsystem::PPOCRSystemv3(&det_model, &rec_model);
   auto ocr_system_v3 = fastdeploy::application::ocrsystem::PPOCRSystemv3(&det_model, &cls_model, &rec_model);
 
