@@ -67,10 +67,11 @@ if(WIN32)
       CACHE FILEPATH "OPENVINO shared library." FORCE)
   file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/Release/*)
   file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
-  file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
 
   file(GLOB_RECURSE OPENVINO_BIN_FILES ${OPENVINO_INSTALL_DIR}/bin/intel64/Release/*)
   file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/bin/)
+
+  file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
   file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/bin/intel64)
 elseif(APPLE)
   set(OPENVINO_LIB
@@ -102,6 +103,7 @@ find_package(TBB PATHS "${OPENVINO_INSTALL_DIR}/3rdparty/tbb")
 if (TBB_FOUND)
   list(APPEND OPENVINO_LIBS ${TBB_IMPORTED_TARGETS})
 else()
+  # TODO(zhoushunjie): Use openvino with tbb on linux in future.
   set(OMP_LIB "${OPENVINO_INSTALL_DIR}/3rdparty/omp/lib/libiomp5.so")
   add_library(omp STATIC IMPORTED GLOBAL)
   set_property(TARGET omp PROPERTY IMPORTED_LOCATION
