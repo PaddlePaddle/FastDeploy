@@ -163,7 +163,3 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(FATAL_ERROR "[ERROR] FastDeploy require g++ version >= 5.4.0, but now your g++ version is ${CMAKE_CXX_COMPILER_VERSION}, this may cause failure! Use -DCMAKE_CXX_COMPILER to define path of your compiler.")
   endif()
 endif()
-
-FOREACH(LIB ${FASTDEPLOY_LIBS})
-  message(STATUS get_filename_component(directory ${LIB}))
-ENDFOREACH(LIB)
