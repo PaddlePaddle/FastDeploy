@@ -41,7 +41,6 @@ else()
 endif()
 set(OPENVINO_URL "${OPENVINO_URL_PREFIX}${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}")
 
-
 set(OPENVINO_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/runtime)
 set(OPENVINO_INSTALL_INC_DIR
   "${OPENVINO_INSTALL_DIR}/include"
@@ -62,9 +61,6 @@ download_and_decompress(${OPENVINO_URL}
     ${THIRD_PARTY_PATH}/install)
 
 if(WIN32)
-  set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/openvino.lib"
-      CACHE FILEPATH "OPENVINO shared library." FORCE)
   file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/Release/*)
   file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
   file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
@@ -73,16 +69,10 @@ if(WIN32)
   file(COPY ${OPENVINO_BIN_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/bin/)
   file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/bin/intel64)
 elseif(APPLE)
-  set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/libopenvino.dylib"
-      CACHE FILEPATH "OPENVINO shared library." FORCE)
   file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/Release/*)
   file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
   file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
 else()
-  set(OPENVINO_LIB
-      "${OPENVINO_INSTALL_DIR}/lib/libopenvino.so"
-      CACHE FILEPATH "OPENVINO shared library." FORCE)
   file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/*)
   file(COPY ${OPENVINO_LIB_FILES} DESTINATION ${OPENVINO_INSTALL_DIR}/lib/)
   file(REMOVE_RECURSE ${OPENVINO_INSTALL_DIR}/lib/intel64)
@@ -94,21 +84,7 @@ file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/samples)
 file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/setupvars.sh)
 file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/tools)
 
-add_library(external_openvino STATIC IMPORTED GLOBAL)
-set_property(TARGET external_openvino PROPERTY IMPORTED_LOCATION ${OPENVINO_LIB})
-set(OPENVINO_LIBS external_openvino)
-
-find_package(TBB PATHS "${OPENVINO_INSTALL_DIR}/3rdparty/tbb")
-if (TBB_FOUND)
-  list(APPEND OPENVINO_LIBS ${TBB_IMPORTED_TARGETS})
-else()
-  # TODO(zhoushunjie): Use openvino with tbb on linux in future.
-  set(OMP_LIB "${OPENVINO_INSTALL_DIR}/3rdparty/omp/lib/libiomp5.so")
-  add_library(omp STATIC IMPORTED GLOBAL)
-  set_property(TARGET omp PROPERTY IMPORTED_LOCATION
-                                          ${OMP_LIB})
-  list(APPEND OPENVINO_LIBS omp)
-endif()
-message(STATUS "OPENVINO_LIBS = ${OPENVINO_LIBS}")
-
+include(${PROJECT_SOURCE_DIR}/FastDeployUtils.cmake)
+get_openvino_libs(${OPENVINO_INSTALL_DIR})
+message("OPENVINO_LIBS = ${OPENVINO_LIBS}")
 list(APPEND DEPEND_LIBS ${OPENVINO_LIBS})
