@@ -140,7 +140,166 @@ fpm-cli.bat install libs path-to-lib-dir % 安装所有libs到指定目录 比�
 ## Visual Studio 2019 IDE 方式使用 C++ SDK
 <div id="VisualStudio2019"></div>  
 
-- TODO  
+步骤一：打开Visual Studio 2019，点击"创建新项目"->点击"CMake"，从而创建CMake工程项目
+
+![image](https://user-images.githubusercontent.com/31974251/192143543-9f29e4cb-2307-45ca-a61a-bcfba5df19ff.png)
+
+![image](https://user-images.githubusercontent.com/31974251/192143640-39e79c65-8b50-4254-8da6-baa21bb23e3c.png)  
+
+以PPYOLOE为例，来说明如何在Visual Studio 2019 IDE中使用FastDeploy C++ SDK.
+
+![image](https://user-images.githubusercontent.com/31974251/192143713-be2e6490-4cab-4151-8463-8c367dbc451a.png)
+
+打开工程发现，Visual Stuio 2019已经为我们生成了一些基本的文件，其中包括CMakeLists.txt。infer_ppyoloe.h头文件这里实际上用不到，我们可以直接删除。  
+
+![image](https://user-images.githubusercontent.com/31974251/192143930-db1655c2-66ee-448c-82cb-0103ca1ca2a0.png)   
+
+步骤二：添加infer_ppyoloe推理源码，并修改CMakeLists.txt  
+
+![image](https://user-images.githubusercontent.com/31974251/192144782-79bccf8f-65d0-4f22-9f41-81751c530319.png)
+
+其实infer_ppyoloe.cpp的代码可以直接从examples中的代码拷贝过来：  
+- [examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc](../../examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc)
+
+CMakeLists.txt主要包括配置FastDeploy C++ SDK的路径，如果是GPU版本的SDK，还需要配置CUDA_DIRECTORY为CUDA的安装路径 
+
+```cmake
+project(infer_ppyoloe_demo C CXX)
+cmake_minimum_required(VERSION 3.12)
+
+# Only support "Release" mode now  
+set(CMAKE_BUILD_TYPE "Release")
+
+# Set FastDeploy install dir
+set(FASTDEPLOY_INSTALL_DIR 
+	"D:/qiuyanjun/fastdeploy-win-x64-gpu-0.2.1" 
+	CACHE PATH "Path to downloaded or built fastdeploy sdk.")
+
+# Set CUDA_DIRECTORY (CUDA 11.x) for GPU SDK
+set(CUDA_DIRECTORY 
+	"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.7"
+	CACHE PATH "Path to installed CUDA Toolkit.")
+
+include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
+
+include_directories(${FASTDEPLOY_INCS})
+
+add_executable(infer_ppyoloe_demo ${PROJECT_SOURCE_DIR}/infer_ppyoloe.cpp)
+target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})
+```
+
+步骤三：点击"CMakeLists.txt"->右键点击"生成缓存"
+
+![image](https://user-images.githubusercontent.com/31974251/192145349-c78b110a-0e41-4ee5-8942-3bf70bd94a75.png)
+
+发现已经成功生成缓存了，但是由于打开工程时，默认是Debug模式，我们发现exe和缓存保存路径还是Debug模式下的。 我们可以先修改CMake的设置为Release.
+
+步骤四：点击"CMakeLists.txt"->右键点击"infer_ppyoloe_demo的cmake设置"，进入CMakeSettings.json的设置面板，把其中的Debug设置修改为Release.  
+
+![image](https://user-images.githubusercontent.com/31974251/192145242-01d37b44-e2fa-47df-82c1-c11c2ccbff99.png)  
+
+同时设置CMake生成器为 "Visual Studio 16 2019 Win64"
+
+![image](https://user-images.githubusercontent.com/31974251/192147961-ac46d0f6-7349-4126-a123-914af2b63d95.jpg)
+
+
+点击保存CMake缓存以切换为Release配置：  
+
+![image](https://user-images.githubusercontent.com/31974251/192145974-b5a63341-9143-49a2-8bfe-94ac641b1670.png)
+
+步骤五：（1）点击"CMakeLists.txt"->右键"CMake缓存仅限x64-Release"->"点击删除缓存"；（2）点击"CMakeLists.txt"->"生成缓存"；（3）如果在步骤一发现删除缓存的选项是灰色的可以直接点击"CMakeLists.txt"->"生成"，若生成失败则可以重复尝试（1）和（2） 
+
+![image](https://user-images.githubusercontent.com/31974251/192146394-51fbf2b8-1cba-41ca-bb45-5f26890f64ce.jpg)  
+
+最终可以看到，配置已经成功生成Relase模式下的CMake缓存了。  
+
+![image](https://user-images.githubusercontent.com/31974251/192146239-a1eacd9e-034d-4373-a262-65b18ce25b87.png)  
+
+
+步骤六：生成可执行文件，点击"CMakeLists.txt"->"生成"。可以发现已经成功生成了infer_ppyoloe_demo.exe，并保存在`out/build/x64-Release/Release`目录下。  
+
+![image](https://user-images.githubusercontent.com/31974251/192146852-c64d2252-8c8f-4309-a950-908a5cb258b8.png)
+
+步骤七：执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以利用先前提到的fpm-cli.bat脚本小工具来快速处理（注意，自行编译SDK的用户需要根据自己的情况对这个简单的脚本稍加修改，如CPU SDK可以不拷贝TensorRT），以下是一个演示，通过几行命令，将所有的依赖库dll拷贝到exe所在的目录下，避免每次都繁琐地手动拷贝。
+
+```bat
+D:\qiuyanjun>fpm-cli.bat help
+[FastDeploy Package Manager][INFO] Can not find fpm-init.txt
+
+D:\qiuyanjun>fpm-cli.bat init D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1
+[FastDeploy Package Manager][INFO] Init done: fpm-init.txt [D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1]
+
+D:\qiuyanjun>fpm-cli.bat help
+----------------------------------------------------------------------------------
+FASTDEPLOY_HOME: D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1
+ACTION_TYPE: "help", "show", "install", "setup"
+     "help":         fpm-cli usage helps.
+     "init":         init FastDeploy path.
+     "show":         show all third libs need by FastDeploy.
+  "install":         install third libs to a specific location.
+    "setup":         setup FastDeploy third libs env for current terminal.
+INSTALL_TYPE: "dlls", "libs"
+     "dlls":         install DLLs files to a specific location.
+     "libs":         install LIBs files to a specific location.
+DESTINATION: specific location to install FastDeploy's third libs.
+Usage:
+     fpm-cli.bat help
+     fpm-cli.bat init path-to-fastdepploy-installed-dir
+     fpm-cli.bat show
+     fpm-cli.bat install dlls path-to-your-exe-or-dll-dir
+     fpm-cli.bat install libs path-to-your-lib-dir
+     fpm-cli.bat setup path-to-your-exe-or-dll-dir
+----------------------------------------------------------------------------------
+
+D:\qiuyanjun>fpm-cli.bat show
+----------------------------------------------------------------------------------
+[FastDeploy Package Manager][INFO] show FastDeploy third_libs ...
+---------------------------------- [DLLs][PATH] ----------------------------------
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\lib\*.dll
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\onnxruntime\lib\*.dll
+...
+----------------------------------------------------------------------------------
+
+D:\qiuyanjun>fpm-cli.bat install dlls D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\out\build\x64-Release\Release
+[FastDeploy Package Manager][INFO] install FastDeploy third_libs ...
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\lib\fastdeploy.dll
+已复制         1 个文件。
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\onnxruntime\lib\onnxruntime.dll
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\onnxruntime\lib\onnxruntime_providers_cuda.dll
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\onnxruntime\lib\onnxruntime_providers_shared.dll
+D:\qiuyanjun\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\onnxruntime\lib\onnxruntime_providers_tensorrt.dll
+...
+[FastDeploy Package Manager][INFO] Installed DLLs to: D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\out\build\x64-Release\Release
+```
+同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 准备完成后，目录结构如下：  
+
+![image](https://user-images.githubusercontent.com/31974251/192147505-054edb77-564b-405e-89ee-fd0d2e413e78.png)
+
+最后，执行以下命令获得推理结果：  
+
+```bat  
+D:\qiuyanjun>cd D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\out\build\x64-Release\Release
+
+D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\out\build\x64-Release\Release>infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 0
+[INFO] fastdeploy/runtime.cc(304)::fastdeploy::Runtime::Init    Runtime initialized with Backend::OPENVINO in Device::CPU.
+DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
+415.047180,89.311569, 506.009613, 283.863098, 0.950423, 0
+163.665710,81.914932, 198.585342, 166.760895, 0.896433, 0
+581.788635,113.027618, 612.623474, 198.521713, 0.842596, 0
+267.217224,89.777306, 298.796051, 169.361526, 0.837951, 0
+......
+153.301407,123.233757, 177.130539, 164.558350, 0.066697, 60
+505.887604,140.919601, 523.167236, 151.875336, 0.084912, 67
+
+Visualized result saved in ./vis_result.jpg
+```  
+
+打开保存的图片查看可视化结果：  
+
+<div  align="center">  
+<img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
+</div>
 
 
 ## CLion 2022 IDE 方式使用 C++ SDK

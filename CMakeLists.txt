@@ -421,6 +421,7 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 install(
