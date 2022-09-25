@@ -19,6 +19,9 @@ set(FASTDEPLOY_LIBS "")
 set(FASTDEPLOY_INCS "")
 list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/include)
 
+# Note(zhoushunjie): include some useful utils function
+include(${CMAKE_CURRENT_LIST_DIR}/FastDeployUtils.cmake)
+
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 11)
 endif()
@@ -57,19 +60,7 @@ endif()
 
 if(ENABLE_OPENVINO_BACKEND)
   set(OPENVINO_FILENAME @OPENVINO_FILENAME@)
-  find_library(OPENVINO_LIB openvino ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${OPENVINO_FILENAME}/runtime/lib/ NO_DEFAULT_PATH)
-  set(OPENVINO_LIBS ${OPENVINO_LIB})
-  # Find tbb libs
-  find_package(TBB PATHS "${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${OPENVINO_FILENAME}/runtime/3rdparty/tbb/")
-  if (TBB_FOUND)
-    list(APPEND OPENVINO_LIBS ${TBB_IMPORTED_TARGETS})
-  else()
-    # TODO(zhoushunjie): Use openvino with tbb on linux in future.
-    set(OMP_LIB "${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${OPENVINO_FILENAME}/runtime/3rdparty/omp/lib/libiomp5.so")
-    add_library(omp STATIC IMPORTED GLOBAL)
-    set_property(TARGET omp PROPERTY IMPORTED_LOCATION ${OMP_LIB})
-    list(APPEND OPENVINO_LIBS omp)
-  endif()
+  get_openvino_libs(${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${OPENVINO_FILENAME}/runtime)
   message(STATUS "OPENVINO_LIBS = ${OPENVINO_LIBS}")
   list(APPEND FASTDEPLOY_LIBS ${OPENVINO_LIBS})
 endif()
@@ -143,6 +134,7 @@ endif()
 message(STATUS "  ENABLE_TRT_BACKEND        : ${ENABLE_TRT_BACKEND}")
 message(STATUS "  ENABLE_VISION             : ${ENABLE_VISION}")
 message(STATUS "  ENABLE_TEXT               : ${ENABLE_TEXT}")
+message(STATUS "  DEPENDENCY_LIBS           : ${FASTDEPLOY_LIBS}")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.4.0")
