@@ -59,6 +59,12 @@ else() # TODO: use fastdeploy/third_libs instead.
 endif()
 set(OPENCV_URL ${OPENCV_URL_PREFIX}/${OPENCV_LIB}${COMPRESSED_SUFFIX})
 
+if(BUILD_ON_JETSON)
+  if(EXISTS /usr/lib/aarch64-linux-gnu/cmake/opencv4/)
+    set(OPENCV_DIRECTORY /usr/lib/aarch64-linux-gnu/cmake/opencv4/)
+  endif()
+endif()
+
 if(OPENCV_DIRECTORY)
   message(STATUS "Use the opencv lib specified by user. The OpenCV path: ${OPENCV_DIRECTORY}")
   STRING(REGEX REPLACE "\\\\" "/" OPENCV_DIRECTORY ${OPENCV_DIRECTORY})
