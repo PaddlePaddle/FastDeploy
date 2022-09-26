@@ -25,7 +25,6 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
                                          const cv::Mat& background,
                                          const MattingResult& result,
                                          bool remove_small_connected_area) {
-  // 只可视化alpha，fgr(前景)本身就是一张图 不需要可视化
   FDASSERT((!im.empty()), "Image can't be empty!");
   FDASSERT((im.channels() == 3), "Only support 3 channels image mat!");
   FDASSERT((!background.empty()), "Background image can't be empty!");
@@ -39,7 +38,6 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
   int width = im.cols;
   int bg_height = background.rows;
   int bg_width = background.cols;
-  // alpha to cv::Mat && 避免resize等操作修改外部数据
   std::vector<float> alpha_copy;
   alpha_copy.assign(result.alpha.begin(), result.alpha.end());
   float* alpha_ptr = static_cast<float*>(alpha_copy.data());
@@ -76,9 +74,7 @@ cv::Mat Visualize::SwapBackgroundMatting(const cv::Mat& im,
 
   return vis_img;
 }
-// 对SegmentationResult做背景替换，由于分割模型可以预测多个类别，其中
-// background_label 表示预测为背景类的标签
-// 由于不同模型和数据集训练的背景类别标签可能不同，用户可以自己输入背景类对应的标签。
+
 cv::Mat Visualize::SwapBackgroundSegmentation(
     const cv::Mat& im, const cv::Mat& background, int background_label,
     const SegmentationResult& result) {

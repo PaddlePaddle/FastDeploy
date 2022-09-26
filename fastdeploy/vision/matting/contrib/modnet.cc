@@ -26,8 +26,8 @@ MODNet::MODNet(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+    valid_cpu_backends = {Backend::ORT}; 
+    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -93,7 +93,6 @@ bool MODNet::Postprocess(
     return false;
   }
 
-  // 先获取alpha并resize (使用opencv)
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
   FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
@@ -103,7 +102,6 @@ bool MODNet::Postprocess(
   int ipt_h = iter_ipt->second[0];
   int ipt_w = iter_ipt->second[1];
 
-  // TODO: 需要修改成FDTensor或Mat的运算 现在依赖cv::Mat
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
@@ -116,7 +114,6 @@ bool MODNet::Postprocess(
   result->Clear();
   // note: must be setup shape before Resize
   result->contain_foreground = false;
-  // 和输入原图大小对应的alpha
   result->shape = {static_cast<int64_t>(ipt_h), static_cast<int64_t>(ipt_w)};
   int numel = ipt_h * ipt_w;
   int nbytes = numel * sizeof(float);

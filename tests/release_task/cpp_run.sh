@@ -1,19 +1,15 @@
 #!/bin/bash
-export no_proxy=bcebos.com
+export no_proxy=bcebos.com,xly.bce.baidu.com,aliyun.com
 CURRENT_DIR=$(cd $(dirname $0); pwd)
 PLATFORM=$1
 DEVICE=$2
 VERSION=$3
 if [ "$DEVICE" = "gpu" ];then
-       PY_FASTDEPLOY_PACKAGE=fastdeploy-$DEVICE-python
        CPP_FASTDEPLOY_PACKAGE=fastdeploy-$PLATFORM-$DEVICE-$VERSION
 else
-       PY_FASTDEPLOY_PACKAGE=fastdeploy-python
        CPP_FASTDEPLOY_PACKAGE=fastdeploy-$PLATFORM-$VERSION
 fi
 echo $CPP_FASTDEPLOY_PACKAGE
-echo $PY_FASTDEPLOY_PACKAGE
-PY_VERSION_CASE=('python3.6' 'python3.7' 'python3.8' 'python3.9' 'python3.10')
 LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort' 'openvino')
@@ -41,34 +37,8 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
 	RUN_CASE=(${MACOS_ARM64_CPU_CASE[*]})
 fi
 
-py_version_case_number=${#PY_VERSION_CASE[@]}
 case_number=${#RUN_CASE[@]}
-for((i=0;i<py_version_case_number;i+=1))
-do
-	py_version=${PY_VERSION_CASE[i]}
-        echo "py_version:" $py_version
-        $py_version -m pip freeze | grep fastdeploy | xargs pip uninstall -y
-        $py_version -m pip install $PY_FASTDEPLOY_PACKAGE -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
-        for((j=0;j<case_number;j+=1))
-        do
-               backend=${RUN_CASE[j]}
-               echo "Python Backend:" $backend
-               if [ "$backend" != "trt" ];then
-                       $py_version infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device cpu --backend $backend >> py_cpu_result.txt
-                       $py_version $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_cpu_result.txt --platform $PLATFORM --device cpu
-               fi
-               if [ "$DEVICE" = "gpu" ];then
 
-        	       if [ "$backend" = "trt" ];then
-                               $py_version infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_trt_result.txt
-                               $py_version $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_trt_result.txt --platform $PLATFORM --device trt
-        	       else
-        		       $py_version infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_gpu_result.txt
-                               $py_version $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_gpu_result.txt --platform $PLATFORM --device gpu
-                       fi
-               fi
-        done
-done
 wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
 
 tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
@@ -96,7 +66,7 @@ do
        fi
 done
 
-res_file="result.txt"
+res_file="*result.txt"
 if [ ! -f $res_file ]; then
        exit 0
 else

@@ -37,15 +37,15 @@ class PaddleSegModel(FastDeployModel):
         return self._model.predict(input_image)
 
     @property
-    def with_softmax(self):
-        return self._model.with_softmax
+    def apply_softmax(self):
+        return self._model.apply_softmax
 
-    @with_softmax.setter
-    def with_softmax(self, value):
+    @apply_softmax.setter
+    def apply_softmax(self, value):
         assert isinstance(
             value,
-            bool), "The value to set `with_softmax` must be type of bool."
-        self._model.with_softmax = value
+            bool), "The value to set `apply_softmax` must be type of bool."
+        self._model.apply_softmax = value
 
     @property
     def is_vertical_screen(self):

@@ -139,16 +139,16 @@ ModelFormat GuessModelFormat(const std::string& model_file) {
 
 void RuntimeOption::SetModelPath(const std::string& model_path,
                                  const std::string& params_path,
-                                 const std::string& _model_format) {
-  if (_model_format == "paddle") {
+                                 const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
     model_file = model_path;
     params_file = params_path;
     model_format = ModelFormat::PADDLE;
-  } else if (_model_format == "onnx") {
+  } else if (format == ModelFormat::ONNX) {
     model_file = model_path;
     model_format = ModelFormat::ONNX;
   } else {
-    FDASSERT(false, "The model format only can be 'paddle' or 'onnx'.");
+    FDASSERT(false, "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 
