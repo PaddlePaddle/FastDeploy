@@ -39,7 +39,7 @@ def process_on_linux(current_dir):
                 if d not in ["lib", "lib64"]:
                     continue
                 rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-                if path in  user_specified_dirs:
+                if path in user_specified_dirs:
                     # Note(zhoushunjie): Use the absolute path for user_specified_dirs
                     rpath = os.path.join(root, d)
                 else:
@@ -78,14 +78,18 @@ def process_on_mac(current_dir):
             for d in dirs:
                 if d not in ["lib", "lib64"]:
                     continue
-            rel_path = rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-            rpath = "$loader_path/" + rel_path
-            for lib in fd_libs:
-                pre_commands.append(
-                    "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
-                        rpath, lib))
-                commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
-                                format(rpath, lib))
+                rel_path = os.path.relpath(os.path.join(root, d), libs_path)
+                if path in user_specified_dirs:
+                    # Note(zhoushunjie): Use the absolute path for user_specified_dirs
+                    rpath = os.path.join(root, d)
+                else:
+                    rpath = "$loader_path/" + rel_path
+                for lib in fd_libs:
+                    pre_commands.append(
+                        "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
+                            rpath, lib))
+                    commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
+                                    format(rpath, lib))
 
     for cmd in pre_commands:
         try:
@@ -96,7 +100,6 @@ def process_on_mac(current_dir):
     for cmd in commands:
         assert subprocess.Popen(
             cmd, shell=True) != 0, "Execute command failed: {}".format(cmd)
-
 
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")

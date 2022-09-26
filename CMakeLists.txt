@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROJECT(fastdeploy C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(CSRCS_DIR_NAME "Name of source code directory")
 option(LIBRARY_NAME "Name of build library name")
@@ -34,6 +34,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
 if(ANDROID)
@@ -50,14 +51,14 @@ option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
-option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
-option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
-option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
+# option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
+# option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
+# option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
+# option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 ######################### Options for Android cross compiling ####################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
@@ -68,9 +69,16 @@ option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
+######################### Paths to user's custom libraries directory #####################
+set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
+set(TRT_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of tensorrt library.")
+set(ORT_DIRECTORY "" CACHE PATH "User can specify the installed onnxruntime directory.")
+set(OPENCV_DIRECTORY "" CACHE PATH "User can specify the installed opencv directory.")
+
+
 # Whether to build fastdeploy on device Nvidia Jetson
 # Only support CPU Inference & GPU(TensorRT) Inference Now
-option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF) 
+option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF)
 if(BUILD_ON_JETSON)
   set(WITH_GPU ON)
   set(ENABLE_TRT_BACKEND ON)
@@ -165,7 +173,15 @@ string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
 set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
 
-include(${PROJECT_SOURCE_DIR}/cmake/eigen.cmake)
+# Add eigen lib
+include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
+if(WIN32)
+  add_definitions(-DEIGEN_STRONG_INLINE=inline)
+endif()
+# sw not support thread_local semantic
+if(WITH_SW)
+  add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
+endif()
 
 if(ENABLE_PADDLE_FRONTEND)
   add_definitions(-DENABLE_PADDLE_FRONTEND)
@@ -204,7 +220,6 @@ if(ENABLE_OPENVINO_BACKEND)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
-  list(APPEND DEPEND_LIBS external_openvino)
 endif()
 
 if(WITH_GPU)
@@ -320,7 +335,6 @@ configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PR
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
-add_dependencies(${LIBRARY_NAME} extern_eigen3)
 
 redefine_file_macro(${LIBRARY_NAME})
 
@@ -414,6 +428,8 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 install(
