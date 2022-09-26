@@ -125,7 +125,6 @@ if(ENABLE_PADDLE_FRONTEND)
   list(APPEND FASTDEPLOY_LIBS ${PADDLE2ONNX_LIB})
 endif()
 
-message("FASTDEPLOY_LIBS = ${FASTDEPLOY_LIBS}")
 remove_duplicate_libraries(FASTDEPLOY_LIBS)
 
 # Print compiler information
