@@ -23,6 +23,9 @@ set(FASTDEPLOY_LIBS "")
 set(FASTDEPLOY_INCS "")
 list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/include)
 
+# Note(zhoushunjie): include some useful utils function
+include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
+
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 11)
 endif()
@@ -60,8 +63,10 @@ if(ENABLE_PADDLE_BACKEND)
 endif()
 
 if(ENABLE_OPENVINO_BACKEND)
-  find_library(OPENVINO_LIB openvino ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/openvino/lib/ NO_DEFAULT_PATH)
-  list(APPEND FASTDEPLOY_LIBS ${OPENVINO_LIB})
+  set(OPENVINO_FILENAME @OPENVINO_FILENAME@)
+  get_openvino_libs(${CMAKE_CURRENT_LIST_DIR}/third_libs/install/${OPENVINO_FILENAME}/runtime)
+  message(STATUS "OPENVINO_LIBS = ${OPENVINO_LIBS}")
+  list(APPEND FASTDEPLOY_LIBS ${OPENVINO_LIBS})
 endif()
 
 if(WITH_GPU)
@@ -104,8 +109,6 @@ if (ENABLE_TEXT)
   find_library(FASTER_TOKENIZER_LIB core_tokenizers ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/faster_tokenizer/lib NO_DEFAULT_PATH)
   list(APPEND FASTDEPLOY_LIBS ${FASTER_TOKENIZER_LIB})
   list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/faster_tokenizer/include)
-   # TODO (zhoushunjie): Will remove it later.
-  list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/faster_tokenizer/include/faster_tokenizer)
   list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/faster_tokenizer/third_party/include)
 endif()
 
@@ -113,6 +116,9 @@ if(ENABLE_PADDLE_FRONTEND)
   find_library(PADDLE2ONNX_LIB paddle2onnx  ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/paddle2onnx/lib NO_DEFAULT_PATH)
   list(APPEND FASTDEPLOY_LIBS ${PADDLE2ONNX_LIB})
 endif()
+
+message("FASTDEPLOY_LIBS = ${FASTDEPLOY_LIBS}")
+remove_duplicate_libraries(FASTDEPLOY_LIBS)
 
 # Print compiler information
 message(STATUS "")
@@ -156,6 +162,7 @@ if(ANDROID)
     message(STATUS "  WITH_LITE_STATIC          : ${WITH_LITE_STATIC}")
   endif()
 endif() 
+message(STATUS "  DEPENDENCY_LIBS           : ${FASTDEPLOY_LIBS}")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.4.0")

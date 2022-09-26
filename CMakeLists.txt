@@ -211,7 +211,6 @@ if(ENABLE_OPENVINO_BACKEND)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
-  list(APPEND DEPEND_LIBS external_openvino)
 endif()
 
 if(WITH_GPU)
@@ -422,6 +421,7 @@ install(
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
   ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 install(
