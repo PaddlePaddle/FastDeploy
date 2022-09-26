@@ -38,7 +38,6 @@ tar -xvf COCO_val_320.tar.gz
 ```shell
 fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
-注意: 在执行以上命令时, 如果遇到input shape检查提示, 用户请直接输入'N'跳过即可.
 
 ##### 3.参数说明
 
@@ -69,9 +68,9 @@ tar -xvf COCO_val_320.tar.gz
 ##### 2.使用fastdeploy_quant命令，执行一键模型量化:
 
 ```shell
+export CUDA_VISIBLE_DEVICES=0
 fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
-注意: 在执行以上命令时, 如果遇到input shape检查提示, 用户请直接输入'N'跳过即可.
 
 ##### 3.参数说明
 

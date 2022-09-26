@@ -22,7 +22,7 @@ import paddle
 from paddleslim.common import load_config, load_onnx_model
 from paddleslim.auto_compression import AutoCompression
 from paddleslim.quant import quant_post_static
-from fdquant.dataset import yolo_image_preprocess
+from fdquant.dataset import yolo_image_preprocess, cls_image_preprocess
 
 
 def argsparser():
@@ -76,16 +76,15 @@ def main():
     all_config = load_config(FLAGS.config_path)
     assert "Global" in all_config, f"Key 'Global' not found in config file. \n{all_config}"
     global_config = all_config["Global"]
-    input_name = 'x2paddle_image_arrays' if global_config[
-        'arch'] == 'YOLOv6' else 'x2paddle_images'
+    input_name = global_config['input_name']
 
     assert os.path.exists(global_config[
         'image_path']), "image_path does not exist!"
     paddle.vision.image.set_image_backend('cv2')
-
     #transform could be customized.
     train_dataset = paddle.vision.datasets.ImageFolder(
-        global_config['image_path'], transform=yolo_image_preprocess)
+        global_config['image_path'],
+        transform=eval(global_config['preprocess']))
     train_loader = paddle.io.DataLoader(
         train_dataset,
         batch_size=1,
@@ -98,7 +97,9 @@ def main():
     # ACT compression
     if FLAGS.method == 'QAT':
         ac = AutoCompression(
-            model_dir=global_config["model_dir"],
+            model_dir=global_config['model_dir'],
+            model_filename=global_config['model_filename'],
+            params_filename=global_config['params_filename'],
             train_dataloader=train_loader,
             save_dir=FLAGS.save_dir,
             config=all_config,

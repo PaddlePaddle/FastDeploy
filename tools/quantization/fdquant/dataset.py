@@ -44,7 +44,6 @@ def yolo_image_preprocess(img, target_shape=[640, 640]):
         fy=im_scale_y,
         interpolation=cv2.INTER_LINEAR)
     # Pad
-
     im_h, im_w = img.shape[:2]
     h, w = target_shape[:]
     if h != im_h or w != im_w:
@@ -53,5 +52,50 @@ def yolo_image_preprocess(img, target_shape=[640, 640]):
         canvas[0:im_h, 0:im_w, :] = img.astype(np.float32)
         img = canvas
     img = np.transpose(img / 255, [2, 0, 1])
+
+    return img.astype(np.float32)
+
+
+def cls_resize_short(img, target_size):
+
+    img_h, img_w = img.shape[:2]
+    percent = float(target_size) / min(img_w, img_h)
+    w = int(round(img_w * percent))
+    h = int(round(img_h * percent))
+
+    return cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
+
+
+def crop_image(img, target_size, center):
+
+    height, width = img.shape[:2]
+    size = target_size
+
+    if center == True:
+        w_start = (width - size) // 2
+        h_start = (height - size) // 2
+    else:
+        w_start = np.random.randint(0, width - size + 1)
+        h_start = np.random.randint(0, height - size + 1)
+    w_end = w_start + size
+    h_end = h_start + size
+
+    return img[h_start:h_end, w_start:w_end, :]
+
+
+def cls_image_preprocess(img):
+
+    # resize
+    img = cls_resize_short(img, target_size=256)
+    # crop
+    img = crop_image(img, target_size=224, center=True)
+
+    #ToCHWImage & Normalize
+    img = np.transpose(img / 255, [2, 0, 1])
+
+    img_mean = np.array([0.485, 0.456, 0.406]).reshape((3, 1, 1))
+    img_std = np.array([0.229, 0.224, 0.225]).reshape((3, 1, 1))
+    img -= img_mean
+    img /= img_std
 
     return img.astype(np.float32)
