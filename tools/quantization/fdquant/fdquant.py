@@ -22,7 +22,7 @@ import paddle
 from paddleslim.common import load_config, load_onnx_model
 from paddleslim.auto_compression import AutoCompression
 from paddleslim.quant import quant_post_static
-from fdquant.dataset import yolo_image_preprocess, cls_image_preprocess
+from fdquant.dataset import *
 
 
 def argsparser():
