@@ -7,7 +7,7 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
@@ -25,16 +25,16 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 
 
 # CPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 0
 # GPU推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
-./infer_demo Unet_cityscapes_without_argmax_infer Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
 ```
 
 运行完成可视化结果如下图所示
 <div  align="center">  
-<img src="https://user-images.githubusercontent.com/16222477/184588768-45ee673b-ef1f-40f4-9fbd-6b1a9ce17c59.png", width=512px, height=256px />
+<img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
@@ -80,10 +80,10 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 #### 预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`True`表明输入图片是竖屏，即height大于width的图片
+> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **with_softmax**(bool): 当模型导出时，并未指定`with_softmax`参数，可通过此设置此参数为`True`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 - [模型介绍](../../)
 - [Python部署](../python)
