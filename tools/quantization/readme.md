@@ -95,7 +95,6 @@ fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --sav
 
 ## 4.Benchmark
 下表为模型量化前后，在FastDeploy部署的端到端推理性能.
-说明：
 - 测试图片为COCO val2017中的图片.
 - 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
