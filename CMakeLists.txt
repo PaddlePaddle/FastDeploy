@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROJECT(fastdeploy C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(CSRCS_DIR_NAME "Name of source code directory")
 option(LIBRARY_NAME "Name of build library name")
@@ -34,6 +34,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
 if(ANDROID)

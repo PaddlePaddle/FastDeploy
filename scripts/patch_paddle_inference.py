@@ -28,4 +28,4 @@ def process_paddle_inference(paddle_inference_so_file):
 
     command = "patchelf --set-rpath '{}' {}".format(":".join(rpaths), paddle_inference_so_file)
     if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
-        assert subprocess.Popen(command, shell=True) != 0, "patchelf {} failed, the command: {}".format(command, lib)
+        assert os.system(command) == 0, "patchelf {} failed, the command: {}".format(paddle_inference_so_file, command)
