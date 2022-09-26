@@ -70,7 +70,7 @@ option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
 # Whether to build fastdeploy on device Nvidia Jetson
 # Only support CPU Inference & GPU(TensorRT) Inference Now
-option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF) 
+option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF)
 if(BUILD_ON_JETSON)
   set(WITH_GPU ON)
   set(ENABLE_TRT_BACKEND ON)
@@ -165,7 +165,17 @@ string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
 set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
 
-include(${PROJECT_SOURCE_DIR}/cmake/eigen.cmake)
+# Add eigen lib
+include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
+if(WIN32)
+  add_definitions(-DEIGEN_STRONG_INLINE=inline)
+endif()
+# sw not support thread_local semantic
+if(WITH_SW)
+  add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
+endif()
+
+
 
 if(ENABLE_PADDLE_FRONTEND)
   add_definitions(-DENABLE_PADDLE_FRONTEND)
@@ -319,7 +329,6 @@ configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PR
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
-add_dependencies(${LIBRARY_NAME} extern_eigen3)
 
 redefine_file_macro(${LIBRARY_NAME})
 
