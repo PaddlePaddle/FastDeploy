@@ -20,6 +20,6 @@ fastdeploy/core/config.h
 fastdeploy/pybind/main.cc
 python/fastdeploy/libs/lib*
 __pycache__
-build_fastdeploy_android.sh
+build_fd_android.sh
 python/scripts/process_libraries.py
 .vs
