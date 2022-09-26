@@ -13,8 +13,8 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const RuntimeOption& custom_option,
                                const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -46,6 +46,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
             << ", maybe you should check this file." << std::endl;
     return false;
   }
+  bool yml_contain_resize_op = false;
 
   if (cfg["Deploy"]["transforms"]) {
     auto preprocess_cfg = cfg["Deploy"]["transforms"];
@@ -64,10 +65,10 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<Normalize>(mean, std));
 
       } else if (op["type"].as<std::string>() == "Resize") {
+        yml_contain_resize_op = true;
         const auto& target_size = op["target_size"];
         int resize_width = target_size[0].as<int>();
         int resize_height = target_size[1].as<int>();
-        is_resized = true;
         processors_.push_back(
             std::make_shared<Resize>(resize_width, resize_height));
       } else {
@@ -78,6 +79,21 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
       }
     }
     processors_.push_back(std::make_shared<HWC2CHW>());
+  }
+  if (cfg["Deploy"]["input_shape"]) {
+    auto input_shape = cfg["Deploy"]["input_shape"];
+    int input_batch = input_shape[0].as<int>();
+    int input_channel = input_shape[1].as<int>();
+    int input_height = input_shape[2].as<int>();
+    int input_width = input_shape[3].as<int>();
+    if (input_height == -1 || input_width == -1) {
+      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
+      valid_gpu_backends = {Backend::PDINFER};
+    }
+    if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
+      processors_.push_back(
+          std::make_shared<Resize>(input_width, input_height));
+    }
   }
   if (cfg["Deploy"]["output_op"]) {
     std::string output_op = cfg["Deploy"]["output_op"].as<std::string>();
@@ -157,21 +173,30 @@ bool PaddleSegModel::Postprocess(
   result->Clear();
   FDASSERT(infer_result->shape[0] == 1, "Only support batch size = 1.");
 
-  int64_t batch = infer_result->shape[0];
-  int64_t channel = 0;
-  int64_t height = 0;
-  int64_t width = 0;
+  int64_t infer_batch = infer_result->shape[0];
+  int64_t infer_channel = 0;
+  int64_t infer_height = 0;
+  int64_t infer_width = 0;
 
   if (is_with_argmax) {
-    channel = 1;
-    height = infer_result->shape[1];
-    width = infer_result->shape[2];
+    infer_channel = 1;
+    infer_height = infer_result->shape[1];
+    infer_width = infer_result->shape[2];
   } else {
-    channel = infer_result->shape[1];
-    height = infer_result->shape[2];
-    width = infer_result->shape[3];
+    infer_channel = infer_result->shape[1];
+    infer_height = infer_result->shape[2];
+    infer_width = infer_result->shape[3];
   }
-  int64_t chw = channel * height * width;
+  int64_t infer_chw = infer_channel * infer_height * infer_width;
+
+  bool is_resized = false;
+  auto iter_ipt = im_info.find("input_shape");
+  FDASSERT(iter_ipt != im_info.end(), "Cannot find input_shape from im_info.");
+  int ipt_h = iter_ipt->second[0];
+  int ipt_w = iter_ipt->second[1];
+  if (ipt_h != infer_height || ipt_w != infer_width) {
+    is_resized = true;
+  }
 
   if (!is_with_softmax && apply_softmax) {
     Softmax(*infer_result, infer_result, 1);
@@ -185,7 +210,7 @@ bool PaddleSegModel::Postprocess(
     Transpose(*infer_result, infer_result, dim);
   }
   // batch always 1, so ignore
-  infer_result->shape = {height, width, channel};
+  infer_result->shape = {infer_height, infer_width, infer_channel};
 
   // for resize mat below
   FDTensor new_infer_result;
@@ -201,7 +226,7 @@ bool PaddleSegModel::Postprocess(
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
         fp32_result_buffer = new std::vector<float_t>(
-            infer_result_buffer, infer_result_buffer + chw);
+            infer_result_buffer, infer_result_buffer + infer_chw);
       }
       if (infer_result->dtype == FDDataType::INT32) {
         int32_t* infer_result_buffer =
@@ -210,18 +235,13 @@ bool PaddleSegModel::Postprocess(
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
         fp32_result_buffer = new std::vector<float_t>(
-            infer_result_buffer, infer_result_buffer + chw);
+            infer_result_buffer, infer_result_buffer + infer_chw);
       }
       infer_result->Resize(infer_result->shape, FDDataType::FP32);
       infer_result->SetExternalData(
           infer_result->shape, FDDataType::FP32,
           static_cast<void*>(fp32_result_buffer->data()));
     }
-    auto iter_ipt = im_info.find("input_shape");
-    FDASSERT(iter_ipt != im_info.end(),
-             "Cannot find input_shape from im_info.");
-    int ipt_h = iter_ipt->second[0];
-    int ipt_w = iter_ipt->second[1];
     mat = new Mat(CreateFromTensor(*infer_result));
     Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
     mat->ShareWithTensor(&new_infer_result);
