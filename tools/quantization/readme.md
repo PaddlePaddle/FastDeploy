@@ -99,14 +99,14 @@ fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --sav
 - 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
 
-| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      |
-| YOLOv5s             | TensorRT         |    GPU    |  14.13        |  11.22      |      1.26         |
-| YOLOv5s             | ONNX Runtime     |    CPU    |  183.68       |    100.39   |      1.83         |
-| YOLOv5s             | PaddleInference  |    CPU    |      226.36   |   152.27     |      1.48         |
-| YOLOv6s             | TensorRT         |    GPU    |       12.89        |   8.92          |  1.45             |
-| YOLOv6s             | ONNX Runtime     |    CPU    |   345.85            |  131.81           |      2.60         |
-| YOLOv6s             | PaddleInference  |    CPU    |         366.41      |    131.70         |     2.78          |
-| YOLOv7             | TensorRT          |    GPU    |     30.43          |      15.40       |       1.98        |
-| YOLOv7             | ONNX Runtime     |    CPU    |     971.27          |  471.88           |  2.06             |
-| YOLOv7             | PaddleInference  |    CPU    |          1015.70     |      562.41       |    1.82           |
+| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | NT8 mAP
+| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |
+| YOLOv5s             | TensorRT         |    GPU    |  14.13        |  11.22      |      1.26         | 37.6  | 36.6 |
+| YOLOv5s             | ONNX Runtime     |    CPU    |  183.68       |    100.39   |      1.83         | 37.6  | 33.1 |
+| YOLOv5s             | Paddle Inference  |    CPU    |      226.36   |   152.27     |      1.48         |37.6 | 36.8 |
+| YOLOv6s             | TensorRT         |    GPU    |       12.89        |   8.92          |  1.45             | 42.5 | 40.6|
+| YOLOv6s             | ONNX Runtime     |    CPU    |   345.85            |  131.81           |      2.60         |42.5| 36.1|
+| YOLOv6s             | Paddle Inference  |    CPU    |         366.41      |    131.70         |     2.78          |42.5| 41.2|
+| YOLOv7             | TensorRT          |    GPU    |     30.43          |      15.40       |       1.98        | 51.1| 50.8|
+| YOLOv7             | ONNX Runtime     |    CPU    |     971.27          |  471.88           |  2.06             | 51.1 | 42.5|
+| YOLOv7             | Paddle Inference  |    CPU    |          1015.70     |      562.41       |    1.82           |51.1 | 46.3|
