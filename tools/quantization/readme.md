@@ -1,5 +1,5 @@
 # FastDeploy 一键模型量化
-FastDeploy 给用户提供了一键量化功能, 支持离线量化和量化蒸馏训练, 用户可以参考本文档安装FastDeploy一键量化功能.
+FastDeploy 给用户提供了一键量化功能, 支持离线量化和量化蒸馏训练. 本文档已Yolov5s为例, 用户可参考如何安装并执行FastDeploy的一键量化功能.
 
 ## 1.安装
 
@@ -76,7 +76,7 @@ fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --sav
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./fdquant/configs/readme.md)                        |
+| --config_path          | 一键量化所需要的量化配置文件.[详解](./fdquant/configs/readme.md) |
 | --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
@@ -92,3 +92,22 @@ fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --sav
 - [YOLOv6s 量化模型C++部署](../examples/slim/yolov6s/cpp/)
 - [YOLOv7 量化模型Python部署](../examples/slim/yolov7/python/)
 - [YOLOv7 量化模型C++部署](../examples/slim/yolov7/cpp/)
+
+## 4.Benchmark
+下表为模型量化前后，在FastDeploy部署的端到端推理性能.
+说明：
+- 测试图片为COCO val2017中的图片.
+- 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
+- CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
+
+| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    |
+| ------------------- | -----------------|-----------|  --------     |--------      |--------      |
+| YOLOv5s             | TensorRT         |    GPU    |  14.13        |  11.22      |      1.26         |
+| YOLOv5s             | ONNX Runtime     |    CPU    |  183.68       |    100.39   |      1.83         |
+| YOLOv5s             | PaddleInference  |    CPU    |      226.36   |   152.27     |      1.48         |
+| YOLOv6s             | TensorRT         |    GPU    |       12.89        |   8.92          |  1.45             |
+| YOLOv6s             | ONNX Runtime     |    CPU    |   345.85            |  131.81           |      2.60         |
+| YOLOv6s             | PaddleInference  |    CPU    |         366.41      |    131.70         |     2.78          |
+| YOLOv7             | TensorRT          |    GPU    |     30.43          |      15.40       |       1.98        |
+| YOLOv7             | ONNX Runtime     |    CPU    |     971.27          |  471.88           |  2.06             |
+| YOLOv7             | PaddleInference  |    CPU    |          1015.70     |      562.41       |    1.82           |
