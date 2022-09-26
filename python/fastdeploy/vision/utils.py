@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import absolute_import
-import logging
 import json
-from . import c_lib_wrap as C
+from .. import c_lib_wrap as C
 
 
 def mask_to_json(result):
@@ -28,7 +27,7 @@ def mask_to_json(result):
 def detection_to_json(result):
     masks = []
     for mask in result.masks:
-        masks.append(detection_to_json(mask))
+        masks.append(mask_to_json(mask))
     r_json = {
         "boxes": result.boxes,
         "scores": result.scores,

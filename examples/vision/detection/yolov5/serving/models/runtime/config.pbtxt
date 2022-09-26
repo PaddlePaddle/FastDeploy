@@ -1,24 +1,22 @@
-# 服务名(可不填),必须与目录名称一致
+# optional, If name is specified it must match the name of the model repository directory containing the model.
 name: "runtime"
-# backend名称
 backend: "fastdeploy"
-# runtime推理时允许最大batch数量
 max_batch_size: 16
 
-# 模型输入配置
+# Input configuration of the model
 input [
   # 第一个输入
   {
-    # 输入名
+    # input name
     name: "images"
-    # 输入类型 常用类型有:TYPE_FP32、TYPE_UINT8、TYPE_INT8、TYPE_INT16、TYPE_INT32、TYPE_INT64、TYPE_FP16、TYPE_STRING
+    # input type such as TYPE_FP32、TYPE_UINT8、TYPE_INT8、TYPE_INT16、TYPE_INT32、TYPE_INT64、TYPE_FP16、TYPE_STRING
     data_type: TYPE_FP32
-    # 输入shape， batch纬度可不填写. 实际shape是:[batch, c, h, w]
+    # input shape， The batch dimension is omitted and the actual shape is [batch, c, h, w]
     dims: [ 3, -1, -1 ]
   }
 ]
 
-# 输出配置，跟输入一致
+# The output of the model is configured in the same format as the input
 output [
   {
     name: "output"
@@ -27,14 +25,14 @@ output [
   }
 ]
 
-# 配置模型实例个数
+# Number of instances of the model
 instance_group [
   {
-    # 实例数量
+    # The number of instances is 1
     count: 1
-    # 使用GPU推理。 CPU推理为:KIND_CPU
+    # Use GPU, CPU inference option is:KIND_CPU
     kind: KIND_GPU
-    # 实例部署在卡0上
+    # The instance is deployed on the 0th GPU card
     gpus: [0]
   }
 ]

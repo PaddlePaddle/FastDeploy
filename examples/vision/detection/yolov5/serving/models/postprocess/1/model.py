@@ -83,7 +83,7 @@ class TritonPythonModel:
             result = fd.vision.detection.YOLOv5.postprocess(
                 [new_infer_output, ], new_im_info)
 
-            r_str = fd.fd_result_to_json(result)
+            r_str = fd.vision.utils.fd_result_to_json(result)
             results.append(r_str)
         return np.array(results, dtype=np.object)
 
