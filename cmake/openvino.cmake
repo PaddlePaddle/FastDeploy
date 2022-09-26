@@ -85,9 +85,9 @@ file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/setupvars.s
 file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/tools)
 
 if (OPENVINO_DIRECTORY)
-  message(STATUS "Use the openvino lib specified by user. The OpenCV path: ${OPENVINO_DIRECTORY}")
+  message(STATUS "Use the openvino lib specified by user. The OpenVINO path: ${OPENVINO_DIRECTORY}")
   STRING(REGEX REPLACE "\\\\" "/" OPENVINO_DIRECTORY ${OPENVINO_DIRECTORY})
-  get_openvino_libs(${OPENVINO_DIRECTORY})
+  get_openvino_libs(${OPENVINO_DIRECTORY}/runtime)
 else()
   get_openvino_libs(${OPENVINO_INSTALL_DIR})
 endif()
