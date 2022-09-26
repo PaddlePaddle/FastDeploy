@@ -175,8 +175,6 @@ if(WITH_SW)
   add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
 endif()
 
-
-
 if(ENABLE_PADDLE_FRONTEND)
   add_definitions(-DENABLE_PADDLE_FRONTEND)
   include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
