@@ -81,9 +81,9 @@ if(WITH_GPU)
   list(APPEND FASTDEPLOY_LIBS ${CUDA_LIB})
 
   if (ENABLE_TRT_BACKEND)
-    find_library(TRT_INFER_LIB nvinfer ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib)
-    find_library(TRT_ONNX_LIB nvonnxparser ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib)
-    find_library(TRT_PLUGIN_LIB nvinfer_plugin ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib)
+    find_library(TRT_INFER_LIB nvinfer ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib NO_DEFAULT_PATH)
+    find_library(TRT_ONNX_LIB nvonnxparser ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib NO_DEFAULT_PATH)
+    find_library(TRT_PLUGIN_LIB nvinfer_plugin ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/tensorrt/lib NO_DEFAULT_PATH)
     list(APPEND FASTDEPLOY_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
   endif()
 
