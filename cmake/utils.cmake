@@ -56,6 +56,5 @@ function(remove_duplicate_libraries libraries)
     endif()
   endforeach()
   set(${libraries} ${full_libraries} PARENT_SCOPE)
-  list(LENGTH full_libraries lib_length)
 endfunction()
 

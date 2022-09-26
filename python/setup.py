@@ -66,7 +66,7 @@ setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 
-if setup_configs["WITH_GPU"] == "ON":
+if setup_configs["WITH_GPU"] == "ON" or setup_configs["BUILD_ON_JETSON"] == "ON":
     wheel_name = "fastdeploy-gpu-python"
 
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
