@@ -12,8 +12,8 @@
   - [使用CMake GUI进行基础配置](#CMakeGuiAndVS2019Basic)
   - [编译CPU版本 C++ SDK设置](#CMakeGuiAndVS2019CPU)
   - [编译GPU版本 C++ SDK设置](#CMakeGuiAndVS2019GPU)
-  - [使用Visual Studio 2019 IDE进行编译](#CMakeGuiAndVS2019Build)
-
+  - [使用Visual Studio 2019 IDE进行编译](#CMakeGuiAndVS2019Build)  
+- [Windows下FastDeploy C++ SDK使用方式](#Usage)  
 
 ## 1. 环境依赖
 <div id="Environment"></div>  
@@ -121,16 +121,16 @@ C:\Python38\python.exe -m pip install dist\fastdeploy_gpu_python-0.2.1-cp38-cp38
 更多编译选项说明参考[编译指南](./README.md)
 
 ## 3. CMake GUI + Visual Studio 2019 IDE方式编译C++ SDK
-<div id="CMakeGuiAndVS2019"></div>    
+<div id="CMakeGuiAndVS2019"></div>  
 
 ### 使用CMake GUI进行基础配置
-<div id="CMakeGuiAndVS2019Basic"></div> 
+<div id="CMakeGuiAndVS2019Basic"></div>
 
 步骤一：首先，打开CMake GUI，先初始化FastDeploy工程：
 
 ![image](https://user-images.githubusercontent.com/31974251/192094881-c5beb0e5-82ae-4a62-a88c-73f3d80f7936.png)  
 
-步骤二：点击Configure后，在弹窗中设置编译"x64"架构： 
+步骤二：点击Configure后，在弹窗中设置编译"x64"架构：
 
 ![image](https://user-images.githubusercontent.com/31974251/192094951-958a0a22-2090-4ab6-84f5-3573164d0835.png)
 
@@ -146,7 +146,7 @@ C:\Python38\python.exe -m pip install dist\fastdeploy_gpu_python-0.2.1-cp38-cp38
 
 ### 编译CPU版本 C++ SDK设置
 
-<div id="CMakeGuiAndVS2019CPU"></div>    
+<div id="CMakeGuiAndVS2019CPU"></div>  
 
 步骤一：勾选CPU版本对应的编译选项。注意CPU版本，请`不要`勾选WITH_GPU和ENABLE_TRT_BACKEND
 
@@ -170,9 +170,9 @@ C:\Python38\python.exe -m pip install dist\fastdeploy_gpu_python-0.2.1-cp38-cp38
 
 步骤一：勾选GPU版本对应的编译选项。注意GPU版本，请`需要`勾选WITH_GPU
 
-![image](https://user-images.githubusercontent.com/31974251/192099254-9f82abb0-8a29-41ce-a0ce-da6aacf23582.png) 
+![image](https://user-images.githubusercontent.com/31974251/192099254-9f82abb0-8a29-41ce-a0ce-da6aacf23582.png)
 
-这个示例中，我们开启ORT、Paddle、OpenVINO和TRT等推理后端，并且选择了需要编译TEXT和VISION的API。并且，由于开启了GPU和TensorRT，此时需要额外指定CUDA_DIRECTORY和TRT_DIRECTORY，在GUI界面中找到这两个变量，点击右侧的选项框，分别选择您安装CUDA的路径和TensorRT的路径    
+这个示例中，我们开启ORT、Paddle、OpenVINO和TRT等推理后端，并且选择了需要编译TEXT和VISION的API。并且，由于开启了GPU和TensorRT，此时需要额外指定CUDA_DIRECTORY和TRT_DIRECTORY，在GUI界面中找到这两个变量，点击右侧的选项框，分别选择您安装CUDA的路径和TensorRT的路径  
 
 
 ![image](https://user-images.githubusercontent.com/31974251/192098907-9dd9a49c-4a3e-4641-8e68-f25da1cafbba.png)
@@ -215,7 +215,7 @@ GPU版本SDK:
 
 步骤二：在Visual Studio 2019点击"ALL BUILD"->右键点击"生成"开始编译  
 
-![image](https://user-images.githubusercontent.com/31974251/192096893-5d6bc428-b824-4ffe-8930-0ec6d4dcfd02.png)   
+![image](https://user-images.githubusercontent.com/31974251/192096893-5d6bc428-b824-4ffe-8930-0ec6d4dcfd02.png)  
 
 CPU版本SDK编译成功！
 
@@ -233,10 +233,10 @@ GPU版本SDK编译成功！
 
 ![image](https://user-images.githubusercontent.com/31974251/192097122-d675ae39-35fb-4dbb-9c75-eefb0597ec2e.png)  
 
-SDK成功安装到指定目录！   
+SDK成功安装到指定目录！  
 
 ### 编译所有examples（可选）
-可以在CMake GUI中勾选BUILD_EXAMPLES选项，连带编译所有的examples，编译完成后所有example的可执行文件保存在build/bin/Release目录下 
+可以在CMake GUI中勾选BUILD_EXAMPLES选项，连带编译所有的examples，编译完成后所有example的可执行文件保存在build/bin/Release目录下
 
 ![image](https://user-images.githubusercontent.com/31974251/192110769-a4f0940d-dea3-4524-831b-1c2a6ab8e871.png)
 
@@ -249,3 +249,9 @@ SDK成功安装到指定目录！
 如果是用户自行编译SDK，理论上支持Windows 10/11，VS 2019/2022，CUDA 11.x 以及 TensorRT 8.x等配置，但建议使用我们推荐的默认配置，即：Windows 10, VS 2019, CUDA 11.2 和 TensorRT 8.4.x版本。另外，如果编译过程中遇到中文字符的编码问题（如UIE example必须传入中文字符进行预测），可以参考Visual Studio的官方文档，设置源字符集为`/utf-8`解决：  
 - [/utf-8（将源字符集和执行字符集设置为 UTF-8）](https://learn.microsoft.com/zh-cn/cpp/build/reference/utf-8-set-source-and-executable-character-sets-to-utf-8?view=msvc-170)
 
+## 5. Windows下FastDeploy C++ SDK使用方式  
+
+<div id="Usage"></div>  
+
+Windows下FastDeploy C++ SDK使用方式，请参考文档：  
+- [how_to_use_sdk_on_windows.md](./how_to_use_sdk_on_windows.md)  
