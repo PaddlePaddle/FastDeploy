@@ -44,6 +44,8 @@ def write2file(error_file):
         f.write(args.platform + " " + py_version + " " +
                 args.result_path.split(".")[0] + "\n")
 
+def save_numpy_result(file_path, error_msg):
+    np.savetxt(file_path, error_msg, fmt='%f',delimiter=',')
 
 def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
@@ -57,12 +59,17 @@ def check_result(gt_result, infer_result, args):
     if (label_diff > 0).any(): 
         print(args.platform, args.device, "label diff ", label_diff)        
         is_diff = True
+        save_numpy_result("label_diff_bool.txt", label_diff > 0)
     if (score_diff > 1e-4).any():
         print(args.platform, args.device, "score diff ", score_diff)
         is_diff = True
-    if (boxes_diff_ratio > 1e-4).any():
+        save_numpy_result("score_diff_bool.txt", score_diff > 1e-4)
+    if (boxes_diff_ratio > 1e-4).any() and (boxes_diff > 1e-3).any():
         print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
         is_diff = True
+        save_numpy_result("boxes_diff_bool.txt", boxes_diff > 1e-3)
+        save_numpy_result("boxes_diff_ratio.txt", boxes_diff_ratio)
+        save_numpy_result("boxes_diff_ratio_bool.txt", boxes_diff_ratio > 1e-4)
     if is_diff:
         write2file("result.txt")
     else:

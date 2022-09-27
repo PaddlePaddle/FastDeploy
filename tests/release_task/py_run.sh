@@ -46,7 +46,7 @@ do
        echo "Python Backend:" $backend
        if [ "$backend" != "trt" ];then
                python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device cpu --backend $backend >> py_$backend\_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_cpu_result.txt --platform $PLATFORM --device cpu
+               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu
        fi
        if [ "$DEVICE" = "gpu" ];then
 
@@ -55,12 +55,12 @@ do
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_trt_result.txt --platform $PLATFORM --device trt
 	       else
 		       python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_$backend\_gpu_result.txt
-                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_gpu_result.txt --platform $PLATFORM --device gpu
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_gpu_result.txt --platform $PLATFORM --device gpu
                fi
        fi
 done
 
-res_file="*result.txt"
+res_file="result.txt"
 if [ ! -f $res_file ]; then
        exit 0
 else

@@ -66,7 +66,7 @@ do
        fi
 done
 
-res_file="*result.txt"
+res_file="result.txt"
 if [ ! -f $res_file ]; then
        exit 0
 else
