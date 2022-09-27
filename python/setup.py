@@ -363,7 +363,6 @@ if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     all_lib_data = process_libraries(
         os.path.split(os.path.abspath(__file__))[0])
     package_data[PACKAGE_NAME].extend(all_lib_data)
-    print("??????????? ", package_data)
     setuptools.setup(
         name=wheel_name,
         version=VersionInfo.version,
