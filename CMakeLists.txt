@@ -300,7 +300,6 @@ if(ENABLE_VISION)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
-  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
