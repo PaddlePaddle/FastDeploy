@@ -15,11 +15,11 @@
 include(ExternalProject)
 
 set(PADDLELITE_PROJECT "extern_paddlelite")
-set(PADDLELITE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddlelite)
+set(PADDLELITE_FILENAME paddlelite)
+set(PADDLELITE_PREFIX_DIR ${THIRD_PARTY_PATH}/${PADDLELITE_FILENAME})
 set(PADDLELITE_SOURCE_DIR
-    ${THIRD_PARTY_PATH}/paddlelite/src/${PADDLELITE_PROJECT})
-# TODO(qiuyanjun): install all paddle library to 'paddlelibs' dir.    
-set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/paddlelite)  
+    ${THIRD_PARTY_PATH}/${PADDLELITE_FILENAME}/src/${PADDLELITE_PROJECT})
+set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${PADDLELITE_FILENAME})  
 set(PADDLELITE_INC_DIR
     "${PADDLELITE_INSTALL_DIR}/include"
     CACHE PATH "paddlelite include directory." FORCE)
