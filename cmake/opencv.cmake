@@ -123,6 +123,8 @@ else()
   # Win/Linux/Mac
   else()
     download_and_decompress(${OPENCV_URL} ${CMAKE_CURRENT_BINARY_DIR}/${OPENCV_FILENAME}${COMPRESSED_SUFFIX} ${THIRD_PARTY_PATH}/install/)
+    file(RENAME ${THIRD_PARTY_PATH}/install/${OPENCV_FILENAME}/ ${THIRD_PARTY_PATH}/install/opencv)
+    set(OPENCV_FILENAME opencv)
     set(OpenCV_DIR ${THIRD_PARTY_PATH}/install/${OPENCV_FILENAME}/)
     if (WIN32)
       set(OpenCV_DIR ${OpenCV_DIR}/build/)
