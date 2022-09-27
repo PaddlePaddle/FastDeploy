@@ -19,32 +19,29 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByShort : public Processor {
+class Crop : public Processor {
  public:
-  ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
-                const std::vector<int>& max_hw = std::vector<int>()) {
-    target_size_ = target_size;
-    max_hw_ = max_hw;
-    interp_ = interp;
-    use_scale_ = use_scale;
+  Crop(int offset_w, int offset_h, int width, int height) {
+    offset_w_ = offset_w;
+    offset_h_ = offset_h;
+    width_ = width;
+    height_ = height;
   }
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "ResizeByShort"; }
+  std::string Name() { return "Crop"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
-                  bool use_scale = true,
-                  const std::vector<int>& max_hw = std::vector<int>(),
+  static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
  private:
-  double GenerateScale(const int origin_w, const int origin_h);
-  int target_size_;
-  std::vector<int> max_hw_;
-  int interp_;
-  bool use_scale_;
+  int offset_w_;
+  int offset_h_;
+  int height_;
+  int width_;
 };
+
 }  // namespace vision
 }  // namespace fastdeploy

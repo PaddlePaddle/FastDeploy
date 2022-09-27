@@ -32,16 +32,6 @@ bool LimitShort::CpuRun(Mat* mat) {
   if (target != im_size_min) {
     scale = static_cast<double>(target) / static_cast<double>(im_size_min);
   }
-  // 如果给了固定的shape，按照固定shape就好。
-  if (input_w_ > 0 && input_h_ > 0) {
-    // 给出的input_shape 大于原始的shape(origin_w, origin_h) 则直接返回。
-    if (origin_w <= input_w_ && origin_h <= input_h_) {
-      return true;
-    }
-    float scale_w = input_w_ * 1.0 / origin_w;
-    float scale_h = input_h_ * 1.0 / origin_h;
-    scale = std::min(scale_w, scale_h);
-  }
   if (scale > 0) {
     cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
@@ -67,16 +57,6 @@ bool LimitShort::GpuRun(Mat* mat) {
   if (target != im_size_min) {
     scale = static_cast<double>(target) / static_cast<double>(im_size_min);
   }
-  // 如果给了固定的shape，按照固定shape就好。
-  if (input_w_ > 0 && input_h_ > 0) {
-    // 给出的input_shape 大于原始的shape(origin_w, origin_h) 则直接返回。
-    if (origin_w <= input_w_ && origin_h <= input_h_) {
-      return true;
-    }
-    float scale_w = input_w_ * 1.0 / origin_w;
-    float scale_h = input_h_ * 1.0 / origin_h;
-    scale = std::min(scale_w, scale_h);
-  }
   if (scale > 0) {
     cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
@@ -86,9 +66,8 @@ bool LimitShort::GpuRun(Mat* mat) {
 }
 #endif
 
-bool LimitShort::Run(Mat* mat, int max_short, int min_short, int input_w,
-                     int input_h, ProcLib lib) {
-  auto l = LimitShort(max_short, min_short, input_w, input_h);
+bool LimitShort::Run(Mat* mat, int max_short, int min_short, ProcLib lib) {
+  auto l = LimitShort(max_short, min_short);
   return l(mat, lib);
 }
 }  // namespace vision
