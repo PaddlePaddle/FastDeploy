@@ -11,18 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-
-void BindYOLOv5Cls(pybind11::module& m);
-void BindPaddleClas(pybind11::module& m);
-
-void BindClassification(pybind11::module& m) {
-  auto classification_module =
-      m.def_submodule("classification", "Image classification models.");
-  BindYOLOv5Cls(classification_module);
-  BindPaddleClas(classification_module);
+void BindYOLOv5Cls(pybind11::module& m) {
+  pybind11::class_<vision::classification::YOLOv5Cls, FastDeployModel>(
+      m, "YOLOv5Cls")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::classification::YOLOv5Cls& self, pybind11::array& data,
+              int topk = 1) {
+             auto mat = PyArrayToCvMat(data);
+             vision::ClassifyResult res;
+             self.Predict(&mat, &res, topk);
+             return res;
+           })
+      .def_readwrite("size", &vision::classification::YOLOv5Cls::size)
 }
 }  // namespace fastdeploy
