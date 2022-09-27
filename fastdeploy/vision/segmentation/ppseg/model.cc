@@ -78,7 +78,6 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
         return false;
       }
     }
-    processors_.push_back(std::make_shared<HWC2CHW>());
   }
   if (cfg["Deploy"]["input_shape"]) {
     auto input_shape = cfg["Deploy"]["input_shape"];
@@ -117,6 +116,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << " smoother. Please export model with parameters"
               << "  --output_op softmax." << std::endl;
   }
+  processors_.push_back(std::make_shared<HWC2CHW>());
   return true;
 }
 
