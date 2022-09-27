@@ -49,12 +49,24 @@ def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    if (diff > 1e-5).any():
-        print(args.platform, args.device, "diff ", diff)
+    label_diff = diff[:, -1]
+    score_diff = diff[:, -2]
+    boxes_diff = diff[:, :-2]
+    boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
+    is_diff = False
+    if (label_diff > 0).any(): 
+        print(args.platform, args.device, "label diff ", label_diff)        
+        is_diff = True
+    if (score_diff > 1e-4).any():
+        print(args.platform, args.device, "score diff ", score_diff)
+        is_diff = True
+    if (boxes_diff_ratio > 1e-4).any():
+        print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
+        is_diff = True
+    if is_diff:
         write2file("result.txt")
     else:
         print(args.platform, args.device, "No diff")
-
 
 if __name__ == '__main__':
     args = parse_arguments()
