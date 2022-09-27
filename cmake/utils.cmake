@@ -29,10 +29,10 @@ endfunction()
 
 function(get_openvino_libs OPENVINO_RUNTIME_DIR)
   set(LIB_LIST "")
-  find_library(OPENVINO_LIB openvino ${OPENVINO_RUNTIME_DIR}/lib/ NO_DEFAULT_PATH)
+  find_library(OPENVINO_LIB openvino PATHS ${OPENVINO_RUNTIME_DIR}/lib/ ${OPENVINO_RUNTIME_DIR}/lib/intel64 NO_DEFAULT_PATH)
   list(APPEND LIB_LIST ${OPENVINO_LIB})
 
-  find_package(TBB PATHS "${OPENVINO_RUNTIME_DIR}/3rdparty/tbb")
+  find_package(TBB PATHS ${OPENVINO_RUNTIME_DIR}/3rdparty/tbb)
   if (TBB_FOUND)
     list(APPEND LIB_LIST ${TBB_IMPORTED_TARGETS})
   else()
