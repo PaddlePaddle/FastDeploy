@@ -32,6 +32,18 @@ def process_on_linux(current_dir):
             fd_libs.append(filename)
 
     third_libs_path = os.path.join(libs_path, "third_libs")
+
+    # remove some useless opencv file in python wheels to decrease package size
+    if os.path.exists(os.path.join(third_libs_path, "opencv")):
+        for root, dirs, files in os.walk(os.path.join(third_libs_path, "opencv")):
+            for f in files:
+                items = f.strip().split('.')
+                if len(items) != 4:
+                    os.remove(os.path.join(root, f))
+                    continue
+                if items[0].strip() not in ["libopencv_highgui", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
+                    os.remove(os.path.join(root, f))
+
     all_libs_paths = [third_libs_path] + user_specified_dirs
     for path in all_libs_paths:
         for root, dirs, files in os.walk(path):
