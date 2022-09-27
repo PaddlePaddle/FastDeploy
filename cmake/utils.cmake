@@ -57,4 +57,3 @@ function(remove_duplicate_libraries libraries)
   endforeach()
   set(${libraries} ${full_libraries} PARENT_SCOPE)
 endfunction()
-
