@@ -131,18 +131,20 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 // GPU/TensorRT部署参考 examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
-int main(int argc, char* argv[]) {
-  namespace vision = fastdeploy::vision;
-  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
-                                          "ppyoloe_crn_l_300e_coco/model.pdiparams",
-                                          "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
-  auto im = cv::imread("000000014439.jpg");
+int main(int argc, char *argv[]) {
 
-  vision::DetectionResult res;
-  model.Predict(&im, &res)
+    namespace vision = fastdeploy::vision;
+    auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
+                                            "ppyoloe_crn_l_300e_coco/model.pdiparams",
+                                            "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
+    auto im = cv::imread("000000014439.jpg");
+    cv::cvtColor(im,im,cv::COLOR_BGR2RGB);
+    vision::DetectionResult res;
+    model.Predict(&im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
-  cv::imwrite("vis_image.jpg", vis_im);
+    auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+    cv::imwrite("vis_image.jpg", vis_im);
+    return 0;
 }
 ```
 
