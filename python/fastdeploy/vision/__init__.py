@@ -22,4 +22,5 @@ from . import facedet
 from . import faceid
 from . import ocr
 from . import evaluation
+from .utils import fd_result_to_json
 from .visualize import *
