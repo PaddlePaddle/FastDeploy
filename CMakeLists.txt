@@ -367,7 +367,6 @@ if(MSVC)
   target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
-message("??????????????  ${DEPEND_LIBS}")
 
 if(WIN32)
   if(ENABLE_VISION)
