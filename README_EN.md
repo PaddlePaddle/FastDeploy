@@ -140,21 +140,19 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 // For GPU/TensorRT deployment, please refer to examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
+  namespace vision = fastdeploy::vision;
+  auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
+                                          "ppyoloe_crn_l_300e_coco/model.pdiparams",
+                                          "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
+  auto im = cv::imread("000000014439.jpg");
 
-    namespace vision = fastdeploy::vision;
-    auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
-                                            "ppyoloe_crn_l_300e_coco/model.pdiparams",
-                                            "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
-    auto im = cv::imread("000000014439.jpg");
-    cv::cvtColor(im,im,cv::COLOR_BGR2RGB);
-    vision::DetectionResult res;
-    model.Predict(&im, &res);
+  vision::DetectionResult res;
+  model.Predict(&im, &res)
 
-    auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
-    cv::imwrite("vis_image.jpg", vis_im);
-    return 0;
-}
+  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  cv::imwrite("vis_image.jpg", vis_im);
+ }
 ```
 
 ### For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
