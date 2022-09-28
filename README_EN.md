@@ -100,12 +100,12 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ```
 
 * Test inference results
- 
+
 ```python
 # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
-  
+
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
@@ -148,16 +148,17 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
-  model.Predict(&im, &res)
+  model.Predict(&im, &res);
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
+  return 0;
  }
 ```
 
 ### For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
- 
+
 
 ### Supported Server-Side Model List🔥🔥🔥
 
