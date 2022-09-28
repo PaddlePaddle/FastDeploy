@@ -160,13 +160,13 @@ int main(int argc, char* argv[]) {
 
 
 
-### Supported Server-Side Model List🔥🔥🔥
+### Supported Data Center and Cloud Model List🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>
 
 Notes:
 
- (1) ✅: already supported; (2) ❔: to be supported in the future; (3) ❌: not supported at the moment; (4) --: not considered at the moment;<br>Hyperlinks：Click model's name, the website will jump to the model inference demo code
+✅: already supported; ❔: to be supported in the future; ❌: not supported now; 
 
 
 
