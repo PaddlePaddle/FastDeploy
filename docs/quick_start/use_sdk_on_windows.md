@@ -81,7 +81,7 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + Tenso
 
 ## 5. SDK使用方式二：Visual Studio 2019 创建 sln 工程使用 C++ SDK
 
-本章节针对非CMake用户，介绍如何在Visual Studio 2019 中创建 sln 工程使用 FastDeploy C++ SDK. CMake用户请直接看下一章节。另外，本章节内容特别感谢“梦里南天”同学关于FastDeploy使用的文档教程：[如何在 Windows 上使用 FastDeploy C++ 部署 PaddleDetection 目标检测模型](https://www.bilibili.com/read/cv18807232)
+本章节针对非CMake用户，介绍如何在Visual Studio 2019 中创建 sln 工程使用 FastDeploy C++ SDK. CMake用户请直接看下一章节。另外，本章节内容特别感谢“梦醒南天”同学关于FastDeploy使用的文档教程：[如何在 Windows 上使用 FastDeploy C++ 部署 PaddleDetection 目标检测模型](https://www.bilibili.com/read/cv18807232)
 
 <div id="VisualStudio2019Sln"></div>  
 
