@@ -148,7 +148,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = ModelFormat::ONNX;
   } else {
-    FDASSERT(false, "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
+    FDASSERT(
+        false,
+        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 
@@ -226,6 +228,11 @@ void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
 void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   FDASSERT(size > 0, "Parameter size must greater than 0.");
   pd_mkldnn_cache_size = size;
+}
+
+void RuntimeOption::SetLitePowerMode(int mode) {
+  FDASSERT(mode > -1, "Parameter mode must greater than -1.");
+  lite_power_mode = mode;
 }
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
@@ -465,6 +472,8 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
+  lite_option.threads = option.cpu_thread_num;
+  lite_option.power_mode = option.lite_power_mode;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
