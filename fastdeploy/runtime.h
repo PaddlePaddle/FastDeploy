@@ -87,6 +87,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // set the power mode of paddle lite backend.
   void SetLitePowerMode(int mode);
 
+  // enable half precision while use paddle lite backend
+  void EnableLiteFP16();
+  // disable half precision, change to full precision(float32)
+  void DisableLiteFP16();
+
   // set tensorrt shape while the inputs of model contain dynamic shape
   // min_shape: the minimum shape
   // opt_shape: the most common shape while inference, default be empty
@@ -134,6 +139,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
   int lite_power_mode = 0;
+  // enable fp16 or not
+  bool lite_enable_fp16 = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;

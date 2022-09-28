@@ -230,6 +230,10 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
+void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
+
+void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+
 void RuntimeOption::SetLitePowerMode(int mode) {
   FDASSERT(mode > -1, "Parameter mode must greater than -1.");
   lite_power_mode = mode;
@@ -474,6 +478,7 @@ void Runtime::CreateLiteBackend() {
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
   lite_option.power_mode = option.lite_power_mode;
+  lite_option.enable_fp16 = option.lite_enable_fp16;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

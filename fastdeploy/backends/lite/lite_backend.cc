@@ -41,8 +41,13 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
 
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
-  valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  if (option.enable_fp16) {
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+  } else {
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  }
   config_.set_valid_places(valid_places);
   if (option.threads > 0) {
     config_.set_threads(option.threads);

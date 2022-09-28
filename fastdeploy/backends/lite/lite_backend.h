@@ -35,6 +35,8 @@ struct LiteBackendOption {
   // 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
   int power_mode = 0;
+  // enable fp16
+  bool enable_fp16 = false;
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
 };
