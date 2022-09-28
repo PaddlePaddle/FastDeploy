@@ -43,7 +43,7 @@ wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
 
 tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
 mkdir build && cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../$CPP_FASTDEPLOY_PACKAGE
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../$CPP_FASTDEPLOY_PACKAGE -DCMAKE_CXX_COMPILER=$CMAKE_CXX_COMPILER
 make -j
 
 for((i=0;i<case_number;i+=1))

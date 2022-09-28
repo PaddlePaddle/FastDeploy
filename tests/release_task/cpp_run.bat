@@ -38,7 +38,7 @@ wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.zip
 tar -xf %cd%\%CPP_FASTDEPLOY_PACKAGE%.zip
 
 mkdir build && cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
+cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"  -DCMAKE_CXX_COMPILER=%CMAKE_CXX_COMPILER%
 
 msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 
