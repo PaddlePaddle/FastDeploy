@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if(UNIX)
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   set(PATCHELF_EXE "patchelf")
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(PATCHELF_URL https://bj.bcebos.com/fastdeploy/third_libs/patchelf-0.15.0-aarch64.tar.gz)
