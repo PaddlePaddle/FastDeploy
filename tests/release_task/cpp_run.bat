@@ -80,9 +80,6 @@ for %%b in (%RUN_CASES%) do (
     ) 
 )
 
-if %errorlevel% NEQ 0 (
-    exit -1
-)
 
 set res_file=%cd%\result.txt
 
@@ -90,6 +87,9 @@ if exist %res_file% (
     for /f "delims=" %%i in (%res_file%) do echo %%i
     exit -1
 ) else (
+    if %errorlevel% NEQ 0 (
+        exit -1
+    )
     exit 0
 )
 :END

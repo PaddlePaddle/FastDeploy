@@ -66,13 +66,16 @@ do
        fi
 done
 
-if [ $?==0 ];then
-    exit -1
+ret=$?
 
 res_file="result.txt"
-if [ ! -f $res_file ]; then
+if [ ! -f $res_file ];then
+       if [ $ret -ne 0 ];then
+               exit -1
+       fi
        exit 0
 else
        cat $res_file
        exit -1
 fi
+
