@@ -53,7 +53,7 @@
 
 ## 1. 项目结构说明
 
-根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GIthub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。SDK目录结构如下：
+根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GitHub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。SDK目录结构如下：
 
 ```
 .EasyEdge-iOS-SDK

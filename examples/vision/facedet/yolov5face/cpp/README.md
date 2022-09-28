@@ -12,9 +12,9 @@
 ```bash
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-0.2.1.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
 #下载官方转换好的YOLOv5Face模型文件和测试图片
@@ -46,7 +46,7 @@ fastdeploy::vision::facedet::YOLOv5Face(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::ONNX)
+        const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
 YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -56,7 +56,7 @@ YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX格式
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX格式
 
 #### Predict函数
 

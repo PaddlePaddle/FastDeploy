@@ -13,11 +13,11 @@
 以ppyoloe为例进行推理部署
 
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.0/examples/vision/detection/paddledetection/cpp
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.2.1.tgz
+cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/detection/paddledetection/cpp
 mkdir build && cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
 make -j
 
 # 下载PPYOLOE模型文件和测试图片
@@ -48,7 +48,7 @@ fastdeploy::vision::detection::PPYOLOE(
         const string& params_file,
         const string& config_file
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const Frontend& model_format = Frontend::PADDLE)
+        const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
 PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ONNX模型格式。
@@ -59,7 +59,7 @@ PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ON
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 配置文件路径，即PaddleDetection导出的部署yaml文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为PADDLE格式
+> * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
 
 #### Predict函数
 
@@ -77,3 +77,4 @@ PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ON
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

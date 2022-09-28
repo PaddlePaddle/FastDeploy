@@ -1,6 +1,6 @@
 # 简介
 
-本文档以[千分类模型_MobileNetV3](https://ai.baidu.com/easyedge/app/openSource)为例，介绍FastDeploy中的模型SDK， 在**ARM Linux Python** 环境下： （1)**服务化**推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。其中ARM Linux Python请参考[ARM Linux C++环境下的HTTP推理部署](./ARM-Linux-CPP-SDK-Serving.md)文档。
+本文档以[千分类模型_MobileNetV3](https://ai.baidu.com/easyedge/app/openSource)为例，介绍FastDeploy中的模型SDK， 在**ARM Linux Python** 环境下： （1)**服务化**推理部署步骤； （2）介绍模型推流全流程API，方便开发者了解项目后二次开发。其中ARM Linux Python请参考[ARM Linux C++环境下的HTTP推理部署](./arm_linux_cpp_sdk_serving.md)文档。
 
 **注意**：部分模型（如OCR等）不支持服务化推理。
 
@@ -38,7 +38,7 @@
 
 ## 1.SDK下载
 
-根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GIthub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。解压缩后的文件结构如下。
+根据开发者模型、部署芯片、操作系统需要，在图像界面[飞桨开源模型](https://ai.baidu.com/easyedge/app/openSource)或[GitHub](https://github.com/PaddlePaddle/FastDeploy)中选择对应的SDK进行下载。解压缩后的文件结构如下。
 
 ```shell
 EasyEdge-Linux-x86-[部署芯片]

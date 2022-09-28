@@ -53,4 +53,4 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 ## 其它文档
 
 - [预编译C++部署库](./CPP_prebuilt_libraries.md)
-- [视觉模型C++/Python部署示例](../../examples/vision/)
+- [视觉/NLP模型C++/Python部署示例](../../examples/)

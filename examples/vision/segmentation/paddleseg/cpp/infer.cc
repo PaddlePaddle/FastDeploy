@@ -26,6 +26,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto config_file = model_dir + sep + "deploy.yaml";
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file);
+
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -40,6 +41,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -54,6 +56,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   option.UseGpu();
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
+
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -68,6 +71,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -85,6 +89,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
                           {1, 3, 2048, 2048});
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
+
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -99,6 +104,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
