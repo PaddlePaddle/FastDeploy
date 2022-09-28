@@ -17,15 +17,24 @@ import sys
 import shutil
 import subprocess
 import platform
+import sys
+
 
 def process_paddle_inference(paddle_inference_so_file):
     rpaths = [
-      "$ORIGIN",
-      "$ORIGIN/../../third_party/install/mkldnn/lib/",
-      "$ORIGIN/../../third_party/install/mklml/lib/",
-      "$ORIGIN/../../../tensorrt/lib"
+        "$ORIGIN", "$ORIGIN/../../third_party/install/mkldnn/lib/",
+        "$ORIGIN/../../third_party/install/mklml/lib/",
+        "$ORIGIN/../../../tensorrt/lib"
     ]
 
-    command = "patchelf --set-rpath '{}' {}".format(":".join(rpaths), paddle_inference_so_file)
+    patchelf_exe = os.getenv("PATCHELF_EXE", "patchelf")
+    command = "{} --set-rpath '{}' {}".format(patchelf_exe, ":".join(rpaths),
+                                              paddle_inference_so_file)
     if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
-        assert os.system(command) == 0, "patchelf {} failed, the command: {}".format(paddle_inference_so_file, command)
+        assert os.system(
+            command) == 0, "patchelf {} failed, the command: {}".format(
+                paddle_inference_so_file, command)
+
+
+if __name__ == "__main__":
+    process_paddle_inference(sys.argv[1])
