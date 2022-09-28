@@ -67,7 +67,7 @@ option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
-option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
+# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
