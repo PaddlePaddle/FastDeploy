@@ -60,8 +60,9 @@ do
        fi
 done
 
-if [ $?==0 ];then
-    exit -1
+if [ $? == 0 ];then
+       exit -1
+fi
 
 res_file="result.txt"
 if [ ! -f $res_file ]; then
