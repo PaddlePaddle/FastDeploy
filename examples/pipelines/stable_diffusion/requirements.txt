@@ -1,0 +1,4 @@
+onnx
+torch
+diffusers
+transformers
