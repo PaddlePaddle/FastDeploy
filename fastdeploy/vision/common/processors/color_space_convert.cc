@@ -19,7 +19,7 @@ namespace vision {
 bool BGR2RGB::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   cv::Mat new_im;
-  cv::cvtColor(*im, new_im, cv::COLOR_RGB2BGR);
+  cv::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
   mat->SetMat(new_im);
   return true;
 }
@@ -27,7 +27,7 @@ bool BGR2RGB::CpuRun(Mat* mat) {
 #ifdef ENABLE_OPENCV_CUDA
 bool BGR2RGB::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
-  cv::cvtColor(*im, *im, cv::COLOR_RGB2BGR);
+  cv::cvtColor(*im, *im, cv::COLOR_BGR2RGB);
   return true;
 }
 #endif
