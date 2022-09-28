@@ -61,7 +61,7 @@ AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 ### predict函数
 
 > ```python
-> AdaFace.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> AdaFace.predict(image_data)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -69,8 +69,6 @@ AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > **参数**
 >
 > > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **conf_threshold**(float): 检测框置信度过滤阈值
-> > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
 > **返回**
 >

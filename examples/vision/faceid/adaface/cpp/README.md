@@ -62,9 +62,7 @@ AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 #### Predict函数
 
 > ```c++
-> AdaFace::Predict(cv::Mat* im, FaceRecognitionResult* result,
->                 float conf_threshold = 0.25,
->                 float nms_iou_threshold = 0.5)
+> AdaFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
@@ -73,8 +71,6 @@ AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **conf_threshold**: 检测框置信度过滤阈值
-> > * **nms_iou_threshold**: NMS处理过程中iou阈值
 
 ### 类成员变量
 #### 预处理参数
