@@ -27,7 +27,7 @@ bool BGR2RGB::CpuRun(Mat* mat) {
 #ifdef ENABLE_OPENCV_CUDA
 bool BGR2RGB::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
-  cv::cvtColor(*im, *im, cv::COLOR_BGR2RGB);
+  cv::cuda::cvtColor(*im, *im, cv::COLOR_BGR2RGB);
   return true;
 }
 #endif
@@ -42,9 +42,8 @@ bool RGB2BGR::CpuRun(Mat* mat) {
 
 #ifdef ENABLE_OPENCV_CUDA
 bool RGB2BGR::GpuRun(Mat* mat) {
-  cv::Mat new_im;
-  cv::cvtColor(*im, new_im, cv::COLOR_RGB2BGR);
-  mat->SetMat(new_im);
+  cv::cuda::GpuMat* im = mat->GetGpuMat();
+  cv::cuda::cvtColor(*im, *im, cv::COLOR_RGB2BGR);
   return true;
 }
 #endif
