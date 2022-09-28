@@ -89,7 +89,7 @@ ExternalProject_Add(
   BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
 
 if(UNIX)
-  add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
+  add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()
 
 add_library(external_paddle_inference STATIC IMPORTED GLOBAL)
