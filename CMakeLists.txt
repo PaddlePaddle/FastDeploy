@@ -441,13 +441,6 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
-if(NOT WIN32)
-  install(
-    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-  )
-endif()
-
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
   if("${PY_EXT_SUFFIX}" STREQUAL "")
