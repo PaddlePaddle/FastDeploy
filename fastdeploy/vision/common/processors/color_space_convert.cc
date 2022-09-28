@@ -28,7 +28,6 @@ bool BGR2RGB::CpuRun(Mat* mat) {
 bool BGR2RGB::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
   cv::cvtColor(*im, *im, cv::COLOR_RGB2BGR);
-  mat->SetMat(new_im);
   return true;
 }
 #endif
