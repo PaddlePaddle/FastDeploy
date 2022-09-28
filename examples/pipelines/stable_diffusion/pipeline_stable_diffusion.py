@@ -17,7 +17,7 @@ from typing import List, Optional, Union
 
 import numpy as np
 import fastdeploy as fd
-from paddlenlp.transformers import CLIPTokenizer
+from transformers import CLIPTokenizer
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 
 
