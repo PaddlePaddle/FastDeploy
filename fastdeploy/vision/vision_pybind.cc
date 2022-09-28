@@ -56,7 +56,7 @@ void BindVision(pybind11::module& m) {
       .def(pybind11::init())
       .def_readwrite("boxes", &vision::OCRResult::boxes)
       .def_readwrite("text", &vision::OCRResult::text)
-      .def_readwrite("score", &vision::OCRResult::rec_scores)
+      .def_readwrite("rec_scores", &vision::OCRResult::rec_scores)
       .def_readwrite("cls_scores", &vision::OCRResult::cls_scores)
       .def_readwrite("cls_labels", &vision::OCRResult::cls_labels)
       .def("__repr__", &vision::OCRResult::Str)

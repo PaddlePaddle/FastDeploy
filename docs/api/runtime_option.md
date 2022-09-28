@@ -29,7 +29,7 @@ RuntimeOption(
   device_id : 0                        # 推理硬件id（针对GPU）
   model_file : yolov5s.onnx            # 模型文件路径
   params_file :                        # 参数文件路径
-  model_format : Frontend.ONNX         # 模型格式
+  model_format : ModelFormat.ONNX         # 模型格式
   ort_execution_mode : -1              # 前辍为ort的表示为ONNXRuntime后端专用参数
   ort_graph_opt_level : -1
   ort_inter_op_num_threads : -1
@@ -57,7 +57,7 @@ RuntimeOption(
 > * **device_id**(int): 设备id，在GPU下使用
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径
-> * **model_format**(Frontend): 模型格式, `fd.Frontend.PADDLE`/`fd.Frontend.ONNX`
+> * **model_format**(ModelFormat): 模型格式, `fd.ModelFormat.PADDLE`/`fd.ModelFormat.ONNX`
 > * **ort_execution_mode**(int): ORT后端执行方式，0表示按顺序执行所有算子，1表示并行执行算子，默认为-1，即按ORT默认配置方式执行
 > * **ort_graph_opt_level**(int): ORT后端图优化等级；0：禁用图优化；1：基础优化 2：额外拓展优化；99：全部优化； 默认为-1，即按ORT默认配置方式执行
 > * **ort_inter_op_num_threads**(int): 当`ort_execution_mode`为1时，此参数设置算子间并行的线程数
@@ -100,7 +100,7 @@ model = fd.vision.classification.PaddleClasModel(
 > * **device_id**(int): 设备id，在GPU下使用
 > * **model_file**(string): 模型文件路径
 > * **params_file**(string): 参数文件路径
-> * **model_format**(fastdeploy::Frontend): 模型格式, `Frontend::PADDLE`/`Frontend::ONNX`
+> * **model_format**(fastdeploy::ModelFormat): 模型格式, `ModelFormat::PADDLE`/`ModelFormat::ONNX`
 > * **ort_execution_mode**(int): ORT后端执行方式，0表示按顺序执行所有算子，1表示并行执行算子，默认为-1，即按ORT默认配置方式执行
 > * **ort_graph_opt_level**(int): ORT后端图优化等级；0：禁用图优化；1：基础优化 2：额外拓展优化；99：全部优化； 默认为-1，即按ORT默认配置方式执行
 > * **ort_inter_op_num_threads**(int): 当`ort_execution_mode`为1时，此参数设置算子间并行的线程数

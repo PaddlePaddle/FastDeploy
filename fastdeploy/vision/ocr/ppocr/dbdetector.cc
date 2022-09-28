@@ -24,10 +24,11 @@ DBDetector::DBDetector() {}
 DBDetector::DBDetector(const std::string& model_file,
                        const std::string& params_file,
                        const RuntimeOption& custom_option,
-                       const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
-    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+                       const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT,
+                          Backend::OPENVINO};  
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -90,7 +91,6 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
   *ratio_w = float(resize_w) / float(w);
 }
 
-//预处理
 bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info) {
@@ -110,7 +110,6 @@ bool DBDetector::Preprocess(
   return true;
 }
 
-//后处理
 bool DBDetector::Postprocess(
     FDTensor& infer_result, std::vector<std::array<int, 8>>* boxes_result,
     const std::map<std::string, std::array<float, 2>>& im_info) {
@@ -165,7 +164,6 @@ bool DBDetector::Postprocess(
   return true;
 }
 
-//预测
 bool DBDetector::Predict(cv::Mat* img,
                          std::vector<std::array<int, 8>>* boxes_result) {
   Mat mat(*img);

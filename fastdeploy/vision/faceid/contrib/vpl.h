@@ -26,36 +26,21 @@ namespace faceid {
 
 class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionModel {
  public:
-  // 当model_format为ONNX时，无需指定params_file
-  // 当model_format为Paddle时，则需同时指定model_file & params_file
-  // VPL支持IResNet, IResNet1024骨干
   VPL(const std::string& model_file, const std::string& params_file = "",
       const RuntimeOption& custom_option = RuntimeOption(),
-      const Frontend& model_format = Frontend::ONNX);
+      const ModelFormat& model_format = ModelFormat::ONNX);
 
-  // 定义模型的名称
   std::string ModelName() const override {
     return "deepinsight/insightface/recognition/vpl";
   }
 
-  // 模型预测接口，即用户调用的接口
-  // im 为用户的输入数据，目前对于CV均定义为cv::Mat
-  // result 为模型预测的输出结构体
   bool Predict(cv::Mat* im, FaceRecognitionResult* result) override;
-  // 父类中包含 size, alpha, beta, swap_rb, l2_normalize 等基本可配置属性
 
  private:
-  // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
   bool Initialize() override;
 
-  // 输入图像预处理操作
-  // Mat为FastDeploy定义的数据结构
-  // FDTensor为预处理后的Tensor数据，传给后端进行推理
   bool Preprocess(Mat* mat, FDTensor* output) override;
 
-  // 后端推理结果后处理，输出给用户
-  // infer_result 为后端推理后的输出Tensor
-  // result 为模型预测的结果
   bool Postprocess(std::vector<FDTensor>& infer_result,
                    FaceRecognitionResult* result) override;
 };

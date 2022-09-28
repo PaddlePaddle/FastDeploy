@@ -42,29 +42,27 @@ python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2
 ## PPOCRSystemv2 Python接口
 
 ```
-fastdeploy.vision.ocr.PPOCRSystemv2(ocr_det = det_model._model, ocr_cls = cls_model._model, ocr_rec = rec_model._model)
+fd.vision.ocr.PPOCRSystemv2(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 ```
-
-PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别模型
+PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
 
 **参数**
 
-> * **ocr_det**(model): OCR中的检测模型
-> * **ocr_cls**(model): OCR中的分类模型
-> * **ocr_rec**(model): OCR中的识别模型
+> * **det_model**(model): OCR中的检测模型
+> * **cls_model**(model): OCR中的分类模型
+> * **rec_model**(model): OCR中的识别模型
 
 ### predict函数
 
 > ```
-> result = PPOCRSystemv2.predict(img_list)
+> result = ocr_system.predict(im)
 > ```
 >
-> 模型预测接口，输入的是一个可包含多个图像的list
+> 模型预测接口，输入是一张图片
 >
 > **参数**
 >
-> > * **img_list**(list[np.ndarray]): 输入数据的list，每张图片注意需为HWC，BGR格式
-> > * **result**(float): OCR结果,包括由检测模型输出的检测框位置,分类模型输出的方向分类,以及识别模型输出的识别结果,
+> > * **im**(np.ndarray): 输入数据，每张图片注意需为HWC，BGR格式
 
 > **返回**
 >
@@ -77,7 +75,7 @@ PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别
 ### DBDetector类
 
 ```
-fastdeploy.vision.ocr.DBDetector(model_file, params_file, runtime_option=None, model_format=Frontend.PADDLE)
+fastdeploy.vision.ocr.DBDetector(model_file, params_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 DBDetector模型加载和初始化，其中模型为paddle模型格式。
@@ -87,14 +85,14 @@ DBDetector模型加载和初始化，其中模型为paddle模型格式。
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为PADDLE格式
+> * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
 
 ### Classifier类与DBDetector类相同
 
 ### Recognizer类
 ```
 fastdeploy.vision.ocr.Recognizer(rec_model_file,rec_params_file,rec_label_file,
-                                  runtime_option=rec_runtime_option,model_format=Frontend.PADDLE)
+                                  runtime_option=rec_runtime_option,model_format=ModelFormat.PADDLE)
 ```
 Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所需的label文件路径，其他参数均与DBDetector类相同
 
@@ -124,6 +122,7 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 
 ## 其它文档
 
-- [PPOCR系列模型介绍](../../)
+- [PPOCR 系列模型介绍](../../)
 - [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

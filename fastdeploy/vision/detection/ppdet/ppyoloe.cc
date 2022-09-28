@@ -12,7 +12,7 @@ namespace detection {
 PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
                  const RuntimeOption& custom_option,
-                 const Frontend& model_format) {
+                 const ModelFormat& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
@@ -24,7 +24,8 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
 }
 
 void PPYOLOE::GetNmsInfo() {
-  if (runtime_option.model_format == Frontend::PADDLE) {
+#ifdef ENABLE_PADDLE_FRONTEND
+  if (runtime_option.model_format == ModelFormat::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
       return;
@@ -41,6 +42,7 @@ void PPYOLOE::GetNmsInfo() {
       normalized = reader.nms_params.normalized;
     }
   }
+#endif
 }
 
 bool PPYOLOE::Initialize() {
@@ -157,6 +159,8 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
       return false;
     }
   }
+
+  Cast::Run(mat, "float");
 
   outputs->resize(2);
   (*outputs)[0].name = InputInfoOfRuntime(0).name;

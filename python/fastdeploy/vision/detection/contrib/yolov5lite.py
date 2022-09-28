@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -23,7 +23,7 @@ class YOLOv5Lite(FastDeployModel):
                  model_file,
                  params_file="",
                  runtime_option=None,
-                 model_format=Frontend.ONNX):
+                 model_format=ModelFormat.ONNX):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(YOLOv5Lite, self).__init__(runtime_option)
@@ -100,21 +100,19 @@ class YOLOv5Lite(FastDeployModel):
     @is_mini_pad.setter
     def is_mini_pad(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `is_mini_pad` must be type of bool."
+            value, bool), "The value to set `is_mini_pad` must be type of bool."
         self._model.is_mini_pad = value
 
     @is_scale_up.setter
     def is_scale_up(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `is_scale_up` must be type of bool."
+            value, bool), "The value to set `is_scale_up` must be type of bool."
         self._model.is_scale_up = value
 
     @stride.setter
     def stride(self, value):
-        assert isinstance(
-            value, int), "The value to set `stride` must be type of int."
+        assert isinstance(value,
+                          int), "The value to set `stride` must be type of int."
         self._model.stride = value
 
     @max_wh.setter

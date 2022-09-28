@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -24,10 +24,10 @@ class PaddleSegModel(FastDeployModel):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PaddleSegModel, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PaddleSeg only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PaddleSeg only support model format of ModelFormat.Paddle now."
         self._model = C.vision.segmentation.PaddleSegModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -37,15 +37,15 @@ class PaddleSegModel(FastDeployModel):
         return self._model.predict(input_image)
 
     @property
-    def with_softmax(self):
-        return self._model.with_softmax
+    def apply_softmax(self):
+        return self._model.apply_softmax
 
-    @with_softmax.setter
-    def with_softmax(self, value):
+    @apply_softmax.setter
+    def apply_softmax(self, value):
         assert isinstance(
             value,
-            bool), "The value to set `with_softmax` must be type of bool."
-        self._model.with_softmax = value
+            bool), "The value to set `apply_softmax` must be type of bool."
+        self._model.apply_softmax = value
 
     @property
     def is_vertical_screen(self):

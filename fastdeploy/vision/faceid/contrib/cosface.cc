@@ -24,20 +24,14 @@ namespace faceid {
 
 CosFace::CosFace(const std::string& model_file, const std::string& params_file,
                  const RuntimeOption& custom_option,
-                 const Frontend& model_format)
+                 const ModelFormat& model_format)
     : InsightFaceRecognitionModel(model_file, params_file, custom_option,
                                   model_format) {
   initialized = Initialize();
 }
 
 bool CosFace::Initialize() {
-  // 如果初始化有变化 修改该子类函数
-  // 这里需要判断backend是否已经initialized，如果是，则不应该再调用
-  // InsightFaceRecognitionModel::Initialize()
-  // 因为该函数会对backend进行初始化, backend已经在父类的构造函数初始化
-  // 这里只修改一些模型相关的属性
-
-  // (1) 如果父类初始化了backend
+ 
   if (initialized) {
     // (1.1) re-init parameters for specific sub-classes
     size = {112, 112};
@@ -47,7 +41,6 @@ bool CosFace::Initialize() {
     l2_normalize = false;
     return true;
   }
-  // (2) 如果父类没有初始化backend
   if (!InsightFaceRecognitionModel::Initialize()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -62,19 +55,15 @@ bool CosFace::Initialize() {
 }
 
 bool CosFace::Preprocess(Mat* mat, FDTensor* output) {
-  // 如果预处理有变化 修改该子类函数
   return InsightFaceRecognitionModel::Preprocess(mat, output);
 }
 
 bool CosFace::Postprocess(std::vector<FDTensor>& infer_result,
                           FaceRecognitionResult* result) {
-  // 如果后处理有变化 修改该子类函数
   return InsightFaceRecognitionModel::Postprocess(infer_result, result);
 }
 
 bool CosFace::Predict(cv::Mat* im, FaceRecognitionResult* result) {
-  // 如果前后处理有变化 则override子类的Preprocess和Postprocess
-  // 如果前后处理有变化 此处应该调用子类自己的Preprocess和Postprocess
   return InsightFaceRecognitionModel::Predict(im, result);
 }
 
