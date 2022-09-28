@@ -15,7 +15,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-
+void BindAdaFace(pybind11::module& m);
 void BindArcFace(pybind11::module& m);
 void BindInsightFaceRecognitionModel(pybind11::module& m);
 void BindCosFace(pybind11::module& m);
