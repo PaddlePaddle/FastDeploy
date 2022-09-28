@@ -132,6 +132,7 @@ if(OPENCV_DIRECTORY)
     endif()
   # Win/Linux/Mac
   else()
+    set(OpenCV_DIR ${OPENCV_DIRECTORY})
     find_package(OpenCV REQUIRED PATHS ${OPENCV_DIRECTORY})
     include_directories(${OpenCV_INCLUDE_DIRS})
     list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
