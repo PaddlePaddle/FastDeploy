@@ -37,12 +37,10 @@ void CpuInfer(const std::string& model_file,
 
   std::cout << "Prediction Done!" << std::endl;
 
-  // 输出预测框结果
   std::cout << "--- [Face 0]:" << res0.Str();
   std::cout << "--- [Face 1]:" << res1.Str();
   std::cout << "--- [Face 2]:" << res2.Str();
 
-  // 计算余弦相似度
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
       res0.embedding, res1.embedding, model.l2_normalize);
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
@@ -76,12 +74,10 @@ void GpuInfer(const std::string& model_file,
 
   std::cout << "Prediction Done!" << std::endl;
 
-  // 输出预测框结果
   std::cout << "--- [Face 0]:" << res0.Str();
   std::cout << "--- [Face 1]:" << res1.Str();
   std::cout << "--- [Face 2]:" << res2.Str();
 
-  // 计算余弦相似度
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
       res0.embedding, res1.embedding, model.l2_normalize);
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
@@ -117,12 +113,10 @@ void TrtInfer(const std::string& model_file,
 
   std::cout << "Prediction Done!" << std::endl;
 
-  // 输出预测框结果
   std::cout << "--- [Face 0]:" << res0.Str();
   std::cout << "--- [Face 1]:" << res1.Str();
   std::cout << "--- [Face 2]:" << res2.Str();
 
-  // 计算余弦相似度
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
       res0.embedding, res1.embedding, model.l2_normalize);
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(

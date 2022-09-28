@@ -1,3 +1,4 @@
+简体中文 | [English](README_EN.md)
 # YOLOv7准备部署模型
 
 - YOLOv7部署实现来自[YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。

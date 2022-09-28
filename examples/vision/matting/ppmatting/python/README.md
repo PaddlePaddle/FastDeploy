@@ -35,7 +35,7 @@ python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bg
 ## PPMatting Python接口
 
 ```python
-fd.vision.matting.PPMatting(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fd.vision.matting.PPMatting(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 PPMatting模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
@@ -46,7 +46,7 @@ PPMatting模型加载和初始化，其中model_file, params_file以及config_fi
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理部署配置文件
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle格式
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
 
 ### predict函数
 
@@ -75,3 +75,4 @@ PPMatting模型加载和初始化，其中model_file, params_file以及config_fi
 - [PPMatting 模型介绍](..)
 - [PPMatting C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

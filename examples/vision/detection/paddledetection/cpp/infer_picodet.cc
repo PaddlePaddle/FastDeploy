@@ -83,8 +83,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("image", {1, 3, 320, 320});
-  option.SetTrtInputShape("scale_Factor", {1, 2});
   auto model = fastdeploy::vision::detection::PicoDet(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
