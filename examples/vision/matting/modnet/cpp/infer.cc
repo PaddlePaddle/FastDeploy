@@ -21,7 +21,6 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
   model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
@@ -52,7 +51,6 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
   model.size = {256, 256};
 
   auto im = cv::imread(image_file);
@@ -86,7 +84,6 @@ void TrtInfer(const std::string& model_file, const std::string& image_file,
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  // 设置推理size, 必须和模型文件一致
   model.size = {256, 256};
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
