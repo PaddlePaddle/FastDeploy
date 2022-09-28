@@ -80,6 +80,10 @@ for %%b in (%RUN_CASES%) do (
     ) 
 )
 
+if %errorlevel% NEQ 0 (
+    exit -1
+)
+
 set res_file=%cd%\result.txt
 
 if exist %res_file% (
