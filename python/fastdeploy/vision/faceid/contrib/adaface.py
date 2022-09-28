@@ -13,10 +13,8 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-import logging
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
-from ..contrib.insightface_rec import InsightFaceRecognitionModel
 
 
 class AdaFace(FastDeployModel):
