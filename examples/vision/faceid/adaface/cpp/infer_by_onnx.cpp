@@ -13,7 +13,7 @@
 
 void CpuInfer(const std::string &model_file,
               const std::vector<std::string> &image_file) {
-  auto model = fastdeploy::vision::faceid::ArcFace(model_file);
+  auto model = fastdeploy::vision::faceid::AdaFace(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -89,7 +89,7 @@ void TrtInfer(const std::string &model_file,
   option.UseGpu();
   option.UseTrtBackend();
   option.SetTrtInputShape("data", {1, 3, 112, 112});
-  auto model = fastdeploy::vision::faceid::ArcFace(model_file, "", option);
+  auto model = fastdeploy::vision::faceid::AdaFace(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -124,10 +124,10 @@ void TrtInfer(const std::string &model_file,
 
 int main(int argc, char *argv[]) {
   if (argc < 6) {
-    std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_arcface_demo ms1mv3_arcface_r100.onnx "
-                 "test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG "
-                 "test_lite_focal_arcface_2.JPG 0"
+    std::cout << "Usage: infer_by_onnx path/to/model path/to/image run_option, "
+                 "e.g ./infer_by_onnx mobile_face_net_ada_face_112x112.onnx "
+                 "test_lite_focal_AdaFace_0.JPG test_lite_focal_AdaFace_1.JPG "
+                 "test_lite_focal_AdaFace_2.JPG 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
