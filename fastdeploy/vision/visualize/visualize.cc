@@ -21,6 +21,24 @@ namespace vision {
 int Visualize::num_classes_ = 0;
 std::vector<int> Visualize::color_map_ = std::vector<int>();
 
+static std::vector<int> global_fd_vis_color_map = std::vector<int>();
+
+std::vector<int> GenerateColorMap(int num_classes) {
+  std::vector<int> color_map(num_classes * 3, 0);
+  for (int i = 0; i < num_classes; ++i) {
+    int j = 0;
+    int lab = i;
+    while (lab) {
+      color_map[i * 3] |= (((lab >> 0) & 1) << (7 - j));
+      color_map[i * 3 + 1] |= (((lab >> 1) & 1) << (7 - j));
+      color_map[i * 3 + 2] |= (((lab >> 2) & 1) << (7 - j));
+      ++j;
+      lab >>= 3;
+    }
+  }
+  return color_map;
+}
+
 const std::vector<int>& Visualize::GetColorMap(int num_classes) {
   if (num_classes < num_classes_) {
     return color_map_;
@@ -42,6 +60,6 @@ const std::vector<int>& Visualize::GetColorMap(int num_classes) {
   return color_map_;
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
 #endif
