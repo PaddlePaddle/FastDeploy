@@ -21,6 +21,8 @@ import sys
 
 
 def process_paddle_inference(paddle_inference_so_file):
+    if platform.system().lower() != "linux":
+        return
     rpaths = [
         "$ORIGIN", "$ORIGIN/../../third_party/install/mkldnn/lib/",
         "$ORIGIN/../../third_party/install/mklml/lib/",
