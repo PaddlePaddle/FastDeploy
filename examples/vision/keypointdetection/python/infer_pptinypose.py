@@ -12,8 +12,6 @@ def parse_arguments():
         required=True,
         help="path of paddletinypose model directory")
     parser.add_argument(
-        "--det_model_dir", help="path of paddledetection model directory")
-    parser.add_argument(
         "--image", required=True, help="path of test image file.")
     parser.add_argument(
         "--device",
@@ -54,43 +52,20 @@ def build_tinypose_option(args):
 
 
 args = parse_arguments()
-det_result = None
-if args.det_model_dir:
-    picodet_model_file = os.path.join(args.det_model_dir, "model.pdmodel")
-    picodet_params_file = os.path.join(args.det_model_dir, "model.pdiparams")
-    picodet_config_file = os.path.join(args.det_model_dir, "infer_cfg.yml")
-
-    # 配置runtime，加载模型
-    runtime_option = build_picodet_option(args)
-    det_model = fd.vision.detection.PicoDet(
-        picodet_model_file,
-        picodet_params_file,
-        picodet_config_file,
-        runtime_option=runtime_option)
-
-    # 预测图片检测结果
-    im = cv2.imread(args.image)
-    det_result = det_model.predict(im.copy())
-    print("PicoDet Result:\n", det_result)
-
-    # 预测结果可视化
-    det_vis_im = fd.vision.vis_detection(im, det_result, score_threshold=0.5)
-    cv2.imwrite("det_visualized_result.jpg", det_vis_im)
-    print("Detection visualized result save in ./det_visualized_result.jpg")
 
 tinypose_model_file = os.path.join(args.tinypose_model_dir, "model.pdmodel")
 tinypose_params_file = os.path.join(args.tinypose_model_dir, "model.pdiparams")
 tinypose_config_file = os.path.join(args.tinypose_model_dir, "infer_cfg.yml")
 # 配置runtime，加载模型
 runtime_option = build_tinypose_option(args)
-tinypose_model = fd.vision.detection.PPTinyPose(
+tinypose_model = fd.vision.keypointdetection.PPTinyPose(
     tinypose_model_file,
     tinypose_params_file,
     tinypose_config_file,
     runtime_option=runtime_option)
 # 预测图片检测结果
 im = cv2.imread(args.image)
-tinypose_result = tinypose_model.predict(im.copy(), det_result)
+tinypose_result = tinypose_model.predict(im.copy())
 print("Paddle TinyPose Result:\n", tinypose_result)
 
 # 预测结果可视化

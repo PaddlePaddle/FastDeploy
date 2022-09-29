@@ -17,12 +17,12 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
-#include "fastdeploy/vision/detection/ppdet/pptinypose_utils.h"
+#include "fastdeploy/vision/keypointdet/pptinypose/pptinypose_utils.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace keypointdetection {
 
 class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  public:
@@ -44,8 +44,7 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
                    const std::vector<float>& center,
                    const std::vector<float>& scale);
 
-  bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
-               DetectionResult* detection_result = nullptr);
+  bool Predict(cv::Mat* im, KeyPointDetectionResult* result);
   bool use_dark = true;
 
  private:
@@ -53,6 +52,6 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
   std::string config_file_;
   float threshold;
 };
-}  // namespace detection
+}  // namespace keypointdetection
 }  // namespace vision
 }  // namespace fastdeploy

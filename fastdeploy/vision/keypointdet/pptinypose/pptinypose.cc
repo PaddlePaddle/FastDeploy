@@ -1,4 +1,4 @@
-#include "fastdeploy/vision/detection/ppdet/pptinypose.h"
+#include "fastdeploy/vision/keypointdet/pptinypose/pptinypose.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 #ifdef ENABLE_PADDLE_FRONTEND
@@ -7,7 +7,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace keypointdetection {
 
 PPTinyPose::PPTinyPose(const std::string& model_file,
                        const std::string& params_file,
@@ -15,7 +15,7 @@ PPTinyPose::PPTinyPose(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const Frontend& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -52,9 +52,8 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
   std::string arch = cfg["arch"].as<std::string>();
   if (arch != "HRNet" && arch != "HigherHRNet") {
     FDERROR << "Require the arch of model is HRNet or HigherHRNet, but arch "
-               "defined in "
-               "config file is "
-            << arch << "." << std::endl;
+            << "defined in "
+            << "config file is " << arch << "." << std::endl;
     return false;
   }
 
@@ -89,8 +88,6 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
 }
 
 bool PPTinyPose::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
-  int origin_w = mat->Width();
-  int origin_h = mat->Height();
   for (size_t i = 0; i < processors_.size(); ++i) {
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
@@ -159,69 +156,29 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
   return true;
 }
 
-bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
-                         DetectionResult* detection_result) {
-  std::vector<cv::Mat> crop_imgs;
-  std::vector<std::vector<float>> center_bs;
-  std::vector<std::vector<float>> scale_bs;
-  int crop_imgs_num = 0;
-  if (detection_result != nullptr) {
-    int box_num = detection_result->boxes.size();
-    for (int i = 0; i < box_num; i++) {
-      auto box = detection_result->boxes[i];
-      auto label_id = detection_result->label_ids[i];
-      cv::Mat crop_img;
-      std::vector<int> rect = {
-          static_cast<int>(box[0]), static_cast<int>(box[1]),
-          static_cast<int>(box[2]), static_cast<int>(box[3])};
-      std::vector<float> center;
-      std::vector<float> scale;
-      if (label_id == 0) {
-        utils::CropImage(*im, &crop_img, rect, &center, &scale);
-        center_bs.emplace_back(center);
-        scale_bs.emplace_back(scale);
-        crop_imgs.emplace_back(crop_img);
-        crop_imgs_num += 1;
-      }
-    }
-  } else {
-    cv::Mat crop_img;
-    std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
-    std::vector<float> center;
-    std::vector<float> scale;
-    utils::CropImage(*im, &crop_img, rect, &center, &scale);
-    center_bs.emplace_back(center);
-    scale_bs.emplace_back(scale);
-    crop_imgs.emplace_back(crop_img);
-    crop_imgs_num += 1;
+bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
+  cv::Mat crop_img;
+  std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
+  std::vector<float> center;
+  std::vector<float> scale;
+  utils::CropImage(*im, &crop_img, rect, &center, &scale);
+  Mat mat(crop_img);
+  std::vector<FDTensor> processed_data;
+  if (!Preprocess(&mat, &processed_data)) {
+    FDERROR << "Failed to preprocess input data while using model:"
+            << ModelName() << "." << std::endl;
+    return false;
   }
-  for (int i = 0; i < crop_imgs_num; i++) {
-    Mat mat(crop_imgs[i]);
-    std::vector<FDTensor> processed_data;
-    if (!Preprocess(&mat, &processed_data)) {
-      FDERROR << "Failed to preprocess input data while using model:"
-              << ModelName() << "." << std::endl;
-      return false;
-    }
-    std::vector<FDTensor> infer_result;
-    if (!Infer(processed_data, &infer_result)) {
-      FDERROR << "Failed to inference while using model:" << ModelName() << "."
-              << std::endl;
-      return false;
-    }
-    KeyPointDetectionResult one_cropimg_result;
-    if (!Postprocess(infer_result, &one_cropimg_result, center_bs[i],
-                     scale_bs[i])) {
-      FDERROR << "Failed to postprocess while using model:" << ModelName()
-              << "." << std::endl;
-      return false;
-    }
-    if (result->num_joints == -1) {
-      result->num_joints = one_cropimg_result.num_joints;
-    }
-    std::copy(one_cropimg_result.keypoints.begin(),
-              one_cropimg_result.keypoints.end(),
-              std::back_inserter(result->keypoints));
+  std::vector<FDTensor> infer_result;
+  if (!Infer(processed_data, &infer_result)) {
+    FDERROR << "Failed to inference while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
+  }
+  if (!Postprocess(infer_result, result, center, scale)) {
+    FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
+            << std::endl;
+    return false;
   }
 
   return true;

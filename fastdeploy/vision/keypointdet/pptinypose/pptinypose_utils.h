@@ -17,7 +17,7 @@
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace keypointdetection {
 
 cv::Point2f Get3dPoint(const cv::Point2f& a, const cv::Point2f& b);
 
@@ -46,6 +46,6 @@ void GetFinalPredictions(const std::vector<float>& heatmap,
                          const std::vector<float> scale,
                          std::vector<float>* preds, const bool DARK);
 
-}  // namespace detection
+}  // namespace keypointdetection
 }  // namespace vision
 }  // namespace fastdeploy

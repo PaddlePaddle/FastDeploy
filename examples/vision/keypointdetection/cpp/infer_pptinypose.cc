@@ -20,33 +20,8 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void CpuInfer(const std::string& det_model_dir,
-              const std::string& tinypose_model_dir,
+void CpuInfer(const std::string& tinypose_model_dir,
               const std::string& image_file) {
-  auto det_model_file = det_model_dir + sep + "model.pdmodel";
-  auto det_params_file = det_model_dir + sep + "model.pdiparams";
-  auto det_config_file = det_model_dir + sep + "infer_cfg.yml";
-  auto det_model = fastdeploy::vision::detection::PicoDet(
-      det_model_file, det_params_file, det_config_file);
-  if (!det_model.Initialized()) {
-    std::cerr << "Detection Model Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-  auto det_im_bak = im.clone();
-
-  fastdeploy::vision::DetectionResult det_res;
-  if (!det_model.Predict(&det_im_bak, &det_res)) {
-    std::cerr << "Detection Model Failed to predict." << std::endl;
-    return;
-  }
-  std::cout << det_res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im, det_res, 0.5);
-  cv::imwrite("det_vis_result.jpg", vis_im);
-  std::cout << "Detection visualized result saved in ./det_vis_result.jpg"
-            << std::endl;
-
   auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
   auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
   auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
@@ -57,9 +32,10 @@ void CpuInfer(const std::string& det_model_dir,
     return;
   }
 
+  auto im = cv::imread(image_file);
   cv::Mat tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res, &det_res)) {
+  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -76,35 +52,10 @@ void CpuInfer(const std::string& det_model_dir,
             << std::endl;
 }
 
-void GpuInfer(const std::string& det_model_dir,
-              const std::string& tinypose_model_dir,
+void GpuInfer(const std::string& tinypose_model_dir,
               const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto det_model_file = det_model_dir + sep + "model.pdmodel";
-  auto det_params_file = det_model_dir + sep + "model.pdiparams";
-  auto det_config_file = det_model_dir + sep + "infer_cfg.yml";
-  auto det_model = fastdeploy::vision::detection::PicoDet(
-      det_model_file, det_params_file, det_config_file, option);
-  if (!det_model.Initialized()) {
-    std::cerr << "Detection Model Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-  auto det_im_bak = im.clone();
-
-  fastdeploy::vision::DetectionResult det_res;
-  if (!det_model.Predict(&det_im_bak, &det_res)) {
-    std::cerr << "Detection Model Failed to predict." << std::endl;
-    return;
-  }
-
-  std::cout << det_res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im, det_res, 0.5);
-  cv::imwrite("det_vis_result.jpg", vis_im);
-  std::cout << "Detection visualized result saved in ./det_vis_result.jpg"
-            << std::endl;
 
   auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
   auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
@@ -116,9 +67,10 @@ void GpuInfer(const std::string& det_model_dir,
     return;
   }
 
+  auto im = cv::imread(image_file);
   auto tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res, &det_res)) {
+  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -135,39 +87,8 @@ void GpuInfer(const std::string& det_model_dir,
             << std::endl;
 }
 
-void TrtInfer(const std::string& det_model_dir,
-              const std::string& tinypose_model_dir,
+void TrtInfer(const std::string& tinypose_model_dir,
               const std::string& image_file) {
-  auto det_model_file = det_model_dir + sep + "model.pdmodel";
-  auto det_params_file = det_model_dir + sep + "model.pdiparams";
-  auto det_config_file = det_model_dir + sep + "infer_cfg.yml";
-
-  auto det_option = fastdeploy::RuntimeOption();
-  det_option.UseGpu();
-  det_option.UseTrtBackend();
-  det_option.SetTrtInputShape("image", {1, 3, 320, 320});
-  det_option.SetTrtInputShape("scale_factor", {1, 2});
-  auto det_model = fastdeploy::vision::detection::PicoDet(
-      det_model_file, det_params_file, det_config_file, det_option);
-  if (!det_model.Initialized()) {
-    std::cerr << "Detection Model Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-  auto det_im_bak = im.clone();
-
-  fastdeploy::vision::DetectionResult det_res;
-  if (!det_model.Predict(&det_im_bak, &det_res)) {
-    std::cerr << "Detection Model Failed to predict." << std::endl;
-    return;
-  }
-  std::cout << det_res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im, det_res, 0.5);
-  cv::imwrite("det_vis_result.jpg", vis_im);
-  std::cout << "Detection visualized result saved in ./det_vis_result.jpg"
-            << std::endl;
-
   auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
   auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
   auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
@@ -182,9 +103,10 @@ void TrtInfer(const std::string& det_model_dir,
     return;
   }
 
+  auto im = cv::imread(image_file);
   cv::Mat tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res, &det_res)) {
+  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -202,11 +124,10 @@ void TrtInfer(const std::string& det_model_dir,
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 5) {
-    std::cout << "Usage: infer_demo path/to/detection_model_dir "
-                 "path/to/pptinypose_model_dir path/to/image run_option, "
-                 "e.g ./infer_model ./picodet_model_dir ./pptinypose_model_dir "
-                 "./test.jpeg 0"
+  if (argc < 4) {
+    std::cout << "Usage: infer_demo path/to/pptinypose_model_dir path/to/image "
+                 "run_option, "
+                 "e.g ./infer_model ./pptinypose_model_dir ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
@@ -214,12 +135,12 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  if (std::atoi(argv[4]) == 0) {
-    CpuInfer(argv[1], argv[2], argv[3]);
-  } else if (std::atoi(argv[4]) == 1) {
-    GpuInfer(argv[1], argv[2], argv[3]);
-  } else if (std::atoi(argv[4]) == 2) {
-    TrtInfer(argv[1], argv[2], argv[3]);
+  if (std::atoi(argv[3]) == 0) {
+    CpuInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 1) {
+    GpuInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 2) {
+    TrtInfer(argv[1], argv[2]);
   }
   return 0;
 }

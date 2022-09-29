@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include "fastdeploy/vision/detection/ppdet/mask_rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/picodet.h"
-#include "fastdeploy/vision/detection/ppdet/ppyolo.h"
-#include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
-#include "fastdeploy/vision/detection/ppdet/rcnn.h"
-#include "fastdeploy/vision/detection/ppdet/yolov3.h"
-#include "fastdeploy/vision/detection/ppdet/yolox.h"
+#include "fastdeploy/pybind/main.h"
+
+namespace fastdeploy {
+
+void BindPPTinyPose(pybind11::module& m);
+
+void BindKeyPointDetection(pybind11::module& m) {
+  auto keypointdetection_module = m.def_submodule(
+      "keypointdetection", "Image object keypoint detection models.");
+  BindPPTinyPose(keypointdetection_module);
+}
+}  // namespace fastdeploy

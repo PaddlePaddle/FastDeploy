@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/ppdet/pptinypose_utils.h"
+#include "fastdeploy/vision/keypointdet/pptinypose/pptinypose_utils.h"
 #define PI 3.1415926535
 #define HALF_CIRCLE_DEGREE 180
 
 namespace fastdeploy {
 namespace vision {
-namespace detection {
+namespace keypointdetection {
 
 cv::Point2f Get3dPoint(const cv::Point2f& a, const cv::Point2f& b) {
   cv::Point2f direct{a.x - b.x, a.y - b.y};

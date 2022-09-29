@@ -134,35 +134,6 @@ class YOLOv3(PPYOLOE):
         assert self.initialized, "YOLOv3 model initialize failed."
 
 
-class PPTinyPose(FastDeployModel):
-    def __init__(self,
-                 model_file,
-                 params_file,
-                 config_file,
-                 runtime_option=None,
-                 model_format=Frontend.PADDLE):
-        super(PPTinyPose, self).__init__(runtime_option)
-
-        assert model_format == Frontend.PADDLE, "PPTinyPose model only support model format of Frontend.Paddle now."
-        self._model = C.vision.detection.PPTinyPose(
-            model_file, params_file, config_file, self._runtime_option,
-            model_format)
-        assert self.initialized, "PPTinyPose model initialize failed."
-
-    def predict(self, input_image, detection_result):
-        assert input_image is not None, "The input image data is None."
-        if detection_result is None:
-            import warnings
-            warnings.warn(
-                "No Detection boxes input. Please make sure the input image has been cropped by Detection model's boxes before"
-            )
-        return self._model.predict(input_image, detection_result)
-
-    @property
-    def use_dark(self):
-        return self._model.use_dark
-
-
 class MaskRCNN(FastDeployModel):
     def __init__(self,
                  model_file,

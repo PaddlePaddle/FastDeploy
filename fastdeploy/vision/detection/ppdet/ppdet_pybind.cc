@@ -104,19 +104,5 @@ void BindPPDet(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            });
-
-  pybind11::class_<vision::detection::PPTinyPose, FastDeployModel>(m,
-                                                                   "PPTinyPose")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
-      .def("predict",
-           [](vision::detection::PPTinyPose& self, pybind11::array& data,
-              vision::DetectionResult* detection_result = nullptr) {
-             auto mat = PyArrayToCvMat(data);
-             vision::KeyPointDetectionResult res;
-             self.Predict(&mat, &res, detection_result);
-             return res;
-           })
-      .def_readwrite("use_dark", &vision::detection::PPTinyPose::use_dark);
 }
 }  // namespace fastdeploy
