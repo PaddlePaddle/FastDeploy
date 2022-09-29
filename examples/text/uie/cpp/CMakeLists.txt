@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROJECT(infer_demo C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.12)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
 

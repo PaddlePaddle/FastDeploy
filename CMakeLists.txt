@@ -28,6 +28,8 @@ if(NOT PY_LIBRARY_NAME)
   set(PY_LIBRARY_NAME "fastdeploy_main")
 endif()
 include(ExternalProject)
+set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
+
 add_subdirectory(${CSRCS_DIR_NAME}/fastdeploy)
 include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 
@@ -36,6 +38,10 @@ if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
+
+if(UNIX)
+  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+endif()
 
 if(ANDROID)
   # To reduce the volume of the library
@@ -168,7 +174,6 @@ set(DEPEND_LIBS "")
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
-set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
 
 # Add eigen lib
 include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
@@ -278,10 +283,13 @@ if(ENABLE_TRT_BACKEND)
     execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
     if(UNIX)
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-    	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
     	          RESULT_VARIABLE result
                       OUTPUT_VARIABLE curr_out
                       ERROR_VARIABLE  curr_out)
+      if(ret EQUAL "1")
+	message(FATAL_ERROR "Failed to patchelf tensorrt libraries.")
+      endif()
       message(STATUS "result:${result} out:${curr_out}")
     endif()
   endif()
@@ -300,7 +308,6 @@ if(ENABLE_VISION)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
-  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
@@ -433,6 +440,12 @@ install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+if(NOT WIN32)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
