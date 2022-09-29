@@ -21,6 +21,25 @@ from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
 from diffusers.schedulers import PNDMScheduler
 from transformers import CLIPTokenizer
 
+
+def create_ort_runtime(onnx_file):
+    option = fd.RuntimeOption()
+    option.use_ort_backend()
+    option.use_gpu()
+    option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
+    return fd.Runtime(option)
+
+
+def create_trt_runtime(onnx_file):
+    option = fd.RuntimeOption()
+    option.use_trt_backend()
+    option.use_gpu()
+    option.enable_trt_fp16()
+    option._option.trt_max_workspace_size = 1 << 31
+    option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
+    return fd.Runtime(option)
+
+
 if __name__ == "__main__":
     # 1. Init scheduler
     scheduler = PNDMScheduler(
@@ -34,19 +53,9 @@ if __name__ == "__main__":
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     # 3. Init runtime
-    option = fd.RuntimeOption()
-    option.use_trt_backend()
-    option.use_gpu()
-    option.set_model_path(
-        "text_encoder_v1_4.onnx", model_format=ModelFormat.ONNX)
-    text_encoder_runtime = fd.Runtime(option)
-
-    option.set_model_path("unet_v1_4.onnx", model_format=ModelFormat.ONNX)
-    unet_runtime = fd.Runtime(option)
-
-    option.set_model_path(
-        "vae_decoder_v1_4.onnx", model_format=ModelFormat.ONNX)
-    vae_decoder_runtime = fd.Runtime(option)
+    text_encoder_runtime = create_ort_runtime("text_encoder_v1_4.onnx")
+    vae_decoder_runtime = create_ort_runtime("vae_decoder_v1_4.onnx")
+    unet_runtime = create_trt_runtime("unet_v1_4.onnx")
 
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,

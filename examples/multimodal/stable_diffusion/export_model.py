@@ -30,7 +30,11 @@ vae_decoder = VAEDecoder.from_pretrained(
 
 # 2. Load UNet model
 unet = UNet2DConditionModel.from_pretrained(
-    "CompVis/stable-diffusion-v1-4", subfolder="unet", use_auth_token=True)
+    "CompVis/stable-diffusion-v1-4",
+    torch_dtype=torch.float16,
+    revision="fp16",
+    subfolder="unet",
+    use_auth_token=True)
 
 # 3. Load CLIP model
 text_encoder = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14")
@@ -54,9 +58,9 @@ with torch.inference_mode(), torch.autocast("cuda"):
 
     # Export the unet model
     unet_inputs = (torch.randn(
-        2, 4, 64, 64, device='cuda'), torch.randn(
-            1, device='cuda'), torch.randn(
-                2, 77, 768, device='cuda'))
+        2, 4, 64, 64, dtype=torch.half, device='cuda'), torch.randn(
+            1, dtype=torch.half, device='cuda'), torch.randn(
+                2, 77, 768, dtype=torch.half, device='cuda'))
     torch.onnx.export(
         unet,  # model being run
         unet_inputs,  # model input (or a tuple for multiple inputs)
