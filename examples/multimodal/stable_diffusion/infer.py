@@ -35,7 +35,8 @@ if __name__ == "__main__":
 
     # 3. Init runtime
     option = fd.RuntimeOption()
-    option.use_ort_backend()
+    option.use_trt_backend()
+    option.use_gpu()
     option.set_model_path(
         "text_encoder_v1_4.onnx", model_format=ModelFormat.ONNX)
     text_encoder_runtime = fd.Runtime(option)
