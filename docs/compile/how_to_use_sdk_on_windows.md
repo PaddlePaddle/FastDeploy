@@ -285,11 +285,11 @@ install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 
 ![image](https://user-images.githubusercontent.com/31974251/192146852-c64d2252-8c8f-4309-a950-908a5cb258b8.png)
 
-（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。  
+（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。其他配置方式，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)  
 
 ```cmake  
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
-```
+```  
 （3）同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 准备完成后，目录结构如下：  
 
 ![image](https://user-images.githubusercontent.com/31974251/192147505-054edb77-564b-405e-89ee-fd0d2e413e78.png)
