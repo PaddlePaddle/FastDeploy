@@ -132,6 +132,10 @@ fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
 
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\include
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv-win-x64-3.4.16\build\include  
+```  
+注意，如果是自行编译最新的SDK或版本>0.2.1，依赖库目录结构有所变动，opencv路径需要做出适当的修改。如：    
+```bat  
+D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv\build\include  
 ```
 
 ![image](https://user-images.githubusercontent.com/31974251/192824445-978c06ed-cc14-4d6a-8ccf-d4594ca11533.png)
@@ -147,6 +151,10 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 ```bat  
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\lib
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\lib
+``` 
+注意，如果是自行编译最新的SDK或版本>0.2.1，依赖库目录结构有所变动，opencv路径需要做出适当的修改。如：    
+```bat  
+D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv\build\include  
 ```  
 
 ![image](https://user-images.githubusercontent.com/31974251/192826130-fe28791f-317c-4e66-a6a5-133e60b726f0.png)
@@ -236,6 +244,7 @@ target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})
 # Optional: install all DLLs to binary dir.
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ```
+注意，`install_fastdeploy_libraries`函数仅在最新的代码编译的SDK或版本>0.2.1下有效。  
 
 ### 6.3 步骤三：生成工程缓存并修改CMakeSetting.json配置
 
@@ -276,11 +285,11 @@ install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 
 ![image](https://user-images.githubusercontent.com/31974251/192146852-c64d2252-8c8f-4309-a950-908a5cb258b8.png)
 
-（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。  
+（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。其他配置方式，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)  
 
 ```cmake  
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
-```
+```  
 （3）同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 准备完成后，目录结构如下：  
 
 ![image](https://user-images.githubusercontent.com/31974251/192147505-054edb77-564b-405e-89ee-fd0d2e413e78.png)
@@ -320,6 +329,7 @@ Visualized result saved in ./vis_result.jpg
 ```cmake
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ```
+注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。  
 
 ### 7.2 方式二：命令行设置环境变量
 <div id="CommandLineDeps2"></div>  
@@ -349,7 +359,13 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\onnxruntime* Releas
 ```bat
 where onnxruntime.dll
 C:\Windows\System32\onnxruntime.dll  # windows自带的onnxruntime.dll
-```  
+```    
+另外，注意，如果是自行编译最新的SDK或版本>0.2.1，opencv和openvino目录结构有所改变，路径需要做出适当的修改。如：    
+```bat  
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin;%PATH%
+```
 可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中(包含copy onnxruntime)，如`setup_fastdeploy_dll.bat`，方便多次使用。
 ```bat
 setup_fastdeploy_dll.bat
@@ -376,6 +392,12 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.xml Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin\*.dll Release\
+``` 
+另外，注意，如果是自行编译最新的SDK或版本>0.2.1，opencv和openvino目录结构有所改变，路径需要做出适当的修改。如：    
+```bat  
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin\*.dll Release\ 
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin\*.dll Release\
 ```
 可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中，如`copy_fastdeploy_dll.bat`，方便多次使用。
 ```bat
