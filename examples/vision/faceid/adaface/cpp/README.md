@@ -19,19 +19,32 @@ tar xvf fastdeploy-linux-x64-0.2.1.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
-#下载官方转换好的AdaFace模型文件和测试图片
-wget https://bj.bcebos.com/fastdeploy/models/onnx/mobile_face_net_ada_face_112x112.onnx
+#下载测试图片
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
-
+# 如果为ONNX模型，运行以下代码
+wget https://bj.bcebos.com/fastdeploy/models/onnx/mobile_face_net_ada_face_112x112.onnx
 # CPU推理
-./infer_adaface_demo mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
 # GPU推理
-./infer_adaface_demo mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 1
+./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 1
 # GPU上TensorRT推理
-./infer_adaface_demo mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 2
+./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 2
+
+# 如果为Paddle模型，运行以下代码
+wget
+wget
+# CPU推理
+./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+
+# GPU推理
+./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+
+# GPU上TensorRT推理
+./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+
 ```
 
 运行完成可视化结果如下图所示

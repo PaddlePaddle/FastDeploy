@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL AdaFace : public InsightFaceRecognitionModel {
  public:
   AdaFace(const std::string& model_file, const std::string& params_file = "",
           const RuntimeOption& custom_option = RuntimeOption(),
-          const ModelFormat& model_format = ModelFormat::ONNX);
+          const ModelFormat& model_format = ModelFormat::PADDLE);
 
   std::string ModelName() const override {
     return "Zheng-Bicheng/AdaFacePaddleCLas";
