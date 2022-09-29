@@ -263,8 +263,8 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
 
-void RuntimeOption::SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size) {
-  trt_max_workspace_size = trt_max_workspace_size;
+void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
+  trt_max_workspace_size = max_workspace_size;
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
