@@ -23,3 +23,5 @@ __pycache__
 build_fd_android.sh
 python/scripts/process_libraries.py
 .vs
+.idea
+.DS_Store
