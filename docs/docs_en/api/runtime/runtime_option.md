@@ -204,7 +204,7 @@ void UseOpenVINOBackend()
 Inference with OpenVINO backend (CPU supported, Paddle/ONNX model format supported)
 
 ```
-void EnablePaddleMKLDNN()
+void SetPaddleMKLDNN(bool pd_mkldnn = true)
 void DisablePaddleMKLDNN()
 ```
 
