@@ -54,8 +54,10 @@ class RuntimeOption:
     def __init__(self):
         self._option = C.RuntimeOption()
 
-    def set_model_path(self, model_path, params_path="",
-                       model_format="paddle"):
+    def set_model_path(self,
+                       model_path,
+                       params_path="",
+                       model_format=C.ModelFormat.PADDLE):
         return self._option.set_model_path(model_path, params_path,
                                            model_format)
 
@@ -98,6 +100,9 @@ class RuntimeOption:
     def set_paddle_mkldnn_cache_size(self, cache_size):
         return self._option.set_paddle_mkldnn_cache_size(cache_size)
 
+    def set_lite_power_mode(self, mode):
+        return self._option.set_lite_power_mode(mode)
+
     def set_trt_input_shape(self,
                             tensor_name,
                             min_shape,
@@ -119,6 +124,9 @@ class RuntimeOption:
 
     def disable_trt_fp16(self):
         return self._option.disable_trt_fp16()
+
+    def set_trt_max_workspace_size(self, trt_max_workspace_size):
+        return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
 
     def __repr__(self):
         attrs = dir(self._option)

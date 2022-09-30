@@ -34,7 +34,11 @@ def convert2numpy(result_file):
 
 
 def write2file(error_file):
-    with open(error_file, "w+") as f:
+    import os
+    if not os.path.exists(error_file):
+        with open(error_file, "w+") as f:
+            f.write("Failed Cases:\n")
+    with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
         f.write(args.platform + " " + py_version + " " +
@@ -45,7 +49,7 @@ def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    if (diff > 1e-5).all():
+    if (diff > 1e-5).any():
         print(args.platform, args.device, "diff ", diff)
         write2file("result.txt")
     else:

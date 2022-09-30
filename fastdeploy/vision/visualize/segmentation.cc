@@ -21,8 +21,32 @@
 namespace fastdeploy {
 namespace vision {
 
+cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
+                        float weight) {
+  auto color_map = GenerateColorMap(1000);
+  int64_t height = result.shape[0];
+  int64_t width = result.shape[1];
+  auto vis_img = cv::Mat(height, width, CV_8UC3);
+
+  int64_t index = 0;
+  for (int i = 0; i < height; i++) {
+    for (int j = 0; j < width; j++) {
+      int category_id = result.label_map[index++];
+      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
+      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
+      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+    }
+  }
+  cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
+  return vis_img;
+}
+
 cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
                                    const SegmentationResult& result) {
+  FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisSegmentation is "
+               "deprecated, please use fastdeploy::vision:VisSegmentation "
+               "function instead."
+            << std::endl;
   auto color_map = GetColorMap();
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];

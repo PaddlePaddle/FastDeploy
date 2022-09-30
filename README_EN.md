@@ -100,12 +100,12 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ```
 
 * Test inference results
- 
+
 ```python
 # For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
-  
+
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
@@ -148,24 +148,25 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
-  model.Predict(&im, &res)
+  model.Predict(&im, &res);
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
+  return 0;
  }
 ```
 
 ### For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
- 
 
-### Supported Server-Side Model List🔥🔥🔥
+
+### Supported Data Center and Cloud Model List🔥🔥🔥
 
 <div id="fastdeploy-server-models"></div>
 
 Notes:
 
- (1) ✅: already supported; (2) ❔: to be supported in the future; (3) ❌: not supported at the moment; (4) --: not considered at the moment;<br>Hyperlinks：Click model's name, the website will jump to the model inference demo code
+✅: already supported; ❔: to be supported in the future; ❌: not supported now; 
 
 
 
@@ -255,7 +256,7 @@ Notes:
 
 |                    | Model                        | Size (MB) | Linux   | Android | iOS     | Linux                                     | Linux                                   | Linux                    | TBD...  |
 |:------------------:|:----------------------------:|:---------:|:-------:|:-------:|:-------:|:-----------------------------------------:|:---------------------------------------:|:------------------------:|:-------:|
-| ---                | ---                          | ---       | ARM CPU | ARM CPU | ARM CPU | Rexchip-NPU<br>RV1109<br>RV1126<br>RK1808 | Amlogic-NPU <br>A311D<br>S905D<br>C308X | NXPNPU<br>  i.MX 8M Plus | TBD...｜ |
+| ---                | ---                          | ---       | ARM CPU | ARM CPU | ARM CPU | Rockchip-NPU<br>RV1109<br>RV1126<br>RK1808 | Amlogic-NPU <br>A311D<br>S905D<br>C308X | NXPNPU<br>  i.MX 8M Plus | TBD...｜ |
 | Classification     | PP-LCNet                     | 11.9      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
 | Classification     | PP-LCNetv2                   | 26.6      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
 | Classification     | EfficientNet                 | 31.4      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
@@ -299,7 +300,7 @@ Notes:
 - **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/190932769-f36c0173-0fe6-4cab-9bba-f05e550b834f.jpg"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/192177204-811f114f-5393-4abb-bb7a-bdc70e0833be.jpeg"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge

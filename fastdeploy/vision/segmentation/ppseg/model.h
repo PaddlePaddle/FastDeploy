@@ -18,7 +18,7 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   virtual bool Predict(cv::Mat* im, SegmentationResult* result);
 
-  bool with_softmax = false;
+  bool apply_softmax = false;
 
   bool is_vertical_screen = false;
 
@@ -27,20 +27,19 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   bool BuildPreprocessPipelineFromConfig();
 
-  bool Preprocess(Mat* mat, FDTensor* outputs,
-                  std::map<std::string, std::array<int, 2>>* im_info);
+  bool Preprocess(Mat* mat, FDTensor* outputs);
 
-  bool Postprocess(FDTensor& infer_result, SegmentationResult* result,
-                   std::map<std::string, std::array<int, 2>>* im_info);
+  bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
+                   const std::map<std::string, std::array<int, 2>>& im_info);
 
-  bool is_resized = false;
+  bool is_with_softmax = false;
+
+  bool is_with_argmax = true;
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
 };
 
-void FDTensor2FP32CVMat(cv::Mat& mat, FDTensor& infer_result,
-                        bool contain_score_map);
 }  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy

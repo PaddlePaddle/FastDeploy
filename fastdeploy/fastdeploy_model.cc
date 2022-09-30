@@ -200,18 +200,4 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
   return statis_info_of_runtime_dict;
 }
-
-void FastDeployModel::EnableDebug() {
-#ifdef FASTDEPLOY_DEBUG
-  debug_ = true;
-#else
-  FDWARNING << "The compile FastDeploy is not with -DENABLE_DEBUG=ON, so "
-               "cannot enable debug mode."
-            << std::endl;
-  debug_ = false;
-#endif
-}
-
-bool FastDeployModel::DebugEnabled() { return debug_; }
-
 }  // namespace fastdeploy
