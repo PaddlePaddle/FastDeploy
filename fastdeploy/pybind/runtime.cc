@@ -36,6 +36,7 @@ void BindRuntime(pybind11::module& m) {
            &RuntimeOption::SetPaddleMKLDNNCacheSize)
       .def("set_lite_power_mode", &RuntimeOption::SetLitePowerMode)
       .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
+      .def("set_trt_max_workspace_size", &RuntimeOption::SetTrtMaxWorkspaceSize)
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)

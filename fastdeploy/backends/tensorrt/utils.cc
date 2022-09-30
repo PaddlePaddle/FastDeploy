@@ -97,6 +97,8 @@ nvinfer1::DataType ReaderDtypeToTrtDtype(int reader_dtype) {
   } else if (reader_dtype == 5) {
     // regard int64 as int32
     return nvinfer1::DataType::kINT32;
+  } else if (reader_dtype == 6) {
+    return nvinfer1::DataType::kHALF;
   }
   FDASSERT(false, "Received unexpected data type of %d", reader_dtype);
   return nvinfer1::DataType::kFLOAT;
@@ -135,4 +137,4 @@ nvinfer1::Dims ToDims(const std::vector<int64_t>& vec) {
   return dims;
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy
