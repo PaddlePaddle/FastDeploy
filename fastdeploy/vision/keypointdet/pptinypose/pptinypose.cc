@@ -240,6 +240,6 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   return true;
 }
 
-}  // namespace detection
+}  // namespace keypointdetection
 }  // namespace vision
 }  // namespace fastdeploy
