@@ -81,6 +81,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
   }
   if (cfg["Deploy"]["transforms"]) {
     auto preprocess_cfg = cfg["Deploy"]["transforms"];
+    int long_size = -1;
     for (const auto& op : preprocess_cfg) {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
@@ -90,7 +91,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         if (is_fixed_input_shape) {
           // if the input shape is fixed, will resize by scale, and the max
           // shape will not exceed input_shape
-          int long_size = std::max(input_shape[2], input_shape[3]);
+          long_size = max_short;
           std::vector<int> max_size = {input_shape[2], input_shape[3]};
           processors_.push_back(
               std::make_shared<ResizeByShort>(long_size, 1, true, max_size));
@@ -100,7 +101,6 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         }
       } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
         if (is_fixed_input_shape) {
-          int long_size = std::max(input_shape[2], input_shape[3]);
           std::vector<int> max_size = {input_shape[2], input_shape[3]};
           processors_.push_back(
               std::make_shared<ResizeByShort>(long_size, 1, true, max_size));
@@ -119,13 +119,13 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         }
         processors_.push_back(std::make_shared<Normalize>(mean, std));
       } else if (op["type"].as<std::string>() == "ResizeByShort") {
-        int target_size = op["short_size"].as<int>();
+        long_size = op["short_size"].as<int>();
         if (is_fixed_input_shape) {
           std::vector<int> max_size = {input_shape[2], input_shape[3]};
           processors_.push_back(
-              std::make_shared<ResizeByShort>(target_size, 1, true, max_size));
+              std::make_shared<ResizeByShort>(long_size, 1, true, max_size));
         } else {
-          processors_.push_back(std::make_shared<ResizeByShort>(target_size));
+          processors_.push_back(std::make_shared<ResizeByShort>(long_size));
         }
       }
     }
@@ -179,8 +179,11 @@ bool PPMatting::Postprocess(
                    static_cast<double>(iter_ipt->second[1]);
   double actual_scale = std::min(scale_h, scale_w);
 
-  int size_before_pad_h = round(actual_scale * iter_out->second[0]);
-  int size_before_pad_w = round(actual_scale * iter_out->second[1]);
+  int size_before_pad_h = round(actual_scale * iter_ipt->second[0]);
+  int size_before_pad_w = round(actual_scale * iter_ipt->second[1]);
+  std::vector<int64_t> dim{0, 2, 3, 1};
+  Transpose(alpha_tensor, &alpha_tensor, dim);
+  alpha_tensor.Squeeze(0);
   Mat mat = CreateFromTensor(alpha_tensor);
 
   Crop::Run(&mat, 0, 0, size_before_pad_w, size_before_pad_h);

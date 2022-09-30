@@ -63,6 +63,7 @@ double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   int im_size_min = std::min(origin_w, origin_h);
   double scale =
       static_cast<double>(target_size_) / static_cast<double>(im_size_min);
+
   if (max_hw_.size() > 0) {
     FDASSERT(max_hw_.size() == 2,
              "Require size of max_hw_ be 2, but now it's %zu.", max_hw_.size());
@@ -70,11 +71,14 @@ double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
         max_hw_[0] > 0 && max_hw_[1] > 0,
         "Require elements in max_hw_ greater than 0, but now it's [%d, %d].",
         max_hw_[0], max_hw_[1]);
-    if (round(scale * origin_h) > max_hw_[0]) {
-      scale = static_cast<double>(max_hw_[0]) / static_cast<double>(origin_h);
-    }
-    if (round(scale * origin_w) > max_hw_[1]) {
-      scale = static_cast<double>(max_hw_[1]) / static_cast<double>(origin_w);
+
+    double scale_h =
+        static_cast<double>(max_hw_[0]) / static_cast<double>(origin_h);
+    double scale_w =
+        static_cast<double>(max_hw_[1]) / static_cast<double>(origin_w);
+    double min_scale = std::min(scale_h, scale_w);
+    if (min_scale < scale) {
+      scale = min_scale;
     }
   }
   return scale;
