@@ -68,6 +68,7 @@ option(WITH_LITE_FULL_API "Use Paddle-Lite full API lib for Android." ON)
 option(WITH_LITE_FP16 "Use Paddle-Lite lib with fp16 enabled for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
+# Only support Linux Now
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
@@ -300,10 +301,13 @@ endif()
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
   if(ENABLE_OPENCV_CUDA)
-    add_definitions(-DENABLE_OPENCV_CUDA)
-    if(APPLE OR ANDROID OR IOS)
-      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    if(NOT WITH_GPU)
+      message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
     endif()
+    if(APPLE OR ANDROID OR IOS OR WIN32)
+      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android/windows os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    endif()
+    add_definitions(-DENABLE_OPENCV_CUDA)
   endif()
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
