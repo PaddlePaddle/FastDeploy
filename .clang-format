@@ -2,7 +2,6 @@
 Language:        Cpp
 # BasedOnStyle:  LLVM
 AccessModifierOffset: -1
-CommentPragmas:  '^[^ ]'
 AlignAfterOpenBracket: Align
 AlignArrayOfStructures: None
 AlignConsecutiveMacros: None
@@ -60,7 +59,8 @@ BreakConstructorInitializers: BeforeColon
 BreakAfterJavaFieldAnnotations: false
 BreakStringLiterals: true
 ColumnLimit:     80
-CommentPragmas:  '^ IWYU pragma:'
+# CommentPragmas:  '^ IWYU pragma:'
+CommentPragmas:  '^[^ ]'
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 ConstructorInitializerIndentWidth: 4
