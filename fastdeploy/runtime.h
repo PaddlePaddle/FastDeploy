@@ -27,8 +27,8 @@
 #include "fastdeploy/utils/perf.h"
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
- *
- */
+*
+*/
 namespace fastdeploy {
 
 /*! Inference backend supported in FastDeploy */
@@ -38,14 +38,14 @@ enum Backend {
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,      ///< Paddle Lite, support Paddle format model, ARM CPU only
+  LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
 };
 
 /*! Deep learning model format */
 enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
-  PADDLE,   ///< Model with paddlepaddle format
-  ONNX,     ///< Model with ONNX format
+  PADDLE,  ///< Model with paddlepaddle format
+  ONNX,  ///< Model with ONNX format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -73,118 +73,101 @@ ModelFormat GuessModelFormat(const std::string& model_file);
 /*! @brief Option object used when create a new Runtime object
  */
 struct FASTDEPLOY_DECL RuntimeOption {
-  /** \brief Set path of model file and parameter file
+   /** \brief Set path of model file and parameter file
    *
-   * \param[in] model_path Path of model file, e.g ResNet50/model.pdmodel for
-   * Paddle format model / ResNet50/model.onnx for ONNX format model \param[in]
-   * params_path Path of parameter file, this only used when the model format is
-   * Paddle, e.g Resnet50/model.pdiparams \param[in] format Format of the loaded
-   * model
+   * \param[in] model_path Path of model file, e.g ResNet50/model.pdmodel for Paddle format model / ResNet50/model.onnx for ONNX format model
+   * \param[in] params_path Path of parameter file, this only used when the model format is Paddle, e.g Resnet50/model.pdiparams
+   * \param[in] format Format of the loaded model
    */
-  void SetModelPath(
-      const std::string& model_path, const std::string& params_path = "",
-      const ModelFormat& format =
-          ModelFormat::PADDLE);  ///< Set path of model file and parameter file,
-                                 ///< if the format is ModelFormat::ONNX, the
-                                 ///< `params_path` can be set as empty string
+  void SetModelPath(const std::string& model_path,
+                    const std::string& params_path = "",
+                    const ModelFormat& format = ModelFormat::PADDLE);
 
-  void UseCpu();  ///< Use cpu to inference, the runtime will inference on CPU
-                  ///< by default
+  /// Use cpu to inference, the runtime will inference on CPU by default
+  void UseCpu();
 
-  void UseGpu(int gpu_id = 0);  ///< Use Nvidia GPU to inference
+  /// Use Nvidia GPU to inference
+  void UseGpu(int gpu_id = 0);
 
-  void SetCpuThreadNum(
-      int thread_num);  ///< Set number of cpu threads while inference on CPU,
-                        ///< by default it will decided by the different
-                        ///< backends
+  /*
+   * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
+   */
+  void SetCpuThreadNum(int thread_num);
 
-  void UsePaddleBackend();  ///< Set Paddle Inference as inference backend,
-                            ///< support CPU/GPU
+  /// Set Paddle Inference as inference backend, support CPU/GPU
+  void UsePaddleBackend();
 
-  void
-  UseOrtBackend();  ///< Set ONNX Runtime as inference backend, support CPU/GPU
+  /// Set ONNX Runtime as inference backend, support CPU/GPU
+  void UseOrtBackend();
 
-  void
-  UseTrtBackend();  ///< Set TensorRT as inference backend, only support GPU
+  /// Set TensorRT as inference backend, only support GPU
+  void UseTrtBackend();
 
-  void UseOpenVINOBackend();  ///< Set OpenVINO as inference backend, only
-                              ///< support CPU
+  /// Set OpenVINO as inference backend, only support CPU
+  void UseOpenVINOBackend();
 
-  void UseLiteBackend();  ///< Set Paddle Lite as inference backend, only
-                          ///< support arm cpu
+  /// Set Paddle Lite as inference backend, only support arm cpu
+  void UseLiteBackend();
 
-  void EnablePaddleMKLDNN();  ///< Enable mkldnn while using Paddle Inference as
-                              ///< inference backend
+  /// Enable mkldnn while using Paddle Inference as inference backend
+  void EnablePaddleMKLDNN();
 
-  void DisablePaddleMKLDNN();  ///< Disable mkldnn while using Paddle Inference
-                               ///< as inference backend
+  /// Disable mkldnn while using Paddle Inference as inference backend
+  void DisablePaddleMKLDNN();
 
-  void DeletePaddleBackendPass(
-      const std::string&
-          delete_pass_name);  ///< Delete pass by name while using Paddle
-                              ///< Inference as inference backend, this can be
-                              ///< called multiple times to delete mulitple
-                              ///< passes
+  /*
+   * Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete mulitple passes
+   */
+  void DeletePaddleBackendPass(const std::string& delete_pass_name);
 
-  void
-  EnablePaddleLogInfo();  ///< Enable print debug information while using Paddle
-                          ///< Inference as inference backend, the backend
-                          ///< disable the debug information by default
+  /**
+   * @brief Enable print debug information while using Paddle Inference as inference backend, the backend disable the debug information by default
+   */
+  void EnablePaddleLogInfo();
 
-  void DisablePaddleLogInfo();  ///< Disable print debug information while using
-                                ///< Paddle Inference as inference backend
+  /**
+   * @brief Disable print debug information while using Paddle Inference as inference backend
+   */
+  void DisablePaddleLogInfo();
 
-  void SetPaddleMKLDNNCacheSize(
-      int size);  ///< Set shape cache size while using Paddle Inference with
-                  ///< mkldnn, by default it will cache all the difference shape
+  /**
+   * @brief Set shape cache size while using Paddle Inference with mkldnn, by default it will cache all the difference shape
+   */
+  void SetPaddleMKLDNNCacheSize(int size);
 
-  void SetLitePowerMode(
-      int mode);  ///< Set power mode while using Paddle Lite as inference
-                  ///< backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2:
-                  ///< LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4:
-                  ///< LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer
-                  ///< [paddle
-                  ///< lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode)
-                  ///< for more details)
+  /**
+   * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
+   */
+  void SetLitePowerMode(int mode);
 
-  /** \brief Set shape range of input tensor for the model that contain dynamic
-   * input shape while using TensorRT backend
+
+  /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
    *
-   * \param[in] input_name The name of input for the model which is dynamic
-   * shape \param[in] min_shape The minimal shape for the input tensor
-   * \param[in] opt_shape The optimized shape for the input tensor, just set the
-   * most common shape, if set as default value, it will keep same with
-   * min_shape \param[in] max_shape The maximum shape for the input tensor, if
-   * set as default value, it will keep same with min_shape
+   * \param[in] input_name The name of input for the model which is dynamic shape
+   * \param[in] min_shape The minimal shape for the input tensor
+   * \param[in] opt_shape The optimized shape for the input tensor, just set the most common shape, if set as default value, it will keep same with min_shape
+   * \param[in] max_shape The maximum shape for the input tensor, if set as default value, it will keep same with min_shape
    */
   void SetTrtInputShape(
       const std::string& input_name, const std::vector<int32_t>& min_shape,
       const std::vector<int32_t>& opt_shape = std::vector<int32_t>(),
-      const std::vector<int32_t>& max_shape = std::vector<
-          int32_t>());  ///< For model that contain dynamic input shape, this
-                        ///< interface allow user to set its shape range while
-                        ///< using TensorRT backend
+      const std::vector<int32_t>& max_shape = std::vector<int32_t>());
 
-  void SetTrtMaxWorkspaceSize(
-      size_t trt_max_workspace_size);  ///< Set max_workspace_size for TensorRT,
-                                       ///< default 1<<30
+  /// Set max_workspace_size for TensorRT, default 1<<30
+  void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
 
-  void EnableTrtFP16();  ///< Enable FP16 inference while using TensorRT
-                         ///< backend. Notice: not all the GPU device support
-                         ///< FP16, on those device doesn't support FP16,
-                         ///< FastDeploy will fallback to FP32 automaticly
+  /**
+   * @brief Enable FP16 inference while using TensorRT backend. Notice: not all the GPU device support FP16, on those device doesn't support FP16, FastDeploy will fallback to FP32 automaticly
+   */
+  void EnableTrtFP16();
 
-  void
-  DisableTrtFP16();  ///< Disable FP16 inference while using TensorRT backend
+  /// Disable FP16 inference while using TensorRT backend
+  void DisableTrtFP16();
 
-  void SetTrtCacheFile(
-      const std::string&
-          cache_file_path);  ///< Set cache file path while use TensorRT
-                             ///< backend. Loadding a Paddle/ONNX model and
-                             ///< initialize TensorRT will take a long time, by
-                             ///< this interface it will save the tensorrt
-                             ///< engine to `cache_file_path`, and load it
-                             ///< directly while execute the code again.
+  /**
+   * @brief Set cache file path while use TensorRT backend. Loadding a Paddle/ONNX model and initialize TensorRT will take a long time, by this interface it will save the tensorrt engine to `cache_file_path`, and load it directly while execute the code again
+   */
+  void SetTrtCacheFile(const std::string& cache_file_path);
 
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
@@ -236,19 +219,18 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::map<std::string, std::string> custom_op_info_;
 };
 
-/*! @brief Runtime object used to inference the loaded model on different
- * devices
+/*! @brief Runtime object used to inference the loaded model on different devices
  */
 struct FASTDEPLOY_DECL Runtime {
  public:
-  bool Init(const RuntimeOption&
-                _option);  ///< Intialize a Runtime object with RuntimeOption
+  /// Intialize a Runtime object with RuntimeOption
+  bool Init(const RuntimeOption& _option);
 
   /** \brief Inference the model by the input data, and write to the output
    *
-   * \param[in] input_tensors Notice the FDTensor::name should keep same with
-   * the model's input \param[in] output_tensors Inference results \return true
-   * if the inference successed, otherwise false
+   * \param[in] input_tensors Notice the FDTensor::name should keep same with the model's input
+   * \param[in] output_tensors Inference results
+   * \return true if the inference successed, otherwise false
    */
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
