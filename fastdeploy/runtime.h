@@ -26,6 +26,16 @@ enum FASTDEPLOY_DECL Backend { UNKNOWN, ORT, TRT, PDINFER, OPENVINO, LITE };
 // to decide which ModelFormat is
 enum FASTDEPLOY_DECL ModelFormat { AUTOREC, PADDLE, ONNX };
 
+// PaddleLite power mode for mobile device.
+enum FASTDEPLOY_DECL LitePowerMode {
+  LITE_POWER_HIGH = 0,
+  LITE_POWER_LOW = 1,
+  LITE_POWER_FULL = 2,
+  LITE_POWER_NO_BIND = 3,
+  LITE_POWER_RAND_HIGH = 4,
+  LITE_POWER_RAND_LOW = 5
+};
+
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
 FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
@@ -71,13 +81,16 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // enable mkldnn while use paddle inference in CPU
   void EnablePaddleMKLDNN();
+
   // disable mkldnn while use paddle inference in CPU
   void DisablePaddleMKLDNN();
+
   // Enable delete in pass
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
 
   // enable debug information of paddle backend
   void EnablePaddleLogInfo();
+
   // disable debug information of paddle backend
   void DisablePaddleLogInfo();
 
@@ -85,10 +98,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetPaddleMKLDNNCacheSize(int size);
 
   // set the power mode of paddle lite backend.
-  void SetLitePowerMode(int mode);
+  void SetLitePowerMode(LitePowerMode mode);
+
+  // Set optimzed model dir for Paddle Lite backend.
+  void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   // enable half precision while use paddle lite backend
   void EnableLiteFP16();
+
   // disable half precision, change to full precision(float32)
   void DisableLiteFP16();
 
@@ -138,9 +155,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
-  int lite_power_mode = 0;
+  LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
   // enable fp16 or not
   bool lite_enable_fp16 = false;
+  // optimized model dir for CxxConfig
+  std::string lite_optimized_model_dir = "";
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;

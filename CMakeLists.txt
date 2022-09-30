@@ -64,6 +64,8 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 ######################### Options for Android cross compiling ####################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
+option(WITH_LITE_FULL_API "Use Paddle-Lite full API lib for Android." ON)
+option(WITH_LITE_FP16 "Use Paddle-Lite lib with fp16 enabled for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
@@ -408,6 +410,11 @@ if(WIN32)
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION lib
+  )
+elseif(ANDROID)
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib/${ANDROID_ABI}
   )
 else()
   install(

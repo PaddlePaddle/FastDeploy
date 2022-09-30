@@ -230,13 +230,22 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
-void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
+void RuntimeOption::EnableLiteFP16() {
+  FDASSERT(false,
+           "FP16 with LiteBackend for FastDeploy is not fully supported, "
+           "please do not use it now!");
+  lite_enable_fp16 = true;
+}
 
 void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
 
-void RuntimeOption::SetLitePowerMode(int mode) {
-  FDASSERT(mode > -1, "Parameter mode must greater than -1.");
+void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
+}
+
+void RuntimeOption::SetLiteOptimizedModelDir(
+    const std::string& optimized_model_dir) {
+  lite_optimized_model_dir = optimized_model_dir;
 }
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
@@ -477,8 +486,9 @@ void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
-  lite_option.power_mode = option.lite_power_mode;
   lite_option.enable_fp16 = option.lite_enable_fp16;
+  lite_option.power_mode = static_cast<int>(option.lite_power_mode);
+  lite_option.optimized_model_dir = option.lite_optimized_model_dir;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

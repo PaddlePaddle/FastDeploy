@@ -40,14 +40,23 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
 }
 
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
+  option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
   if (option.enable_fp16) {
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
-  } else {
-    valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+    paddle::lite_api::MobileConfig check_fp16_config;
+    // Determine whether the device supports the FP16
+    // instruction set (or whether it is an arm device
+    // of the armv8.2 architecture)
+    supported_fp16_ = check_fp16_config.check_fp16_valid();
+    if (supported_fp16_) {
+      valid_places.push_back(
+          paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+    } else {
+      FDWARNING << "This device is not supported fp16, will skip fp16 option.";
+    }
   }
+  valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
   if (option.threads > 0) {
     config_.set_threads(option.threads);
@@ -73,6 +82,11 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
   predictor_ =
       paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
           config_);
+  if (option_.optimized_model_dir != "") {
+    FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
+           << option_.optimized_model_dir << std::endl;
+    predictor_->SaveOptimizedModel(option_.optimized_model_dir);
+  }
 
   inputs_desc_.clear();
   outputs_desc_.clear();
