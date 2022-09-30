@@ -24,10 +24,12 @@
 
 namespace fastdeploy {
 
+/*! @brief Information of Tensor
+ */
 struct TensorInfo {
-  std::string name;
-  std::vector<int> shape;
-  FDDataType dtype;
+  std::string name;        ///< Name of tensor
+  std::vector<int> shape;  ///< Shape of tensor
+  FDDataType dtype;        ///< Data type of tensor
 
   friend std::ostream& operator<<(std::ostream& output,
                                   const TensorInfo& info) {

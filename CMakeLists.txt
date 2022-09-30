@@ -28,6 +28,8 @@ if(NOT PY_LIBRARY_NAME)
   set(PY_LIBRARY_NAME "fastdeploy_main")
 endif()
 include(ExternalProject)
+set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
+
 add_subdirectory(${CSRCS_DIR_NAME}/fastdeploy)
 include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 
@@ -36,6 +38,10 @@ if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
+
+if(UNIX)
+  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+endif()
 
 if(ANDROID)
   # To reduce the volume of the library
@@ -55,15 +61,12 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-# option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
-# option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
-# option(OPENCV_DIRECTORY "User can specify the installed opencv directory.")
-# option(ORT_DIRECTORY "User can specify the installed onnxruntime directory.")
 ######################### Options for Android cross compiling ####################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
+# Only support Linux Now
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
@@ -74,6 +77,7 @@ set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path
 set(TRT_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of tensorrt library.")
 set(ORT_DIRECTORY "" CACHE PATH "User can specify the installed onnxruntime directory.")
 set(OPENCV_DIRECTORY "" CACHE PATH "User can specify the installed opencv directory.")
+set(OPENVINO_DIRECTORY "" CACHE PATH "User can specify the installed openvino directory.")
 
 
 # Whether to build fastdeploy on device Nvidia Jetson
@@ -171,7 +175,6 @@ set(DEPEND_LIBS "")
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
-set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
 
 # Add eigen lib
 include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
@@ -264,9 +267,9 @@ if(ENABLE_TRT_BACKEND)
   include_directories(${TRT_INC_DIR})
   include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/common)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
-  find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR})
-  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR})
-  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR})
+  find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR} NO_DEFAULT_PATH)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
 
   if(NOT BUILD_ON_JETSON)
@@ -281,10 +284,13 @@ if(ENABLE_TRT_BACKEND)
     execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
     if(UNIX)
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-    	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
     	          RESULT_VARIABLE result
                       OUTPUT_VARIABLE curr_out
                       ERROR_VARIABLE  curr_out)
+      if(ret EQUAL "1")
+	message(FATAL_ERROR "Failed to patchelf tensorrt libraries.")
+      endif()
       message(STATUS "result:${result} out:${curr_out}")
     endif()
   endif()
@@ -293,17 +299,19 @@ endif()
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
   if(ENABLE_OPENCV_CUDA)
-    add_definitions(-DENABLE_OPENCV_CUDA)
-    if(APPLE OR ANDROID OR IOS)
-      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    if(NOT WITH_GPU)
+      message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
     endif()
+    if(APPLE OR ANDROID OR IOS OR WIN32)
+      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android/windows os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    endif()
+    add_definitions(-DENABLE_OPENCV_CUDA)
   endif()
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
-  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
@@ -436,6 +444,12 @@ install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+if(NOT WIN32)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)

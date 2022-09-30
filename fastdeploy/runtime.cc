@@ -93,6 +93,32 @@ std::string Str(const ModelFormat& f) {
   return "UNKNOWN-ModelFormat";
 }
 
+std::ostream& operator<<(std::ostream& out, const Backend& backend) {
+  if (backend == Backend::ORT) {
+    out << "Backend::ORT";
+  } else if (backend == Backend::TRT) {
+    out << "Backend::TRT";
+  } else if (backend == Backend::PDINFER) {
+    out << "Backend::PDINFER";
+  } else if (backend == Backend::OPENVINO) {
+    out << "Backend::OPENVINO";
+  } else if (backend == Backend::LITE) {
+    out << "Backend::LITE";
+  }
+  out << "UNKNOWN-Backend";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
+    out << "ModelFormat::PADDLE";
+  } else if (format == ModelFormat::ONNX) {
+    out << "ModelFormat::ONNX";
+  }
+  out << "UNKNOWN-ModelFormat";
+  return out;
+}
+
 bool CheckModelFormat(const std::string& model_file,
                       const ModelFormat& model_format) {
   if (model_format == ModelFormat::PADDLE) {
@@ -148,7 +174,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = ModelFormat::ONNX;
   } else {
-    FDASSERT(false, "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
+    FDASSERT(
+        false,
+        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 
@@ -228,6 +256,11 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
+void RuntimeOption::SetLitePowerMode(int mode) {
+  FDASSERT(mode > -1, "Parameter mode must greater than -1.");
+  lite_power_mode = mode;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -246,6 +279,10 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
   } else {
     trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
   }
+}
+
+void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
+  trt_max_workspace_size = max_workspace_size;
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
@@ -465,6 +502,8 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
+  lite_option.threads = option.cpu_thread_num;
+  lite_option.power_mode = option.lite_power_mode;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
