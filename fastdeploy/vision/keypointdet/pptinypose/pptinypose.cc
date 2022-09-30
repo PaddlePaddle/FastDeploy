@@ -184,6 +184,62 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
   return true;
 }
 
+bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
+                         const DetectionResult& detection_result) {
+  std::vector<cv::Mat> crop_imgs;
+  std::vector<std::vector<float>> center_bs;
+  std::vector<std::vector<float>> scale_bs;
+  int crop_imgs_num = 0;
+  int box_num = detection_result.boxes.size();
+  for (int i = 0; i < box_num; i++) {
+    auto box = detection_result.boxes[i];
+    auto label_id = detection_result.label_ids[i];
+    cv::Mat crop_img;
+    std::vector<int> rect = {static_cast<int>(box[0]), static_cast<int>(box[1]),
+                             static_cast<int>(box[2]),
+                             static_cast<int>(box[3])};
+    std::vector<float> center;
+    std::vector<float> scale;
+    if (label_id == 0) {
+      utils::CropImage(*im, &crop_img, rect, &center, &scale);
+      center_bs.emplace_back(center);
+      scale_bs.emplace_back(scale);
+      crop_imgs.emplace_back(crop_img);
+      crop_imgs_num += 1;
+    }
+  }
+  for (int i = 0; i < crop_imgs_num; i++) {
+    Mat mat(crop_imgs[i]);
+    std::vector<FDTensor> processed_data;
+    if (!Preprocess(&mat, &processed_data)) {
+      FDERROR << "Failed to preprocess input data while using model:"
+              << ModelName() << "." << std::endl;
+      return false;
+    }
+    std::vector<FDTensor> infer_result;
+    if (!Infer(processed_data, &infer_result)) {
+      FDERROR << "Failed to inference while using model:" << ModelName() << "."
+              << std::endl;
+      return false;
+    }
+    KeyPointDetectionResult one_cropimg_result;
+    if (!Postprocess(infer_result, &one_cropimg_result, center_bs[i],
+                     scale_bs[i])) {
+      FDERROR << "Failed to postprocess while using model:" << ModelName()
+              << "." << std::endl;
+      return false;
+    }
+    if (result->num_joints == -1) {
+      result->num_joints = one_cropimg_result.num_joints;
+    }
+    std::copy(one_cropimg_result.keypoints.begin(),
+              one_cropimg_result.keypoints.end(),
+              std::back_inserter(result->keypoints));
+  }
+
+  return true;
+}
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

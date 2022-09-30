@@ -27,6 +27,15 @@ void BindPPTinyPose(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            })
+      .def(
+          "predict",
+          [](vision::keypointdetection::PPTinyPose& self, pybind11::array& data,
+             vision::DetectionResult& detection_result) {
+            auto mat = PyArrayToCvMat(data);
+            vision::KeyPointDetectionResult res;
+            self.Predict(&mat, &res, detection_result);
+            return res;
+          })
       .def_readwrite("use_dark",
                      &vision::keypointdetection::PPTinyPose::use_dark);
 }

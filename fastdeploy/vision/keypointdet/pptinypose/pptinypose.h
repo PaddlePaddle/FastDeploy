@@ -45,6 +45,10 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
                    const std::vector<float>& scale);
 
   bool Predict(cv::Mat* im, KeyPointDetectionResult* result);
+
+  bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
+               const DetectionResult& detection_result);
+
   bool use_dark = true;
 
  private:
