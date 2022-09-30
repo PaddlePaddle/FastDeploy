@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/lite/lite_backend.h"
+
 #include <cstring>
 
 namespace fastdeploy {
@@ -40,13 +41,21 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
 
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   std::vector<paddle::lite_api::Place> valid_places;
-  valid_places.push_back(paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
+  if (option.threads > 0) {
+    config_.set_threads(option.threads);
+  }
+  if (option.power_mode > 0) {
+    config_.set_power_mode(
+        static_cast<paddle::lite_api::PowerMode>(option.power_mode));
+  }
 }
 
 bool LiteBackend::InitFromPaddle(const std::string& model_file,
-                               const std::string& params_file,
-                               const LiteBackendOption& option) {
+                                 const std::string& params_file,
+                                 const LiteBackendOption& option) {
   if (initialized_) {
     FDERROR << "LiteBackend is already initialized, cannot initialize again."
             << std::endl;
@@ -56,8 +65,10 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
   config_.set_model_file(model_file);
   config_.set_param_file(params_file);
   BuildOption(option);
-  predictor_ = paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(config_);
-  
+  predictor_ =
+      paddle::lite_api::CreatePaddlePredictor<paddle::lite_api::CxxConfig>(
+          config_);
+
   inputs_desc_.clear();
   outputs_desc_.clear();
   inputs_order_.clear();
@@ -82,7 +93,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     info.dtype = LiteDataTypeToFD(tensor->precision());
     outputs_desc_.emplace_back(info);
   }
-  
+
   initialized_ = true;
   return true;
 }
@@ -103,12 +114,10 @@ TensorInfo LiteBackend::GetOutputInfo(int index) {
   return outputs_desc_[index];
 }
 
-std::vector<TensorInfo> LiteBackend::GetOutputInfos() {
-  return outputs_desc_;
-}
+std::vector<TensorInfo> LiteBackend::GetOutputInfos() { return outputs_desc_; }
 
 bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs) {
+                        std::vector<FDTensor>* outputs) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -119,12 +128,15 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
-      FDERROR << "Cannot find input with name:" << inputs[i].name << " in loaded model." << std::endl;
+      FDERROR << "Cannot find input with name:" << inputs[i].name
+              << " in loaded model." << std::endl;
       return false;
     }
     auto tensor = predictor_->GetInput(iter->second);
     tensor->Resize(inputs[i].shape);
-    tensor->ShareExternalMemory(const_cast<void*>(inputs[i].CpuData()), inputs[i].Nbytes(), paddle::lite_api::TargetType::kARM);
+    tensor->ShareExternalMemory(const_cast<void*>(inputs[i].CpuData()),
+                                inputs[i].Nbytes(),
+                                paddle::lite_api::TargetType::kARM);
   }
 
   predictor_->Run();
@@ -132,8 +144,10 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
-    (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype, outputs_desc_[i].name);
-    memcpy((*outputs)[i].MutableData(), tensor->data<void>(), (*outputs)[i].Nbytes());
+    (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype,
+                         outputs_desc_[i].name);
+    memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
+           (*outputs)[i].Nbytes());
   }
   return true;
 }

@@ -232,6 +232,11 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
+void RuntimeOption::SetLitePowerMode(int mode) {
+  FDASSERT(mode > -1, "Parameter mode must greater than -1.");
+  lite_power_mode = mode;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -258,6 +263,10 @@ void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
 
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
+}
+
+void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
+  trt_max_workspace_size = max_workspace_size;
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
@@ -469,6 +478,8 @@ void Runtime::CreateTrtBackend() {
 void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
+  lite_option.threads = option.cpu_thread_num;
+  lite_option.power_mode = option.lite_power_mode;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

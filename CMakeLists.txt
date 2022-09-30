@@ -66,6 +66,7 @@ option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle-Lite static lib for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
+# Only support Linux Now
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
@@ -298,10 +299,13 @@ endif()
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
   if(ENABLE_OPENCV_CUDA)
-    add_definitions(-DENABLE_OPENCV_CUDA)
-    if(APPLE OR ANDROID OR IOS)
-      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    if(NOT WITH_GPU)
+      message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
     endif()
+    if(APPLE OR ANDROID OR IOS OR WIN32)
+      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android/windows os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    endif()
+    add_definitions(-DENABLE_OPENCV_CUDA)
   endif()
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
@@ -440,6 +444,12 @@ install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+if(NOT WIN32)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)

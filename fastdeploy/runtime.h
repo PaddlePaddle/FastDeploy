@@ -84,6 +84,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // set size of cached shape while enable mkldnn with paddle inference backend
   void SetPaddleMKLDNNCacheSize(int size);
 
+  // set the power mode of paddle lite backend.
+  void SetLitePowerMode(int mode);
+
   // set tensorrt shape while the inputs of model contain dynamic shape
   // min_shape: the minimum shape
   // opt_shape: the most common shape while inference, default be empty
@@ -102,6 +105,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void DisableTrtFP16();
 
   void SetTrtCacheFile(const std::string& cache_file_path);
+
+  void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
 
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
@@ -125,6 +130,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool pd_enable_log_info = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
+
+  // ======Only for Paddle-Lite Backend=====
+  // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
+  // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
+  // 5: LITE_POWER_RAND_LOW
+  int lite_power_mode = 0;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
