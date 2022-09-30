@@ -106,6 +106,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   // default will let the backend choose their own default value

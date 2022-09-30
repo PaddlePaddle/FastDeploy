@@ -125,6 +125,9 @@ class RuntimeOption:
     def disable_trt_fp16(self):
         return self._option.disable_trt_fp16()
 
+    def set_trt_max_workspace_size(self, trt_max_workspace_size):
+        return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
+
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"
