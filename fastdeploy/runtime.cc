@@ -148,7 +148,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = ModelFormat::ONNX;
   } else {
-    FDASSERT(false, "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
+    FDASSERT(
+        false,
+        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
   }
 }
 
@@ -212,7 +214,9 @@ void RuntimeOption::UseLiteBackend() {
 #endif
 }
 
-void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
+void RuntimeOption::SetPaddleMKLDNN(bool pd_mkldnn) {
+  pd_enable_mkldnn = pd_mkldnn;
+}
 
 void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
 

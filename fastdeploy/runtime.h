@@ -69,8 +69,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // use paddle lite backend
   void UseLiteBackend();
 
-  // enable mkldnn while use paddle inference in CPU
-  void EnablePaddleMKLDNN();
+  // set mkldnn switch while use paddle inference in CPU
+  void SetPaddleMKLDNN(bool pd_mkldnn = true);
   // disable mkldnn while use paddle inference in CPU
   void DisablePaddleMKLDNN();
   // Enable delete in pass
