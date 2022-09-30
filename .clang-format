@@ -60,7 +60,8 @@ BreakAfterJavaFieldAnnotations: false
 BreakStringLiterals: true
 ColumnLimit:     80
 # CommentPragmas:  '^ IWYU pragma:'
-CommentPragmas:  '^[^ ]'
+# CommentPragmas:  '^[^ ]'
+CommentPragmas:  '^\\.+'
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
 ConstructorInitializerIndentWidth: 4
