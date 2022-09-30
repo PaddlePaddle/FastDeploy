@@ -32,8 +32,6 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
   bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
 
-  bool is_resized = false;
-
   bool is_with_softmax = false;
 
   bool is_with_argmax = true;
