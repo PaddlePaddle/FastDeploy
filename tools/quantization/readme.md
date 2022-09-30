@@ -4,11 +4,19 @@ FastDeploy 给用户提供了一键量化功能, 支持离线量化和量化蒸�
 ## 1.安装
 
 ### 环境依赖
-- python >= 3.5  
-- paddlepaddle >= 2.3 (如需使用GPU进行量化，请下载GPU版本)
-- paddleslim >= 2.3.3
 
-### 安装方式
+1.用户参考PaddlePaddle官网, 安装develop版本
+```
+https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
+```
+
+2.安装paddleslim-develop版本
+```bash
+git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
+python setup.py install
+```
+
+### FastDeploy-Quantization 安装方式
 用户在当前目录下，运行如下命令:
 ```
 python setup.py install
@@ -36,7 +44,7 @@ tar -xvf COCO_val_320.tar.gz
 ##### 2.使用fastdeploy_quant命令，执行一键模型量化:
 
 ```shell
-fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
 
 ##### 3.参数说明
@@ -69,7 +77,7 @@ tar -xvf COCO_val_320.tar.gz
 
 ```shell
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.参数说明
@@ -99,7 +107,7 @@ fastdeploy_quant --config_path=./configs/yolov5s_quant.yaml --method='QAT' --sav
 - 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
 
-| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | NT8 mAP
+| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | INT8 mAP |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |
 | YOLOv5s             | TensorRT         |    GPU    |  14.13        |  11.22      |      1.26         | 37.6  | 36.6 |
 | YOLOv5s             | ONNX Runtime     |    CPU    |  183.68       |    100.39   |      1.83         | 37.6  | 33.1 |

@@ -99,3 +99,55 @@ def cls_image_preprocess(img):
     img /= img_std
 
     return img.astype(np.float32)
+
+
+def ppdet_resize_no_keepratio(img, target_shape=[640, 640]):
+    im_shape = img.shape
+
+    resize_h, resize_w = target_shape
+    im_scale_y = resize_h / im_shape[0]
+    im_scale_x = resize_w / im_shape[1]
+
+    return cv2.resize(
+        img, None, None, fx=im_scale_x, fy=im_scale_y, interpolation=2)
+
+
+def ppdet_normliaze(img, is_scale=True):
+
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+    img = img.astype(np.float32, copy=False)
+
+    if is_scale:
+        scale = 1.0 / 255.0
+        img *= scale
+
+    mean = np.array(mean)[np.newaxis, np.newaxis, :]
+    std = np.array(std)[np.newaxis, np.newaxis, :]
+    img -= mean
+    img /= std
+    print("xyy-debug, finish norm")
+    return img
+
+
+def hwc_to_chw(img):
+    img = img.transpose((2, 0, 1))
+    return img
+
+
+def ppdet_image_preprocess(img):
+
+    img = ppdet_resize_no_keepratio(img, target_shape=[640, 640])
+
+    img = np.transpose(img / 255, [2, 0, 1])
+
+    img_mean = np.array([0.485, 0.456, 0.406]).reshape((3, 1, 1))
+    img_std = np.array([0.229, 0.224, 0.225]).reshape((3, 1, 1))
+    img -= img_mean
+    img /= img_std
+
+    print("xyy debug img")
+    print(img)
+    # img = ppdet_normliaze(img, is_scale=True)
+    # img = hwc_to_chw(img)
+    return img.astype(np.float32)
