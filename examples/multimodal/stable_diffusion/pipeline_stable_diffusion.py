@@ -87,7 +87,7 @@ class StableDiffusionFastDeployPipeline(object):
 
         input_name = self.text_encoder_runtime.get_input_info(0).name
         text_embeddings = self.text_encoder_runtime.infer({
-            input_name: text_input_ids.astype(np.int32)
+            input_name: text_input_ids.astype(np.int64)
         })[0]
 
         do_classifier_free_guidance = guidance_scale > 1.0
@@ -99,7 +99,7 @@ class StableDiffusionFastDeployPipeline(object):
                 max_length=max_length,
                 return_tensors="np")
             uncond_embeddings = self.text_encoder_runtime.infer({
-                input_name: uncond_input.input_ids.astype(np.int32)
+                input_name: uncond_input.input_ids.astype(np.int64)
             })[0]
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
@@ -143,11 +143,12 @@ class StableDiffusionFastDeployPipeline(object):
             timestep_name = self.unet_runtime.get_input_info(1).name
             encoder_hidden_states_name = self.unet_runtime.get_input_info(
                 2).name
+            # Required fp16 input.
             noise_pred = self.unet_runtime.infer({
-                sample_name: latent_model_input.astype(np.float32),
+                sample_name: latent_model_input.astype(np.float16),
                 timestep_name: np.array(
-                    [t], dtype=np.float32),
-                encoder_hidden_states_name: text_embeddings.astype(np.float32),
+                    [t], dtype=np.float16),
+                encoder_hidden_states_name: text_embeddings.astype(np.float16),
             })[0]
 
             # perform guidance

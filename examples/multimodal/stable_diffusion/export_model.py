@@ -55,6 +55,7 @@ with torch.inference_mode(), torch.autocast("cuda"):
         do_constant_folding=True,  # whether to execute constant folding for optimization
         input_names=['input_0'],
         output_names=['output_0'])
+    print("Finish exporting vae decoder.")
 
     # Export the unet model
     unet_inputs = (torch.randn(
@@ -70,6 +71,7 @@ with torch.inference_mode(), torch.autocast("cuda"):
         do_constant_folding=True,  # whether to execute constant folding for optimization
         input_names=['input_0', 'input_1', 'input_2'],
         output_names=['output_0'])
+    print("Finish exporting unet.")
 
     # Export the text_encoder
     text_encoder_inputs = (torch.randint(0, 1, (2, 77), device='cuda'), )
@@ -92,3 +94,4 @@ with torch.inference_mode(), torch.autocast("cuda"):
             }
         },
         output_names=['logits'])
+    print("Finish exporting text encoder.")

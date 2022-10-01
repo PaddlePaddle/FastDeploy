@@ -35,8 +35,9 @@ def create_trt_runtime(onnx_file):
     option.use_trt_backend()
     option.use_gpu()
     option.enable_trt_fp16()
-    option._option.trt_max_workspace_size = 1 << 31
+    option.set_trt_max_workspace_size(1 << 31)
     option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
+    option.set_trt_cache_file(f"{onnx_file}.trt.cache")
     return fd.Runtime(option)
 
 
@@ -55,8 +56,9 @@ if __name__ == "__main__":
     # 3. Init runtime
     text_encoder_runtime = create_ort_runtime("text_encoder_v1_4.onnx")
     vae_decoder_runtime = create_ort_runtime("vae_decoder_v1_4.onnx")
+    start = time.time()
     unet_runtime = create_trt_runtime("unet_v1_4.onnx")
-
+    print(f"Spend {time.time() - start : .2f} s")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,
         text_encoder_runtime=text_encoder_runtime,
