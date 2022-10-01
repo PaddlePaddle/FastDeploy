@@ -1,7 +1,7 @@
 # AdaFace C++部署示例
 本目录下提供infer_xxx.py快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
-以AdaFace为例提供`infer_adaface.cc`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+以AdaFace为例提供`infer.cc`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -24,26 +24,32 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
-# 如果为ONNX模型，运行以下代码
-wget https://bj.bcebos.com/fastdeploy/models/onnx/mobile_face_net_ada_face_112x112.onnx
-# CPU推理
-./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
-# GPU推理
-./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 1
-# GPU上TensorRT推理
-./infer_by_onnx mobile_face_net_ada_face_112x112.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 2
-
 # 如果为Paddle模型，运行以下代码
-wget
-wget
+wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
+tar zxvf mobilefacenet_adaface.tgz -C ./
 # CPU推理
-./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              0
 
 # GPU推理
-./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              1
 
 # GPU上TensorRT推理
-./infer_by_paddle mobilefacenet_adaface.pdmodel mobilefacenet_adaface.pdiparams test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              2
 
 ```
 
@@ -67,10 +73,13 @@ fastdeploy::vision::faceid::AdaFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::ONNX)
+        const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+AdaFace模型加载和初始化，如果使用PaddleInference推理，model_file和params_file为PaddleInference模型格式;
+如果使用ONNXRuntime推理，model_file为ONNX模型格式,params_file为空。
+
+
 
 #### Predict函数
 

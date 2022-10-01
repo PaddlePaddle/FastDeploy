@@ -6,7 +6,7 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-以AdaFace为例子, 提供`infer_adaface.py`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+以AdaFace为例子, 提供`infer.py`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
@@ -20,11 +20,11 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 # CPU推理
-python infer_adaface.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
+python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
 # GPU推理
-python infer_adaface.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
+python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
 # GPU上使用TensorRT推理
-python infer_adaface.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
+python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示

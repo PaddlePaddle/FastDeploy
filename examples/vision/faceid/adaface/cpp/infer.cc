@@ -11,9 +11,10 @@
  **/
 #include "fastdeploy/vision.h"
 
-void CpuInfer(const std::string &model_file,
+void CpuInfer(const std::string &model_file, const std::string &params_file,
               const std::vector<std::string> &image_file) {
-  auto model = fastdeploy::vision::faceid::AdaFace(model_file);
+  auto option = fastdeploy::RuntimeOption();
+  auto model = fastdeploy::vision::faceid::AdaFace(model_file, params_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -46,11 +47,12 @@ void CpuInfer(const std::string &model_file,
             << ", Cosine 02:" << cosine02 << std::endl;
 }
 
-void GpuInfer(const std::string &model_file,
+void GpuInfer(const std::string &model_file, const std::string &params_file,
               const std::vector<std::string> &image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::faceid::AdaFace(model_file, "", option);
+  auto model =
+      fastdeploy::vision::faceid::AdaFace(model_file, params_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -83,13 +85,14 @@ void GpuInfer(const std::string &model_file,
             << ", Cosine 02:" << cosine02 << std::endl;
 }
 
-void TrtInfer(const std::string &model_file,
+void TrtInfer(const std::string &model_file, const std::string &params_file,
               const std::vector<std::string> &image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
   option.SetTrtInputShape("data", {1, 3, 112, 112});
-  auto model = fastdeploy::vision::faceid::AdaFace(model_file, "", option);
+  auto model =
+      fastdeploy::vision::faceid::AdaFace(model_file, params_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -123,9 +126,10 @@ void TrtInfer(const std::string &model_file,
 }
 
 int main(int argc, char *argv[]) {
-  if (argc < 6) {
-    std::cout << "Usage: infer_by_onnx path/to/model path/to/image run_option, "
-                 "e.g ./infer_by_onnx mobile_face_net_ada_face_112x112.onnx "
+  if (argc < 7) {
+    std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
+                 "e.g ./infer_demo mobilefacenet_adaface.pdmodel "
+                 "mobilefacenet_adaface.pdiparams "
                  "test_lite_focal_AdaFace_0.JPG test_lite_focal_AdaFace_1.JPG "
                  "test_lite_focal_AdaFace_2.JPG 0"
               << std::endl;
@@ -135,13 +139,14 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  std::vector<std::string> image_files = {argv[2], argv[3], argv[4]};
-  if (std::atoi(argv[5]) == 0) {
-    CpuInfer(argv[1], image_files);
-  } else if (std::atoi(argv[5]) == 1) {
-    GpuInfer(argv[1], image_files);
-  } else if (std::atoi(argv[5]) == 2) {
-    TrtInfer(argv[1], image_files);
+  std::vector<std::string> image_files = {argv[3], argv[4], argv[5]};
+  if (std::atoi(argv[6]) == 0) {
+    std::cout << "use CpuInfer" << std::endl;
+    CpuInfer(argv[1], argv[2], image_files);
+  } else if (std::atoi(argv[6]) == 1) {
+    GpuInfer(argv[1], argv[2], image_files);
+  } else if (std::atoi(argv[6]) == 2) {
+    TrtInfer(argv[1], argv[2], image_files);
   }
   return 0;
 }

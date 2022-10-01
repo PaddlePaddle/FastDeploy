@@ -18,7 +18,13 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of insgihtface onnx model.")
+        "--model",
+        required=True,
+        help="Path of insgihtface paddle or onnx model.")
+    parser.add_argument(
+        "--params_file",
+        default=None,
+        help="Path of insgihtface paddle model's params_file.")
     parser.add_argument(
         "--face", required=True, help="Path of test face image file.")
     parser.add_argument(
@@ -54,37 +60,32 @@ def build_option(args):
     return option
 
 
-args = parse_arguments()
+if __name__ == "__main__":
+    args = parse_arguments()
 
-# 配置runtime，加载模型
-runtime_option = build_option(args)
-model = fd.vision.faceid.ArcFace(args.model, runtime_option=runtime_option)
+    runtime_option = build_option(args)
+    model = fd.vision.faceid.ArcFace(args.model, runtime_option=runtime_option)
 
-# 加载图片
-face0 = cv2.imread(args.face)  # 0,1 同一个人
-face1 = cv2.imread(args.face_positive)
-face2 = cv2.imread(args.face_negative)  # 0,2 不同的人
+    face0 = cv2.imread(args.face)  # 0,1 同一个人
+    face1 = cv2.imread(args.face_positive)
+    face2 = cv2.imread(args.face_negative)  # 0,2 不同的人
 
-# 设置 l2 normalize
-model.l2_normalize = True
+    model.l2_normalize = True
 
-# 预测图片检测结果
-result0 = model.predict(face0)
-result1 = model.predict(face1)
-result2 = model.predict(face2)
+    result0 = model.predict(face0)
+    result1 = model.predict(face1)
+    result2 = model.predict(face2)
 
-# 计算余弦相似度
-embedding0 = result0.embedding
-embedding1 = result1.embedding
-embedding2 = result2.embedding
+    embedding0 = result0.embedding
+    embedding1 = result1.embedding
+    embedding2 = result2.embedding
 
-cosine01 = cosine_similarity(embedding0, embedding1)
-cosine02 = cosine_similarity(embedding0, embedding2)
+    cosine01 = cosine_similarity(embedding0, embedding1)
+    cosine02 = cosine_similarity(embedding0, embedding2)
 
-# 打印结果
-print(result0, end="")
-print(result1, end="")
-print(result2, end="")
-print("Cosine 01: ", cosine01)
-print("Cosine 02: ", cosine02)
-print(model.runtime_option)
+    print(result0, end="")
+    print(result1, end="")
+    print(result2, end="")
+    print("Cosine 01: ", cosine01)
+    print("Cosine 02: ", cosine02)
+    print(model.runtime_option)

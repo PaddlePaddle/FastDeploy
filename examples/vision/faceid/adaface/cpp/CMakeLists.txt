@@ -9,8 +9,5 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(infer_by_onnx ${PROJECT_SOURCE_DIR}/infer_by_onnx.cc)
-target_link_libraries(infer_by_onnx ${FASTDEPLOY_LIBS})
-
-add_executable(infer_by_paddle.cpp ${PROJECT_SOURCE_DIR}/infer_by_paddle.cc)
-target_link_libraries(infer_by_paddle ${FASTDEPLOY_LIBS})
+add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
+target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
