@@ -14,13 +14,19 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/faceid/paddleclas/python/
 
 #下载AdaFace模型文件和测试图片
-wget https://bj.bcebos.com/fastdeploy/models/onnx/mobile_face_net_ada_face_112x112.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
+tar zxvf mobilefacenet_adaface.tgz -C ./
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 # CPU推理
-python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                --device cpu
 # GPU推理
 python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
 # GPU上使用TensorRT推理
