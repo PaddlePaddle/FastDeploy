@@ -93,6 +93,32 @@ std::string Str(const ModelFormat& f) {
   return "UNKNOWN-ModelFormat";
 }
 
+std::ostream& operator<<(std::ostream& out, const Backend& backend) {
+  if (backend == Backend::ORT) {
+    out << "Backend::ORT";
+  } else if (backend == Backend::TRT) {
+    out << "Backend::TRT";
+  } else if (backend == Backend::PDINFER) {
+    out << "Backend::PDINFER";
+  } else if (backend == Backend::OPENVINO) {
+    out << "Backend::OPENVINO";
+  } else if (backend == Backend::LITE) {
+    out << "Backend::LITE";
+  }
+  out << "UNKNOWN-Backend";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
+    out << "ModelFormat::PADDLE";
+  } else if (format == ModelFormat::ONNX) {
+    out << "ModelFormat::ONNX";
+  }
+  out << "UNKNOWN-ModelFormat";
+  return out;
+}
+
 bool CheckModelFormat(const std::string& model_file,
                       const ModelFormat& model_format) {
   if (model_format == ModelFormat::PADDLE) {
@@ -253,6 +279,10 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
   } else {
     trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
   }
+}
+
+void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
+  trt_max_workspace_size = max_workspace_size;
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
