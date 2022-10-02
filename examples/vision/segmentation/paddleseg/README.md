@@ -2,7 +2,7 @@
 
 ## 模型版本说明
 
-- [PaddleSeg Release/2.6](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6)
+- [PaddleSeg develop](https://github.com/PaddlePaddle/PaddleSeg/tree/develop)
 
 目前FastDeploy支持如下模型的部署 
 
