@@ -226,6 +226,30 @@ struct FD_ALIGN(2) float16 {
     return static_cast<double>(static_cast<float>(*this));
   }
 
+  inline bool operator>(const float& other) const {
+    return this->operator float() > other;
+  }
+
+  inline bool operator>(const double& other) const {
+    return this->operator double() > other;
+  }
+
+  inline bool operator<(const float& other) const {
+    return this->operator float() > other;
+  }
+
+  inline bool operator<(const double& other) const {
+    return this->operator double() > other;
+  }
+
+  template <typename T,
+            typename std::enable_if<!std::is_same<T, float16>::value,
+                                    bool>::type = true>
+  inline float16& operator+=(const T& other) {
+    *this = float16(static_cast<T>(*this) + other);
+    return *this;
+  }
+
  private:
   union Bits {
     float f;
@@ -505,6 +529,21 @@ inline bool operator>=(const float16& a, const float16& b) {
   return static_cast<float>(a) >= static_cast<float>(b);
 }
 #endif
+
+  template <typename T,
+            typename std::enable_if<std::is_integral<T>::value ||
+                                        std::is_same<T, float>::value,
+                                    bool>::type = true>
+  inline T& operator+=(T& a, const float16& b) {  // NOLINT
+    auto c = static_cast<float>(a) + static_cast<float>(b);
+    a = static_cast<T>(c);
+    return a;
+  }
+
+  inline double& operator+=(double& a, const float16& b) {  // NOLINT
+    a = a + static_cast<double>(b);
+    return a;
+  }
 
   inline float16 raw_uint16_to_float16(uint16_t a) {
     float16 res;
