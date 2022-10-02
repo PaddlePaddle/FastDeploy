@@ -115,7 +115,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Disable mkldnn while using Paddle Inference as inference backend
   void DisablePaddleMKLDNN();
 
-  /*
+  /**
    * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
    */
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
