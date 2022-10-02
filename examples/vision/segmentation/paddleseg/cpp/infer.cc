@@ -83,11 +83,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-<<<<<<< HEAD
-//  option.SetTrtInputShape("x", {1, 3, 256, 256}, {1, 3, 1024, 1024},
-//                          {1, 3, 2048, 2048});
-=======
->>>>>>> 4de832bc37b1f9c44e4956db94c2605cd34e021b
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
 
