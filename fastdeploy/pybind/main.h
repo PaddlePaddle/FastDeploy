@@ -30,6 +30,8 @@
 #include "fastdeploy/text.h"
 #endif
 
+#include "fastdeploy/core/float16.h"
+
 namespace fastdeploy {
 
 void BindBackend(pybind11::module&);
