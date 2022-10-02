@@ -4,7 +4,7 @@ name: Documentation
 # events but only for the master branch
 on:
   push:
-    branches: [ doxygen ]
+    branches: [ develop ]
 
 jobs:
   build-documentation:
