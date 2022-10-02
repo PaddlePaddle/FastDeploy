@@ -14,8 +14,8 @@
 #include <cstring>
 
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
-
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
