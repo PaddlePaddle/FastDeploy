@@ -20,31 +20,10 @@
 #include <iostream>
 #include <limits>
 
-#ifdef WITH_GPU
-#include <cuda.h>
-#endif  // WITH_GPU
-
-#if defined(__CUDACC__) && CUDA_VERSION >= 7050
-#define FD_CUDA_FP16
-#include <cuda_fp16.h>
-#endif
-
 #if !defined(_WIN32)
 #define FD_ALIGN(x) __attribute__((aligned(x)))
 #else
 #define FD_ALIGN(x) __declspec(align(x))
-#endif
-
-#define CUDA_ARCH_FP16_SUPPORTED(CUDA_ARCH) (CUDA_ARCH >= 600)
-
-#ifdef WITH_GPU
-#define HOSTDEVICE __host__ __device__
-#define DEVICE __device__
-#define HOST __host__
-#else
-#define HOSTDEVICE
-#define DEVICE
-#define HOST
 #endif
 
 namespace fastdeploy {
@@ -63,24 +42,17 @@ struct FD_ALIGN(2) float16 {
   ~float16() = default;
 
 // Constructors
-#ifdef FD_CUDA_FP16
-  HOSTDEVICE inline explicit float16(const half& h) { x = h.x; }
-#endif  // FD_CUDA_FP16
 
 #ifdef FD_WITH_NATIVE_FP16
   // __fp16 is a native half precision data type for arm cpu,
   // float16_t is an alias for __fp16
-  HOSTDEVICE inline explicit float16(const float16_t& h) {
+  inline explicit float16(const float16_t& h) {
     x = *reinterpret_cast<const uint16_t*>(&h);
   }
 #endif
 
-  HOSTDEVICE inline explicit float16(float val) {
-#if defined(FD_CUDA_FP16)
-    half tmp = __float2half(val);
-    x = *reinterpret_cast<uint16_t*>(&tmp);
-
-#elif defined(FD_WITH_NATIVE_FP16)
+  inline explicit float16(float val) {
+#if defined(FD_WITH_NATIVE_FP16)
     float32x4_t tmp = vld1q_dup_f32(&val);
     float16_t res = vget_lane_f16(vcvt_f16_f32(tmp), 0);
     x = *reinterpret_cast<uint16_t*>(&res);
@@ -109,109 +81,85 @@ struct FD_ALIGN(2) float16 {
 #endif
   }
 
-  HOSTDEVICE inline explicit float16(bool b) : x(b ? 0x3c00 : 0) {}
+  inline explicit float16(bool b) : x(b ? 0x3c00 : 0) {}
 
   template <class T>
-  HOSTDEVICE inline explicit float16(const T& val)
+  inline explicit float16(const T& val)
       : x(float16(static_cast<float>(val)).x) {}
 
 // Assignment operators
-#ifdef FD_CUDA_FP16
-  HOSTDEVICE inline float16& operator=(const half& rhs) {
-    x = rhs.x;
-    return *this;
-  }
-#endif
 
 #ifdef FD_WITH_NATIVE_FP16
-  HOSTDEVICE inline float16& operator=(const float16_t& rhs) {
+  inline float16& operator=(const float16_t& rhs) {
     x = *reinterpret_cast<const uint16_t*>(&rhs);
     return *this;
   }
 #endif
 
-  HOSTDEVICE inline float16& operator=(bool b) {
+  inline float16& operator=(bool b) {
     x = b ? 0x3c00 : 0;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(int8_t val) {
+  inline float16& operator=(int8_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(uint8_t val) {
+  inline float16& operator=(uint8_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(int16_t val) {
+  inline float16& operator=(int16_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(uint16_t val) {
+  inline float16& operator=(uint16_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(int32_t val) {
+  inline float16& operator=(int32_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(uint32_t val) {
+  inline float16& operator=(uint32_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(int64_t val) {
+  inline float16& operator=(int64_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(uint64_t val) {
+  inline float16& operator=(uint64_t val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(float val) {
+  inline float16& operator=(float val) {
     x = float16(val).x;
     return *this;
   }
 
-  HOSTDEVICE inline float16& operator=(double val) {
+  inline float16& operator=(double val) {
     x = float16(val).x;
     return *this;
   }
 
 // Conversion opertors
-#ifdef FD_CUDA_FP16
-  HOSTDEVICE inline half to_half() const {
-#ifdef CUDA_VERSION >= 9000
-    __half_raw h;
-    h.x = x;
-    return half(h);
-#else
-    half h;
-    h.x = x;
-    return h;
-#endif
-  }
-#endif  // FD_CUDA_FP16
-
 #ifdef FD_WITH_NATIVE_FP16
   HOSTDEVICE inline explicit operator float16_t() const {
     return *reinterpret_cast<const float16_t*>(this);
   }
 #endif
 
-  HOSTDEVICE inline operator float() const {
-#if defined(FD_CUDA_FP16) && (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 300)
-    half tmp = *reinterpret_cast<const half*>(this);
-    return __half2float(tmp);
-
-#elif defined(FD_WITH_NATIVE_FP16)
+  inline operator float() const {
+#if defined(FD_WITH_NATIVE_FP16)
     float16x4_t res = vld1_dup_f16(reinterpret_cast<const float16_t*>(this));
     return vgetq_lane_f32(vcvt_f32_f16(res), 0);
 
@@ -240,41 +188,41 @@ struct FD_ALIGN(2) float16 {
 #endif
   }
 
-  HOSTDEVICE inline explicit operator bool() const { return (x & 0x7fff) != 0; }
+  inline explicit operator bool() const { return (x & 0x7fff) != 0; }
 
-  HOSTDEVICE inline explicit operator int8_t() const {
+  inline explicit operator int8_t() const {
     return static_cast<int8_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator uint8_t() const {
+  inline explicit operator uint8_t() const {
     return static_cast<uint8_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator int16_t() const {
+  inline explicit operator int16_t() const {
     return static_cast<int16_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator uint16_t() const {
+  inline explicit operator uint16_t() const {
     return static_cast<uint16_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator int32_t() const {
+  inline explicit operator int32_t() const {
     return static_cast<int32_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator uint32_t() const {
+  inline explicit operator uint32_t() const {
     return static_cast<uint32_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator int64_t() const {
+  inline explicit operator int64_t() const {
     return static_cast<int64_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline explicit operator uint64_t() const {
+  inline explicit operator uint64_t() const {
     return static_cast<uint64_t>(static_cast<float>(*this));
   }
 
-  HOSTDEVICE inline operator double() const {
+  inline operator double() const {
     return static_cast<double>(static_cast<float>(*this));
   }
 
@@ -309,123 +257,8 @@ struct FD_ALIGN(2) float16 {
   static constexpr int32_t minD = minC - subC - 1;
 };
 
-// Arithmetic operators for float16 on GPU
-#if defined(FD_CUDA_FP16)
-HOSTDEVICE inline float16 operator+(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return float16(__hadd(a.to_half(), b.to_half()));
-#else
-  return float16(static_cast<float>(a) + static_cast<float>(b));
-#endif
-}
-
-HOSTDEVICE inline float16 operator-(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return float16(__hsub(a.to_half(), b.to_half()));
-#else
-  return float16(static_cast<float>(a) - static_cast<float>(b));
-#endif
-}
-
-HOSTDEVICE inline float16 operator*(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return float16(__hmul(a.to_half(), b.to_half()));
-#else
-  return float16(static_cast<float>(a) * static_cast<float>(b));
-#endif
-}
-
-HOSTDEVICE inline float16 operator/(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  // TODO(kexinzhao): check which cuda version starts to support __hdiv
-  float num = __half2float(a.to_half());
-  float denom = __half2float(b.to_half());
-  return float16(num / denom);
-#else
-  return float16(static_cast<float>(a) / static_cast<float>(b));
-#endif
-}
-
-HOSTDEVICE inline float16 operator-(const float16& a) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return float16(__hneg(a.to_half()));
-#else
-  float16 res;
-  res.x = a.x ^ 0x8000;
-  return res;
-#endif
-}
-
-HOSTDEVICE inline float16& operator+=(float16& a, const float16& b) {  // NOLINT
-  a = a + b;
-  return a;
-}
-
-HOSTDEVICE inline float16& operator-=(float16& a, const float16& b) {  // NOLINT
-  a = a - b;
-  return a;
-}
-
-HOSTDEVICE inline float16& operator*=(float16& a, const float16& b) {  // NOLINT
-  a = a * b;
-  return a;
-}
-
-HOSTDEVICE inline float16& operator/=(float16& a, const float16& b) {  // NOLINT
-  a = a / b;
-  return a;
-}
-
-HOSTDEVICE inline bool operator==(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __heq(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) == static_cast<float>(b);
-#endif
-}
-
-HOSTDEVICE inline bool operator!=(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hne(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) != static_cast<float>(b);
-#endif
-}
-
-HOSTDEVICE inline bool operator<(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hlt(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) < static_cast<float>(b);
-#endif
-}
-
-HOSTDEVICE inline bool operator<=(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hle(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) <= static_cast<float>(b);
-#endif
-}
-
-HOSTDEVICE inline bool operator>(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hgt(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) > static_cast<float>(b);
-#endif
-}
-
-HOSTDEVICE inline bool operator>=(const float16& a, const float16& b) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hge(a.to_half(), b.to_half());
-#else
-  return static_cast<float>(a) >= static_cast<float>(b);
-#endif
-}
-
-#elif defined(FD_WITH_NATIVE_FP16)
 // Arithmetic operators for float16 on ARMv8.2-A CPU
+#if defined(FD_WITH_NATIVE_FP16)
 inline float16 operator+(const float16& a, const float16& b) {
   float16 res;
   asm volatile(
@@ -673,41 +506,28 @@ inline bool operator>=(const float16& a, const float16& b) {
 }
 #endif
 
-HOSTDEVICE inline float16 raw_uint16_to_float16(uint16_t a) {
-  float16 res;
-  res.x = a;
-  return res;
-}
+  inline float16 raw_uint16_to_float16(uint16_t a) {
+    float16 res;
+    res.x = a;
+    return res;
+  }
 
-HOSTDEVICE inline bool(isnan)(const float16& a) {
-#if defined(FD_CUDA_FP16) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530
-  return __hisnan(a.to_half());
-#else
-    return (a.x & 0x7fff) > 0x7c00;
-#endif
-}
+  inline bool(isnan)(const float16& a) { return (a.x & 0x7fff) > 0x7c00; }
 
-HOSTDEVICE inline bool(isinf)(const float16& a) {
-  return (a.x & 0x7fff) == 0x7c00;
-}
+  inline bool(isinf)(const float16& a) { return (a.x & 0x7fff) == 0x7c00; }
 
-HOSTDEVICE inline bool(isfinite)(const float16& a) {
-  return !((isnan)(a)) && !((isinf)(a));
-}
+  inline bool(isfinite)(const float16& a) {
+    return !((isnan)(a)) && !((isinf)(a));
+  }
 
-HOSTDEVICE inline float16(abs)(const float16& a) {
-#if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530)
-  return float16(::fabs(static_cast<float>(a)));
-#else
+  inline float16(abs)(const float16& a) {
     return float16(std::abs(static_cast<float>(a)));
-#endif
-}
+  }
 
-inline std::ostream& operator<<(std::ostream& os, const float16& a) {
-  os << static_cast<float>(a);
-  return os;
-}
-
+  inline std::ostream& operator<<(std::ostream& os, const float16& a) {
+    os << static_cast<float>(a);
+    return os;
+  }
 }  // namespace fastdeploy
 
 namespace std {
@@ -772,36 +592,34 @@ struct numeric_limits<fastdeploy::float16> {
   static const bool traps = true;
   static const bool tinyness_before = false;
 
-  HOSTDEVICE static fastdeploy::float16(min)() {
+  static fastdeploy::float16(min)() {
     return fastdeploy::raw_uint16_to_float16(0x400);
   }
-  HOSTDEVICE static fastdeploy::float16 lowest() {
+  static fastdeploy::float16 lowest() {
     return fastdeploy::raw_uint16_to_float16(0xfbff);
   }
-  HOSTDEVICE static fastdeploy::float16(max)() {
+  static fastdeploy::float16(max)() {
     return fastdeploy::raw_uint16_to_float16(0x7bff);
   }
-  HOSTDEVICE static fastdeploy::float16 epsilon() {
+  static fastdeploy::float16 epsilon() {
     return fastdeploy::raw_uint16_to_float16(0x0800);
   }
-  HOSTDEVICE static fastdeploy::float16 round_error() {
-    return fastdeploy::float16(0.5);
-  }
-  HOSTDEVICE static fastdeploy::float16 infinity() {
+  static fastdeploy::float16 round_error() { return fastdeploy::float16(0.5); }
+  static fastdeploy::float16 infinity() {
     return fastdeploy::raw_uint16_to_float16(0x7c00);
   }
-  HOSTDEVICE static fastdeploy::float16 quiet_NaN() {
+  static fastdeploy::float16 quiet_NaN() {
     return fastdeploy::raw_uint16_to_float16(0x7e00);
   }
-  HOSTDEVICE static fastdeploy::float16 signaling_NaN() {
+  static fastdeploy::float16 signaling_NaN() {
     return fastdeploy::raw_uint16_to_float16(0x7e00);
   }
-  HOSTDEVICE static fastdeploy::float16 denorm_min() {
+  static fastdeploy::float16 denorm_min() {
     return fastdeploy::raw_uint16_to_float16(0x1);
   }
 };
 
-HOSTDEVICE inline fastdeploy::float16 abs(const fastdeploy::float16& a) {
+inline fastdeploy::float16 abs(const fastdeploy::float16& a) {
   return fastdeploy::abs(a);
 }
 

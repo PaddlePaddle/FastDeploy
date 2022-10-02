@@ -35,6 +35,8 @@ std::vector<int64_t> PartialShapeToVec(const ov::PartialShape& shape) {
 FDDataType OpenVINODataTypeToFD(const ov::element::Type& type) {
   if (type == ov::element::f32) {
     return FDDataType::FP32;
+  } else if (type == ov::element::f16) {
+    return FDDataType::FP16;
   } else if (type == ov::element::f64) {
     return FDDataType::FP64;
   } else if (type == ov::element::i8) {
@@ -46,7 +48,7 @@ FDDataType OpenVINODataTypeToFD(const ov::element::Type& type) {
   } else if (type == ov::element::i64) {
     return FDDataType::INT64;
   } else {
-    FDASSERT(false, "Only support float/double/int8/int32/int64 now.");
+    FDASSERT(false, "Only support float/double/int8/int32/int64/float16 now.");
   }
   return FDDataType::FP32;
 }
@@ -64,8 +66,11 @@ ov::element::Type FDDataTypeToOV(const FDDataType& type) {
     return ov::element::i32;
   } else if (type == FDDataType::INT64) {
     return ov::element::i64;
+  } else if (type == FDDataType::FP16) {
+    return ov::element::f16;
   }
-  FDASSERT(false, "Only support float/double/int8/uint8/int32/int64 now.");
+  FDASSERT(false,
+           "Only support float/double/int8/uint8/int32/int64/float16 now.");
   return ov::element::f32;
 }
 

@@ -18,6 +18,7 @@
 
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/backends/ort/utils.h"
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
@@ -186,6 +187,9 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE) {
     dtype = FDDataType::FP64;
     numel *= sizeof(double);
+  } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    dtype = FDDataType::FP16;
+    numel *= sizeof(float16);
   } else {
     FDASSERT(
         false,

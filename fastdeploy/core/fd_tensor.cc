@@ -166,6 +166,8 @@ void FDTensor::PrintInfo(const std::string& prefix) {
     CalculateStatisInfo<int32_t>(Data(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT64) {
     CalculateStatisInfo<int64_t>(Data(), Numel(), &mean, &max, &min);
+  } else if (dtype == FDDataType::FP16) {
+    CalculateStatisInfo<float16>(Data(), Numel(), &mean, &max, &min);
   } else {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "

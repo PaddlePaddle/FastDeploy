@@ -135,6 +135,7 @@ void BindRuntime(pybind11::module& m) {
       .value("INT16", FDDataType::INT16)
       .value("INT32", FDDataType::INT32)
       .value("INT64", FDDataType::INT64)
+      .value("FP16", FDDataType::FP16)
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
