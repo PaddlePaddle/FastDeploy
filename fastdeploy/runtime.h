@@ -53,16 +53,14 @@ FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const ModelFormat& format);
 
-/*! PaddleLite power mode for mobile device.
- *  Refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details.
- */
+/*! Paddle Lite power mode for mobile device. */
 enum FASTDEPLOY_DECL LitePowerMode {
-  LITE_POWER_HIGH = 0,
-  LITE_POWER_LOW = 1,
-  LITE_POWER_FULL = 2,
-  LITE_POWER_NO_BIND = 3,
-  LITE_POWER_RAND_HIGH = 4,
-  LITE_POWER_RAND_LOW = 5
+  LITE_POWER_HIGH = 0,  ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,  ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,  ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,  ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5  ///< Use Lite Backend with rand low power mode
 };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
