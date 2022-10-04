@@ -9,7 +9,7 @@ FastDeploy中各视觉模型可支持多种后端，包括
 所有模型切换后端方式均通过RuntimeOption进行切换，
 
 **Python**
-```
+```python
 import fastdeploy as fd
 option = fd.RuntimeOption()
 
@@ -26,14 +26,14 @@ option.use_ort_backend() # ONNX Runtime
 ```
 
 **C++**
-```
+```C++
 fastdeploy::RuntimeOption option;
 
-# 切换使用CPU/GPU
+// 切换使用CPU/GPU
 option.UseCpu();
 option.UseGpu();
 
-# 切换不同后端
+// 切换不同后端
 option.UsePaddleBackend(); // Paddle Inference
 option.UseTrtBackend(); // TensorRT
 option.UseOpenVINOBackend(); // OpenVINO
