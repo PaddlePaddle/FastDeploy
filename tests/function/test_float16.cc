@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <array>
+#include <cstring>
 #include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/float16.h"
@@ -139,6 +140,28 @@ TEST(float16, isnan) {
   EXPECT_EQ(std::isnan(a), true);
   EXPECT_EQ(std::isnan(b), true);
   EXPECT_EQ(std::isnan(c), true);
+}
+
+TEST(float16, fd_tensor_cpu) {
+  FDTensor tensor;
+
+  std::vector<float16> input_data = {float16(1.0f), float16(0.5f),
+                                     float16(0.33333f), float16(0.0f)};
+  EXPECT_EQ(input_data[0].x, 0x3c00);
+  EXPECT_EQ(input_data[1].x, 0x3800);
+  EXPECT_EQ(input_data[2].x, 0x3555);
+  EXPECT_EQ(input_data[3].x, 0x0000);
+
+  tensor.Resize({4, 1}, FDDataType::FP16);
+  std::memcpy(tensor.Data(), input_data.data(),
+              input_data.size() * sizeof(float16));
+  float16* data_ptr = reinterpret_cast<float16*>(tensor.Data());
+
+  EXPECT_NE(data_ptr, nullptr);
+  EXPECT_EQ(input_data.size(), static_cast<size_t>(tensor.Numel()));
+  for (size_t i = 0; i < input_data.size(); ++i) {
+    EXPECT_EQ(data_ptr[i].x, input_data[i].x);
+  }
 }
 
 }  // namespace fastdeploy
