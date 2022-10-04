@@ -100,6 +100,12 @@ class RuntimeOption:
     def set_paddle_mkldnn_cache_size(self, cache_size):
         return self._option.set_paddle_mkldnn_cache_size(cache_size)
 
+    def enable_lite_fp16(self):
+        return self._option.enable_lite_fp16()
+
+    def disable_lite_fp16(self):
+        return self._option.disable_lite_fp16()
+
     def set_lite_power_mode(self, mode):
         return self._option.set_lite_power_mode(mode)
 
