@@ -53,7 +53,9 @@ FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const ModelFormat& format);
 
-// PaddleLite power mode for mobile device.
+/*! PaddleLite power mode for mobile device.
+ *  Refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details.
+ */
 enum FASTDEPLOY_DECL LitePowerMode {
   LITE_POWER_HIGH = 0,
   LITE_POWER_LOW = 1,
@@ -145,18 +147,18 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetPaddleMKLDNNCacheSize(int size);
 
-  /** 
-   * @brief Set optimzed model dir for Paddle Lite backend. 
+  /**
+   * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   /**
-   * @brief enable half precision while use paddle lite backend 
+   * @brief enable half precision while use paddle lite backend
    */
   void EnableLiteFP16();
 
   /**
-   * @brief disable half precision, change to full precision(float32)  
+   * @brief disable half precision, change to full precision(float32)
    */
   void DisableLiteFP16();
 
