@@ -33,7 +33,6 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
@@ -42,7 +41,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -63,7 +62,6 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
@@ -72,7 +70,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -85,8 +83,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("x", {1, 3, 256, 256}, {1, 3, 1024, 1024},
-                          {1, 3, 2048, 2048});
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option);
 
@@ -96,7 +92,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(&im, &res)) {
@@ -105,7 +100,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisSegmentation(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
