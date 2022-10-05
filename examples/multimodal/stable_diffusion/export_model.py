@@ -14,6 +14,7 @@
 
 import onnx
 import torch
+import onnxsim
 from typing import Optional, Tuple, Union
 from diffusers import UNet2DConditionModel, AutoencoderKL
 from transformers import CLIPTextModel
@@ -72,6 +73,11 @@ with torch.inference_mode(), torch.autocast("cuda"):
         input_names=['input_0', 'input_1', 'input_2'],
         output_names=['output_0'])
     print("Finish exporting unet.")
+
+    unet_model = onnx.load("unet_v1_4.onnx")
+    unet_model_simp, check = onnxsim.simplify(unet_model)
+    onnx.save(unet_model_simp, "unet_v1_4_sim.onnx")
+    print("Finish simplifying unet.")
 
     # Export the text_encoder
     text_encoder_inputs = (torch.randint(0, 1, (2, 77), device='cuda'), )

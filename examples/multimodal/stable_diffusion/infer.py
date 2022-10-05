@@ -57,7 +57,7 @@ if __name__ == "__main__":
     text_encoder_runtime = create_ort_runtime("text_encoder_v1_4.onnx")
     vae_decoder_runtime = create_ort_runtime("vae_decoder_v1_4.onnx")
     start = time.time()
-    unet_runtime = create_trt_runtime("unet_v1_4.onnx")
+    unet_runtime = create_trt_runtime("unet_v1_4_sim.onnx")
     print(f"Spend {time.time() - start : .2f} s")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     prompt = "a photo of an astronaut riding a horse on mars"
 
     start = time.time()
-    image = pipe(prompt)
+    image = pipe(prompt, num_inference_steps=100)[0]
     time_cost = time.time() - start
     image.save("fd_astronaut_rides_horse.png")
     print(f"Image saved! Total time cost: {time_cost:2f} s")

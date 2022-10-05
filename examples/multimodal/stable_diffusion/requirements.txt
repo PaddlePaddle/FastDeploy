@@ -2,3 +2,4 @@ onnx
 torch
 diffusers
 transformers
+onnxsim

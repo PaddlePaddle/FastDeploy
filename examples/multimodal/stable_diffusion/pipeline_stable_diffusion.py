@@ -170,8 +170,6 @@ class StableDiffusionFastDeployPipeline(object):
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
 
-        image = self.vae_decoder(latent_sample=latents)[0]
-
         sample_name = self.vae_decoder_runtime.get_input_info(0).name
         image = self.vae_decoder_runtime.infer({
             sample_name: latents.astype(np.float32)
