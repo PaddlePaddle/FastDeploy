@@ -30,12 +30,12 @@ def create_ort_runtime(onnx_file):
     return fd.Runtime(option)
 
 
-def create_trt_runtime(onnx_file):
+def create_trt_runtime(onnx_file, workspace=1 << 31):
     option = fd.RuntimeOption()
     option.use_trt_backend()
     option.use_gpu()
     option.enable_trt_fp16()
-    option.set_trt_max_workspace_size(1 << 31)
+    option.set_trt_max_workspace_size(workspace)
     option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
     option.set_trt_cache_file(f"{onnx_file}.trt.cache")
     return fd.Runtime(option)
