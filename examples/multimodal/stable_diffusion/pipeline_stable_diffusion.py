@@ -19,6 +19,8 @@ import numpy as np
 import fastdeploy as fd
 from transformers import CLIPTokenizer
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+import PIL
+from PIL import Image
 
 
 class StableDiffusionFastDeployPipeline(object):
@@ -164,7 +166,7 @@ class StableDiffusionFastDeployPipeline(object):
             else:
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
-
+            latents = np.array(latents)
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
 
