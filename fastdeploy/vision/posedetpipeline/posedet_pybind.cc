@@ -21,6 +21,6 @@ void BindPPTinyPosePipeline(pybind11::module& m);
 void BindPoseDetPipeline(pybind11::module& m) {
   auto posedet_module = m.def_submodule(
       "posedetpipeline", "Module to deploy pipeline pose detection models");
-  BindPPTinyPosePipeline(posedet_module)
+  BindPPTinyPosePipeline(posedet_module);
 }
 }  // namespace fastdeploy

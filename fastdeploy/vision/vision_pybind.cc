@@ -113,9 +113,9 @@ void BindVision(pybind11::module& m) {
   BindMatting(m);
   BindOcr(m);
   BindKeyPointDetection(m);
-  BindPoseDetPipeline(m)
+  BindPoseDetPipeline(m);
 #ifdef ENABLE_VISION_VISUALIZE
-      BindVisualize(m);
+  BindVisualize(m);
 #endif
 }
 }  // namespace fastdeploy

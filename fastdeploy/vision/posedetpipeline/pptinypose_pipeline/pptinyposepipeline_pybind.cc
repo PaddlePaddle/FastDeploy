@@ -19,8 +19,13 @@ void BindPPTinyPosePipeline(pybind11::module& m) {
   pybind11::class_<application::posedetpipeline::PPTinyPosePipeline,
                    FastDeployModel>(m, "PPTinyPosePipeline")
 
+      // explicitly pybind more detection models here
       .def(pybind11::init<fastdeploy::vision::detection::PPYOLOE*,
                           fastdeploy::vision::keypointdetection::PPTinyPose*>())
+
+      .def(pybind11::init<fastdeploy::vision::detection::PicoDet*,
+                          fastdeploy::vision::keypointdetection::PPTinyPose*>())
+
       .def("predict", [](application::posedetpipeline::PPTinyPosePipeline& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
