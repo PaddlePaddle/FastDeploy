@@ -18,8 +18,8 @@ import fastdeploy as fd
 from fastdeploy import ModelFormat
 import numpy as np
 from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
-from diffusers.schedulers import PNDMScheduler
 from transformers import CLIPTokenizer
+from scheduling_utils import PNDMScheduler
 
 
 def create_ort_runtime(onnx_file):
