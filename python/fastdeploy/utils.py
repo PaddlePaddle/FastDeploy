@@ -11,30 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
-import logging
-import os
-import sys
 
-from .c_lib_wrap import (
-    ModelFormat,
-    Backend,
-    rknpu2,
-    FDDataType,
-    TensorInfo,
-    Device,
-    is_built_with_gpu,
-    is_built_with_ort,
-    ModelFormat,
-    is_built_with_paddle,
-    is_built_with_trt,
-    get_default_cuda_directory, )
+import cProfile, pstats, io
+from pstats import SortKey
 
-from .runtime import Runtime, RuntimeOption
-from .model import FastDeployModel
-from . import c_lib_wrap as C
-from . import vision
-from . import pipeline
-from . import text
-from .download import download, download_and_decompress, download_model
-from .utils import profile
+
+def profile(func, *args, **kwargs):
+    pr = cProfile.Profile()
+    pr.enable()
+    func(*args, **kwargs)
+    pr.disable()
+    s = io.StringIO()
+    sortby = SortKey.CUMULATIVE
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())

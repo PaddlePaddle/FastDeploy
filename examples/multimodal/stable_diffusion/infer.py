@@ -30,7 +30,7 @@ def create_ort_runtime(onnx_file):
     return fd.Runtime(option)
 
 
-def create_trt_runtime(onnx_file, workspace=1 << 31):
+def create_trt_runtime(onnx_file, workspace=(1 << 31)):
     option = fd.RuntimeOption()
     option.use_trt_backend()
     option.use_gpu()
@@ -55,7 +55,8 @@ if __name__ == "__main__":
 
     # 3. Init runtime
     text_encoder_runtime = create_ort_runtime("text_encoder_v1_4.onnx")
-    vae_decoder_runtime = create_ort_runtime("vae_decoder_v1_4.onnx")
+    vae_decoder_runtime = create_trt_runtime(
+        "vae_decoder_v1_4.onnx", workspace=(1 << 30))
     start = time.time()
     unet_runtime = create_trt_runtime("unet_v1_4_sim.onnx")
     print(f"Spend {time.time() - start : .2f} s")
