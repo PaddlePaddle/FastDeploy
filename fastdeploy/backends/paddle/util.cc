@@ -79,7 +79,9 @@ FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {
     fd_dtype = FDDataType::INT32;
   } else if (dtype == paddle_infer::UINT8) {
     fd_dtype = FDDataType::UINT8;
-  } else {
+  } else if (dtype == paddle_infer::INT8) {
+    fd_dtype = FDDataType::INT8;
+  }else {
     FDASSERT(
         false,
         "Unexpected data type: %d while call CopyTensorToCpu in PaddleBackend.",

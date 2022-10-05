@@ -20,6 +20,7 @@
 namespace fastdeploy {
 namespace vision {
 
+// This class will deprecated, please not use it
 class FASTDEPLOY_DECL Visualize {
  public:
   static int num_classes_;
@@ -50,6 +51,31 @@ class FASTDEPLOY_DECL Visualize {
                                       const KeyPointDetectionResult& results,
                                       float conf_threshold = 0.5f);
 };
+
+std::vector<int> GenerateColorMap(int num_classes = 1000);
+cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred, float threshold);
+FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
+                                     const DetectionResult& result,
+                                     float score_threshold = 0.0,
+                                     int line_size = 1, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisFaceDetection(const cv::Mat& im,
+                                         const FaceDetectionResult& result,
+                                         int line_size = 1,
+                                         float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
+                                        const SegmentationResult& result,
+                                        float weight = 0.5);
+FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
+                                   const MattingResult& result,
+                                   bool remove_small_connected_area = false);
+FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
+FASTDEPLOY_DECL cv::Mat SwapBackground(
+    const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
+    bool remove_small_connected_area = false);
+FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
+                                       const cv::Mat& background,
+                                       const SegmentationResult& result,
+                                       int background_label);
 
 }  // namespace vision
 }  // namespace fastdeploy

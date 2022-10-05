@@ -39,6 +39,8 @@ FDDataType OpenVINODataTypeToFD(const ov::element::Type& type) {
     return FDDataType::FP64;
   } else if (type == ov::element::i8) {
     return FDDataType::INT8;
+  } else if (type == ov::element::u8) {
+    return FDDataType::UINT8;
   } else if (type == ov::element::i32) {
     return FDDataType::INT32;
   } else if (type == ov::element::i64) {
@@ -56,12 +58,14 @@ ov::element::Type FDDataTypeToOV(const FDDataType& type) {
     return ov::element::f64;
   } else if (type == FDDataType::INT8) {
     return ov::element::i8;
+  } else if (type == FDDataType::UINT8) {
+    return ov::element::u8;
   } else if (type == FDDataType::INT32) {
     return ov::element::i32;
   } else if (type == FDDataType::INT64) {
     return ov::element::i64;
   }
-  FDASSERT(false, "Only support float/double/int8/int32/int64 now.");
+  FDASSERT(false, "Only support float/double/int8/uint8/int32/int64 now.");
   return ov::element::f32;
 }
 
@@ -107,19 +111,25 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   // So here will reorder it's inputs and outputs
   std::string model_content;
   ReadBinaryFromFile(model_file, &model_content);
-  auto reader = paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
+  auto reader =
+      paddle2onnx::PaddleReader(model_content.c_str(), model_content.size());
   if (reader.num_inputs != input_infos.size()) {
-    FDERROR << "The number of inputs from PaddleReader:" << reader.num_inputs << " not equal to the number of inputs from OpenVINO:" << input_infos.size() << "." << std::endl;
+    FDERROR << "The number of inputs from PaddleReader:" << reader.num_inputs
+            << " not equal to the number of inputs from OpenVINO:"
+            << input_infos.size() << "." << std::endl;
     return false;
   }
   if (reader.num_outputs != output_infos.size()) {
-    FDERROR << "The number of outputs from PaddleReader:" << reader.num_outputs << " not equal to the number of outputs from OpenVINO:" << output_infos.size() << "." << std::endl;
+    FDERROR << "The number of outputs from PaddleReader:" << reader.num_outputs
+            << " not equal to the number of outputs from OpenVINO:"
+            << output_infos.size() << "." << std::endl;
     return false;
   }
   for (int i = 0; i < reader.num_inputs; ++i) {
     auto iter = input_infos.find(std::string(reader.inputs[i].name));
     if (iter == input_infos.end()) {
-      FDERROR << "Cannot find input name:" << reader.inputs[i].name << " from OpenVINO model." << std::endl;
+      FDERROR << "Cannot find input name:" << reader.inputs[i].name
+              << " from OpenVINO model." << std::endl;
       return false;
     }
     input_infos_.push_back(iter->second);
@@ -127,7 +137,8 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   for (int i = 0; i < reader.num_outputs; ++i) {
     auto iter = output_infos.find(std::string(reader.outputs[i].name));
     if (iter == output_infos.end()) {
-      FDERROR << "Cannot find output name:" << reader.outputs[i].name << " from OpenVINO model." << std::endl;
+      FDERROR << "Cannot find output name:" << reader.outputs[i].name
+              << " from OpenVINO model." << std::endl;
       return false;
     }
     output_infos_.push_back(iter->second);
@@ -144,6 +155,14 @@ TensorInfo OpenVINOBackend::GetInputInfo(int index) {
            "The index: %d should less than the number of outputs: %d.", index,
            NumOutputs());
   return input_infos_[index];
+}
+
+std::vector<TensorInfo> OpenVINOBackend::GetInputInfos() {
+  return input_infos_;
+}
+
+std::vector<TensorInfo> OpenVINOBackend::GetOutputInfos() {
+  return output_infos_;
 }
 
 TensorInfo OpenVINOBackend::GetOutputInfo(int index) {
@@ -181,19 +200,25 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   // So here will reorder it's inputs and outputs
   std::string model_content;
   ReadBinaryFromFile(model_file, &model_content);
-  auto reader = paddle2onnx::OnnxReader(model_content.c_str(), model_content.size());
+  auto reader =
+      paddle2onnx::OnnxReader(model_content.c_str(), model_content.size());
   if (reader.num_inputs != input_infos.size()) {
-    FDERROR << "The number of inputs from OnnxReader:" << reader.num_inputs << " not equal to the number of inputs from OpenVINO:" << input_infos.size() << "." << std::endl;
+    FDERROR << "The number of inputs from OnnxReader:" << reader.num_inputs
+            << " not equal to the number of inputs from OpenVINO:"
+            << input_infos.size() << "." << std::endl;
     return false;
   }
   if (reader.num_outputs != output_infos.size()) {
-    FDERROR << "The number of outputs from OnnxReader:" << reader.num_outputs << " not equal to the number of outputs from OpenVINO:" << output_infos.size() << "." << std::endl;
+    FDERROR << "The number of outputs from OnnxReader:" << reader.num_outputs
+            << " not equal to the number of outputs from OpenVINO:"
+            << output_infos.size() << "." << std::endl;
     return false;
   }
   for (int i = 0; i < reader.num_inputs; ++i) {
     auto iter = input_infos.find(std::string(reader.inputs[i].name));
     if (iter == input_infos.end()) {
-      FDERROR << "Cannot find input name:" << reader.inputs[i].name << " from OpenVINO model." << std::endl;
+      FDERROR << "Cannot find input name:" << reader.inputs[i].name
+              << " from OpenVINO model." << std::endl;
       return false;
     }
     input_infos_.push_back(iter->second);
@@ -201,7 +226,8 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   for (int i = 0; i < reader.num_outputs; ++i) {
     auto iter = output_infos.find(std::string(reader.outputs[i].name));
     if (iter == output_infos.end()) {
-      FDERROR << "Cannot find output name:" << reader.outputs[i].name << " from OpenVINO model." << std::endl;
+      FDERROR << "Cannot find output name:" << reader.outputs[i].name
+              << " from OpenVINO model." << std::endl;
       return false;
     }
     output_infos_.push_back(iter->second);

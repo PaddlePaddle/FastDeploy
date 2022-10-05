@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import fastdeploy as fd
+from fastdeploy import ModelFormat
 import numpy as np
 
 # 下载模型并解压
@@ -21,7 +22,7 @@ fd.download(model_url, path=".")
 
 option = fd.RuntimeOption()
 
-option.set_model_path("mobilenetv2.onnx", model_format="onnx")
+option.set_model_path("mobilenetv2.onnx", model_format=ModelFormat.ONNX)
 
 option.use_openvino_backend()
 

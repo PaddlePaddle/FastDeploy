@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROJECT(fastdeploy C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.16)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(CSRCS_DIR_NAME "Name of source code directory")
 option(LIBRARY_NAME "Name of build library name")
@@ -28,13 +28,26 @@ if(NOT PY_LIBRARY_NAME)
   set(PY_LIBRARY_NAME "fastdeploy_main")
 endif()
 include(ExternalProject)
+set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
+
 add_subdirectory(${CSRCS_DIR_NAME}/fastdeploy)
-include(external/utils.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 
 # Set C++11 as standard for the whole project
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
+
+if(UNIX)
+  include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
+endif()
+
+if(ANDROID)
+  # To reduce the volume of the library
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Os -ffunction-sections -fdata-sections")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Os -ffunction-sections -fdata-sections")
+endif()
 
 #############################CMAKE FOR FASTDEPLOY################################
 option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
@@ -42,20 +55,41 @@ option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernc
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
-option(ENABLE_OPENVINO_BACKEND "Whether to enable paddle backend." OFF)
-option(CUDA_DIRECTORY "If build tensorrt backend, need to define path of cuda library.")
-option(TRT_DIRECTORY "If build tensorrt backend, need to define path of tensorrt library.")
+option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
+option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+######################### Options for Android cross compiling ####################
+option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
+option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
+option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
+option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
-option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
-option(ENABLE_DEBUG "Whether to enable print debug information, this may reduce performance." OFF)
+# Only support Linux Now
+# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
-# Whether to build fastdeply with vision/text/... examples, only for testings.
-option(BUILD_EXAMPLES "Whether to build fastdeply with vision examples" OFF)
+# Whether to build fastdeploy with vision/text/... examples, only for testings.
+option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+
+######################### Paths to user's custom libraries directory #####################
+set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
+set(TRT_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of tensorrt library.")
+set(ORT_DIRECTORY "" CACHE PATH "User can specify the installed onnxruntime directory.")
+set(OPENCV_DIRECTORY "" CACHE PATH "User can specify the installed opencv directory.")
+set(OPENVINO_DIRECTORY "" CACHE PATH "User can specify the installed openvino directory.")
+
+
+# Whether to build fastdeploy on device Nvidia Jetson
+# Only support CPU Inference & GPU(TensorRT) Inference Now
+option(BUILD_ON_JETSON "Whether to build fastdeploy on Nvidia Jetson" OFF)
+if(BUILD_ON_JETSON)
+  set(WITH_GPU ON)
+  set(ENABLE_TRT_BACKEND ON)
+  set(ENABLE_ORT_BACKEND ON)
+endif()
 
 # config GIT_URL with github mirrors to speed up dependent repos clone
 option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
@@ -87,9 +121,6 @@ if(WIN32 AND ENABLE_VISION)
   set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 endif()
 
-if(ENABLE_DEBUG)
-  add_definitions(-DFASTDEPLOY_DEBUG)
-endif()
 if(NOT CUDA_DIRECTORY)
   set(CUDA_DIRECTORY "/usr/local/cuda")
 endif()
@@ -110,6 +141,21 @@ if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   endif()
 endif()
 
+if(ANDROID OR IOS)
+  if(ENABLE_ORT_BACKEND)
+    message(FATAL_ERROR "Not support ONNXRuntime backend for Andorid/IOS now. Please set ENABLE_ORT_BACKEND=OFF.")
+  endif()
+  if(ENABLE_PADDLE_BACKEND)
+    message(FATAL_ERROR "Not support Paddle backend for Andorid/IOS now. Please set ENABLE_PADDLE_BACKEND=OFF.")
+  endif()
+  if(ENABLE_OPENVINO_BACKEND)
+    message(FATAL_ERROR "Not support OpenVINO backend for Andorid/IOS now. Please set ENABLE_OPENVINO_BACKEND=OFF.")
+  endif()
+  if(ENABLE_TRT_BACKEND)
+    message(FATAL_ERROR "Not support TensorRT backend for Andorid/IOS now. Please set ENABLE_TRT_BACKEND=OFF.")
+  endif()
+endif()
+
 add_definitions(-DFASTDEPLOY_LIB)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
@@ -120,37 +166,52 @@ file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastde
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/openvino/*.cc)
+file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS})
 
 set(DEPEND_LIBS "")
 
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 
-set(THIRD_PARTY_PATH ${CMAKE_CURRENT_BINARY_DIR}/third_libs)
 
-include(external/eigen.cmake)
+# Add eigen lib
+include_directories(${PROJECT_SOURCE_DIR}/third_party/eigen)
+if(WIN32)
+  add_definitions(-DEIGEN_STRONG_INLINE=inline)
+endif()
+# sw not support thread_local semantic
+if(WITH_SW)
+  add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
+endif()
 
 if(ENABLE_PADDLE_FRONTEND)
   add_definitions(-DENABLE_PADDLE_FRONTEND)
-  include(${PROJECT_SOURCE_DIR}/external/paddle2onnx.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
   list(APPEND DEPEND_LIBS external_paddle2onnx)
 endif(ENABLE_PADDLE_FRONTEND)
 
 if(ENABLE_ORT_BACKEND)
   add_definitions(-DENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
-  include(external/onnxruntime.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/onnxruntime.cmake)
   list(APPEND DEPEND_LIBS external_onnxruntime)
+endif()
+
+if(ENABLE_LITE_BACKEND)
+  add_definitions(-DENABLE_LITE_BACKEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/paddlelite.cmake)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_LITE_SRCS})
+  list(APPEND DEPEND_LIBS external_paddle_lite)
 endif()
 
 if(ENABLE_PADDLE_BACKEND)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
-  include(external/paddle_inference.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/paddle_inference.cmake)
   if(NOT APPLE)
     list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
   else()
@@ -163,13 +224,15 @@ endif()
 if(ENABLE_OPENVINO_BACKEND)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
-  include(external/openvino.cmake)
-  list(APPEND DEPEND_LIBS external_openvino)
+  include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
 endif()
 
 if(WITH_GPU)
   if(APPLE)
     message(FATAL_ERROR "Cannot enable GPU while compling in Mac OSX.")
+    set(WITH_GPU OFF)
+  elseif(ANDROID OR IOS)
+    message(FATAL_ERROR "Cannot enable GPU while compling in Android or IOS.")
     set(WITH_GPU OFF)
   else()
     add_definitions(-DWITH_GPU)
@@ -184,58 +247,73 @@ if(WITH_GPU)
 endif()
 
 if(ENABLE_TRT_BACKEND)
-  if(APPLE)
-    message(FATAL_ERROR "Cannot enable tensorrt backend in mac os, please set -DENABLE_TRT_BACKEND=OFF.")
+  if(APPLE OR ANDROID OR IOS)
+    message(FATAL_ERROR "Cannot enable tensorrt backend in mac/ios/android os, please set -DENABLE_TRT_BACKEND=OFF.")
   endif()
   if(NOT WITH_GPU)
     message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must set -DWITH_GPU=ON, but now it's OFF")
   endif()
-  if(NOT TRT_DIRECTORY)
-    message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must define -DTRT_DIRECTORY, e.g -DTRT_DIRECTORY=/Downloads/TensorRT-8.4")
+  if(NOT BUILD_ON_JETSON)
+    if(NOT TRT_DIRECTORY)
+      message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must define -DTRT_DIRECTORY, e.g -DTRT_DIRECTORY=/Downloads/TensorRT-8.4")
+    endif()
   endif()
+  set(TRT_INC_DIR /usr/include/aarch64-linux-gnu/)
+  set(TRT_LIB_DIR /usr/lib/aarch64-linux-gnu/)
+  if(NOT BUILD_ON_JETSON)
+    set(TRT_INC_DIR ${TRT_DIRECTORY}/include)
+    set(TRT_LIB_DIR ${TRT_DIRECTORY}/lib)
+  endif()
+
   add_definitions(-DENABLE_TRT_BACKEND)
-  include_directories(${TRT_DIRECTORY}/include)
+  include_directories(${TRT_INC_DIR})
   include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/common)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
-  find_library(TRT_INFER_LIB nvinfer ${TRT_DIRECTORY}/lib)
-  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_DIRECTORY}/lib)
-  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_DIRECTORY}/lib)
+  find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+  find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+  find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR} NO_DEFAULT_PATH)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
 
-  if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
-    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+  if(NOT BUILD_ON_JETSON)
+    if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+      file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+      file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
+    endif()
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
+    execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
+    if(UNIX)
+      execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
+    	          RESULT_VARIABLE result
+                      OUTPUT_VARIABLE curr_out
+                      ERROR_VARIABLE  curr_out)
+      if(ret EQUAL "1")
+	message(FATAL_ERROR "Failed to patchelf tensorrt libraries.")
+      endif()
+      message(STATUS "result:${result} out:${curr_out}")
+    endif()
   endif()
-  if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-    file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib")
-  endif()
-  find_package(Python COMPONENTS Interpreter Development REQUIRED)
-  message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/build_scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
-  if(UNIX)
-    execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-  	          COMMAND sh -c "xargs patchelf --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
-  	          RESULT_VARIABLE result
-                    OUTPUT_VARIABLE curr_out
-                    ERROR_VARIABLE  curr_out)
-    message(STATUS "result:${result} out:${curr_out}")
-  endif()
-
 endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
   if(ENABLE_OPENCV_CUDA)
-    add_definitions(-DENABLE_OPENCV_CUDA)
-    if(APPLE)
-      message(FATAL_ERROR "Cannot enable opencv with cuda in mac os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    if(NOT WITH_GPU)
+      message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
     endif()
+    if(APPLE OR ANDROID OR IOS OR WIN32)
+      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android/windows os, please set -DENABLE_OPENCV_CUDA=OFF.")
+    endif()
+    add_definitions(-DENABLE_OPENCV_CUDA)
   endif()
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
-  include(external/opencv.cmake)
-  list(APPEND DEPEND_LIBS ${OpenCV_LIBS})
+  include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
 
   if(ENABLE_VISION_VISUALIZE)
     add_definitions(-DENABLE_VISION_VISUALIZE)
@@ -247,31 +325,45 @@ else()
   endif()
 endif()
 
+if(ANDROID OR IOS)
+  if(ENABLE_TEXT)
+    set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
+    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support faster_tokenizer with Android/IOS now.")
+  endif()
+endif()
+
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
-  include(external/faster_tokenizer.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/faster_tokenizer.cmake)
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
+configure_file(${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py.in ${PROJECT_SOURCE_DIR}/python/scripts/process_libraries.py)
 
 list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_PYBIND_SRCS})
 
 add_library(${LIBRARY_NAME} SHARED ${ALL_DEPLOY_SRCS})
-add_dependencies(${LIBRARY_NAME} extern_eigen3)
 
 redefine_file_macro(${LIBRARY_NAME})
-set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-if(NOT APPLE)
-  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS "-Wl,--start-group,--exclude-libs,ALL")
-endif()
-set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
 
 file(READ "${PROJECT_SOURCE_DIR}/VERSION_NUMBER" FASTDEPLOY_VERSION)
 string(STRIP "${FASTDEPLOY_VERSION}" FASTDEPLOY_VERSION)
 if (APPLE)
   set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+elseif(ANDROID)
+  set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+  # strip debug C++ symbol table
+  set(COMMON_LINK_FLAGS "-Wl,-exclude-libs,ALL")
+  set(COMMON_LINK_FLAGS_REL "-Wl,-s,--gc-sections,-exclude-libs,ALL")
+  if(WITH_OPENCV_STATIC OR WITH_LITE_STATIC)
+    set(COMMON_LINK_FLAGS "${COMMON_LINK_FLAGS},--allow-multiple-definition")
+    set(COMMON_LINK_FLAGS_REL "${COMMON_LINK_FLAGS_REL},--allow-multiple-definition")
+  endif()
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS ${COMMON_LINK_FLAGS})
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE ${COMMON_LINK_FLAGS_REL})
+  set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_MINSIZEREL ${COMMON_LINK_FLAGS_REL})
 elseif(MSVC)
 else()
   set_target_properties(${LIBRARY_NAME} PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
@@ -291,8 +383,10 @@ endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(WIN32)
-  add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
-  add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+  if(ENABLE_VISION)
+    add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+    add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+  endif()
 endif()
 
 # add examples after prepare include paths for third-parties
@@ -306,13 +400,13 @@ endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
-  include(external/gtest.cmake)
-  include(external/gflags.cmake)
-  include(external/glog.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/gtest.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/glog.cmake)
   add_subdirectory(tests)
 endif()
 
-include(external/summary.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/summary.cmake)
 fastdeploy_summary()
 if(WIN32)
   install(
@@ -320,6 +414,11 @@ if(WIN32)
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION lib
+  )
+elseif(ANDROID)
+  install(
+    TARGETS ${LIBRARY_NAME}
+    LIBRARY DESTINATION lib/${ANDROID_ABI}
   )
 else()
   install(
@@ -344,12 +443,20 @@ install(
   ${PROJECT_SOURCE_DIR}/ThirdPartyNotices.txt
   ${PROJECT_SOURCE_DIR}/VERSION_NUMBER
   ${PROJECT_SOURCE_DIR}/FastDeploy.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/FastDeployConfig.cmake
+  ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+if(NOT WIN32)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
 
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)

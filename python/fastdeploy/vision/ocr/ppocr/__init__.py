@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -23,7 +23,7 @@ class DBDetector(FastDeployModel):
                  model_file="",
                  params_file="",
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(DBDetector, self).__init__(runtime_option)
@@ -81,8 +81,8 @@ class DBDetector(FastDeployModel):
     @det_db_box_thresh.setter
     def det_db_box_thresh(self, value):
         assert isinstance(
-            value, float
-        ), "The value to set `det_db_box_thresh` must be type of float."
+            value,
+            float), "The value to set `det_db_box_thresh` must be type of float."
         self._model.det_db_box_thresh = value
 
     @det_db_unclip_ratio.setter
@@ -118,7 +118,7 @@ class Classifier(FastDeployModel):
                  model_file="",
                  params_file="",
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(Classifier, self).__init__(runtime_option)
@@ -159,8 +159,7 @@ class Classifier(FastDeployModel):
     @cls_batch_num.setter
     def cls_batch_num(self, value):
         assert isinstance(
-            value,
-            int), "The value to set `cls_batch_num` must be type of int."
+            value, int), "The value to set `cls_batch_num` must be type of int."
         self._model.cls_batch_num = value
 
 
@@ -170,7 +169,7 @@ class Recognizer(FastDeployModel):
                  params_file="",
                  label_path="",
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(Recognizer, self).__init__(runtime_option)
@@ -211,18 +210,19 @@ class Recognizer(FastDeployModel):
     @rec_batch_num.setter
     def rec_batch_num(self, value):
         assert isinstance(
-            value,
-            int), "The value to set `rec_batch_num` must be type of int."
+            value, int), "The value to set `rec_batch_num` must be type of int."
         self._model.rec_batch_num = value
 
 
 class PPOCRSystemv3(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None." 
+        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model, rec_model._model)
+            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model,
+                                                     rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model, cls_model._model, rec_model._model)
+            self.system = C.vision.ocr.PPOCRSystemv3(
+                det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
         return self.system.predict(input_image)
@@ -230,11 +230,13 @@ class PPOCRSystemv3(FastDeployModel):
 
 class PPOCRSystemv2(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None." 
+        assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model, rec_model._model)
+            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model,
+                                                     rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model, cls_model._model, rec_model._model)
+            self.system = C.vision.ocr.PPOCRSystemv2(
+                det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
         return self.system.predict(input_image)

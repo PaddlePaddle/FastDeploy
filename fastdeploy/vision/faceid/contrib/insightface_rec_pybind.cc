@@ -19,7 +19,8 @@ void BindInsightFaceRecognitionModel(pybind11::module& m) {
   // Bind InsightFaceRecognitionModel
   pybind11::class_<vision::faceid::InsightFaceRecognitionModel,
                    FastDeployModel>(m, "InsightFaceRecognitionModel")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::faceid::InsightFaceRecognitionModel& self,
               pybind11::array& data) {

@@ -28,12 +28,10 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   DBDetector(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+             const ModelFormat& model_format = ModelFormat::PADDLE);
 
-  // 定义模型的名称
   std::string ModelName() const { return "ppocr/ocr_det"; }
 
-  // 模型预测接口，即用户调用的接口
   virtual bool Predict(cv::Mat* im,
                        std::vector<std::array<int, 8>>* boxes_result);
 
@@ -54,20 +52,15 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   bool is_scale;
 
  private:
-  // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
   bool Initialize();
 
-  // FDTensor为预处理后的Tensor数据，传给后端进行推理
-  // im_info为预处理过程保存的数据，在后处理中需要用到
   bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  // 后端推理结果后处理，输出给用户
   bool Postprocess(FDTensor& infer_result,
                    std::vector<std::array<int, 8>>* boxes_result,
                    const std::map<std::string, std::array<float, 2>>& im_info);
 
-  // OCR后处理类
   PostProcessor post_processor_;
 };
 

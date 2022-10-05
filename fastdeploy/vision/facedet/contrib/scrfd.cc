@@ -60,10 +60,11 @@ void SCRFD::LetterBox(Mat* mat, const std::vector<int>& size,
 }
 
 SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
-             const RuntimeOption& custom_option, const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
-    valid_cpu_backends = {Backend::ORT};  // 指定可用的CPU后端
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  // 指定可用的GPU后端
+             const RuntimeOption& custom_option,
+             const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT};  
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -217,7 +218,6 @@ bool SCRFD::Postprocess(
   float pad_h = (out_h - ipt_h * scale) / 2.0f;
   float pad_w = (out_w - ipt_w * scale) / 2.0f;
   if (is_mini_pad) {
-    // 和 LetterBox中_auto=true的处理逻辑对应
     pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }
@@ -317,9 +317,6 @@ bool SCRFD::Postprocess(
 
 bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
                     float conf_threshold, float nms_iou_threshold) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
@@ -336,31 +333,18 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (!Postprocess(output_tensors, result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
-
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 

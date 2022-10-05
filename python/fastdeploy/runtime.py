@@ -23,7 +23,8 @@ class Runtime:
             runtime_option._option), "Initialize Runtime Failed!"
 
     def infer(self, data):
-        assert isinstance(data, dict), "The input data should be type of dict."
+        assert isinstance(data, dict) or isinstance(
+            data, list), "The input data should be type of dict or list."
         return self._runtime.infer(data)
 
     def num_inputs(self):
@@ -53,8 +54,10 @@ class RuntimeOption:
     def __init__(self):
         self._option = C.RuntimeOption()
 
-    def set_model_path(self, model_path, params_path="",
-                       model_format="paddle"):
+    def set_model_path(self,
+                       model_path,
+                       params_path="",
+                       model_format=C.ModelFormat.PADDLE):
         return self._option.set_model_path(model_path, params_path,
                                            model_format)
 
@@ -79,6 +82,9 @@ class RuntimeOption:
     def use_openvino_backend(self):
         return self._option.use_openvino_backend()
 
+    def use_lite_backend(self):
+        return self._option.use_lite_backend()
+
     def enable_paddle_mkldnn(self):
         return self._option.enable_paddle_mkldnn()
 
@@ -93,6 +99,15 @@ class RuntimeOption:
 
     def set_paddle_mkldnn_cache_size(self, cache_size):
         return self._option.set_paddle_mkldnn_cache_size(cache_size)
+
+    def enable_lite_fp16(self):
+        return self._option.enable_lite_fp16()
+
+    def disable_lite_fp16(self):
+        return self._option.disable_lite_fp16()
+
+    def set_lite_power_mode(self, mode):
+        return self._option.set_lite_power_mode(mode)
 
     def set_trt_input_shape(self,
                             tensor_name,
@@ -115,6 +130,9 @@ class RuntimeOption:
 
     def disable_trt_fp16(self):
         return self._option.disable_trt_fp16()
+
+    def set_trt_max_workspace_size(self, trt_max_workspace_size):
+        return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
 
     def __repr__(self):
         attrs = dir(self._option)

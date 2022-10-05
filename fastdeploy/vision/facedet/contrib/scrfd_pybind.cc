@@ -18,7 +18,8 @@ namespace fastdeploy {
 void BindSCRFD(pybind11::module& m) {
   // Bind SCRFD
   pybind11::class_<vision::facedet::SCRFD, FastDeployModel>(m, "SCRFD")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, Frontend>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
       .def("predict",
            [](vision::facedet::SCRFD& self, pybind11::array& data,
               float conf_threshold, float nms_iou_threshold) {

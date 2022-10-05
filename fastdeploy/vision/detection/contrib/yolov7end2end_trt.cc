@@ -60,8 +60,8 @@ void YOLOv7End2EndTRT::LetterBox(Mat* mat, const std::vector<int>& size,
 YOLOv7End2EndTRT::YOLOv7End2EndTRT(const std::string& model_file,
                                    const std::string& params_file,
                                    const RuntimeOption& custom_option,
-                                   const Frontend& model_format) {
-  if (model_format == Frontend::ONNX) {
+                                   const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {};              // NO CPU
     valid_gpu_backends = {Backend::TRT};  // NO ORT
   } else {
