@@ -46,7 +46,6 @@ sudo apt-get install python-pip
 sudo -H pip install jetson-stats
 ```
 
-
 <div id="Compiling"></div>
 
 ## 二、Jetson 上编译 FastDeploy 的 C++ SDK
