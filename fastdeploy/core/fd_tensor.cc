@@ -14,8 +14,8 @@
 #include <cstring>
 
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
-
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -166,6 +166,8 @@ void FDTensor::PrintInfo(const std::string& prefix) {
     CalculateStatisInfo<int32_t>(Data(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT64) {
     CalculateStatisInfo<int64_t>(Data(), Numel(), &mean, &max, &min);
+  } else if (dtype == FDDataType::FP16) {
+    CalculateStatisInfo<float16>(Data(), Numel(), &mean, &max, &min);
   } else {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "

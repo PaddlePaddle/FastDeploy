@@ -30,6 +30,8 @@ ONNXTensorElementDataType GetOrtDtype(const FDDataType& fd_dtype) {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8;
   } else if (fd_dtype == FDDataType::INT8) {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8;
+  } else if (fd_dtype == FDDataType::FP16) {
+    return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
   }
   FDERROR << "Unrecognized fastdeply data type:" << Str(fd_dtype) << "."
           << std::endl;
@@ -45,6 +47,8 @@ FDDataType GetFdDtype(const ONNXTensorElementDataType& ort_dtype) {
     return FDDataType::INT32;
   } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
     return FDDataType::INT64;
+  } else if (ort_dtype == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    return FDDataType::FP16;
   }
   FDERROR << "Unrecognized ort data type:" << ort_dtype << "." << std::endl;
   return FDDataType::FP32;
