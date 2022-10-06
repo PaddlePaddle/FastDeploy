@@ -3,3 +3,4 @@ torch
 diffusers
 transformers
 onnxsim
+scipy

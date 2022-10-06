@@ -16,6 +16,7 @@
 
 import math
 from typing import Optional, Tuple, Union
+from scipy import integrate
 
 import numpy as np
 from config_utils import register_to_config, ConfigMixin
@@ -155,8 +156,7 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
                     ]), self.pndm_order)
             self.prk_timesteps = (
                 prk_timesteps[:-1].repeat(2)[1:-1])[::-1].copy()
-            self.plms_timesteps = self._timesteps[:-3][::-1].copy(
-            )  # we copy to avoid having negative strides which are not supported by torch.from_numpy
+            self.plms_timesteps = self._timesteps[:-3][::-1].copy()
 
         self.timesteps = np.concatenate(
             [self.prk_timesteps, self.plms_timesteps]).astype(np.int64)
@@ -177,9 +177,9 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         This function calls `step_prk()` or `step_plms()` depending on the internal variable `counter`.
 
         Args:
-            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
+            model_output (`np.ndarray`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`torch.FloatTensor`):
+            sample (`np.ndarray`):
                 current instance of sample being created by diffusion process.
             return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
 
@@ -207,9 +207,9 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         solution to the differential equation.
 
         Args:
-            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
+            model_output (`np.ndarray`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`torch.FloatTensor`):
+            sample (`np.ndarray`):
                 current instance of sample being created by diffusion process.
 
         Returns:
@@ -257,9 +257,9 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         times to approximate the solution.
 
         Args:
-            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
+            model_output (`np.ndarray`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`torch.FloatTensor`):
+            sample (`np.ndarray`):
                 current instance of sample being created by diffusion process.
             return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
 
@@ -474,9 +474,9 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         process from the learned model outputs (most often the predicted noise).
 
         Args:
-            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
+            model_output (`np.ndarray`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`torch.FloatTensor`):
+            sample (`np.ndarray`):
                 current instance of sample being created by diffusion process.
             eta (`float`): weight of noise for added noise in diffusion step.
             use_clipped_model_output (`bool`): TODO
@@ -648,8 +648,6 @@ class LMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         Args:
             num_inference_steps (`int`):
                 the number of diffusion steps used when generating samples with a pre-trained model.
-            device (`str` or `torch.device`, optional):
-                the device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
         """
         self.num_inference_steps = num_inference_steps
 
@@ -679,9 +677,9 @@ class LMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         process from the learned model outputs (most often the predicted noise).
 
         Args:
-            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
+            model_output (`np.ndarray`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`torch.FloatTensor`):
+            sample (`np.ndarray`):
                 current instance of sample being created by diffusion process.
             order: coefficient for multi-step inference.
             return_dict (`bool`): option for returning tuple rather than LMSDiscreteSchedulerOutput class

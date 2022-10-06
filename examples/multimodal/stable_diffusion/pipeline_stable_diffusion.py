@@ -20,7 +20,7 @@ from typing import List, Optional, Union
 import numpy as np
 import fastdeploy as fd
 from transformers import CLIPTokenizer
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from scheduling_utils import PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler
 import PIL
 from PIL import Image
 
@@ -132,7 +132,6 @@ class StableDiffusionFastDeployPipeline(object):
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
-
         for i, t in enumerate(self.scheduler.timesteps):
             # expand the latents if we are doing classifier free guidance
             latent_model_input = np.concatenate(
@@ -154,7 +153,6 @@ class StableDiffusionFastDeployPipeline(object):
                     [t], dtype=np.float16),
                 encoder_hidden_states_name: text_embeddings.astype(np.float16),
             })[0]
-
             # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = np.split(noise_pred, 2)
@@ -164,14 +162,12 @@ class StableDiffusionFastDeployPipeline(object):
             # compute the previous noisy sample x_t -> x_t-1
             if isinstance(self.scheduler, LMSDiscreteScheduler):
                 latents = self.scheduler.step(noise_pred, i, latents,
-                                              **extra_step_kwargs).prev_sample
+                                              **extra_step_kwargs)[0]
             else:
                 latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
-            latents = np.array(latents)
+                                              **extra_step_kwargs)[0]
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
-
         sample_name = self.vae_decoder_runtime.get_input_info(0).name
         image = self.vae_decoder_runtime.infer({
             sample_name: latents.astype(np.float32)
