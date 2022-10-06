@@ -46,15 +46,6 @@ sudo apt-get install python-pip
 sudo -H pip install jetson-stats
 ```
 
-### 3. [ 可选 ] 移除 LibreOffice
-
-鉴于 LibreOffice 的使用率很低，将其移除可以节省系统空间。
-
-```
-sudo apt-get purge libreoffice
-
-sudo apt-get clean
-```
 
 <div id="Compiling"></div>
 
