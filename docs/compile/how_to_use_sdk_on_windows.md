@@ -332,7 +332,8 @@ Visualized result saved in ./vis_result.jpg
 
 ### 4.1 方式一：使用 fastdeploy_init.bat 进行配置（推荐）  
 <div id="CommandLineDeps1"></div>  
-对于版本高于0.2.1的SDK，我们提供了 `fastdeploy_init.bat` 工具来管理FastDeploy中所有的依赖库。可以通过该脚本工具查看(show)、拷贝(install) 和 设置(init and setup) SDK中所有的dll，方便用户快速完成运行时环境配置。
+
+对于版本高于0.2.1的SDK，我们提供了 **fastdeploy_init.bat** 工具来管理FastDeploy中所有的依赖库。可以通过该脚本工具查看(show)、拷贝(install) 和 设置(init and setup) SDK中所有的dll，方便用户快速完成运行时环境配置。
 
 #### 4.1.1 fastdeploy_init.bat 使用说明  
 <div id="CommandLineDeps11"></div>  
@@ -366,22 +367,17 @@ D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat show %cd%
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [DLL] D:\path-to-fastdeploy-sdk-dir\lib\fastdeploy.dll **[NEEDED]**
 [DLL] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\lib\core_tokenizers.dll  **[NEEDED]**
-......
 [DLL] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\x64\vc15\bin\opencv_ffmpeg3416_64.dll  **[NEEDED]**
-[DLL] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\x64\vc15\bin\opencv_world3416.dll  **[NEEDED]**
 ......
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [Lib] D:\path-to-fastdeploy-sdk-dir\lib\fastdeploy.lib **[NEEDED][fastdeploy]**
 [Lib] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\lib\core_tokenizers.lib  **[NEEDED][fastdeploy::text]**
-......
 [Lib] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\x64\vc15\lib\opencv_world3416.lib  **[NEEDED][fastdeploy::vision]**
 ......
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [Include] D:\path-to-fastdeploy-sdk-dir\include **[NEEDED][fastdeploy]**
-[Include]D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\include  **[NEEDED][fastdeploy::text]**
-[Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\onnxruntime\include
+[Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\include  **[NEEDED][fastdeploy::text]**
 [Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\include  **[NEEDED][fastdeploy::vision]**
-[Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\openvino\runtime\include
 ......
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 [XML] D:\path-to-fastdeploy-sdk-dir\third_libs\install\openvino\runtime\bin\plugins.xml **[NEEDED]**

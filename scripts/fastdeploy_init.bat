@@ -128,9 +128,9 @@ if "%__script_action_type%" == "install" (
         echo [INFO]   To: !__another_target_dir!
         set /p yes_or_no=Choose y means YES, n means NO: [y/n]
         if "!yes_or_no!"=="y" (echo YES.) else (echo NO. && pause && goto:eof)
-        @setlocal disabledelayedexpansion
         pause
     )
+    @setlocal disabledelayedexpansion
     if not exist %__fastdeploy_sdk_dir% ( echo [ERROR] %__fastdeploy_sdk_dir% is not exist ! && goto:eof )
     if not exist %__another_target_dir% ( mkdir %__another_target_dir% && echo [INFO] Created %__another_target_dir% done!)
     set __have_openvino_flag=false
