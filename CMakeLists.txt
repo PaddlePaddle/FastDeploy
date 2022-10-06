@@ -49,7 +49,7 @@ if(ANDROID)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Os -ffunction-sections -fdata-sections")
 endif()
 
-#############################CMAKE FOR FASTDEPLOY################################
+############################# Basic Options for FastDeploy ################################
 option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
@@ -61,7 +61,7 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
-######################### Options for Android cross compiling ####################
+############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
 option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
@@ -156,6 +156,7 @@ if(ANDROID OR IOS)
   endif()
 endif()
 
+##################################### Buiding: FastDeploy C++ SDK #######################################
 add_definitions(-DFASTDEPLOY_LIB)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
@@ -408,6 +409,8 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/summary.cmake)
 fastdeploy_summary()
+
+################################ Installation: FastDeploy C++ SDK ###############################
 if(WIN32)
   install(
     TARGETS ${LIBRARY_NAME}
@@ -437,6 +440,20 @@ install(
   DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install
   DESTINATION ${CMAKE_INSTALL_PREFIX}/third_libs
 )
+
+if(WIN32 AND BUILD_EXAMPLES)
+  get_windows_path(_tmp_install_dir ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install)
+  get_windows_path(_publish_exe_dir ${EXECUTABLE_OUTPUT_PATH}/Release)
+  list(GET CMAKE_CONFIGURATION_TYPES 0 _CONFIG_TYPE)
+  if((${CMAKE_BUILD_TYPE} MATCHES "Release") OR (${_CONFIG_TYPE} MATCHES "Release"))
+    install(TARGETS ${LIBRARY_NAME} RUNTIME DESTINATION ${EXECUTABLE_OUTPUT_PATH}/Release)
+    add_custom_target(
+      copy_fd_third_dlls_examples ALL COMMAND
+      cmd /C ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.bat install ${_tmp_install_dir} ${_publish_exe_dir} noconfirm)
+    add_dependencies(copy_fd_third_dlls_examples ${LIBRARY_NAME} copy_yaml_library)
+  endif()
+endif()
+
 install(
   FILES
   ${PROJECT_SOURCE_DIR}/LICENSE
@@ -447,17 +464,25 @@ install(
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
 if(NOT WIN32)
   install(
     FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
+else()
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.bat
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
 endif()
 
+############################### Building: FastDeploy Python Wheel #############################
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
   if("${PY_EXT_SUFFIX}" STREQUAL "")
