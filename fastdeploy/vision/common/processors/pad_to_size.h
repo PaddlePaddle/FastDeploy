@@ -21,7 +21,7 @@ namespace vision {
 
 class PadToSize : public Processor {
  public:
-  // only support pad with left-top padding mode
+  // only support pad with right-bottom padding mode
   PadToSize(int width, int height, const std::vector<float>& value) {
     width_ = width;
     height_ = height;

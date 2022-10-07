@@ -122,8 +122,13 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       } else {
         int min_target_size = std::min(target_size[0], target_size[1]);
         int max_target_size = std::max(target_size[0], target_size[1]);
+        std::vector<int> max_size;
+        if (max_target_size > 0) {
+          max_size.push_back(max_target_size);
+          max_size.push_back(max_target_size);
+        }
         processors_.push_back(std::make_shared<ResizeByShort>(
-            min_target_size, interp, true, max_target_size));
+            min_target_size, interp, true, max_size));
       }
     } else if (op_name == "Permute") {
       // Do nothing, do permute as the last operation

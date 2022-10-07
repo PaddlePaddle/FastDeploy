@@ -85,6 +85,13 @@ void FDTensor::ExpandDim(int64_t axis) {
   shape.insert(shape.begin() + axis, 1);
 }
 
+void FDTensor::Squeeze(int64_t axis) {
+  size_t ndim = shape.size();
+  FDASSERT(axis >= 0 && axis < ndim,
+           "The allowed 'axis' must be in range of (0, %lu)!", ndim);
+  shape.erase(shape.begin() + axis);
+}
+
 void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
                         const FDDataType& data_type,
                         const std::string& tensor_name,

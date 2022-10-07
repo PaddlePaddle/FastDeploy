@@ -19,32 +19,33 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByShort : public Processor {
+class LimitLong : public Processor {
  public:
-  ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
-                const std::vector<int>& max_hw = std::vector<int>()) {
-    target_size_ = target_size;
-    max_hw_ = max_hw;
+  explicit LimitLong(int max_long = -1, int min_long = -1, int interp = 1) {
+    max_long_ = max_long;
+    min_long_ = min_long;
     interp_ = interp;
-    use_scale_ = use_scale;
   }
+
+  // Limit the long edge of image.
+  // If the long edge is larger than max_long_, resize the long edge
+  // to max_long_, while scale the short edge proportionally.
+  // If the long edge is smaller than min_long_, resize the long edge
+  // to min_long_, while scale the short edge proportionally.
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "ResizeByShort"; }
+  std::string Name() { return "LimitLong"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
-                  bool use_scale = true,
-                  const std::vector<int>& max_hw = std::vector<int>(),
+  static bool Run(Mat* mat, int max_long = -1, int min_long = -1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
+  int GetMaxLong() const { return max_long_; }
 
  private:
-  double GenerateScale(const int origin_w, const int origin_h);
-  int target_size_;
-  std::vector<int> max_hw_;
+  int max_long_;
+  int min_long_;
   int interp_;
-  bool use_scale_;
 };
 }  // namespace vision
 }  // namespace fastdeploy
