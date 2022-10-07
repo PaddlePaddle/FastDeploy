@@ -54,7 +54,7 @@ FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const ModelFormat& format);
 
 /*! Paddle Lite power mode for mobile device. */
-enum FASTDEPLOY_DECL LitePowerMode {
+enum LitePowerMode {
   LITE_POWER_HIGH = 0,  ///< Use Lite Backend with high power mode
   LITE_POWER_LOW = 1,  ///< Use Lite Backend with low power mode
   LITE_POWER_FULL = 2,  ///< Use Lite Backend with full power mode
