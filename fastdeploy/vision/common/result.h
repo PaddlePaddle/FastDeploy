@@ -16,6 +16,9 @@
 #include "opencv2/core/core.hpp"
 
 namespace fastdeploy {
+/** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
+*
+*/
 namespace vision {
 enum FASTDEPLOY_DECL ResultType {
   UNKNOWN_RESULT,
