@@ -88,7 +88,7 @@ git config --global http.sslverify false
 
 - 基于 COCO 数据集训练并导出后的 PicoDet-s-416 模型可[点此下载](https://paddledet.bj.bcebos.com/deploy/Inference/picodet_s_416_coco_lcnet.tar)；使用FastDeploy SDK时，导出模型注意事项参考examples下的模型说明，例如 PaddleDetection 中的模型到处参考[对应说明](../../examples/vision/detection/paddledetection#导出部署模型)。
 
-- 测试图片可[点此下载](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.5/demo/000000014439.jpg)
+- 测试图片可[点此下载](https://user-images.githubusercontent.com/54695910/194441360-eda0d563-5e85-4866-90c4-4200b71a7aba.jpeg)
 
 <div id="Deploy"></div>
 
@@ -150,7 +150,7 @@ PicoDet目标检测模型，推理框上的text内容为 {类别ID，置信度}
 
 FastDeploy 默认采用TRT-FP32的推理。如果需要使用TRT-FP16的推理，只需要在代码中加入一行 option.EnableTrtFP16() 即可。
 
-![](https://ai-studio-static-online.cdn.bcebos.com/25ca48f7ecd643ac99715c1db68183bc5a245b51a355412f803f391d87c4ed31)
+![](https://user-images.githubusercontent.com/54695910/194441254-46666ebf-d700-44da-843b-72cf6eaf5858.jpeg)
 
 <font size=3>**【注意】**</font>
 
