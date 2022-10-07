@@ -34,6 +34,8 @@ void BindRuntime(pybind11::module& m) {
       .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",
            &RuntimeOption::SetPaddleMKLDNNCacheSize)
+      .def("enable_lite_fp16", &RuntimeOption::EnableLiteFP16)
+      .def("disable_lite_fp16", &RuntimeOption::DisableLiteFP16)
       .def("set_lite_power_mode", &RuntimeOption::SetLitePowerMode)
       .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
       .def("set_trt_max_workspace_size", &RuntimeOption::SetTrtMaxWorkspaceSize)
@@ -136,6 +138,7 @@ void BindRuntime(pybind11::module& m) {
       .value("INT16", FDDataType::INT16)
       .value("INT32", FDDataType::INT32)
       .value("INT64", FDDataType::INT64)
+      .value("FP16", FDDataType::FP16)
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
