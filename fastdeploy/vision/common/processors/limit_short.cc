@@ -28,9 +28,11 @@ bool LimitShort::CpuRun(Mat* mat) {
   } else if (min_short_ > 0 && im_size_min < min_short_) {
     target = min_short_;
   }
+  double scale = -1.f;
   if (target != im_size_min) {
-    double scale =
-        static_cast<double>(target) / static_cast<double>(im_size_min);
+    scale = static_cast<double>(target) / static_cast<double>(im_size_min);
+  }
+  if (scale > 0) {
     cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
     mat->SetHeight(im->rows);
@@ -51,9 +53,11 @@ bool LimitShort::GpuRun(Mat* mat) {
   } else if (min_short_ > 0 && im_size_min < min_short_) {
     target = min_short_;
   }
+  double scale = -1.f;
   if (target != im_size_min) {
-    double scale =
-        static_cast<double>(target) / static_cast<double>(im_size_min);
+    scale = static_cast<double>(target) / static_cast<double>(im_size_min);
+  }
+  if (scale > 0) {
     cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
     mat->SetHeight(im->rows);

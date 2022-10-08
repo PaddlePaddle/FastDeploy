@@ -53,6 +53,16 @@ FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const ModelFormat& format);
 
+/*! Paddle Lite power mode for mobile device. */
+enum LitePowerMode {
+  LITE_POWER_HIGH = 0,  ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,  ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,  ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,  ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5  ///< Use Lite Backend with rand low power mode
+};
+
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
 
@@ -115,8 +125,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Disable mkldnn while using Paddle Inference as inference backend
   void DisablePaddleMKLDNN();
 
-  /*
-   * Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete mulitple passes
+  /**
+   * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
    */
   void DeletePaddleBackendPass(const std::string& delete_pass_name);
 
@@ -136,10 +146,24 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetPaddleMKLDNNCacheSize(int size);
 
   /**
+   * @brief Set optimzed model dir for Paddle Lite backend.
+   */
+  void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
+
+  /**
+   * @brief enable half precision while use paddle lite backend
+   */
+  void EnableLiteFP16();
+
+  /**
+   * @brief disable half precision, change to full precision(float32)
+   */
+  void DisableLiteFP16();
+
+  /**
    * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
    */
-  void SetLitePowerMode(int mode);
-
+  void SetLitePowerMode(LitePowerMode mode);
 
   /** \brief Set shape range of input tensor for the model that contain dynamic input shape while using TensorRT backend
    *
@@ -196,7 +220,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
-  int lite_power_mode = 0;
+  LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
+  // enable fp16 or not
+  bool lite_enable_fp16 = false;
+  // optimized model dir for CxxConfig
+  std::string lite_optimized_model_dir = "";
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
