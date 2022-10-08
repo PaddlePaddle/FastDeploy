@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, Frontend
+from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
@@ -24,10 +24,10 @@ class PPTinyPose(FastDeployModel):
                  params_file,
                  config_file,
                  runtime_option=None,
-                 model_format=Frontend.PADDLE):
+                 model_format=ModelFormat.PADDLE):
         super(PPTinyPose, self).__init__(runtime_option)
 
-        assert model_format == Frontend.PADDLE, "PPTinyPose model only support model format of Frontend.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PPTinyPose model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.keypointdetection.PPTinyPose(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
