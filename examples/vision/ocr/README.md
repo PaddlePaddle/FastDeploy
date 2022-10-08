@@ -29,7 +29,6 @@
 使用示例如下：
 ```
 #该用例将en_PP-OCRv3_det_infer模型的输入shape, 改为[-1,3,-1,-1], 并将新模型存放至output文件夹下
-
 git clone git@github.com:jiangjiajun/PaddleUtils.git
 cd paddle
 python paddle_infer_shape.py --model_dir en_PP-OCRv3_det_infer/ \
