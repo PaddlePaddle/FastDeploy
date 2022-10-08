@@ -17,3 +17,24 @@
 | PPOCRv2_mobile |[ch_ppocr_mobile_v2.0_det](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_det_infer.tar.gz) | [ch_ppocr_mobile_v2.0_cls](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz) | [ch_ppocr_mobile_v2.0_rec](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_rec_infer.tar.gz) | [ppocr_keys_v1.txt](https://bj.bcebos.com/paddlehub/fastdeploy/ppocr_keys_v1.txt) | OCRv2系列原始超轻量模型，支持中英文、多语种文本检测,比PPOCRv2更加轻量 |
 | PPOCRv2_server |[ch_ppocr_server_v2.0_det](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_server_v2.0_det_infer.tar.gz) | [ch_ppocr_mobile_v2.0_cls](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz) | [ch_ppocr_server_v2.0_rec](https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_server_v2.0_rec_infer.tar.gz) |[ppocr_keys_v1.txt](https://bj.bcebos.com/paddlehub/fastdeploy/ppocr_keys_v1.txt) | OCRv2服务器系列模型, 支持中英文、多语种文本检测，比超轻量模型更大，但效果更好|
 
+### OCR 模型的处理说明
+
+为了让OCR系列模型在FastDeploy多个推理后端上正确推理，以上表格中的部分模型的输入shape，和PaddleOCR套件提供的模型有差异.
+所以用户在FastDeploy上推理PaddleOCR提供的模型，可能会存在shape上的报错.
+例如，由PaddleOCR套件库提供的英文版PP-OCRv3_det模型,输入的shape是`[?,3,960,960]`, 而FastDeploy提供的此模型输入shape为`[?,3,?,?]`.
+我们推荐用户直接下载FastDeploy提供的模型, 用户也可以参考如下工具仓库，自行修改模型的输入shape.
+
+仓库链接: https://github.com/jiangjiajun/PaddleUtils
+
+使用示例如下：
+```
+#该用例将en_PP-OCRv3_det_infer模型的输入shape, 改为[-1,3,-1,-1], 并将新模型存放至output文件夹下
+
+git clone git@github.com:jiangjiajun/PaddleUtils.git
+cd paddle
+python paddle_infer_shape.py --model_dir en_PP-OCRv3_det_infer/ \
+                             --model_filename inference.pdmodel \
+                             --params_filename inference.pdiparams \
+                             --save_dir output  \
+                             --input_shape_dict="{'x':[-1,3,-1,-1]}"
+```
