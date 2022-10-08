@@ -123,11 +123,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
 
-  /// Enable mkldnn while using Paddle Inference as inference backend
-  void EnablePaddleMKLDNN();
-
-  /// Disable mkldnn while using Paddle Inference as inference backend
-  void DisablePaddleMKLDNN();
+  // set mkldnn switch while using Paddle Inference as inference backend
+  void SetPaddleMKLDNN(bool pd_mkldnn = true);
 
   /**
    * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes

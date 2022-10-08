@@ -20,4 +20,4 @@ if(WIN32)
     target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT} Shlwapi.lib)
 else()
     target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS} gflags ${CMAKE_THREAD_LIBS_INIT})
-endif
+endif()
