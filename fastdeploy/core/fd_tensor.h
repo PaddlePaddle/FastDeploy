@@ -71,6 +71,10 @@ struct FASTDEPLOY_DECL FDTensor {
   // at the `axis` position in the expanded Tensor shape.
   void ExpandDim(int64_t axis = 0);
 
+  // Squeeze the shape of a Tensor. Erase the axis that will appear
+  // at the `axis` position in the squeezed Tensor shape.
+  void Squeeze(int64_t axis = 0);
+
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer

@@ -12,19 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/resize_to_int_mult.h"
+#include "fastdeploy/vision/common/processors/limit_long.h"
 
 namespace fastdeploy {
 namespace vision {
 
-bool ResizeToIntMult::CpuRun(Mat* mat) {
+bool LimitLong::CpuRun(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
-  int rw = origin_w - origin_w % mult_int_;
-  int rh = origin_h - origin_h % mult_int_;
-  if (rw != origin_w || rh != origin_w) {
-    cv::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
+  int im_size_max = std::max(origin_w, origin_h);
+  int target = im_size_max;
+  if (max_long_ > 0 && im_size_max > max_long_) {
+    target = max_long_;
+  } else if (min_long_ > 0 && im_size_max < min_long_) {
+    target = min_long_;
+  }
+  if (target != im_size_max) {
+    double scale =
+        static_cast<double>(target) / static_cast<double>(im_size_max);
+    cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
     mat->SetHeight(im->rows);
   }
@@ -32,15 +39,22 @@ bool ResizeToIntMult::CpuRun(Mat* mat) {
 }
 
 #ifdef ENABLE_OPENCV_CUDA
-bool ResizeToIntMult::GpuRun(Mat* mat) {
+bool LimitLong::GpuRun(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetGpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   im->convertTo(*im, CV_32FC(im->channels()));
-  int rw = origin_w - origin_w % mult_int_;
-  int rh = origin_h - origin_h % mult_int_;
-  if (rw != origin_w || rh != origin_w) {
-    cv::cuda::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
+  int im_size_max = std::max(origin_w, origin_h);
+  int target = im_size_max;
+  if (max_long_ > 0 && im_size_max > max_long_) {
+    target = max_long_;
+  } else if (min_long_ > 0 && im_size_max < min_long_) {
+    target = min_long_;
+  }
+  if (target != im_size_max) {
+    double scale =
+        static_cast<double>(target) / static_cast<double>(im_size_max);
+    cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
     mat->SetHeight(im->rows);
   }
@@ -48,9 +62,9 @@ bool ResizeToIntMult::GpuRun(Mat* mat) {
 }
 #endif
 
-bool ResizeToIntMult::Run(Mat* mat, int mult_int, int interp, ProcLib lib) {
-  auto r = ResizeToIntMult(mult_int, interp);
-  return r(mat, lib);
+bool LimitLong::Run(Mat* mat, int max_long, int min_long, ProcLib lib) {
+  auto l = LimitLong(max_long, min_long);
+  return l(mat, lib);
 }
 }  // namespace vision
 }  // namespace fastdeploy
