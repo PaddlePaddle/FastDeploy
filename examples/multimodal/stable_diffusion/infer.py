@@ -30,12 +30,19 @@ def create_ort_runtime(onnx_file):
     return fd.Runtime(option)
 
 
-def create_trt_runtime(onnx_file, workspace=(1 << 31)):
+def create_trt_runtime(onnx_file, workspace=(1 << 31), dynamic_shape=None):
     option = fd.RuntimeOption()
     option.use_trt_backend()
     option.use_gpu()
     option.enable_trt_fp16()
     option.set_trt_max_workspace_size(workspace)
+    if dynamic_shape is not None:
+        for key, shape_dict in dynamic_shape.items():
+            option.set_trt_input_shape(
+                key,
+                min_shape=shape_dict["min_shape"],
+                opt_shape=shape_dict.get("opt_shape", None),
+                max_shape=shape_dict.get("opt_shape", None))
     option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
     option.set_trt_cache_file(f"{onnx_file}.trt.cache")
     return fd.Runtime(option)
@@ -59,7 +66,7 @@ if __name__ == "__main__":
         "vae_decoder_v1_4.onnx", workspace=(1 << 30))
     start = time.time()
     unet_runtime = create_trt_runtime("unet_v1_4_sim.onnx")
-    print(f"Spend {time.time() - start : .2f} s")
+    print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,
         text_encoder_runtime=text_encoder_runtime,

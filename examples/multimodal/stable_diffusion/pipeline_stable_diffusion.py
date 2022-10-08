@@ -170,7 +170,7 @@ class StableDiffusionFastDeployPipeline(object):
         latents = 1 / 0.18215 * latents
         sample_name = self.vae_decoder_runtime.get_input_info(0).name
         image = self.vae_decoder_runtime.infer({
-            sample_name: latents.astype(np.float32)
+            sample_name: latents.astype(np.float16)
         })[0]
 
         image = np.clip(image / 2 + 0.5, 0, 1)

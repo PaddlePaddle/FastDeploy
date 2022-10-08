@@ -29,7 +29,11 @@ class VAEDecoder(AutoencoderKL):
 
 # 1. Load VAE model
 vae_decoder = VAEDecoder.from_pretrained(
-    "CompVis/stable-diffusion-v1-4", subfolder="vae", use_auth_token=True)
+    "CompVis/stable-diffusion-v1-4",
+    torch_dtype=torch.float16,
+    revision="fp16",
+    subfolder="vae",
+    use_auth_token=True)
 
 # 2. Load UNet model
 unet = UNet2DConditionModel.from_pretrained(
@@ -46,9 +50,9 @@ vae_decoder.cuda()
 unet.cuda()
 text_encoder.cuda()
 
-with torch.inference_mode(), torch.autocast("cuda"):
+with torch.inference_mode():
     # Export vae decoder model
-    vae_inputs = (torch.randn(1, 4, 64, 64, device='cuda'), )
+    vae_inputs = (torch.randn(1, 4, 64, 64, dtype=torch.half, device='cuda'), )
     torch.onnx.export(
         vae_decoder,  # model being run
         vae_inputs,  # model input (or a tuple for multiple inputs)
@@ -72,7 +76,7 @@ with torch.inference_mode(), torch.autocast("cuda"):
         export_params=True,  # store the trained parameter weights inside the model file
         opset_version=12,  # the ONNX version to export the model to
         do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=['input_0', 'input_1', 'input_2'],
+        input_names=['latent', 'timestep', 'encoder_embedding'],
         output_names=['output_0'])
     print("Finish exporting unet.")
 
@@ -91,15 +95,5 @@ with torch.inference_mode(), torch.autocast("cuda"):
         opset_version=14,  # the ONNX version to export the model to
         do_constant_folding=True,  # whether to execute constant folding for optimization
         input_names=['input_ids'],
-        dynamic_axes={
-            'input_ids': {
-                0: 'batch_size',
-                1: 'sequence'
-            },
-            'logits': {
-                0: 'batch_size',
-                1: 'sequence'
-            }
-        },
         output_names=['logits'])
     print("Finish exporting text encoder.")
