@@ -16,68 +16,90 @@
 
 namespace fastdeploy {
 
+/*! @brief Base model object for all the vision models
+ */
 class FASTDEPLOY_DECL FastDeployModel {
  public:
+  /// Get model's name
   virtual std::string ModelName() const { return "NameUndefined"; }
 
-  virtual bool InitRuntime();
-  virtual bool CreateCpuBackend();
-  virtual bool CreateGpuBackend();
+  /** \brief Inference the model by the runtime. This interface is included in the `Predict()` function, so we don't call `Infer()` directly in most common situation
+  */
   virtual bool Infer(std::vector<FDTensor>& input_tensors,
                      std::vector<FDTensor>* output_tensors);
 
   RuntimeOption runtime_option;
+  /** \brief Model's valid cpu backends. This member defined all the cpu backends have successfully tested for the model
+   */
   std::vector<Backend> valid_cpu_backends = {Backend::ORT};
+  /** Model's valid gpu backends. This member defined all the gpu backends have successfully tested for the model
+   */
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
-  std::vector<Backend> valid_external_backends;
-  bool initialized = false;
+  /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
+  /// Get number of outputs for this model
   virtual int NumOutputsOfRuntime() { return runtime_->NumOutputs(); }
+  /// Get input information for this model
   virtual TensorInfo InputInfoOfRuntime(int index) {
     return runtime_->GetInputInfo(index);
   }
+  /// Get output information for this model
   virtual TensorInfo OutputInfoOfRuntime(int index) {
     return runtime_->GetOutputInfo(index);
   }
+  /// Check if the model is initialized successfully
   virtual bool Initialized() const {
     return runtime_initialized_ && initialized;
   }
 
+  /** \brief This is a debug interface, used to record the time of backend runtime
+   *
+   * example code @code
+   * auto model = fastdeploy::vision::PPYOLOE("model.pdmodel", "model.pdiparams", "infer_cfg.yml");
+   * if (!model.Initialized()) {
+   *   std::cerr << "Failed to initialize." << std::endl;
+   *   return -1;
+   * }
+   * model.EnableRecordTimeOfRuntime();
+   * cv::Mat im = cv::imread("test.jpg");
+   * for (auto i = 0; i < 1000; ++i) {
+   *   fastdeploy::vision::DetectionResult result;
+   *   model.Predict(&im, &result);
+   * }
+   * model.PrintStatisInfoOfRuntime();
+   * @endcode After called the `PrintStatisInfoOfRuntime()`, the statistical information of runtime will be printed in the console
+   */
   virtual void EnableRecordTimeOfRuntime() {
     time_of_runtime_.clear();
     std::vector<double>().swap(time_of_runtime_);
     enable_record_time_of_runtime_ = true;
   }
 
+  /** \brief Disable to record the time of backend runtime, see `EnableRecordTimeOfRuntime()` for more detail
+  */
   virtual void DisableRecordTimeOfRuntime() {
     enable_record_time_of_runtime_ = false;
   }
 
+  /** \brief Print the statistic information of runtime in the console, see function `EnableRecordTimeOfRuntime()` for more detail
+  */
   virtual std::map<std::string, float> PrintStatisInfoOfRuntime();
-  virtual void EnableDebug();
-  virtual bool DebugEnabled();
+
+ protected:
+  virtual bool InitRuntime();
+  virtual bool CreateCpuBackend();
+  virtual bool CreateGpuBackend();
+  bool initialized = false;
+  std::vector<Backend> valid_external_backends;
 
  private:
   std::unique_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
-  bool debug_ = false;
 
   // record inference time for backend
   std::vector<double> time_of_runtime_;
 };
-
-#define TIMERECORD_START(id) \
-  TimeCounter tc_##id;       \
-  tc_##id.Start();
-
-#define TIMERECORD_END(id, prefix)                                           \
-  if (DebugEnabled()) {                                                      \
-    tc_##id.End();                                                           \
-    FDLogger() << __FILE__ << "(" << __LINE__ << "):" << __FUNCTION__ << " " \
-               << prefix << " duration = " << tc_##id.Duration() << "s."     \
-               << std::endl;                                                 \
-  }
 
 }  // namespace fastdeploy

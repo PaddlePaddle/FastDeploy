@@ -256,9 +256,6 @@ bool YOLOv5::Postprocess(
 
 bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                      float nms_iou_threshold) {
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_START(0)
-#endif
 
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
@@ -272,31 +269,18 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
     return false;
   }
 
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(0, "Preprocess")
-  TIMERECORD_START(1)
-#endif
-
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(1, "Inference")
-  TIMERECORD_START(2)
-#endif
 
   if (!Postprocess(output_tensors, result, im_info, conf_threshold,
                    nms_iou_threshold, multi_label_)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
-
-#ifdef FASTDEPLOY_DEBUG
-  TIMERECORD_END(2, "Postprocess")
-#endif
   return true;
 }
 

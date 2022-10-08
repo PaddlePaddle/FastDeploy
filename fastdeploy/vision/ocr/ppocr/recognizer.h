@@ -25,17 +25,13 @@ namespace ocr {
 class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
  public:
   Recognizer();
-  // 当model_format为ONNX时，无需指定params_file
-  // 当model_format为Paddle时，则需同时指定model_file & params_file
   Recognizer(const std::string& model_file, const std::string& params_file = "",
              const std::string& label_path = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
 
-  // 定义模型的名称
   std::string ModelName() const { return "ppocr/ocr_rec"; }
 
-  // 模型预测接口，即用户调用的接口
   virtual bool Predict(cv::Mat* img,
                        std::tuple<std::string, float>* rec_result);
 
@@ -51,15 +47,11 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
   bool is_scale;
 
  private:
-  // 初始化函数，包括初始化后端，以及其它模型推理需要涉及的操作
   bool Initialize();
 
-  // 输入图像预处理操作
   bool Preprocess(Mat* img, FDTensor* outputs,
                   const std::vector<int>& rec_image_shape);
 
-  // 后端推理结果后处理，输出给用户
-  // infer_result 为后端推理后的输出Tensor
   bool Postprocess(FDTensor& infer_result,
                    std::tuple<std::string, float>* rec_result);
 };

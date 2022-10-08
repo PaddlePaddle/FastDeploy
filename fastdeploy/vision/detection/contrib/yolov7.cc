@@ -191,7 +191,6 @@ bool YOLOv7::Postprocess(
   float pad_h = (out_h - ipt_h * scale) / 2.0f;
   float pad_w = (out_w - ipt_w * scale) / 2.0f;
   if (is_mini_pad) {
-    // 和 LetterBox中_auto=true的处理逻辑对应
     pad_h = static_cast<float>(static_cast<int>(pad_h) % stride);
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }

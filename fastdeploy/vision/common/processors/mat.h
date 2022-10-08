@@ -36,6 +36,7 @@ struct FASTDEPLOY_DECL Mat {
     width = cpu_mat.cols;
     channels = cpu_mat.channels();
   }
+  void SetMat(const cv::Mat& mat) { cpu_mat = mat; }
 
  private:
   int channels;
@@ -75,6 +76,8 @@ struct FASTDEPLOY_DECL Mat {
   Layout layout = Layout::HWC;
   Device device = Device::CPU;
 };
+
+Mat CreateFromTensor(const FDTensor& tensor);
 
 }  // namespace vision
 }  // namespace fastdeploy
