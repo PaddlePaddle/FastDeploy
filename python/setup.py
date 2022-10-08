@@ -346,13 +346,6 @@ if sys.version_info[0] == 3:
 
 package_data = {PACKAGE_NAME: ["LICENSE", "ThirdPartyNotices.txt"]}
 
-version = VersionInfo.version,
-if os.getenv("BUILD_FOR_PY_API", "OFF") == "ON":
-    wheel_name = "fastdeploy-py-api"
-    import datetime
-    today = datetime.datetime.today()
-    yea
-    version = "12341234134123412"
 if sys.argv[1] == "install" or sys.argv[1] == "bdist_wheel":
     shutil.copy(
         os.path.join(TOP_DIR, "ThirdPartyNotices.txt"),
