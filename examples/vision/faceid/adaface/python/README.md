@@ -11,14 +11,17 @@
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/faceid/paddleclas/python/
+cd examples/vision/faceid/adaface/python/
 
 #下载AdaFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
-tar zxvf mobilefacenet_adaface.tgz -C ./
+#下载测试图片
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
+
+# 如果为Paddle模型，运行以下代码
+wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
+tar zxvf mobilefacenet_adaface.tgz -C ./
 
 # CPU推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
@@ -28,9 +31,20 @@ python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --face_negative test_lite_focal_arcface_2.JPG \
                 --device cpu
 # GPU推理
-python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                --device gpu
 # GPU上使用TensorRT推理
-python infer.py --model mobile_face_net_ada_face_112x112.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                 --device gpu \
+                 --use_trt True
 ```
 
 运行完成可视化结果如下图所示
@@ -52,17 +66,17 @@ Cosine 02:  -0.09605773855893639
 ## AdaFace Python接口
 
 ```python
-fastdeploy.vision.faceid.AdaFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.AdaFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式
+AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式或PADDLE静态图格式
 
 **参数**
 
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为PADDLE
 
 ### predict函数
 

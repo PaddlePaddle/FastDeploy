@@ -64,10 +64,8 @@ if __name__ == "__main__":
     args = parse_arguments()
 
     runtime_option = build_option(args)
-    model = fd.vision.faceid.ArcFace(
-        args.model,
-        params_file=args.params_file,
-        runtime_option=runtime_option)
+    model = fd.vision.faceid.AdaFace(
+        args.model, args.params_file, runtime_option=runtime_option)
 
     face0 = cv2.imread(args.face)
     face1 = cv2.imread(args.face_positive)
