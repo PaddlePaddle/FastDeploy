@@ -18,7 +18,6 @@
 #include "fastdeploy/vision/common/result.h"
 
 #include "fastdeploy/vision/keypointdet/pptinypose/pptinypose_utils.h"
-#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -29,7 +28,7 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
   PPTinyPose(const std::string& model_file, const std::string& params_file,
              const std::string& config_file,
              const RuntimeOption& custom_option = RuntimeOption(),
-             const Frontend& model_format = Frontend::PADDLE);
+             const ModelFormat& model_format = ModelFormat::PADDLE);
 
   std::string ModelName() const { return "PaddleDetection/PPTinyPose"; }
 

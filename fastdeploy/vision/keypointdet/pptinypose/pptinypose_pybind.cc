@@ -18,7 +18,7 @@ void BindPPTinyPose(pybind11::module& m) {
   pybind11::class_<vision::keypointdetection::PPTinyPose, FastDeployModel>(
       m, "PPTinyPose")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          Frontend>())
+                          ModelFormat>())
       .def("predict",
            [](vision::keypointdetection::PPTinyPose& self,
               pybind11::array& data) {
