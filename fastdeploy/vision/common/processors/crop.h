@@ -19,24 +19,29 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeToIntMult : public Processor {
+class Crop : public Processor {
  public:
-  explicit ResizeToIntMult(int mult_int = 32, int interp = 1) {
-    mult_int_ = mult_int;
-    interp_ = interp;
+  Crop(int offset_w, int offset_h, int width, int height) {
+    offset_w_ = offset_w;
+    offset_h_ = offset_h;
+    width_ = width;
+    height_ = height;
   }
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "ResizeToIntMult"; }
+  std::string Name() { return "Crop"; }
 
-  static bool Run(Mat* mat, int mult_int = 32, int interp = 1,
+  static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
  private:
-  int interp_;
-  int mult_int_;
+  int offset_w_;
+  int offset_h_;
+  int height_;
+  int width_;
 };
+
 }  // namespace vision
 }  // namespace fastdeploy

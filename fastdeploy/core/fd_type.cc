@@ -14,12 +14,12 @@
 
 #include "fastdeploy/core/fd_type.h"
 
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
 int FDDataTypeSize(const FDDataType& data_type) {
-  FDASSERT(data_type != FDDataType::FP16, "Float16 is not supported.");
   if (data_type == FDDataType::BOOL) {
     return sizeof(bool);
   } else if (data_type == FDDataType::INT16) {
@@ -36,6 +36,8 @@ int FDDataTypeSize(const FDDataType& data_type) {
     return sizeof(uint8_t);
   } else if (data_type == FDDataType::INT8) {
     return sizeof(int8_t);
+  } else if (data_type == FDDataType::FP16) {
+    return sizeof(float16);
   } else {
     FDASSERT(false, "Unexpected data type: %s", Str(data_type).c_str());
   }

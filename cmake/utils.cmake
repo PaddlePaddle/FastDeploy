@@ -58,3 +58,8 @@ function(remove_duplicate_libraries libraries)
   endforeach()
   set(${libraries} ${full_libraries} PARENT_SCOPE)
 endfunction()
+
+function(get_windows_path win_path origin_path)
+  STRING(REGEX REPLACE "/" "\\\\" _win_path ${origin_path})
+  set(${win_path} ${_win_path} PARENT_SCOPE)
+endfunction()
