@@ -69,14 +69,14 @@ class PaddleBackend : public BaseBackend {
       const std::string& model_file, const std::string& params_file,
       const PaddleBackendOption& option = PaddleBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override;
 
-  int NumInputs() const { return inputs_desc_.size(); }
+  int NumInputs() const override { return inputs_desc_.size(); }
 
-  int NumOutputs() const { return outputs_desc_.size(); }
+  int NumOutputs() const override { return outputs_desc_.size(); }
 
-  TensorInfo GetInputInfo(int index);
-  TensorInfo GetOutputInfo(int index);
+  TensorInfo GetInputInfo(int index) override;
+  TensorInfo GetOutputInfo(int index) override;
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
