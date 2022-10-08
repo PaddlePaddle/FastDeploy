@@ -142,15 +142,9 @@ class RuntimeOption:
         """
         return self._option.use_lite_backend()
 
-    def enable_paddle_mkldnn(self):
-        """Enable MKLDNN if Paddle Inference backend is used, mkldnn is enabled by default.
-        """
-        return self._option.enable_paddle_mkldnn()
-
-    def disable_paddle_mkldnn(self):
-        """Disable MKLDNN if Paddle Inference backend is used, mkldnn is enabled by default.
-        """
-        return self._option.disable_paddle_mkldnn()
+    def set_paddle_mkldnn(self, use_mkldnn=True):
+        """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
+        return self._option.set_paddle_mkldnn(use_mkldnn)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
