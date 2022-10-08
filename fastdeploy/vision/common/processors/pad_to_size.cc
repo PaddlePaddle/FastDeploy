@@ -18,6 +18,9 @@ namespace fastdeploy {
 namespace vision {
 
 bool PadToSize::CpuRun(Mat* mat) {
+  if (width_ == -1 || height_ == -1) {
+    return true;
+  }
   if (mat->layout != Layout::HWC) {
     FDERROR << "PadToSize: The input data must be Layout::HWC format!"
             << std::endl;
@@ -74,6 +77,9 @@ bool PadToSize::CpuRun(Mat* mat) {
 
 #ifdef ENABLE_OPENCV_CUDA
 bool PadToSize::GpuRun(Mat* mat) {
+  if (width_ == -1 || height_ == -1) {
+    return true;
+  }
   if (mat->layout != Layout::HWC) {
     FDERROR << "PadToSize: The input data must be Layout::HWC format!"
             << std::endl;

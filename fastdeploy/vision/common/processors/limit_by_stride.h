@@ -19,32 +19,27 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByShort : public Processor {
+class LimitByStride : public Processor {
  public:
-  ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
-                const std::vector<int>& max_hw = std::vector<int>()) {
-    target_size_ = target_size;
-    max_hw_ = max_hw;
+  explicit LimitByStride(int stride = 32, int interp = 1) {
+    stride_ = stride;
     interp_ = interp;
-    use_scale_ = use_scale;
   }
+
+  // Resize Mat* mat to make the size divisible by stride_.
+
   bool CpuRun(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool GpuRun(Mat* mat);
 #endif
-  std::string Name() { return "ResizeByShort"; }
+  std::string Name() { return "LimitByStride"; }
 
-  static bool Run(Mat* mat, int target_size, int interp = 1,
-                  bool use_scale = true,
-                  const std::vector<int>& max_hw = std::vector<int>(),
+  static bool Run(Mat* mat, int stride = 32, int interp = 1,
                   ProcLib lib = ProcLib::OPENCV_CPU);
 
  private:
-  double GenerateScale(const int origin_w, const int origin_h);
-  int target_size_;
-  std::vector<int> max_hw_;
   int interp_;
-  bool use_scale_;
+  int stride_;
 };
 }  // namespace vision
 }  // namespace fastdeploy
