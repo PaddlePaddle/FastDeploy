@@ -20,7 +20,7 @@
 ### OCR 模型的处理说明
 
 为了让OCR系列模型在FastDeploy多个推理后端上正确推理，以上表格中的部分模型的输入shape，和PaddleOCR套件提供的模型有差异.
-例如，由PaddleOCR套件库提供的英文版PP-OCRv3_det模型,输入的shape是`[?,3,960,960]`, 而FastDeploy提供的此模型输入shape为`[?,3,?,?]`.
+例如，由PaddleOCR套件库提供的英文版PP-OCRv3_det模型,输入的shape是`[-1,3,960,960]`, 而FastDeploy提供的此模型输入shape为`[-1,3,-1,-1]`.
 所以用户在FastDeploy上推理PaddleOCR提供的模型，可能会存在shape上的报错.我们推荐用户直接下载FastDeploy提供的模型, 用户也可以参考如下工具仓库，自行修改模型的输入shape.
 
 仓库链接: https://github.com/jiangjiajun/PaddleUtils
