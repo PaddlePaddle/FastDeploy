@@ -244,8 +244,6 @@ void RuntimeOption::SetPaddleMKLDNN(bool pd_mkldnn) {
   pd_enable_mkldnn = pd_mkldnn;
 }
 
-void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
-
 void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
   pd_delete_pass_names.push_back(pass_name);
 }

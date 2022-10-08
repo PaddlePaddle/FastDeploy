@@ -66,8 +66,7 @@ use_openvino_backend()
 使用OpenVINO后端进行推理，支持CPU, 支持Paddle/ONNX模型格式
 
 ```
-enable_paddle_mkldnn()
-disable_paddle_mkldnn()
+set_paddle_mkldnn()
 ```
 当使用Paddle Inference后端时，通过此开关开启或关闭CPU上MKLDNN推理加速，后端默认为开启
 
@@ -181,7 +180,6 @@ void UseOpenVINOBackend()
 
 ```
 void SetPaddleMKLDNN(bool pd_mkldnn = true)
-void DisablePaddleMKLDNN()
 ```
 当使用Paddle Inference后端时，通过此开关开启或关闭CPU上MKLDNN推理加速，后端默认为开启
 
