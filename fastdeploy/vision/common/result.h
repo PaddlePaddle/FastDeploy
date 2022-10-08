@@ -16,6 +16,9 @@
 #include "opencv2/core/core.hpp"
 
 namespace fastdeploy {
+/** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
+*
+*/
 namespace vision {
 enum FASTDEPLOY_DECL ResultType {
   UNKNOWN_RESULT,
@@ -33,51 +36,81 @@ struct FASTDEPLOY_DECL BaseResult {
   ResultType type = ResultType::UNKNOWN_RESULT;
 };
 
+/*! @brief Classify result structure for all the image classify models
+ */
 struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
+  /// Classify result for an image
   std::vector<int32_t> label_ids;
+  /// The confidence for each classify result
   std::vector<float> scores;
   ResultType type = ResultType::CLASSIFY;
 
+  /// Clear result
   void Clear();
+
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
+/*! Mask structure, used in DetectionResult for instance segmentation models
+ */
 struct FASTDEPLOY_DECL Mask : public BaseResult {
+  /// Mask data buffer
   std::vector<int32_t> data;
+  /// Shape of mask
   std::vector<int64_t> shape;  // (H,W) ...
   ResultType type = ResultType::MASK;
 
+  /// clear mask
   void Clear();
 
+  /// Return a mutable pointer of the mask data buffer
   void* Data() { return data.data(); }
 
+  /// Return a pointer of the mask data buffer for read only
   const void* Data() const { return data.data(); }
 
+  /// Reserve size for mask data buffer
   void Reserve(int size);
 
+  /// Resize the mask data buffer
   void Resize(int size);
 
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
+
+/*! @brief Detection result structure for all the object detection models and instance segmentation models
+ */
 struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
-  // box: xmin, ymin, xmax, ymax
+  /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
+   */
   std::vector<std::array<float, 4>> boxes;
+  /** \brief The confidence for all the detected objects
+   */
   std::vector<float> scores;
+  /// The classify label for all the detected objects
   std::vector<int32_t> label_ids;
+  /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
+   */
   std::vector<Mask> masks;
+  //// Shows if the DetectionResult has mask
   bool contain_masks = false;
+
   ResultType type = ResultType::DETECTION;
 
   DetectionResult() {}
   DetectionResult(const DetectionResult& res);
 
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
 
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
