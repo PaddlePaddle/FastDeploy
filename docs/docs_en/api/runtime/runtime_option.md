@@ -73,8 +73,7 @@ use_openvino_backend()
 Inference with OpenVINO backend (CPU supported, Paddle/ONNX model format supported)
 
 ```
-enable_paddle_mkldnn()
-disable_paddle_mkldnn()
+set_paddle_mkldnn()
 ```
 
 When using the Paddle Inference backend, this parameter determines whether the MKLDNN inference acceleration on the CPU is on or off. It is on by default.
@@ -204,8 +203,7 @@ void UseOpenVINOBackend()
 Inference with OpenVINO backend (CPU supported, Paddle/ONNX model format supported)
 
 ```
-void EnablePaddleMKLDNN()
-void DisablePaddleMKLDNN()
+void SetPaddleMKLDNN(bool pd_mkldnn = true)
 ```
 
 When using the Paddle Inference backend, this parameter determines whether the MKLDNN inference acceleration on the CPU is on or off. It is on by default.

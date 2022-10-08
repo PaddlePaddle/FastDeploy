@@ -5,7 +5,6 @@ max_batch_size: 16
 
 # Input configuration of the model
 input [
-  # 第一个输入
   {
     # input name
     name: "images"
@@ -36,3 +35,12 @@ instance_group [
     gpus: [0]
   }
 ]
+
+optimization {
+  execution_accelerators {
+  gpu_execution_accelerator : [ {
+    # use ONNXRuntime engine
+    name: "onnxruntime",
+    parameters { key: "cpu_threads" value: "2" }
+  }]
+}}

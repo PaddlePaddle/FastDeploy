@@ -65,11 +65,6 @@ class SyncGRPCTritonRunner:
         """
         infer_inputs = []
         for idx, data in enumerate(inputs):
-            print("len(data):", len(data))
-            print("name:", self._input_names[idx], "  shape:", data.shape,
-                  data.dtype)
-            #data = np.array([[x.encode('utf-8')] for x in data],
-            #                dtype=np.object_)
             infer_input = InferInput(self._input_names[idx], data.shape,
                                      "UINT8")
             infer_input.set_data_from_numpy(data)
@@ -106,7 +101,7 @@ if __name__ == "__main__":
         result = runner.Run([im, ])
         for name, values in result.items():
             print("output_name:", name)
-            for i in range(len(values)):
-                value = values[i][0]
+            for j in range(len(values)):
+                value = values[j][0]
                 value = json.loads(value)
                 print(value)

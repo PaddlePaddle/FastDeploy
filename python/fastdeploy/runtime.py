@@ -85,11 +85,8 @@ class RuntimeOption:
     def use_lite_backend(self):
         return self._option.use_lite_backend()
 
-    def enable_paddle_mkldnn(self):
-        return self._option.enable_paddle_mkldnn()
-
-    def disable_paddle_mkldnn(self):
-        return self._option.disable_paddle_mkldnn()
+    def set_paddle_mkldnn(self):
+        return self._option.set_paddle_mkldnn()
 
     def enable_paddle_log_info(self):
         return self._option.enable_paddle_log_info()

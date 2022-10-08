@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "fastdeploy/core/fd_type.h"
+#include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
 namespace triton {
@@ -66,6 +67,10 @@ fastdeploy::FDDataType ModelConfigDataTypeToFDType(
     const std::string& data_type_str);
 
 std::string FDTypeToModelConfigDataType(fastdeploy::FDDataType data_type);
+
+TRITONSERVER_Error* FDParseShape(triton::common::TritonJson::Value& io,
+                                 const std::string& name,
+                                 std::vector<int32_t>* shape);
 
 }  // namespace fastdeploy_runtime
 }  // namespace backend
