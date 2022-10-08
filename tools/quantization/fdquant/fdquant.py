@@ -53,10 +53,14 @@ def argsparser():
     return parser
 
 
-def reader_wrapper(reader, input_name='x2paddle_images'):
+def reader_wrapper(reader, input_list=None):
     def gen():
-        for data in reader:
-            yield {input_name: data[0]}
+        for data_list in reader:
+            in_dict = {}
+            for data in data_list:
+                for i, input_name in enumerate(input_list):
+                    in_dict[input_name] = data[i]
+                yield in_dict
 
     return gen
 
@@ -76,12 +80,12 @@ def main():
     all_config = load_config(FLAGS.config_path)
     assert "Global" in all_config, f"Key 'Global' not found in config file. \n{all_config}"
     global_config = all_config["Global"]
-    input_name = global_config['input_name']
+    input_list = global_config['input_list']
 
     assert os.path.exists(global_config[
         'image_path']), "image_path does not exist!"
     paddle.vision.image.set_image_backend('cv2')
-    #transform could be customized.
+    # transform could be customized.
     train_dataset = paddle.vision.datasets.ImageFolder(
         global_config['image_path'],
         transform=eval(global_config['preprocess']))
@@ -91,7 +95,7 @@ def main():
         shuffle=True,
         drop_last=True,
         num_workers=0)
-    train_loader = reader_wrapper(train_loader, input_name=input_name)
+    train_loader = reader_wrapper(train_loader, input_list=input_list)
     eval_func = None
 
     # ACT compression

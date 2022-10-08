@@ -5,7 +5,7 @@ Global:
   params_filename: inference.pdiparams
   image_path: ./ImageNet_val_640
   arch: MobileNetV1
-  input_name: inputs
+  input_list: ['input']
   preprocess: cls_image_preprocess
 
 

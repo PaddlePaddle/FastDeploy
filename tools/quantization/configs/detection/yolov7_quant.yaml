@@ -5,7 +5,7 @@ Global:
   params_filename: model.pdiparams
   image_path: ./COCO_val_320
   arch: YOLOv7
-  input_name: x2paddle_images
+  input_list: ['x2paddle_images']
 
 Distillation:
   alpha: 1.0
