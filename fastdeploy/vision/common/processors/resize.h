@@ -31,15 +31,12 @@ class Resize : public Processor {
     use_scale_ = use_scale;
   }
 
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Resize"; }
 
   static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,
                   float scale_h = -1.0, int interp = 1, bool use_scale = false,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
   bool SetWidthAndHeight(int width, int height) {
     width_ = width;
