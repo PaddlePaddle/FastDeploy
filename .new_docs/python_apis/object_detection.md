@@ -1,4 +1,4 @@
-# Object Detection API Reference
+# 目标检测模型部署
 
 ## fastdeploy.vision.detection.PPYOLOE
 
