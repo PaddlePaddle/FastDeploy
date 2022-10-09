@@ -16,36 +16,14 @@
 namespace fastdeploy {
 namespace vision {
 
-#ifdef ENABLE_OPENCV_CUDA
-cv::cuda::GpuMat* Mat::GetGpuMat() {
-  if (device == Device::CPU) {
-    gpu_mat.upload(cpu_mat);
-  }
-  return &gpu_mat;
-}
-#endif
-
 cv::Mat* Mat::GetCpuMat() {
-#ifdef ENABLE_OPENCV_CUDA
-  if (device == Device::GPU) {
-    gpu_mat.download(cpu_mat);
-  }
-#endif
   return &cpu_mat;
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
-  if (device == Device::GPU) {
-#ifdef ENABLE_OPENCV_CUDA
-    tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                            GetGpuMat()->ptr());
-    tensor->device = Device::GPU;
-#endif
-  } else {
-    tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                            GetCpuMat()->ptr());
-    tensor->device = Device::CPU;
-  }
+  tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
+                          GetCpuMat()->ptr());
+  tensor->device = Device::CPU;
   if (layout == Layout::HWC) {
     tensor->shape = {Height(), Width(), Channels()};
   }
@@ -79,13 +57,7 @@ void Mat::PrintInfo(const std::string& flag) {
 
 FDDataType Mat::Type() {
   int type = -1;
-  if (device == Device::GPU) {
-#ifdef ENABLE_OPENCV_CUDA
-    type = gpu_mat.type();
-#endif
-  } else {
-    type = cpu_mat.type();
-  }
+  type = cpu_mat.type();
   if (type < 0) {
     FDASSERT(false,
              "While calling Mat::Type(), get negative value, which is not "
