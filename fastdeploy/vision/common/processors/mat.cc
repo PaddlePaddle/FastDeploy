@@ -16,13 +16,13 @@
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat* Mat::GetCpuMat() {
+cv::Mat* Mat::GetOpenCVMat() {
   return &cpu_mat;
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                          GetCpuMat()->ptr());
+                          GetOpenCVMat()->ptr());
   tensor->device = Device::CPU;
   if (layout == Layout::HWC) {
     tensor->shape = {Height(), Width(), Channels()};
@@ -30,7 +30,7 @@ void Mat::ShareWithTensor(FDTensor* tensor) {
 }
 
 bool Mat::CopyToTensor(FDTensor* tensor) {
-  cv::Mat* im = GetCpuMat();
+  cv::Mat* im = GetOpenCVMat();
   int total_bytes = im->total() * im->elemSize();
   if (total_bytes != tensor->Nbytes()) {
     FDERROR << "While copy Mat to Tensor, requires the memory size be same, "
@@ -44,7 +44,7 @@ bool Mat::CopyToTensor(FDTensor* tensor) {
 }
 
 void Mat::PrintInfo(const std::string& flag) {
-  cv::Mat* im = GetCpuMat();
+  cv::Mat* im = GetOpenCVMat();
   cv::Scalar mean = cv::mean(*im);
   std::cout << flag << ": "
             << "Channel=" << Channels() << ", height=" << Height()

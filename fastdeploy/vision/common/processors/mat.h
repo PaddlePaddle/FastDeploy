@@ -22,6 +22,10 @@
 #include "opencv2/cudawarping.hpp"
 #endif
 
+namespace fcv {
+  class Mat;
+}
+
 namespace fastdeploy {
 namespace vision {
 
@@ -70,7 +74,7 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
-  cv::Mat* GetCpuMat();
+  cv::Mat* GetOpenCVMat();
 
   FDDataType Type();
   int Channels() const { return channels; }

@@ -34,9 +34,9 @@ class Processor {
 
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
-//  virtual bool ImplByFalconCV(Mat* mat) {
-//    return ImplByOpenCV(mat);
-//  }
+  virtual bool ImplByFalconCV(Mat* mat) {
+    return ImplByOpenCV(mat);
+  }
 
   virtual bool operator()(Mat* mat,
                           ProcLib lib = ProcLib::OPENCV);
