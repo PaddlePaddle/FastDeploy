@@ -25,13 +25,29 @@ class PaddleClasModel(FastDeployModel):
                  config_file,
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
+        """Load a image classification model exported by PaddleClas.
+
+        :param model_file: (str)Path of model file, e.g resnet50/inference.pdmodel
+        :param params_file: (str)Path of parameters file, e.g resnet50/inference.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str) Path of configuration file for deploy, e.g resnet50/inference_cls.yaml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
         super(PaddleClasModel, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PaddleClasModel only support model format of ModelFormat.Paddle now."
+        assert model_format == ModelFormat.PADDLE, "PaddleClasModel only support model format of ModelFormat.PADDLE now."
         self._model = C.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "PaddleClas model initialize failed."
 
-    def predict(self, input_image, topk=1):
-        return self._model.predict(input_image, topk)
+    def predict(self, im, topk=1):
+        """Classify an input image
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param topk: (int)The topk result by the classify confidence score, default 1
+        :return: ClassifyResult
+        """
+
+        return self._model.predict(im, topk)

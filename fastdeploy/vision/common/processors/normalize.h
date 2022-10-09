@@ -24,10 +24,7 @@ class Normalize : public Processor {
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Normalize"; }
 
   // While use normalize, it is more recommend not use this function
@@ -44,7 +41,7 @@ class Normalize : public Processor {
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
