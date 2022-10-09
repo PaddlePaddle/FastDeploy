@@ -1,49 +1,50 @@
-# PPOCRSystemv3 Python部署示例
+# PPOCRSystemv2 Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-本目录下提供`infer.py`快速完成PPOCRSystemv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成PPOCRSystemv2在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
 
 # 下载模型,图片和字典文件
-wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
-tar xvf ch_PP-OCRv3_det_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
+tar -xvf ch_PP-OCRv2_det_infer.tar.gz
 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
 
-wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
-tar xvf ch_PP-OCRv3_rec_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
+tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
+
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vison/ocr/PPOCRSystemv3/python/
+cd examples/vison/ocr/PP-OCRv2/python/
 
 # CPU推理
-python infer.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv3_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device cpu
+python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device cpu
 # GPU推理
-python infer.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv3_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu
+python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu
 # GPU上使用TensorRT推理
-python infer.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv3_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu --backend trt
+python infer.py --det_model ch_PP-OCRv2_det_infer --cls_model ch_ppocr_mobile_v2.0_cls_infer --rec_model ch_PP-OCRv2_rec_infer --rec_label_file ppocr_keys_v1.txt --image 12.jpg --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
-## PPOCRSystemv3 Python接口
+## PPOCRSystemv2 Python接口
 
 ```
-fd.vision.ocr.PPOCRSystemv3(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+fd.vision.ocr.PPOCRSystemv2(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 ```
-PPOCRSystemv3的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
+PPOCRSystemv2的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
 
 **参数**
 
@@ -122,6 +123,6 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 ## 其它文档
 
 - [PPOCR 系列模型介绍](../../)
-- [PPOCRv3 C++部署](../cpp)
+- [PPOCRv2 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
