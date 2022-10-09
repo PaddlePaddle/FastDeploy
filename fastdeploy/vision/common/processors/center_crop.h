@@ -22,14 +22,11 @@ namespace vision {
 class CenterCrop : public Processor {
  public:
   CenterCrop(int width, int height) : height_(height), width_(width) {}
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "CenterCrop"; }
 
   static bool Run(Mat* mat, const int& width, const int& height,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int height_;

@@ -20,18 +20,6 @@ namespace vision {
 
 ProcLib Processor::default_lib = ProcLib::DEFAULT;
 
-bool Processor::CpuRun(Mat* mat) {
-  FDERROR << "Unimplemented CpuRun." << std::endl;
-  return false;
-}
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Processor::GpuRun(Mat* mat) {
-  FDERROR << "Unimplemented GpuRun." << std::endl;
-  return false;
-}
-#endif
-
 bool Processor::operator()(Mat* mat, ProcLib lib) {
   // if default_lib is set
   // then use default_lib
@@ -40,20 +28,7 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
     target = default_lib;
   }
 
-  if (target == ProcLib::OPENCV_CUDA) {
-#ifdef ENABLE_OPENCV_CUDA
-    bool ret = GpuRun(mat);
-    mat->device = Device::GPU;
-    return ret;
-#else
-    FDERROR
-        << "OpenCV is not compiled with CUDA, cannot process image with CUDA."
-        << std::endl;
-    return false;
-#endif
-  }
-  bool ret = CpuRun(mat);
-  mat->device = Device::CPU;
+  bool ret = ImplByOpenCV(mat);
   return ret;
 }
 

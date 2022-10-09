@@ -32,14 +32,11 @@ class LimitShort : public Processor {
   // to max_short_, while scale the long edge proportionally.
   // If the short edge is smaller than min_short_, resize the short edge
   // to min_short_, while scale the long edge proportionally.
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "LimitShort"; }
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
   int GetMaxShort() const { return max_short_; }
 
  private:

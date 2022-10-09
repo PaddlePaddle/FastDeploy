@@ -22,17 +22,14 @@ class Convert : public Processor {
  public:
   Convert(const std::vector<float>& alpha, const std::vector<float>& beta);
 
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Convert"; }
 
   // Compute `result = mat * alpha + beta` directly by channel.
   // The default behavior is the same as OpenCV's convertTo method.
   static bool Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   std::vector<float> alpha_;

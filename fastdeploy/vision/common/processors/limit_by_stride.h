@@ -28,14 +28,11 @@ class LimitByStride : public Processor {
 
   // Resize Mat* mat to make the size divisible by stride_.
 
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "LimitByStride"; }
 
   static bool Run(Mat* mat, int stride = 32, int interp = 1,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int interp_;

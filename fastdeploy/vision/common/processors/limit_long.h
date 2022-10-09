@@ -32,14 +32,11 @@ class LimitLong : public Processor {
   // to max_long_, while scale the short edge proportionally.
   // If the long edge is smaller than min_long_, resize the long edge
   // to min_long_, while scale the short edge proportionally.
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "LimitLong"; }
 
   static bool Run(Mat* mat, int max_long = -1, int min_long = -1,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
   int GetMaxLong() const { return max_long_; }
 
  private:

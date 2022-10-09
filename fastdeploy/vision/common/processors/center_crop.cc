@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool CenterCrop::CpuRun(Mat* mat) {
+bool CenterCrop::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int height = static_cast<int>(im->rows);
   int width = static_cast<int>(im->cols);
@@ -33,25 +33,6 @@ bool CenterCrop::CpuRun(Mat* mat) {
   mat->SetHeight(height_);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool CenterCrop::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int height = static_cast<int>(im->rows);
-  int width = static_cast<int>(im->cols);
-  if (height < height_ || width < width_) {
-    FDERROR << "[CenterCrop] Image size less than crop size" << std::endl;
-    return false;
-  }
-  int offset_x = static_cast<int>((width - width_) / 2);
-  int offset_y = static_cast<int>((height - height_) / 2);
-  cv::Rect crop_roi(offset_x, offset_y, width_, height_);
-  *im = (*im)(crop_roi);
-  mat->SetWidth(width_);
-  mat->SetHeight(height_);
-  return true;
-}
-#endif
 
 bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
                      ProcLib lib) {

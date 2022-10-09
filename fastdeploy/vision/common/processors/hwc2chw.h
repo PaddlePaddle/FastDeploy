@@ -21,13 +21,10 @@ namespace vision {
 
 class HWC2CHW : public Processor {
  public:
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "HWC2CHW"; }
 
-  static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV_CPU);
+  static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
 };
 } // namespace vision
 } // namespace fastdeploy

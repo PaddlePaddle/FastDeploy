@@ -27,14 +27,11 @@ class Crop : public Processor {
     width_ = width;
     height_ = height;
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Crop"; }
 
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int offset_w_;

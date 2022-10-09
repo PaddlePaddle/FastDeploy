@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool LimitByStride::CpuRun(Mat* mat) {
+bool LimitByStride::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -30,23 +30,6 @@ bool LimitByStride::CpuRun(Mat* mat) {
   }
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool LimitByStride::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  im->convertTo(*im, CV_32FC(im->channels()));
-  int rw = origin_w - origin_w % stride_;
-  int rh = origin_h - origin_h % stride_;
-  if (rw != origin_w || rh != origin_w) {
-    cv::cuda::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
-    mat->SetWidth(im->cols);
-    mat->SetHeight(im->rows);
-  }
-  return true;
-}
-#endif
 
 bool LimitByStride::Run(Mat* mat, int stride, int interp, ProcLib lib) {
   auto r = LimitByStride(stride, interp);

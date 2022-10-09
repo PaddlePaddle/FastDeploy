@@ -22,13 +22,10 @@ namespace vision {
 class Cast : public Processor {
  public:
   explicit Cast(const std::string& dtype = "float") : dtype_(dtype) {}
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Cast"; }
   static bool Run(Mat* mat, const std::string& dtype,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   std::string dtype_;

@@ -28,16 +28,13 @@ class ResizeByShort : public Processor {
     interp_ = interp;
     use_scale_ = use_scale;
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "ResizeByShort"; }
 
   static bool Run(Mat* mat, int target_size, int interp = 1,
                   bool use_scale = true,
                   const std::vector<int>& max_hw = std::vector<int>(),
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   double GenerateScale(const int origin_w, const int origin_h);
