@@ -33,8 +33,8 @@ wget hhttps://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Im
 运行完成后返回结果如下所示
 ```bash
 ClassifyResult(
-label_ids: 153,
-scores: 0.686229,
+label_ids: 265,
+scores: 0.196327,
 )
 ```
 

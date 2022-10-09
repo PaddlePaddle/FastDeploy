@@ -27,8 +27,8 @@ python infer.py --model yolov5n-cls.onnx --image ILSVRC2012_val_00000010.jpeg --
 运行完成后返回结果如下所示
 ```bash
 ClassifyResult(
-label_ids: 153,
-scores: 0.686229,
+label_ids: 265,
+scores: 0.196327,
 )
 ```
 
