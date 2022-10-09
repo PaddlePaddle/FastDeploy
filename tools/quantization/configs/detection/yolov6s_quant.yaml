@@ -1,0 +1,35 @@
+Global:
+  model_dir: ./yolov6s.onnx
+  format: 'onnx'
+  model_filename: model.pdmodel
+  params_filename: model.pdiparams
+  image_path: ./COCO_val_320
+  arch: YOLOv6
+  input_list: ['x2paddle_image_arrays']
+
+Distillation:
+  alpha: 1.0
+  loss: soft_label
+
+Quantization:
+  onnx_format: true
+  activation_quantize_type: 'moving_average_abs_max'
+  quantize_op_types:
+  - conv2d
+  - depthwise_conv2d
+
+
+PTQ:
+  calibration_method: 'avg'   # option: avg, abs_max, hist, KL, mse
+  skip_tensor_list:  ['conv2d_2.w_0', 'conv2d_15.w_0', 'conv2d_46.w_0', 'conv2d_11.w_0', 'conv2d_49.w_0']
+
+TrainConfig:
+  train_iter: 8000
+  learning_rate:
+    type: CosineAnnealingDecay
+    learning_rate: 0.00003
+    T_max: 8000
+  optimizer_builder:
+    optimizer:
+      type: SGD
+    weight_decay: 0.00004
