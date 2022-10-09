@@ -29,7 +29,7 @@ namespace fcv {
 namespace fastdeploy {
 namespace vision {
 
-enum ProcLib { DEFAULT, OPENCV};
+enum ProcLib { DEFAULT, OPENCV, FALCONCV};
 enum Layout { HWC, CHW };
 
 struct FASTDEPLOY_DECL Mat {
@@ -51,12 +51,24 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
+  inline cv::Mat* GetOpenCVMat() {
+    FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
+    return &cpu_mat;
+  }
+
 #ifdef ENABLE_FALCONCV
   void SetMat(const fcv::Mat& mat) { 
     fcv_mat = mat; 
     mat_type = Proclib::FALCONCV;
   }
+
+  inline fcv::Mat* GetFalconCVMat() {
+    FDASSERT(mat_type == ProcLib::FALCONCV, "Met non fcv::Mat data strucure.");
+    return &fcv_mat;
+  }
 #endif
+
+  void* Data();
 
  private:
   int channels;
@@ -73,8 +85,6 @@ struct FASTDEPLOY_DECL Mat {
   T* GetMat() {
     return &cpu_mat;
   }
-
-  cv::Mat* GetOpenCVMat();
 
   FDDataType Type();
   int Channels() const { return channels; }

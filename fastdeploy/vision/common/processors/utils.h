@@ -15,33 +15,20 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
-#include "fastdeploy/vision/common/processors/mat.h"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
+#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 namespace vision {
 
-class Processor {
- public:
-  // default_lib has the highest priority
-  // all the function in `processor` will force to use
-  // default_lib if this flag is set.
-  // DEFAULT means this flag is not set
-  static ProcLib default_lib;
+// Convert data type of opencv to FDDataType
+FDDataType OpenCVDataTypeToFD(int type);
 
-  virtual std::string Name() = 0;
-
-  virtual bool ImplByOpenCV(Mat* mat) = 0;
-
-  virtual bool ImplByFalconCV(Mat* mat) {
-    FDASSERT(false, "%s is not implemented with FalconCV, please use OpenCV instead.", Name().c_str());
-    return false;
-  }
-
-  virtual bool operator()(Mat* mat,
-                          ProcLib lib = ProcLib::OPENCV);
-};
+#ifdef ENABLE_FALCONCV
+// Convert data type of falconcv to FDDataType
+FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type);
+// Create data type of falconcv by FDDataType
+fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel = 1);
+#endif
 
 } // namespace vision
 } // namespace fastdeploy
