@@ -95,5 +95,15 @@ with torch.inference_mode():
         opset_version=14,  # the ONNX version to export the model to
         do_constant_folding=True,  # whether to execute constant folding for optimization
         input_names=['input_ids'],
+        dynamic_axes={
+            'input_ids': {
+                0: 'batch_size',
+                1: 'sequence'
+            },
+            'logits': {
+                0: 'batch_size',
+                1: 'sequence'
+            }
+        },
         output_names=['logits'])
     print("Finish exporting text encoder.")
