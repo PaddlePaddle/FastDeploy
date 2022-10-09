@@ -29,7 +29,7 @@ PP-TinyPose模型导出，请参考其文档说明[模型导出](https://github.
 - 关键点检测模型的精度指标所依赖的检测框为ground truth标注得到。
 - 推理速度测试环境为 Qualcomm Snapdragon 865，采用arm8下4线程推理得到。
 
-详情请参考：[PP-TinyPose 官方文档](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
+更多信息请参考：[PP-TinyPose 官方文档](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
 
 ## 详细部署文档
 
