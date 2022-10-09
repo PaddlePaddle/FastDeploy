@@ -141,6 +141,8 @@ if __name__ == "__main__":
         scheduler=scheduler)
 
     prompt = "a photo of an astronaut riding a horse on mars"
+    # Warm up
+    pipe(prompt, num_inference_steps=10)
 
     time_costs = []
     print(
