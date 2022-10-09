@@ -35,7 +35,7 @@ scores: 0.686229,
 ## YOLOv5Cls Python接口
 
 ```python
-fastdeploy.vision.detection.YOLOv5Cls(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.classification.YOLOv5Cls(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 YOLOv5Cls模型加载和初始化，其中model_file为导出的ONNX模型格式

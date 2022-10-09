@@ -46,7 +46,7 @@ scores: 0.686229,
 ### YOLOv5Cls类
 
 ```c++
-fastdeploy::vision::detection::YOLOv5Cls(
+fastdeploy::vision::classification::YOLOv5Cls(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),

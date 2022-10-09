@@ -26,7 +26,7 @@ class YOLOv5Cls(FastDeployModel):
                  model_format=ModelFormat.ONNX):
         super(YOLOv5Cls, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.YOLOv5Cls(
+        self._model = C.vision.classification.YOLOv5Cls(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "YOLOv5Cls initialize failed."
 

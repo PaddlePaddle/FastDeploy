@@ -42,7 +42,7 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.YOLOv5Cls(
+model = fd.vision.classification.YOLOv5Cls(
     args.model, runtime_option=runtime_option)
 
 # 预测图片分类结果

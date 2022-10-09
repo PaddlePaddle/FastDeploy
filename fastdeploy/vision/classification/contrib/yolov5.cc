@@ -73,9 +73,12 @@ bool YOLOv5Cls::Preprocess(Mat* mat, FDTensor* output,
 
 bool YOLOv5Cls::Postprocess(const FDTensor& infer_result,
                             ClassifyResult* result, int topk) {
-  int num_classes = infer_result.shape[1];
+  // Softmax
+  FDTensor infer_result_softmax;
+  Softmax(infer_result, &infer_result_softmax, 1);
+  int num_classes = infer_result_softmax.shape[1];
   const float* infer_result_buffer =
-      reinterpret_cast<const float*>(infer_result.Data());
+      reinterpret_cast<const float*>(infer_result_softmax.Data());
   topk = std::min(num_classes, topk);
   result->label_ids =
       utils::TopKIndices(infer_result_buffer, num_classes, topk);
