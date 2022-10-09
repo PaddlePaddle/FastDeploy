@@ -34,15 +34,15 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
 
 bool PPOCRSystemv2::Initialized() const {
   
-  if ( detector_!=nullptr && !detector_->Initialized()){
+  if (detector_ != nullptr && !detector_->Initialized()){
     return false;
   }
 
-  if ( classifier_!=nullptr && !classifier_->Initialized()){
+  if (classifier_ != nullptr && !classifier_->Initialized()){
     return false;
   }
 
-  if ( recognizer_!=nullptr && !recognizer_->Initialized()){
+  if (recognizer_ != nullptr && !recognizer_->Initialized()){
     return false;
   }
   return true; 
