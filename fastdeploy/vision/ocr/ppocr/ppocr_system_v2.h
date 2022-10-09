@@ -39,6 +39,7 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
   virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  bool Initialized() const override;
 
  protected:
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
