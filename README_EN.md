@@ -303,11 +303,16 @@ Notes:
 <div id="fastdeploy-community"></div>
 
 - If you have any question or suggestion, please give us your valuable input via GitHub Issues
-- **Join Us👬：** Scan the QR code via WeChat to join our **FastDeploy technology communication group**
+- **Join Us👬：** 
+    - **Slack**：Click [the link](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) to join **FastDeploy technology communication group**
+    
+    - **WeChat**：Scan the QR code via WeChat to join our **FastDeploy technology communication group**
 
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/193485762-ff517d78-8ca8-4cd4-a627-1cbb7fb2309f.jpeg"  width = "225" height = "225" />
 </div>
+    
+    
 
 ## Acknowledge
 
