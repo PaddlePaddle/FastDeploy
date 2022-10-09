@@ -1,0 +1,47 @@
+Global:
+  model_dir: ./ResNet50_vd_infer/
+  format: 'paddle'
+  model_filename: inference.pdmodel
+  params_filename: inference.pdiparams
+  image_path: ./ImageNet_val_640
+  arch: ResNet50
+  input_list: ['input']
+  preprocess: cls_image_preprocess
+
+
+Distillation:
+  alpha: 1.0
+  loss: l2
+  node:
+  - softmax_0.tmp_0
+
+Quantization:
+  use_pact: true
+  activation_bits: 8
+  is_full_quantize: false
+  onnx_format: True
+  activation_quantize_type: moving_average_abs_max
+  weight_quantize_type: channel_wise_abs_max
+  not_quant_pattern:
+  - skip_quant
+  quantize_op_types:
+  - conv2d
+  - depthwise_conv2d
+  weight_bits: 8
+
+TrainConfig:
+  train_iter: 5000
+  learning_rate:
+    type: CosineAnnealingDecay
+    learning_rate: 0.015
+    T_max: 8000
+  optimizer_builder:
+    optimizer:
+      type: Momentum
+    weight_decay: 0.00002
+  origin_metric: 0.7912
+
+
+PTQ:
+  calibration_method: 'avg'   # option: avg, abs_max, hist, KL, mse
+  skip_tensor_list: None
