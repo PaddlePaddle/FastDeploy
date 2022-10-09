@@ -99,8 +99,8 @@ if __name__ == "__main__":
         vae_dynamic_shape = {
             "latent": {
                 "min_shape": [1, 4, 64, 64],
-                "max_shape": [8, 4, 64, 64],
-                "opt_shape": [1, 4, 64, 64],
+                "max_shape": [2, 4, 64, 64],
+                "opt_shape": [2, 4, 64, 64],
             }
         }
         vae_decoder_runtime = create_trt_runtime(
@@ -110,13 +110,13 @@ if __name__ == "__main__":
         unet_dynamic_shape = {
             "latent_input": {
                 "min_shape": [1, 4, 64, 64],
-                "max_shape": [8, 4, 64, 64],
-                "opt_shape": [1, 4, 64, 64],
+                "max_shape": [2, 4, 64, 64],
+                "opt_shape": [2, 4, 64, 64],
             },
             "encoder_embedding": {
                 "min_shape": [1, 77, 768],
-                "max_shape": [8, 77, 768],
-                "opt_shape": [1, 77, 768],
+                "max_shape": [2, 77, 768],
+                "opt_shape": [2, 77, 768],
             },
         }
         start = time.time()
