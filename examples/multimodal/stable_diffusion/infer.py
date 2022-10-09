@@ -70,7 +70,7 @@ def create_trt_runtime(onnx_file, workspace=(1 << 31), dynamic_shape=None):
                 opt_shape=shape_dict.get("opt_shape", None),
                 max_shape=shape_dict.get("max_shape", None))
     option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
-    option.set_trt_cache_file(f"{onnx_file}.trt.cache")
+    option.set_trt_cache_file(f"{onnx_file}.trt")
     return fd.Runtime(option)
 
 
