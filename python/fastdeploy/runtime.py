@@ -117,6 +117,9 @@ class RuntimeOption:
         """
         return self._option.set_cpu_thread_num(thread_num)
 
+    def set_ort_graph_opt_level(self, level=-1):
+        return self._option.set_ort_graph_opt_level(level)
+
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
