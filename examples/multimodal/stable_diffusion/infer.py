@@ -39,6 +39,16 @@ def parse_arguments():
         default='text_encoder_v1_4.onnx',
         help="The onnx file path of text_encoder model.")
     parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=100,
+        help="The number of unet inference steps.")
+    parser.add_argument(
+        "--benchmark_steps",
+        type=int,
+        default=1,
+        help="The number of performance benchmark steps.")
+    parser.add_argument(
         "--backend",
         type=str,
         default='onnx_runtime',
@@ -132,8 +142,19 @@ if __name__ == "__main__":
 
     prompt = "a photo of an astronaut riding a horse on mars"
 
-    start = time.time()
-    image = pipe(prompt, num_inference_steps=100)[0]
-    time_cost = time.time() - start
+    time_costs = []
+    print(
+        f"Run the stable diffusion pipeline {args.benchmark_steps} times to test the performance."
+    )
+    for step in range(args.benchmark_steps):
+        start = time.time()
+        image = pipe(prompt, num_inference_steps=args.inference_steps)[0]
+        latency = time.time() - start
+        time_costs += [latency]
+        print(f"No {step:3d} time cost: {latency:2f} s")
+    print(
+        f"Mean latency: {np.mean(time_costs):2f}, p50 latency: {np.percentile(time_costs, 50):2f}, "
+        f"p90 latency: {np.percentile(time_costs, 90):2f}, p95 latency: {np.percentile(time_costs, 95):2f}."
+    )
     image.save("fd_astronaut_rides_horse.png")
-    print(f"Image saved! Total time cost: {time_cost:2f} s")
+    print(f"Image saved!")
