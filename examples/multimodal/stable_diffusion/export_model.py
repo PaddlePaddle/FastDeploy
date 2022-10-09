@@ -60,8 +60,16 @@ with torch.inference_mode():
         export_params=True,  # store the trained parameter weights inside the model file
         opset_version=12,  # the ONNX version to export the model to
         do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=['input_0'],
-        output_names=['output_0'])
+        input_names=['latent'],
+        dynamic_axes={
+            'latent': {
+                0: 'batch_size',
+            },
+            'image': {
+                0: 'batch_size',
+            },
+        },
+        output_names=['image'])
     print("Finish exporting vae decoder.")
 
     # Export the unet model
@@ -76,8 +84,20 @@ with torch.inference_mode():
         export_params=True,  # store the trained parameter weights inside the model file
         opset_version=12,  # the ONNX version to export the model to
         do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=['latent', 'timestep', 'encoder_embedding'],
-        output_names=['output_0'])
+        input_names=['latent_input', 'timestep', 'encoder_embedding'],
+        dynamic_axes={
+            'latent_input': {
+                0: 'batch_size',
+            },
+            'encoder_embedding': {
+                0: 'batch_size',
+                1: 'sequence'
+            },
+            'latent_output': {
+                0: 'batch_size',
+            },
+        },
+        output_names=['latent_output'])
     print("Finish exporting unet.")
 
     unet_model = onnx.load("unet_v1_4.onnx")

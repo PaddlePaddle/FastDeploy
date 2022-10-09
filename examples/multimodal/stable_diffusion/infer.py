@@ -22,6 +22,32 @@ from transformers import CLIPTokenizer
 from scheduling_utils import PNDMScheduler
 
 
+def parse_arguments():
+    import argparse
+    import ast
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--unet_onnx_file",
+        default='unet_v1_4_sim.onnx',
+        help="The onnx file path of unet model.")
+    parser.add_argument(
+        "--vae_onnx_file",
+        default='vae_decoder_v1_4.onnx',
+        help="The onnx file path of vae model.")
+    parser.add_argument(
+        "--text_encoder_onnx_file",
+        default='text_encoder_v1_4.onnx',
+        help="The onnx file path of text_encoder model.")
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default='onnx_runtime',
+        choices=['onnx_runtime', 'tensorrt'],
+        help="The inference runtime backend of unet model and text encoder model."
+    )
+    return parser.parse_args()
+
+
 def create_ort_runtime(onnx_file):
     option = fd.RuntimeOption()
     option.use_ort_backend()
@@ -49,6 +75,7 @@ def create_trt_runtime(onnx_file, workspace=(1 << 31), dynamic_shape=None):
 
 
 if __name__ == "__main__":
+    args = parse_arguments()
     # 1. Init scheduler
     scheduler = PNDMScheduler(
         beta_end=0.012,
@@ -61,12 +88,41 @@ if __name__ == "__main__":
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     # 3. Init runtime
-    text_encoder_runtime = create_ort_runtime("text_encoder_v1_4.onnx")
-    vae_decoder_runtime = create_trt_runtime(
-        "vae_decoder_v1_4.onnx", workspace=(1 << 30))
-    start = time.time()
-    unet_runtime = create_trt_runtime("unet_v1_4_sim.onnx")
-    print(f"Spend {time.time() - start : .2f} s to load unet model.")
+    text_encoder_runtime = create_ort_runtime(args.text_encoder_onnx_file)
+
+    if args.backend == "onnx_runtime":
+        vae_decoder_runtime = create_ort_runtime(args.vae_onnx_file)
+        start = time.time()
+        unet_runtime = create_ort_runtime(args.unet_onnx_file)
+        print(f"Spend {time.time() - start : .2f} s to load unet model.")
+    else:
+        vae_dynamic_shape = {
+            "latent": {
+                "min_shape": [1, 4, 64, 64],
+                "max_shape": [8, 4, 64, 64],
+                "opt_shape": [1, 4, 64, 64],
+            }
+        }
+        vae_decoder_runtime = create_trt_runtime(
+            args.vae_onnx_file,
+            workspace=(1 << 30),
+            dynamic_shape=vae_dynamic_shape)
+        unet_dynamic_shape = {
+            "latent_input": {
+                "min_shape": [1, 4, 64, 64],
+                "max_shape": [8, 4, 64, 64],
+                "opt_shape": [1, 4, 64, 64],
+            },
+            "encoder_embedding": {
+                "min_shape": [1, 77, 768],
+                "max_shape": [8, 77, 768],
+                "opt_shape": [1, 77, 768],
+            },
+        }
+        start = time.time()
+        unet_runtime = create_trt_runtime(
+            args.unet_onnx_file, dynamic_shape=unet_dynamic_shape)
+        print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,
         text_encoder_runtime=text_encoder_runtime,
