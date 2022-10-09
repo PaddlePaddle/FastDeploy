@@ -22,6 +22,7 @@
 
 #include <map>
 #include <vector>
+#include <algorithm>
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
@@ -103,6 +104,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
   void SetCpuThreadNum(int thread_num);
+
+  /// Use ORT graph opt level
+  void SetOrtGraphOptLevel(int level = -1);
 
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();

@@ -198,6 +198,13 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   cpu_thread_num = thread_num;
 }
 
+void RuntimeOption::SetOrtGraphOptLevel(int level) {
+  std::vector<int> supported_level{-1, 0, 1, 2};
+  auto valid_level = std::find(supported_level.begin(), supported_level.end(), level) != supported_level.end();
+  FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
+  ort_graph_opt_level = level;
+}
+
 // use paddle inference backend
 void RuntimeOption::UsePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
