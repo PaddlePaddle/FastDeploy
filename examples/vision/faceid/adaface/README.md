@@ -1,8 +1,7 @@
 # AdaFace准备部署模型
 
 - [PaddleClas](https://github.com/PaddlePaddle/PaddleClas/)
-  - （1）[官方库](https://github.com/PaddlePaddle/PaddleClas/)中训练过后的Paddle模型[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）开发者基于自己数据训练的PaddleClas人脸识别模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - [官方库](https://github.com/PaddlePaddle/PaddleClas/)中训练过后的Paddle模型导出Paddle静态图模型操作后，可进行部署；
 
 ## 简介
 一直以来，低质量图像的人脸识别都具有挑战性，因为低质量图像的人脸属性是模糊和退化的。将这样的图片输入模型时，将不能很好的实现分类。
@@ -14,12 +13,12 @@
 由上，AdaFace缓解了低质量图片在输入网络后输出结果精度变低的情况，更加适合在人脸识别任务落地中使用。
 
 
-## 导出ONNX模型
+## 导出Paddle静态图模型
 以AdaFace为例:
 训练和导出代码，请参考[AIStudio](https://aistudio.baidu.com/aistudio/projectdetail/4479879?contributionType=1)
 
 
-## 下载预训练ONNX模型
+## 下载预训练Paddle静态图模型
 
 为了方便开发者的测试，下面提供了我转换过的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）其中精度指标来源于AIStudio中对各模型的介绍。
 
