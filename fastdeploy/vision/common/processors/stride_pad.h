@@ -26,15 +26,12 @@ class StridePad : public Processor {
     stride_ = stride;
     value_ = value;
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "StridePad"; }
 
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int stride_ = 32;
