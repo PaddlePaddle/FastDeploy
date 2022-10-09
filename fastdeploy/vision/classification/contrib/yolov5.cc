@@ -58,12 +58,12 @@ bool YOLOv5Cls::Preprocess(Mat* mat, FDTensor* output,
   CenterCrop::Run(mat, crop_size, crop_size);
   Resize::Run(mat, size[0], size[1], -1, -1, cv::INTER_LINEAR);
   // Normalize
-  HWC2CHW::Run(mat);
   BGR2RGB::Run(mat);
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
   Convert::Run(mat, alpha, beta);
   Normalize::Run(mat, mean, std, false);
+  HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
 
   mat->ShareWithTensor(output);
