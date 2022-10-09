@@ -9,6 +9,6 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
+add_executable(infer_demo ${PROJECT_SOURCE_DIR}/det_keypoint_unite_infer.cc)
 # 添加FastDeploy库依赖
 target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})

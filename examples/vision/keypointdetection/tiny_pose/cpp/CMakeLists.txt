@@ -9,5 +9,5 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(infer_tinypose_demo ${PROJECT_SOURCE_DIR}/infer_pptinypose.cc)
+add_executable(infer_tinypose_demo ${PROJECT_SOURCE_DIR}/pptinypose_infer.cc)
 target_link_libraries(infer_tinypose_demo ${FASTDEPLOY_LIBS})
