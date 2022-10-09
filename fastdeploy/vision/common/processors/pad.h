@@ -29,15 +29,12 @@ class Pad : public Processor {
     right_ = right;
     value_ = value;
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Pad"; }
 
   static bool Run(Mat* mat, const int& top, const int& bottom, const int& left,
                   const int& right, const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int top_;
