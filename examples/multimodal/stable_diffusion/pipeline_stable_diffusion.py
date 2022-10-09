@@ -162,10 +162,11 @@ class StableDiffusionFastDeployPipeline(object):
             # compute the previous noisy sample x_t -> x_t-1
             if isinstance(self.scheduler, LMSDiscreteScheduler):
                 latents = self.scheduler.step(noise_pred, i, latents,
-                                              **extra_step_kwargs)[0]
+                                              **extra_step_kwargs).prev_sample
             else:
                 latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs)[0]
+                                              **extra_step_kwargs).prev_sample
+            latents = np.array(latents)
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
         sample_name = self.vae_decoder_runtime.get_input_info(0).name

@@ -15,13 +15,97 @@
 # limitations under the License.
 
 import math
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Any
 from scipy import integrate
 
 import numpy as np
 from config_utils import register_to_config, ConfigMixin
+from dataclasses import dataclass
+from collections import OrderedDict
 
 SCHEDULER_CONFIG_NAME = "scheduler_config.json"
+
+
+class BaseOutput(OrderedDict):
+    """
+    Base class for all model outputs as dataclass. Has a `__getitem__` that allows indexing by integer or slice (like a
+    tuple) or strings (like a dictionary) that will ignore the `None` attributes. Otherwise behaves like a regular
+    python dictionary.
+    <Tip warning={true}>
+    You can't unpack a `BaseOutput` directly. Use the [`~utils.BaseOutput.to_tuple`] method to convert it to a tuple
+    before.
+    </Tip>
+    """
+
+    def __post_init__(self):
+        class_fields = fields(self)
+
+        # Safety and consistency checks
+        if not len(class_fields):
+            raise ValueError(f"{self.__class__.__name__} has no fields.")
+
+        first_field = getattr(self, class_fields[0].name)
+        other_fields_are_none = all(
+            getattr(self, field.name) is None for field in class_fields[1:])
+
+        if other_fields_are_none and isinstance(first_field, dict):
+            for key, value in first_field.items():
+                self[key] = value
+        else:
+            for field in class_fields:
+                v = getattr(self, field.name)
+                if v is not None:
+                    self[field.name] = v
+
+    def __delitem__(self, *args, **kwargs):
+        raise Exception(
+            f"You cannot use ``__delitem__`` on a {self.__class__.__name__} instance."
+        )
+
+    def setdefault(self, *args, **kwargs):
+        raise Exception(
+            f"You cannot use ``setdefault`` on a {self.__class__.__name__} instance."
+        )
+
+    def pop(self, *args, **kwargs):
+        raise Exception(
+            f"You cannot use ``pop`` on a {self.__class__.__name__} instance.")
+
+    def update(self, *args, **kwargs):
+        raise Exception(
+            f"You cannot use ``update`` on a {self.__class__.__name__} instance."
+        )
+
+    def __getitem__(self, k):
+        if isinstance(k, str):
+            inner_dict = {k: v for (k, v) in self.items()}
+            if self.__class__.__name__ in [
+                    "StableDiffusionPipelineOutput", "ImagePipelineOutput"
+            ] and k == "sample":
+                deprecate("samples", "0.6.0",
+                          "Please use `.images` or `'images'` instead.")
+                return inner_dict["images"]
+            return inner_dict[k]
+        else:
+            return self.to_tuple()[k]
+
+    def __setattr__(self, name, value):
+        if name in self.keys() and value is not None:
+            # Don't call self.__setitem__ to avoid recursion errors
+            super().__setitem__(name, value)
+        super().__setattr__(name, value)
+
+    def __setitem__(self, key, value):
+        # Will raise a KeyException if needed
+        super().__setitem__(key, value)
+        # Don't call self.__setattr__ to avoid recursion errors
+        super().__setattr__(key, value)
+
+    def to_tuple(self) -> Tuple[Any]:
+        """
+        Convert self to a tuple containing all the attributes/keys that are not `None`.
+        """
+        return tuple(self[k] for k in self.keys())
 
 
 class SchedulerMixin:
@@ -33,6 +117,50 @@ class SchedulerMixin:
 
     def set_format(self, tensor_format="pt"):
         return self
+
+
+class SchedulerOutput(BaseOutput):
+    """
+    Base class for the scheduler's step function output.
+    Args:
+        prev_sample (`np.ndarray` of shape `(batch_size, num_channels, height, width)` for images):
+            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            denoising loop.
+    """
+
+    prev_sample: np.ndarray
+
+
+class DDIMSchedulerOutput(BaseOutput):
+    """
+    Output class for the scheduler's step function output.
+    Args:
+        prev_sample (` np.ndarray` of shape `(batch_size, num_channels, height, width)` for images):
+            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            denoising loop.
+        pred_original_sample (` np.ndarray` of shape `(batch_size, num_channels, height, width)` for images):
+            The predicted denoised sample (x_{0}) based on the model output from the current timestep.
+            `pred_original_sample` can be used to preview progress or for guidance.
+    """
+
+    prev_sample: np.ndarray
+    pred_original_sample: Optional[np.ndarray] = None
+
+
+class LMSDiscreteSchedulerOutput(BaseOutput):
+    """
+    Output class for the scheduler's step function output.
+    Args:
+        prev_sample (`np.ndarray` of shape `(batch_size, num_channels, height, width)` for images):
+            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            denoising loop.
+        pred_original_sample (`np.ndarray` of shape `(batch_size, num_channels, height, width)` for images):
+            The predicted denoised sample (x_{0}) based on the model output from the current timestep.
+            `pred_original_sample` can be used to preview progress or for guidance.
+    """
+
+    prev_sample: np.ndarray
+    pred_original_sample: Optional[np.ndarray] = None
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
@@ -192,16 +320,22 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         if self.counter < len(
                 self.prk_timesteps) and not self.config.skip_prk_steps:
             return self.step_prk(
-                model_output=model_output, timestep=timestep, sample=sample)
+                model_output=model_output,
+                timestep=timestep,
+                sample=sample,
+                return_dict=return_dict)
         else:
             return self.step_plms(
-                model_output=model_output, timestep=timestep, sample=sample)
+                model_output=model_output,
+                timestep=timestep,
+                sample=sample,
+                return_dict=return_dict)
 
-    def step_prk(
-            self,
-            model_output: np.ndarray,
-            timestep: int,
-            sample: np.ndarray, ):
+    def step_prk(self,
+                 model_output: np.ndarray,
+                 timestep: int,
+                 sample: np.ndarray,
+                 return_dict: bool=True):
         """
         Step function propagating the sample with the Runge-Kutta method. RK takes 4 forward passes to approximate the
         solution to the differential equation.
@@ -244,14 +378,16 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         prev_sample = self._get_prev_sample(cur_sample, timestep,
                                             prev_timestep, model_output)
         self.counter += 1
+        if not return_dict:
+            return (prev_sample, )
 
-        return (prev_sample, )
+        return SchedulerOutput(prev_sample=prev_sample)
 
-    def step_plms(
-            self,
-            model_output: np.ndarray,
-            timestep: int,
-            sample: np.ndarray, ):
+    def step_plms(self,
+                  model_output: np.ndarray,
+                  timestep: int,
+                  sample: np.ndarray,
+                  return_dict: bool=True):
         """
         Step function propagating the sample with the linear multi-step method. This has one forward pass with multiple
         times to approximate the solution.
@@ -307,8 +443,9 @@ class PNDMScheduler(SchedulerMixin, ConfigMixin):
         prev_sample = self._get_prev_sample(sample, timestep, prev_timestep,
                                             model_output)
         self.counter += 1
-
-        return (prev_sample, )
+        if not return_dict:
+            return (prev_sample, )
+        return SchedulerOutput(prev_sample=prev_sample)
 
     def _get_prev_sample(self, sample, timestep, prev_timestep, model_output):
         alpha_prod_t = self.alphas_cumprod[timestep]
@@ -468,7 +605,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
             sample: np.ndarray,
             eta: float=0.0,
             use_clipped_model_output: bool=False,
-            generator=None, ):
+            generator=None,
+            return_dict: bool=True, ):
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).
@@ -548,8 +686,10 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
                 0.5) * eta * noise
 
             prev_sample = prev_sample + variance
-
-        return (prev_sample, pred_original_sample)
+        if not return_dict:
+            return (prev_sample, )
+        return DDIMSchedulerOutput(
+            prev_sample=prev_sample, pred_original_sample=pred_original_sample)
 
     def __len__(self):
         return self.config.num_train_timesteps
@@ -716,7 +856,8 @@ class LMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         if not return_dict:
             return (prev_sample, )
 
-        return (prev_sample, pred_original_sample)
+        return LMSDiscreteSchedulerOutput(
+            prev_sample=prev_sample, pred_original_sample=pred_original_sample)
 
     def add_noise(
             self,
