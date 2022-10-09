@@ -27,6 +27,6 @@ void BindYOLOv5Cls(pybind11::module& m) {
              self.Predict(&mat, &res, topk);
              return res;
            })
-      .def_readwrite("size", &vision::classification::YOLOv5Cls::size)
+      .def_readwrite("size", &vision::classification::YOLOv5Cls::size);
 }
 }  // namespace fastdeploy

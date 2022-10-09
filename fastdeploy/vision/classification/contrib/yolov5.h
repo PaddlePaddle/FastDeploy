@@ -27,10 +27,12 @@ class FASTDEPLOY_DECL YOLOv5Cls : public FastDeployModel {
             const RuntimeOption& custom_option = RuntimeOption(),
             const ModelFormat& model_format = ModelFormat::ONNX);
 
-  std::string ModelName() const { return "yolov5cls"; }
+  virtual std::string ModelName() const { return "yolov5cls"; }
+
+  virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
   // tuple of (width, height)
-  std::vector<float> size;
+  std::vector<int> size;
   // Normalize mean
   std::vector<float> mean;
   // Normalize std
@@ -38,8 +40,6 @@ class FASTDEPLOY_DECL YOLOv5Cls : public FastDeployModel {
 
  private:
   bool Initialize();
-
-  bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
   bool Preprocess(Mat* mat, FDTensor* output,
                   const std::vector<int>& size = {224, 224});

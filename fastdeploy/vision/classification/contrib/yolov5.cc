@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/contrib/yolov5.h"
+#include "fastdeploy/vision/classification/contrib/yolov5.h"
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
@@ -54,7 +54,7 @@ bool YOLOv5Cls::Initialize() {
 bool YOLOv5Cls::Preprocess(Mat* mat, FDTensor* output,
                            const std::vector<int>& size) {
   // CenterCrop
-  int crop_size = min(mat->Height(), mat->Width());
+  int crop_size = std::min(mat->Height(), mat->Width());
   CenterCrop::Run(mat, crop_size, crop_size);
   Resize::Run(mat, size[0], size[1], -1, -1, cv::INTER_LINEAR);
   // Normalize
@@ -95,13 +95,13 @@ bool YOLOv5Cls::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-  std::vector<FDTensor> output_tensors;
+  std::vector<FDTensor> output_tensors(1);
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(infer_result[0], result, topk)) {
+  if (!Postprocess(output_tensors[0], result, topk)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
