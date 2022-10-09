@@ -25,31 +25,51 @@
 namespace fastdeploy {
 namespace vision {
 
+enum ProcLib { DEFAULT, OPENCV};
 enum Layout { HWC, CHW };
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(cv::Mat& mat) {
     cpu_mat = mat;
-    device = Device::CPU;
     layout = Layout::HWC;
     height = cpu_mat.rows;
     width = cpu_mat.cols;
     channels = cpu_mat.channels();
+    mat_type = ProcLib::OPENCV;
   }
+
+  // careful if you use this interface
+  // this only used if you don't want to write
+  // the original data, and write to a new cv::Mat
+  // then replace the old cv::Mat of this structure
+  void SetMat(const cv::Mat& mat) { 
+    cpu_mat = mat; 
+    mat_type = ProcLib::OPENCV;
+  }
+
+#ifdef ENABLE_FALCONCV
+  void SetMat(const fcv::Mat& mat) { 
+    fcv_mat = mat; 
+    mat_type = Proclib::FALCONCV;
+  }
+#endif
 
  private:
   int channels;
   int height;
   int width;
   cv::Mat cpu_mat;
-#ifdef ENABLE_OPENCV_CUDA
-  cv::cuda::GpuMat gpu_mat;
+
+#ifdef ENABLE_FALCONCV
+  fcv::Mat fcv_mat;
 #endif
 
  public:
-#ifdef ENABLE_OPENCV_CUDA
-  cv::cuda::GpuMat* GetGpuMat();
-#endif
+  template<typename T>
+  T* GetMat() {
+    return &cpu_mat;
+  }
+
   cv::Mat* GetCpuMat();
 
   FDDataType Type();
@@ -72,8 +92,8 @@ struct FASTDEPLOY_DECL Mat {
   // This function will print shape / mean of each channels of the Mat
   void PrintInfo(const std::string& flag);
 
+  ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
-  Device device = Device::CPU;
 };
 
 Mat CreateFromTensor(const FDTensor& tensor);

@@ -20,7 +20,30 @@
 namespace fastdeploy {
 namespace vision {
 
+cv::Mat VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
+  auto vis_im = im.clone();
+
+  for (int n = 0; n < ocr_result.boxes.size(); n++) {
+    cv::Point rook_points[4];
+
+    for (int m = 0; m < 4; m++) {
+      rook_points[m] = cv::Point(int(ocr_result.boxes[n][m * 2]),
+                                 int(ocr_result.boxes[n][m * 2 + 1]));
+    }
+
+    const cv::Point *ppt[1] = {rook_points};
+    int npt[] = {4};
+    cv::polylines(vis_im, ppt, npt, 1, 1, CV_RGB(0, 255, 0), 2, 8, 0);
+  }
+
+  return vis_im;
+}
+
 cv::Mat Visualize::VisOcr(const cv::Mat &im, const OCRResult &ocr_result) {
+  FDWARNING
+      << "DEPRECATED: fastdeploy::vision::Visualize::VisOcr is deprecated, "
+         "please use fastdeploy::vision:VisOcr function instead."
+      << std::endl;
   auto vis_im = im.clone();
 
   for (int n = 0; n < ocr_result.boxes.size(); n++) {

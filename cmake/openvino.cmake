@@ -41,6 +41,17 @@ else()
 endif()
 set(OPENVINO_URL "${OPENVINO_URL_PREFIX}${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}")
 
+download_and_decompress(${OPENVINO_URL}
+    ${CMAKE_CURRENT_BINARY_DIR}/${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}
+    ${THIRD_PARTY_PATH}/install)
+
+if(EXISTS ${THIRD_PARTY_PATH}/install/openvino)
+  file(REMOVE_RECURSE ${THIRD_PARTY_PATH}/install/openvino) 
+endif()
+
+file(RENAME ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME} ${THIRD_PARTY_PATH}/install/openvino)
+set(OPENVINO_FILENAME openvino)
+
 set(OPENVINO_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${OPENVINO_FILENAME}/runtime)
 set(OPENVINO_INSTALL_INC_DIR
   "${OPENVINO_INSTALL_DIR}/include"
@@ -55,10 +66,6 @@ set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${OPENVINO_LIB_DIR}")
 
 # For OPENVINO code to include internal headers.
 include_directories(${OPENVINO_INSTALL_INC_DIR})
-
-download_and_decompress(${OPENVINO_URL}
-    ${CMAKE_CURRENT_BINARY_DIR}/${OPENVINO_FILENAME}${COMPRESSED_SUFFIX}
-    ${THIRD_PARTY_PATH}/install)
 
 if(WIN32)
   file(GLOB_RECURSE OPENVINO_LIB_FILES ${OPENVINO_INSTALL_DIR}/lib/intel64/Release/*)

@@ -25,6 +25,22 @@
 namespace fastdeploy {
 
 struct LiteBackendOption {
+  // cpu num threads
+  int threads = 1;
+  // lite power mode
+  // 0: LITE_POWER_HIGH
+  // 1: LITE_POWER_LOW
+  // 2: LITE_POWER_FULL
+  // 3: LITE_POWER_NO_BIND
+  // 4: LITE_POWER_RAND_HIGH
+  // 5: LITE_POWER_RAND_LOW
+  int power_mode = 3;
+  // enable fp16
+  bool enable_fp16 = false;
+  // optimized model dir for CxxConfig
+  std::string optimized_model_dir = "";
+  // TODO(qiuyanjun): support more options for lite backend.
+  // Such as fp16, different device target (kARM/kXPU/kNPU/...)
 };
 
 // Convert data type from paddle lite to fastdeploy
@@ -57,5 +73,7 @@ class LiteBackend : public BaseBackend {
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
   std::map<std::string, int> inputs_order_;
+  LiteBackendOption option_;
+  bool supported_fp16_ = false;
 };
 }  // namespace fastdeploy

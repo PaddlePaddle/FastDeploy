@@ -12,31 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/vision/common/processors/limit_by_stride.h"
 
 namespace fastdeploy {
 namespace vision {
 
-class ResizeToIntMult : public Processor {
- public:
-  explicit ResizeToIntMult(int mult_int = 32, int interp = 1) {
-    mult_int_ = mult_int;
-    interp_ = interp;
+bool LimitByStride::ImplByOpenCV(Mat* mat) {
+  cv::Mat* im = mat->GetCpuMat();
+  int origin_w = im->cols;
+  int origin_h = im->rows;
+  int rw = origin_w - origin_w % stride_;
+  int rh = origin_h - origin_h % stride_;
+  if (rw != origin_w || rh != origin_w) {
+    cv::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
+    mat->SetWidth(im->cols);
+    mat->SetHeight(im->rows);
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
-  std::string Name() { return "ResizeToIntMult"; }
+  return true;
+}
 
-  static bool Run(Mat* mat, int mult_int = 32, int interp = 1,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
-
- private:
-  int interp_;
-  int mult_int_;
-};
+bool LimitByStride::Run(Mat* mat, int stride, int interp, ProcLib lib) {
+  auto r = LimitByStride(stride, interp);
+  return r(mat, lib);
+}
 }  // namespace vision
 }  // namespace fastdeploy
