@@ -29,13 +29,13 @@ TensorInfo PorosBackend::GetOutputInfo(int index) {
   return info_output;
 }
 
-std::vector<TensorInfo> PaddleBackend::GetInputInfos() {
+std::vector<TensorInfo> PorosBackend::GetInputInfos() {
   // eager mode cann't obtain inputs information before infer
   std::vector<TensorInfo> info_inputs;
   return info_inputs;
 }
 
-std::vector<TensorInfo> PaddleBackend::GetOutputInfos() {
+std::vector<TensorInfo> PorosBackend::GetOutputInfos() {
   // eager mode cann't obtain outputs information before infer
   std::vector<TensorInfo> info_outputs;
   return info_outputs;
