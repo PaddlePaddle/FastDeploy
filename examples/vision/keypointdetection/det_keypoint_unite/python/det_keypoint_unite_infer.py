@@ -82,7 +82,7 @@ det_reulst = None
 im = cv2.imread(args.image)
 pptinypose_pipeline = fd.vision.posedetpipeline.PPTinyPosePipeline(
     det_model, tinypose_model)
-tinypose_result = pptinypose_pipeline.predict(im.copy(), det_result)
+tinypose_result = pptinypose_pipeline.predict(im.copy())
 print("Paddle TinyPose Result:\n", tinypose_result)
 
 # 预测结果可视化
