@@ -120,7 +120,7 @@ bool PorosBackend::Compile(const std::string& model_file,
   return true;
 }
 
-bool PorosBackend::InitFromTorchscript(const std::string& model_file,
+bool PorosBackend::InitFromTorchScript(const std::string& model_file,
                                        const PorosBackendOption& option) {
   if (initialized_) {
     FDERROR << "PorosBackend is already initlized, cannot initialize again."

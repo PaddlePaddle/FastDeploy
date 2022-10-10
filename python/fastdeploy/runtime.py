@@ -28,8 +28,33 @@ class Runtime:
         """
 
         self._runtime = C.Runtime()
+        self.runtime_option = runtime_option
+        self.to_internal()
         assert self._runtime.init(
-            runtime_option._option), "Initialize Runtime Failed!"
+            self.runtime_option._option), "Initialize Runtime Failed!"
+
+    def to_internal(self):
+        """Set Runtime Option for poros.
+        """
+        assert isinstance(self.runtime_option.is_dynamic, bool)
+        self.runtime_option._option.is_dynamic = self.runtime_option.is_dynamic
+        assert isinstance(self.runtime_option.long_to_int, bool)
+        self.runtime_option._option.long_to_int = self.runtime_option.long_to_int
+        assert isinstance(self.runtime_option.use_nvidia_tf32, bool)
+        self.runtime_option._option.use_nvidia_tf32 = self.runtime_option.use_nvidia_tf32
+        assert isinstance(self.runtime_option.unconst_ops_thres, int)
+        self.runtime_option._option.unconst_ops_thres = self.runtime_option.unconst_ops_thres
+
+    def forward(self, *inputs):
+        """Inference with input data for poros
+
+        :param data: (list[str : numpy.ndarray])The input data list
+        :return list of numpy.ndarray
+        """
+        inputs_dict = dict()
+        for i in range(len(inputs)):
+            inputs_dict["x" + str(i)] = inputs[i]
+        return self.infer(inputs_dict)
 
     def infer(self, data):
         """Inference with input data.
@@ -84,6 +109,11 @@ class RuntimeOption:
 
     def __init__(self):
         self._option = C.RuntimeOption()
+        # only for poros
+        self.is_dynamic = False
+        self.unconst_ops_thres = -1
+        self.long_to_int = True
+        self.use_nvidia_tf32 = False
 
     def set_model_path(self,
                        model_path,
@@ -124,6 +154,11 @@ class RuntimeOption:
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
         return self._option.use_paddle_backend()
+
+    def use_poros_backend(self):
+        """Use Poros backend, support inference TorchScript model on CPU/Nvidia GPU.
+        """
+        return self._option.use_poros_backend()
 
     def use_ort_backend(self):
         """Use ONNX Runtime backend, support inference Paddle/ONNX model on CPU/Nvidia GPU.
@@ -230,7 +265,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

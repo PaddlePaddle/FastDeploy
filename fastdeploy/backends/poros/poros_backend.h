@@ -74,7 +74,7 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool InitFromTorchscript(
+  bool InitFromTorchScript(
       const std::string& model_file,
       const PorosBackendOption& option = PorosBackendOption());
 

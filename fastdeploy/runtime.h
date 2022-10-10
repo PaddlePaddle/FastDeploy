@@ -38,7 +38,7 @@ enum Backend {
   ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
-  POROS,  ///< Poros, support Torchscript format model, CPU / Nvidia GPU
+  POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
 };
@@ -48,7 +48,7 @@ enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
-  TORCHSCRIPT,  ///< Model with Torchscript format
+  TORCHSCRIPT,  ///< Model with TorchScript format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
