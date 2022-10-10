@@ -25,8 +25,9 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
-                                                      config_file);
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -58,6 +59,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
 
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
+  option.UsePaddleBackend();
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
@@ -79,7 +81,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
-               "and ./visualized_result_fg.jpgg"
+               "and ./visualized_result_fg.jpg"
             << std::endl;
 }
 

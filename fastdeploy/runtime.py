@@ -155,9 +155,6 @@ class RuntimeOption:
     def disable_trt_fp16(self):
         return self._option.disable_trt_fp16()
 
-    def set_input_dtypes(self, dtypes):
-        return self._option.set_input_dtypes(dtypes)
-
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"

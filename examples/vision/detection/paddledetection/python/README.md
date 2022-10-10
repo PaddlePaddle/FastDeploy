@@ -10,7 +10,7 @@
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/detection/paddledetection/python/
+cd FastDeploy/examples/vision/detection/paddledetection/python/
 
 #下载PPYOLOE模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -33,12 +33,13 @@ python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439
 ## PaddleDetection Python接口
 
 ```python
-fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
-fastdeploy.vision.detection.PicoDet(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
-fastdeploy.vision.detection.PaddleYOLOX(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
-fastdeploy.vision.detection.YOLOv3(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
-fastdeploy.vision.detection.PPYOLO(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
-fastdeploy.vision.detection.FasterRCNN(model_file, params_file, config_file, runtime_option=None, model_format=Frontend.PADDLE)
+fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.PicoDet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.PaddleYOLOX(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.YOLOv3(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.PPYOLO(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.FasterRCNN(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
+fastdeploy.vision.detection.MaskRCNN(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
 PaddleDetection模型加载和初始化，其中model_file， params_file为导出的Paddle部署模型格式, config_file为PaddleDetection同时导出的部署配置yaml文件
@@ -49,7 +50,7 @@ PaddleDetection模型加载和初始化，其中model_file， params_file为导�
 > * **params_file**(str): 参数文件路径
 > * **config_file**(str): 推理配置yaml文件路径
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为Paddle
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle
 
 ### predict函数
 
@@ -73,3 +74,4 @@ PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO
 - [PaddleDetection 模型介绍](..)
 - [PaddleDetection C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

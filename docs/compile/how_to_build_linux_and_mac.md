@@ -13,7 +13,7 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 git checkout develop
-mkdir build & cd build
+mkdir build && cd build
 cmake .. -DENABLE_ORT_BACKEND=ON \
          -DENABLE_VISION=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
@@ -25,7 +25,7 @@ make install
 ## 编译Python安装包
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy
+cd FastDeploy/python
 git checkout develop
 # Python通过export环境变量设置编译选项
 export ENABLE_ORT_BACKEND=ON

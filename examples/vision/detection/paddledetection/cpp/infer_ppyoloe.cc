@@ -40,6 +40,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -68,6 +69,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -81,8 +83,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("image", {1, 3, 640, 640});
-  option.SetTrtInputShape("scale_factor", {1, 2});
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
@@ -99,6 +99,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
