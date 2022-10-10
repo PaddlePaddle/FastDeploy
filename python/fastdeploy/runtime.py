@@ -66,6 +66,23 @@ class Runtime:
             data, list), "The input data should be type of dict or list."
         return self._runtime.infer(data)
 
+    def compile(self, warm_datas):
+        """compile with prewarm data for poros
+
+        :param data: (list[str : numpy.ndarray])The prewarm data list
+        :return TorchScript Model
+        """
+        assert isinstance(warm_datas,
+                          list), "The prewarm data should be type of list."
+        for i in range(len(warm_datas)):
+            warm_data = warm_datas[i]
+            if isinstance(warm_data[0], np.ndarray):
+                warm_data = list(data for data in warm_data)
+            else:
+                warm_data = list(data.numpy() for data in warm_data)
+            warm_datas[i] = warm_data
+        return self._runtime.compile(warm_datas, self.runtime_option._option)
+
     def num_inputs(self):
         """Get number of inputs of the loaded model.
         """
