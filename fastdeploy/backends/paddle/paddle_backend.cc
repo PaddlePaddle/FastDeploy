@@ -19,6 +19,37 @@ namespace fastdeploy {
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+    if (option.enable_trt) {
+#ifdef ENABLE_TRT_BACKEND
+      auto precision = paddle_infer::PrecisionType::kFloat32;
+      if (option.trt_option.enable_fp16) {
+        precision = paddle_infer::PrecisionType::kHalf;
+      }
+      bool use_static = false;
+      if (option.trt_option.serialize_file != "") {
+        FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
+        use_static = true;
+      }
+      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, precision, use_static);
+      std::map<std::string, std::vector<int>> max_shape;
+      std::map<std::string, std::vector<int>> min_shape;
+      std::map<std::string, std::vector<int>> opt_shape;
+      for (const auto& item : option.trt_option.min_shape) {
+        auto max_iter = option.trt_option.max_shape.find(item.first);
+        auto opt_iter = option.trt_option.opt_shape.find(item.first);
+        FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find %s in TrtBackendOption::min_shape.", item.first.c_str());
+        FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find %s in TrtBackendOption::opt_shape.", item.first.c_str());
+        max_shape[item.first].assign(max_iter->second.begin(), max_iter->second.end());
+        opt_shape[item.first].assign(opt_iter->second.begin(), opt_iter->second.end());
+        min_shape[item.first].assign(item.second.begin(), item.second.end());
+      }
+      if (min_shape.size() > 0) {
+        config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
+      }
+#else
+      FDWARING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
+#endif
+    }
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
