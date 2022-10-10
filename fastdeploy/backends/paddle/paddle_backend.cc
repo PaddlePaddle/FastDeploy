@@ -16,13 +16,23 @@
 
 namespace fastdeploy {
 
-void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
+void PaddleBackend::BuildOption(const PaddleBackendOption& option,
+                                const std::string& model_file) {
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
       config_.EnableMKLDNN();
+      std::string contents;
+      if (!ReadBinaryFromFile(model_file, &contents)) {
+        return;
+      }
+      auto reader =
+          paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+      if (reader.is_quantize_model) {
+        config_.EnableMkldnnInt8();
+      }
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
@@ -52,7 +62,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
-  BuildOption(option);
+  BuildOption(option, model_file);
   predictor_ = paddle_infer::CreatePredictor(config_);
   std::vector<std::string> input_names = predictor_->GetInputNames();
   std::vector<std::string> output_names = predictor_->GetOutputNames();
