@@ -16,8 +16,7 @@
 
 namespace fastdeploy {
 
-void PaddleBackend::BuildOption(const PaddleBackendOption& option,
-                                const std::string& model_file) {
+void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
     if (option.enable_trt) {
@@ -54,16 +53,6 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option,
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
-      config_.EnableMKLDNN();
-      std::string contents;
-      if (!ReadBinaryFromFile(model_file, &contents)) {
-        return;
-      }
-      auto reader =
-          paddle2onnx::PaddleReader(contents.c_str(), contents.size());
-      if (reader.is_quantize_model) {
-        config_.EnableMkldnnInt8();
-      }
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }
@@ -93,28 +82,48 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
-  BuildOption(option, model_file);
+  BuildOption(option);
+
+  // The input/output information get from predictor is not right, use PaddleReader instead now
+  std::string contents;
+  if (!ReadBinaryFromFile(model_file, &contents)) {
+    return false;
+  }
+  auto reader =
+      paddle2onnx::PaddleReader(contents.c_str(), contents.size());
+
+  // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to int8 mode
+  if (reader.is_quantize_model) {
+    if (option.use_gpu) {
+      FDWARNING << "The loaded model is a quantized model, while inference on GPU, please use TensorRT backend to get better performance." << std::endl;
+    }
+    if (option.enable_mkldnn) {
+      config_.EnableMkldnnInt8();
+    } else {
+      FDWARNING << "The loaded model is a quantized model, while inference on CPU, please enable MKLDNN to get better performance." << std::endl;
+    }
+  }
+
+  inputs_desc_.resize(reader.num_inputs);
+  for (int i = 0; i < reader.num_inputs; ++i) {
+    std::string name(reader.inputs[i].name);
+    std::vector<int64_t> shape(
+        reader.inputs[i].shape,
+        reader.inputs[i].shape + reader.inputs[i].rank);
+    inputs_desc_[i].name = name;
+    inputs_desc_[i].shape.assign(shape.begin(), shape.end());
+    inputs_desc_[i].dtype = ReaderDataTypeToFD(reader.inputs[i].dtype);
+  }
+  outputs_desc_.resize(reader.num_outputs);
+  for (int i = 0; i < reader.num_outputs; ++i) {
+    std::string name(reader.outputs[i].name);
+    std::vector<int64_t> shape(reader.outputs[i].shape, reader.outputs[i].shape + reader.outputs[i].rank);
+    outputs_desc_[i].name = name;
+    outputs_desc_[i].shape.assign(shape.begin(), shape.end());
+    outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
+  }
+
   predictor_ = paddle_infer::CreatePredictor(config_);
-  std::vector<std::string> input_names = predictor_->GetInputNames();
-  std::vector<std::string> output_names = predictor_->GetOutputNames();
-  for (size_t i = 0; i < input_names.size(); ++i) {
-    auto handle = predictor_->GetInputHandle(input_names[i]);
-    TensorInfo info;
-    auto shape = handle->shape();
-    info.shape.assign(shape.begin(), shape.end());
-    info.dtype = PaddleDataTypeToFD(handle->type());
-    info.name = input_names[i];
-    inputs_desc_.emplace_back(info);
-  }
-  for (size_t i = 0; i < output_names.size(); ++i) {
-    auto handle = predictor_->GetOutputHandle(output_names[i]);
-    TensorInfo info;
-    auto shape = handle->shape();
-    info.shape.assign(shape.begin(), shape.end());
-    info.dtype = PaddleDataTypeToFD(handle->type());
-    info.name = output_names[i];
-    outputs_desc_.emplace_back(info);
-  }
   initialized_ = true;
   return true;
 }
