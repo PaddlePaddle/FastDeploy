@@ -105,7 +105,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetCpuThreadNum(int thread_num);
 
-  /// Use ORT graph opt level
+  /// Set ORT graph opt level, default is decide by ONNX Runtime itself
   void SetOrtGraphOptLevel(int level = -1);
 
   /// Set Paddle Inference as inference backend, support CPU/GPU
@@ -123,7 +123,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
 
-  // set mkldnn switch while using Paddle Inference as inference backend
+  /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
 
   /**
