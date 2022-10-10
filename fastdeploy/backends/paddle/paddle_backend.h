@@ -23,6 +23,10 @@
 #include "paddle2onnx/converter.h"
 #include "paddle_inference_api.h"  // NOLINT
 
+#ifdef ENABLE_TRT_BACKEND
+#include "fastdeploy/backends/tensorrt/trt_backend.h"
+#endif
+
 namespace fastdeploy {
 
 struct PaddleBackendOption {
@@ -34,6 +38,11 @@ struct PaddleBackendOption {
   bool enable_mkldnn = true;
 
   bool enable_log_info = false;
+
+  bool enable_trt = false;
+#ifdef ENABLE_TRT_BACKEND
+  TrtBackendOption trt_option;
+#endif
 
   int mkldnn_cache_size = 1;
   int cpu_thread_num = 8;
@@ -69,7 +78,8 @@ class PaddleBackend : public BaseBackend {
       const std::string& model_file, const std::string& params_file,
       const PaddleBackendOption& option = PaddleBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override;
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs) override;
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
