@@ -91,8 +91,10 @@ class PorosBackend : public BaseBackend {
 
   int NumOutputs() const { return _numoutputs; }
 
-  TensorInfo GetInputInfo(int index);
-  TensorInfo GetOutputInfo(int index);
+  TensorInfo GetInputInfo(int index) override;
+  TensorInfo GetOutputInfo(int index) override;
+  std::vector<TensorInfo> GetInputInfos() override;
+  std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
   baidu::mirana::poros::PorosOptions _options;

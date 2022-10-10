@@ -29,6 +29,18 @@ TensorInfo PorosBackend::GetOutputInfo(int index) {
   return info_output;
 }
 
+std::vector<TensorInfo> PaddleBackend::GetInputInfos() {
+  // eager mode cann't obtain inputs information before infer
+  std::vector<TensorInfo> info_inputs;
+  return info_inputs;
+}
+
+std::vector<TensorInfo> PaddleBackend::GetOutputInfos() {
+  // eager mode cann't obtain outputs information before infer
+  std::vector<TensorInfo> info_outputs;
+  return info_outputs;
+}
+
 void PorosBackend::BuildOption(const PorosBackendOption& option) {
   _options.device = option.use_gpu ? baidu::mirana::poros::Device::GPU
                                    : baidu::mirana::poros::Device::CPU;
