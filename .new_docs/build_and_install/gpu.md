@@ -1,4 +1,4 @@
-# GPU部署环境
+# GPU部署库编译
 
 FastDeploy当前在GPU环境支持Paddle Inference、ONNX Runtime和TensorRT，但同时在Linux&Windows的GPU环境也同时支持CPU硬件，因此编译时也可以同步将CPU的推理后端OpenVINO编译集成
 
@@ -10,34 +10,6 @@ FastDeploy当前在GPU环境支持Paddle Inference、ONNX Runtime和TensorRT，�
 | OpenVINO | Windows(x64)<br>Linux(x64) | Paddle/ONNX | 仅支持CPU，编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
 
 注意编译GPU环境时，需额外指定`WITH_GPU`为ON，设定`CUDA_DIRECTORY`，如若需集成TensorRT，还需同时设定`TRT_DIRECTORY`
-
-## 预编译库安装
-
-FastDeploy提供了预编译库供开发者快速安装使用，默认集成了各推理后端及Vision和Text模块, 当前发布两种版本
-
-- Release版本：FastDeploy每月更新发布的已测试版本
-- Nightly build版本：FastDeploy每日定期根据最新代码发布的编译版本(仅含Linux-x64和Windows-x64版本)
-
-### Python安装
-
-Release版本安装
-```
-pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-```
-
-Nightly build版本安装
-```
-pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
-```
-
-### C++SDK安装
-
-注：其中`nightly build`为每日最新代码编译产出
-
-| 平台  | 下载链接(Release) | 下载链接(nightly build) | 说明 |
-| :---- | :---------------- | :---------------------- | :--- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-0.2.1.tgz]() | [fastdeploy-linux-x64-gpu-0.2.2-dev.tgz]() | gcc 8.2编译产出，CUDA 11.2，CUDNN 8.2 |
-| Windows x64 | [fastdeploy-win-x64-gpu-0.2.1.zip]() | [fastdeploy-win-x64-gpu-0.2.2.-dev.tgz]() | Visual Studio 2019编译产出，CUDA 11.2，CUDNN 8.2 |
 
 ## C++ SDK编译安装
 
@@ -97,7 +69,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 
 编译完成后，即在`CMAKE_INSTALL_PREFIX`指定的目录下生成C++推理库
 
-## Python包编译安装
+## Python编译安装
 
 
 ### Linux
