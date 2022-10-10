@@ -14,4 +14,5 @@ FastDeploy
 
     build_and_install/index
     quick_start/index
+    serving/index
     api.md
