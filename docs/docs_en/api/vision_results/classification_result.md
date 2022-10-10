@@ -1,6 +1,6 @@
 # Image Classification Results - ClassifyResult
 
-The ClassifyResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the classification results and confidence level of the image.
+The ClassifyResult function is defined in `fastdeploy/vision/common/result.h` , indicating the classification results and confidence level of the image.
 
 ## C++ Definition
 
