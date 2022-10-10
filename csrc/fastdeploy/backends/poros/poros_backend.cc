@@ -37,104 +37,8 @@ void PorosBackend::BuildOption(const PorosBackendOption& option) {
   _options.device_id = option.gpu_id;
   _options.unconst_ops_thres = option.unconst_ops_thres;
   _options.is_dynamic = option.is_dynamic;
-  _options.is_dynamic = true;
   _options.max_workspace_size = option.max_workspace_size;
   _options.use_fp16 = option.enable_fp16;
-  // int input_index = 0;
-  // if (_options.is_dynamic) {
-  //     std::vector<torch::jit::IValue> inputs_min;
-  //     std::vector<torch::jit::IValue> inputs_opt;
-  //     std::vector<torch::jit::IValue> inputs_max;
-  //     for (auto iter = option.min_shape.begin(); iter !=
-  //     option.min_shape.end(); ++iter) {
-  //         std::vector<int64_t> min_shape;
-  //         std::vector<int64_t> opt_shape;
-  //         std::vector<int64_t> max_shape;
-  //         auto prewarm_dtype =
-  //         GetPorosDtype(option.prewarm_datatypes[input_index]);
-  //         auto max_iter = option.max_shape.find(iter->first);
-  //         auto opt_iter = option.opt_shape.find(iter->first);
-  //         FDASSERT(max_iter != option.max_shape.end(), "Cannot find " +
-  //         iter->first + " in TrtBackendOption::max_shape.");
-  //         FDASSERT(opt_iter != option.opt_shape.end(), "Cannot find " +
-  //         iter->first + " in TrtBackendOption::opt_shape.");
-  //         min_shape.assign(iter->second.begin(), iter->second.end());
-  //         opt_shape.assign(opt_iter->second.begin(), opt_iter->second.end());
-  //         max_shape.assign(max_iter->second.begin(), max_iter->second.end());
-  //         //min
-  //         if (option.use_gpu) {
-  //             std::cout << "test_wjj0000000: " << min_shape[0] << " " <<
-  //             min_shape[1] << std::endl;
-  //             auto min_tensor = at::ones(min_shape,
-  //             {at::kCUDA}).to(prewarm_dtype);
-  //             std::cout << min_tensor << std::endl;
-  //             inputs_min.push_back(min_tensor);
-  //             // inputs_min.push_back(at::randint(1, 10, min_shape,
-  //             {at::kCUDA}));
-  //         } else{
-  //             std::cout << "test_wjj0000000: " << min_shape[0] << " " <<
-  //             min_shape[1] << std::endl;
-  //             inputs_min.push_back(at::randn(min_shape,
-  //             {at::kCPU}).to(prewarm_dtype));
-  //         }
-  //         //opt
-  //         if (option.use_gpu) {
-  //             std::cout << "test_wjj1111111: " << opt_shape[0] << " " <<
-  //             opt_shape[1] << std::endl;
-  //             auto opt_tensor = at::ones(opt_shape,
-  //             {at::kCUDA}).to(prewarm_dtype);
-  //             inputs_opt.push_back(opt_tensor);
-  //             // inputs_opt.push_back(at::randint(1, 10, opt_shape,
-  //             {at::kCUDA}));
-  //         } else {
-  //             std::cout << "test_wjj1111111: " << opt_shape[0] << " " <<
-  //             opt_shape[1] << std::endl;
-  //             inputs_opt.push_back(at::randn(opt_shape,
-  //             {at::kCPU}).to(prewarm_dtype));
-  //         }
-  //         //max
-  //         if (option.use_gpu) {
-  //             std::cout << "test_wjj2222222: " << max_shape[0] << " " <<
-  //             max_shape[1] << std::endl;
-  //             auto max_tensor = at::ones(max_shape,
-  //             {at::kCUDA}).to(prewarm_dtype);
-  //             inputs_max.push_back(max_tensor);
-  //             // inputs_max.push_back(at::randint(1, 10, max_shape,
-  //             {at::kCUDA}));
-  //         } else {
-  //             std::cout << "test_wjj2222222: " << max_shape[0] << " " <<
-  //             max_shape[1] << std::endl;
-  //             inputs_max.push_back(at::randn(max_shape,
-  //             {at::kCPU}).to(prewarm_dtype));
-  //         }
-  //         input_index += 1;
-  //     }
-  //     std::cout << "test_wjj4444444: " << inputs_max.size() << std::endl;
-  //     std::cout << "test_wjj5555555: " << inputs_min.size() << std::endl;
-  //     std::cout << "test_wjj6666666: " << inputs_opt.size() << std::endl;
-  //     _prewarm_datas.push_back(inputs_max);
-  //     _prewarm_datas.push_back(inputs_min);
-  //     _prewarm_datas.push_back(inputs_opt);
-  // }
-  // else {
-  //     std::vector<torch::jit::IValue> inputs_min;
-  //     for (auto iter:option.min_shape) {
-  //         auto prewarm_dtype =
-  //         GetPorosDtype(option.prewarm_datatypes[input_index]);
-  //         std::vector<int64_t> min_shape;
-  //         min_shape.assign(iter.second.begin(), iter.second.end());
-  //         //min
-  //         if (option.use_gpu) {
-  //             inputs_min.push_back(at::randn(min_shape,
-  //             {at::kCUDA}).to(prewarm_dtype));
-  //         } else{
-  //             inputs_min.push_back(at::randn(min_shape,
-  //             {at::kCPU}).to(prewarm_dtype));
-  //         }
-  //         input_index += 1;
-  //     }
-  //     _prewarm_datas.push_back(inputs_min);
-  // }
   return;
 }
 
@@ -160,12 +64,6 @@ bool PorosBackend::Compile(const std::string& model_file,
   auto inputs = graph->inputs();
   // remove self node
   _numinputs = inputs.size() - 1;
-  // TODO:tuple to solve
-  auto outputs = graph->outputs();
-  for (int i = 0; i < outputs.size(); ++i) {
-    std::cout << outputs[i]->debugName() << std::endl;
-  }
-  _numoutputs = outputs.size();
   // FDTensor to at::Tensor
   std::vector<std::vector<c10::IValue>> prewarm_datas;
   bool is_backend_cuda = option.use_gpu ? true : false;
@@ -177,6 +75,29 @@ bool PorosBackend::Compile(const std::string& model_file,
     }
     prewarm_datas.push_back(prewarm_data);
   }
+  // get outputs nums
+  auto temp_result = mod.forward(prewarm_datas[0]);
+  size_t outputs_nums = 0;
+  if (temp_result.isTensor()) {
+    outputs_nums += 1;
+  } else if (temp_result.isTuple()) {
+    auto temp_result_tuple = temp_result.toTuple();
+    for (size_t i = 0; i < temp_result_tuple->elements().size(); ++i) {
+      auto poros_tensor = temp_result_tuple->elements()[i];
+      if (poros_tensor.isTensor()) {
+        outputs_nums += 1;
+      } else if (poros_tensor.isList()) {
+        auto poros_tensor_list = poros_tensor.toList();
+        outputs_nums += poros_tensor_list.size();
+      } else if (poros_tensor.isTuple()) {
+        auto poros_tensor_tuple = poros_tensor.toTuple();
+        outputs_nums += poros_tensor_tuple->elements().size();
+      } else {
+        continue;
+      }
+    }
+  }
+  _numoutputs = outputs_nums;
   _poros_module = baidu::mirana::poros::Compile(mod, prewarm_datas, _options);
   if (_poros_module == nullptr) {
     FDERROR << "PorosBackend initlize Failed, try initialize again."
@@ -267,47 +188,31 @@ bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
   auto poros_outputs = _poros_module->forward(poros_inputs);
   // Convert PyTorch Tensor to FD Tensor
   if (poros_outputs.isTensor()) {
-    if (is_backend_cuda) {
-      CopyTensorToCpu(poros_outputs.toTensor().to(at::kCPU), &((*outputs)[0]));
-    } else {
-      CopyTensorToCpu(poros_outputs.toTensor(), &((*outputs)[0]));
-    }
+    CopyTensorToCpu(poros_outputs.toTensor(), &((*outputs)[0]),
+                    is_backend_cuda);
   } else if (poros_outputs.isTuple()) {
     // deal with multi outputs
-    auto poros_outputs_list = poros_outputs.toTuple();
+    auto poros_outputs_tuple = poros_outputs.toTuple();
     size_t index = 0;
-    for (size_t i = 0; i < poros_outputs_list->elements().size(); ++i) {
-      auto poros_tensor = poros_outputs_list->elements()[i];
+    for (size_t i = 0; i < poros_outputs_tuple->elements().size(); ++i) {
+      auto poros_tensor = poros_outputs_tuple->elements()[i];
       if (poros_tensor.isTensor()) {
-        if (is_backend_cuda) {
-          CopyTensorToCpu(poros_tensor.toTensor().to(at::kCPU),
-                          &((*outputs)[index]));
-        } else {
-          CopyTensorToCpu(poros_tensor.toTensor(), &((*outputs)[index]));
-        }
+        CopyTensorToCpu(poros_tensor.toTensor(), &((*outputs)[index]),
+                        is_backend_cuda);
         index += 1;
       } else if (poros_tensor.isList()) {
         auto poros_tensor_list = poros_tensor.toList();
         for (const auto list_idx : c10::irange(0, poros_tensor_list.size())) {
           const auto& elt = poros_tensor_list.get(list_idx);
-          if (is_backend_cuda) {
-            CopyTensorToCpu(elt.toTensor().to(at::kCPU), &((*outputs)[index]));
-          } else {
-            CopyTensorToCpu(elt.toTensor(), &((*outputs)[index]));
-          }
+          CopyTensorToCpu(elt.toTensor(), &((*outputs)[index]),
+                          is_backend_cuda);
           index += 1;
         }
       } else if (poros_tensor.isTuple()) {
         auto poros_tensor_tuple = poros_tensor.toTuple();
         for (size_t j = 0; j < poros_tensor_tuple->elements().size(); ++j) {
-          if (is_backend_cuda) {
-            CopyTensorToCpu(
-                poros_tensor_tuple->elements()[j].toTensor().to(at::kCPU),
-                &((*outputs)[index]));
-          } else {
-            CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor(),
-                            &((*outputs)[index]));
-          }
+          CopyTensorToCpu(poros_tensor_tuple->elements()[j].toTensor(),
+                          &((*outputs)[index]), is_backend_cuda);
           index += 1;
         }
       } else {

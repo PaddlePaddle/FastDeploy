@@ -100,7 +100,7 @@ class RuntimeOption:
     def use_cpu(self):
         return self._option.use_cpu()
 
-    def set_cpu_thread_num(self, thread_num=8):
+    def set_cpu_thread_num(self, thread_num=-1):
         return self._option.set_cpu_thread_num(thread_num)
 
     def use_paddle_backend(self):

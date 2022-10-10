@@ -292,7 +292,7 @@ void RuntimeOption::SetInputDtypes(const std::vector<std::string>& dtypes) {
     } else if (dtypes[i] == "uint8") {
       input_dtypes.push_back(FDDataType::UINT8);
     } else {
-      FDASSERT(false, "Unexpected data type: " + dtypes[i]);
+      FDASSERT(false, "Unexpected data type!!!");
     }
   }
 }
@@ -312,9 +312,6 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
   poros_option.max_workspace_size = option.trt_max_workspace_size;
-  // poros_option.max_shape = option.trt_max_shape;
-  // poros_option.min_shape = option.trt_min_shape;
-  // poros_option.opt_shape = option.trt_opt_shape;
   FDASSERT(option.model_format == Frontend::TORCHSCRIPT,
            "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();
@@ -356,12 +353,14 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::ORT only supports Device::CPU/Device::GPU.");
     CreateOrtBackend();
-    FDINFO << "Runtime initialized with Backend::ORT." << std::endl;
+    FDINFO << "Runtime initialized with Backend::ORT in device "
+           << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::TRT) {
     FDASSERT(option.device == Device::GPU,
              "Backend::TRT only supports Device::GPU.");
     CreateTrtBackend();
-    FDINFO << "Runtime initialized with Backend::TRT." << std::endl;
+    FDINFO << "Runtime initialized with Backend::TRT in device "
+           << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::TRT only supports Device::CPU/Device::GPU.");
@@ -375,14 +374,15 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(
         option.model_format == Frontend::TORCHSCRIPT,
         "Backend::POROS only supports model format of Frontend::TORCHSCRIPT.");
-    // CreatePorosBackend();
-    FDINFO << "Runtime initialized with Backend::PDINFER." << std::endl;
+    FDINFO << "Runtime initialized with Backend::POROS in device "
+           << Str(option.device) << "." << std::endl;
     return true;
   } else if (option.backend == Backend::OPENVINO) {
     FDASSERT(option.device == Device::CPU,
              "Backend::OPENVINO only supports Device::CPU");
     CreateOpenVINOBackend();
-    FDINFO << "Runtime initialized with Backend::OPENVINO." << std::endl;
+    FDINFO << "Runtime initialized with Backend::OPENVINO in device "
+           << Str(option.device) << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
@@ -526,36 +526,6 @@ void Runtime::CreateTrtBackend() {
   FDASSERT(false,
            "TrtBackend is not available, please compiled with "
            "ENABLE_TRT_BACKEND=ON.");
-#endif
-}
-
-void Runtime::CreatePorosBackend() {
-#ifdef ENABLE_POROS_BACKEND
-  auto poros_option = PorosBackendOption();
-  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
-  poros_option.gpu_id = option.device_id;
-  poros_option.long_to_int = option.long_to_int;
-  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
-  poros_option.unconst_ops_thres = option.unconst_ops_thres;
-  poros_option.poros_file = option.poros_file;
-  poros_option.prewarm_datatypes = option.input_dtypes;
-  poros_option.enable_fp16 = option.trt_enable_fp16;
-  poros_option.max_batch_size = option.trt_max_batch_size;
-  poros_option.max_workspace_size = option.trt_max_workspace_size;
-  // poros_option.max_shape = option.trt_max_shape;
-  // poros_option.min_shape = option.trt_min_shape;
-  // poros_option.opt_shape = option.trt_opt_shape;
-  FDASSERT(option.model_format == Frontend::TORCHSCRIPT,
-           "PorosBackend only support model format of Frontend::TORCHSCRIPT.");
-  backend_ = utils::make_unique<PorosBackend>();
-  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
-  FDASSERT(
-      casted_backend->InitFromTorchscript(option.model_file, poros_option),
-      "Load model from Torchscript failed while initliazing PorosBackend.");
-#else
-  FDASSERT(false,
-           "PorosBackend is not available, please compiled with "
-           "ENABLE_POROS_BACKEND=ON.");
 #endif
 }
 

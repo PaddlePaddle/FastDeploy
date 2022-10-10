@@ -34,7 +34,8 @@ struct PorosBackendOption {
 #endif
   int gpu_id = 0;
   bool long_to_int = true;
-  // There is calculation precision in tf32 mode on A10, it can bring some performance improvement, but there may be diff
+  // There is calculation precision in tf32 mode on A10, it can bring some
+  // performance improvement, but there may be diff
   bool use_nvidia_tf32 = false;
   // Threshold for the number of non-const ops
   int32_t unconst_ops_thres = -1;
@@ -46,9 +47,6 @@ struct PorosBackendOption {
   bool is_dynamic = false;
   size_t max_batch_size = 32;
   size_t max_workspace_size = 1 << 30;
-  // std::map<std::string, std::vector<int32_t>> max_shape;
-  // std::map<std::string, std::vector<int32_t>> min_shape;
-  // std::map<std::string, std::vector<int32_t>> opt_shape;
 };
 
 // Convert data type from fastdeploy to poros
@@ -66,7 +64,8 @@ std::string AtType2String(const at::ScalarType& dtype);
 at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda = false);
 
 // Copy memory data from at::Tensor to fastdeploy::FDTensor
-void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor);
+void CopyTensorToCpu(const at::Tensor& tensor, FDTensor* fd_tensor,
+                     bool is_backend_cuda = false);
 
 class PorosBackend : public BaseBackend {
  public:
@@ -75,14 +74,16 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool InitFromTorchscript(const std::string& model_file,
-                    const PorosBackendOption& option = PorosBackendOption());
-  
-  bool InitFromPoros(const std::string& model_file,
-                  const PorosBackendOption& option = PorosBackendOption());
+  bool InitFromTorchscript(
+      const std::string& model_file,
+      const PorosBackendOption& option = PorosBackendOption());
 
-  bool Compile(const std::string& model_file, std::vector<std::vector<FDTensor>>& prewarm_tensors,
-                  const PorosBackendOption& option = PorosBackendOption());
+  bool InitFromPoros(const std::string& model_file,
+                     const PorosBackendOption& option = PorosBackendOption());
+
+  bool Compile(const std::string& model_file,
+               std::vector<std::vector<FDTensor>>& prewarm_tensors,
+               const PorosBackendOption& option = PorosBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
 

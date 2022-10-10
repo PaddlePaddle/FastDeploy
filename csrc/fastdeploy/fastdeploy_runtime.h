@@ -173,8 +173,6 @@ struct FASTDEPLOY_DECL Runtime {
 
   void CreateTrtBackend();
 
-  void CreatePorosBackend();
-
   // only for poros
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);

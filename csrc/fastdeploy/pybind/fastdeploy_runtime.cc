@@ -83,13 +83,14 @@ void BindRuntime(pybind11::module& m) {
                  rows, std::vector<FDTensor>(columns));
              for (size_t i = 0; i < rows; ++i) {
                for (size_t j = 0; j < columns; ++j) {
-                 warm_tensors[i][j].dtype =
+                 auto dtype =
                      NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
-                 warm_tensors[i][j].shape.insert(
-                     warm_tensors[i][j].shape.begin(), warm_datas[i][j].shape(),
+                 std::vector<int64_t> data_shape;
+                 data_shape.insert(
+                     data_shape.begin(), warm_datas[i][j].shape(),
                      warm_datas[i][j].shape() + warm_datas[i][j].ndim());
-                 warm_tensors[i][j].data.resize(warm_datas[i][j].nbytes());
-                 memcpy(warm_tensors[i][j].Data(),
+                 warm_tensors[i][j].Resize(data_shape, dtype);
+                 memcpy(warm_tensors[i][j].MutableData(),
                         warm_datas[i][j].mutable_data(),
                         warm_datas[i][j].nbytes());
                }
@@ -101,15 +102,14 @@ void BindRuntime(pybind11::module& m) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
              for (auto iter = data.begin(); iter != data.end(); ++iter) {
-               inputs[index].dtype =
-                   NumpyDataTypeToFDDataType(iter->second.dtype());
-               inputs[index].shape.insert(
-                   inputs[index].shape.begin(), iter->second.shape(),
-                   iter->second.shape() + iter->second.ndim());
+               std::vector<int64_t> data_shape;
+               data_shape.insert(data_shape.begin(), iter->second.shape(),
+                                 iter->second.shape() + iter->second.ndim());
+               auto dtype = NumpyDataTypeToFDDataType(iter->second.dtype());
                // TODO(jiangjiajun) Maybe skip memory copy is a better choice
                // use SetExternalData
-               inputs[index].data.resize(iter->second.nbytes());
-               memcpy(inputs[index].Data(), iter->second.mutable_data(),
+               inputs[index].Resize(data_shape, dtype);
+               memcpy(inputs[index].MutableData(), iter->second.mutable_data(),
                       iter->second.nbytes());
                inputs[index].name = iter->first;
                index += 1;
