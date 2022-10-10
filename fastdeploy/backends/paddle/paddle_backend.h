@@ -20,7 +20,9 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
+#endif
 #include "paddle_inference_api.h"  // NOLINT
 
 namespace fastdeploy {
@@ -58,18 +60,21 @@ void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
 // Convert data type from paddle inference to fastdeploy
 FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype);
 
+// Convert data type from paddle2onnx::PaddleReader to fastdeploy
+FDDataType ReaderDataTypeToFD(int32_t dtype);
+
 class PaddleBackend : public BaseBackend {
  public:
   PaddleBackend() {}
   virtual ~PaddleBackend() = default;
-  void BuildOption(const PaddleBackendOption& option,
-                   const std::string& model_file);
+  void BuildOption(const PaddleBackendOption& option);
 
   bool InitFromPaddle(
       const std::string& model_file, const std::string& params_file,
       const PaddleBackendOption& option = PaddleBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override;
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs) override;
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
