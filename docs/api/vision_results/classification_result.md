@@ -1,6 +1,6 @@
 # ClassifyResult 图像分类结果
 
-ClassifyResult代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明图像的分类结果和置信度。
+ClassifyResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像的分类结果和置信度。
 
 ## C++ 定义
 

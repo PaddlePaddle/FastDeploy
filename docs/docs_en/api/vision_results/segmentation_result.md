@@ -1,6 +1,6 @@
 # Segmentation Results
 
-The SegmentationResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the predicted segmentation class and the probability value of the segmentation class from each pixel in the image.
+The SegmentationResult function is defined in `fastdeploy/vision/common/result.h` , indicating the predicted segmentation class and the probability value of the segmentation class from each pixel in the image.
 
 ## C++  Definition
 

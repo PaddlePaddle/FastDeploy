@@ -1,6 +1,6 @@
 # 视觉模型预测结果说明
 
-FastDeploy根据视觉模型的任务类型，定义了不同的结构体(`csrcs/fastdeploy/vision/common/result.h`)来表达模型预测结果，具体如下表所示
+FastDeploy根据视觉模型的任务类型，定义了不同的结构体(`fastdeploy/vision/common/result.h`)来表达模型预测结果，具体如下表所示
 
 | 结构体 | 文档 | 说明 | 相应模型 |
 | :----- | :--- | :---- | :------- |

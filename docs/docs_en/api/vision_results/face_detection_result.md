@@ -1,6 +1,6 @@
 # Face Detection Results
 
-The FaceDetectionResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the object's frame, face landmarks , target confidence and the number of landmarks for each face detected.
+The FaceDetectionResult function is defined in `fastdeploy/vision/common/result.h` , indicating the object's frame, face landmarks , target confidence and the number of landmarks for each face detected.
 
 ## C++  Definition
 
