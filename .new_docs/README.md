@@ -6,6 +6,7 @@
 - [GPU部署环境编译安装](./build_and_install/gpu.md)
 - [CPU部署环境编译安装](./build_and_install/cpu.md)
 - [Jetson部署环境编译安装](./build_and_install/jetson.md)
+- [Android平台部署环境编译安装](./build_and_install/android.md)
 
 ## 快速使用
 
@@ -20,6 +21,10 @@
 - [C++ API文档]()
 - [Java API文档]()
 
+## 性能调优
+
+- [量化加速](quantize.md)
+
 ## 常见问题
 
 - [1. 如何配置模型部署的推理后端]()
@@ -30,5 +35,4 @@
 
 ## 更多FastDeploy部署模块
 
-- [模型量化加速]()
 - [服务化部署]()
