@@ -1,6 +1,6 @@
 # Matting Results
 
-The MattingResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the value of alpha transparency predicted by the model, the predicted foreground.
+The MattingResult function is defined in `fastdeploy/vision/common/result.h` , indicating the value of alpha transparency predicted by the model, the predicted foreground.
 
 ## C++ Definition
 

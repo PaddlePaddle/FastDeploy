@@ -22,8 +22,6 @@
 namespace fastdeploy {
 namespace vision {
 
-enum ProcLib { DEFAULT, OPENCV_CPU, OPENCV_CUDA };
-
 class Processor {
  public:
   // default_lib has the highest priority
@@ -32,16 +30,16 @@ class Processor {
   // DEFAULT means this flag is not set
   static ProcLib default_lib;
 
-  //  virtual bool ShapeInfer(const std::vector<int>& in_shape,
-  //                          std::vector<int>* out_shape) = 0;
   virtual std::string Name() = 0;
-  virtual bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  virtual bool GpuRun(Mat* mat);
-#endif
+
+  virtual bool ImplByOpenCV(Mat* mat) = 0;
+
+//  virtual bool ImplByFalconCV(Mat* mat) {
+//    return ImplByOpenCV(mat);
+//  }
 
   virtual bool operator()(Mat* mat,
-                          ProcLib lib = ProcLib::OPENCV_CPU);
+                          ProcLib lib = ProcLib::OPENCV);
 };
 
 } // namespace vision

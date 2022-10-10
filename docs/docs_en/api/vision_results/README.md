@@ -1,6 +1,6 @@
 # Vision Model Inference Results
 
-FastDeploy defines different structs (`csrcs/fastdeploy/vision/common/result.h`) to demonstrate the model inference results according to the task types of vision models. The details are as follows
+FastDeploy defines different structs (`fastdeploy/vision/common/result.h`) to demonstrate the model inference results according to the task types of vision models. The details are as follows
 
 | Struct                | Doc                                        | Description                                                                  | Related Models          |
 |:--------------------- |:------------------------------------------ |:---------------------------------------------------------------------------- |:----------------------- |

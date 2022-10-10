@@ -41,6 +41,11 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   // auto ocr_system_v3 = fastdeploy::application::ocrsystem::PPOCRSystemv3(&det_model, &rec_model);
   auto ocr_system_v3 = fastdeploy::application::ocrsystem::PPOCRSystemv3(&det_model, &cls_model, &rec_model);
 
+  if(!ocr_system_v3.Initialized()){
+    std::cerr << "Failed to initialize OCR system." << std::endl;
+    return;
+  }
+
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
   
