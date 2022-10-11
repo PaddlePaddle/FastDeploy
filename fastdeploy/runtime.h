@@ -119,7 +119,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
 
-  // use Poros backend
+  /// Set Poros backend as inference backend, support CPU/GPU
   void UsePorosBackend();
 
   /// Set OpenVINO as inference backend, only support CPU
@@ -276,7 +276,12 @@ struct FASTDEPLOY_DECL Runtime {
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
 
-  // only for poros
+  /** \brief Compile TorchScript Module, only for Poros backend
+   *
+   * \param[in] prewarm_tensors Prewarm datas for compile
+   * \param[in] _option Runtime option
+   * \return true if compile successed, otherwise false
+   */
   bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const RuntimeOption& _option);
 

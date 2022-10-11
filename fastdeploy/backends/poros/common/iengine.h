@@ -28,7 +28,7 @@ namespace mirana {
 namespace poros {
 
 /**
- * the base engine class 
+ * the base engine class
  * every registered engine should inherit from this IEngine
  **/
 
@@ -44,41 +44,41 @@ public:
     virtual ~IEngine() {}
 
     /**
-     * @brief init, 必须init成功才算初始化成功
+     * @brief init, initialization must be successful if the init is successful
      * @return int
      * @retval 0 => success, <0 => fail
      **/
     virtual int init() = 0;
-    
+
     /**
-     * @brief 编译期将subgraph转化成对应engine的图结构保存在engine内部，以使得运行期的excute_engine能调用, 此处保证所有的op都被支持，核心实现
-     * @param [in] sub_graph  : 子图
+     * @brief During compilation, the subgraph is converted into the graph structure of the corresponding engine and stored inside the engine, so that the execute_engine at runtime can be called
+     * @param [in] sub_graph  : subgraph
      * @return [res]int
      * @retval 0 => success, <0 => fail
      **/
     virtual int transform(const PorosGraph& sub_graph) = 0;
 
     /**
-     * @brief 子图执行期逻辑
-     * @param [in] inputs  : 输入tensor
-     * @return [res] 输出tensor
+     * @brief Subgraph execution period logic
+     * @param [in] inputs  : input tensor
+     * @return [res] output tensor
      **/
     virtual std::vector<at::Tensor> excute_engine(const std::vector<at::Tensor>& inputs) = 0;
 
     virtual void register_module_attribute(const std::string& name, torch::jit::Module& module) = 0;
 
-    //标识
+    // Logo
     virtual const std::string who_am_i() = 0;
 
-    //node是否被当前engine支持
+    // Whether the node is supported by the current engine
     bool is_node_supported(const torch::jit::Node* node);
 
 public:
-    std::pair<uint64_t, uint64_t> _num_io; //输入/输出参数个数
+    std::pair<uint64_t, uint64_t> _num_io; // Number of input/output parameters
     EngineID _id;
 
 };
 
-}  // namespace poros 
+}  // namespace poros
 }  // namespace mirana
 }  // namespace baidu

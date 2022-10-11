@@ -52,6 +52,10 @@ class Runtime:
         :param data: (list[str : numpy.ndarray])The input data list
         :return list of numpy.ndarray
         """
+        if self.runtime_option._option.model_format != ModelFormat.TORCHSCRIPT:
+            raise Exception(
+                "The forward function is only used for Poros backend, please call infer function"
+            )
         inputs_dict = dict()
         for i in range(len(inputs)):
             inputs_dict["x" + str(i)] = inputs[i]
@@ -73,6 +77,10 @@ class Runtime:
         :param data: (list[str : numpy.ndarray])The prewarm data list
         :return TorchScript Model
         """
+        if self.runtime_option._option.model_format != ModelFormat.TORCHSCRIPT:
+            raise Exception(
+                "The compile function is only used for Poros backend, please call infer function"
+            )
         assert isinstance(warm_datas,
                           list), "The prewarm data should be type of list."
         for i in range(len(warm_datas)):

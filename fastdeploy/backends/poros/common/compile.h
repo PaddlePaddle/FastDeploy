@@ -30,14 +30,14 @@ namespace poros {
 /**
  * @brief  compile graph
  *
- * @param [in] module : 原始module
- * @param [in] input_ivalues : 预热数据
- * @param [in] options : 参数
+ * @param [in] module : original module
+ * @param [in] input_ivalues : prewarm datas
+ * @param [in] options : Inference options
  * @return porosmodule
  * @retval !nullptr => succeed  nullptr => failed
  **/
-std::unique_ptr<PorosModule> Compile(const torch::jit::Module& module, 
-        const std::vector<std::vector<c10::IValue> >& prewarm_datas, 
+std::unique_ptr<PorosModule> Compile(const torch::jit::Module& module,
+        const std::vector<std::vector<c10::IValue> >& prewarm_datas,
         const PorosOptions& options);
 
 class Compiler {
@@ -60,16 +60,16 @@ public:
     /**
      * @brief compile whole graph
      *
-     * @param [in] origin_module 
+     * @param [in] origin_module
      * @param [in] prewarm_datas : ivalue_vec_t, vector of IValue
      * @param [out] optimized_module : optimized graph
      * @return  int
      * @retval 0 => succeed  <0 => failed
     **/
-    int compile(const torch::jit::Module& origin_module, 
+    int compile(const torch::jit::Module& origin_module,
                 const ivalue_vec_t& prewarm_datas,
                 torch::jit::Module* optimized_module);
-    
+
 private:
 
     /**
@@ -85,19 +85,19 @@ private:
     /**
      * @brief segement this calculation graph
      *
-     * @param [in/out] graph 
+     * @param [in/out] graph
      * @return  int
      * @retval 0 => succeed  <0 => failed
     **/
     int segment_graph(std::shared_ptr<torch::jit::Graph>& graph);
 
-    //分割子图（block)
-    //分割后的子图，作为subgraph, 关联到block下。
+    // Split subgraph（block)
+    // The divided subgraph, as a subgraph, is associated with the block
     int segment_block(torch::jit::Block& block, IEngine* engine, int current_depth);
-    
-    //子图优化
+
+    // Subgraph optimization
     /**
-     * @brief 子图优化
+     * @brief Subgraph optimization
      *
      * @param [in] prewarm_datas : ivalue_vec_t, vector of IValue
      * @param [in] opt_graph : ivalue_vec_t, vector of IValue
@@ -105,34 +105,34 @@ private:
      * @return  int
      * @retval 0 => succeed  <0 => failed
     **/
-    int optimize_subgraph(const ivalue_vec_t& prewarm_datas, 
+    int optimize_subgraph(const ivalue_vec_t& prewarm_datas,
             const std::shared_ptr<torch::jit::Graph>& opt_graph,
             torch::jit::Module* optimized_module);
 
-    //子图优化(block)
-    int optimize_subblock(torch::jit::Block* block, 
+    // Subgraph optimization(block)
+    int optimize_subblock(torch::jit::Block* block,
             torch::jit::Module* optimized_module);
 
     /**
-     * @brief 将子图基于engine编译成新图
+     * @brief Compile the subgraph into a new graph based on the engine
      *
-     * @param [in] engine : 子图用到的engine
-     * @param [in] subgraph_node : 子图结点
-     * @return [out] module : 转化后的模型
+     * @param [in] engine : The engine used by the subgraph
+     * @param [in] subgraph_node : Subgraph node
+     * @return [out] module : Transformed model
      * @retval 0 => succeed  <0 => failed
     **/
-    int transform(IEngine* engine, torch::jit::Node& subgraph_node, 
+    int transform(IEngine* engine, torch::jit::Node& subgraph_node,
             torch::jit::Module& module);
 
     /**
-     * @brief 根据子图和options选择engine
+     * @brief Select engine based on subgraph and options
      *
-     * @param [in] node : 子图代表结点
+     * @param [in] node : Jit Node
      * @return  int
      * @retval 0 => succeed  <0 => failed
     **/
     IEngine* select_engine(const torch::jit::Node* n);
-    
+
     /**
      * @brief destory
      *
@@ -141,27 +141,27 @@ private:
     void close();
 
 private:
-    int _max_segment_depth{5};                    //最大子图分割深度
-    ivalue_vec_t _prewarm_datas;                    //预热用的输入数据
+    int _max_segment_depth{5};                    // Maximum subgraph segmentation depth
+    ivalue_vec_t _prewarm_datas;                    // Prewarm datas
     PorosOptions _options;
-    engine_map_t _engine_map;                       //记录子图用的engine
-    const torch::jit::Module* _origin_module;       //原始模型
-    std::atomic<int> _engine_index = {0};            //记录engine的index
+    engine_map_t _engine_map;                       // The engine used to record the subgraph
+    const torch::jit::Module* _origin_module;       // Origin_module
+    std::atomic<int> _engine_index = {0};            // Record engine index
 };
 
 /**
- * @brief  compile graph, 内部使用
+ * @brief  compile graph, internal use
  *
- * @param [in] module : 原始module
- * @param [in] input_ivalues : 预热数据
- * @param [in] options : 参数
+ * @param [in] module : Origin module
+ * @param [in] input_ivalues : Prewarm datas
+ * @param [in] options : Inference options
  * @return optimized_module
  * @retval !nullptr => succeed  nullptr => failed
  **/
-std::unique_ptr<torch::jit::Module> CompileGraph(const torch::jit::Module& module, 
-                                const std::vector<std::vector<c10::IValue> >& prewarm_datas, 
+std::unique_ptr<torch::jit::Module> CompileGraph(const torch::jit::Module& module,
+                                const std::vector<std::vector<c10::IValue> >& prewarm_datas,
                                 const PorosOptions& options);
 
-}  // namespace poros 
+}  // namespace poros
 }  // namespace mirana
 }  // namespace baidu

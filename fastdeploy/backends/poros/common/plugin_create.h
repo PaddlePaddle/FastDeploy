@@ -33,7 +33,7 @@ typedef std::unordered_map<std::string, plugin_creator_t> plugin_creator_map_t;
 IPlugin* create_plugin(const std::string& plugin_name);
 IPlugin* create_plugin(const std::string& plugin_name, const plugin_creator_map_t& plugin_creator_map);
 
-void create_all_plugins(const plugin_creator_map_t& plugin_creator_map, 
+void create_all_plugins(const plugin_creator_map_t& plugin_creator_map,
         std::unordered_map<std::string, IPlugin*>& plugin_m);
 //void create_all_plugins(std::unordered_map<std::string, IPlugin*>& plugin_m);
 
@@ -43,7 +43,7 @@ IPlugin* default_plugin_creator() {
 }
 
 void register_plugin_creator(const std::string& plugin_name, plugin_creator_t creator);
-void register_plugin_creator(const std::string& plugin_name, 
+void register_plugin_creator(const std::string& plugin_name,
         plugin_creator_t creator, plugin_creator_map_t& plugin_creator_map);
 
 template <typename PluginType>
@@ -51,7 +51,7 @@ void register_plugin_class(const std::string& plugin_name) {
     return register_plugin_creator(plugin_name, default_plugin_creator<PluginType>);
 }
 
-//推荐使用此版本
+// This version is recommended
 template <typename PluginType>
 void register_plugin_class(const std::string& plugin_name, plugin_creator_map_t& plugin_creator_map) {
     return register_plugin_creator(plugin_name, default_plugin_creator<PluginType>, plugin_creator_map);
