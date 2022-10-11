@@ -33,10 +33,6 @@ class FASTDEPLOY_DECL YOLOv5Cls : public FastDeployModel {
 
   // tuple of (width, height)
   std::vector<int> size;
-  // Normalize mean
-  std::vector<float> mean;
-  // Normalize std
-  std::vector<float> std;
 
  private:
   bool Initialize();

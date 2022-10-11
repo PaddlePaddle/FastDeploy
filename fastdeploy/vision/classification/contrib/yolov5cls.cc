@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/classification/contrib/yolov5.h"
+#include "fastdeploy/vision/classification/contrib/yolov5cls.h"
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
@@ -42,8 +42,6 @@ YOLOv5Cls::YOLOv5Cls(const std::string& model_file,
 bool YOLOv5Cls::Initialize() {
   // preprocess parameters
   size = {224, 224};
-  mean = {0.485f, 0.456f, 0.406f};
-  std = {0.229f, 0.224f, 0.225f};
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -62,6 +60,8 @@ bool YOLOv5Cls::Preprocess(Mat* mat, FDTensor* output,
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
   Convert::Run(mat, alpha, beta);
+  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
+  std::vector<float> std = {0.229f, 0.224f, 0.225f};
   Normalize::Run(mat, mean, std, false);
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
