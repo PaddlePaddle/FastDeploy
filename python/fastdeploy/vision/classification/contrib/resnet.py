@@ -24,20 +24,21 @@ class ResNet(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
+
+        # call super() to initialize the backend_option
+        # the result of initialization will be saved in self._runtime_option
         super(ResNet, self).__init__(runtime_option)
 
         self._model = C.vision.classification.ResNet(
             model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
+        # self.initialized shows the initialization of the model is successful or not
+
         assert self.initialized, "ResNet initialize failed."
 
     def predict(self, input_image, topk=1):
         return self._model.predict(input_image, topk)
 
-    # 一些跟ResNet模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
+    # Implement the setter and getter method for variables
     @property
     def size(self):
         return self._model.size

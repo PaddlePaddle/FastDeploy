@@ -24,6 +24,8 @@ ResNet::ResNet(const std::string& model_file,
                const std::string& params_file,
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
+  // In constructor, the 3 steps below are necessary.
+  // 1. set the Backend 2. set RuntimeOption 3. call Initialize()
 
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO}; 
@@ -41,6 +43,9 @@ ResNet::ResNet(const std::string& model_file,
 
 bool ResNet::Initialize() {
 
+  // In this function, the 3 steps below are necessary.
+  // 1. assign values to the global variables 2. call InitRuntime()
+
   size = {224, 224};
   mean_vals = {0.485f, 0.456f, 0.406f};
   std_vals = {0.229f, 0.224f, 0.225f};
@@ -55,9 +60,10 @@ bool ResNet::Initialize() {
 
 bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
 
-// Resize
-// BGR2RGB
-// Normalize         
+// In this function, the preprocess need be implemented according to the original Repos,
+// The result of preprocess has to be saved in FDTensor variable, because the input of Infer() need to be std::vector<FDTensor>.
+// 1. Resize 2. BGR2RGB 3. Normalize 4. HWC2CHW 5. Put the result into FDTensor variable.
+        
   if (mat->Height()!=size[0] || mat->Width()!=size[1]){
     int interp = cv::INTER_LINEAR;
     Resize::Run(mat, size[1], size[0], -1, -1, interp);
@@ -75,11 +81,13 @@ bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
 
 bool ResNet::Postprocess(FDTensor& infer_result,
                                   ClassifyResult* result, int topk) {
+
+  // In this function, the postprocess need be implemented according to the original Repos,
+  // Finally the reslut of postprocess should be saved in ClassifyResult variable.
+  // 1. Softmax 2. Choose topk labels 3. Put the result into ClassifyResult variable.
+
   int num_classes = infer_result.shape[1];
-  // FDTensor *softmax_res;
   Softmax(infer_result, &infer_result);
-  // const float* infer_result_buffer =
-  //     reinterpret_cast<const float*>(infer_result.Data());
   const float* infer_result_buffer = reinterpret_cast<float*>(infer_result.Data());
   topk = std::min(num_classes, topk);
   result->label_ids =
@@ -92,6 +100,9 @@ bool ResNet::Postprocess(FDTensor& infer_result,
 }
 
 bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
+
+  // In this function, the Preprocess(), Infer(), and Postprocess() are called sequentially.
+
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
   if (!Preprocess(&mat, &(processed_data[0]))) {

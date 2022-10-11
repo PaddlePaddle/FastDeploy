@@ -17,6 +17,8 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
+// The namespace shoulde be
+// fastdeploy::vision::classification (fastdeploy::vision::${task})
 namespace fastdeploy {
 namespace vision {
 namespace classification {

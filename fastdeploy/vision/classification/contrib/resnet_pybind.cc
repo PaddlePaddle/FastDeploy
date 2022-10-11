@@ -13,9 +13,13 @@
 // limitations under the License.
 
 #include "fastdeploy/pybind/main.h"
-
+// namespace should be  `fastdeploy`
 namespace fastdeploy {
+// the name of Pybind function should be Bind${model_name}
 void BindResNet(pybind11::module& m) {
+  // the constructor and the predict funtion are necessary
+  // the constructor is used to initialize the python model class.
+  // the necessary public functions and variables like `size`, `mean_vals` should also be binded.
   pybind11::class_<vision::classification::ResNet, FastDeployModel>(
       m, "ResNet")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
