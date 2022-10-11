@@ -11,7 +11,7 @@
 - 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../../../tools/quantization/),自行进行模型量化, 并使用产出的量化模型进行部署.
 
 
-## YOLOv5s模型,量化部署示例
+## 以量化后的YOLOv5s模型为例, 进行部署
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
