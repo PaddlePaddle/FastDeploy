@@ -17,10 +17,10 @@
 - [Runtime Python使用示例](cn/quick_start/runtime/python.md)
 - [Runtime C++使用示例](cn/quick_start/runtime/cpp.md)
 
-## API文档
+## API文档(进行中)
 
-- [Python API文档](进行中)
-- [C++ API文档](进行中)
+- [Python API文档](https://baidu-paddle.github.io/fastdeploy-api/python/html)
+- [C++ API文档](https://baidu-paddle.github.io/fastdeploy-api/cpp/)
 
 ## 性能调优
 
