@@ -43,11 +43,15 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   bool Preprocess(...);
   bool Postprocess(...);
 };
+```
+
 * 编写resnet.cc 文件
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/C++代码存放位置/视觉模型/分类任务/外部模型/模型名)
   * 编写内容
     * 再resnet.cc中实现resnet.h中声明函数的具体逻辑，其中PreProcess 和 PostProcess需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考【TODO PR resnet.cc】
+
+```C++
 ResNet::ResNet(...) {
   // 构造函数逻辑
   // 1. 指定 Backend 2. 设置RuntimeOption 3. 调用Initialize()函数
