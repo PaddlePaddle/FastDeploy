@@ -1,6 +1,6 @@
 # FastDeploy外部模型集成指引
 
-在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy支持外部模型具体步骤，需要开发的代码包括如下6步。
+在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下6步。
 
 | 步骤 | 说明                                | 创建或修改的文件                            |
 |:------:|:-------------------------------------:|:---------------------------------------------:|
@@ -13,7 +13,7 @@
 
 在完成上述6步之后，一个外部模型就集成好了，接下来为了方便用户更好的使用我们的模型，我们会在添加测试代码和相关的说明文档，可在[测试](#test)中查看。
 
-## 模型集成
+## 模型集成     <span id="modelsupport"></span>
 
 ### 模型准备  <span id="step1"></span>
 
@@ -43,7 +43,7 @@ torch.onnx.export(model,
 ### C++部分  <span id="step2"></span>
 * 编写resnet.h文件
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.h)【TODO 变量用 ${xxx}替换】
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.h)
   * 内容
     * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明Predict、Initialize、Preprocess、Postprocess和构造函数，以及必要的变量，具体的代码细节请参考【TODO，PR resnet.h】。
 
