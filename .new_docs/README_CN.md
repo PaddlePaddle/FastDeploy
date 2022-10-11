@@ -24,7 +24,7 @@
 
 ## 性能调优
 
-- [量化加速](quantize.md)
+- [量化加速](cn/quantize.md)
 
 ## 常见问题
 
