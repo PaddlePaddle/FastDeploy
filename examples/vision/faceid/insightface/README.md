@@ -31,19 +31,19 @@
 
 为了方便开发者的测试，下面提供了InsightFace导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）其中精度指标来源于InsightFace中对各模型的介绍，详情各参考InsightFace中的说明
 
-| 模型                                                               | 大小    | 精度 (AgeDB_30)   |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [CosFace-r18](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r18.onnx) | 92MB | 97.7 |
-| [CosFace-r34](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r34.onnx) | 131MB | 98.3|
-| [CosFace-r50](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r50.onnx) | 167MB | 98.3 |
-| [CosFace-r100](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r100.onnx) | 249MB | 98.4 |
-| [ArcFace-r18](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r18.onnx) | 92MB | 97.7 |
-| [ArcFace-r34](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r34.onnx) | 131MB | 98.1|
-| [ArcFace-r50](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r50.onnx) | 167MB | - |
-| [ArcFace-r100](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx) | 249MB | 98.4 |
-| [ArcFace-r100_lr0.1](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_r100_lr01.onnx) | 249MB | 98.4 |
-| [PartialFC-r34](https://bj.bcebos.com/paddlehub/fastdeploy/partial_fc_glint360k_r50.onnx) | 167MB | -|
-| [PartialFC-r50](https://bj.bcebos.com/paddlehub/fastdeploy/partial_fc_glint360k_r100.onnx) | 249MB | - |
+| 模型                                                                                         | 大小    | 精度 (AgeDB_30) |
+|:-------------------------------------------------------------------------------------------|:------|:--------------|
+| [CosFace-r18](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r18.onnx)       | 92MB  | 97.7          |
+| [CosFace-r34](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r34.onnx)       | 131MB | 98.3          |
+| [CosFace-r50](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r50.onnx)       | 167MB | 98.3          |
+| [CosFace-r100](https://bj.bcebos.com/paddlehub/fastdeploy/glint360k_cosface_r100.onnx)     | 249MB | 98.4          |
+| [ArcFace-r18](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r18.onnx)          | 92MB  | 97.7          |
+| [ArcFace-r34](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r34.onnx)          | 131MB | 98.1          |
+| [ArcFace-r50](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r50.onnx)          | 167MB | -             |
+| [ArcFace-r100](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx)        | 249MB | 98.4          |
+| [ArcFace-r100_lr0.1](https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_r100_lr01.onnx)     | 249MB | 98.4          |
+| [PartialFC-r34](https://bj.bcebos.com/paddlehub/fastdeploy/partial_fc_glint360k_r50.onnx)  | 167MB | -             |
+| [PartialFC-r50](https://bj.bcebos.com/paddlehub/fastdeploy/partial_fc_glint360k_r100.onnx) | 249MB | -             |
 
 
 

@@ -1,30 +1,50 @@
-# InsightFace Python部署示例
-本目录下提供infer_xxx.py快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+# AdaFace Python部署示例
+本目录下提供infer_xxx.py快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-以ArcFace为例子, 提供`infer_arcface.py`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+以AdaFace为例子, 提供`infer.py`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/faceid/insightface/python/
+cd examples/vision/faceid/adaface/python/
 
-#下载ArcFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
+#下载AdaFace模型文件和测试图片
+#下载测试图片
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
+# 如果为Paddle模型，运行以下代码
+wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
+tar zxvf mobilefacenet_adaface.tgz -C ./
+
 # CPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                --device cpu
 # GPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                --device gpu
 # GPU上使用TensorRT推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
+python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+                --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+                --face test_lite_focal_arcface_0.JPG \
+                --face_positive test_lite_focal_arcface_1.JPG \
+                --face_negative test_lite_focal_arcface_2.JPG \
+                 --device gpu \
+                 --use_trt True
 ```
 
 运行完成可视化结果如下图所示
@@ -36,36 +56,32 @@ python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_
 </div>
 
 ```bash
-Prediction Done!
---- [Face 0]:FaceRecognitionResult: [Dim(512), Min(-2.309220), Max(2.372197), Mean(0.016987)]
---- [Face 1]:FaceRecognitionResult: [Dim(512), Min(-2.288258), Max(1.995104), Mean(-0.003400)]
---- [Face 2]:FaceRecognitionResult: [Dim(512), Min(-3.243411), Max(3.875866), Mean(-0.030682)]
-Detect Done! Cosine 01: 0.814385, Cosine 02:-0.059388
-
+FaceRecognitionResult: [Dim(512), Min(-0.133213), Max(0.148838), Mean(0.000293)]
+FaceRecognitionResult: [Dim(512), Min(-0.102777), Max(0.120130), Mean(0.000615)]
+FaceRecognitionResult: [Dim(512), Min(-0.116685), Max(0.142919), Mean(0.001595)]
+Cosine 01:  0.7483505506964364
+Cosine 02:  -0.09605773855893639
 ```
 
-## InsightFace Python接口
+## AdaFace Python接口
 
 ```python
-fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
-fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
-fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
-fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.AdaFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
+AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式或PADDLE静态图格式
 
 **参数**
 
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为PADDLE
 
 ### predict函数
 
 > ```python
-> ArcFace.predict(image_data)
+> AdaFace.predict(image_data)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -92,7 +108,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 
 ## 其它文档
 
-- [InsightFace 模型介绍](..)
-- [InsightFace C++部署](../cpp)
+- [AdaFace 模型介绍](..)
+- [AdaFace C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
