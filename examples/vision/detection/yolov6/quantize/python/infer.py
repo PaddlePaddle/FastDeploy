@@ -1,7 +1,7 @@
 import fastdeploy as fd
 import cv2
 import os
-from fastdeploy.c_lib_wrap import ModelFormat
+from fastdeploy import ModelFormat
 
 
 def parse_arguments():
