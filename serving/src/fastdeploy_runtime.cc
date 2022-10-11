@@ -918,7 +918,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+  FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       SetInputTensors(total_batch_size, requests, request_count, &responses,
                       &collector, &cuda_copy));
@@ -934,7 +934,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_start_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
                                       all_response_failed,
                                       Run(&responses, request_count));
   }
@@ -943,7 +943,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_end_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         ReadOutputTensors(total_batch_size, requests, request_count,
                           &responses));
@@ -1096,7 +1096,7 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   // BackendOutputResponder responder(
   //     requests, request_count, responses,
   //     model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
-  //     model_state_->EnablePinnedInput(), CudaStream());
+  //     model_state_->EnablePinnedOutput(), CudaStream());
   // r21.10
   BackendOutputResponder responder(
       requests, request_count, responses, StateForModel()->MaxBatchSize(),

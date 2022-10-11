@@ -12,6 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+WITH_GPU=${1:-ON}
+
+if [ $WITH_GPU == "ON" ]; then
+
 if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
     wget https://github.com/Kitware/CMake/releases/download/v3.18.6/cmake-3.18.6-Linux-x86_64.tar.gz
     tar -zxvf cmake-3.18.6-Linux-x86_64.tar.gz
@@ -34,3 +38,19 @@ docker run -it --rm --name build_fd_vison \
             export ENABLE_TEXT=ON;
             python setup.py build;
             python setup.py bdist_wheel'
+
+else
+
+docker run -it --rm --name build_fd_vison \
+           -v`pwd`:/workspace/fastdeploy \
+           paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
+           bash -c \
+           'cd /workspace/fastdeploy/python;
+            rm -rf .setuptools-cmake-build dist;
+            export WITH_GPU=OFF;
+            export ENABLE_VISION=ON;
+            export ENABLE_TEXT=ON;
+            python setup.py build;
+            python setup.py bdist_wheel'
+
+fi
