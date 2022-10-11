@@ -1,8 +1,8 @@
-# Python部署
+# PPYOLOE Python部署
 
 确认开发环境已安装FastDeploy，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。
 
-本文档以PaddleDetection目标检测模型PicoDet为例展示CPU上的推理示例
+本文档以PaddleDetection目标检测模型PPYOLOE为例展示CPU上的推理示例
 
 ## 1. 获取模型和测试图像
 
