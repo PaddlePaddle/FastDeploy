@@ -1,3 +1,4 @@
+
 使用FastDeploy集成，这几步就够了~~
 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy支持外部模型具体步骤，
 # 模型集成
@@ -126,10 +127,10 @@ void BindClassification(pybind11::module& m) {
   * 创建位置
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/分类任务/外部模型/模型名)
   * 内容
-    * 创建ResNet类继承自FastDeployModel，实现 __init__、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考【TODO PR resnet.py】
+    * 创建ResNet类继承自FastDeployModel，实现 `__init__`、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考【TODO PR resnet.py】
 ```C++
 class ResNet(FastDeployModel):
-    def __init__(self, ...):
+    def `__init__`(self, ...):
         self._model = C.vision.classification.ResNet(...)
     def predict(self, input_image, topk=1):
         return self._model.predict(input_image, topk)
@@ -143,7 +144,7 @@ class ResNet(FastDeployModel):
 
 * 导入ResNet类
   * 修改位置
-    * FastDeploy/python/fastdeploy/vision/classification/__init__.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/分类任务/__init__.py)
+    * FastDeploy/python/fastdeploy/vision/classification/`__init__`.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/分类任务/`__init__`.py)
   * 修改内容
 
 ```Python
