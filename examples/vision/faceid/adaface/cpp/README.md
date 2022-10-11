@@ -1,6 +1,7 @@
-# InsightFace C++部署示例
-本目录下提供infer_xxx.cc快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
-以ArcFace为例提供`infer_arcface.cc`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+# AdaFace C++部署示例
+本目录下提供infer_xxx.py快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+
+以AdaFace为例提供`infer.cc`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -10,6 +11,7 @@
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
+# “如果预编译库不包含本模型，请从最新代码编译SDK”
 mkdir build
 cd build
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.1.tgz
@@ -17,19 +19,38 @@ tar xvf fastdeploy-linux-x64-0.2.1.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
 make -j
 
-#下载官方转换好的ArcFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
+#下载测试图片
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
-
+# 如果为Paddle模型，运行以下代码
+wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
+tar zxvf mobilefacenet_adaface.tgz -C ./
 # CPU推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 0
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              0
+
 # GPU推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 1
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              1
+
 # GPU上TensorRT推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG test_lite_focal_arcface_2.JPG 2
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              2
+
 ```
 
 运行完成可视化结果如下图所示
@@ -43,66 +64,27 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
 
-## InsightFace C++接口
+## AdaFace C++接口
 
-### ArcFace类
+### AdaFace类
 
 ```c++
-fastdeploy::vision::faceid::ArcFace(
+fastdeploy::vision::faceid::AdaFace(
         const string& model_file,
         const string& params_file = "",
         const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::ONNX)
+        const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
+AdaFace模型加载和初始化，如果使用PaddleInference推理，model_file和params_file为PaddleInference模型格式;
+如果使用ONNXRuntime推理，model_file为ONNX模型格式,params_file为空。
 
-### CosFace类
 
-```c++
-fastdeploy::vision::faceid::CosFace(
-        const string& model_file,
-        const string& params_file = "",
-        const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::ONNX)
-```
-
-CosFace模型加载和初始化，其中model_file为导出的ONNX模型格式。
-
-### PartialFC类
-
-```c++
-fastdeploy::vision::faceid::PartialFC(
-        const string& model_file,
-        const string& params_file = "",
-        const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::ONNX)
-```
-
-PartialFC模型加载和初始化，其中model_file为导出的ONNX模型格式。
-
-### VPL类
-
-```c++
-fastdeploy::vision::faceid::VPL(
-        const string& model_file,
-        const string& params_file = "",
-        const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::ONNX)
-```
-
-VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
-**参数**
-
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX格式
 
 #### Predict函数
 
 > ```c++
-> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
+> AdaFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
