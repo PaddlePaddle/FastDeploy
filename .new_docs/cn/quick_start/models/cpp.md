@@ -8,7 +8,7 @@
 
 ```
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget https://bj.bcebos.com/fastdeploy/tests/test_det.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 ```
 
@@ -22,21 +22,23 @@ int main() {
   std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
   std::string params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
   std::string infer_cfg_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file, infer_cfg_file);
+  // 模型推理的配置信息
+  fastdeploy::RuntimeOption option;
+  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file, infer_cfg_file, option);
 
   assert(model.Initialized()); // 判断模型是否初始化成功
 
-  cv::mat im = cv::imread("000000014439.jpg");
+  cv::Mat im = cv::imread("test_det.jpg");
   fastdeploy::vision::DetectionResult result;
   
-  assert(model.Predict(im)); // 判断是否预测成功
+  assert(model.Predict(&im, &result)); // 判断是否预测成功
 
-  std::cout << result << std::endl;
+  std::cout << result.Str() << std::endl;
 
-  cv::mat vis_im = fastdeploy::vision::Visualize::VisDetection(im, result, 0.5);
+  cv::Mat vis_im = fastdeploy::vision::Visualize::VisDetection(im, result, 0.5);
   // 可视化结果保存到本地
   cv::imwrite("vis_result.jpg", vis_im);
-
+  std::cout << "Visualized result save in vis_result.jpg" << std::endl;
   return 0;
 }
 ```
@@ -53,9 +55,9 @@ include(/Paddle/Download/fastdeploy_cpp_sdk/FastDeploy.cmake)
 
 ```
 PROJECT(infer_demo C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.12)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
-include(/Paddle/Download/fastdeploy_cpp_sdk/FastDeploy.cmake)
+include(/Path/to/fastdeploy_cpp_sdk/FastDeploy.cmake)
 
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
@@ -78,22 +80,34 @@ cmake ..
 make -j
 ```
 
-在执行`cmake`命令时，屏幕会输出FastDeploy编译信息以及Notice，其中如下提示是指引开发者将FastDeploy依赖库路径添加到环境变量，便于编译后执行二进制程序能链接到相应的库，开发者复制相应command在终端执行即可。
-
-```
-======================= Notice ========================
-After compiled binary executable file, please add the following path to environment, execute the following command,
-
-export LD_LIBRARY_PATH=/Paddle/Download/fastdeploy_cpp_sdk/third_libs/install/paddle2onnx/lib:/Paddle/Download/fastdeploy_cpp_sdk/third_libs/install/opencv/lib:/Paddle/Download/fastdeploy_cpp_sdk/third_libs/install/onnxruntime/lib:/Paddle/Download/fastdeploy_cpp_sdk/lib:${LD_LIBRARY_PATH}
-=======================================================
-```
-
 编译完成后，使用如下命令执行可得到预测结果
 ```
 ./infer_demo 
 ```
+执行时如提示`error while loading shared libraries: libxxx.so: cannot open shared object file: No such file...`，说明程序执行时没有找到FastDeploy的库路径，可通过执行如下命令，将FastDeploy的库路径添加到环境变量之后，重新执行二进制程序。
+```
+source /Path/to/fastdeploy_cpp_sdk/fastdeploy_init.sh
+```
+
+执行完屏幕会输出如下日志
+```
+DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
+415.047180,89.311569, 506.009613, 283.863098, 0.950423, 0
+163.665710,81.914932, 198.585342, 166.760895, 0.896433, 0
+581.788635,113.027618, 612.623474, 198.521713, 0.842596, 0
+267.217224,89.777306, 298.796051, 169.361526, 0.837951, 0
+...
+...
+```
+
+同时可视化的检测结果图片保存在本地`vis_result.jpg`，查看效果如下
+<div  align="center">
+<img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
+</div>
 
 ### Windows
+
+上面的编译过程适用于Linux/Mac，Windows上编译流程如下
 
 在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，进入`infer_demo.cc`和`CMakeLists.txt`所在目录，执行如下命令
 ```
@@ -103,14 +117,13 @@ cmake .. -G "Visual Studio 16 2019" -A x64
 msbuild infer_demo.sln /m /p:Configuration=Release /p:Platform=x64
 ```
 
-在执行`cmake`命令时，屏幕会输出FastDeploy编译信息以及Notice，其中如下提示是指引开发者将FastDeploy依赖库路径添加到环境变量，便于编译后执行exe能链接到相应的库，开发者复制相应command在终端执行即可。
-
-```
-======================= Notice ========================
-
-```
-
 执行完后，即会在`build/Release`目录下生成`infer_demo.exe`程序，使用如下命令执行可得到预测结果
 ```
 Release\infer_demo.exe
 ```
+
+Windows上更多SDK使用方式参阅[Windows平台使用FastDeploy C++ SDK](../../faq/use_sdk_on_windows.md)
+
+## 其它文档
+
+- [切换模型推理的硬件和后端](../../faq/how_to_change_backend.md)

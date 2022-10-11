@@ -298,8 +298,8 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
         << "TensorRT engine will be rebuilt once shape range information "
            "changed, this may take lots of time, you can set a proper shape "
            "range before loading model to avoid rebuilding process. refer "
-           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
-           "tensorrt.md for more details."
+           "https://github.com/PaddlePaddle/FastDeploy/docs/en/faq/"
+           "tensorrt_tricks.md for more details."
         << std::endl;
     BuildTrtEngine();
   }
@@ -592,8 +592,8 @@ bool TrtBackend::CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer) {
            "should be noticed that FastDeploy will rebuild the engine while "
            "new input shape is out of the collected shape range, this may "
            "bring some time consuming problem, refer "
-           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
-           "tensorrt.md for more details."
+           "https://github.com/PaddlePaddle/FastDeploy/docs/en/faq/"
+           "tensorrt_tricks.md for more details."
         << std::endl;
     initialized_ = true;
     return true;
