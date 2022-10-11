@@ -16,6 +16,7 @@
 #include "fastdeploy/core/config.h"
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision/classification/ppcls/model.h"
+#include "fastdeploy/vision/classification/contrib/resnet.h"
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
 #include "fastdeploy/vision/detection/contrib/yolor.h"

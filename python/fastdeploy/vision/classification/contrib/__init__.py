@@ -11,20 +11,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
 
-from .ppcls import PaddleClasModel
-from .contrib.resnet import ResNet
-PPLCNet = PaddleClasModel
-PPLCNetv2 = PaddleClasModel
-EfficientNet = PaddleClasModel
-GhostNet = PaddleClasModel
-MobileNetv1 = PaddleClasModel
-MobileNetv2 = PaddleClasModel
-MobileNetv3 = PaddleClasModel
-ShuffleNetv2 = PaddleClasModel
-SqueezeNet = PaddleClasModel
-Inceptionv3 = PaddleClasModel
-PPHGNet = PaddleClasModel
-ResNet50vd = PaddleClasModel
-SwinTransformer = PaddleClasModel
+from __future__ import absolute_import

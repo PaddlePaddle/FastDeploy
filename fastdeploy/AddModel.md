@@ -1,0 +1,204 @@
+使用FastDeploy集成，这几步就够了~~
+本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy支持外部模型具体步骤，
+# 模型集成
+
+## 模型准备
+
+在集成外部模型之前，先要将训练好的模型（.pt 等）转换成ONNX格式的模型。多数开源仓库会提供模型转换脚本，可以直接利用脚本做模型的转换。由于torchvision没有提供转换脚本，顾手动编写转换脚本，参考代码如下：
+
+```python
+import torch
+import torchvision.models as models
+model = models.resnet50(pretrained=True)
+batch_size = 1  #批处理大小
+input_shape = (3, 224, 224)   #输入数据,改成自己的输入shape
+model.eval()
+x = torch.randn(batch_size, *input_shape)	# 生成张量
+export_onnx_file = "resnet50.onnx"			# 目的ONNX文件名
+torch.onnx.export(model,
+                    x,
+                    export_onnx_file,
+                    opset_version=12,
+                    input_names=["input"],	# 输入名
+                    output_names=["output"],	# 输出名
+                    dynamic_axes={"input":{0:"batch_size"},  # 批处理变量
+                                    "output":{0:"batch_size"}})
+执行上述脚本将会得到 resnet50.onnx 文件。
+```
+
+## C++部分
+* 编写resnet.h文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/C++代码存放位置/视觉模型/分类任务/外部模型/模型名)【TODO 变量用 ${xxx}替换】
+  * 内容
+    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明Predict、Initialize、Preprocess、Postprocess和构造函数，以及必要的变量，具体的代码细节请参考【TODO，PR resnet.h】。
+
+```C++
+class FASTDEPLOY_DECL ResNet : public FastDeployModel {
+ public:
+  ResNet(...);
+  virtual bool Predict(...);
+ private:
+  bool Initialize();
+  bool Preprocess(...);
+  bool Postprocess(...);
+};
+* 编写resnet.cc 文件
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/C++代码存放位置/视觉模型/分类任务/外部模型/模型名)
+  * 编写内容
+    * 再resnet.cc中实现resnet.h中声明函数的具体逻辑，其中PreProcess 和 PostProcess需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考【TODO PR resnet.cc】
+ResNet::ResNet(...) {
+  // 构造函数逻辑
+  // 1. 指定 Backend 2. 设置RuntimeOption 3. 调用Initialize()函数
+}
+bool ResNet::Initialize() {
+  // 初始化逻辑
+  // 1. 全局变量赋值 2. 调用InitRuntime()函数
+  return true;
+}
+bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
+// 前处理逻辑
+// 1. Resize 2. BGR2RGB 3. Normalize 4. HWC2CHW 5. 处理结果放入 FDTensor类中  
+  return true;
+}
+bool ResNet::Postprocess(FDTensor& infer_result, ClassifyResult* result, int topk) {
+  //后处理逻辑
+  // 1. Softmax 2. Choose topk labels 3. 结果存入 ClassifyResult类
+  return true;
+}
+bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
+  Preprocess(...)
+  Infer(...)
+  Postprocess(...)
+  return true;
+}
+```
+
+* 在vision.h文件中加入新添加的模型文件
+  * 文件位置
+    * FastDeploy/fastdeploy/vision.h
+  * 内容
+
+```C++
+#ifdef ENABLE_VISION
+#include "fastdeploy/vision/classification/contrib/resnet.h"
+#endif
+```
+
+## Python部分
+* Pybind
+  * 编写Pybind文件
+    * 创建位置
+      * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/C++代码存放位置/视觉模型/分类任务/外部模型/模型名_pybind.cc)
+    * 内容
+      * 利用Pybind将C++中的函数变量绑定到Python中，具体代码请参考【TODO PR resnet_pybind.cc】
+```C++
+void BindResNet(pybind11::module& m) {
+  pybind11::class_<vision::classification::ResNet, FastDeployModel>(
+      m, "ResNet")
+      .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
+      .def("predict", ...)
+      .def_readwrite("size", &vision::classification::ResNet::size)
+      .def_readwrite("mean_vals", &vision::classification::ResNet::mean_vals)
+      .def_readwrite("std_vals", &vision::classification::ResNet::std_vals);
+}
+```
+
+* 调用Pybind函数
+  * 修改位置
+    * FastDeploy/fastdeploy/vision/classification/classification_pybind.cc (FastDeploy/C++代码存放位置/视觉模型/分类任务/任务名_pybind.cc)
+  * 内容
+```C++
+void BindResNet(pybind11::module& m);
+void BindClassification(pybind11::module& m) {
+  auto classification_module =
+      m.def_submodule("classification", "Image classification models.");
+  BindResNet(classification_module);
+}
+```
+
+* 编写resnet.py文件
+  * 创建位置
+    * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/分类任务/外部模型/模型名)
+  * 内容
+    * 创建ResNet类继承自FastDeployModel，实现 __init__、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考【TODO PR resnet.py】
+```C++
+class ResNet(FastDeployModel):
+    def __init__(self, ...):
+        self._model = C.vision.classification.ResNet(...)
+    def predict(self, input_image, topk=1):
+        return self._model.predict(input_image, topk)
+    @property
+    def size(self):
+        return self._model.size
+    @size.setter
+    def size(self, wh):
+        ...
+```
+
+* 导入ResNet类
+  * 修改位置
+    * FastDeploy/python/fastdeploy/vision/classification/__init__.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/分类任务/__init__.py)
+  * 修改内容
+
+```Python
+from .contrib.resnet import ResNet
+```
+
+# 测试
+* 编译
+  * C++
+    * 位置：FastDeploy/
+
+```
+mkdir build & cd build
+cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+-DENABLE_PADDLE_BACKEND=ON -DENABLE_TRT_BACKEND=ON -DWITH_GPU=ON -DTRT_DIRECTORY=/PATH/TO/TensorRT/
+make -j8
+make install
+* 编译会得到 build/fastdeploy-0.0.3/
+* Python
+  * 位置：FastDeploy/python/
+export TRT_DIRECTORY=/PATH/TO/TensorRT/    # 如果用TensorRT 需要填写TensorRT所在位置，并开启 ENABLE_TRT_BACKEND
+export ENABLE_TRT_BACKEND=ON
+export WITH_GPU=ON
+export ENABLE_PADDLE_BACKEND=ON
+export ENABLE_OPENVINO_BACKEND=ON
+export ENABLE_VISION=ON
+export ENABLE_ORT_BACKEND=ON
+python setup.py build
+python setup.py bdist_wheel
+cd dist
+pip install fastdeploy_gpu_python-版本号-cpxx-cpxxm-系统架构.whl
+```
+
+* 编写测试代码
+  * 创建位置: FastDeploy/examples/vision/classification/resnet/
+  * 文件结构
+
+```
+.
+├── cpp
+│   ├── CMakeLists.txt
+│   ├── infer.cc
+│   └── README.md
+├── python
+│   ├── infer.py
+│   └── README.md
+└── README.md
+```
+
+* C++
+  * 编写CmakeLists文件、C++ 代码以及 README.md 内容请参考 【todo PR 】
+  * 编译 infer.cc
+    * 位置：FastDeploy/examples/vision/classification/resnet/cpp/
+
+```
+mkdir build & cd build
+cmake .. -DFASTDEPLOY_INSTALL_DIR=/PATH/TO/FastDeploy/build/fastdeploy-0.0.3/
+make
+```
+
+* Python
+  * Python 代码以及 README.md 内容请参考 【todo PR 】

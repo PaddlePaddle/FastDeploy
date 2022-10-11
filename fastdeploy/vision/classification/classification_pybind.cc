@@ -17,10 +17,11 @@
 namespace fastdeploy {
 
 void BindPaddleClas(pybind11::module& m);
-
+void BindResNet(pybind11::module& m);
 void BindClassification(pybind11::module& m) {
   auto classification_module =
       m.def_submodule("classification", "Image classification models.");
   BindPaddleClas(classification_module);
+  BindResNet(classification_module);
 }
 }  // namespace fastdeploy
