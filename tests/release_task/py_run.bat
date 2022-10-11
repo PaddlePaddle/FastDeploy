@@ -27,9 +27,9 @@ if "%DEVICE%" == "gpu" (
 echo "PY_FASTDEPLOY_PACKAGE: " %PY_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt
+python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz')"
+python -c "import wget; wget.download('https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg')"
+python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt')"
 tar -xf ppyoloe_crn_l_300e_coco.tgz
 
 set IMAGE_PATH=%CURRENT_DIR%\000000014439.jpg
