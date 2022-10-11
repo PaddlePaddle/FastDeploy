@@ -12,7 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+WITH_GPU=${1:-ON}
 
-sh build_fd_vison.sh
-sh build_fd_runtime.sh
-sh build_fd_backend.sh
+if [ $WITH_GPU == "ON" ]; then
+
+sh build_fd_vison.sh ON
+sh build_fd_runtime.sh ON
+sh build_fd_backend.sh ON
+
+else
+
+sh build_fd_vison.sh OFF
+sh build_fd_runtime.sh OFF
+sh build_fd_backend.sh OFF
+
+fi
