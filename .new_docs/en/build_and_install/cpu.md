@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/cpu.md) | 简体中文
+
 # CPU部署库编译
 
 FastDeploy当前在CPU支持后端引擎如下
@@ -54,6 +56,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 
 编译完成后，即在`CMAKE_INSTALL_PREFIX`指定的目录下生成C++推理库
 
+如您使用CMake GUI可参考文档[Windows使用CMakeGUI + Visual Studio 2019 IDE编译](../faq/build_on_win_with_gui.md)
 
 ## Python编译安装
 
