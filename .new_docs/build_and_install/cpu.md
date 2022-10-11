@@ -1,4 +1,4 @@
-# CPU部署环境
+# CPU部署库编译
 
 FastDeploy当前在CPU支持后端引擎如下
 
@@ -6,38 +6,7 @@ FastDeploy当前在CPU支持后端引擎如下
 | :--- | :---- | :----------- | :--- |
 | Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64) | Paddle | 编译开关`ENABLE_PADDLE_BACKEND`为ON或OFF控制, 默认OFF |
 | ONNX&nbsp;Runtime | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF |
-| OpenVINO | Windows(x64)<br>Linux(x64) | Paddle/ONNX | 编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
-
-## 预编译库安装
-
-FastDeploy提供了预编译库供开发者快速安装使用，默认集成了各推理后端及Vision和Text模块, 当前发布两种版本
-
-- Release版本：FastDeploy每月更新发布的已测试版本
-- Nightly build版本：FastDeploy每日定期根据最新代码发布的编译版本(仅含Linux-x64和Windows-x64版本)
-
-### Python安装
-
-Release版本安装
-```
-pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-```
-
-Nightly build版本安装
-```
-pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy_nightly_build.html
-```
-
-### C++SDK安装
-
-注：其中`nightly build`为每日最新代码编译产出
-
-| 平台  | 下载链接(Release) | 下载链接(nightly build) | 说明 |
-| :---- | :---------------- | :---------------------- | :--- |
-| Linux x64 | [fastdeploy-linux-x64-0.2.1.tgz]() | [fastdeploy-linux-x64-0.2.2-dev.tgz]() | gcc 8.2编译产出 |
-| Linux aarch64 | [fastdeploy-linux-x64-0.2.1.tgz]() | - | gcc 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-0.2.1.zip]() | [fastdeploy-win-x64-0.2.2.-dev.tgz]() | Visual Studio 2019编译产出 |
-| Mac x86 | [fastdeploy-osx-x86_64-0.2.1.tgz]() | - | OSX 10.0编译产出，仅含ONNX Runtime后端 |
-| Max arm64 | [fastdeploy-osx-arm64-0.2.1.tgz]() | - | OSX 11.0编译产出，仅含ONNX Runtime后端 |
+| OpenVINO | Windows(x64)<br>Linux(x64)<br>Mac(x86) | Paddle/ONNX | 编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
 
 ## C++ SDK编译安装
 
@@ -86,7 +55,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 编译完成后，即在`CMAKE_INSTALL_PREFIX`指定的目录下生成C++推理库
 
 
-## Python包编译安装
+## Python编译安装
 
 编译过程同样需要满足
 - gcc/g++ >= 5.4(推荐8.2)

@@ -1,6 +1,6 @@
 # MattingResult 抠图结果
 
-MattingResult 代码定义在`csrcs/fastdeploy/vision/common/result.h`中，用于表明模型预测的alpha透明度的值，预测的前景等。
+MattingResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明模型预测的alpha透明度的值，预测的前景等。
 
 ## C++ 定义
 
