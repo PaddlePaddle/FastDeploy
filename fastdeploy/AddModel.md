@@ -1,5 +1,15 @@
 
 使用FastDeploy集成，这几步就够了~~
+
+| 步骤 | 说明                                | 创建或修改的文件                            |
+|------|-------------------------------------|---------------------------------------------|
+| 1    | 将模型转为 ONNX 格式                | export.py                                   |
+| 2    | 添加C++版本 ResNet 模型部署类       | resnet.h & resnet.cc                        |
+| 3    | include 新增类                      | vision.h                                    |
+| 4    | 将C++中的类、函数、变量与Python绑定 | resnet_pybind.cc & classification_pybind.cc |
+| 5    | 添加Python版本 ResNet 模型部署类    | resnet.py                                   |
+| 6    | import新增类                        | __init__.py                                 |
+
 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy支持外部模型具体步骤，
 # 模型集成
 
