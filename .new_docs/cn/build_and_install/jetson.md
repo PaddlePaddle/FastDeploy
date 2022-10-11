@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/jetson.md) | 简体中文
+
 # Jetson部署库编译
 
 FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU两种后端推理
