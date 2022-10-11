@@ -4,12 +4,12 @@
 
 ## 部署准备
 ### FastDeploy环境准备
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/environment.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../../docs/quick_start)
 
 ### 量化模型准备
 - 1. 用户可以直接使用由FastDeploy提供的量化模型进行部署.
-- 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../../tools/quantization/),自行进行模型量化, 并使用产出的量化模型进行部署.
+- 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../../../tools/quantization/),自行进行模型量化, 并使用产出的量化模型进行部署.
 
 ## YOLOv5s模型,量化部署示例
 在本目录执行如下命令即可完成编译,以及量化模型部署.
