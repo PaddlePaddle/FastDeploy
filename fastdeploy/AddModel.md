@@ -167,7 +167,7 @@ from .contrib.resnet import ResNet
 ```
 
 ## 测试  <span id="test"></span>
-* 编译
+### 编译
   * C++
     * 位置：FastDeploy/
 
@@ -180,7 +180,7 @@ make install
 ```
 
  编译会得到 build/fastdeploy-0.0.3/。
-*
+
   * Python
     * 位置：FastDeploy/python/
 
@@ -198,7 +198,7 @@ cd dist
 pip install fastdeploy_gpu_python-版本号-cpxx-cpxxm-系统架构.whl
 ```
 
-* 编写测试代码
+### 编写测试代码
   * 创建位置: FastDeploy/examples/vision/classification/resnet/ (FastDeploy/${示例目录}/${视觉模型}/${任务名称}/${模型名}/)
   * 创建目录结构
 
