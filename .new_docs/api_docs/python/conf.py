@@ -35,7 +35,8 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx_markdown_tables',
-    'sphinx.ext.viewcode'
+    'sphinx.ext.viewcode',
+    'sphinx.ext.githubpages',
 ]
 
 autoclass_content = 'both'
