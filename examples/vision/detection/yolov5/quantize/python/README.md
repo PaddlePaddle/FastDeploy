@@ -9,14 +9,14 @@
 
 ### 量化模型准备
 - 1. 用户可以直接使用由FastDeploy提供的量化模型进行部署.
-- 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../tools/quantization),自行进行模型量化, 并使用产出的量化模型进行部署.
+- 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../../tools/quantization/),自行进行模型量化, 并使用产出的量化模型进行部署.
 
 
 ## YOLOv5s模型,量化部署示例
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/slim/yolov5/python
+cd examples/vision/detection/yolov5/quantize/python
 
 #下载FastDeloy提供的yolov5s量化模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_quant.tar
