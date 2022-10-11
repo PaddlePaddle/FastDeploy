@@ -24,21 +24,43 @@ class YOLOv5Cls(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
+        """Load a image classification model exported by YOLOv5.
+
+        :param model_file: (str)Path of model file, e.g yolov5cls/yolov5n-cls.onnx
+        :param params_file: (str)Path of parameters file, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model, default is ONNX
+        """
+
         super(YOLOv5Cls, self).__init__(runtime_option)
 
+        assert model_format == ModelFormat.ONNX, "YOLOv5Cls only support model format of ModelFormat.ONNX now."
         self._model = C.vision.classification.YOLOv5Cls(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "YOLOv5Cls initialize failed."
 
     def predict(self, input_image, topk=1):
+        """Classify an input image
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param topk: (int)The topk result by the classify confidence score, default 1
+        :return: ClassifyResult
+        """
+
         return self._model.predict(input_image, topk)
 
     @property
     def size(self):
+        """
+        Returns the preprocess image size
+        """
         return self._model.size
 
     @size.setter
     def size(self, wh):
+        """
+        Set the preprocess image size
+        """
         assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
         assert len(wh) == 2,\
