@@ -177,9 +177,14 @@ cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DCMAKE_INSTALL_PREFIX=${PWD
 -DENABLE_PADDLE_BACKEND=ON -DENABLE_TRT_BACKEND=ON -DWITH_GPU=ON -DTRT_DIRECTORY=/PATH/TO/TensorRT/
 make -j8
 make install
-* 编译会得到 build/fastdeploy-0.0.3/
-* Python
-  * 位置：FastDeploy/python/
+```
+
+ 编译会得到 build/fastdeploy-0.0.3/。
+
+  * Python
+    * 位置：FastDeploy/python/
+
+```
 export TRT_DIRECTORY=/PATH/TO/TensorRT/    # 如果用TensorRT 需要填写TensorRT所在位置，并开启 ENABLE_TRT_BACKEND
 export ENABLE_TRT_BACKEND=ON
 export WITH_GPU=ON
