@@ -46,7 +46,7 @@ torch.onnx.export(model,
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.h)
   * 创建内容
-    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明Predict、Initialize、Preprocess、Postprocess和构造函数，以及必要的变量，具体的代码细节请参考【TODO，PR resnet.h】。
+    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明Predict、Initialize、Preprocess、Postprocess和构造函数，以及必要的变量，具体的代码细节请参考[resnet.h]()。【TODO，PR resnet.h】。
 
 ```C++
 class FASTDEPLOY_DECL ResNet : public FastDeployModel {
@@ -64,7 +64,7 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.cc)
   * 创建内容
-    * 在resnet.cc中实现resnet.h中声明函数的具体逻辑，其中PreProcess 和 PostProcess需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.h]()。【TODO PR resnet.cc】
+    * 在resnet.cc中实现resnet.h中声明函数的具体逻辑，其中PreProcess 和 PostProcess需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.cc]()。【TODO PR resnet.cc】
 
 ```C++
 ResNet::ResNet(...) {
@@ -141,7 +141,7 @@ void BindClassification(pybind11::module& m) {
   * 创建位置
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/${外部模型}/${模型名}.py)
   * 创建内容
-    * 创建ResNet类继承自FastDeployModel，实现 \_\_init\_\_、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考【TODO PR resnet.py】
+    * 创建ResNet类继承自FastDeployModel，实现 \_\_init\_\_、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考[resnet.py]()。【TODO PR resnet.py】
 
 ```C++
 class ResNet(FastDeployModel):
