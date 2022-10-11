@@ -19,8 +19,8 @@
 
 ## API文档
 
-- [Python API文档]()
-- [C++ API文档]()
+- [Python API文档](进行中)
+- [C++ API文档](进行中)
 
 ## 性能调优
 
