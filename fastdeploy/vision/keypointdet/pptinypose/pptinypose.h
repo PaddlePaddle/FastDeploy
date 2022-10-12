@@ -53,7 +53,6 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  private:
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
-  float threshold;
 };
 }  // namespace keypointdetection
 }  // namespace vision

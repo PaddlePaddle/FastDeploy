@@ -34,13 +34,18 @@ class Processor {
 
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
+  virtual bool ImplByOpenCV(const Mat& src_im, Mat* dst_im);
+
 //  virtual bool ImplByFalconCV(Mat* mat) {
 //    return ImplByOpenCV(mat);
 //  }
 
   virtual bool operator()(Mat* mat,
                           ProcLib lib = ProcLib::OPENCV);
+
+  virtual bool operator()(const Mat& src_im, Mat* dst_im,
+                          ProcLib lib = ProcLib::OPENCV);
 };
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

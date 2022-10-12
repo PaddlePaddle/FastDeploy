@@ -5,6 +5,8 @@
 #include "paddle2onnx/converter.h"
 #endif
 
+#include "fastdeploy/vision.h"
+
 namespace fastdeploy {
 namespace vision {
 namespace keypointdetection {
@@ -57,10 +59,6 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
     return false;
   }
 
-  // Get draw_threshold for visualization
-  if (cfg["draw_threshold"].IsDefined()) {
-    threshold = cfg["draw_threshold"].as<float>();
-  }
   processors_.push_back(std::make_shared<BGR2RGB>());
 
   for (const auto& op : cfg["Preprocess"]) {
@@ -101,7 +99,7 @@ bool PPTinyPose::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   mat->ShareWithTensor(&((*outputs)[0]));
 
   // reshape to [1, c, h, w]
-  (*outputs)[0].shape.insert((*outputs)[0].shape.begin(), 1);
+  (*outputs)[0].ExpandDim(0);
 
   return true;
 }
@@ -141,7 +139,7 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
     std::copy(static_cast<int64_t*>(idx_data),
               static_cast<int64_t*>(idx_data) + idxdata_size, idxout.begin());
   } else {
-    FDERROR << "Don't support inference output FDDataType." << std::endl;
+    FDERROR << "Only support process inference result with INT32/INT64 data type, but now it's " << idx_dtype << "." << std::endl;
   }
   GetFinalPredictions(heatmap, out_data_shape, idxout, center, scale, &preds,
                       this->use_dark);
@@ -157,12 +155,13 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
 }
 
 bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
-  cv::Mat crop_img;
+  cv::Mat cv_crop_img;
+  Mat crop_img(cv_crop_img);
   std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
   std::vector<float> center;
   std::vector<float> scale;
-  utils::CropImage(*im, &crop_img, rect, &center, &scale);
-  Mat mat(crop_img);
+  Mat mat(*im);
+  Crop::Run(mat, &crop_img, rect, &center, &scale);
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
     FDERROR << "Failed to preprocess input data while using model:"
@@ -186,7 +185,7 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
 
 bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
                          const DetectionResult& detection_result) {
-  std::vector<cv::Mat> crop_imgs;
+  std::vector<Mat> crop_imgs;
   std::vector<std::vector<float>> center_bs;
   std::vector<std::vector<float>> scale_bs;
   int crop_imgs_num = 0;
@@ -194,14 +193,16 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   for (int i = 0; i < box_num; i++) {
     auto box = detection_result.boxes[i];
     auto label_id = detection_result.label_ids[i];
-    cv::Mat crop_img;
+    cv::Mat cv_crop_img;
+    Mat crop_img(cv_crop_img);
     std::vector<int> rect = {static_cast<int>(box[0]), static_cast<int>(box[1]),
                              static_cast<int>(box[2]),
                              static_cast<int>(box[3])};
     std::vector<float> center;
     std::vector<float> scale;
     if (label_id == 0) {
-      utils::CropImage(*im, &crop_img, rect, &center, &scale);
+      Mat mat(*im);
+      Crop::Run(mat, &crop_img, rect, &center, &scale);
       center_bs.emplace_back(center);
       scale_bs.emplace_back(scale);
       crop_imgs.emplace_back(crop_img);

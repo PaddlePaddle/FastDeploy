@@ -103,7 +103,7 @@ void BindVisualize(pybind11::module& m) {
           [](pybind11::array& im_data, vision::KeyPointDetectionResult& result,
              float conf_threshold) {
             auto im = PyArrayToCvMat(im_data);
-            auto vis_im = vision::Visualize::VisKeypointDetection(
+            auto vis_im = vision::VisKeypointDetection(
                 im, result, conf_threshold);
             FDTensor out;
             vision::Mat(vis_im).ShareWithTensor(&out);

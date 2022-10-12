@@ -19,14 +19,14 @@
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat Visualize::VisKeypointDetection(const cv::Mat& im,
-                                        const KeyPointDetectionResult& results,
-                                        float conf_threshold) {
+cv::Mat VisKeypointDetection(const cv::Mat& im,
+                             const KeyPointDetectionResult& results,
+                             float conf_threshold) {
   const int edge[][2] = {{0, 1},   {0, 2},  {1, 3},   {2, 4},   {3, 5},
                          {4, 6},   {5, 7},  {6, 8},   {7, 9},   {8, 10},
                          {5, 11},  {6, 12}, {11, 13}, {12, 14}, {13, 15},
                          {14, 16}, {11, 12}};
-  auto colormap = GetColorMap();
+  auto colormap = GenerateColorMap();
   cv::Mat vis_img = im.clone();
   for (int i = 0; i < results.num_joints; i++) {
     if (results.keypoints[i * 3 + 2] > conf_threshold) {

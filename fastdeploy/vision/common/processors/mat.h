@@ -42,14 +42,14 @@ struct FASTDEPLOY_DECL Mat {
   // this only used if you don't want to write
   // the original data, and write to a new cv::Mat
   // then replace the old cv::Mat of this structure
-  void SetMat(const cv::Mat& mat) { 
-    cpu_mat = mat; 
+  void SetMat(const cv::Mat& mat) {
+    cpu_mat = mat;
     mat_type = ProcLib::OPENCV;
   }
 
 #ifdef ENABLE_FALCONCV
-  void SetMat(const fcv::Mat& mat) { 
-    fcv_mat = mat; 
+  void SetMat(const fcv::Mat& mat) {
+    fcv_mat = mat;
     mat_type = Proclib::FALCONCV;
   }
 #endif
@@ -71,6 +71,7 @@ struct FASTDEPLOY_DECL Mat {
   }
 
   cv::Mat* GetCpuMat();
+  const cv::Mat* GetCpuMat() const;
 
   FDDataType Type();
   int Channels() const { return channels; }

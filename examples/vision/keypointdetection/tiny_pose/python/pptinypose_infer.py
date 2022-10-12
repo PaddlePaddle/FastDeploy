@@ -26,19 +26,6 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def build_picodet_option(args):
-    option = fd.RuntimeOption()
-
-    if args.device.lower() == "gpu":
-        option.use_gpu()
-
-    if args.use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("image", [1, 3, 320, 320])
-        option.set_trt_input_shape("scale_factor", [1, 2])
-    return option
-
-
 def build_tinypose_option(args):
     option = fd.RuntimeOption()
 
@@ -65,7 +52,7 @@ tinypose_model = fd.vision.keypointdetection.PPTinyPose(
     runtime_option=runtime_option)
 # 预测图片检测结果
 im = cv2.imread(args.image)
-tinypose_result = tinypose_model.predict(im.copy())
+tinypose_result = tinypose_model.predict(im)
 print("Paddle TinyPose Result:\n", tinypose_result)
 
 # 预测结果可视化

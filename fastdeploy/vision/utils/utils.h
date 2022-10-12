@@ -74,10 +74,6 @@ FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-void CropImage(const cv::Mat& img, cv::Mat* crop_img,
-               const std::vector<int>& area, std::vector<float>* center,
-               std::vector<float>* scale, const float expandratio = 0.15);
-
 // 功能：关键点检测模型，后处理中对关键点做精细定位
 // 参数：
 // heatmap：关键点检测模型的模型推理结果

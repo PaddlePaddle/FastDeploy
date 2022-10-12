@@ -46,10 +46,6 @@ class FASTDEPLOY_DECL Visualize {
                                             int background_label,
                                             const SegmentationResult& result);
   static cv::Mat VisOcr(const cv::Mat& srcimg, const OCRResult& ocr_result);
-
-  static cv::Mat VisKeypointDetection(const cv::Mat& im,
-                                      const KeyPointDetectionResult& results,
-                                      float conf_threshold = 0.5f);
 };
 
 std::vector<int> GenerateColorMap(int num_classes = 1000);
@@ -76,6 +72,9 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const cv::Mat& background,
                                        const SegmentationResult& result,
                                        int background_label);
+FASTDEPLOY_DECL cv::Mat VisKeypointDetection(const cv::Mat& im,
+                                      const KeyPointDetectionResult& results,
+                                      float conf_threshold = 0.5f);
 
 }  // namespace vision
 }  // namespace fastdeploy

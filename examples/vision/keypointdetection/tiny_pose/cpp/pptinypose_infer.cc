@@ -33,9 +33,8 @@ void CpuInfer(const std::string& tinypose_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  cv::Mat tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
+  if (!tinypose_model.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -46,7 +45,7 @@ void CpuInfer(const std::string& tinypose_model_dir,
 
   // 可视化预测结果
   auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
   cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
   std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
             << std::endl;
@@ -68,9 +67,8 @@ void GpuInfer(const std::string& tinypose_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  auto tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
+  if (!tinypose_model.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -81,7 +79,7 @@ void GpuInfer(const std::string& tinypose_model_dir,
 
   // 可视化预测结果
   auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
   cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
   std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
             << std::endl;
@@ -104,9 +102,8 @@ void TrtInfer(const std::string& tinypose_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  cv::Mat tinypose_im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
-  if (!tinypose_model.Predict(&tinypose_im_bak, &res)) {
+  if (!tinypose_model.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -117,7 +114,7 @@ void TrtInfer(const std::string& tinypose_model_dir,
 
   // 可视化预测结果
   auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
   cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
   std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
             << std::endl;

@@ -44,13 +44,12 @@ void CpuInfer(const std::string& det_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  cv::Mat im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
 
-  auto pptinypose_pipeline =
-      fastdeploy::application::posedetpipeline::PPTinyPosePipeline(
+  auto pipeline =
+      fastdeploy::pipeline::PPTinyPose(
           &det_model, &tinypose_model);
-  if (!pptinypose_pipeline.Predict(&im_bak, &res)) {
+  if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -60,10 +59,10 @@ void CpuInfer(const std::string& det_model_dir,
   std::cout << res.Str() << std::endl;
 
   // 可视化预测结果
-  auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
-  cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
-  std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
+  auto vis_im =
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;
 }
 
@@ -93,13 +92,12 @@ void GpuInfer(const std::string& det_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  cv::Mat im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
 
-  auto pptinypose_pipeline =
-      fastdeploy::application::posedetpipeline::PPTinyPosePipeline(
+  auto pipeline =
+      fastdeploy::pipeline::PPTinyPose(
           &det_model, &tinypose_model);
-  if (!pptinypose_pipeline.Predict(&im_bak, &res)) {
+  if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -109,10 +107,10 @@ void GpuInfer(const std::string& det_model_dir,
   std::cout << res.Str() << std::endl;
 
   // 可视化预测结果
-  auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
-  cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
-  std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
+  auto vis_im =
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;
 }
 
@@ -150,13 +148,12 @@ void TrtInfer(const std::string& det_model_dir,
   }
 
   auto im = cv::imread(image_file);
-  cv::Mat im_bak = im.clone();
   fastdeploy::vision::KeyPointDetectionResult res;
 
   auto pptinypose_pipeline =
       fastdeploy::application::posedetpipeline::PPTinyPosePipeline(
           &det_model, &tinypose_model);
-  if (!pptinypose_pipeline.Predict(&im_bak, &res)) {
+  if (!pptinypose_pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
@@ -166,10 +163,10 @@ void TrtInfer(const std::string& det_model_dir,
   std::cout << res.Str() << std::endl;
 
   // 可视化预测结果
-  auto tinypose_vis_im =
-      fastdeploy::vision::Visualize::VisKeypointDetection(im, res, 0.5);
-  cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
-  std::cout << "TinyPose visualized result saved in ./tinypose_vis_result.jpg"
+  auto vis_im =
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;
 }
 

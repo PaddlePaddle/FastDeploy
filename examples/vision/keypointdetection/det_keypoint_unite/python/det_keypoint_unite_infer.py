@@ -80,10 +80,9 @@ tinypose_model = fd.vision.keypointdetection.PPTinyPose(
 det_reulst = None
 # 预测图片检测结果
 im = cv2.imread(args.image)
-pptinypose_pipeline = fd.vision.posedetpipeline.PPTinyPosePipeline(
-    det_model, tinypose_model)
-tinypose_result = pptinypose_pipeline.predict(im.copy())
-print("Paddle TinyPose Result:\n", tinypose_result)
+pipeline = fd.pipeline.PPTinyPosePipeline(det_model, tinypose_model)
+pipeline_result = pipeline.predict(im)
+print("Paddle TinyPose Result:\n", pipeline_result)
 
 # 预测结果可视化
 vis_im = fd.vision.vis_keypoint_detection(

@@ -20,6 +20,10 @@ cv::Mat* Mat::GetCpuMat() {
   return &cpu_mat;
 }
 
+const cv::Mat* Mat::GetCpuMat() const {
+  return &cpu_mat;
+}
+
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
                           GetCpuMat()->ptr());
