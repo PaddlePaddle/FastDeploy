@@ -24,18 +24,16 @@ if "%DEVICE%" == "gpu" (
 echo "CPP_FASTDEPLOY_PACKAGE: " %CPP_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
-python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz')"
 python -c "import wget; wget.download('https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg')"
 python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt')"
-tar -xf ppyoloe_crn_l_300e_coco.tgz
+python -c "from download import *; download_and_decompress('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz', './')"
 
 set IMAGE_PATH=%CURRENT_DIR%\000000014439.jpg
 set MODEL_PATH=%CURRENT_DIR%\ppyoloe_crn_l_300e_coco
 set GROUND_TRUTH_PATH=%CURRENT_DIR%\release_task_groud_truth_result.txt
 set COMPARE_SHELL=%CURRENT_DIR%\compare_with_gt.py
 
-python -c "import wget; wget.download('https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.zip')"
-tar -xf %cd%\%CPP_FASTDEPLOY_PACKAGE%.zip
+python -c "from download import *; download_and_decompress('https://fastdeploy.bj.bcebos.com/dev/cpp/%CPP_FASTDEPLOY_PACKAGE%.zip', './')"
 
 mkdir build && cd build
 cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"  -DCMAKE_CXX_COMPILER=%CMAKE_CXX_COMPILER%
