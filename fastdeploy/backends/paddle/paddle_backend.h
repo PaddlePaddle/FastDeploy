@@ -44,6 +44,7 @@ struct PaddleBackendOption {
   bool enable_trt = false;
 #ifdef ENABLE_TRT_BACKEND
   TrtBackendOption trt_option;
+  bool collect_shape = false;
 #endif
 
   int mkldnn_cache_size = 1;

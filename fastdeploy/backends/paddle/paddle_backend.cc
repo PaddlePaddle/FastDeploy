@@ -97,6 +97,16 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   if (reader.is_quantize_model) {
     if (option.use_gpu) {
       FDWARNING << "The loaded model is a quantized model, while inference on GPU, please use TensorRT backend to get better performance." << std::endl;
+      if (option.enable_trt) {
+#ifdef ENABLE_TRT_BACKEND
+        bool use_static = false;
+        if (option.trt_option.serialize_file != "") {
+          FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
+          use_static = true;
+        }
+        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, true);
+#endif
+      }
     }
     if (option.enable_mkldnn) {
       config_.EnableMkldnnInt8();
