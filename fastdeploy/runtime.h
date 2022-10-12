@@ -22,6 +22,7 @@
 
 #include <map>
 #include <vector>
+#include <algorithm>
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
@@ -104,6 +105,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetCpuThreadNum(int thread_num);
 
+  /// Set ORT graph opt level, default is decide by ONNX Runtime itself
+  void SetOrtGraphOptLevel(int level = -1);
+
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
 
@@ -119,8 +123,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
 
-  // set mkldnn switch while using Paddle Inference as inference backend
+  /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
+
+  /*
+   * @brief If TensorRT backend is used, EnablePaddleToTrt will change to use Paddle Inference backend, and use its integrated TensorRT instead.
+   */
+  void EnablePaddleToTrt();
 
   /**
    * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
@@ -210,6 +219,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
   bool pd_enable_log_info = false;
+  bool pd_enable_trt = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 

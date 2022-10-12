@@ -1,6 +1,6 @@
 # Detection Results
 
-The DetectionResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the object's frame, class and confidence level from the image detection.
+The DetectionResult function is defined in `fastdeploy/vision/common/result.h` , indicating the object's frame, class and confidence level from the image detection.
 
 ## C++  Definition
 
