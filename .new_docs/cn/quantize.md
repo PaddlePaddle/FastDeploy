@@ -30,9 +30,9 @@ Fastdeploy 为用户提供了一键模型量化的功能，请参考如下文档
 
 
 ## 量化示例
-目前, FastDeploy已支持的模型量化如下表所示:
+目前, FastDeploy已支持的模型量化如下表所示:
 
-YOLO 系列
+### YOLO 系列
 | 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | INT8 mAP | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
 | [YOLOv5s](../../examples/vision/detection/yolov5/quantize/)             | TensorRT         |    GPU    |  14.13        |  11.22      |      1.26         | 37.6  | 36.6 | 量化蒸馏训练 |
@@ -51,7 +51,7 @@ YOLO 系列
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
 
 
-PaddleClas系列
+### PaddleClas系列
 | 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 Top1 | INT8 Top1 |量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
 | [ResNet50_vd](../../examples/vision/classification/paddleclas/quantize/)            | ONNX Runtime         |    CPU    |  86.87        |  59 .32     |      1.46         | 79.12  | 78.87|  离线量化|
