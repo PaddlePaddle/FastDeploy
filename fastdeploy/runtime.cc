@@ -93,6 +93,32 @@ std::string Str(const ModelFormat& f) {
   return "UNKNOWN-ModelFormat";
 }
 
+std::ostream& operator<<(std::ostream& out, const Backend& backend) {
+  if (backend == Backend::ORT) {
+    out << "Backend::ORT";
+  } else if (backend == Backend::TRT) {
+    out << "Backend::TRT";
+  } else if (backend == Backend::PDINFER) {
+    out << "Backend::PDINFER";
+  } else if (backend == Backend::OPENVINO) {
+    out << "Backend::OPENVINO";
+  } else if (backend == Backend::LITE) {
+    out << "Backend::LITE";
+  }
+  out << "UNKNOWN-Backend";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
+    out << "ModelFormat::PADDLE";
+  } else if (format == ModelFormat::ONNX) {
+    out << "ModelFormat::ONNX";
+  }
+  out << "UNKNOWN-ModelFormat";
+  return out;
+}
+
 bool CheckModelFormat(const std::string& model_file,
                       const ModelFormat& model_format) {
   if (model_format == ModelFormat::PADDLE) {
@@ -172,6 +198,13 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   cpu_thread_num = thread_num;
 }
 
+void RuntimeOption::SetOrtGraphOptLevel(int level) {
+  std::vector<int> supported_level{-1, 0, 1, 2};
+  auto valid_level = std::find(supported_level.begin(), supported_level.end(), level) != supported_level.end();
+  FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
+  ort_graph_opt_level = level;
+}
+
 // use paddle inference backend
 void RuntimeOption::UsePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
@@ -214,9 +247,9 @@ void RuntimeOption::UseLiteBackend() {
 #endif
 }
 
-void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
-
-void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
+void RuntimeOption::SetPaddleMKLDNN(bool pd_mkldnn) {
+  pd_enable_mkldnn = pd_mkldnn;
+}
 
 void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
   pd_delete_pass_names.push_back(pass_name);
@@ -230,9 +263,22 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
-void RuntimeOption::SetLitePowerMode(int mode) {
-  FDASSERT(mode > -1, "Parameter mode must greater than -1.");
+void RuntimeOption::EnableLiteFP16() {
+  FDASSERT(false,
+           "FP16 with LiteBackend for FastDeploy is not fully supported, "
+           "please do not use it now!");
+  lite_enable_fp16 = true;
+}
+
+void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+
+void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
+}
+
+void RuntimeOption::SetLiteOptimizedModelDir(
+    const std::string& optimized_model_dir) {
+  lite_optimized_model_dir = optimized_model_dir;
 }
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
@@ -253,6 +299,10 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
   } else {
     trt_max_shape[input_name].assign(max_shape.begin(), max_shape.end());
   }
+}
+
+void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
+  trt_max_workspace_size = max_workspace_size;
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
@@ -473,7 +523,9 @@ void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
-  lite_option.power_mode = option.lite_power_mode;
+  lite_option.enable_fp16 = option.lite_enable_fp16;
+  lite_option.power_mode = static_cast<int>(option.lite_power_mode);
+  lite_option.optimized_model_dir = option.lite_optimized_model_dir;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

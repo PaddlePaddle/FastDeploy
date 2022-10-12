@@ -1,6 +1,6 @@
 # Face Recognition Results
 
-The FaceRecognitionResult function is defined in `csrcs/fastdeploy/vision/common/result.h` , indicating the embedding of image features by the face recognition model.
+The FaceRecognitionResult function is defined in `fastdeploy/vision/common/result.h` , indicating the embedding of image features by the face recognition model.
 
 ## C++  Definition
 

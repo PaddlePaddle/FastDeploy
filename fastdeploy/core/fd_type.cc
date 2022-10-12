@@ -14,12 +14,12 @@
 
 #include "fastdeploy/core/fd_type.h"
 
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
 int FDDataTypeSize(const FDDataType& data_type) {
-  FDASSERT(data_type != FDDataType::FP16, "Float16 is not supported.");
   if (data_type == FDDataType::BOOL) {
     return sizeof(bool);
   } else if (data_type == FDDataType::INT16) {
@@ -36,6 +36,8 @@ int FDDataTypeSize(const FDDataType& data_type) {
     return sizeof(uint8_t);
   } else if (data_type == FDDataType::INT8) {
     return sizeof(int8_t);
+  } else if (data_type == FDDataType::FP16) {
+    return sizeof(float16);
   } else {
     FDASSERT(false, "Unexpected data type: %s", Str(data_type).c_str());
   }
@@ -56,6 +58,22 @@ std::string Str(const Device& d) {
   }
   return out;
 }
+
+std::ostream& operator<<(std::ostream& out,const Device& d){
+  switch (d) {
+  case Device::CPU:
+    out << "Device::CPU";
+    break;
+  case Device::GPU:
+    out << "Device::GPU";
+    break;
+  default:
+    out << "Device::UNKOWN";
+  }
+  return out;
+}
+
+
 
 std::string Str(const FDDataType& fdt) {
   std::string out;
@@ -89,6 +107,41 @@ std::string Str(const FDDataType& fdt) {
       break;
     default:
       out = "FDDataType::UNKNOWN";
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out,const FDDataType& fdt){
+  switch (fdt) {
+  case FDDataType::BOOL:
+    out << "FDDataType::BOOL";
+    break;
+  case FDDataType::INT16:
+    out << "FDDataType::INT16";
+    break;
+  case FDDataType::INT32:
+    out << "FDDataType::INT32";
+    break;
+  case FDDataType::INT64:
+    out << "FDDataType::INT64";
+    break;
+  case FDDataType::FP32:
+    out << "FDDataType::FP32";
+    break;
+  case FDDataType::FP64:
+    out << "FDDataType::FP64";
+    break;
+  case FDDataType::FP16:
+    out << "FDDataType::FP16";
+    break;
+  case FDDataType::UINT8:
+    out << "FDDataType::UINT8";
+    break;
+  case FDDataType::INT8:
+    out << "FDDataType::INT8";
+    break;
+  default:
+    out << "FDDataType::UNKNOWN";
   }
   return out;
 }

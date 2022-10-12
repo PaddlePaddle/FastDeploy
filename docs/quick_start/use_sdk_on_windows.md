@@ -5,29 +5,33 @@
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../quick_start)
 
 ## 目录
-- [环境依赖](#Environment)  
-- [下载 FastDeploy Windows 10 C++ SDK](#Download)  
-- [Windows下多种方式使用 C++ SDK 的方式](#CommandLine)
-  - [方式一：命令行方式使用 C++ SDK](#CommandLine)  
-    - [步骤一：在 Windows 命令行终端 上编译 example](#CommandLine)  
-    - [步骤二：运行可执行文件获得推理结果](#CommandLine)  
-  - [方式二：Visual Studio 2019 创建sln工程使用 C++ SDK](#VisualStudio2019Sln)  
-    - [步骤一：Visual Studio 2019 创建 sln 工程项目](#VisualStudio2019Sln1)  
-    - [步骤二：从examples中拷贝infer_ppyoloe.cc的代码到工程](#VisualStudio2019Sln2)  
-    - [步骤三：将工程配置设置成"Release x64"配置](#VisualStudio2019Sln3)  
-    - [步骤四：配置头文件include路径](#VisualStudio2019Sln4)  
-    - [步骤五：配置lib路径和添加库文件](#VisualStudio2019Sln5)  
-    - [步骤六：编译工程并运行获取结果](#VisualStudio2019Sln6)
-  - [方式三：Visual Studio 2019 创建CMake工程使用 C++ SDK](#VisualStudio2019)
-    - [步骤一：Visual Studio 2019 创建CMake工程项目](#VisualStudio20191)  
-    - [步骤二：在CMakeLists中配置 FastDeploy C++ SDK](#VisualStudio20192)  
-    - [步骤三：生成工程缓存并修改CMakeSetting.json配置](#VisualStudio20193)  
-    - [步骤四：生成可执行文件，运行获取结果](#VisualStudio20194)  
-  - [方式四：CLion IDE 方式使用 C++ SDK](#VisualStudioCode)
-- [多种方法配置exe运行时所需的依赖库](#CommandLineDeps1)
-  - [方式一：修改CMakeLists.txt，一行命令配置（推荐）](#CommandLineDeps1)  
-  - [方式二：命令行设置环境变量](#CommandLineDeps2)  
-  - [方法三：手动拷贝依赖库到exe的目录下](#CommandLineDeps3)  
+- [1. 环境依赖](#Environment)  
+- [2. 下载 FastDeploy Windows 10 C++ SDK](#Download)  
+- [3. Windows下多种方式使用 C++ SDK 的方式](#CommandLine)
+  - [3.1 命令行方式使用 C++ SDK](#CommandLine)  
+    - [3.1.1 在 Windows 命令行终端 上编译 example](#CommandLine)  
+    - [3.1.2 运行可执行文件获得推理结果](#CommandLine)  
+  - [3.2 Visual Studio 2019 创建sln工程使用 C++ SDK](#VisualStudio2019Sln)  
+    - [3.2.1 Visual Studio 2019 创建 sln 工程项目](#VisualStudio2019Sln1)  
+    - [3.2.2 从examples中拷贝infer_ppyoloe.cc的代码到工程](#VisualStudio2019Sln2)  
+    - [3.2.3 将工程配置设置成"Release x64"配置](#VisualStudio2019Sln3)  
+    - [3.2.4 配置头文件include路径](#VisualStudio2019Sln4)  
+    - [3.2.5 配置lib路径和添加库文件](#VisualStudio2019Sln5)  
+    - [3.2.6 编译工程并运行获取结果](#VisualStudio2019Sln6)
+  - [3.3 Visual Studio 2019 创建CMake工程使用 C++ SDK](#VisualStudio2019)
+    - [3.3.1 Visual Studio 2019 创建CMake工程项目](#VisualStudio20191)  
+    - [3.3.2 在CMakeLists中配置 FastDeploy C++ SDK](#VisualStudio20192)  
+    - [3.3.3 生成工程缓存并修改CMakeSetting.json配置](#VisualStudio20193)  
+    - [3.3.4 生成可执行文件，运行获取结果](#VisualStudio20194)  
+- [4. 多种方法配置exe运行时所需的依赖库](#CommandLineDeps1)
+  - [4.1 使用 fastdeploy_init.bat 进行配置（推荐）](#CommandLineDeps1)
+    - [4.1.1 fastdeploy_init.bat 使用说明](#CommandLineDeps11)
+    - [4.1.2 fastdeploy_init.bat 查看 SDK 中所有的 dll、lib 和 include 路径](#CommandLineDeps12)
+    - [4.1.3 fastdeploy_init.bat 安装 SDK 中所有的 dll 到指定的目录](#CommandLineDeps13)
+    - [4.1.4 fastdeploy_init.bat 配置 SDK 环境变量](#CommandLineDeps14)
+  - [4.2 修改 CMakeLists.txt，一行命令配置（推荐）](#CommandLineDeps2)  
+  - [4.3 命令行设置环境变量](#CommandLineDeps3)  
+  - [4.4 手动拷贝依赖库到exe的目录下](#CommandLineDeps4)  
 
 
 ## 1. 环境依赖
@@ -41,21 +45,24 @@
 ## 2. 下载 FastDeploy Windows 10 C++ SDK
 <div id="Download"></div>  
 
+### 2.1 下载预编译库或者从源码编译最新的SDK
 可以从以下链接下载编译好的 FastDeploy Windows 10 C++ SDK，SDK中包含了examples代码。
 ```text
 https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.1.zip
 ```
-## 3. 准备模型文件和测试图片
+源码编译请参考: [Windows C++ SDK源码编译文档](../compile/how_to_build_windows.md)
+### 2.2 准备模型文件和测试图片
 可以从以下链接下载模型文件和测试图片，并解压缩
 ```text
 https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (下载后解压缩)
 https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-## 4. SDK使用方式一：命令行方式使用 C++ SDK
+## 3. Windows下多种方式使用 C++ SDK 的方式
+### 3.1 SDK使用方式一：命令行方式使用 C++ SDK
 <div id="CommandLine"></div>  
 
-### 4.1 在 Windows 上编译 PPYOLOE
+#### 3.1.1 在 Windows 上编译 PPYOLOE
 Windows菜单打开`x64 Native Tools Command Prompt for VS 2019`命令工具，cd到ppyoloe的demo路径  
 ```bat  
 cd fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
@@ -69,7 +76,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\..\.
 msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```
 
-### 4.2 运行 demo
+#### 3.1.2 运行 demo
 ```bat
 cd Release
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 0  # CPU
@@ -79,13 +86,13 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + Tenso
 
 特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)
 
-## 5. SDK使用方式二：Visual Studio 2019 创建 sln 工程使用 C++ SDK
+### 3.2 SDK使用方式二：Visual Studio 2019 创建 sln 工程使用 C++ SDK
 
 本章节针对非CMake用户，介绍如何在Visual Studio 2019 中创建 sln 工程使用 FastDeploy C++ SDK. CMake用户请直接看下一章节。另外，本章节内容特别感谢“梦醒南天”同学关于FastDeploy使用的文档教程：[如何在 Windows 上使用 FastDeploy C++ 部署 PaddleDetection 目标检测模型](https://www.bilibili.com/read/cv18807232)
 
 <div id="VisualStudio2019Sln"></div>  
 
-### 5.1 步骤一：Visual Studio 2019 创建 sln 工程项目
+#### 3.2.1 步骤一：Visual Studio 2019 创建 sln 工程项目
 
 <div id="VisualStudio2019Sln1"></div>  
 
@@ -99,7 +106,7 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + Tenso
 
 ![image](https://user-images.githubusercontent.com/31974251/192817382-643c8ca2-1f2a-412e-954e-576c22b4ea62.png)
 
-### 5.2 步骤二：从examples中拷贝infer_ppyoloe.cc的代码到工程
+#### 3.2.2 步骤二：从examples中拷贝infer_ppyoloe.cc的代码到工程
 
 <div id="VisualStudio2019Sln2"></div>  
 
@@ -110,13 +117,13 @@ fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
 
 ![image](https://user-images.githubusercontent.com/31974251/192818456-21ca846c-ab52-4001-96d2-77c8174bff6b.png)  
 
-### 5.3 步骤三：将工程配置设置成"Release x64"配置
+#### 3.2.3 步骤三：将工程配置设置成"Release x64"配置
 
 <div id="VisualStudio2019Sln3"></div>  
 
 ![image](https://user-images.githubusercontent.com/31974251/192818918-98d7a54c-4a60-4760-a3cb-ecacc38b7e7a.png)
 
-### 5.4 步骤四：配置头文件include路径
+#### 3.2.4 步骤四：配置头文件include路径
 
 <div id="VisualStudio2019Sln4"></div>  
 
@@ -132,6 +139,10 @@ fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
 
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\include
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv-win-x64-3.4.16\build\include  
+```  
+注意，如果是自行编译最新的SDK或版本>0.2.1，依赖库目录结构有所变动，opencv路径需要做出适当的修改。如：  
+```bat  
+D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv\build\include  
 ```
 
 ![image](https://user-images.githubusercontent.com/31974251/192824445-978c06ed-cc14-4d6a-8ccf-d4594ca11533.png)
@@ -139,7 +150,7 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 用户需要根据自己实际的sdk路径稍作修改。
 
 
-### 5.5 步骤五：配置lib路径和添加库文件
+#### 3.2.5 步骤五：配置lib路径和添加库文件
 
 <div id="VisualStudio2019Sln5"></div>  
 
@@ -147,6 +158,10 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 ```bat  
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\lib
 D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\lib
+```
+注意，如果是自行编译最新的SDK或版本>0.2.1，依赖库目录结构有所变动，opencv路径需要做出适当的修改。如：  
+```bat  
+D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\install\opencv\build\include  
 ```  
 
 ![image](https://user-images.githubusercontent.com/31974251/192826130-fe28791f-317c-4e66-a6a5-133e60b726f0.png)
@@ -155,7 +170,7 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 
  ![image](https://user-images.githubusercontent.com/31974251/192826884-44fc84a1-c57a-45f1-8ee2-30b7eaa3dce9.png)
 
-### 5.6 步骤六：编译工程并运行获取结果
+#### 3.2.6 步骤六：编译工程并运行获取结果
 
 <div id="VisualStudio2019Sln6"></div>  
 
@@ -176,12 +191,12 @@ D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe
 ![image](https://user-images.githubusercontent.com/31974251/192829545-3ea36bfc-9a54-492b-984b-2d5d39094d47.png)  
 
 
-## 6. SDK使用方式三：Visual Studio 2019 创建 CMake 工程使用 C++ SDK
+### 3.3 SDK使用方式三：Visual Studio 2019 创建 CMake 工程使用 C++ SDK
 <div id="VisualStudio2019"></div>  
 
 本章节针对CMake用户，介绍如何在Visual Studio 2019 中创建 CMake 工程使用 FastDeploy C++ SDK.
 
-### 6.1 步骤一：Visual Studio 2019 创建“CMake”工程项目
+#### 3.3.1 步骤一：Visual Studio 2019 创建“CMake”工程项目
 
 <div id="VisualStudio20191"></div>  
 
@@ -198,7 +213,7 @@ D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe
 
 ![image](https://user-images.githubusercontent.com/31974251/192143930-db1655c2-66ee-448c-82cb-0103ca1ca2a0.png)  
 
-### 6.2 步骤二：在CMakeLists中配置 FastDeploy C++ SDK
+#### 3.3.2 步骤二：在CMakeLists中配置 FastDeploy C++ SDK
 
 <div id="VisualStudio20192"></div>  
 
@@ -236,8 +251,9 @@ target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})
 # Optional: install all DLLs to binary dir.
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ```
+注意，`install_fastdeploy_libraries`函数仅在最新的代码编译的SDK或版本>0.2.1下有效。  
 
-### 6.3 步骤三：生成工程缓存并修改CMakeSetting.json配置
+#### 3.3.3 步骤三：生成工程缓存并修改CMakeSetting.json配置
 
 <div id="VisualStudio20193"></div>  
 
@@ -268,7 +284,7 @@ install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ![image](https://user-images.githubusercontent.com/31974251/192146239-a1eacd9e-034d-4373-a262-65b18ce25b87.png)  
 
 
-### 6.4 步骤四：生成可执行文件，运行获取结果。
+#### 3.3.4 步骤四：生成可执行文件，运行获取结果。
 
 <div id="VisualStudio20194"></div>  
 
@@ -276,11 +292,11 @@ install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 
 ![image](https://user-images.githubusercontent.com/31974251/192146852-c64d2252-8c8f-4309-a950-908a5cb258b8.png)
 
-（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。  
+（2）执行可执行文件，获得推理结果。 首先需要拷贝所有的dll到exe所在的目录下，这里我们可以在CMakeLists.txt添加一下命令，可将FastDeploy中所有的dll安装到指定的目录。注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。其他配置方式，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)  
 
 ```cmake  
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
-```
+```  
 （3）同时，也需要把ppyoloe的模型文件和测试图片下载解压缩后，拷贝到exe所在的目录。 准备完成后，目录结构如下：  
 
 ![image](https://user-images.githubusercontent.com/31974251/192147505-054edb77-564b-405e-89ee-fd0d2e413e78.png)
@@ -310,19 +326,116 @@ Visualized result saved in ./vis_result.jpg
 
 特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)
 
-## 7. 多种方法配置exe运行时所需的依赖库
+## 4. 多种方法配置exe运行时所需的依赖库
 <div id="CommandLineDeps"></div>  
+说明：对于使用的最新源码编译的SDK或SDK版本>0.2.1的用户，我们推荐使用（4.1）和（4.2）中的方式配置运行时的依赖库。如果使用的SDK版本<=0.2.1，请参考（4.3）和（4.4）中的方式进行配置。
 
-### 7.1 方式一：修改CMakeLists.txt，一行命令配置(推荐)
+### 4.1 方式一：使用 fastdeploy_init.bat 进行配置（推荐）  
 <div id="CommandLineDeps1"></div>  
+
+对于版本高于0.2.1的SDK，我们提供了 **fastdeploy_init.bat** 工具来管理FastDeploy中所有的依赖库。可以通过该脚本工具查看(show)、拷贝(install) 和 设置(init and setup) SDK中所有的dll，方便用户快速完成运行时环境配置。
+
+#### 4.1.1 fastdeploy_init.bat 使用说明  
+<div id="CommandLineDeps11"></div>  
+
+首先进入SDK的根目录，运行以下命令，可以查看 fastdeploy_init.bat 的用法说明
+```bat
+D:\path-to-your-fastdeploy-sdk-dir>fastdeploy_init.bat help
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[1] [help]    print help information:                      fastdeploy_init.bat help
+[2] [show]    show all dlls/libs/include paths:            fastdeploy_init.bat show fastdeploy-sdk-dir
+[3] [init]    init all dlls paths for current terminal:    fastdeploy_init.bat init fastdeploy-sdk-dir  [WARNING: need copy onnxruntime.dll manually]
+[4] [setup]   setup path env for current terminal:         fastdeploy_init.bat setup fastdeploy-sdk-dir [WARNING: need copy onnxruntime.dll manually]
+[5] [install] install all dlls to a specific dir:          fastdeploy_init.bat install fastdeploy-sdk-dir another-dir-to-install-dlls **[RECOMMEND]**
+[6] [install] install all dlls with logging infos:         fastdeploy_init.bat install fastdeploy-sdk-dir another-dir-to-install-dlls info
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+```  
+用法简要说明如下：  
+- help:     打印所有的用法说明  
+- show:     查看SDK中所有的 dll、lib 和 include 路径
+- init:     初始化所有dll路径信息，后续用于设置terminal环境变量（不推荐，请参考4.3中关于onnxruntime的说明）
+- setup:    在init之后运行，设置terminal环境便令（不推荐，请参考4.3中关于onnxruntime的说明）  
+- install:  将SDK中所有的dll安装到某个指定的目录（推荐）
+#### 4.1.2  fastdeploy_init.bat 查看 SDK 中所有的 dll、lib 和 include 路径  
+<div id="CommandLineDeps12"></div>  
+
+进入SDK的根目录，运行show命令，可以查看SDK中所有的 dll、lib 和 include 路径。以下命令中 %cd% 表示当前目录（SDK的根目录）。  
+```bat
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat show %cd%
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[SDK] D:\path-to-fastdeploy-sdk-dir
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[DLL] D:\path-to-fastdeploy-sdk-dir\lib\fastdeploy.dll **[NEEDED]**
+[DLL] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\lib\core_tokenizers.dll  **[NEEDED]**
+[DLL] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\x64\vc15\bin\opencv_ffmpeg3416_64.dll  **[NEEDED]**
+......
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[Lib] D:\path-to-fastdeploy-sdk-dir\lib\fastdeploy.lib **[NEEDED][fastdeploy]**
+[Lib] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\lib\core_tokenizers.lib  **[NEEDED][fastdeploy::text]**
+[Lib] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\x64\vc15\lib\opencv_world3416.lib  **[NEEDED][fastdeploy::vision]**
+......
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[Include] D:\path-to-fastdeploy-sdk-dir\include **[NEEDED][fastdeploy]**
+[Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\faster_tokenizer\include  **[NEEDED][fastdeploy::text]**
+[Include] D:\path-to-fastdeploy-sdk-dir\third_libs\install\opencv\build\include  **[NEEDED][fastdeploy::vision]**
+......
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+[XML] D:\path-to-fastdeploy-sdk-dir\third_libs\install\openvino\runtime\bin\plugins.xml **[NEEDED]**
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+```  
+可以看到该命令会根据您当前的SDK，输出对应的信息，包含 dll、lib 和 include 的路径信息。对于 dll，被标记为 `[NEEDED]`的，是运行时所需要的，如果包含OpenVINO后端，还需要将他的plugins.xml拷贝到exe所在的目录；对于 lib 和 include，被标记为`[NEEDED]`的，是开发时所需要配置的最小依赖。并且，我们还增加了对应的API Tag标记，如果您只使用vision API，则只需要配置标记为 `[NEEDED][fastdeploy::vision]` 的 lib 和 include 路径.  
+
+#### 4.1.3 fastdeploy_init.bat 安装 SDK 中所有的 dll 到指定的目录 （推荐）
+<div id="CommandLineDeps13"></div>  
+
+进入SDK的根目录，运行install命令，可以将SDK 中所有的 dll 安装到指定的目录（如exe所在的目录）。我们推荐这种方式来配置exe运行所需要的依赖库。比如，可以在SDK根目录下创建一个临时的bin目录备份所有的dll文件。以下命令中 %cd% 表示当前目录（SDK的根目录）。
+```bat  
+% info参数为可选参数，添加info参数后会打印详细的安装信息 %
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat install %cd% bin
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat install %cd% bin info
+```
+```bat
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat install %cd% bin
+[INFO] Do you want to install all FastDeploy dlls ?
+[INFO] From: D:\path-to-fastdeploy-sdk-dir
+[INFO]   To: bin
+Choose y means YES, n means NO: [y/n]y
+YES.
+请按任意键继续. . .
+[INFO] Created bin done!
+已复制         1 个文件。
+已复制         1 个文件。
+已复制         1 个文件。
+已复制         1 个文件。
+.....
+已复制         1 个文件。
+已复制         1 个文件。
+已复制         1 个文件。
+已复制         1 个文件。
+.....
+```  
+#### 4.1.4 fastdeploy_init.bat 配置 SDK 环境变量  
+<div id="CommandLineDeps14"></div>  
+
+您也可以选择通过配置环境变量的方式来设置运行时的依赖库环境，这种方式只在当前的terminal有效。如果您使用的SDK中包含了onnxruntime推理后端，我们不推荐这种方式，详细原因请参考（4.3）中关于onnxruntime配置的说明（需要手动拷贝onnxruntime所有的dll到exe所在的目录）。配置 SDK 环境变量的方式如下。以下命令中 %cd% 表示当前目录（SDK的根目录）。
+```bat
+% 先运行 init 初始化当前SDK所有的dll文件路径 %
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat init %cd%
+% 再运行 setup 完成 SDK 环境变量配置  %
+D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat setup %cd%
+```
+
+### 4.2 方式二：修改CMakeLists.txt，一行命令配置（推荐）
+<div id="CommandLineDeps2"></div>  
 
 考虑到Windows下C++开发的特殊性，如经常需要拷贝所有的lib或dll文件到某个指定的目录，FastDeploy提供了`install_fastdeploy_libraries`的cmake函数，方便用户快速配置所有的dll。修改ppyoloe的CMakeLists.txt，添加：  
 ```cmake
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ```
+注意，该方式仅在最新的代码编译的SDK或版本>0.2.1下有效。  
 
-### 7.2 方式二：命令行设置环境变量
-<div id="CommandLineDeps2"></div>  
+### 4.3 方式三：命令行设置环境变量
+<div id="CommandLineDeps3"></div>  
 
 编译好的exe保存在Release目录下，在运行demo前，需要将模型和测试图片拷贝至该目录。另外，需要在终端指定DLL的搜索路径。请在build目录下执行以下命令。
 ```bat
@@ -350,14 +463,20 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\onnxruntime* Releas
 where onnxruntime.dll
 C:\Windows\System32\onnxruntime.dll  # windows自带的onnxruntime.dll
 ```  
+另外，注意，如果是自行编译最新的SDK或版本>0.2.1，opencv和openvino目录结构有所改变，路径需要做出适当的修改。如：  
+```bat  
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin;%PATH%
+```
 可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中(包含copy onnxruntime)，如`setup_fastdeploy_dll.bat`，方便多次使用。
 ```bat
 setup_fastdeploy_dll.bat
 ```
 
-### 7.3 方式三：手动拷贝依赖库到exe的目录下
+### 4.4 方式四：手动拷贝依赖库到exe的目录下
 
-<div id="CommandLineDeps3"></div>  
+<div id="CommandLineDeps4"></div>  
 
 手动拷贝，或者在build目录下执行以下命令：
 ```bat
@@ -377,15 +496,14 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.xml Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin\*.dll Release\
 ```
+另外，注意，如果是自行编译最新的SDK或版本>0.2.1，opencv和openvino目录结构有所改变，路径需要做出适当的修改。如：  
+```bat  
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin\*.dll Release\
+copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin\*.dll Release\
+```
 可以把上述命令拷贝并保存到build目录下的某个bat脚本文件中，如`copy_fastdeploy_dll.bat`，方便多次使用。
 ```bat
 copy_fastdeploy_dll.bat
 ```
 特别说明：上述的set和copy命令对应的依赖库路径，需要用户根据自己使用SDK中的依赖库进行适当地修改。比如，若是CPU版本的SDK，则不需要TensorRT相关的设置。
-
-
-
-## 8. CLion 2022 IDE 方式使用 C++ SDK
-<div id="CLion"></div>  
-
-- TODO  

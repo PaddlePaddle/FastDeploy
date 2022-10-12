@@ -28,7 +28,7 @@ Convert::Convert(const std::vector<float>& alpha,
   beta_.assign(beta.begin(), beta.end());
 }
 
-bool Convert::CpuRun(Mat* mat) {
+bool Convert::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetCpuMat();
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
@@ -38,19 +38,6 @@ bool Convert::CpuRun(Mat* mat) {
   cv::merge(split_im, *im);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Convert::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  std::vector<cv::cuda::GpuMat> split_im;
-  cv::cuda::split(*im, split_im);
-  for (int c = 0; c < im->channels(); c++) {
-    split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
-  }
-  cv::cuda::merge(split_im, *im);
-  return true;
-}
-#endif
 
 bool Convert::Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta, ProcLib lib) {

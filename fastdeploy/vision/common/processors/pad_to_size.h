@@ -21,21 +21,18 @@ namespace vision {
 
 class PadToSize : public Processor {
  public:
-  // only support pad with left-top padding mode
+  // only support pad with right-bottom padding mode
   PadToSize(int width, int height, const std::vector<float>& value) {
     width_ = width;
     height_ = height;
     value_ = value;
   }
-  bool CpuRun(Mat* mat);
-#ifdef ENABLE_OPENCV_CUDA
-  bool GpuRun(Mat* mat);
-#endif
+  bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "PadToSize"; }
 
   static bool Run(Mat* mat, int width, int height,
                   const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV_CPU);
+                  ProcLib lib = ProcLib::OPENCV);
 
  private:
   int width_;

@@ -26,6 +26,32 @@
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
 
+class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
+ public:
+  explicit Int8EntropyCalibrator2(const std::string& calibration_cache)
+      : calibration_cache_(calibration_cache) {}
+
+  int getBatchSize() const noexcept override { return 0; }
+
+  bool getBatch(void* bindings[], const char* names[],
+                int nbBindings) noexcept override {
+    return false;
+  }
+
+  const void* readCalibrationCache(size_t& length) noexcept override {
+    length = calibration_cache_.size();
+    return length ? calibration_cache_.data() : nullptr;
+  }
+
+  void writeCalibrationCache(const void* cache,
+                             size_t length) noexcept override {
+    std::cout << "NOT IMPLEMENT." << std::endl;
+  }
+
+ private:
+  const std::string calibration_cache_;
+};
+
 namespace fastdeploy {
 
 struct TrtValueInfo {
@@ -94,6 +120,8 @@ class TrtBackend : public BaseBackend {
   std::vector<TrtValueInfo> outputs_desc_;
   std::map<std::string, FDDeviceBuffer> inputs_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_buffer_;
+
+  std::string calibration_str_;
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
