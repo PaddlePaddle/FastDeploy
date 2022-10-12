@@ -47,7 +47,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
       }
 #else
-      FDWARING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
+      FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
 #endif
     }
   } else {
