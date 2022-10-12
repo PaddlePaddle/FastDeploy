@@ -38,14 +38,14 @@ torch.onnx.export(model,
                     dynamic_axes={"input":{0:"batch_size"},  # 批处理变量
                                     "output":{0:"batch_size"}})
 ```
-执行上述脚本将会得到 resnet50.onnx 文件。
+执行上述脚本将会得到 `resnet50.onnx` 文件。
 
 ### C++部分  <span id="step2"></span>
-* 创建resnet.h文件
+* 创建`resnet.h`文件
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.h)
   * 创建内容
-    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明Predict、Initialize、Preprocess、Postprocess和构造函数，以及必要的变量，具体的代码细节请参考[resnet.h]()。【TODO，PR resnet.h】。
+    * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明`Predict`、`Initialize`、`Preprocess`、`Postprocess`和`构造函数`，以及必要的变量，具体的代码细节请参考[resnet.h]()。【TODO，PR resnet.h】。
 
 ```C++
 class FASTDEPLOY_DECL ResNet : public FastDeployModel {
@@ -59,11 +59,11 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
 };
 ```
 
-* 创建resnet.cc 文件
+* 创建`resnet.cc`文件
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.cc)
   * 创建内容
-    * 在resnet.cc中实现resnet.h中声明函数的具体逻辑，其中PreProcess 和 PostProcess需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.cc]()。【TODO PR resnet.cc】
+    * 在`resnet.cc`中实现`resnet.h`中声明函数的具体逻辑，其中`PreProcess` 和 `PostProcess`需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.cc]()。【TODO PR resnet.cc】
 
 ```C++
 ResNet::ResNet(...) {
@@ -93,7 +93,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 }
 ```
 <span id="step3"></span>
-* 在vision.h文件中加入新增模型文件
+* 在`vision.h`文件中加入新增模型文件
   * 修改位置
     * FastDeploy/fastdeploy/vision.h
   * 修改内容
@@ -135,7 +135,7 @@ void BindClassification(pybind11::module& m) {
 }
 ```
 <span id="step5"></span>
-* 创建resnet.py文件
+* 创建`resnet.py`文件
   * 创建位置
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/${外部模型}/${模型名}.py)
   * 创建内容
