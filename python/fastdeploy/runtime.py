@@ -117,6 +117,9 @@ class RuntimeOption:
         """
         return self._option.set_cpu_thread_num(thread_num)
 
+    def set_ort_graph_opt_level(self, level=-1):
+        return self._option.set_ort_graph_opt_level(level)
+
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
@@ -213,6 +216,11 @@ class RuntimeOption:
         """Disable half precision inference while suing TensorRT backend.
         """
         return self._option.disable_trt_fp16()
+
+    def enable_paddle_to_trt(self):
+        """While using TensorRT backend, enable_paddle_to_trt() will change to use Paddle Inference backend, and use its integrated TensorRT instead.
+        """
+        return self._option.enable_paddle_to_trt()
 
     def set_trt_max_workspace_size(self, trt_max_workspace_size):
         """Set max workspace size while using TensorRT backend.
