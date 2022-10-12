@@ -1,18 +1,18 @@
-# PPMatting Python部署示例
+# PP-Matting Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-本目录下提供`infer.py`快速完成PPMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成PP-Matting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/matting/ppmatting/python
 
-# 下载PPmatting模型文件和测试图片
+# 下载PP-Matting模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
@@ -32,13 +32,13 @@ python infer.py --model PP-Matting-512 --image matting_input.jpg --bg matting_bg
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852116-cf91445b-3a67-45d9-a675-c69fe77c383a.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852554-6960659f-4fd7-4506-b33b-54e1a9dd89bf.jpg">
 </div>
-## PPMatting Python接口
+## PP-Matting Python接口
 
 ```python
 fd.vision.matting.PPMatting(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-PPMatting模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+PP-Matting模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
 
 **参数**
 
@@ -72,7 +72,7 @@ PPMatting模型加载和初始化，其中model_file, params_file以及config_fi
 
 ## 其它文档
 
-- [PPMatting 模型介绍](..)
-- [PPMatting C++部署](../cpp)
+- [PP-Matting 模型介绍](..)
+- [PP-Matting C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)

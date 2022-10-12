@@ -59,7 +59,7 @@ bg = cv2.imread(args.bg)
 result = model.predict(im.copy())
 print(result)
 # 可视化结果
-vis_im = fd.vision.vis_matting_alpha(im, result)
+vis_im = fd.vision.vis_matting(im, result)
 vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
 cv2.imwrite("visualized_result_fg.jpg", vis_im)
 cv2.imwrite("visualized_result_replaced_bg.jpg", vis_im_with_bg)

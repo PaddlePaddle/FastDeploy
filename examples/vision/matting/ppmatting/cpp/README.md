@@ -1,13 +1,13 @@
-# PPMatting C++部署示例
+# PP-Matting C++部署示例
 
-本目录下提供`infer.cc`快速完成PPMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成PP-Matting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
 
-以Linux上 PPMatting 推理为例，在本目录执行如下命令即可完成编译测试（如若只需在CPU上部署，可在[Fastdeploy C++预编译库](../../../../../docs/quick_start/CPP_prebuilt_libraries.md)下载CPU推理库）
+以Linux上 PP-Matting 推理为例，在本目录执行如下命令即可完成编译测试（如若只需在CPU上部署，可在[Fastdeploy C++预编译库](../../../../../docs/quick_start/CPP_prebuilt_libraries.md)下载CPU推理库）
 
 ```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
@@ -18,7 +18,7 @@ mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
 make -j
 
-# 下载PPMatting模型文件和测试图片
+# 下载PP-Matting模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
@@ -44,7 +44,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
 
-## PPMatting C++接口
+## PP-Matting C++接口
 
 ### PPMatting类
 
@@ -57,7 +57,7 @@ fastdeploy::vision::matting::PPMatting(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-PPMatting模型加载和初始化，其中model_file为导出的Paddle模型格式。
+PP-Matting模型加载和初始化，其中model_file为导出的Paddle模型格式。
 
 **参数**
 

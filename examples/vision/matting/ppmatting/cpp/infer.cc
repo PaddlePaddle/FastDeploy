@@ -41,7 +41,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
@@ -75,7 +75,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
@@ -110,7 +110,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file,
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::Visualize::VisMattingAlpha(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
       fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);

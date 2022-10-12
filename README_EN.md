@@ -166,7 +166,7 @@ int main(int argc, char* argv[]) {
 
 Notes:
 
-✅: already supported; ❔: to be supported in the future; ❌: not supported now; 
+✅: already supported; ❔: to be supported in the future; ❌: not supported now;
 
 
 
@@ -218,8 +218,8 @@ Notes:
 | <font size=2> Face Recognition | <font size=2> [insightface/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ |
 | <font size=2> Face Recognition | <font size=2> [insightface/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ |
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PPMatting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PPHumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
+| <font size=2> Matting | <font size=2> [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
+| <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 | <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 | <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 
@@ -303,15 +303,15 @@ Notes:
 <div id="fastdeploy-community"></div>
 
 - If you have any question or suggestion, please give us your valuable input via GitHub Issues
-- **Join Us👬：** 
+- **Join Us👬：**
     - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
     - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/194988203-d5e70b90-f2bb-4d45-b79b-4081b375dc41.png"  width = "225" height = "225" />
 </div>
-    
-    
+
+
 
 ## Acknowledge
 
