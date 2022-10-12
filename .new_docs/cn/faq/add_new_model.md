@@ -37,8 +37,8 @@ torch.onnx.export(model,
                     output_names=["output"],	# 输出名
                     dynamic_axes={"input":{0:"batch_size"},  # 批处理变量
                                     "output":{0:"batch_size"}})
-执行上述脚本将会得到 resnet50.onnx 文件。
 ```
+执行上述脚本将会得到 resnet50.onnx 文件。
 
 ### C++部分  <span id="step2"></span>
 * 创建resnet.h文件
