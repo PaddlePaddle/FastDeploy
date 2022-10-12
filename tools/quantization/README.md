@@ -53,7 +53,7 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./fdquant/configs/readme.md)                        |
+| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README.md)                        |
 | --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
@@ -89,7 +89,7 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./fdquant/configs/readme.md)|
+| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README.md)|
 | --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
@@ -97,9 +97,9 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 ## 3. FastDeploy 部署量化模型
 用户在获得量化模型之后，即可以使用FastDeploy进行部署, 部署文档请参考:
 具体请用户参考示例文档:
-- [YOLOv5s 量化模型部署](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 量化模型部署](../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6s 量化模型部署](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 量化模型部署](../../examples/vision/detection/yolov6/quantize/)
 
 - [YOLOv7 量化模型部署](../../examples/vision/detection/yolov7/quantize/)
 
