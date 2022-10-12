@@ -1,5 +1,6 @@
 # FastDeploy 一键模型量化
-FastDeploy 给用户提供了一键量化功能, 支持离线量化和量化蒸馏训练. 本文档以Yolov5s为例, 供用户参考如何安装并执行FastDeploy的一键模型量化功能.
+FastDeploy基于PaddleSlim, 给用户提供了一键模型量化的工具, 支持离线量化和量化蒸馏训练.
+本文档以Yolov5s为例, 供用户参考如何安装并执行FastDeploy的一键模型量化.
 
 ## 1.安装
 
