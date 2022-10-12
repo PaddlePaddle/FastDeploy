@@ -139,7 +139,7 @@ void BindClassification(pybind11::module& m) {
   * 创建位置
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/${外部模型}/${模型名}.py)
   * 创建内容
-    * 创建ResNet类继承自FastDeployModel，实现 \_\_init\_\_、Pybind绑定的函数、以及对Pybind绑定的全局变量进行赋值和获取的函数，具体代码请参考[resnet.py]()。【TODO PR resnet.py】
+    * 创建ResNet类继承自FastDeployModel，实现 `\_\_init\_\_`、Pybind绑定的函数（如`predict()`）、以及`对Pybind绑定的全局变量进行赋值和获取的函数`，具体代码请参考[resnet.py]()。【TODO PR resnet.py】
 
 ```C++
 class ResNet(FastDeployModel):
