@@ -45,6 +45,7 @@
 #include "fastdeploy/vision/ocr/ppocr/ppocr_system_v3.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
+#include "fastdeploy/vision/tracking/pptracking/model.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

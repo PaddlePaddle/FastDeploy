@@ -25,9 +25,11 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include "include/trajectory.h"
+#include "fastdeploy/vision/tracking/pptracking/trajectory.h"
 
-namespace PaddleDetection {
+namespace fastdeploy {
+namespace vision {
+namespace tracking {
 
 typedef std::map<int, int> Match;
 typedef std::map<int, int>::iterator MatchIterator;
@@ -69,4 +71,6 @@ class JDETracker {
   float det_thresh;
 };
 
-}  // namespace PaddleDetection
+} // namespace tracking
+} // namespace vision
+} // namespace fastdeploy

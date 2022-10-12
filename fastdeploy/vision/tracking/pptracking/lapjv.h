@@ -17,8 +17,7 @@
 // Ths copyright of gatagat/lap is as follows:
 // MIT License
 
-#ifndef DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_
-#define DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_
+#pragma once
 #define LARGE 1000000
 
 #if !defined TRUE
@@ -45,7 +44,9 @@
   }
 #include <opencv2/opencv.hpp>
 
-namespace PaddleDetection {
+namespace fastdeploy {
+namespace vision {
+namespace tracking {
 
 typedef signed int int_t;
 typedef unsigned int uint_t;
@@ -59,6 +60,7 @@ int lapjv_internal(const cv::Mat &cost,
                    int *x,
                    int *y);
 
-}  // namespace PaddleDetection
+} // namespace tracking
+} // namespace vision
+} // namespace fastdeploy
 
-#endif  // DEPLOY_PPTRACKING_CPP_INCLUDE_LAPJV_H_

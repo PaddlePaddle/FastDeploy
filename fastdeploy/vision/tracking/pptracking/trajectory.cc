@@ -17,10 +17,12 @@
 // Ths copyright of CnybTseng/JDE is as follows:
 // MIT License
 
-#include "include/trajectory.h"
+#include "fastdeploy/vision/tracking/pptracking/trajectory.h"
 #include <algorithm>
 
-namespace PaddleDetection {
+namespace fastdeploy {
+namespace vision {
+namespace tracking {
 
 void TKalmanFilter::init(const cv::Mat &measurement) {
   measurement.copyTo(statePost(cv::Rect(0, 0, 1, 4)));
@@ -514,4 +516,6 @@ cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b) {
   return dists;
 }
 
-}  // namespace PaddleDetection
+} // namespace tracking
+} // namespace vision
+} // namespace fastdeploy

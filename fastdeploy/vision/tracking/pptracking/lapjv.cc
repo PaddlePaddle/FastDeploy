@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/lapjv.h"
+#include "fastdeploy/vision/tracking/pptracking/lapjv.h"
 
 namespace fastdeploy {
 namespace vision {

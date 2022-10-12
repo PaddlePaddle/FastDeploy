@@ -26,7 +26,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "opencv2/video/tracking.hpp"
 
-namespace PaddleDetection {
+namespace fastdeploy {
+namespace vision {
+namespace tracking {
 
 typedef enum { New = 0, Tracked = 1, Lost = 2, Removed = 3 } TrajectoryState;
 
@@ -227,4 +229,6 @@ inline void Trajectory::mark_lost(void) { state = Lost; }
 
 inline void Trajectory::mark_removed(void) { state = Removed; }
 
-}  // namespace PaddleDetection
+} // namespace tracking
+} // namespace vision
+} // namespace fastdeploy

@@ -22,8 +22,8 @@
 #include <algorithm>
 #include <map>
 
-#include "include/lapjv.h"
-#include "include/tracker.h"
+#include "fastdeploy/vision/tracking/pptracking/lapjv.h"
+#include "fastdeploy/vision/tracking/pptracking/tracker.h"
 
 #define mat2vec4f(m)             \
   cv::Vec4f(*m.ptr<float>(0, 0), \
@@ -31,7 +31,9 @@
             *m.ptr<float>(0, 2), \
             *m.ptr<float>(0, 3))
 
-namespace PaddleDetection {
+namespace fastdeploy {
+namespace vision {
+namespace tracking {
 
 static std::map<int, float> chi2inv95 = {{1, 3.841459f},
                                          {2, 5.991465f},
@@ -301,4 +303,6 @@ void JDETracker::remove_duplicate_trajectory(TrajectoryPool *a,
   }
 }
 
-}  // namespace PaddleDetection
+} // namespace tracking
+} // namespace vision
+} // namespace fastdeploy

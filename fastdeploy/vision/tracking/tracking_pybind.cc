@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPTracking(pybind11::module &m) {
-  pybind11::class_<vision::tracking::PPTracking, FastDeployModel>(
-    m, "PPTracking")
-    .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-            ModelFormat>())
-    .def("predict",
-         [](vision::tracking::PPTracking &self,
-            pybind11::array &data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::MOTResult *res = new vision::MOTResult();
-             self.Predict(&mat, res);
-             return res;
-         })
-    .def("__repr__",[](vision::tracking::PPTracking &self){
-      return self.ModelName();
-    })
-}
+
+    void BindPPTracking(pybind11::module& m);
+
+    void BindTracking(pybind11::module& m) {
+        auto tracking_module =
+                m.def_submodule("tracking", "object tracking models.");
+        BindPPTracking(tracking_module);
+    }
 }  // namespace fastdeploy
