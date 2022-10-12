@@ -126,6 +126,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
 
+  /*
+   * @brief If TensorRT backend is used, EnablePaddleToTrt will change to use Paddle Inference backend, and use its integrated TensorRT instead.
+   */
+  void EnablePaddleToTrt();
+
   /**
    * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
    */
@@ -214,6 +219,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
   bool pd_enable_log_info = false;
+  bool pd_enable_trt = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 
