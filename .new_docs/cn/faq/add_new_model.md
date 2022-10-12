@@ -105,12 +105,11 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 ```
 
 ### Python部分
-* Pybind    <span id="step4"></span>
-  * 创建Pybind文件
-    * 创建位置
-      * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}_pybind.cc)
-    * 创建内容
-      * 利用Pybind将C++中的函数变量绑定到Python中，具体代码请参考[resnet_pybind.cc]()。【TODO PR resnet_pybind.cc】
+* 创建Pybind文件   <span id="step4"></span>
+  * 创建位置
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}_pybind.cc)
+  * 创建内容
+    * 利用Pybind将C++中的函数变量绑定到Python中，具体代码请参考[resnet_pybind.cc]()。【TODO PR resnet_pybind.cc】
 ```C++
 void BindResNet(pybind11::module& m) {
   pybind11::class_<vision::classification::ResNet, FastDeployModel>(
@@ -214,7 +213,7 @@ pip install fastdeploy_gpu_python-版本号-cpxx-cpxxm-系统架构.whl
 ```
 
 * C++
-  * 编写CmakeLists文件、C++ 代码以及 README.md 内容请参考[cpp]()。 【todo PR 】
+  * 编写CmakeLists文件、C++ 代码以及 README.md 内容请参考[cpp/]()。 【todo PR 】
   * 编译 infer.cc
     * 位置：FastDeploy/examples/vision/classification/resnet/cpp/
 
@@ -225,4 +224,4 @@ make
 ```
 
 * Python
-  * Python 代码以及 README.md 内容请参考[python]()。 【todo PR 】
+  * Python 代码以及 README.md 内容请参考[python/]()。 【todo PR 】
