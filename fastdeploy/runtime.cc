@@ -198,6 +198,13 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
   cpu_thread_num = thread_num;
 }
 
+void RuntimeOption::SetOrtGraphOptLevel(int level) {
+  std::vector<int> supported_level{-1, 0, 1, 2};
+  auto valid_level = std::find(supported_level.begin(), supported_level.end(), level) != supported_level.end();
+  FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
+  ort_graph_opt_level = level;
+}
+
 // use paddle inference backend
 void RuntimeOption::UsePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
@@ -240,9 +247,9 @@ void RuntimeOption::UseLiteBackend() {
 #endif
 }
 
-void RuntimeOption::EnablePaddleMKLDNN() { pd_enable_mkldnn = true; }
-
-void RuntimeOption::DisablePaddleMKLDNN() { pd_enable_mkldnn = false; }
+void RuntimeOption::SetPaddleMKLDNN(bool pd_mkldnn) {
+  pd_enable_mkldnn = pd_mkldnn;
+}
 
 void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
   pd_delete_pass_names.push_back(pass_name);
@@ -250,6 +257,17 @@ void RuntimeOption::DeletePaddleBackendPass(const std::string& pass_name) {
 void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
+
+void RuntimeOption::EnablePaddleToTrt() {
+  FDASSERT(backend == Backend::TRT, "Should call UseTrtBackend() before call EnablePaddleToTrt().");
+#ifdef ENABLE_PADDLE_BACKEND
+  FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will change to use Paddle Inference Backend." << std::endl;
+  backend = Backend::PDINFER;
+  pd_enable_trt = true;
+#else
+  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the FastDeploy is compiled with Paddle Inference Backend, please rebuild your FastDeploy.");
+#endif
+}
 
 void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   FDASSERT(size > 0, "Parameter size must greater than 0.");
@@ -399,6 +417,21 @@ void Runtime::CreatePaddleBackend() {
   pd_option.gpu_id = option.device_id;
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
+#ifdef ENABLE_TRT_BACKEND
+  if (pd_option.use_gpu && option.pd_enable_trt) {
+    pd_option.enable_trt = true;
+    auto trt_option = TrtBackendOption();
+    trt_option.gpu_id = option.device_id;
+    trt_option.enable_fp16 = option.trt_enable_fp16;
+    trt_option.max_batch_size = option.trt_max_batch_size;
+    trt_option.max_workspace_size = option.trt_max_workspace_size;
+    trt_option.max_shape = option.trt_max_shape;
+    trt_option.min_shape = option.trt_min_shape;
+    trt_option.opt_shape = option.trt_opt_shape;
+    trt_option.serialize_file = option.trt_serialize_file;
+    pd_option.trt_option = trt_option;
+  }
+#endif
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "PaddleBackend only support model format of ModelFormat::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();

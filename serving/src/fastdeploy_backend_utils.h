@@ -33,13 +33,15 @@
 #include <vector>
 
 #include "fastdeploy/core/fd_type.h"
+#include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
 namespace triton {
 namespace backend {
 namespace fastdeploy_runtime {
 
-#define RESPOND_ALL_AND_SET_TRUE_IF_ERROR(RESPONSES, RESPONSES_COUNT, BOOL, X) \
+#define FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(                                  \
+RESPONSES, RESPONSES_COUNT, BOOL, X)                                           \
   do {                                                                         \
     TRITONSERVER_Error* raasnie_err__ = (X);                                   \
     if (raasnie_err__ != nullptr) {                                            \
@@ -66,6 +68,10 @@ fastdeploy::FDDataType ModelConfigDataTypeToFDType(
     const std::string& data_type_str);
 
 std::string FDTypeToModelConfigDataType(fastdeploy::FDDataType data_type);
+
+TRITONSERVER_Error* FDParseShape(triton::common::TritonJson::Value& io,
+                                 const std::string& name,
+                                 std::vector<int32_t>* shape);
 
 }  // namespace fastdeploy_runtime
 }  // namespace backend
