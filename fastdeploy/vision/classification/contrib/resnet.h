@@ -21,15 +21,19 @@
 // fastdeploy::vision::classification (fastdeploy::vision::${task})
 namespace fastdeploy {
 namespace vision {
+/** \brief All object classification model APIs are defined inside this namespace
+ *
+ */
 namespace classification {
-
+/*! @brief ResNet series model
+ */
 class FASTDEPLOY_DECL ResNet : public FastDeployModel {
  public:
   /** \brief  Set path of model file and the configuration of runtime.
    *
    * \param[in] model_file Path of model file, e.g ./resnet50.onnx
    * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
-   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
    * \param[in] model_format Model format of the loaded model, default is ONNX format
    */
   ResNet(const std::string& model_file,
@@ -38,7 +42,7 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
                const ModelFormat& model_format = ModelFormat::ONNX);
 
   virtual std::string ModelName() const { return "ResNet"; }
-   /** \brief Predict for the input `im`, the result will be saved in `result`.
+   /** \brief Predict for the input "im", the result will be saved in "result".
    *
    * \param[in] im Input image for inference.
    * \param[in] result Saving the inference result.
@@ -58,9 +62,9 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   /*! @brief Initialize for ResNet model, assign values to the global variables and call InitRuntime()
   */
   bool Initialize();
-  /// PreProcessing for the input `mat`, the result will be saved in `outputs`.
+  /// PreProcessing for the input "mat", the result will be saved in "outputs".
   bool Preprocess(Mat* mat, FDTensor* outputs);
-  /*! @brief PostProcessing for the input `infer_result`, the result will be saved in `result`.
+  /*! @brief PostProcessing for the input "infer_result", the result will be saved in "result".
   */
   bool Postprocess(FDTensor& infer_result, ClassifyResult* result,
                    int topk = 1);
