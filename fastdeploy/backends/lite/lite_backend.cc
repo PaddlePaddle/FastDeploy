@@ -163,8 +163,7 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
-    (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype,
-                         outputs_desc_[i].name);
+    (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype, outputs_desc_[i].name);
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),
            (*outputs)[i].Nbytes());
   }

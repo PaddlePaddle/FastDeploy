@@ -65,9 +65,15 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT};  
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  
-  } else {
+    valid_npu_backends = {};
+  }else if(model_format == ModelFormat::RKNN){
+    valid_cpu_backends = {Backend::ORT};
+    valid_gpu_backends = {Backend::ORT};
+    valid_npu_backends = {Backend::RKNPU2};
+  }else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_npu_backends = {};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -127,27 +133,38 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+
   // scrfd's preprocess steps
+  // for cpu and gpu
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
-                   is_scale_up, stride);
+  // for rknpu
+  // 1. letterbox
+  // 2. BGR->RGB
 
-  BGR2RGB::Run(mat);
-  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-  //                std::vector<float>(mat->Channels(), 1.0));
-  // Compute `result = mat * alpha + beta` directly by channel
-  // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
-  // input_size, (127.5, 127.5, 127.5), swapRB=True)
-  std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-  std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-  Convert::Run(mat, alpha, beta);
-  // Record output shape of preprocessed image
-  (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
-                                static_cast<float>(mat->Width())};
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
+
+  // rknpu don't need normalize and transpose
+  if(runtime_option.backend != Backend::RKNPU2){
+    SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up, stride);
+    BGR2RGB::Run(mat);
+    // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+    //                std::vector<float>(mat->Channels(), 1.0));
+    // Compute `result = mat * alpha + beta` directly by channel
+    // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
+    // input_size, (127.5, 127.5, 127.5), swapRB=True)
+    std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+    std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+    Convert::Run(mat, alpha, beta);
+    // Record output shape of preprocessed image
+    (*im_info)["output_shape"] = {static_cast<float>(mat->Height()), static_cast<float>(mat->Width())};
+    HWC2CHW::Run(mat);
+    Cast::Run(mat, "float");
+  }else{
+    SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up, stride);
+    BGR2RGB::Run(mat);
+    (*im_info)["output_shape"] = {static_cast<float>(mat->Height()), static_cast<float>(mat->Width())};
+  }
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
@@ -193,7 +210,7 @@ bool SCRFD::Postprocess(
   FDASSERT((fmc == 3 || fmc == 5), "The fmc must be 3 or 5");
   FDASSERT((infer_result.at(0).shape[0] == 1), "Only support batch =1 now.");
   for (int i = 0; i < fmc; ++i) {
-    if (infer_result.at(i).dtype != FDDataType::FP32) {
+    if (infer_result.at(i).dtype != FDDataType::FP32 && infer_result.at(i).dtype != FDDataType::FP16) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }

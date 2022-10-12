@@ -216,8 +216,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0,
-                                OrtMemTypeDefault);
+    Ort::MemoryInfo memory_info("Cpu", OrtDeviceAllocator, 0, OrtMemTypeDefault);
     binding_->BindOutput(outputs_desc_[i].name.c_str(), memory_info);
   }
 

@@ -40,6 +40,7 @@ enum Backend {
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
+  RKNPU2,  ///< RKNPU2, support RKNN format model, Rockchip NPU only
 };
 
 /*! Deep learning model format */
@@ -47,6 +48,7 @@ enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
+  RKNN,  ///< Model with RKNN format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -63,6 +65,27 @@ enum LitePowerMode {
   LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
   LITE_POWER_RAND_LOW = 5  ///< Use Lite Backend with rand low power mode
 };
+
+/*! RKNPU2 core mask for mobile device. */
+typedef enum _rknpu2_core_mask {
+    RKNN_NPU_CORE_AUTO = 0,                                       /* default, run on NPU core randomly. */
+    RKNN_NPU_CORE_0 = 1,                                          /* run on NPU core 0. */
+    RKNN_NPU_CORE_1 = 2,                                          /* run on NPU core 1. */
+    RKNN_NPU_CORE_2 = 4,                                          /* run on NPU core 2. */
+    RKNN_NPU_CORE_0_1 = RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1,        /* run on NPU core 1 and core 2. */
+    RKNN_NPU_CORE_0_1_2 = RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2,    /* run on NPU core 1 and core 2 and core 3. */
+
+    RKNN_NPU_CORE_UNDEFINED,
+} rknn_core_mask;
+typedef rknn_core_mask rknpu2_core_mask;
+
+/*! RKNPU2 device name for mobile device. */
+typedef enum _rknpu2_cpu_name {
+    RK356X = 0,                                       /* run on RK356X. */
+    RK3588 = 1,                                       /* default,run on RK3588. */
+    UNDEFINED,
+} rknpu2_cpu_name;
+
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
@@ -99,6 +122,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
+
+  void UseRKNPU2(rknpu2_cpu_name rknpu2_name = rknpu2_cpu_name::RK3588, 
+                  rknpu2_core_mask rknpu2_core = rknpu2_core_mask::RKNN_NPU_CORE_0);
 
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
@@ -237,6 +263,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
 
+  // ======Only for RKNPU2 Backend=======
+  rknpu2_cpu_name rknpu2_cpu_name_ = rknpu2_cpu_name::RK3588;
+  rknpu2_core_mask rknpu2_core_mask_ = rknpu2_core_mask::RKNN_NPU_CORE_AUTO;
+  
+
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   ModelFormat model_format = ModelFormat::AUTOREC;  // format of input model
@@ -291,6 +322,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateTrtBackend();
   void CreateOpenVINOBackend();
   void CreateLiteBackend();
+  void CreateRKNPU2Backend();
   std::unique_ptr<BaseBackend> backend_;
 };
 }  // namespace fastdeploy

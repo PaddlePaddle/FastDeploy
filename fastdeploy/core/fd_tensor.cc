@@ -131,9 +131,10 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
   name = tensor_name;
   device = new_device;
   dtype = data_type;
-  int new_nbytes = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                   std::multiplies<int>()) *
-                   FDDataTypeSize(data_type);
+  int new_nbytes = std::accumulate(new_shape.begin(), 
+                                    new_shape.end(), 
+                                    1, 
+                                    std::multiplies<int>()) * FDDataTypeSize(data_type);
   ReallocFn(new_nbytes);
   shape.assign(new_shape.begin(), new_shape.end());
 }
