@@ -96,6 +96,12 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+  void CollectShapeRun(paddle_infer::Predictor* predictor,
+          const std::map<std::string, std::vector<int>>& shape) const;
+  void GetDynamicShapeFromOption(const PaddleBackendOption& option,
+      std::map<std::string, std::vector<int>>* max_shape,
+      std::map<std::string, std::vector<int>>* min_shape,
+      std::map<std::string, std::vector<int>>* opt_shape) const;
   paddle_infer::Config config_;
   std::shared_ptr<paddle_infer::Predictor> predictor_;
   std::vector<TensorInfo> inputs_desc_;

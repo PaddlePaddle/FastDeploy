@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/paddle/paddle_backend.h"
+#include "fastdeploy/utils/path.h"
+#include "fastdeploy/core/float16.h"
 
 namespace fastdeploy {
 
@@ -34,15 +36,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       std::map<std::string, std::vector<int>> max_shape;
       std::map<std::string, std::vector<int>> min_shape;
       std::map<std::string, std::vector<int>> opt_shape;
-      for (const auto& item : option.trt_option.min_shape) {
-        auto max_iter = option.trt_option.max_shape.find(item.first);
-        auto opt_iter = option.trt_option.opt_shape.find(item.first);
-        FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find %s in TrtBackendOption::min_shape.", item.first.c_str());
-        FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find %s in TrtBackendOption::opt_shape.", item.first.c_str());
-        max_shape[item.first].assign(max_iter->second.begin(), max_iter->second.end());
-        opt_shape[item.first].assign(opt_iter->second.begin(), opt_iter->second.end());
-        min_shape[item.first].assign(item.second.begin(), item.second.end());
-      }
+      GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
       if (min_shape.size() > 0) {
         config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
       }
@@ -133,7 +127,26 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
   }
-
+#ifdef ENABLE_TRT_BACKEND
+  if (option.collect_shape) {
+    // Set the shape info file.
+    paddle_infer::Config config_tmp = config_;
+    std::string shape_range_info = PathJoin(config_.model_dir(), "shape_range_info.txt");
+    if (!CheckFileExists(shape_range_info)) {
+      config_tmp.CollectShapeRangeInfo(shape_range_info);
+      auto predictor_tmp = paddle_infer::CreatePredictor(config_tmp);
+      std::map<std::string, std::vector<int>> max_shape;
+      std::map<std::string, std::vector<int>> min_shape;
+      std::map<std::string, std::vector<int>> opt_shape;
+      GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+      // Need to run once to get the shape range info file.
+      CollectShapeRun(predictor_tmp.get(), max_shape);
+      CollectShapeRun(predictor_tmp.get(), min_shape);
+      CollectShapeRun(predictor_tmp.get(), opt_shape);
+    }
+    config_.EnableTunedTensorRtDynamicShape(shape_range_info, true);
+  }
+#endif
   predictor_ = paddle_infer::CreatePredictor(config_);
   initialized_ = true;
   return true;
@@ -180,6 +193,64 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     CopyTensorToCpu(handle, &((*outputs)[i]));
   }
   return true;
+}
+
+void PaddleBackend::GetDynamicShapeFromOption(const PaddleBackendOption& option,
+      std::map<std::string, std::vector<int>>* max_shape,
+      std::map<std::string, std::vector<int>>* min_shape,
+      std::map<std::string, std::vector<int>>* opt_shape) const {
+  for (const auto& item : option.trt_option.min_shape) {
+    auto max_iter = option.trt_option.max_shape.find(item.first);
+    auto opt_iter = option.trt_option.opt_shape.find(item.first);
+    FDASSERT(max_iter != option.trt_option.max_shape.end(), "Cannot find %s in TrtBackendOption::min_shape.", item.first.c_str());
+    FDASSERT(opt_iter != option.trt_option.opt_shape.end(), "Cannot find %s in TrtBackendOption::opt_shape.", item.first.c_str());
+    (*max_shape)[item.first].assign(max_iter->second.begin(), max_iter->second.end());
+    (*opt_shape)[item.first].assign(opt_iter->second.begin(), opt_iter->second.end());
+    (*min_shape)[item.first].assign(item.second.begin(), item.second.end());
+  }
+}
+
+void PaddleBackend::CollectShapeRun(paddle_infer::Predictor* predictor,
+    const std::map<std::string, std::vector<int>>& shape) const {
+  auto input_names = predictor->GetInputNames();
+  auto input_type = predictor->GetInputTypes();
+  for(auto name : input_names) {
+    FDASSERT(shape.find(name) != shape.end() && input_type.find(name) != input_type.end(),
+      "Paddle Input name [%s] is not one of the trt dynamic shape.", name.c_str());
+    auto tensor = predictor->GetInputHandle(name);
+    auto shape_value = shape.at(name);
+    int shape_num = std::accumulate(shape_value.begin(), shape_value.end(), 1,
+                                    std::multiplies<int>());
+    tensor->Reshape(shape_value);
+    auto dtype = input_type[name];
+    switch (dtype) {
+      case paddle_infer::DataType::FLOAT32: {
+        std::vector<float> input_data(shape_num, 1.0);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      case paddle_infer::DataType::INT32: {
+        std::vector<int> input_data(shape_num, 1);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      case paddle_infer::DataType::INT64: {
+        std::vector<int64_t> input_data(shape_num, 1);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      case paddle_infer::DataType::FLOAT16: {
+        std::vector<float16> input_data(shape_num, static_cast<float16>(1.0));
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      default: {
+        FDASSERT(false, "Input data Paddle backend only supports FP32/INT32/INT64 currently.");
+        break;
+      }
+    }
+  }
+  predictor->Run();
 }
 
 }  // namespace fastdeploy
