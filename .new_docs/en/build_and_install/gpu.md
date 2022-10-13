@@ -1,24 +1,26 @@
-[English](../../en/build_and_install/gpu.md) | 简体中文
 
-# GPU部署库编译
+# How to Build GPU Deployment Environment
 
-FastDeploy当前在GPU环境支持Paddle Inference、ONNX Runtime和TensorRT，但同时在Linux&Windows的GPU环境也同时支持CPU硬件，因此编译时也可以同步将CPU的推理后端OpenVINO编译集成
+FastDeploy currently supports Paddle Inference, ONNX Runtime and TensorRT in the GPU environment. It also supports CPU hardware in the GPU environments of Linux & Windows, so developers can compile and integrate the CPU inference backend OpenVINO at the same time.
 
-| 后端 | 平台  | 支持模型格式 | 说明 |
-| :--- | :---- | :----------- | :--- |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64) | Paddle | 同时支持CPU/GPU，编译开关`ENABLE_PADDLE_BACKEND`为ON或OFF控制, 默认OFF |
-| ONNX&nbsp;Runtime | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX | 同时支持CPU/GPU，编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF |
-| TensorRT | Windows(x64)<br>Linux(x64) | Paddle/ONNX | 仅支持GPU，编译开关`ENABLE_TRT_BACKEND`为ON或OFF控制，默认OFF |
-| OpenVINO | Windows(x64)<br>Linux(x64) | Paddle/ONNX | 仅支持CPU，编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
+| Backend               | Platform                                             | Supported model format | Description                                                                                 |
+|:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------- |
+| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64)                           | Paddle                 | Support both CPU/GPU, and compilation switch is `ENABLE_PADDLE_BACKEND`. The default is OFF |
+| ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | Support both CPU/GPU, and compilation switch is `ENABLE_ORT_BACKEND`. The default is OFF    |
+| TensorRT              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support GPU only, and compilation switch is `ENABLE_TRT_BACKEND`. The default is OFF        |
+| OpenVINO              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support CPU only, and compilation switch is `ENABLE_OPENVINO_BACKEND`. The default is OFF   |
 
-注意编译GPU环境时，需额外指定`WITH_GPU`为ON，设定`CUDA_DIRECTORY`，如若需集成TensorRT，还需同时设定`TRT_DIRECTORY`
+Note: 
 
-## C++ SDK编译安装
+When the environment is GPU, please set `WITH_GPU` as ON and specify `CUDA_DIRECTORY`. If TensorRT integration is needed, please specify `TRT_DIRECTORY` as well.
 
-### Linux 
+## How to Build and Install C++ SDK
 
-Linux上编译需满足
-- gcc/g++ >= 5.4(推荐8.2)
+### Linux
+
+For Linux, it needs:
+
+- gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 - cuda >= 11.2
 - cudnn >= 8.2
@@ -42,14 +44,14 @@ make install
 
 ### Windows
 
-Windows编译需要满足条件
+For Windows, it needs:
 
 - Windows 10/11 x64
 - Visual Studio 2019
 - cuda >= 11.2
 - cudnn >= 8.2
 
-在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -69,23 +71,27 @@ msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
 
-编译完成后，即在`CMAKE_INSTALL_PREFIX`指定的目录下生成C++推理库
+Once compiled, the C++ inference library is generated in the directory specified by `CMAKE_INSTALL_PREFIX`
 
-如您使用CMake GUI可参考文档[Windows使用CMakeGUI + Visual Studio 2019 IDE编译](../faq/build_on_win_with_gui.md)
+If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Studio 2019 IDE on Windows](../faq/build_on_win_with_gui.md)
 
-## Python编译安装
-
+## How to Use Python for Compilation
 
 ### Linux
 
-编译过程需要满足
-- gcc/g++ >= 5.4(推荐8.2)
+For Linux, it needs:
+
+- gcc/g++ >= 5.4 (8.2 is recommended)
+
 - cmake >= 3.18.0
+
 - python >= 3.6
+
 - cuda >= 11.2
+
 - cudnn >= 8.2
 
-所有编译选项通过环境变量导入
+All compilation options are imported via environment variables
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -105,14 +111,15 @@ python setup.py bdist_wheel
 
 ### Windows
 
-编译过程同样需要满足
+It needs:
+
 - Windows 10/11 x64
 - Visual Studio 2019
 - python >= 3.6
 - cuda >= 11.2
 - cudnn >= 8.2
 
-在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -130,6 +137,6 @@ python setup.py build
 python setup.py bdist_wheel
 ```
 
-编译完成即会在`FastDeploy/python/dist`目录下生成编译后的`wheel`包，直接pip install即可
+The compiled `wheel` package will be generated in the `FastDeploy/python/dist` directory once finished. Users can pip-install it directly.
 
-编译过程中，如若修改编译参数，为避免带来缓存影响，可删除`FastDeploy/python`目录下的`build`和`.setuptools-cmake-build`两个子目录后再重新编译
+During the compilation, if developers want to change the compilation parameters, it is advisable to delete the `build` and `.setuptools-cmake-build` subdirectories in the `FastDeploy/python` to avoid the possible impact from cache, and then recompile.
