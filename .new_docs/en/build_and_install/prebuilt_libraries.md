@@ -1,4 +1,3 @@
-[English](../../en/build_and_install/prebuilt.md) | 简体中文
 
 # How to Install Prebuilt Library
 
