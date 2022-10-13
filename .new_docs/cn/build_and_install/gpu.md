@@ -1,4 +1,3 @@
-[English](../../en/build_and_install/gpu.md) | 简体中文
 
 # GPU部署库编译
 
