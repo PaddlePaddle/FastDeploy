@@ -43,7 +43,7 @@ tar -xvf COCO_val_320.tar.gz
 ```
 
 ##### 2.使用fastdeploy_quant命令，执行一键模型量化:
-
+以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
 fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
@@ -77,7 +77,7 @@ tar -xvf COCO_val_320.tar.gz
 ```
 
 ##### 2.使用fastdeploy_quant命令，执行一键模型量化:
-
+以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
 # 执行命令默认为单卡训练，训练前请指定单卡GPU, 否则在训练过程中可能会卡住.
 export CUDA_VISIBLE_DEVICES=0
