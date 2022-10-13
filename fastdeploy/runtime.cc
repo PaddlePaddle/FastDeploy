@@ -212,10 +212,11 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
-void RuntimeOption::UseRKNPU2(rknpu2_cpu_name rknpu2_name, rknpu2_core_mask rknpu2_core) { 
+void RuntimeOption::UseRKNPU2(rknpu2_cpu_name rknpu2_name,
+                              rknpu2_core_mask rknpu2_core) {
   rknpu2_cpu_name_ = rknpu2_name;
   rknpu2_core_mask_ = rknpu2_core;
-  device = Device::NPU; 
+  device = Device::NPU;
 }
 
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
@@ -225,7 +226,8 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
   std::vector<int> supported_level{-1, 0, 1, 2};
-  auto valid_level = std::find(supported_level.begin(), supported_level.end(), level) != supported_level.end();
+  auto valid_level = std::find(supported_level.begin(), supported_level.end(),
+                               level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
   ort_graph_opt_level = level;
 }
@@ -352,7 +354,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::OPENVINO;
     } else if (IsBackendAvailable(Backend::RKNPU2)) {
       option.backend = Backend::RKNPU2;
-    }else {
+    } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
               << std::endl;
@@ -397,10 +399,10 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDASSERT(option.device == Device::NPU,
              "Backend::RKNPU2 only supports Device::NPU");
     CreateRKNPU2Backend();
-    
-    FDINFO << "Runtime initialized with Backend::RKNPU2 in " << Str(option.device)
-           << "." << std::endl;
-  }else {
+
+    FDINFO << "Runtime initialized with Backend::RKNPU2 in "
+           << Str(option.device) << "." << std::endl;
+  } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER as backend now."
             << std::endl;
@@ -448,9 +450,8 @@ void Runtime::CreatePaddleBackend() {
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
-  FDASSERT(false,
-           "PaddleBackend is not available, please compiled with "
-           "ENABLE_PADDLE_BACKEND=ON.");
+  FDASSERT(false, "PaddleBackend is not available, please compiled with "
+                  "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 
@@ -474,9 +475,8 @@ void Runtime::CreateOpenVINOBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "OpenVINOBackend is not available, please compiled with "
-           "ENABLE_OPENVINO_BACKEND=ON.");
+  FDASSERT(false, "OpenVINOBackend is not available, please compiled with "
+                  "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 
@@ -509,9 +509,8 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "OrtBackend is not available, please compiled with "
-           "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false, "OrtBackend is not available, please compiled with "
+                  "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -547,9 +546,8 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "TrtBackend is not available, please compiled with "
-           "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false, "TrtBackend is not available, please compiled with "
+                  "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
 
@@ -568,9 +566,8 @@ void Runtime::CreateLiteBackend() {
                                           lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false,
-           "LiteBackend is not available, please compiled with "
-           "ENABLE_LITE_BACKEND=ON.");
+  FDASSERT(false, "LiteBackend is not available, please compiled with "
+                  "ENABLE_LITE_BACKEND=ON.");
 #endif
 }
 
@@ -583,15 +580,13 @@ void Runtime::CreateRKNPU2Backend() {
            "RKNPU2Backend only support model format of ModelFormat::RKNN");
   backend_ = utils::make_unique<RKNPU2Backend>();
   auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromRKNN(option.model_file, 
-                                        option.params_file,
+  FDASSERT(casted_backend->InitFromRKNN(option.model_file, option.params_file,
                                         lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false,
-           "RKNPU2Backend is not available, please compiled with "
-           "ENABLE_RKNPU2_BACKEND=ON.");
+  FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
+                  "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy
