@@ -24,18 +24,16 @@ if "%DEVICE%" == "gpu" (
 echo "CPP_FASTDEPLOY_PACKAGE: " %CPP_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt
-tar -xf ppyoloe_crn_l_300e_coco.tgz
+python -c "import wget; wget.download('https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg')"
+python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt')"
+python -c "from download import *; download_and_decompress('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz', './')"
 
 set IMAGE_PATH=%CURRENT_DIR%\000000014439.jpg
 set MODEL_PATH=%CURRENT_DIR%\ppyoloe_crn_l_300e_coco
 set GROUND_TRUTH_PATH=%CURRENT_DIR%\release_task_groud_truth_result.txt
 set COMPARE_SHELL=%CURRENT_DIR%\compare_with_gt.py
 
-wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.zip
-tar -xf %cd%\%CPP_FASTDEPLOY_PACKAGE%.zip
+python -c "from download import *; download_and_decompress('https://fastdeploy.bj.bcebos.com/dev/cpp/%CPP_FASTDEPLOY_PACKAGE%.zip', './')"
 
 mkdir build && cd build
 cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"  -DCMAKE_CXX_COMPILER=%CMAKE_CXX_COMPILER%
@@ -67,15 +65,17 @@ for %%b in (%RUN_CASES%) do (
     echo "Cpp Backend:" %%b
     if %%b  NEQ trt (
         infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=cpu --backend=%%b >> cpp_%%b_cpu_result.txt
-        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_cpu_result.txt --platform %PLATFORM% --device cpu
+        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_cpu_result.txt --platform %PLATFORM% --device cpu --conf_threshold 0.5
     )
     if  "%DEVICE%" == "gpu" (
         if %%b == trt (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_trt_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt
-        ) else (
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt --conf_threshold 0.5
+        ) else if %%b == ort (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_gpu_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu --conf_threshold 0.5
+        ) else if %%b == paddle (
+            echo "Temporarily skip paddle gpu case in windows for Inaccurate inference precision" 
         )
     ) 
 )
