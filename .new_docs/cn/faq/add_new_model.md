@@ -1,16 +1,14 @@
 # FastDeploy外部模型集成指引
 
-在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下5步。
+在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下3步。
 
 | 步骤 | 说明                                | 创建或修改的文件                            |
 |:------:|:-------------------------------------:|:---------------------------------------------:|
-| [1](#step2)    | 添加C++版本 ResNet 模型部署类       | resnet.h & resnet.cc                        |
-| [2](#step3)     | include新增类                      | vision.h                                    |
-| [3](#step4)     | 将C++中的类、函数、变量与Python绑定 | resnet_pybind.cc & classification_pybind.cc |
-| [4](#step5)     | 添加Python版本 ResNet 模型部署类    | resnet.py                                   |
-| [5](#step6)     | import新增类                        | \_\_init\_\_.py                                 |
+| [1](#step2)    |  在fastdeploy/vision相应任务模块增加模型实现       | resnet.h、resnet.cc、vision.h                     |
+| [2](#step4)     | 通过pybind完成Python接口绑定 | resnet_pybind.cc、classification_pybind.cc |
+| [3](#step5)     | 实现Python相应调用接口    | resnet.py、\_\_init\_\_.py                        |
 
-在完成上述5步之后，一个外部模型就集成好了。
+在完成上述3步之后，一个外部模型就集成好了。
 如果您想为FastDeploy开源项目贡献代码，需要为新增的模型添加测试代码和相关的说明文档，可在[测试](#test)中查看。
 
 ## 模型集成     <span id="modelsupport"></span>
@@ -18,7 +16,7 @@
 ### 模型准备  <span id="step1"></span>
 
 
-在集成外部模型之前，先要将训练好的模型（.pt，.pdparams 等）转换成FastDeploy支持部署的模型格式（.onnx，.pdmodel）。多数开源仓库会提供模型转换脚本，可以直接利用脚本做模型的转换。由于torchvision没有提供转换脚本，顾手动编写转换脚本，本文中将 `torchvison.models.resnet50` 转换为 `resnet50.onnx`， 参考代码如下：
+在集成外部模型之前，先要将训练好的模型（.pt，.pdparams 等）转换成FastDeploy支持部署的模型格式（.onnx，.pdmodel）。多数开源仓库会提供模型转换脚本，可以直接利用脚本做模型的转换。由于torchvision没有提供转换脚本，因此手动编写转换脚本，本文中将 `torchvison.models.resnet50` 转换为 `resnet50.onnx`， 参考代码如下：
 
 ```python
 import torch
@@ -104,8 +102,10 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 #endif
 ```
 
-### Python部分
-* 创建Pybind文件   <span id="step4"></span>
+
+### Pybind部分  <span id="step4"></span>
+
+* 创建Pybind文件  
   * 创建位置
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}_pybind.cc)
   * 创建内容
@@ -134,14 +134,19 @@ void BindClassification(pybind11::module& m) {
   BindResNet(classification_module);
 }
 ```
-<span id="step5"></span>
+
+
+### Python部分  <span id="step5"></span>
+
+
 * 创建`resnet.py`文件
   * 创建位置
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/${外部模型}/${模型名}.py)
   * 创建内容
     * 创建ResNet类继承自FastDeployModel，实现 `\_\_init\_\_`、Pybind绑定的函数（如`predict()`）、以及`对Pybind绑定的全局变量进行赋值和获取的函数`，具体代码请参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
 
-```C++
+```python
+
 class ResNet(FastDeployModel):
     def __init__(self, ...):
         self._model = C.vision.classification.ResNet(...)

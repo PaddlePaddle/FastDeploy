@@ -37,10 +37,10 @@
 为了方便开发者的测试，下面提供了ResNet导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [ResNet-18](https://bj.bcebos.com/paddlehub/fastdeploy/resnet18.onnx) |  | |
-| [ResNet-34](https://bj.bcebos.com/paddlehub/fastdeploy/resnet34.onnx) |  | |
-| [ResNet-50](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50.onnx) |  | |
-| [ResNet-101](https://bj.bcebos.com/paddlehub/fastdeploy/resnet101.onnx) |  | |
+| [ResNet-18](https://bj.bcebos.com/paddlehub/fastdeploy/resnet18.onnx) | 45MB  | |
+| [ResNet-34](https://bj.bcebos.com/paddlehub/fastdeploy/resnet34.onnx) | 84MB | |
+| [ResNet-50](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50.onnx) | 98MB | |
+| [ResNet-101](https://bj.bcebos.com/paddlehub/fastdeploy/resnet101.onnx) | 170MB | |
 
 
 ## 详细部署文档
