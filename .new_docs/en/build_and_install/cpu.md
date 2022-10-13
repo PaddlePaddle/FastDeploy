@@ -2,7 +2,7 @@
 
 # How to Build CPU Deployment Environment
 
-Currently FastDeploy supports the following backend engines on the CPU
+FastDeploy currently supports the following backend engines on the CPU
 
 | Backend               | Platform                                             | Supported model format | Description                                                                                      |
 |:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------------ |
