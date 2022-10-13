@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #pragma once
-#include <unordered_map>
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include <unordered_map>
 
 namespace fastdeploy {
 
@@ -92,6 +92,6 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
 
   std::unordered_map<int, std::vector<SCRFDPoint>> center_points_;
 };
-}  // namespace facedet
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace facedet
+} // namespace vision
+} // namespace fastdeploy

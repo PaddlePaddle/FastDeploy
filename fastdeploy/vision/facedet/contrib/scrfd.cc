@@ -63,14 +63,14 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
              const RuntimeOption& custom_option,
              const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT};  
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
     valid_npu_backends = {};
-  }else if(model_format == ModelFormat::RKNN){
+  } else if (model_format == ModelFormat::RKNN) {
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT};
     valid_npu_backends = {Backend::RKNPU2};
-  }else {
+  } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_npu_backends = {};
@@ -135,38 +135,28 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   }
 
   // scrfd's preprocess steps
-  // for cpu and gpu
   // 1. letterbox
   // 2. BGR->RGB
   // 3. HWC->CHW
-  // for rknpu
-  // 1. letterbox
-  // 2. BGR->RGB
+  SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad,
+                   is_scale_up, stride);
 
-
-  // rknpu don't need normalize and transpose
-  if(runtime_option.backend != Backend::RKNPU2){
-    SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up, stride);
-    BGR2RGB::Run(mat);
-    // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-    //                std::vector<float>(mat->Channels(), 1.0));
-    // Compute `result = mat * alpha + beta` directly by channel
-    // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
-    // input_size, (127.5, 127.5, 127.5), swapRB=True)
-    std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-    std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-    Convert::Run(mat, alpha, beta);
-    // Record output shape of preprocessed image
-    (*im_info)["output_shape"] = {static_cast<float>(mat->Height()), static_cast<float>(mat->Width())};
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
-  }else{
-    SCRFD::LetterBox(mat, size, padding_value, is_mini_pad, is_no_pad, is_scale_up, stride);
-    BGR2RGB::Run(mat);
-    (*im_info)["output_shape"] = {static_cast<float>(mat->Height()), static_cast<float>(mat->Width())};
-  }
+  BGR2RGB::Run(mat);
+  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+  //                std::vector<float>(mat->Channels(), 1.0));
+  // Compute `result = mat * alpha + beta` directly by channel
+  // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
+  // input_size, (127.5, 127.5, 127.5), swapRB=True)
+  std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+  std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+  Convert::Run(mat, alpha, beta);
+  // Record output shape of preprocessed image
+  (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
+                                static_cast<float>(mat->Width())};
+  HWC2CHW::Run(mat);
+  Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1); // reshape to n, h, w, c
   return true;
 }
 
@@ -210,7 +200,8 @@ bool SCRFD::Postprocess(
   FDASSERT((fmc == 3 || fmc == 5), "The fmc must be 3 or 5");
   FDASSERT((infer_result.at(0).shape[0] == 1), "Only support batch =1 now.");
   for (int i = 0; i < fmc; ++i) {
-    if (infer_result.at(i).dtype != FDDataType::FP32 && infer_result.at(i).dtype != FDDataType::FP16) {
+    if (infer_result.at(i).dtype != FDDataType::FP32 &&
+        infer_result.at(i).dtype != FDDataType::FP16) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }
@@ -252,29 +243,30 @@ bool SCRFD::Postprocess(
     // loop each anchor
     for (unsigned int i = 0; i < num_points; ++i) {
       const float cls_conf = score_ptr[i];
-      if (cls_conf < conf_threshold) continue;  // filter
+      if (cls_conf < conf_threshold)
+        continue; // filter
       auto& point = stride_points.at(i);
-      const float cx = point.cx;  // cx
-      const float cy = point.cy;  // cy
+      const float cx = point.cx; // cx
+      const float cy = point.cy; // cy
       // bbox
       const float* offsets = bbox_ptr + i * 4;
-      float l = offsets[0];  // left
-      float t = offsets[1];  // top
-      float r = offsets[2];  // right
-      float b = offsets[3];  // bottom
+      float l = offsets[0]; // left
+      float t = offsets[1]; // top
+      float r = offsets[2]; // right
+      float b = offsets[3]; // bottom
 
       float x1 = ((cx - l) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_w)) /
-                 scale;  // cx - l x1
+                 scale; // cx - l x1
       float y1 = ((cy - t) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_h)) /
-                 scale;  // cy - t y1
+                 scale; // cy - t y1
       float x2 = ((cx + r) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_w)) /
-                 scale;  // cx + r x2
+                 scale; // cx + r x2
       float y2 = ((cy + b) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_h)) /
-                 scale;  // cy + b y2
+                 scale; // cy + b y2
       result->boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
       result->scores.push_back(cls_conf);
       if (use_kps) {
@@ -287,14 +279,14 @@ bool SCRFD::Postprocess(
           float kps_t = kps_offsets[j + 1];
           float kps_x = ((cx + kps_l) * static_cast<float>(current_stride) -
                          static_cast<float>(pad_w)) /
-                        scale;  // cx + l x
+                        scale; // cx + l x
           float kps_y = ((cy + kps_t) * static_cast<float>(current_stride) -
                          static_cast<float>(pad_h)) /
-                        scale;  // cy + t y
+                        scale; // cy + t y
           result->landmarks.emplace_back(std::array<float, 2>{kps_x, kps_y});
         }
       }
-      count += 1;  // limit boxes for nms.
+      count += 1; // limit boxes for nms.
       if (count > max_nms) {
         break;
       }
@@ -365,6 +357,6 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
   return true;
 }
 
-}  // namespace facedet
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace facedet
+} // namespace vision
+} // namespace fastdeploy
