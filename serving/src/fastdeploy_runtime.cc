@@ -315,7 +315,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 //       &runtime_options_->trt_max_workspace_size));
               } else if (param_key == "cache_file") {
                 runtime_options_->SetTrtCacheFile(value_string);
-              } else  (param_key == "use_paddle") {
+              } else if (param_key == "use_paddle") {
                 runtime_options_->EnablePaddleToTrt();
               }
             }

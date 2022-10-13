@@ -53,6 +53,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
+      config_.EnableMKLDNN();
       config_.SetMkldnnCacheCapacity(option.mkldnn_cache_size);
     }
   }

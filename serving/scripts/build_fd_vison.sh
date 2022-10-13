@@ -42,7 +42,7 @@ docker run -it --rm --name build_fd_vison \
 else
 
 docker run -it --rm --name build_fd_vison \
-           -v`pwd`:/workspace/fastdeploy \
+           -v`pwd`/..:/workspace/fastdeploy \
            paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
