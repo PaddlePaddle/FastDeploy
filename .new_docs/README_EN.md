@@ -1,40 +1,40 @@
-[English](README.md) | 简体中文
+[简体中文](README_CN.md)| English 
 
-# 使用文档
+# Tutorials
 
-## 安装文档
+## Install
 
-- [预编译库下载安装](cn/build_and_install/prebuilt.md)
-- [GPU部署环境编译安装](cn/build_and_install/gpu.md)
-- [CPU部署环境编译安装](cn/build_and_install/cpu.md)
-- [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
-- [Android平台部署环境编译安装](cn/build_and_install/android.md)
+- [How to Install Prebuilt Libraries](en/build_and_install/prebuilt.md)
+- [How to Install GPU Deployment Environment](en/build_and_install/gpu.md)
+- [How to Install CPU Deployment Environment](en/build_and_install/cpu.md)
+- [How to Compile and Install Jetson Deployment Library](en/build_and_install/jetson.md)
+- [How to Compile and Install Android Deployment Environment](en/build_and_install/android.md)
 
-## 快速使用
+## A Quick Start - Demos
 
-- [PP-YOLOE Python部署示例]()
-- [PP-YOLOE C++部署示例]()
-- [Runtime Python使用示例]()
-- [Runtime C++使用示例]()
+- [PP-YOLOE Python Deployment Demo](en/quick_start/models/python.md)
+- [PP-YOLOE C++ Deployment Demo](en/quick_start/models/cpp.md)
+- [A Quick Start on Runtime Python](en/quick_start/runtime/python.md)
+- [A Quick Start on Runtime C++](en/quick_start/runtime/cpp.md)
 
-## API文档
+## API (To be continued)
 
-- [Python API文档]()
-- [C++ API文档]()
-- [Java API文档]()
+- [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
+- [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
 
-## 性能调优
+## Performance Optimization
 
-- [量化加速](cn/quantize.md)
+- [How to Quantize Model for Acceleration](en/quantize.md)
 
-## 常见问题
+## Frequent Q&As
 
-- [1. 如何配置模型部署的推理后端]()
-- [2. Windows上C++ SDK如何使用]()
-- [3. Android上如何使用FastDeploy]()
-- [4. 怎么测试Benchmark]()
-- [5. 如何增加新的模型]()
+- [1. How to Change Backend Inference Engine](en/faq/how_to_change_backend.md)
+- [2. How to Use C++ SDK on Windows](en/faq/use_sdk_on_windows.md)
+- [3. How to Use FastDeploy on Android](en/faq/use_sdk_on_android.md)(To be Continued)
+- [4. Tricks of TensorRT](en/faq/tensorrt_tricks.md)
+- [5. How to Develop a New Model](en/faq/develop_a_new_model.md)(To be Continued)
 
-## 更多FastDeploy部署模块
+## More FastDeploy Deployment Module
 
-- [服务化部署]()
+- [deployment AI Model as a Service](../serving)
+- [Benchmark Testing](../benchmark)
