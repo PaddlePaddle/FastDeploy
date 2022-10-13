@@ -1,4 +1,3 @@
-[English](../../en/build_and_install/jetson.md) | 简体中文
 
 # How to Build Jetson Deployment Library
 
