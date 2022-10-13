@@ -24,17 +24,17 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
 fi
 
 docker run -it --rm --name build_fd_backend \
-           -v`pwd`:/workspace/fastdeploy \
+           -v`pwd`/..:/workspace/fastdeploy \
            nvcr.io/nvidia/tritonserver:21.10-py3 \
            bash -c \
            'cd /workspace/fastdeploy/serving;
             rm -rf build; mkdir build; cd build;
             apt-get update; apt-get install -y --no-install-recommends rapidjson-dev;
-            export PATH=/workspace/fastdeploy/cmake-3.18.6-Linux-x86_64/bin:$PATH;
+            export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy-0.0.3 -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10; make -j`nproc`'
 else
 docker run -it --rm --name build_fd_backend \
-           -v`pwd`:/workspace/fastdeploy \
+           -v`pwd`/..:/workspace/fastdeploy \
            paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/serving;

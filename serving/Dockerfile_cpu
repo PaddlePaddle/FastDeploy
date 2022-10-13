@@ -19,9 +19,9 @@ ENV TZ=Asia/Shanghai \
 
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle faster_tokenizer 
+    && python3 -m pip install paddlepaddle paddlenlp faster_tokenizer 
 
-COPY python/dist/*.whl /opt/fastdeploy/
+COPY python/dist/*.whl *.whl /opt/fastdeploy/ 
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
