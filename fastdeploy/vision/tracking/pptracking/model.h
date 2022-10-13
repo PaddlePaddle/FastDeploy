@@ -13,73 +13,44 @@
 // limitations under the License.
 
 #pragma once
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/tracking/pptracking/tracker.h"
+#include "fastdeploy/vision/tracking/pptracking/letter_box.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
 
-class LetterBoxResize:  public Processor{
-public:
-  LetterBoxResize(const std::vector<int>& target_size, const std::vector<float>& color){
-    target_size_=target_size;
-    color_=color;
-  }
-  bool ImplByOpenCV(Mat* mat) override{
-
-    if (mat->Channels() != color_.size()) {
-      FDERROR << "Pad: Require input channels equals to size of padding value, "
-                 "but now channels = "
-              << mat->Channels()
-              << ", the size of padding values = " << color_.size() << "."
-              << std::endl;
-      return false;
-    }
-    // generate scale_factor
-    int origin_w = mat->Width();
-    int origin_h = mat->Height();
-    int target_h = target_size_[0];
-    int target_w = target_size_[1];
-    float ratio_h = static_cast<float>(target_h) / static_cast<float>(origin_h);
-    float ratio_w = static_cast<float>(target_w) / static_cast<float>(origin_w);
-    float resize_scale = std::min(ratio_h, ratio_w);
-
-    int new_shape_w = std::round(mat->Width() * resize_scale);
-    int new_shape_h = std::round(mat->Height() * resize_scale);
-    float padw = (target_size_[1] - new_shape_w) / 2.;
-    float padh = (target_size_[0] - new_shape_h) / 2.;
-    int top = std::round(padh - 0.1);
-    int bottom = std::round(padh + 0.1);
-    int left = std::round(padw - 0.1);
-    int right = std::round(padw + 0.1);
-
-    Resize::Run(mat,new_shape_w,new_shape_h);
-    Pad::Run(mat,top,bottom,left,right,color_);
-    return true;
-  }
-  std::string Name() override { return "LetterBoxResize"; }
-
-private:
-  std::vector<int> target_size_;
-  std::vector<float> color_;
-};
-
 class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
 
 public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g pptracking/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g pptracking/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g pptracking/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   PPTracking(const std::string& model_file,
              const std::string& params_file,
              const std::string& config_file,
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /// Get model's name
   std::string ModelName() const override { return "pptracking"; }
 
+  /** \brief Predict the detection result for an input image(consecutive)
+   *
+   * \param[in] im The input image data which is consecutive frame, comes from imread() or videoCapture.read()
+   * \param[in] result The output tracking result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* img, MOTResult* result);
-
 
 
 private:
@@ -87,8 +58,6 @@ private:
   bool BuildPreprocessPipelineFromConfig();
   bool Initialize();
   void GetNmsInfo();
-
-//  void LetterBoxResize(Mat* im);
 
   bool Preprocess(Mat* img, std::vector<FDTensor>* outputs);
 

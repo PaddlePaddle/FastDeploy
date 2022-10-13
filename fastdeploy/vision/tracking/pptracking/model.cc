@@ -56,7 +56,7 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
       FDERROR << "Please set draw_threshold." << std::endl;
       return false;
   }
-// Get config for tracker
+  // Get config for tracker
   if (cfg["tracker"].IsDefined()) {
     if (cfg["tracker"]["conf_thres"].IsDefined()) {
       conf_thresh_ = cfg["tracker"]["conf_thres"].as<float>();
@@ -72,8 +72,6 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
       tracked_thresh_ = cfg["tracker"]["tracked_thresh"].as<float>();
     }
   }
-
-
 
   processors_.push_back(std::make_shared<BGR2RGB>());
   for (const auto& op : cfg["Preprocess"]) {
@@ -277,8 +275,6 @@ void FilterDets(const float conf_thresh,const cv::Mat& dets,std::vector<int>* in
 }
 
 bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *result){
-
-
   auto bbox_shape = infer_result[0].shape;
   auto bbox_data = static_cast<float*>(infer_result[0].Data());
 
