@@ -117,6 +117,7 @@ bool FastDeployModel::CreateCpuBackend() {
     return false;
   }
 
+
   for (size_t i = 0; i < valid_cpu_backends.size(); ++i) {
     if (!IsBackendAvailable(valid_cpu_backends[i])) {
       continue;
