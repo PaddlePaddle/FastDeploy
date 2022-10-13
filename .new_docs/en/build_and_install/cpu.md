@@ -1,6 +1,6 @@
 
 
-# How to Install CPU Deployment Environment
+# How to Build CPU Deployment Environment
 
 Currently FastDeploy supports the following backend engines on the CPU
 
@@ -10,7 +10,7 @@ Currently FastDeploy supports the following backend engines on the CPU
 | ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | The compilation switch `ENABLE_ORT_BACKEND` is controlled by ON or OFF. The default is OFF.      |
 | OpenVINO              | Windows(x64)<br>Linux(x64)<br>Mac(x86)               | Paddle/ONNX            | The compilation switch `ENABLE_OPENVINO_BACKEND` is controlled by ON or OFF. The default is OFF. |
 
-## How to Install C++ SDK
+## How to Build and Install C++ SDK
 
 ### Linux & Mac
 
@@ -59,7 +59,7 @@ Once compiled, the C++ inference library is generated in the directory specified
 
 If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Studio 2019 IDE on Windows](../faq/build_on_win_with_gui.md)
 
-## How to Use Python for Compilation
+## How to Build and Install Python SDK
 
 It requires: 
 
