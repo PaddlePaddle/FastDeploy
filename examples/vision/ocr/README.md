@@ -7,7 +7,7 @@
 
 根据不同场景, FastDeploy汇总提供如下OCR任务部署, 用户需同时下载3个模型与字典文件（或2个，分类器可选), 完成OCR整个预测流程
 
-### OCR 中英文系列模型
+### PP-OCR 中英文系列模型
 下表中的模型下载链接由PaddleOCR模型库提供, 详见[PP-OCR系列模型列表](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/models_list.md)
 
 | OCR版本 | 文本框检测 | 方向分类模型 | 文字识别 |字典文件| 说明 |
