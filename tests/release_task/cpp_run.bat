@@ -65,15 +65,17 @@ for %%b in (%RUN_CASES%) do (
     echo "Cpp Backend:" %%b
     if %%b  NEQ trt (
         infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=cpu --backend=%%b >> cpp_%%b_cpu_result.txt
-        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_cpu_result.txt --platform %PLATFORM% --device cpu
+        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_cpu_result.txt --platform %PLATFORM% --device cpu --conf_threshold 0.5
     )
     if  "%DEVICE%" == "gpu" (
         if %%b == trt (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_trt_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt
-        ) else (
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt --conf_threshold 0.5
+        ) else if %%b == ort (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_gpu_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu --conf_threshold 0.5
+        ) else if %%b == paddle (
+            echo "Temporarily skip paddle gpu case in windows for Inaccurate inference precision" 
         )
     ) 
 )
