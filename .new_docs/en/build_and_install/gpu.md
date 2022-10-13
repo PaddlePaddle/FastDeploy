@@ -75,7 +75,7 @@ Once compiled, the C++ inference library is generated in the directory specified
 
 If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Studio 2019 IDE on Windows](../faq/build_on_win_with_gui.md)
 
-## How to Use Python for Compilation
+## How to Build and Install Python SDK
 
 ### Linux
 
