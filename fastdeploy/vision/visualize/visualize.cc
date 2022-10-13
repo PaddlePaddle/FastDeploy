@@ -24,6 +24,9 @@ std::vector<int> Visualize::color_map_ = std::vector<int>();
 static std::vector<int> global_fd_vis_color_map = std::vector<int>();
 
 std::vector<int> GenerateColorMap(int num_classes) {
+  if (num_classes < 10) {
+    num_classes = 10;
+  }
   std::vector<int> color_map(num_classes * 3, 0);
   for (int i = 0; i < num_classes; ++i) {
     int j = 0;
