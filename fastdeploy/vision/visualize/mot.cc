@@ -14,6 +14,7 @@
 
 #ifdef ENABLE_VISION_VISUALIZE
 #include "fastdeploy/vision/visualize/visualize.h"
+#include <iomanip>
 
 namespace fastdeploy {
 namespace vision {
