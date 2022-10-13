@@ -1,8 +1,8 @@
-# FastDeploy安装
+# Install FastDeploy - Tutorials
 
-- [预编译库下载安装](prebuilt.md)
-- [GPU部署环境编译安装](gpu.md)
-- [CPU部署环境编译安装](cpu.md)
-- [Jetson部署环境编译安装](jetson.md)
-- [Android平台部署环境编译安装](android.md)
+- [How to Install Prebuilt Libraries](prebuilt.md)
+- [How to Install GPU Deployment Environment](gpu.md)
+- [How to Install CPU Deployment Environment](cpu.md)
+- [How to Compile and Install Jetson Deployment Environment](jetson.md)
+- [How to Compile and Install Android Deployment Environment](android.md)
 
