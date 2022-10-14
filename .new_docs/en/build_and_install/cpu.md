@@ -91,7 +91,7 @@ Prerequisite for Compiling on Windows:
 - Visual Studio 2019
 - python >= 3.6
 
-Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands:
+Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
