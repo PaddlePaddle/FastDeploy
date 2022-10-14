@@ -1,6 +1,6 @@
-# TensorRT使用问题
+# TensorRT Q&As
 
-## 1. 运行TensorRT过程中，出现如下日志提示 
+## 1. The following log may pop up when running TensorRT 
 ```
 [WARNING] fastdeploy/backends/tensorrt/trt_backend.cc(552)::CreateTrtEngineFromOnnx	Cannot build engine right now, because there's dynamic input shape exists, list as below,
 [WARNING] fastdeploy/backends/tensorrt/trt_backend.cc(556)::CreateTrtEngineFromOnnx	Input 0: TensorInfo(name: image, shape: [-1, 3, 320, 320], dtype: FDDataType::FP32)
@@ -14,27 +14,28 @@
 [INFO] fastdeploy/backends/tensorrt/trt_backend.cc(416)::BuildTrtEngine	Start to building TensorRT Engine...
 ```
 
-大部分模型会存在动态Shape，例如分类的输入为[-1, 3, 224, 224]，表示其第一维（batch维）是动态的； 检测的输入[-1, 3, -1, -1]，表示其batch维，以及高和宽是动态的。 而TensorRT在构建引擎时，需要知道这些动态维度的范围。 因此FastDeploy通过以下两种方式来解决
+Most model shapes are dynamic, e.g. the classification model input [-1, 3, 224, 224] indicates that its first batch dimension is dynamic; the detection model input [-1, 3, -1, -1] indicates that its batch dimension, height and width are dynamic. TensorRT needs the range of these dynamic dimensions when building the engine. Therefore FastDeploy solves this problem in two ways
 
-- 1. 自动设置动态Shape; 在加载模型时，如若遇到模型包含动态Shape，则不会立刻创建TensorRT引擎，而是在实际输入数据预测时，获取到数据的Shape，再进行构建。
-- - 1.1 由于大部分模型在推理时，Shape都不会变，因此相当于只是将构建的过程推迟到预测阶段，整体没太大影响；
-- - 1.2 如若预测过程中，Shape在变化，FastDeploy会不断收集新的Shape，扩大动态维度的变化范围。每次遇到新的Shape且超出范围的，则更新范围，并重新构建TensorRT引擎。 因此这样在遇到超过范围的Shape时，会重新花一定时间构建引擎，例如OCR模型存在这种现象，但随着不断预测，数据的Shape范围最终稳定后，便不会再重新构建。
-- 2. 手动设置动态Shape；当知道模型存在动态Shape，先手动设置好其动态范围，这样可以避免预测时重新构建
-- - 2.1 Python接口调用`RuntimeOption.set_trt_input_shape`函数。 [Python API文档](https://baidu-paddle.github.io/fastdeploy-api/python/html)
-- - 2.2 C++接口调用`RuntimeOption.SetTrtInputShape`函数。[C++ API文档](https://baidu-paddle.github.io/fastdeploy-api/cpp/html)
+- 1. Automatically set dynamic Shape: If the loaded model contains a dynamic Shape, the TensorRT engine will not be created immediately. The engine will be built after obtaining the Shape data from actual inference data.
+- - 1.1 Since most models are inferred with a stable Shape, it just postpones the construction to the inference process, with a limited impact on the whole task.
+- - 1.2 If the Shape changes during the inference process, FastDeploy will keep collecting new Shapes to expand the dynamic dimension change range. Each time the model collects an out-of-ranged new Shape, the actual range will be updated in real-time, and it will take some time to rebuild the TensorRT engine, for instance, in the OCR models. With continuous inference, the engine will not be rebuilt after the data range of Shape finally stabilizes. 
+- 2. Manually set the dynamic Shape: When developers know the dynamic Shape range before hand, they can set the dynamic range manually, so as to avoid reconstructing during inference.
+- - 2.1 Python Interface calls `RuntimeOption.set_trt_input_shape`function. [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html)
+- - 2.2 C++ Interface calls`RuntimeOption.SetTrtInputShape` function.[C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html)
 
 
-## 2. 每次运行TensorRT，加载模型初始化耗时长
+## 2. It takes a long time to load model initialization on TensorRT
 
-TensorRT每次构建模型的过程较长，FastDeploy提供了Cache机制帮助开发者将构建好的模型缓存在本地，这样在重新运行代码时，可以通过加载Cache，快速完成模型的加载初始化。
+It takes a long time for TensorRT to build models. Therefore, FastDeploy provides a Cache mechanism to help developers cache the built models locally the model loading initialization can be completed quickly by loading the saved Cache.
 
-- Python接口调用`RuntimeOption.set_trt_cache_file`函数。[Python API文档](https://baidu-paddle.github.io/fastdeploy-api/python/html)
-- C++接口调用`RuntimeOption.SetTrtCacheFile`函数。 [C++ API文档](https://baidu-paddle.github.io/fastdeploy-api/cpp/html)
+- Python Interface calls`RuntimeOption.set_trt_cache_file` function[Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html)
+- C++ Interface calls`RuntimeOption.SetTrtCacheFile` function [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html)
 
-接口传入文件路径字符串，当在执行代码时，
-- 如若发现传入的文件路径不存在，则会构建TensorRT引擎，在构建完成后，将引擎转换为二进制流存储到此文件路径
-- 如若发现传入的文件路径存在，则会跳过构建TensorRT引擎，直接加载此文件并还原成TensorRT引擎
+Interface inputs a file path string, and when the code is executed 
 
-因此，如若有修改模型，推理配置（例如Float32改成Float16)，需先删除本地的cache文件，避免出错。
+- If the input file path does not exist, the model will build a TensorRT engine. After the construction is completed, the engine will be converted to a binary stream and stored in this file path
+- If the input file path does exist, the model will skip building the TensorRT engine and directly load this file and restore it to the TensorRT engine
+
+Therefore, if there is a change in the model, inference configuration (for example, from Float32 to Float16), developers need to delete the local cache file first to avoid errors.
 
 
