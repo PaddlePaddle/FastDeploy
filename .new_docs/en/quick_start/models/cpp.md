@@ -19,10 +19,12 @@ The following C++ code is saved as `infer_demo.cc`
 ``` c++
 #include "fastdeploy/vision.h"
 int main() {
-  std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
+   std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
   std::string params_file = "ppyoloe_crn_l_300e_coco/model.pdiparams";
   std::string infer_cfg_file = "ppyoloe_crn_l_300e_coco/infer_cfg.yml";
-  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file, infer_cfg_file);
+  
+  fastdeploy::RuntimeOption option; // Configuration information for model inference
+  auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file, infer_cfg_file, option);
 
   assert(model.Initialized()); // Determine if the model is initialized successfully
 
