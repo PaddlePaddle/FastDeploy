@@ -1,8 +1,8 @@
 # C++ Deployment
 
-Confirm that the development environment has prepared the FastDeploy C++ SDK deployment. Refer to [FastDeploy installation](../../build_and_install/) to install the pre-built FastDeploy, or build and install according to your own needs.
+Please make sure the development environment has FastDeploy C++ SDK installed. Refer to [FastDeploy installation](../../build_and_install/) to install the pre-built FastDeploy, or build and install according to your own needs.
 
-This document uses the PaddleDetection target detection model PP-YOLOE as an example to show an inference example on the CPU.
+This document shows an example to deploy a target detection model named PP-YOLOE, provided by PaddleDetection, with CPU.
 
 ## 1. Get the Model and Test Image
 
