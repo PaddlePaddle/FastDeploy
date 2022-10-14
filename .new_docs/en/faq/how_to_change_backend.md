@@ -42,7 +42,7 @@ option.UseOpenVINOBackend(); // OpenVINO
 option.UseOrtBackend(); // ONNX Runtime
 ```
 
-具体示例可参阅`FastDeploy/examples/vision`下不同模型的python或c++推理代码
+For more specific demos, please refer to python or c++ inference code for different models under `FastDeploy/examples/vision`
 
 For more deployment methods, please refer to FastDeploy API tutorials. 
 
