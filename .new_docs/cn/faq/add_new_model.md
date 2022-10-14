@@ -9,8 +9,8 @@
 | [3](#step5)     | 实现Python相应调用接口    | resnet.py、\_\_init\_\_.py                        |
 
 在完成上述3步之后，一个外部模型就集成好了。
-如果您想为FastDeploy开源项目贡献代码，需要为新增的模型添加测试代码和相关的说明文档，可在[测试](#test)中查看。
-
+<br />
+如果您想为FastDeploy贡献代码，还需要为新增模型增加代码注释、测试代码和说明文档，可在[测试](#test)中查看。
 ## 模型集成     <span id="modelsupport"></span>
 
 ### 模型准备  <span id="step1"></span>
