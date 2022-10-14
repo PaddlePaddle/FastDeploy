@@ -1,9 +1,9 @@
 
-# How to Build Jetson Deployment Library
+# How to Build FastDeploy Library on Nvidia Jetson Platform
 
 FastDeploy supports CPU inference with ONNX Runtime and GPU inference with Nvidia TensorRT on Nvidia Jetson platform
 
-## How to Build and Install FastDeploy C++ Library on Nvidia Jetson Platform
+## How to Build and Install FastDeploy C++ Library
 
 Prerequisite for Compiling on NVIDIA Jetson:
 
@@ -24,7 +24,7 @@ make install
 
 Once compiled, the C++ inference library is generated in the directory specified by `CMAKE_INSTALL_PREFIX`
 
-## How to Build and Install FastDeploy Python Library on Nvidia Jetson Platform
+## How to Build and Install FastDeploy Python Library
 
 Prerequisite for Compiling on NVIDIA Jetson:
 
