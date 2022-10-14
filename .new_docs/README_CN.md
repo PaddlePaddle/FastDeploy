@@ -4,7 +4,7 @@
 
 ## 安装文档
 
-- [预编译库下载安装](cn/build_and_install/prebuilt.md)
+- [预编译库下载安装](cn/build_and_install/download_prebuilt_libraries.md)
 - [GPU部署环境编译安装](cn/build_and_install/gpu.md)
 - [CPU部署环境编译安装](cn/build_and_install/cpu.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
