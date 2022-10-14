@@ -41,7 +41,7 @@ torch.onnx.export(model,
 ### C++部分  <span id="step2"></span>
 * 创建`resnet.h`文件
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.h)
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.h (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.h)
   * 创建内容
     * 首先在resnet.h中创建 ResNet类并继承FastDeployModel父类，之后声明`Predict`、`Initialize`、`Preprocess`、`Postprocess`和`构造函数`，以及必要的变量，具体的代码细节请参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
 
@@ -59,7 +59,7 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
 
 * 创建`resnet.cc`文件
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}.cc)
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名.cc)
   * 创建内容
     * 在`resnet.cc`中实现`resnet.h`中声明函数的具体逻辑，其中`PreProcess` 和 `PostProcess`需要参考源官方库的前后处理逻辑复现，ResNet每个函数具体逻辑如下，具体的代码请参考[resnet.cc](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-d229d702de28345253a53f2a5839fd2c638f3d32fffa6a7d04d23db9da13a871)。
 
@@ -107,7 +107,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 
 * 创建Pybind文件  
   * 创建位置
-    * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${外部模型}/${模型名}_pybind.cc)
+    * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/外部模型/模型名_pybind.cc)
   * 创建内容
     * 利用Pybind将C++中的函数变量绑定到Python中，具体代码请参考[resnet_pybind.cc](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-270af0d65720310e2cfbd5373c391b2110d65c0f4efa547f7b7eeffcb958bdec)。
 ```C++
@@ -124,7 +124,7 @@ void BindResNet(pybind11::module& m) {
 
 * 调用Pybind函数
   * 修改位置
-    * FastDeploy/fastdeploy/vision/classification/classification_pybind.cc (FastDeploy/${C++代码存放位置}/${视觉模型}/${任务名称}/${任务名称}_pybind.cc)
+    * FastDeploy/fastdeploy/vision/classification/classification_pybind.cc (FastDeploy/C++代码存放位置/视觉模型/任务名称/任务名称}_pybind.cc)
   * 修改内容
 ```C++
 void BindResNet(pybind11::module& m);
@@ -141,7 +141,7 @@ void BindClassification(pybind11::module& m) {
 
 * 创建`resnet.py`文件
   * 创建位置
-    * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/${外部模型}/${模型名}.py)
+    * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/任务名称/外部模型/模型名.py)
   * 创建内容
     * 创建ResNet类继承自FastDeployModel，实现 `\_\_init\_\_`、Pybind绑定的函数（如`predict()`）、以及`对Pybind绑定的全局变量进行赋值和获取的函数`，具体代码请参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
 
@@ -162,7 +162,7 @@ class ResNet(FastDeployModel):
 <span id="step6"></span>
 * 导入ResNet类
   * 修改位置
-    * FastDeploy/python/fastdeploy/vision/classification/\_\_init\_\_.py (FastDeploy/Python代码存放位置/fastdeploy/${视觉模型}/${任务名称}/\_\_init\_\_.py)
+    * FastDeploy/python/fastdeploy/vision/classification/\_\_init\_\_.py (FastDeploy/Python代码存放位置/fastdeploy/视觉模型/任务名称/\_\_init\_\_.py)
   * 修改内容
 
 ```Python
@@ -176,7 +176,7 @@ from .contrib.resnet import ResNet
 
 ```
 mkdir build & cd build
-cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+cmake .. -DENABLE_ORT_BACKEND=ON -DENABLE_VISION=ON -DCMAKE_INSTALL_PREFIX=${PWD/fastdeploy-0.0.3
 -DENABLE_PADDLE_BACKEND=ON -DENABLE_TRT_BACKEND=ON -DWITH_GPU=ON -DTRT_DIRECTORY=/PATH/TO/TensorRT/
 make -j8
 make install
@@ -202,7 +202,7 @@ pip install fastdeploy_gpu_python-版本号-cpxx-cpxxm-系统架构.whl
 ```
 
 ### 编写测试代码
-  * 创建位置: FastDeploy/examples/vision/classification/resnet/ (FastDeploy/${示例目录}/${视觉模型}/${任务名称}/${模型名}/)
+  * 创建位置: FastDeploy/examples/vision/classification/resnet/ (FastDeploy/示例目录/视觉模型/任务名称/模型名/)
   * 创建目录结构
 
 ```
@@ -230,3 +230,5 @@ make
 
 * Python
   * Python 代码以及 README.md 内容请参考[python/](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-5a0d6be8c603a8b81454ac14c17fb93555288d9adf92bbe40454449309700135)。
+
+### 为代码添加注释
