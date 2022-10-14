@@ -17,8 +17,8 @@ bool RKNPU2Backend::GetSDKAndDeviceVersion() {
     printf("rknn_query fail! ret=%d\n", ret);
     return false;
   }
-  std::cout << "rknn_api/rknnrt version: " << sdk_ver.api_version
-            << ", driver version: " << sdk_ver.drv_version << std::endl;
+  FDINFO << "rknn_api/rknnrt version: " << sdk_ver.api_version
+         << ", driver version: " << sdk_ver.drv_version << std::endl;
   return true;
 }
 
@@ -52,13 +52,13 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
                                  const RKNPU2BackendOption& option) {
   // LoadModel
   if (!this->LoadModel((char*)model_file.data())) {
-    std::cout << "load model failed" << std::endl;
+    FDERROR << "load model failed" << std::endl;
     return false;
   }
 
   // GetSDKAndDeviceVersion
   if (!this->GetSDKAndDeviceVersion()) {
-    std::cout << "get SDK and device version failed" << std::endl;
+    FDERROR << "get SDK and device version failed" << std::endl;
     return false;
   }
 
@@ -68,14 +68,14 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
   // SetCoreMask if RK3588
   if (this->option_.cpu_name == rknpu2_cpu_name::RK3588) {
     if (!this->SetCoreMask(option_.core_mask)) {
-      std::cout << "set core mask failed" << std::endl;
+      FDERROR << "set core mask failed" << std::endl;
       return false;
     }
   }
 
   // GetModelInputOutputInfos
   if (!this->GetModelInputOutputInfos()) {
-    std::cout << "get model input output infos failed" << std::endl;
+    FDERROR << "get model input output infos failed" << std::endl;
     return false;
   }
 
@@ -92,7 +92,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
 bool RKNPU2Backend::SetCoreMask(rknpu2_core_mask& core_mask) const {
   int ret = rknn_set_core_mask(ctx, core_mask);
   if (ret != RKNN_SUCC) {
-    std::cout << "rknn_set_core_mask fail! ret=" << ret << std::endl;
+    FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;
     return false;
   }
   return true;
@@ -109,7 +109,7 @@ bool RKNPU2Backend::LoadModel(void* model) {
   int ret = RKNN_SUCC;
   ret = rknn_init(&ctx, model, 0, 0, nullptr);
   if (ret != RKNN_SUCC) {
-    std::cout << "rknn_init fail! ret=" << ret << std::endl;
+    FDERROR << "rknn_init fail! ret=" << ret << std::endl;
     return false;
   }
   return true;
@@ -136,7 +136,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
   memset(input_attrs, 0, io_num.n_input * sizeof(rknn_tensor_attr));
   inputs_desc_.resize(io_num.n_input);
-  std::cout << "========== RKNNInputTensorInfo ==========" << std::endl;
+  FDINFO << "========== RKNNInputTensorInfo ==========" << std::endl;
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     input_attrs[i].index = i;
     // query info
@@ -166,14 +166,14 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
   memset(output_attrs, 0, io_num.n_output * sizeof(rknn_tensor_attr));
   outputs_desc_.resize(io_num.n_output);
-  std::cout << "========== RKNNOutputTensorInfo ==========" << std::endl;
+  FDINFO << "========== RKNNOutputTensorInfo ==========" << std::endl;
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     output_attrs[i].index = i;
     // query info
     ret = rknn_query(ctx, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs[i]),
                      sizeof(rknn_tensor_attr));
     if (ret != RKNN_SUCC) {
-      printf("rknn_query fail! ret=%d\n", ret);
+      FDERROR << "rknn_query fail! ret = " << ret << std::endl;
       return false;
     }
     std::string temp_name = output_attrs[i].name;
@@ -212,7 +212,7 @@ void RKNPU2Backend::DumpTensorAttr(rknn_tensor_attr& attr) {
 TensorInfo RKNPU2Backend::GetInputInfo(int index) {
   FDASSERT(index < NumInputs(),
            "The index: %d should less than the number of inputs: %d.", index,
-           NumInputs());
+           NumInputs())
   return inputs_desc_[index];
 }
 
@@ -221,7 +221,7 @@ std::vector<TensorInfo> RKNPU2Backend::GetInputInfos() { return inputs_desc_; }
 TensorInfo RKNPU2Backend::GetOutputInfo(int index) {
   FDASSERT(index < NumOutputs(),
            "The index: %d should less than the number of outputs %d.", index,
-           NumOutputs());
+           NumOutputs())
   return outputs_desc_[index];
 }
 
@@ -263,6 +263,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   input_attrs[0].fmt = input_layout;
   input_attrs[0].size = inputs[0].Nbytes();
   input_attrs[0].size_with_stride = inputs[0].Nbytes();
+  input_attrs[0].pass_through = 1;
 
   // create input tensor memory
   rknn_tensor_mem* input_mems[1];
@@ -291,7 +292,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   for (uint32_t i = 0; i < io_num.n_output; ++i) {
     // Most post-processing does not support the fp16 format.
     // The unified output here is float32
-    int output_size = output_attrs[i].n_elems * sizeof(float);
+    uint32_t output_size = output_attrs[i].n_elems * sizeof(float);
     output_mems[i] = rknn_create_mem(ctx, output_size);
   }
 
@@ -317,11 +318,12 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   }
 
   // run rknn
-  ret = rknn_run(ctx, NULL);
+  ret = rknn_run(ctx, nullptr);
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn run error! ret=" << ret << std::endl;
     return false;
   }
+  free(input_attrs);
   free(input_mems[0]);
 
   // get result
@@ -338,6 +340,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
            (*outputs)[i].Nbytes());
     free(output_mems[i]);
   }
+  free(output_attrs);
 
   return true;
 }
