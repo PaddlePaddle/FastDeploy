@@ -35,6 +35,7 @@ class ResNet(FastDeployModel):
 
         assert self.initialized, "ResNet initialize failed."
 
+    # Predict and return the inference result of "input_image".
     def predict(self, input_image, topk=1):
         return self._model.predict(input_image, topk)
 
