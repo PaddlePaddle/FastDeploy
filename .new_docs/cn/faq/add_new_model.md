@@ -237,22 +237,22 @@ make
 您需要在resnet.h文件中为Public函数和变量增加注释，有如下两种注释方式，具体可参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
 
 ```C++
-   /** \brief Predict for the input "im", the result will be saved in "result".
-   *
-   * \param[in] im Input image for inference.
-   * \param[in] result Saving the inference result.
-   * \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
-   */
-  virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
+/** \brief Predict for the input "im", the result will be saved in "result".
+*
+* \param[in] im Input image for inference.
+* \param[in] result Saving the inference result.
+* \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
+*/
+virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
-  /// Tuple of (width, height)
-  std::vector<int> size;
+/// Tuple of (width, height)
+std::vector<int> size;
 ```
 - Python 代码
 你需要为resnet.py文件中的函数和变量增加适当的注释，示例如下，具体可参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
 
 ```python  
-    # Predict and return the inference result of "input_image".
-    def predict(self, input_image, topk=1):
-        return self._model.predict(input_image, topk)
+# Predict and return the inference result of "input_image".
+def predict(self, input_image, topk=1):
+    return self._model.predict(input_image, topk)
 ```
