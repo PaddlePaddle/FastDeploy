@@ -256,3 +256,5 @@ std::vector<int> size;
 def predict(self, input_image, topk=1):
     return self._model.predict(input_image, topk)
 ```
+
+对于集成模型过程中的其他文件，您也可以对实现的细节添加适当的注释说明。
