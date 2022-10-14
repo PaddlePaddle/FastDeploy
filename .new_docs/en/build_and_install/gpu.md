@@ -1,7 +1,7 @@
 
 # How to Build GPU Deployment Environment
 
-FastDeploy currently supports Paddle Inference, ONNX Runtime and TensorRT in the GPU environment. It also supports CPU hardware in the GPU environments of Linux & Windows, so developers can compile and integrate the CPU inference backend OpenVINO at the same time.
+FastDeploy supports Paddle Inference, ONNX Runtime and TensorRT in the GPU environment. It should be noted that users also can use CPU in a GPU environment in Linux & Windows, so users can integrate the OpenVINO backend at the same time.
 
 | Backend               | Platform                                             | Supported model format | Description                                                                                 |
 |:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------- |
@@ -51,7 +51,7 @@ Prerequisite for Compiling on Windows:
 - cuda >= 11.2
 - cudnn >= 8.2
 
-Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands:
+Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -119,7 +119,7 @@ Prerequisite for Compiling on Windows:
 - cuda >= 11.2
 - cudnn >= 8.2
 
-Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands:
+Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
