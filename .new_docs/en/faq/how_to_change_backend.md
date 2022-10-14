@@ -1,23 +1,25 @@
-# 如何切换模型推理后端
+# How to Change Model Inference Backend
 
-FastDeploy中各视觉模型可支持多种后端，包括
-- OpenVINO (支持Paddle/ONNX两种格式模型, 仅支持CPU上推理)
-- ONNX Runtime (支持Paddle/ONNX两种格式模型， 支持CPU/GPU）
-- TensorRT (支持Paddle/ONNX两种格式模型，仅支持GPU上推理)
-- Paddle Inference(支持Paddle格式模型， 支持CPU/GPU)
+FastDeploy supports various backends, including
 
-所有模型切换后端方式均通过RuntimeOption进行切换，
+- OpenVINO (supports Paddle/ONNX formats, CPU inference only )
+- ONNX Runtime (supports Paddle/ONNX formats, inference on CPU/GPU)
+- TensorRT (supports Paddle/ONNX formats, GPU inference only）
+- Paddle Inference (supports Paddle format, inference on CPU/GPU)
+
+All models can backend via RuntimeOption
+
 
 **Python**
 ```python
 import fastdeploy as fd
 option = fd.RuntimeOption()
 
-# 切换使用CPU/GPU
+# Change CPU/GPU
 option.use_cpu()
 option.use_gpu()
 
-# 切换不同后端
+# Change the Backend
 option.use_paddle_backend() # Paddle Inference
 option.use_trt_backend() # TensorRT
 option.use_openvino_backend() # OpenVINO
@@ -29,11 +31,11 @@ option.use_ort_backend() # ONNX Runtime
 ```C++
 fastdeploy::RuntimeOption option;
 
-// 切换使用CPU/GPU
+// Change CPU/GPU
 option.UseCpu();
 option.UseGpu();
 
-// 切换不同后端
+// Change the Backend
 option.UsePaddleBackend(); // Paddle Inference
 option.UseTrtBackend(); // TensorRT
 option.UseOpenVINOBackend(); // OpenVINO
@@ -42,6 +44,7 @@ option.UseOrtBackend(); // ONNX Runtime
 
 具体示例可参阅`FastDeploy/examples/vision`下不同模型的python或c++推理代码
 
-更多`RuntimeOption`的配置方式查阅FastDeploy API文档
+For more deployment methods, please refer to FastDeploy API tutorials. 
+
 - [Python API]()
 - [C++ API]()
