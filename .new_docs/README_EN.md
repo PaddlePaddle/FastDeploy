@@ -4,11 +4,11 @@
 
 ## Install
 
-- [How to Install Prebuilt Libraries](en/build_and_install/prebuilt.md)
-- [How to Install GPU Deployment Environment](en/build_and_install/gpu.md)
-- [How to Install CPU Deployment Environment](en/build_and_install/cpu.md)
-- [How to Compile and Install Jetson Deployment Library](en/build_and_install/jetson.md)
-- [How to Compile and Install Android Deployment Environment](en/build_and_install/android.md)
+- [How to Install Prebuilt Deployment Libraries](en/build_and_install/prebuilt.md)
+- [How to Build and Install Deployment Library on GPU Platform](en/build_and_install/gpu.md)
+- [How to Build and Install Deployment Library on CPU Platform](en/build_and_install/cpu.md)
+- [How to Build and Install Deployment Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
+- [How to Build and Install Deployment Library on Android Platform](en/build_and_install/android.md)
 
 ## A Quick Start - Demos
 
@@ -24,13 +24,13 @@
 
 ## Performance Optimization
 
-- [How to Quantize Model for Acceleration](en/quantize.md)
+- [Quantization Acceleration](en/quantize.md)
 
 ## Frequent Q&As
 
-- [1. How to Change Backend Inference Engine](en/faq/how_to_change_backend.md)
-- [2. How to Use C++ SDK on Windows](en/faq/use_sdk_on_windows.md)
-- [3. How to Use FastDeploy on Android](en/faq/use_sdk_on_android.md)(To be Continued)
+- [1. How to Change Inference Backends](en/faq/how_to_change_backend.md)
+- [2. How to Use C++ SDK on Windows Platform](en/faq/use_sdk_on_windows.md)
+- [3. How to Use C++ SDK on Android Platform](en/faq/use_sdk_on_android.md)(To be Continued)
 - [4. Tricks of TensorRT](en/faq/tensorrt_tricks.md)
 - [5. How to Develop a New Model](en/faq/develop_a_new_model.md)(To be Continued)
 
