@@ -14,7 +14,7 @@ FastDeploy currently supports the following backend engines on the CPU
 
 ### Linux & Mac
 
-Prerequisite for Compiling on Linux:
+Prerequisite for Compiling on Linux & Mac:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
@@ -85,7 +85,7 @@ python setup.py bdist_wheel
 
 ### Windows
 
-Prerequisite for Compiling:
+Prerequisite for Compiling :
 
 - Windows 10/11 x64
 - Visual Studio 2019
