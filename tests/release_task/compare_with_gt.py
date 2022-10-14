@@ -73,12 +73,12 @@ def check_result(gt_result, infer_result, args):
         is_diff = True
         label_diff_bool_file = args.platform + "_" + backend + "_" + "label_diff_bool.txt"
         save_numpy_result(label_diff_bool_file, label_diff > 0)
-    if (score_diff > 2e-4).any():
+    if (score_diff > 5e-4).any():
         print(args.platform, args.device, "score diff ", score_diff)
         is_diff = True
         score_diff_bool_file = args.platform + "_" + backend + "_" + "score_diff_bool.txt"
         save_numpy_result(score_diff_bool_file, score_diff > 1e-4)
-    if (boxes_diff_ratio > 1e-4).any() and (boxes_diff > 1e-3).any():
+    if (boxes_diff_ratio > 1e-3).any() and (boxes_diff > 1e-3).any():
         print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
         is_diff = True
         boxes_diff_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_bool.txt"
