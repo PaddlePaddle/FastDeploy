@@ -250,7 +250,8 @@ target_link_libraries(infer_ppyoloe_demo ${FASTDEPLOY_LIBS})
 # Optional: install all DLLs to binary dir.
 install_fastdeploy_libraries(${CMAKE_CURRENT_BINARY_DIR}/Release)
 ```
-注意，`install_fastdeploy_libraries`函数仅在最新的代码编译的SDK或版本>0.2.1下有效。  
+
+Note that the `install_fastdeploy_libraries` function is only valid with the latest code compiled for the SDK or version >0.2.1.
 
 #### 3.3.3 Step 3：Generate project cache and Modify CMakeSetting.json Configuration
 
