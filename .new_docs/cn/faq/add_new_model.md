@@ -234,7 +234,7 @@ make
 ### 为代码添加注释
 为了方便用户理解代码，我们需要为新增代码添加注释，添加注释方法可参考如下示例。
 - C++ 代码
-您需要在resnet.h文件中为Public函数和变量增加注释，有如下两种注释方式，具体可参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
+您需要在resnet.h文件中为函数和变量增加注释，有如下三种注释方式，具体可参考[resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e)。
 
 ```C++
 /** \brief Predict for the input "im", the result will be saved in "result".
@@ -247,6 +247,9 @@ virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
 /// Tuple of (width, height)
 std::vector<int> size;
+/*! @brief Initialize for ResNet model, assign values to the global variables and call InitRuntime()
+*/
+bool Initialize();
 ```
 - Python 代码
 你需要为resnet.py文件中的函数和变量增加适当的注释，示例如下，具体可参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
