@@ -17,7 +17,7 @@ if "%DEVICE%" == "gpu" (
     set CPP_FASTDEPLOY_PACKAGE=fastdeploy-%PLATFORM%-%DEVICE%-%VERSION%
     set RUN_CASES=ort paddle trt
 ) else (
-    set CPP_FASTDEPLOY_PACKAGE=fastdeploy-python
+    set CPP_FASTDEPLOY_PACKAGE=fastdeploy-%PLATFORM%-%VERSION%
     set RUN_CASES=ort paddle openvino
 )
 
