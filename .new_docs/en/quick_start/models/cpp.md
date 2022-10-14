@@ -122,3 +122,9 @@ After execution, the `infer_demo.exe` program will be generated in the `build/Re
 ```
 Release\infer_demo.exe
 ```
+
+For more SDK usage on Windows, please refer to [Using FastDeploy C++ SDK on Windows Platform](../../faq/use_sdk_on_windows.md)
+
+## other documents
+
+- [Switch model inference hardware and backend](../../faq/how_to_change_backend.md)
