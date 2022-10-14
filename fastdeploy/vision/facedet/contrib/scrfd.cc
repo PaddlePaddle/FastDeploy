@@ -147,10 +147,9 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   // Compute `result = mat * alpha + beta` directly by channel
   // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
   // input_size, (127.5, 127.5, 127.5), swapRB=True)
-
-  // std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-  // std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-  // Convert::Run(mat, alpha, beta);
+   std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+   std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+   Convert::Run(mat, alpha, beta);
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};

@@ -35,7 +35,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid gpu backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
-  /** Model's valid gpu backends. This member defined all the gpu backends have successfully tested for the model
+  /** Model's valid npu backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_npu_backends = {Backend::RKNPU2};
   /// Get number of inputs for this model
