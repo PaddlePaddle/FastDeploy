@@ -39,7 +39,7 @@ Prerequisite for Compiling on Windows:
 - Windows 10/11 x64
 - Visual Studio 2019
 
-Open the `x64 Native Tools Command Prompt for VS 2019` in the windows menu and run the following commands: 
+Launch the `x64 Native Tools Command Prompt for VS 2019` from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
