@@ -75,18 +75,17 @@ bool FastDeployModel::InitRuntime() {
       FDWARNING << ModelName() << " is not supported with backend "
                 << Str(runtime_option.backend) << "." << std::endl;
       if (use_gpu) {
-        FDASSERT(valid_gpu_backends.size() > 0,
+        FDASSERT(!valid_gpu_backends.empty(),
                  "There's no valid gpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
-      }
-      if (use_npu) {
-        FDASSERT(valid_npu_backends.size() > 0,
+      }else if (use_npu) {
+        FDASSERT(!valid_npu_backends.empty(),
                  "There's no valid npu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
       } else {
-        FDASSERT(valid_cpu_backends.size() > 0,
+        FDASSERT(!valid_cpu_backends.empty(),
                  "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
@@ -112,7 +111,7 @@ bool FastDeployModel::InitRuntime() {
 }
 
 bool FastDeployModel::CreateCpuBackend() {
-  if (valid_cpu_backends.size() == 0) {
+  if (valid_cpu_backends.empty()) {
     FDERROR << "There's no valid cpu backends for model: " << ModelName()
             << std::endl;
     return false;
@@ -135,7 +134,7 @@ bool FastDeployModel::CreateCpuBackend() {
 }
 
 bool FastDeployModel::CreateGpuBackend() {
-  if (valid_gpu_backends.size() == 0) {
+  if (valid_gpu_backends.empty()) {
     FDERROR << "There's no valid gpu backends for model: " << ModelName()
             << std::endl;
     return false;
@@ -159,7 +158,7 @@ bool FastDeployModel::CreateGpuBackend() {
 }
 
 bool FastDeployModel::CreateNpuBackend() {
-  if (valid_npu_backends.size() == 0) {
+  if (valid_npu_backends.empty()) {
     FDERROR << "There's no valid npu backends for model: " << ModelName()
             << std::endl;
     return false;
