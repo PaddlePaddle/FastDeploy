@@ -30,21 +30,8 @@ class Runtime:
 
         self._runtime = C.Runtime()
         self.runtime_option = runtime_option
-        self.to_internal()
         assert self._runtime.init(
             self.runtime_option._option), "Initialize Runtime Failed!"
-
-    def to_internal(self):
-        """Set Runtime Option for poros.
-        """
-        assert isinstance(self.runtime_option.is_dynamic, bool)
-        self.runtime_option._option.is_dynamic = self.runtime_option.is_dynamic
-        assert isinstance(self.runtime_option.long_to_int, bool)
-        self.runtime_option._option.long_to_int = self.runtime_option.long_to_int
-        assert isinstance(self.runtime_option.use_nvidia_tf32, bool)
-        self.runtime_option._option.use_nvidia_tf32 = self.runtime_option.use_nvidia_tf32
-        assert isinstance(self.runtime_option.unconst_ops_thres, int)
-        self.runtime_option._option.unconst_ops_thres = self.runtime_option.unconst_ops_thres
 
     def forward(self, *inputs):
         """Inference with input data for poros
@@ -135,11 +122,46 @@ class RuntimeOption:
 
     def __init__(self):
         self._option = C.RuntimeOption()
-        # only for poros
-        self.is_dynamic = False
-        self.unconst_ops_thres = -1
-        self.long_to_int = True
-        self.use_nvidia_tf32 = False
+
+    @is_dynamic.setter
+    def is_dynamic(self, value):
+        """Only for Poros backend
+
+        :param value: (bool)Whether to enable dynamic shape, default False
+        """
+        assert isinstance(
+            value, bool), "The value to set `is_dynamic` must be type of bool."
+        self._option.is_dynamic = value
+
+    @unconst_ops_thres.setter
+    def unconst_ops_thres(self, value):
+        """Only for Poros backend
+
+        :param value: (int)Minimum number of subgraph OPs, default 10
+        """
+        assert isinstance(
+            value, int), "The value to set `unconst_ops_thres` must be type of int."
+        self._option.unconst_ops_thres = value
+
+    @long_to_int.setter
+    def long_to_int(self, value):
+        """Only for Poros backend
+
+        :param value: (bool)Whether to convert long dtype to int dtype, default True
+        """
+        assert isinstance(
+            value, bool), "The value to set `long_to_int` must be type of bool."
+        self._option.long_to_int = value
+
+    @use_nvidia_tf32.setter
+    def use_nvidia_tf32(self, value):
+        """Only for Poros backend
+
+        :param value: (bool)The calculation accuracy of tf32 mode exists on the A card, which can bring some performance improvements, default False
+        """
+        assert isinstance(
+            value, bool), "The value to set `use_nvidia_tf32` must be type of bool."
+        self._option.use_nvidia_tf32 = value
 
     def set_model_path(self,
                        model_path,
