@@ -28,6 +28,7 @@ cmake_minimum_required(VERSION 3.17)
 
 project(trironpaddlebackend LANGUAGES C CXX)
 
+option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 set(FASTDEPLOY_DIR "" CACHE PATH "Paths to FastDeploy Directory. Multiple paths may be specified by sparating them with a semicolon.")
 set(FASTDEPLOY_INCLUDE_PATHS "${FASTDEPLOY_DIR}/include"
   CACHE PATH "Paths to FastDeploy includes. Multiple paths may be specified by sparating them with a semicolon.")
@@ -38,6 +39,10 @@ set(FASTDEPLOY_LIB_NAME "fastdeploy_runtime")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
 
 include(FetchContent)
 
@@ -61,6 +66,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
+#
+# CUDA
+#
+if(${TRITON_ENABLE_GPU})
+  find_package(CUDAToolkit REQUIRED)
+endif() # TRITON_ENABLE_GPU
+
 configure_file(src/libtriton_fastdeploy.ldscript libtriton_fastdeploy.ldscript COPYONLY)
 
 add_library(
@@ -73,11 +85,7 @@ target_include_directories(
   triton-fastdeploy-backend
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_include_directories(
-  triton-fastdeploy-backend
-  PRIVATE ${FASTDEPLOY_INCLUDE_PATHS}
+    ${FASTDEPLOY_INCLUDE_PATHS}
 )
 
 target_link_libraries(
@@ -91,6 +99,13 @@ target_compile_options(
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
 )
+
+if(${TRITON_ENABLE_GPU})
+  target_compile_definitions(
+    triton-fastdeploy-backend
+    PRIVATE TRITON_ENABLE_GPU=1
+  )
+endif() # TRITON_ENABLE_GPU
 
 set_target_properties(
   triton-fastdeploy-backend PROPERTIES
@@ -107,3 +122,11 @@ target_link_libraries(
     triton-backend-utils    # from repo-backend
     triton-core-serverstub  # from repo-core
 )
+
+if(${TRITON_ENABLE_GPU})
+  target_link_libraries(
+    triton-fastdeploy-backend
+    PRIVATE
+      CUDA::cudart
+  )
+endif() # TRITON_ENABLE_GPU
