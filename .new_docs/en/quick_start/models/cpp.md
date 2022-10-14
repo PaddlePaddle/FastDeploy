@@ -4,7 +4,7 @@ Confirm that the development environment has prepared the FastDeploy C++ SDK dep
 
 This document uses the PaddleDetection target detection model PP-YOLOE as an example to show an inference example on the CPU.
 
-## 1. Get Model and Test Images
+## 1. Get the Model and Test Image
 
 ```
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
