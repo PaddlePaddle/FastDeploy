@@ -85,7 +85,7 @@ python setup.py bdist_wheel
 
 ### Windows
 
-Prerequisite for Compiling :
+Prerequisite for Compiling on Windows:
 
 - Windows 10/11 x64
 - Visual Studio 2019
