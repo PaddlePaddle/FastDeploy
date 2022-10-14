@@ -1,16 +1,16 @@
-# 在 Windows 使用 FastDeploy C++ SDK
+# Using the FastDeploy C++ SDK on Windows Platform
 
-## 目录
-- [1. 环境依赖](#Environment)  
-- [2. 下载 FastDeploy Windows 10 C++ SDK](#Download)  
-- [3. Windows下多种方式使用 C++ SDK 的方式](#CommandLine)
-  - [3.1 命令行方式使用 C++ SDK](#CommandLine)  
-    - [3.1.1 在 Windows 命令行终端 上编译 example](#CommandLine)  
-    - [3.1.2 运行可执行文件获得推理结果](#CommandLine)  
-  - [3.2 Visual Studio 2019 创建sln工程使用 C++ SDK](#VisualStudio2019Sln)  
-    - [3.2.1 Visual Studio 2019 创建 sln 工程项目](#VisualStudio2019Sln1)  
-    - [3.2.2 从examples中拷贝infer_ppyoloe.cc的代码到工程](#VisualStudio2019Sln2)  
-    - [3.2.3 将工程配置设置成"Release x64"配置](#VisualStudio2019Sln3)  
+## Contents
+- [1. Environment Dependent](#Environment)  
+- [2. Download FastDeploy Windows 10 C++ SDK](#Download)  
+- [3. Various ways to use C++ SDK on Windows Platform](#CommandLine)
+  - [3.1 Using the C++ SDK from the Command Line](#CommandLine)  
+    - [3.1.1 Build the example on the Windows Platform command line terminal](#CommandLine)  
+    - [3.1.2 Run the Executable to Get Inference Results](#CommandLine)  
+  - [3.2 Visual Studio 2019 creates sln Project Using C++ SDK](#VisualStudio2019Sln)  
+    - [3.2.1 Visual Studio 2019 creates sln project project](#VisualStudio2019Sln1)  
+    - [3.2.2 Copy the code of infer_ppyoloe.cc from examples to the project](#VisualStudio2019Sln2)  
+    - [3.2.3 Set the project configuration to "Release x64" configuration](#VisualStudio2019Sln3)  
     - [3.2.4 配置头文件include路径](#VisualStudio2019Sln4)  
     - [3.2.5 配置lib路径和添加库文件](#VisualStudio2019Sln5)  
     - [3.2.6 编译工程并运行获取结果](#VisualStudio2019Sln6)
@@ -30,36 +30,36 @@
   - [4.4 手动拷贝依赖库到exe的目录下](#CommandLineDeps4)  
 
 
-## 1. 环境依赖
+## 1. Environment Dependent
 <div id="Environment"></div>  
 
 - cmake >= 3.12
 - Visual Studio 16 2019
-- cuda >= 11.2 (当WITH_GPU=ON)
-- cudnn >= 8.0 (当WITH_GPU=ON)
+- cuda >= 11.2 (WITH_GPU=ON)
+- cudnn >= 8.0 (WITH_GPU=ON)
 
-## 2. 下载 FastDeploy Windows 10 C++ SDK
+## 2. Download FastDeploy Windows 10 C++ SDK
 <div id="Download"></div>  
 
-### 2.1 下载预编译库或者从源码编译最新的SDK
-可以从以下链接下载编译好的 FastDeploy Windows 10 C++ SDK，SDK中包含了examples代码。
+### 2.1 Download the Pre-built Library or Build the Latest SDK from Source
+The compiled FastDeploy Windows 10 C++ SDK can be downloaded from the link below, and the examples code is included in the SDK.
 ```text
 https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.2.1.zip
 ```
-源码编译请参考: [build_and_install](../build_and_install)
-### 2.2 准备模型文件和测试图片
-可以从以下链接下载模型文件和测试图片，并解压缩
+Please refer to source code compilation: [build_and_install](../build_and_install)
+### 2.2 Prepare Model Files and Test Images
+Model files and test images can be downloaded from the link below and unzipped
 ```text
 https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (下载后解压缩)
 https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-## 3. Windows下多种方式使用 C++ SDK 的方式
-### 3.1 SDK使用方式一：命令行方式使用 C++ SDK
+## 3. Various ways to use C++ SDK on Windows Platform
+### 3.1 SDK usage method 1：Using the C++ SDK from the Command Line
 <div id="CommandLine"></div>  
 
-#### 3.1.1 在 Windows 上编译 PPYOLOE
-Windows菜单打开`x64 Native Tools Command Prompt for VS 2019`命令工具，cd到ppyoloe的demo路径  
+#### 3.1.1 Build PPYOLOE on Windows Platform
+Open `x64 Native Tools Command Prompt for VS 2019` command tool on Winodws, cd to the demo path of ppyoloe:
 ```bat  
 cd fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
 ```
@@ -67,12 +67,12 @@ cd fastdeploy-win-x64-gpu-0.2.1\examples\vision\detection\paddledetection\cpp
 mkdir build && cd build
 cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\..\..\..\..\..\..\fastdeploy-win-x64-gpu-0.2.1 -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
 ```
-然后执行
+Then Run
 ```bat
 msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 ```
 
-#### 3.1.2 运行 demo
+#### 3.1.2 Run Demo
 ```bat
 cd Release
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 0  # CPU
@@ -80,15 +80,16 @@ infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 1  # GPU
 infer_ppyoloe_demo.exe ppyoloe_crn_l_300e_coco 000000014439.jpg 2  # GPU + TensorRT
 ```  
 
-特别说明，exe运行时所需要的依赖库配置方法，请参考章节: [多种方法配置exe运行时所需的依赖库](#CommandLineDeps)
+In particular, for the configuration method of the dependency library required by the exe runtime, please refer to the chapter: [Multiple methods to configure the dependency library required by the exe runtime](#CommandLineDeps)
 
-### 3.2 SDK使用方式二：Visual Studio 2019 创建 sln 工程使用 C++ SDK
+
+### 3.2 SDK usage method 2: Visual Studio 2019 creates sln project using C++ SDK
 
 本章节针对非CMake用户，介绍如何在Visual Studio 2019 中创建 sln 工程使用 FastDeploy C++ SDK. CMake用户请直接看下一章节。另外，本章节内容特别感谢“梦醒南天”同学关于FastDeploy使用的文档教程：[如何在 Windows 上使用 FastDeploy C++ 部署 PaddleDetection 目标检测模型](https://www.bilibili.com/read/cv18807232)
 
 <div id="VisualStudio2019Sln"></div>  
 
-#### 3.2.1 步骤一：Visual Studio 2019 创建 sln 工程项目
+#### 3.2.1 Step 1：Visual Studio 2019 creates sln project project
 
 <div id="VisualStudio2019Sln1"></div>  
 
