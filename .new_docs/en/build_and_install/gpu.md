@@ -18,7 +18,7 @@ When the environment is GPU, please set `WITH_GPU` as ON and specify `CUDA_DIREC
 
 ### Linux
 
-For Linux, it needs:
+Prerequisite for Compiling on Linux:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
@@ -44,7 +44,7 @@ make install
 
 ### Windows
 
-For Windows, it needs:
+Prerequisite for Compiling on Windows:
 
 - Windows 10/11 x64
 - Visual Studio 2019
@@ -79,7 +79,7 @@ If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Stu
 
 ### Linux
 
-For Linux, it needs:
+Prerequisite for Compiling on Linux:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 
@@ -111,7 +111,7 @@ python setup.py bdist_wheel
 
 ### Windows
 
-It needs:
+Prerequisite for Compiling on Windows:
 
 - Windows 10/11 x64
 - Visual Studio 2019
