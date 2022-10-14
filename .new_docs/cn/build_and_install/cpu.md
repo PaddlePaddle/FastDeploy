@@ -1,4 +1,3 @@
-[English](../../en/build_and_install/cpu.md) | 简体中文
 
 # CPU部署库编译
 
