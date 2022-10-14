@@ -87,8 +87,8 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     int input_width = input_shape[3].as<int>();
     if (input_height == -1 || input_width == -1) {
       FDWARNING << "The exported PaddleSeg model is with dynamic shape input,"
-	        << "which is not supported by ONNX Runtime and Tensorrt ,"
-		<< "Only OpenVINO and Paddle Inference are available now" << std::endl;
+	        << "which is not supported by ONNX Runtime and Tensorrt."
+		<< "Only OpenVINO and Paddle Inference are available now." << std::endl;
       valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
       valid_gpu_backends = {Backend::PDINFER};
     }
