@@ -69,6 +69,8 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
       bool is_scale = op["is_scale"].as<bool>();
       processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
     } else if (op_name == "Permute") {
+      // permute = cast<float> + HWC2CHW
+      processors_.push_back(std::make_shared<Cast>("float"));
       processors_.push_back(std::make_shared<HWC2CHW>());
     } else if (op_name == "TopDownEvalAffine") {
       auto trainsize = op["trainsize"].as<std::vector<int>>();
@@ -119,6 +121,7 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
   int idxdata_size =
       std::accumulate(infer_result[1].shape.begin(),
                       infer_result[1].shape.end(), 1, std::multiplies<int>());
+  
   if (outdata_size < 6) {
     FDWARNING << "PPTinyPose No object detected." << std::endl;
   }
@@ -155,13 +158,9 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
 }
 
 bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
-  cv::Mat cv_crop_img;
-  Mat crop_img(cv_crop_img);
-  std::vector<int> rect = {0, 0, im->cols - 1, im->rows - 1};
-  std::vector<float> center;
-  std::vector<float> scale;
+  std::vector<float> center = {round(im->cols / 2.0f), round(im->rows / 2.0f)};
+  std::vector<float> scale = {static_cast<float>(im->cols), static_cast<float>(im->rows)};
   Mat mat(*im);
-  Crop::Run(mat, &crop_img, rect, &center, &scale);
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
     FDERROR << "Failed to preprocess input data while using model:"
@@ -193,9 +192,17 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   for (int i = 0; i < box_num; i++) {
     auto box = detection_result.boxes[i];
     auto label_id = detection_result.label_ids[i];
-    cv::Mat cv_crop_img;
+    const int xmin = static_cast<int>(box[0]);
+    const int ymin = static_cast<int>(box[1]);
+    const int xmax = static_cast<int>(box[2]);
+    const int ymax = static_cast<int>(box[3]);
+    const int cropped_height = ymax - ymin;
+    const int cropped_width  = xmax - xmin;
+    const int channel = 3;
+    cv::Mat cv_crop_img(cropped_height, cropped_width, CV_32SC(channel));
     Mat crop_img(cv_crop_img);
-    std::vector<int> rect = {static_cast<int>(box[0]), static_cast<int>(box[1]),
+    std::vector<int> rect = {static_cast<int>(box[0]), 
+                             static_cast<int>(box[1]),   
                              static_cast<int>(box[2]),
                              static_cast<int>(box[3])};
     std::vector<float> center;
@@ -210,9 +217,8 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
     }
   }
   for (int i = 0; i < crop_imgs_num; i++) {
-    Mat mat(crop_imgs[i]);
     std::vector<FDTensor> processed_data;
-    if (!Preprocess(&mat, &processed_data)) {
+    if (!Preprocess(&crop_imgs[i], &processed_data)) {
       FDERROR << "Failed to preprocess input data while using model:"
               << ModelName() << "." << std::endl;
       return false;

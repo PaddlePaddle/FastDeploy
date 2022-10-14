@@ -55,11 +55,13 @@ setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
+setup_configs["ENABLE_PIPELINE"] = os.getenv("ENABLE_PIPELINE", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
-setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY", "/usr/local/cuda")
+setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
+                                            "/usr/local/cuda")
 setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
@@ -89,7 +91,8 @@ extras_require = {}
 
 # Default value is set to TRUE\1 to keep the settings same as the current ones.
 # However going forward the recomemded way to is to set this to False\0
-USE_MSVC_STATIC_RUNTIME = bool(os.getenv('USE_MSVC_STATIC_RUNTIME', '1') == '1')
+USE_MSVC_STATIC_RUNTIME = bool(
+    os.getenv('USE_MSVC_STATIC_RUNTIME', '1') == '1')
 ONNX_NAMESPACE = os.getenv('ONNX_NAMESPACE', 'paddle2onnx')
 ################################################################################
 # Version
@@ -119,7 +122,8 @@ assert CMAKE, 'Could not find "cmake" executable!'
 @contextmanager
 def cd(path):
     if not os.path.isabs(path):
-        raise RuntimeError('Can only cd to absolute path, got: {}'.format(path))
+        raise RuntimeError('Can only cd to absolute path, got: {}'.format(
+            path))
     orig_path = os.getcwd()
     os.chdir(path)
     try:

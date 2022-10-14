@@ -77,15 +77,14 @@ tinypose_model = fd.vision.keypointdetection.PPTinyPose(
     tinypose_config_file,
     runtime_option=runtime_option)
 
-det_reulst = None
 # 预测图片检测结果
 im = cv2.imread(args.image)
-pipeline = fd.pipeline.PPTinyPosePipeline(det_model, tinypose_model)
+pipeline = fd.pipeline.PPTinyPose(det_model, tinypose_model)
 pipeline_result = pipeline.predict(im)
 print("Paddle TinyPose Result:\n", pipeline_result)
 
 # 预测结果可视化
 vis_im = fd.vision.vis_keypoint_detection(
-    im, tinypose_result, conf_threshold=0.5)
+    im, pipeline_result, conf_threshold=0.5)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("TinyPose visualized result save in ./visualized_result.jpg")

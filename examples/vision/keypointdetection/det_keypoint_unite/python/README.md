@@ -34,7 +34,7 @@ python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infe
 ## PPTinyPosePipeline Python接口
 
 ```python
-fd.vision.posedetpipeline.PPTinyPosePipeline(det_model=None, pptinypose_model=None)
+fd.pipeline.PPTinyPose(det_model=None, pptinypose_model=None)
 ```
 
 PPTinyPosePipeline模型加载和初始化，其中det_model是使用`fd.vision.detection.PicoDet`[参考Detection文档](../../../detection/paddledetection/python/)初始化的检测模型，pptinypose_model是使用`fd.vision.keypointdetection.PPTinyPose`[参考PP-TinyPose文档](../../tiny_pose/python/)初始化的检测模型

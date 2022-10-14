@@ -24,7 +24,6 @@ void BindFaceDet(pybind11::module& m);
 void BindFaceId(pybind11::module& m);
 void BindOcr(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
-void BindPipeline(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -113,7 +112,6 @@ void BindVision(pybind11::module& m) {
   BindMatting(m);
   BindOcr(m);
   BindKeyPointDetection(m);
-  BindPipeline(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

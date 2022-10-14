@@ -150,10 +150,10 @@ void TrtInfer(const std::string& det_model_dir,
   auto im = cv::imread(image_file);
   fastdeploy::vision::KeyPointDetectionResult res;
 
-  auto pptinypose_pipeline =
-      fastdeploy::application::posedetpipeline::PPTinyPosePipeline(
+  auto pipeline =
+      fastdeploy::pipeline::PPTinyPose(
           &det_model, &tinypose_model);
-  if (!pptinypose_pipeline.Predict(&im, &res)) {
+  if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {

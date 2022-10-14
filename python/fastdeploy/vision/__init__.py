@@ -17,7 +17,6 @@ from . import detection
 from . import classification
 from . import segmentation
 from . import keypointdetection
-from . import posedetpipeline
 
 from . import matting
 from . import facedet

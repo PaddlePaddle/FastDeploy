@@ -30,6 +30,10 @@
 #include "fastdeploy/text.h"
 #endif
 
+#ifdef ENABLE_PIPELINE
+#include "fastdeploy/pipeline.h"
+#endif
+
 #include "fastdeploy/core/float16.h"
 
 namespace fastdeploy {
@@ -37,6 +41,7 @@ namespace fastdeploy {
 void BindBackend(pybind11::module&);
 void BindVision(pybind11::module&);
 void BindText(pybind11::module& m);
+void BindPipeline(pybind11::module& m);
 
 pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype);
 
