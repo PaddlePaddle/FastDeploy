@@ -12,7 +12,7 @@ FastDeploy provides pre-built libraries for developers to download and install d
 - python >= 3.6
 - OS: Linux(x64)/Windows 10(x64)
 
-Supports CPU and Nvidia GPU deployment with default integration of Paddle Inference, ONNX Runtime, OpenVINO and TensorRT inference backends, Vision module, Text NLP module
+FastDeploy supports Computer Vision, Text and NLP model deployment on CPU and Nvidia GPU with Paddle Inference, ONNX Runtime, OpenVINO and TensorRT inference backends.
 
 ### Python SDK
 
@@ -22,7 +22,7 @@ Install the released version（the newest 0.2.1 for now）
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html 
 ```
 
-It is recommended to use Conda to configure the development environment
+We recommend users to use Conda to configure the development environment.
 
 ```
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
@@ -44,7 +44,7 @@ Install the released version（Latest 0.2.1）
 - python >= 3.6
 - OS: Linux(x64/aarch64)/Windows 10 x64/Mac OSX(x86/aarm64)
 
-Now it only supports CPU deployment with default integration of Paddle Inference, ONNX Runtime, OpenVINO, Vision module (only ONNX Runtime module is integrated under Linux aarch64 and Mac OSX), and Text NLP module.
+FastDeploy supports computer vision, text and NLP model deployment on CPU with Paddle Inference, ONNX Runtime, OpenVINO inference backends. It should be noted that under Linux aarch64 and Mac OSX, only the ONNX Runtime is supported for now.
 
 ### Python SDK
 
