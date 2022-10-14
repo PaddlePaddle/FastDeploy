@@ -155,8 +155,7 @@ int main(int argc, char* argv[]) {
   return 0;
  }
 ```
-
-### For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
+For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
 
 
@@ -164,9 +163,7 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-server-models"></div>
 
-Notes:
-
-✅: already supported; ❔: to be supported in the future; ❌: not supported now;
+Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supported now;
 
 
 
