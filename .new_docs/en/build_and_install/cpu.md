@@ -1,21 +1,22 @@
-[English](../../en/build_and_install/cpu.md) | 简体中文
 
-# CPU部署库编译
 
-FastDeploy当前在CPU支持后端引擎如下
+# How to Build CPU Deployment Environment
 
-| 后端 | 平台  | 支持模型格式 | 说明 |
-| :--- | :---- | :----------- | :--- |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64) | Paddle | 编译开关`ENABLE_PADDLE_BACKEND`为ON或OFF控制, 默认OFF |
-| ONNX&nbsp;Runtime | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF |
-| OpenVINO | Windows(x64)<br>Linux(x64)<br>Mac(x86) | Paddle/ONNX | 编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
+FastDeploy currently supports the following backend engines on the CPU
 
-## C++ SDK编译安装
+| Backend               | Platform                                             | Supported model format | Description                                                                                      |
+|:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------------ |
+| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64)                           | Paddle                 | The compilation switch `ENABLE_PADDLE_BACKEND` is controlled by ON or OFF. The default is OFF.   |
+| ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | The compilation switch `ENABLE_ORT_BACKEND` is controlled by ON or OFF. The default is OFF.      |
+| OpenVINO              | Windows(x64)<br>Linux(x64)<br>Mac(x86)               | Paddle/ONNX            | The compilation switch `ENABLE_OPENVINO_BACKEND` is controlled by ON or OFF. The default is OFF. |
+
+## How to Build and Install C++ SDK
 
 ### Linux & Mac
 
-Linux上编译需满足
-- gcc/g++ >= 5.4(推荐8.2)
+Prerequisite for Compiling on Linux & Mac:
+
+- gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 
 ```
@@ -33,12 +34,12 @@ make install
 
 ### Windows
 
-Windows编译需要满足条件
+Prerequisite for Compiling on Windows: 
 
 - Windows 10/11 x64
 - Visual Studio 2019
 
-在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+Launch the `x64 Native Tools Command Prompt for VS 2019` from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -54,18 +55,19 @@ msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
 
-编译完成后，即在`CMAKE_INSTALL_PREFIX`指定的目录下生成C++推理库
+Once compiled, the C++ inference library is generated in the directory specified by `CMAKE_INSTALL_PREFIX`
 
-如您使用CMake GUI可参考文档[Windows使用CMakeGUI + Visual Studio 2019 IDE编译](../faq/build_on_win_with_gui.md)
+If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Studio 2019 IDE on Windows](../faq/build_on_win_with_gui.md)
 
-## Python编译安装
+## How to Build and Install Python SDK
 
-编译过程同样需要满足
-- gcc/g++ >= 5.4(推荐8.2)
+Prerequisite for Compiling: 
+
+- gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 - python >= 3.6
 
-所有编译选项通过环境变量导入
+All compilation options are introduced via environment variables
 
 ### Linux & Mac
 
@@ -83,12 +85,13 @@ python setup.py bdist_wheel
 
 ### Windows
 
-编译过程同样需要满足
+Prerequisite for Compiling on Windows:
+
 - Windows 10/11 x64
 - Visual Studio 2019
 - python >= 3.6
 
-在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
+Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Menu and run the following commands:
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -102,6 +105,6 @@ python setup.py build
 python setup.py bdist_wheel
 ```
 
-编译完成即会在`FastDeploy/python/dist`目录下生成编译后的`wheel`包，直接pip install即可
+The compiled `wheel` package will be generated in the `FastDeploy/python/dist` directory once finished. Users can pip-install it directly.
 
-编译过程中，如若修改编译参数，为避免带来缓存影响，可删除`FastDeploy/python`目录下的`build`和`.setuptools-cmake-build`两个子目录后再重新编译
+During the compilation, if developers want to change the compilation parameters,  it is advisable to delete the `build` and `.setuptools-cmake-build` subdirectories in the `FastDeploy/python` to avoid the possible impact from cache, and then recompile.
