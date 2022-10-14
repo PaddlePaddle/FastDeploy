@@ -1,13 +1,13 @@
 #pragma once
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/core/fd_tensor.h"
 #include "rknn_api.h" // NOLINT
 #include <cstring>    // for memset
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-
 typedef enum _rknpu2_cpu_name {
   RK356X = 0, /* run on RK356X. */
   RK3588 = 1, /* default,run on RK3588. */
@@ -51,9 +51,13 @@ class RKNPU2Backend : public BaseBackend {
                     const std::string& params_file,
                     const RKNPU2BackendOption& option = RKNPU2BackendOption());
 
-  int NumInputs() const override { return static_cast<int>(inputs_desc_.size()); }
+  int NumInputs() const override {
+    return static_cast<int>(inputs_desc_.size());
+  }
 
-  int NumOutputs() const override { return static_cast<int>(outputs_desc_.size()); }
+  int NumOutputs() const override {
+    return static_cast<int>(outputs_desc_.size());
+  }
 
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;
@@ -80,5 +84,7 @@ class RKNPU2Backend : public BaseBackend {
   RKNPU2BackendOption option_;
 
   static void DumpTensorAttr(rknn_tensor_attr& attr);
+  static FDDataType RknnTensorTypeToFDDataType(rknn_tensor_type type);
+  static rknn_tensor_type FDDataTypeToRknnTensorType(FDDataType type);
 };
 } // namespace fastdeploy

@@ -147,9 +147,10 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   // Compute `result = mat * alpha + beta` directly by channel
   // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
   // input_size, (127.5, 127.5, 127.5), swapRB=True)
-  std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-  std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-  Convert::Run(mat, alpha, beta);
+
+  // std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+  // std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+  // Convert::Run(mat, alpha, beta);
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
@@ -200,8 +201,7 @@ bool SCRFD::Postprocess(
   FDASSERT((fmc == 3 || fmc == 5), "The fmc must be 3 or 5");
   FDASSERT((infer_result.at(0).shape[0] == 1), "Only support batch =1 now.");
   for (int i = 0; i < fmc; ++i) {
-    if (infer_result.at(i).dtype != FDDataType::FP32 &&
-        infer_result.at(i).dtype != FDDataType::FP16) {
+    if (infer_result.at(i).dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }
