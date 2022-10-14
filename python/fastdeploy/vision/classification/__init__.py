@@ -13,6 +13,7 @@
 # limitations under the License.
 from __future__ import absolute_import
 
+from .contrib.yolov5cls import YOLOv5Cls
 from .ppcls import PaddleClasModel
 
 PPLCNet = PaddleClasModel

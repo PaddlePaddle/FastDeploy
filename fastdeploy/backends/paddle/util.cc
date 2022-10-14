@@ -93,4 +93,26 @@ FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {
   return fd_dtype;
 }
 
+FDDataType ReaderDataTypeToFD(int32_t dtype) {
+  auto fd_dtype = FDDataType::FP32;
+  if (dtype == 0) {
+    fd_dtype = FDDataType::FP32;
+  } else if (dtype == 1) {
+    fd_dtype = FDDataType::FP64;
+  } else if (dtype == 2) {
+    fd_dtype = FDDataType::UINT8;
+  } else if (dtype == 3) {
+    fd_dtype = FDDataType::INT8;
+  } else if (dtype == 4) {
+    fd_dtype = FDDataType::INT32;
+  } else if (dtype == 5) {
+    fd_dtype = FDDataType::INT64;
+  } else if (dtype == 6) {
+    fd_dtype = FDDataType::FP16;
+  } else {
+    FDASSERT(false, "Unexpected data type: %d while call ReaderDataTypeToFD in PaddleBackend.", dtype);
+  }
+  return fd_dtype;
+}
+
 }  // namespace fastdeploy

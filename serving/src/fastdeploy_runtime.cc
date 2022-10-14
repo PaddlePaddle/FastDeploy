@@ -315,6 +315,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 //       &runtime_options_->trt_max_workspace_size));
               } else if (param_key == "cache_file") {
                 runtime_options_->SetTrtCacheFile(value_string);
+              } else if (param_key == "use_paddle") {
+                runtime_options_->EnablePaddleToTrt();
               }
             }
           }
@@ -918,7 +920,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+  FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       SetInputTensors(total_batch_size, requests, request_count, &responses,
                       &collector, &cuda_copy));
@@ -934,7 +936,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_start_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
                                       all_response_failed,
                                       Run(&responses, request_count));
   }
@@ -943,7 +945,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_end_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         ReadOutputTensors(total_batch_size, requests, request_count,
                           &responses));
@@ -1025,12 +1027,13 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
 
-    if (input_tensors_[input_idx].name != std::string(input_name)) {
+    int index = GetInfoIndex(std::string(input_name), input_tensor_infos_);
+    if (index < 0) {
       auto err = TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("Input name [") + input_name +
            std::string("] is not one of the FD predictor input: ") +
-           input_tensors_[input_idx].name)
+           input_tensors_[index].name)
               .c_str());
       // SendErrorForResponses(responses, request_count, err);
       return err;
@@ -1075,12 +1078,12 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
       memory_type = TRITONSERVER_MEMORY_CPU;
       device = fastdeploy::Device::CPU;
     }
-    input_tensors_[input_idx].Resize(
+    input_tensors_[index].Resize(
         batchn_shape, ConvertDataTypeToFD(input_datatype), input_name, device);
     collector->ProcessTensor(
         input_name,
-        reinterpret_cast<char*>(input_tensors_[input_idx].MutableData()),
-        input_tensors_[input_idx].Nbytes(), memory_type, device_id);
+        reinterpret_cast<char*>(input_tensors_[index].MutableData()),
+        input_tensors_[index].Nbytes(), memory_type, device_id);
   }
 
   // Finalize...
@@ -1096,7 +1099,7 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   // BackendOutputResponder responder(
   //     requests, request_count, responses,
   //     model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
-  //     model_state_->EnablePinnedInput(), CudaStream());
+  //     model_state_->EnablePinnedOutput(), CudaStream());
   // r21.10
   BackendOutputResponder responder(
       requests, request_count, responses, StateForModel()->MaxBatchSize(),

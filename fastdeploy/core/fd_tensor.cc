@@ -89,6 +89,8 @@ void FDTensor::Squeeze(int64_t axis) {
   size_t ndim = shape.size();
   FDASSERT(axis >= 0 && axis < ndim,
            "The allowed 'axis' must be in range of (0, %lu)!", ndim);
+  FDASSERT(shape[axis]==1,
+           "The No.%ld dimension of shape should be 1, but it is %ld!", (long)axis, (long)shape[axis]);
   shape.erase(shape.begin() + axis);
 }
 
