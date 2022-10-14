@@ -20,7 +20,6 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-//获取轮廓区域
 void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
                                    float unclip_ratio, float &distance) {
   int pts_num = 4;
@@ -71,7 +70,6 @@ cv::RotatedRect PostProcessor::UnClip(std::vector<std::vector<float>> box,
   return res;
 }
 
-//将图像的矩阵转换为float类型的array数组返回
 float **PostProcessor::Mat2Vec(cv::Mat mat) {
   auto **array = new float *[mat.rows];
   for (int i = 0; i < mat.rows; ++i) array[i] = new float[mat.cols];
@@ -84,8 +82,6 @@ float **PostProcessor::Mat2Vec(cv::Mat mat) {
   return array;
 }
 
-//对点进行顺时针方向的排序（从左到右，从上到下） （order points
-// clockwise[顺时针方向]）
 std::vector<std::vector<int>> PostProcessor::OrderPointsClockwise(
     std::vector<std::vector<int>> pts) {
   std::vector<std::vector<int>> box = pts;
@@ -103,7 +99,6 @@ std::vector<std::vector<int>> PostProcessor::OrderPointsClockwise(
   return rect;
 }
 
-//将图像的矩阵转换为float类型的vector数组返回
 std::vector<std::vector<float>> PostProcessor::Mat2Vector(cv::Mat mat) {
   std::vector<std::vector<float>> img_vec;
   std::vector<float> tmp;
@@ -118,7 +113,6 @@ std::vector<std::vector<float>> PostProcessor::Mat2Vector(cv::Mat mat) {
   return img_vec;
 }
 
-//判断元素为浮点数float的vector的精度，如果a中元素的精度不等于b中元素的精度，则返回false
 bool PostProcessor::XsortFp32(std::vector<float> a, std::vector<float> b) {
   if (a[0] != b[0]) return a[0] < b[0];
   return false;
@@ -248,8 +242,6 @@ float PostProcessor::BoxScoreFast(std::vector<std::vector<float>> box_array,
   return score;
 }
 
-//这个应该是DB（差分二值化）相关的内容，方法从 Bitmap 图中获取检测框
-//涉及到box_thresh（低于这个阈值的boxs不予显示）和det_db_unclip_ratio（文本框扩张的系数，关系到文本框的大小）
 std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
     const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
     const float &det_db_unclip_ratio, const std::string &det_db_score_mode) {

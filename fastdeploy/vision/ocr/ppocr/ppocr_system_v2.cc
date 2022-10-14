@@ -32,6 +32,22 @@ PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
   recognizer_->rec_image_shape[1] = 32;
 }
 
+bool PPOCRSystemv2::Initialized() const {
+  
+  if (detector_ != nullptr && !detector_->Initialized()){
+    return false;
+  }
+
+  if (classifier_ != nullptr && !classifier_->Initialized()){
+    return false;
+  }
+
+  if (recognizer_ != nullptr && !recognizer_->Initialized()){
+    return false;
+  }
+  return true; 
+}
+
 bool PPOCRSystemv2::Detect(cv::Mat* img,
                            fastdeploy::vision::OCRResult* result) {
   if (!detector_->Predict(img, &(result->boxes))) {

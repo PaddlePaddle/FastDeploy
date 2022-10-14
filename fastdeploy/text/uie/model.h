@@ -91,26 +91,27 @@ struct Schema {
 
 struct FASTDEPLOY_DECL UIEModel {
  public:
-  UIEModel(
-      const std::string& model_file, const std::string& params_file,
-      const std::string& vocab_file, float position_prob, size_t max_length,
-      const std::vector<std::string>& schema,
-      const fastdeploy::RuntimeOption& custom_option =
-          fastdeploy::RuntimeOption(),
-      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
-  UIEModel(
-      const std::string& model_file, const std::string& params_file,
-      const std::string& vocab_file, float position_prob, size_t max_length,
-      const SchemaNode& schema, const fastdeploy::RuntimeOption& custom_option =
-                                    fastdeploy::RuntimeOption(),
-      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
-  UIEModel(
-      const std::string& model_file, const std::string& params_file,
-      const std::string& vocab_file, float position_prob, size_t max_length,
-      const std::vector<SchemaNode>& schema,
-      const fastdeploy::RuntimeOption& custom_option =
-          fastdeploy::RuntimeOption(),
-      const fastdeploy::Frontend& model_format = fastdeploy::Frontend::PADDLE);
+  UIEModel(const std::string& model_file, const std::string& params_file,
+           const std::string& vocab_file, float position_prob,
+           size_t max_length, const std::vector<std::string>& schema,
+           const fastdeploy::RuntimeOption& custom_option =
+               fastdeploy::RuntimeOption(),
+           const fastdeploy::ModelFormat& model_format =
+               fastdeploy::ModelFormat::PADDLE);
+  UIEModel(const std::string& model_file, const std::string& params_file,
+           const std::string& vocab_file, float position_prob,
+           size_t max_length, const SchemaNode& schema,
+           const fastdeploy::RuntimeOption& custom_option =
+               fastdeploy::RuntimeOption(),
+           const fastdeploy::ModelFormat& model_format =
+               fastdeploy::ModelFormat::PADDLE);
+  UIEModel(const std::string& model_file, const std::string& params_file,
+           const std::string& vocab_file, float position_prob,
+           size_t max_length, const std::vector<SchemaNode>& schema,
+           const fastdeploy::RuntimeOption& custom_option =
+               fastdeploy::RuntimeOption(),
+           const fastdeploy::ModelFormat& model_format =
+               fastdeploy::ModelFormat::PADDLE);
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(const std::vector<SchemaNode>& schema);
   void SetSchema(const SchemaNode& schema);

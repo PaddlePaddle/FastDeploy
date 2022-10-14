@@ -14,8 +14,8 @@
 #include <cstring>
 
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
-
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -83,6 +83,15 @@ void FDTensor::ExpandDim(int64_t axis) {
   FDASSERT(axis >= 0 && axis <= ndim,
            "The allowed 'axis' must be in range of (0, %lu)!", ndim);
   shape.insert(shape.begin() + axis, 1);
+}
+
+void FDTensor::Squeeze(int64_t axis) {
+  size_t ndim = shape.size();
+  FDASSERT(axis >= 0 && axis < ndim,
+           "The allowed 'axis' must be in range of (0, %lu)!", ndim);
+  FDASSERT(shape[axis]==1,
+           "The No.%ld dimension of shape should be 1, but it is %ld!", (long)axis, (long)shape[axis]);
+  shape.erase(shape.begin() + axis);
 }
 
 void FDTensor::Allocate(const std::vector<int64_t>& new_shape,
@@ -166,6 +175,8 @@ void FDTensor::PrintInfo(const std::string& prefix) {
     CalculateStatisInfo<int32_t>(Data(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT64) {
     CalculateStatisInfo<int64_t>(Data(), Numel(), &mean, &max, &min);
+  } else if (dtype == FDDataType::FP16) {
+    CalculateStatisInfo<float16>(Data(), Numel(), &mean, &max, &min);
   } else {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "

@@ -12,7 +12,7 @@ namespace detection {
 PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
                  const RuntimeOption& custom_option,
-                 const Frontend& model_format) {
+                 const ModelFormat& model_format) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
@@ -25,7 +25,7 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
 
 void PPYOLOE::GetNmsInfo() {
 #ifdef ENABLE_PADDLE_FRONTEND
-  if (runtime_option.model_format == Frontend::PADDLE) {
+  if (runtime_option.model_format == ModelFormat::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
       return;
@@ -122,8 +122,13 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
       } else {
         int min_target_size = std::min(target_size[0], target_size[1]);
         int max_target_size = std::max(target_size[0], target_size[1]);
+        std::vector<int> max_size;
+        if (max_target_size > 0) {
+          max_size.push_back(max_target_size);
+          max_size.push_back(max_target_size);
+        }
         processors_.push_back(std::make_shared<ResizeByShort>(
-            min_target_size, interp, true, max_target_size));
+            min_target_size, interp, true, max_size));
       }
     } else if (op_name == "Permute") {
       // Do nothing, do permute as the last operation
@@ -159,7 +164,7 @@ bool PPYOLOE::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
       return false;
     }
   }
-  
+
   Cast::Run(mat, "float");
 
   outputs->resize(2);

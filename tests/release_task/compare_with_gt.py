@@ -19,34 +19,75 @@ def parse_arguments():
         "--platform", type=str, required=True, help="Testcase platform.")
     parser.add_argument(
         "--device", type=str, required=True, help="Testcase device.")
+    parser.add_argument(
+        "--conf_threshold",
+        type=float,
+        required=False,
+        default=0,
+        help="The threshold to filter inference result.")
     args = parser.parse_args()
     return args
 
 
-def convert2numpy(result_file):
+def convert2numpy(result_file, conf_threshold):
     result = []
     with open(result_file, "r+") as f:
         for line in f.readlines():
             data = re.findall(r"\d+\.?\d*", line)
             if len(data) == 6:
-                result.append([float(num) for num in data])
+                if float(data[-2]) < conf_threshold:
+                    continue
+                else:
+                    result.append([float(num) for num in data])
     return np.array(result)
 
 
 def write2file(error_file):
-    with open(error_file, "w+") as f:
+    import os
+    if not os.path.exists(error_file):
+        with open(error_file, "w+") as f:
+            f.write("Failed Cases:\n")
+    with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
         f.write(args.platform + " " + py_version + " " +
                 args.result_path.split(".")[0] + "\n")
 
 
+def save_numpy_result(file_path, error_msg):
+    np.savetxt(file_path, error_msg, fmt='%f', delimiter=',')
+
+
 def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    if (diff > 1e-5).all():
-        print(args.platform, args.device, "diff ", diff)
+    label_diff = diff[:, -1]
+    score_diff = diff[:, -2]
+    boxes_diff = diff[:, :-2]
+    boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
+    is_diff = False
+    backend = args.result_path.split(".")[0]
+    if (label_diff > 0).any():
+        print(args.platform, args.device, "label diff ", label_diff)
+        is_diff = True
+        label_diff_bool_file = args.platform + "_" + backend + "_" + "label_diff_bool.txt"
+        save_numpy_result(label_diff_bool_file, label_diff > 0)
+    if (score_diff > 2e-4).any():
+        print(args.platform, args.device, "score diff ", score_diff)
+        is_diff = True
+        score_diff_bool_file = args.platform + "_" + backend + "_" + "score_diff_bool.txt"
+        save_numpy_result(score_diff_bool_file, score_diff > 1e-4)
+    if (boxes_diff_ratio > 1e-4).any() and (boxes_diff > 1e-3).any():
+        print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
+        is_diff = True
+        boxes_diff_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_bool.txt"
+        boxes_diff_ratio_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio.txt"
+        boxes_diff_ratio_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio_bool"
+        save_numpy_result(boxes_diff_bool_file, boxes_diff > 1e-3)
+        save_numpy_result(boxes_diff_ratio_file, boxes_diff_ratio)
+        save_numpy_result(boxes_diff_ratio_bool_file, boxes_diff_ratio > 1e-4)
+    if is_diff:
         write2file("result.txt")
     else:
         print(args.platform, args.device, "No diff")
@@ -55,6 +96,6 @@ def check_result(gt_result, infer_result, args):
 if __name__ == '__main__':
     args = parse_arguments()
 
-    gt_numpy = convert2numpy(args.gt_path)
-    infer_numpy = convert2numpy(args.result_path)
+    gt_numpy = convert2numpy(args.gt_path, args.conf_threshold)
+    infer_numpy = convert2numpy(args.result_path, args.conf_threshold)
     check_result(gt_numpy, infer_numpy, args)

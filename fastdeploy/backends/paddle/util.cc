@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/paddle/paddle_backend.h"
+#include "fastdeploy/core/float16.h"
 
 namespace fastdeploy {
 paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device) {
@@ -77,11 +78,35 @@ FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {
     fd_dtype = FDDataType::UINT8;
   } else if (dtype == paddle_infer::INT8) {
     fd_dtype = FDDataType::INT8;
-  }else {
+  } else if (dtype == paddle_infer::FLOAT16) {
+    fd_dtype = FDDataType::FP16;
+  } else {
     FDASSERT(
         false,
         "Unexpected data type: %d while call CopyTensorToCpu in PaddleBackend.",
         int(dtype));
+  }
+  return fd_dtype;
+}
+
+FDDataType ReaderDataTypeToFD(int32_t dtype) {
+  auto fd_dtype = FDDataType::FP32;
+  if (dtype == 0) {
+    fd_dtype = FDDataType::FP32;
+  } else if (dtype == 1) {
+    fd_dtype = FDDataType::FP64;
+  } else if (dtype == 2) {
+    fd_dtype = FDDataType::UINT8;
+  } else if (dtype == 3) {
+    fd_dtype = FDDataType::INT8;
+  } else if (dtype == 4) {
+    fd_dtype = FDDataType::INT32;
+  } else if (dtype == 5) {
+    fd_dtype = FDDataType::INT64;
+  } else if (dtype == 6) {
+    fd_dtype = FDDataType::FP16;
+  } else {
+    FDASSERT(false, "Unexpected data type: %d while call ReaderDataTypeToFD in PaddleBackend.", dtype);
   }
   return fd_dtype;
 }

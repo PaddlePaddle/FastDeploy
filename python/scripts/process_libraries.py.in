@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import platform
 
-user_specified_dirs = ['@OPENCV_DIRECTORY@', ]
+user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
@@ -31,7 +31,24 @@ def process_on_linux(current_dir):
         if f.count("fastdeploy") and f.count(".so") > 0:
             fd_libs.append(filename)
 
+    cmake_build_dir = os.path.join(current_dir, ".setuptools-cmake-build")
+    patchelf_bin_path = os.path.join(cmake_build_dir, "third_libs/patchelf/bin/patchelf")
+    if not os.path.exists(patchelf_bin_path):
+        patchelf_bin_path = "patchelf"
+
     third_libs_path = os.path.join(libs_path, "third_libs")
+
+    # remove some useless opencv file in python wheels to decrease package size
+    if os.path.exists(os.path.join(third_libs_path, "opencv")):
+        for root, dirs, files in os.walk(os.path.join(third_libs_path, "opencv")):
+            for f in files:
+                items = f.strip().split('.')
+                if len(items) != 4:
+                    os.remove(os.path.join(root, f))
+                    continue
+                if items[0].strip() not in ["libopencv_highgui", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
+                    os.remove(os.path.join(root, f))
+
     all_libs_paths = [third_libs_path] + user_specified_dirs
     for path in all_libs_paths:
         for root, dirs, files in os.walk(path):
@@ -39,11 +56,14 @@ def process_on_linux(current_dir):
                 if d not in ["lib", "lib64"]:
                     continue
                 rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-                rpath = "$ORIGIN/" + rel_path
+                if path in user_specified_dirs:
+                    # Note(zhoushunjie): Use the absolute path for user_specified_dirs
+                    rpath = os.path.join(root, d)
+                else:
+                    rpath = "$ORIGIN/" + rel_path
                 rpaths.append(rpath)
-
     for lib in fd_libs:
-        command = "patchelf --set-rpath '{}' {}".format(":".join(rpaths), lib)
+        command = "{} --set-rpath '{}' {}".format(patchelf_bin_path, ":".join(rpaths), lib)
         if platform.machine() != 'sw_64' and platform.machine() != 'mips64':
             assert subprocess.Popen(
                 command,
@@ -75,14 +95,18 @@ def process_on_mac(current_dir):
             for d in dirs:
                 if d not in ["lib", "lib64"]:
                     continue
-            rel_path = rel_path = os.path.relpath(os.path.join(root, d), libs_path)
-            rpath = "$loader_path/" + rel_path
-            for lib in fd_libs:
-                pre_commands.append(
-                    "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
-                        rpath, lib))
-                commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
-                                format(rpath, lib))
+                rel_path = os.path.relpath(os.path.join(root, d), libs_path)
+                if path in user_specified_dirs:
+                    # Note(zhoushunjie): Use the absolute path for user_specified_dirs
+                    rpath = os.path.join(root, d)
+                else:
+                    rpath = "$loader_path/" + rel_path
+                for lib in fd_libs:
+                    pre_commands.append(
+                        "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
+                            rpath, lib))
+                    commands.append("install_name_tool -add_rpath 'loader_path/{}' {}".
+                                    format(rpath, lib))
 
     for cmd in pre_commands:
         try:
@@ -93,7 +117,6 @@ def process_on_mac(current_dir):
     for cmd in commands:
         assert subprocess.Popen(
             cmd, shell=True) != 0, "Execute command failed: {}".format(cmd)
-
 
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")

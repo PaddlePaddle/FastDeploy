@@ -24,7 +24,7 @@ class FASTDEPLOY_DECL PPYOLO : public PPYOLOE {
   PPYOLO(const std::string& model_file, const std::string& params_file,
          const std::string& config_file,
          const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::PADDLE);
+         const ModelFormat& model_format = ModelFormat::PADDLE);
 
   virtual std::string ModelName() const { return "PaddleDetection/PPYOLO"; }
 
@@ -36,12 +36,13 @@ class FASTDEPLOY_DECL PPYOLO : public PPYOLOE {
 };
 
 class FASTDEPLOY_DECL PPYOLOv2 : public PPYOLO {
-  public:
+ public:
   PPYOLOv2(const std::string& model_file, const std::string& params_file,
-         const std::string& config_file,
-         const RuntimeOption& custom_option = RuntimeOption(),
-         const Frontend& model_format = Frontend::PADDLE) : PPYOLO(model_file, params_file, config_file, custom_option, model_format) {
-  }
+           const std::string& config_file,
+           const RuntimeOption& custom_option = RuntimeOption(),
+           const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPYOLO(model_file, params_file, config_file, custom_option,
+               model_format) {}
 
   virtual std::string ModelName() const { return "PaddleDetection/PPYOLOv2"; }
 };

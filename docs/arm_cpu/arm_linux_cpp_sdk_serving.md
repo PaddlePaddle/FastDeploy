@@ -1,7 +1,7 @@
 # 简介
 
 本文档介绍FastDeploy中的模型SDK，在ARM Linux C++环境下：（1）服务化推理部署步骤；（2）介绍模型推流全流程API，方便开发者了解项目后二次开发。
-其中ARM Linux Python请参考[ARM Linux Python环境下的HTTP推理部署](./ARM-Linux-Python-SDK-Serving.md)文档。
+其中ARM Linux Python请参考[ARM Linux Python环境下的HTTP推理部署](./arm_linux_python_sdk_serving.md)文档。
 
 **注意**：部分模型（如OCR等）不支持服务化推理。
 

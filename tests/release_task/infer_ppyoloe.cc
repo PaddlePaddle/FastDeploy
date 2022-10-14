@@ -93,7 +93,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   } else if (FLAGS_backend == "openvino") {
     std::cerr << "Use --backend=openvino for inference must set --device=cpu"
               << std::endl;
-    return
+    return;
   } else if (FLAGS_backend == "default") {
     std::cout << "Use default backend for inference" << std::endl;
   } else {

@@ -16,36 +16,14 @@
 namespace fastdeploy {
 namespace vision {
 
-#ifdef ENABLE_OPENCV_CUDA
-cv::cuda::GpuMat* Mat::GetGpuMat() {
-  if (device == Device::CPU) {
-    gpu_mat.upload(cpu_mat);
-  }
-  return &gpu_mat;
-}
-#endif
-
 cv::Mat* Mat::GetCpuMat() {
-#ifdef ENABLE_OPENCV_CUDA
-  if (device == Device::GPU) {
-    gpu_mat.download(cpu_mat);
-  }
-#endif
   return &cpu_mat;
 }
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
-  if (device == Device::GPU) {
-#ifdef ENABLE_OPENCV_CUDA
-    tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                            GetGpuMat()->ptr());
-    tensor->device = Device::GPU;
-#endif
-  } else {
-    tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                            GetCpuMat()->ptr());
-    tensor->device = Device::CPU;
-  }
+  tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
+                          GetCpuMat()->ptr());
+  tensor->device = Device::CPU;
   if (layout == Layout::HWC) {
     tensor->shape = {Height(), Width(), Channels()};
   }
@@ -79,13 +57,7 @@ void Mat::PrintInfo(const std::string& flag) {
 
 FDDataType Mat::Type() {
   int type = -1;
-  if (device == Device::GPU) {
-#ifdef ENABLE_OPENCV_CUDA
-    type = gpu_mat.type();
-#endif
-  } else {
-    type = cpu_mat.type();
-  }
+  type = cpu_mat.type();
   if (type < 0) {
     FDASSERT(false,
              "While calling Mat::Type(), get negative value, which is not "
@@ -114,6 +86,57 @@ FDDataType Mat::Type() {
         "While calling Mat::Type(), get type = %d, which is not expected!.",
         type);
   }
+}
+
+Mat CreateFromTensor(const FDTensor& tensor) {
+  int type = tensor.dtype;
+  cv::Mat temp_mat;
+  FDASSERT(tensor.shape.size() == 3,
+           "When create FD Mat from tensor, tensor shape should be 3-Dim, HWC "
+           "layout");
+  int64_t height = tensor.shape[0];
+  int64_t width = tensor.shape[1];
+  int64_t channel = tensor.shape[2];
+  switch (type) {
+    case FDDataType::UINT8:
+      temp_mat = cv::Mat(height, width, CV_8UC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    case FDDataType::INT8:
+      temp_mat = cv::Mat(height, width, CV_8SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    case FDDataType::INT16:
+      temp_mat = cv::Mat(height, width, CV_16SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    case FDDataType::INT32:
+      temp_mat = cv::Mat(height, width, CV_32SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    case FDDataType::FP32:
+      temp_mat = cv::Mat(height, width, CV_32FC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    case FDDataType::FP64:
+      temp_mat = cv::Mat(height, width, CV_64FC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+
+    default:
+      FDASSERT(
+          false,
+          "Tensor type %d is not supported While calling CreateFromTensor.",
+          type);
+      break;
+  }
+  Mat mat = Mat(temp_mat);
+  return mat;
 }
 
 }  // namespace vision
