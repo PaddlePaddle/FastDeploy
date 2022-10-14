@@ -5,7 +5,7 @@ FastDeploy currently supports only ONNX Runtime CPU and TensorRT GPU backend inf
 
 ## How to Build and Install C++ SDK
 
-It requires:
+Prerequisite for Compiling on NVIDIA Jetson:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.10.0
@@ -26,7 +26,7 @@ Once compiled, the C++ inference library is generated in the directory specified
 
 ## How to Build and Install Python SDK
 
-It requires:
+Prerequisite for Compiling on NVIDIA Jetson:
 
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.10.0
