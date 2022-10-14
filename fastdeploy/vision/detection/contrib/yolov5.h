@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
@@ -42,6 +43,17 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
                          bool is_scale_up = false, int stride = 32,
                          float max_wh = 7680.0, bool multi_label = true);
 
+#ifdef ENABLE_CUDA_SRC
+  bool CUDAPreprocess(Mat* mat, FDTensor* output,
+                      std::map<std::string, std::array<float, 2>>* im_info,
+                      const std::vector<int>& size = {640, 640},
+                      const std::vector<float> padding_value = {114.0, 114.0,
+                                                                114.0},
+                      bool is_mini_pad = false, bool is_no_pad = false,
+                      bool is_scale_up = false, int stride = 32,
+                      float max_wh = 7680.0, bool multi_label = true);
+#endif  // ENABLE_CUDA_SRC
+
   static bool Postprocess(
       std::vector<FDTensor>& infer_results, DetectionResult* result,
       const std::map<std::string, std::array<float, 2>>& im_info,
@@ -66,6 +78,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   float max_wh_;
   // for different strategies to get boxes when postprocessing
   bool multi_label_;
+  // max input image size(width * height), which is used to allocate GPU buffer
+  int max_image_size_;
 
  private:
   bool Initialize();
@@ -85,6 +99,12 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+  // CUDA host buffer for input image
+  uint8_t *input_img_cuda_buffer_host_ = nullptr;
+  // CUDA device buffer for input image
+  uint8_t *input_img_cuda_buffer_device_ = nullptr;
+  // CUDA device buffer for TRT input tensor
+  float *input_tensor_cuda_buffer_device_ = nullptr;
 };
 
 }  // namespace detection
