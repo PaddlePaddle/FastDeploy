@@ -4,7 +4,7 @@
 
 ## Install
 
-- [How to Install FastDeploy Prebuilt Libraries](en/build_and_install/prebuilt.md)
+- [How to Install FastDeploy Prebuilt Libraries](en/build_and_install/download_prebuilt_libraries.md)
 - [How to Build and Install FastDeploy Library on GPU Platform](en/build_and_install/gpu.md)
 - [How to Build and Install FastDeploy Library on CPU Platform](en/build_and_install/cpu.md)
 - [How to Build and Install FastDeploy Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
