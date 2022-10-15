@@ -100,7 +100,7 @@ def process_on_mac(current_dir):
                     # Note(zhoushunjie): Use the absolute path for user_specified_dirs
                     rpath = os.path.join(root, d)
                 else:
-                    rpath = "$loader_path/" + rel_path
+                    rpath = "@loader_path/" + rel_path
                 for lib in fd_libs:
                     pre_commands.append(
                         "install_name_tool -delete_rpath '@loader_path/{}' {}".format(
