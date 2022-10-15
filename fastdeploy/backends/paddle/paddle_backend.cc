@@ -14,7 +14,6 @@
 
 #include "fastdeploy/backends/paddle/paddle_backend.h"
 #include "fastdeploy/utils/path.h"
-#include "fastdeploy/core/float16.h"
 
 namespace fastdeploy {
 
@@ -130,11 +129,14 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 #ifdef ENABLE_TRT_BACKEND
   if (option.collect_shape) {
     // Set the shape info file.
-    paddle_infer::Config config_tmp = config_;
-    std::string shape_range_info = PathJoin(config_.model_dir(), "shape_range_info.txt");
+    auto curr_model_dir = GetDirFromPath(model_file);
+    std::string shape_range_info = PathJoin(curr_model_dir, "shape_range_info.pbtxt");
     if (!CheckFileExists(shape_range_info)) {
-      config_tmp.CollectShapeRangeInfo(shape_range_info);
-      auto predictor_tmp = paddle_infer::CreatePredictor(config_tmp);
+      FDINFO << "Start generating shape range info file." << std::endl;
+      paddle_infer::Config analysis_config;
+      analysis_config.SetModel(model_file, params_file);
+      analysis_config.CollectShapeRangeInfo(shape_range_info);
+      auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
       std::map<std::string, std::vector<int>> max_shape;
       std::map<std::string, std::vector<int>> min_shape;
       std::map<std::string, std::vector<int>> opt_shape;
@@ -143,8 +145,10 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
       CollectShapeRun(predictor_tmp.get(), max_shape);
       CollectShapeRun(predictor_tmp.get(), min_shape);
       CollectShapeRun(predictor_tmp.get(), opt_shape);
+      FDINFO << "Finish generating shape range info file." << std::endl;
     }
-    config_.EnableTunedTensorRtDynamicShape(shape_range_info, true);
+    FDINFO << "Start loading shape range info file "<< shape_range_info << " to set TensorRT dynamic shape." << std::endl;
+    config_.EnableTunedTensorRtDynamicShape(shape_range_info, false);
   }
 #endif
   predictor_ = paddle_infer::CreatePredictor(config_);
@@ -236,11 +240,6 @@ void PaddleBackend::CollectShapeRun(paddle_infer::Predictor* predictor,
       }
       case paddle_infer::DataType::INT64: {
         std::vector<int64_t> input_data(shape_num, 1);
-        tensor->CopyFromCpu(input_data.data());
-        break;
-      }
-      case paddle_infer::DataType::FLOAT16: {
-        std::vector<float16> input_data(shape_num, static_cast<float16>(1.0));
         tensor->CopyFromCpu(input_data.data());
         break;
       }
