@@ -31,14 +31,14 @@ English | [简体中文](README_CN.md)
 ## 📣 Recent Updates
 
 - 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.3.0)** <br>
-  - **New server-side deployment upgrade: support more vision model and NLP model**
+  - **New server-side deployment upgrade: support more CV model and NLP model**
        - Integrate OpenVINO and provide a seamless deployment experience；
-       - Support one-click model quantization to improve model inference speed in YOLOv7, YOLOv6, YOLOv5, etc；
-       - New visual models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc；
+       - Support one-click model quantization to improve inference speed in YOLOv7,YOLOv5,YOLOv6, etc；
+       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc；
        - New Information Extraction is UIE.
 
 - 🔥 **2022.8.18：Release FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
-  - **New server-side deployment upgrade: faster inference performance, support more vision model**
+  - **New server-side deployment upgrade: faster inference performance, support more CV model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
     - Integrate Paddle Inference, ONNXRuntime, TensorRT and other inference engines and provide a seamless deployment experience
     - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
@@ -78,7 +78,7 @@ English | [简体中文](README_CN.md)
 - python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### Install Library with GPU Support
+##### Install Fastdeploy SDK with CPU&GPU support
 
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -90,7 +90,7 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### Install CPU-only Library
+##### Install Fastdeploy SDK with only CPU support
 
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
