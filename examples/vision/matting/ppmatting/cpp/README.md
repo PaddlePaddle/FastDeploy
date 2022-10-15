@@ -13,9 +13,9 @@
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/matting/ppmatting/cpp/
+cd fastdeploy-linux-x64-gpu-0.3.0/examples/vision/matting/ppmatting/cpp/
 mkdir build && cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.3.0
 make -j
 
 # 下载PP-Matting模型文件和测试图片

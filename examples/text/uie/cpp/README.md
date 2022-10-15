@@ -15,10 +15,10 @@
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
 
-cd fastdeploy-linux-x64-gpu-0.2.1/examples/text/uie/cpp
+cd fastdeploy-linux-x64-gpu-0.3.0/examples/text/uie/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.2.1
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.3.0
 make -j
 
 # 下载uie-base模型以及词表

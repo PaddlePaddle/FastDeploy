@@ -14,7 +14,7 @@ mkdir build
 cd build
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
 tar xvf fastdeploy-linux-x64-0.3.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-gpu-0.2.1
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-gpu-0.3.0
 make -j
 # 若预编译库没有支持该类 则请自行从源码develop分支编译最新的FastDeploy C++ SDK
 

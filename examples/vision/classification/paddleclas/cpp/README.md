@@ -4,8 +4,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上ResNet50_vd推理为例，在本目录执行如下命令即可完成编译测试
 
@@ -13,10 +13,10 @@
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
-cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/classification/paddleclas/cpp
+cd fastdeploy-linux-x64-gpu-0.3.0/examples/vision/classification/paddleclas/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.2.1
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.3.0
 make -j
 
 # 下载ResNet50_vd模型文件和测试图片

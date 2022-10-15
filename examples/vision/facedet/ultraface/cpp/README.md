@@ -14,7 +14,7 @@ mkdir build
 cd build
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz
 tar xvf fastdeploy-linux-x64-0.3.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
 make -j
 
 #下载官方转换好的UltraFace模型文件和测试图片
