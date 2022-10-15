@@ -33,7 +33,7 @@ class RKNPU2Backend : public BaseBackend {
  public:
   RKNPU2Backend() = default;
 
-  virtual ~RKNPU2Backend() = default;
+  virtual ~RKNPU2Backend();
 
   // RKNN API
   bool LoadModel(void* model);
@@ -78,8 +78,8 @@ class RKNPU2Backend : public BaseBackend {
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
 
-  rknn_tensor_attr* input_attrs{};
-  rknn_tensor_attr* output_attrs{};
+  rknn_tensor_attr* input_attrs = nullptr;
+  rknn_tensor_attr* output_attrs = nullptr;
 
   RKNPU2BackendOption option_;
 

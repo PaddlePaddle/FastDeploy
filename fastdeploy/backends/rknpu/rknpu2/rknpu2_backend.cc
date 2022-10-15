@@ -1,7 +1,14 @@
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
 
 namespace fastdeploy {
-
+RKNPU2Backend::~RKNPU2Backend() {
+  if(input_attrs != nullptr){
+    free(input_attrs);
+  }
+  if(output_attrs != nullptr){
+    free(output_attrs);
+  }
+}
 /***************************************************************
  *  @name       GetSDKAndDeviceVersion
  *  @brief      get RKNN sdk and device version
@@ -132,8 +139,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   }
 
   // Get detailed input parameters
-  input_attrs =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
+  input_attrs = (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
   memset(input_attrs, 0, io_num.n_input * sizeof(rknn_tensor_attr));
   inputs_desc_.resize(io_num.n_input);
   FDINFO << "========== RKNNInputTensorInfo ==========" << std::endl;
@@ -251,7 +257,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   rknn_tensor_type input_type =
       fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(inputs[0].dtype);
   if (input_type != input_attrs[0].type) {
-    std::cout << "The input tensor type != model's inputs type."
+    FDWARNING << "The input tensor type != model's inputs type."
               << "The input_type need " << get_type_string(input_attrs[0].type)
               << ",but inputs[0].type is " << get_type_string(input_type)
               << std::endl;
@@ -263,7 +269,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
   input_attrs[0].fmt = input_layout;
   input_attrs[0].size = inputs[0].Nbytes();
   input_attrs[0].size_with_stride = inputs[0].Nbytes();
-  input_attrs[0].pass_through = 1;
+  input_attrs[0].pass_through = 0;
 
   // create input tensor memory
   rknn_tensor_mem* input_mems[1];
@@ -323,8 +329,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     FDERROR << "rknn run error! ret=" << ret << std::endl;
     return false;
   }
-  free(input_attrs);
-  free(input_mems[0]);
+  rknn_destroy_mem(ctx, input_mems[0]);
 
   // get result
   outputs->resize(outputs_desc_.size());
@@ -336,11 +341,9 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    memcpy((*outputs)[i].MutableData(), (float*)output_mems[i]->virt_addr,
-           (*outputs)[i].Nbytes());
-    free(output_mems[i]);
+    memcpy((*outputs)[i].MutableData(), (float*)output_mems[i]->virt_addr, (*outputs)[i].Nbytes());
+    rknn_destroy_mem(ctx, output_mems[i]);
   }
-  free(output_attrs);
 
   return true;
 }
