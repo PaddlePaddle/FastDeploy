@@ -4,8 +4,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
@@ -38,7 +38,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 注意，YOLOv7End2EndORT是专门用于推理YOLOv7中导出模型带[ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) 版本的End2End模型，不带nms的模型推理请使用YOLOv7类，而 [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) 版本的End2End模型请使用YOLOv7End2EndTRT进行推理。
 
@@ -91,4 +91,4 @@ YOLOv7End2EndORT 模型加载和初始化，其中model_file为导出的ONNX模�
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
