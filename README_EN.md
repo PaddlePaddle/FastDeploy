@@ -34,19 +34,19 @@ English | [简体中文](README_CN.md)
   - **New server-side deployment upgrade: support more CV model and NLP model**
        - Integrate OpenVINO and provide a seamless deployment experience with other inference engines include TensorRT、ONNX Runtime、Paddle Inference；
        - Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
-       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc. And provides [End-To-End Deployment Demos](examples/vision/detection/)
-       - New information extraction model is UIE. And provides [End-To-End Deployment Demos](examples/text/uie).
+       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc. And provides [end-to-end deployment demos](examples/vision/detection/)
+       - New information extraction model is UIE. And provides [end-to-end deployment demos](examples/text/uie).
        - 
 
 - 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
   - **New server-side deployment upgrade: faster inference performance, support more CV model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
     - Integrate Paddle Inference, ONNX Runtime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
-    - Support over 40 key models and [Demo Examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
+    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [end-to-end deployment demos](examples/vision/detection/)
+    - Support over 40 key models and [demo examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
     - Support deployment in both Python and C++
   - **Supports Rockchip, Amlogic, NXP and other NPU chip deployment capabilities on edge device deployment**
-    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
+    - Release Lightweight Object Detection [Picodet-NPU deployment demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
