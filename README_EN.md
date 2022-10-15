@@ -34,9 +34,8 @@ English | [简体中文](README_CN.md)
   - **New server-side deployment upgrade: support more CV model and NLP model**
        - Integrate OpenVINO and provide a seamless deployment experience with other inference engines include TensorRT、ONNX Runtime、Paddle Inference；
        - Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
-       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc. And provides [end-to-end deployment demos](examples/vision/detection/)
-       - New information extraction model is UIE. And provides [end-to-end deployment demos](examples/text/uie).
-       - 
+       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
+       - New information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie).
 
 - 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
   - **New server-side deployment upgrade: faster inference performance, support more CV model**
