@@ -32,10 +32,10 @@ English | [简体中文](README_CN.md)
 
 - 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.3.0)** <br>
   - **New server-side deployment upgrade: support more CV model and NLP model**
-       - Integrate OpenVINO and provide a seamless deployment experience；
+       - Integrate OpenVINO and provide a seamless deployment experience with other inference engines；
        - Support one-click model quantization to improve inference speed in YOLOv7,YOLOv5,YOLOv6, etc；
        - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc；
-       - New Information Extraction is UIE.
+       - New information extraction model is UIE.
 
 - 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
   - **New server-side deployment upgrade: faster inference performance, support more CV model**
