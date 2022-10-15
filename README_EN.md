@@ -28,7 +28,14 @@ English | [简体中文](README_CN.md)
 | **Face Alignment**                                                                                                                             | **3D Object Detection**                                                                                                                        | **Face Editing**                                                                                                                                 | **Image Animation**                                                                                                                            |
 | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054663-b0c9c037-6d12-4e90-a7e4-e9abf4cf9b97.gif' height="126px" width="126px">   | <img src='https://user-images.githubusercontent.com/54695910/188056800-2190e05e-ad1f-40ef-bf71-df24c3407b2d.gif' height="126px" width="190px"> |
 
-## Updates
+## 📣 Recent Updates
+
+- 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.3.0)** <br>
+  - **New server-side deployment upgrade: support more vision model and NLP model**
+       - Integrate OpenVINO and provide a seamless deployment experience；
+       - Support one-click model quantization to improve model inference speed in YOLOv7, YOLOv6, YOLOv5, etc；
+       - New visual models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting，etc；
+       - New Information Extraction is UIE.
 
 - 🔥 **2022.8.18：Release FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
   - **New server-side deployment upgrade: faster inference performance, support more vision model**
