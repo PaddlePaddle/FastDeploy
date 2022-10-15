@@ -4,8 +4,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上ResNet50_vd推理为例，在本目录执行如下命令即可完成编译测试
 
