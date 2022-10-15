@@ -28,7 +28,15 @@
 
 ## 近期更新
 
-- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
+- 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.3.0)** <br>
+  - **New server-side deployment upgrade:更快的推理性能，一键量化，更多的视觉和NLP模型**
+       - 集成 OpenVINO 推理引擎，并且保证了使用 OpenVINO 与 使用 TensorRT、ONNX Runtime、 Paddle Inference一致的开发体验；
+       - 提供[一键模型量化工具](tools/quantization)，支持YOLOv7、YOLOv6、YOLOv5等视觉模型，在CPU和GPU推理速度可提升1.5～2倍；
+       - 新增加 PP-OCRv3, PP-OCRv2, PP-Matting, PP-HumanMatting, ModNet 等视觉模型并提供[端到端部署示例](examples/vision)；
+       - 新增加NLP信息抽取模型 UIE 并提供[端到端部署示例](examples/text/uie).
+       - 
+
+- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
     - **服务端部署全新升级：更快的推理性能，更多的视觉模型支持**  
         - 发布基于x86 CPU、NVIDIA GPU的高性能推理引擎SDK，推理速度大幅提升
         - 集成Paddle Inference、ONNX Runtime、TensorRT等推理引擎并提供统一的部署体验

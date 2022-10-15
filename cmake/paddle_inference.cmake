@@ -48,7 +48,7 @@ endif(WIN32)
 
 
 set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(PADDLEINFERENCE_VERSION "2.4-dev")
+set(PADDLEINFERENCE_VERSION "2.4-dev1")
 if(WIN32)
   if (WITH_GPU)
     set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-${PADDLEINFERENCE_VERSION}.zip")
