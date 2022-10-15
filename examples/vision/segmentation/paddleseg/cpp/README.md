@@ -10,8 +10,8 @@
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.2.1.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
 cd fastdeploy-linux-x64-gpu-0.2.1/examples/vision/segmentation/paddleseg/cpp/
 mkdir build
 cd build
