@@ -16,9 +16,9 @@
 ```bash
 mkdir build
 cd build
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.2.0.tgz
-tar xvf fastdeploy-linux-x64-0.2.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.0
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz
+tar xvf fastdeploy-linux-x64-0.3.0.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
 make -j
 
 #下载FastDeloy提供的yolov5s量化模型文件和测试图片
