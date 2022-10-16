@@ -1,11 +1,5 @@
 [English](../en/quantize.md) | 简体中文
 
-# 量化加速
+# Quantitative Acceleration
 
-简要介绍量化加速的原理。
-
-目前量化支持在哪些硬件及后端的使用
-
-## 量化示例
-
-这里一个表格，展示目前支持的量化列表(跳转到相应的example下去)，精度、性能
+coming soon...
