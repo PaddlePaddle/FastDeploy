@@ -15,7 +15,7 @@
 - [SqueezeNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Others.md)
 - [Inception系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Inception.md)
 - [PP-HGNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-HGNet.md)
-- [ResNet系列模型（包含vd系列）](https://github.com/PaddlePaddle/PaddleClas/blob/develop/docs/zh_CN/models/ResNet_and_vd.md)
+- [ResNet系列模型（包含vd系列）](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/ResNet_and_vd.md)
 
 ## 准备PaddleClas部署模型
 
