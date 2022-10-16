@@ -17,7 +17,7 @@ Linux上编译需满足
 - gcc/g++ >= 5.4(推荐8.2)
 - cmake >= 3.18.0
 
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 mkdir build && cd build
@@ -39,16 +39,16 @@ Windows编译需要满足条件
 
 在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
 
-```
+```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 mkdir build && cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 \
-         -DENABLE_ORT_BACKEND=ON \
-         -DENABLE_PADDLE_BACKEND=ON \
-         -DENABLE_OPENVINO_BACKEND=ON \
-         -DENABLE_VISION=ON \
-         -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy"
+cmake .. -G "Visual Studio 16 2019" -A x64 ^
+         -DENABLE_ORT_BACKEND=ON ^
+         -DENABLE_PADDLE_BACKEND=ON ^
+         -DENABLE_OPENVINO_BACKEND=ON ^
+         -DENABLE_VISION=ON ^
+         -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy" ^
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 ```
@@ -68,7 +68,7 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 
 ### Linux & Mac
 
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export ENABLE_ORT_BACKEND=ON
@@ -89,7 +89,7 @@ python setup.py bdist_wheel
 
 在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
 
-```
+```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 set ENABLE_ORT_BACKEND=ON

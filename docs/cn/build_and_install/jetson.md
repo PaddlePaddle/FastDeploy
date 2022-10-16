@@ -10,7 +10,7 @@ FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU两种后端推
 - cmake >= 3.10.0
 - jetpack >= 4.6.1
 
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
 mkdir build && cd build
@@ -34,7 +34,7 @@ make install
 
 所有编译选项通过环境变量导入
 
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export BUILD_ON_JETSON=ON
