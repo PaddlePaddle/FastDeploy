@@ -1,7 +1,7 @@
 # TensorRT使用问题
 
 ## 1. 运行TensorRT过程中，出现如下日志提示 
-```
+```bash
 [WARNING] fastdeploy/backends/tensorrt/trt_backend.cc(552)::CreateTrtEngineFromOnnx	Cannot build engine right now, because there's dynamic input shape exists, list as below,
 [WARNING] fastdeploy/backends/tensorrt/trt_backend.cc(556)::CreateTrtEngineFromOnnx	Input 0: TensorInfo(name: image, shape: [-1, 3, 320, 320], dtype: FDDataType::FP32)
 [WARNING] fastdeploy/backends/tensorrt/trt_backend.cc(556)::CreateTrtEngineFromOnnx	Input 1: TensorInfo(name: scale_factor, shape: [1, 2], dtype: FDDataType::FP32)
