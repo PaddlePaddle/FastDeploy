@@ -2,8 +2,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本目录下提供`infer.py`快速完成PP-Matting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
@@ -75,4 +75,4 @@ PP-Matting模型加载和初始化，其中model_file, params_file以及config_f
 - [PP-Matting 模型介绍](..)
 - [PP-Matting C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)

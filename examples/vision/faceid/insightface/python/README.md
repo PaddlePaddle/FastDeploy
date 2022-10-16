@@ -3,8 +3,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以ArcFace为例子, 提供`infer_arcface.py`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
@@ -95,4 +95,4 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 - [InsightFace 模型介绍](..)
 - [InsightFace C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
