@@ -6,7 +6,7 @@
 
 ## 1. 获取模型和测试图像
 
-```
+```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget https://bj.bcebos.com/fastdeploy/tests/test_det.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
@@ -16,7 +16,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 如下C++代码保存为`infer_demo.cc`
 
-``` c++
+```c++
 #include "fastdeploy/vision.h"
 int main() {
   std::string model_file = "ppyoloe_crn_l_300e_coco/model.pdmodel";
@@ -49,11 +49,11 @@ FastDeploy中包含多个依赖库，直接采用`g++`或编译器编译较为�
 
 假设下载或准备的FastDeploy C++ SDK在`/Paddle/Download`目录下，且目录名为`fastdeploy_cpp_sdk`，在开发者的项目中只需添加如下代码，即可引入`FASTDEPLOY_INCS`和`FASTDEPLOY_LIBS`两个变量，分别表示依赖的头文件和库文件
 
-``` shell
+```cmake
 include(/Paddle/Download/fastdeploy_cpp_sdk/FastDeploy.cmake)
 ```
 
-```
+```cmake
 PROJECT(infer_demo C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
@@ -74,23 +74,23 @@ target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
 
 打开命令行终端，进入`infer_demo.cc`和`CmakeLists.txt`所在的目录，执行如下命令
 
-```
+```bash
 mkdir build & cd build
 cmake ..
 make -j
 ```
 
 编译完成后，使用如下命令执行可得到预测结果
-```
+```bash
 ./infer_demo 
 ```
 执行时如提示`error while loading shared libraries: libxxx.so: cannot open shared object file: No such file...`，说明程序执行时没有找到FastDeploy的库路径，可通过执行如下命令，将FastDeploy的库路径添加到环境变量之后，重新执行二进制程序。
-```
+```bash
 source /Path/to/fastdeploy_cpp_sdk/fastdeploy_init.sh
 ```
 
 执行完屏幕会输出如下日志
-```
+```bash
 DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
 415.047180,89.311569, 506.009613, 283.863098, 0.950423, 0
 163.665710,81.914932, 198.585342, 166.760895, 0.896433, 0
@@ -110,7 +110,7 @@ DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
 上面的编译过程适用于Linux/Mac，Windows上编译流程如下
 
 在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，进入`infer_demo.cc`和`CMakeLists.txt`所在目录，执行如下命令
-```
+```bat
 mkdir build
 cd build
 cmake .. -G "Visual Studio 16 2019" -A x64
@@ -118,7 +118,7 @@ msbuild infer_demo.sln /m /p:Configuration=Release /p:Platform=x64
 ```
 
 执行完后，即会在`build/Release`目录下生成`infer_demo.exe`程序，使用如下命令执行可得到预测结果
-```
+```bat
 Release\infer_demo.exe
 ```
 
