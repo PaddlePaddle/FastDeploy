@@ -12,7 +12,7 @@
 - [FCN系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/fcn/README.md)
 - [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/deeplabv3/README.md)
 
-注意，如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/vision/matting)
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/vision/matting)
 
 ## 准备PaddleSeg部署模型
 
