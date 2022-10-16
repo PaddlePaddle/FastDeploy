@@ -16,12 +16,12 @@ FastDeploy提供各平台预编译库，供开发者直接下载安装使用。�
 ### Python安装
 
 Release版本（当前最新0.3.0）安装
-```
+```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html 
 ```
 
 其中推荐使用Conda配置开发环境
-```
+```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
@@ -45,7 +45,7 @@ Release版本（当前最新0.3.0）
 ### Python安装
 
 Release版本（当前最新0.3.0）安装
-```
+```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
