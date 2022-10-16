@@ -51,14 +51,13 @@ endif()
 
 ############################# Basic Options for FastDeploy ################################
 option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
-option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu" OFF)
+option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-inference-gpu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
-option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
@@ -66,10 +65,6 @@ option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
 option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
 option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
-
-# Please don't open this flag now, some bugs exists.
-# Only support Linux Now
-# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
@@ -130,16 +125,6 @@ option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  if(ENABLE_VISION)
-    # ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
-    message(STATUS "Found BUILD_EXAMPLES and ENABLE_VISION ON, so, force ENABLE_VISION_VISUALIZE ON")
-    set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
-  else()
-    message(WARNING "BUILD_EXAMPLES is ON, but found ENABLE_VISION OFF, will skip vision examples.")
-  endif()
-endif()
 
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)
@@ -301,6 +286,7 @@ endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
+  add_definitions(-DENABLE_VISION_VISUALIZE)
   if(ENABLE_OPENCV_CUDA)
     if(NOT WITH_GPU)
       message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
@@ -316,13 +302,10 @@ if(ENABLE_VISION)
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
 
-  if(ENABLE_VISION_VISUALIZE)
-    add_definitions(-DENABLE_VISION_VISUALIZE)
-  endif()
-else()
-  if(ENABLE_VISION_VISUALIZE)
-    message("While ENABLE_VISION=OFF, will force ENABLE_VISION_VISUALIZE=OFF.")
-    set(ENABLE_VISION_VISUALIZE OFF)
+  if(ENABLE_FALCONCV)
+    add_definitions(-DENABLE_FALCONCV)
+    include(${PROJECT_SOURCE_DIR}/cmake/falconcv.cmake)
+    list(APPEND DEPEND_LIBS external_falconcv)
   endif()
 endif()
 

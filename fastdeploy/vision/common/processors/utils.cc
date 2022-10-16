@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/processors/utils.h"
 
 namespace fastdeploy {
@@ -103,8 +104,8 @@ FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type) {
   } else if (type == fcv::FCVImageType::GRAY_F64) {
     return FDDataType::FP64;
   }
-  FDASSERT(false, "While calling FalconDataTypeToFD(), get unexpected type:" + std::to_string(int(type)) + ".");
-  return FDDataType::UNKNOWN;
+  FDASSERT(false, "While calling FalconDataTypeToFD(), get unexpected type:%d.", int(type));
+  return FDDataType::UNKNOWN1;
 }
 
 fcv::FCVImageType CreateFalconDataCVType(FDDataType type, int channel) {
@@ -127,7 +128,7 @@ fcv::FCVImageType CreateFalconDataCVType(FDDataType type, int channel) {
       return fcv::FCVImageType::PACKAGE_BGRA_F32;
     }
   }
-  FDASSERT(false, "Data type of " + Str(type) + " is not supported.");
+  FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
   return fcv::FCVImageType::PACKAGE_BGR_F32;
 }
 #endif

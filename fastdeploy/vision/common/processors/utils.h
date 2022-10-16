@@ -17,6 +17,10 @@
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
 
+#ifdef ENABLE_FALCONCV
+#include "falconcv.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 

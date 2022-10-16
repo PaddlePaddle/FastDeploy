@@ -14,6 +14,7 @@
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
 #include "opencv2/core/core.hpp"
+#include "fastdeploy/vision/common/processors/utils.h"
 
 #ifdef ENABLE_OPENCV_CUDA
 #include "opencv2/core/cuda.hpp"
@@ -21,10 +22,6 @@
 #include "opencv2/cudaimgproc.hpp"
 #include "opencv2/cudawarping.hpp"
 #endif
-
-namespace fcv {
-  class Mat;
-}
 
 namespace fastdeploy {
 namespace vision {
@@ -59,7 +56,7 @@ struct FASTDEPLOY_DECL Mat {
 #ifdef ENABLE_FALCONCV
   void SetMat(const fcv::Mat& mat) { 
     fcv_mat = mat; 
-    mat_type = Proclib::FALCONCV;
+    mat_type = ProcLib::FALCONCV;
   }
 
   inline fcv::Mat* GetFalconCVMat() {
