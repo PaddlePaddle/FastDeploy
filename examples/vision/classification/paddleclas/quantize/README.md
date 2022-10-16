@@ -12,7 +12,7 @@ FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置�
 | 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 Top1 | INT8 Top1 |量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
 | [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | ONNX Runtime         |    CPU    |   77.20       |  40.08     |     1.93        | 79.12  | 78.87|  离线量化|
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  7.85        | 3.70        | 1.80      |      2.06      | 79.12  | 79.06 | 离线量化 |
+| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  3.70        | 1.80      |      2.06      | 79.12  | 79.06 | 离线量化 |
 | [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | ONNX Runtime |    CPU    |     30.99   |   10.24    |     3.03        |77.89 | 75.09 |离线量化 |
 | [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | TensorRT  |    GPU    |       1.80  |   0.58    |      3.10       |77.89 | 76.86 | 离线量化 |
 
