@@ -11,8 +11,8 @@ FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置�
 
 | 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | INT8 mAP | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)            | TensorRT          |    GPU    |     30.43          |      15.40       |       1.98        | 51.1| 50.8| 量化蒸馏训练 |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)          | Paddle Inference  |    CPU    |          1015.70     |      562.41       |    1.82           |51.1 | 46.3| 量化蒸馏训练 |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)            | TensorRT          |    GPU    |     24.57         |      9.40     |      2.61       | 51.1| 50.8|量化蒸馏训练 |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)              | Paddle Inference  |    CPU    |         1022.55    |     490.87      |   2.08         |51.1 | 46.3|量化蒸馏训练 |
 
 上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
 - 测试图片为COCO val2017中的图片.
