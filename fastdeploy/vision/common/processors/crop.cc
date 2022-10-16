@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool Crop::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);
   int width = static_cast<int>(im->cols);
   if (height < height_ + offset_h_ || width < width_ + offset_w_) {
