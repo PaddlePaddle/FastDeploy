@@ -183,12 +183,19 @@ def process_libraries(current_dir):
                 remain = False
         filename = os.path.split(f)[-1]
         if filename in [
-                "libnvinfer_plugin.so", "libnvinfer_plugin.so.8.4.1",
-                "libnvinfer.so", "libnvinfer.so.8.4.1", "libnvonnxparser.so",
-                "libnvonnxparser.so.8.4.1", "libnvparsers.so",
-                "libnvparsers.so.8.4.1"
+                "libnvinfer_plugin.so",
+                "libnvinfer.so", "libnvonnxparser.so",
+                "libnvparsers.so", "libnvcaffe_parser.so"
         ]:
             continue
+
+        for lib_prefix in ["libnvinfer_plugin.so.8.",
+            "libnvinfer.so.8.", "libnvonnxparser.so.8.",
+            "libnvparsers.so.8.", "libnvcaffe_parser.so.8."]:
+            if filename.startswith(lib_prefix):
+                remain = False
+                break
+
         if remain:
             package_data.append(
                 os.path.relpath(f, os.path.join(current_dir, "fastdeploy")))
