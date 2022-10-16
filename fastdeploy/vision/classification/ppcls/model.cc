@@ -108,7 +108,7 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   int height = mat->Height();
   output->name = InputInfoOfRuntime(0).name;
   output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
-                          mat->GetCpuMat()->ptr());
+                          mat->GetOpenCVMat()->ptr());
   return true;
 }
 

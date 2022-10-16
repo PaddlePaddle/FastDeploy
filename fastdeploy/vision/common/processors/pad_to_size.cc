@@ -56,7 +56,7 @@ bool PadToSize::ImplByOpenCV(Mat* mat) {
     return true;
   }
 
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Scalar value;
   if (value_.size() == 1) {
     value = cv::Scalar(value_[0]);

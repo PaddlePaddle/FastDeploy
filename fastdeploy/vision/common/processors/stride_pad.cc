@@ -45,7 +45,7 @@ bool StridePad::ImplByOpenCV(Mat* mat) {
   if (pad_h == 0 && pad_w == 0) {
     return true;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Scalar value;
   if (value_.size() == 1) {
     value = cv::Scalar(value_[0]);

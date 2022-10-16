@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool Cast::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int c = im->channels();
   if (dtype_ == "float") {
     if (im->type() != CV_32FC(c)) {

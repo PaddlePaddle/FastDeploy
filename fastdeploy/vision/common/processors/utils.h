@@ -12,28 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/limit_by_stride.h"
+#pragma once
+
+#include "fastdeploy/utils/utils.h"
+#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 namespace vision {
 
-bool LimitByStride::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetOpenCVMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  int rw = origin_w - origin_w % stride_;
-  int rh = origin_h - origin_h % stride_;
-  if (rw != origin_w || rh != origin_w) {
-    cv::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
-    mat->SetWidth(im->cols);
-    mat->SetHeight(im->rows);
-  }
-  return true;
-}
+// Convert data type of opencv to FDDataType
+FDDataType OpenCVDataTypeToFD(int type);
 
-bool LimitByStride::Run(Mat* mat, int stride, int interp, ProcLib lib) {
-  auto r = LimitByStride(stride, interp);
-  return r(mat, lib);
-}
-}  // namespace vision
-}  // namespace fastdeploy
+#ifdef ENABLE_FALCONCV
+// Convert data type of falconcv to FDDataType
+FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type);
+// Create data type of falconcv by FDDataType
+fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel = 1);
+#endif
+
+} // namespace vision
+} // namespace fastdeploy

@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 bool BGR2RGB::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im;
   cv::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
   mat->SetMat(new_im);
@@ -25,7 +25,7 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
 }
 
 bool RGB2BGR::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im;
   cv::cvtColor(*im, new_im, cv::COLOR_RGB2BGR);
   mat->SetMat(new_im);

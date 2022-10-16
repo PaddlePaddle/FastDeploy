@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool ResizeByShort::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
