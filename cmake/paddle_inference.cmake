@@ -48,7 +48,7 @@ endif(WIN32)
 
 
 set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(PADDLEINFERENCE_VERSION "2.4-dev")
+set(PADDLEINFERENCE_VERSION "2.4-dev1")
 if(WIN32)
   if (WITH_GPU)
     set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-${PADDLEINFERENCE_VERSION}.zip")
@@ -88,7 +88,7 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
   BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
 
-if(UNIX)
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()
 
