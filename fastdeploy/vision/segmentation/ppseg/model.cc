@@ -90,7 +90,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
 	        << "which is not supported by ONNX Runtime and Tensorrt. "
 		<< "Only OpenVINO and Paddle Inference are available now. " 
 	        << "For using ONNX Runtime or Tensorrt, "
-	        << "Please refer to https://github.com/PaddlePaddle/PaddleDetection/blob/develop/deploy/EXPORT_MODEL.md"
+	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
 	        << " to export model with fixed input shape."
 	        << std::endl;
       valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
