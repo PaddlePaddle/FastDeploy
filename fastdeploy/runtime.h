@@ -38,6 +38,7 @@ enum Backend {
   ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
+  POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,  ///< RKNPU2, support RKNN format model, Rockchip NPU only
@@ -49,6 +50,7 @@ enum ModelFormat {
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
   RKNN,  ///< Model with RKNN format
+  TORCHSCRIPT,  ///< Model with TorchScript format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -143,6 +145,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
+
+  /// Set Poros backend as inference backend, support CPU/GPU
+  void UsePorosBackend();
 
   /// Set OpenVINO as inference backend, only support CPU
   void UseOpenVINOBackend();
@@ -270,6 +275,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
 
+  // ======Only for Poros Backend=======
+  bool is_dynamic = false;
+  bool long_to_int = true;
+  bool use_nvidia_tf32 = false;
+  int unconst_ops_thres = -1;
+  std::string poros_file = "";
+
   // ======Only for RKNPU2 Backend=======
   rknpu2_cpu_name rknpu2_cpu_name_ = rknpu2_cpu_name::RK3588;
   rknpu2_core_mask rknpu2_core_mask_ = rknpu2_core_mask::RKNN_NPU_CORE_AUTO;
@@ -301,6 +313,15 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
+
+  /** \brief Compile TorchScript Module, only for Poros backend
+   *
+   * \param[in] prewarm_tensors Prewarm datas for compile
+   * \param[in] _option Runtime option
+   * \return true if compile successed, otherwise false
+   */
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+               const RuntimeOption& _option);
 
   /** \brief Get number of inputs
    */

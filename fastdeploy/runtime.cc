@@ -29,6 +29,10 @@
 #include "fastdeploy/backends/paddle/paddle_backend.h"
 #endif
 
+#ifdef ENABLE_POROS_BACKEND
+#include "fastdeploy/backends/poros/poros_backend.h"
+#endif
+
 #ifdef ENABLE_OPENVINO_BACKEND
 #include "fastdeploy/backends/openvino/ov_backend.h"
 #endif
@@ -53,6 +57,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_PADDLE_BACKEND
   backends.push_back(Backend::PDINFER);
+#endif
+#ifdef ENABLE_POROS_BACKEND
+  backends.push_back(Backend::POROS);
 #endif
 #ifdef ENABLE_OPENVINO_BACKEND
   backends.push_back(Backend::OPENVINO);
@@ -83,6 +90,8 @@ std::string Str(const Backend& b) {
     return "Backend::TRT";
   } else if (b == Backend::PDINFER) {
     return "Backend::PDINFER";
+  } else if (b == Backend::POROS) {
+    return "Backend::POROS";
   } else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
@@ -96,6 +105,8 @@ std::string Str(const ModelFormat& f) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
+  } else if (f == ModelFormat::TORCHSCRIPT) {
+    return "ModelFormat::TORCHSCRIPT";
   }
   return "UNKNOWN-ModelFormat";
 }
@@ -109,6 +120,8 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::PDINFER";
   } else if (backend == Backend::OPENVINO) {
     out << "Backend::OPENVINO";
+  } else if (backend == Backend::POROS) {
+    out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::LITE";
   }
@@ -121,6 +134,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::PADDLE";
   } else if (format == ModelFormat::ONNX) {
     out << "ModelFormat::ONNX";
+  } else if (format == ModelFormat::TORCHSCRIPT) {
+    out << "ModelFormat::TORCHSCRIPT";
   }
   out << "UNKNOWN-ModelFormat";
   return out;
@@ -152,9 +167,17 @@ bool CheckModelFormat(const std::string& model_file,
               << model_file << std::endl;
       return false;
     }
+  } else if (model_format == ModelFormat::TORCHSCRIPT) {
+    if (model_file.size() < 3 ||
+        model_file.substr(model_file.size() - 3, 3) != ".pt") {
+      FDERROR << "With model format of ModelFormat::TORCHSCRIPT, the model file "
+                 "should ends with `.pt`, but now it's "
+              << model_file << std::endl;
+      return false;
+    }
   } else {
     FDERROR << "Only support model format with frontend ModelFormat::PADDLE / "
-               "ModelFormat::ONNX / ModelFormat::RKNN."
+               "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
             << std::endl;
     return false;
   }
@@ -170,6 +193,10 @@ ModelFormat GuessModelFormat(const std::string& model_file) {
              model_file.substr(model_file.size() - 5, 5) == ".onnx") {
     FDINFO << "Model Format: ONNX." << std::endl;
     return ModelFormat::ONNX;
+  } else if (model_file.size() > 3 &&
+             model_file.substr(model_file.size() - 3, 3) == ".pt") {
+    FDINFO << "Model Format: Torchscript." << std::endl;
+    return ModelFormat::TORCHSCRIPT;
   } else if (model_file.size() > 5 &&
              model_file.substr(model_file.size() - 5, 5) == ".rknn") {
     FDINFO << "Model Format: RKNN." << std::endl;
@@ -192,10 +219,13 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
   } else if (format == ModelFormat::ONNX) {
     model_file = model_path;
     model_format = ModelFormat::ONNX;
+  } else if (format == ModelFormat::TORCHSCRIPT) {
+    model_file = model_path;
+    model_format = ModelFormat::TORCHSCRIPT;
   } else {
     FDASSERT(
         false,
-        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX.");
+        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
   }
 }
 
@@ -247,6 +277,15 @@ void RuntimeOption::UseOrtBackend() {
   backend = Backend::ORT;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with OrtBackend.");
+#endif
+}
+
+// use poros backend
+void RuntimeOption::UsePorosBackend() {
+#ifdef ENABLE_POROS_BACKEND
+  backend = Backend::POROS;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with PorosBackend.");
 #endif
 }
 
@@ -351,6 +390,36 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
 
+bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+                      const RuntimeOption& _option) {
+#ifdef ENABLE_POROS_BACKEND
+  option = _option;
+  auto poros_option = PorosBackendOption();
+  poros_option.use_gpu = (option.device == Device::GPU) ? true : false;
+  poros_option.gpu_id = option.device_id;
+  poros_option.long_to_int = option.long_to_int;
+  poros_option.use_nvidia_tf32 = option.use_nvidia_tf32;
+  poros_option.unconst_ops_thres = option.unconst_ops_thres;
+  poros_option.poros_file = option.poros_file;
+  poros_option.is_dynamic = option.is_dynamic;
+  poros_option.enable_fp16 = option.trt_enable_fp16;
+  poros_option.max_batch_size = option.trt_max_batch_size;
+  poros_option.max_workspace_size = option.trt_max_workspace_size;
+  FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
+           "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
+  backend_ = utils::make_unique<PorosBackend>();
+  auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
+  FDASSERT(
+      casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
+      "Load model from Torchscript failed while initliazing PorosBackend.");
+#else
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
+#endif
+  return true;
+}
+
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.model_format == ModelFormat::AUTOREC) {
@@ -361,6 +430,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::ORT;
     } else if (IsBackendAvailable(Backend::PDINFER)) {
       option.backend = Backend::PDINFER;
+    } else if (IsBackendAvailable(Backend::POROS)) {
+      option.backend = Backend::POROS;
     } else if (IsBackendAvailable(Backend::OPENVINO)) {
       option.backend = Backend::OPENVINO;
     } else if (IsBackendAvailable(Backend::RKNPU2)) {
@@ -394,6 +465,15 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreatePaddleBackend();
     FDINFO << "Runtime initialized with Backend::PDINFER in "
            << Str(option.device) << "." << std::endl;
+  } else if (option.backend == Backend::POROS) {
+    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
+             "Backend::POROS only supports Device::CPU/Device::GPU.");
+    FDASSERT(
+        option.model_format == ModelFormat::TORCHSCRIPT,
+        "Backend::POROS only supports model format of ModelFormat::TORCHSCRIPT.");
+    FDINFO << "Runtime initialized with Backend::POROS in "
+           << Str(option.device) << "." << std::endl;
+    return true;
   } else if (option.backend == Backend::OPENVINO) {
     FDASSERT(option.device == Device::CPU,
              "Backend::OPENVINO only supports Device::CPU");
@@ -415,7 +495,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
            << Str(option.device) << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
-               "Backend::ORT/Backend::TRT/Backend::PDINFER as backend now."
+               "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
+               "backend now."
             << std::endl;
     return false;
   }
