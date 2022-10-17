@@ -131,9 +131,9 @@ bool PaddleSegModel::Preprocess(Mat* mat, FDTensor* output) {
       int resize_height = -1;
       std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
       if (is_vertical_screen && (resize_width > resize_height)) {
-        if (processor->SetWidthAndHeight(resize_height, resize_width)) {
-          FDERROR << "Failed to set Resize processor width and height "
-                  << processors_[i]->Name() << "." << std::endl;
+        if (!(processor->SetWidthAndHeight(resize_height, resize_width))) {
+          FDERROR << "Failed to set width and height of "
+                  << processors_[i]->Name() << " processor." << std::endl;
         }
       }
     }

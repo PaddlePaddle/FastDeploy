@@ -28,7 +28,7 @@ class Crop : public Processor {
     height_ = height;
   }
 
-  Crop(const std::vector<int> area,
+  Crop(const std::vector<float> area,
        std::vector<float>* center,
        std::vector<float>* scale,
        const float expandratio) {
@@ -44,8 +44,8 @@ class Crop : public Processor {
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                   ProcLib lib = ProcLib::OPENCV);
   static bool Run(const Mat& src_im, Mat* dst_im,
-                  const std::vector<int>& area, std::vector<float>* center,
-                  std::vector<float>* scale, const float expandratio = 0.15,
+                  const std::vector<float>& area, std::vector<float>* center,
+                  std::vector<float>* scale, const float expandratio = 0.3,
                   ProcLib lib = ProcLib::OPENCV);
 
  private:
@@ -54,7 +54,7 @@ class Crop : public Processor {
   int height_;
   int width_;
 
-  std::vector<int> area_;
+  std::vector<float> area_;
   std::vector<float>* center_;
   std::vector<float>* scale_;
   float expandratio_;

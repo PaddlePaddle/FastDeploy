@@ -24,3 +24,14 @@ class PPTinyPose(object):
 
     def predict(self, input_image):
         return self._pipeline.predict(input_image)
+
+    @property
+    def detect_model_score_threshold(self):
+        return self._model.detect_model_score_threshold
+
+    @detect_model_score_threshold.setter
+    def detect_model_score_threshold(self, value):
+        assert isinstance(
+            value, float
+        ), "The value to set `detect_model_score_threshold` must be type of float."
+        self._pipeline.detect_model_score_threshold = value

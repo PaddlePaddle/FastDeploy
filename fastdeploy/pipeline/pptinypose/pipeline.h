@@ -30,6 +30,7 @@ class FASTDEPLOY_DECL PPTinyPose {
 
   virtual bool Predict(cv::Mat* img,
                        fastdeploy::vision::KeyPointDetectionResult* result);
+  float detect_model_score_threshold = 0;
 
  protected:
   fastdeploy::vision::detection::PPYOLOE* detector_ = nullptr;

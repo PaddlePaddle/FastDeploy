@@ -30,26 +30,24 @@ cv::Mat VisKeypointDetection(const cv::Mat& im,
   cv::Mat vis_img = im.clone();
   int detection_nums = results.keypoints.size() / 17;
   for (int i = 0; i < detection_nums; i++){
-    int index = i * 3 * 17 ;
+    int index = i * 17;
     bool is_over_threshold = true;
     for (int j = 0; j < results.num_joints; j++) {
-      if (results.keypoints[index + j * 3 + 2] < conf_threshold) {
+      if (results.scores[index + j] < conf_threshold) {
         is_over_threshold = false;
         break;
       }
     }
     if (is_over_threshold) {
       for (int k = 0; k < results.num_joints; k++) {
-        int x_coord = int(results.keypoints[index + k * 3]);
-        int y_coord = int(results.keypoints[index + k * 3 + 1]);
-        std::cout << "x_coord " << x_coord << std::endl;
-        std::cout << "y_coord " << y_coord << std::endl; 
+        int x_coord = int(results.keypoints[index + k][0]);
+        int y_coord = int(results.keypoints[index + k][1]);
         cv::circle(vis_img, cv::Point2d(x_coord, y_coord), 1,
                   cv::Scalar(0, 0, 255), 2);
-        int x_start = int(results.keypoints[index + edge[k][0] * 3]);
-        int y_start = int(results.keypoints[index + edge[k][0] * 3 + 1]);
-        int x_end = int(results.keypoints[index + edge[k][1] * 3]);
-        int y_end = int(results.keypoints[index + edge[k][1] * 3 + 1]);
+        int x_start = int(results.keypoints[index + edge[k][0]][0]);
+        int y_start = int(results.keypoints[index + edge[k][0]][1]);
+        int x_end = int(results.keypoints[index + edge[k][1]][0]);
+        int y_end = int(results.keypoints[index + edge[k][1]][1]);
         cv::line(vis_img, cv::Point2d(x_start, y_start), cv::Point2d(x_end, y_end),
                 colormap[k], 1);
       }

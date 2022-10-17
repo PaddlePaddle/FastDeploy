@@ -31,7 +31,10 @@ void BindPPTinyPosePipeline(pybind11::module& m) {
         vision::KeyPointDetectionResult res;
         self.Predict(&mat, &res);
         return res;
-      });
+      })
+
+      .def_readwrite("detect_model_score_threshold", 
+                     &pipeline::PPTinyPose::detect_model_score_threshold);
 }
 
 }  // namespace fastdeploy

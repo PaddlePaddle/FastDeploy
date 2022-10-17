@@ -118,7 +118,8 @@ std::string DetectionResult::Str() {
 }
 
 void KeyPointDetectionResult::Clear() {
-  std::vector<float>().swap(keypoints);
+  std::vector<std::array<float, 2>>().swap(keypoints);
+  std::vector<float>().swap(scores);
   num_joints = -1;
 }
 
@@ -130,11 +131,10 @@ std::string KeyPointDetectionResult::Str() {
   std::string out;
 
   out = "KeyPointDetectionResult: [x, y, conf]\n";
-  for (size_t i = 0; i < keypoints.size() / 3; ++i) {
-    int index = i * 3;
-    out = out + std::to_string(keypoints[index]) + "," +
-          std::to_string(keypoints[index + 1]) + ", " +
-          std::to_string(keypoints[index + 2]) + "\n";
+  for (size_t i = 0; i < keypoints.size(); ++i) {
+    out = out + std::to_string(keypoints[i][0]) + "," +
+          std::to_string(keypoints[i][1]) + ", " +
+          std::to_string(scores[i]) + "\n";
   }
   out += "num_joints:" + std::to_string(num_joints) + "\n";
   return out;

@@ -29,7 +29,8 @@ enum FASTDEPLOY_DECL ResultType {
   FACE_DETECTION,
   FACE_RECOGNITION,
   MATTING,
-  MASK
+  MASK,
+  KEYPOINT_DETECTION
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -114,17 +115,26 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief KeyPoint Detection result structure for all the pose detection models
+ */
 struct FASTDEPLOY_DECL KeyPointDetectionResult : public BaseResult {
-  // Keypoints: shape(N x 3); N: number of Joints; 3: x,y,conf
-  std::vector<float> keypoints;
+  /** \brief All the coordinates of detected keypoints for an input image, the size of `keypoints` is num_detected_objects * num_joints, and the element of `keypoint` is a array of 2 float values, means [x, y]
+   */
+  std::vector<std::array<float, 2>> keypoints;
+  //// The confidence for all the detected points
+  std::vector<float> scores;
+  //// Number of joints for a detected object
   int num_joints = -1;
 
+  ResultType type = ResultType::KEYPOINT_DETECTION;
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
 
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 

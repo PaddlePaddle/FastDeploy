@@ -4,7 +4,6 @@
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
-
 #include "fastdeploy/vision.h"
 
 namespace fastdeploy {
@@ -76,8 +75,9 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
       auto trainsize = op["trainsize"].as<std::vector<int>>();
       int height = trainsize[1];
       int width = trainsize[0];
+      cv::Mat trans_matrix(2, 3, CV_64FC1);
       processors_.push_back(
-          std::make_shared<Resize>(width, height, -1.0, -1.0, 1, false));
+          std::make_shared<WarpAffine>(trans_matrix, width, height, 1));
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
               << std::endl;
@@ -89,6 +89,23 @@ bool PPTinyPose::BuildPreprocessPipelineFromConfig() {
 
 bool PPTinyPose::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   for (size_t i = 0; i < processors_.size(); ++i) {
+    if (processors_[i]->Name().compare("WarpAffine") == 0) {
+      auto processor = dynamic_cast<WarpAffine*>(processors_[i].get());
+      float origin_width = static_cast<float>(mat->Width());
+      float origin_height = static_cast<float>(mat->Height());
+      std::vector<float> center = {origin_width / 2.0f, origin_height / 2.0f};
+      std::vector<float> scale = {origin_width, origin_height};
+      int resize_width = -1;
+      int resize_height = -1;
+      std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
+      cv::Mat trans_matrix(2, 3, CV_64FC1);
+      GetAffineTransform(center, scale, 0, {resize_width, resize_height}, &trans_matrix, 0);
+      if (!(processor->SetTransformMatrix(trans_matrix))) {
+        FDERROR << "Failed to set transform matrix of " 
+                << processors_[i]->Name()
+                << " processor." << std::endl;
+      }
+    }
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
@@ -150,9 +167,8 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
   result->num_joints = out_data_shape[1];
   result->keypoints.clear();
   for (int i = 0; i < out_data_shape[1]; i++) {
-    result->keypoints.emplace_back(preds[i * 3 + 1]);
-    result->keypoints.emplace_back(preds[i * 3 + 2]);
-    result->keypoints.emplace_back(preds[i * 3]);
+    result->keypoints.push_back({preds[i * 3 + 1], preds[i * 3 + 2]});
+    result->scores.push_back(preds[i * 3]);
   }
   return true;
 }
@@ -192,19 +208,10 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
   for (int i = 0; i < box_num; i++) {
     auto box = detection_result.boxes[i];
     auto label_id = detection_result.label_ids[i];
-    const int xmin = static_cast<int>(box[0]);
-    const int ymin = static_cast<int>(box[1]);
-    const int xmax = static_cast<int>(box[2]);
-    const int ymax = static_cast<int>(box[3]);
-    const int cropped_height = ymax - ymin;
-    const int cropped_width  = xmax - xmin;
-    const int channel = 3;
-    cv::Mat cv_crop_img(cropped_height, cropped_width, CV_32SC(channel));
+    int channel = im->channels();
+    cv::Mat cv_crop_img(0, 0, CV_32SC(channel));
     Mat crop_img(cv_crop_img);
-    std::vector<int> rect = {static_cast<int>(box[0]), 
-                             static_cast<int>(box[1]),   
-                             static_cast<int>(box[2]),
-                             static_cast<int>(box[3])};
+    std::vector<float> rect(box.begin(), box.end());
     std::vector<float> center;
     std::vector<float> scale;
     if (label_id == 0) {
@@ -242,6 +249,9 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
     std::copy(one_cropimg_result.keypoints.begin(),
               one_cropimg_result.keypoints.end(),
               std::back_inserter(result->keypoints));
+    std::copy(one_cropimg_result.scores.begin(),
+              one_cropimg_result.scores.end(),
+              std::back_inserter(result->scores));
   }
 
   return true;
