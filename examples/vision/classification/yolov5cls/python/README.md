@@ -12,7 +12,7 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/classification/yolov5cls/python/
 
-#下载yolov5cls模型文件和测试图片
+#下载 YOLOv5Cls 模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n-cls.onnx
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
