@@ -26,7 +26,7 @@ API:`fastdeploy.vision.DetectionResult` , 该结果返回:
 - **masks**: 成员变量，表示单张图片检测出来的所有实例mask，其元素个数及shape大小与boxes一致.
 - **contain_masks**: 成员变量，表示检测结果中是否包含实例mask，实例分割模型的结果此项一般为`True`.
 
-fastdeploy.vision.Mask  
+`fastdeploy.vision.Mask` , 该结果返回:
 - **data**: 成员变量，表示检测到的一个mask.
 - **shape**: 成员变量，表示mask的尺寸，如 `H*W`.
 
