@@ -55,7 +55,7 @@ API:`fastdeploy.vision.MattingResult`, 该结果返回:
 - **alpha**(list of float): 是一维向量，为预测的alpha透明度的值，值域为`[0.,1.]`，长度为`H*W`，H,W为输入图像的高和宽.
 - **foreground**(list of float): 是一维向量，为预测的前景，值域为`[0.,255.]`，长度为`H*W*C`，H,W为输入图像的高和宽，C一般为3，`foreground`不是一定有的，只有模型本身预测了前景，这个属性才会有效.
 - **contain_foreground**(bool): 表示预测的结果是否包含前景.
-- **shape**(list of int): 表示输出结果的shape，当`contain_foreground`为`false`，shape只包含`(H,W)`，当`contain_foreground`为true，shape包含`(H,W,C)`, C一般为3.
+- **shape**(list of int): 表示输出结果的shape，当`contain_foreground`为`false`，shape只包含`(H,W)`，当`contain_foreground`为`true`，shape包含`(H,W,C)`, C一般为3.
 
 ## OCRResult
 OCRResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测和识别出来的文本框，文本框方向分类，以及文本框内的文本内容.
