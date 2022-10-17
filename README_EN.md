@@ -84,7 +84,7 @@ English | [简体中文](README_CN.md)
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [Conda Installation (Recommended)](docs/quick_start/Python_prebuilt_wheels.md)
+##### [Conda Installation (Recommended)](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
@@ -129,7 +129,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 #### Installation
 
-- Please refer to [C++ Prebuilt Libraries Download](docs/quick_start/CPP_prebuilt_libraries.md)
+- Please refer to [C++ Prebuilt Libraries Download](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 #### C++ Inference Example
 
@@ -312,7 +312,7 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
     - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/194988203-d5e70b90-f2bb-4d45-b79b-4081b375dc41.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/196074889-259434b0-48a1-4a41-9946-6c5a701395c3.png"  width = "225" height = "225" />
 </div>
 
 

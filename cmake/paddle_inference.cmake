@@ -88,7 +88,7 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
   BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
 
-if(UNIX)
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
 endif()
 
