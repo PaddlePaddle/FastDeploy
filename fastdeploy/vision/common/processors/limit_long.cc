@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool LimitLong::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   int im_size_max = std::max(origin_w, origin_h);
