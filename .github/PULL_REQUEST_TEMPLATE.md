@@ -1,6 +1,6 @@
 <!-- Demo: https://github.com/PaddlePaddle/Paddle/pull/24810 -->
 ### PR types(PR类型)
-<!-- One of [ Model | Backend | Doc | Bug Fix] -->
+<!-- One of [ Model | Backend | Serving | Doc | Bug Fix | Other] -->
 
 The title of this pull request should be `[PR type] Description of this pull request`, e.g `[Model] PP-Matting deployment support`    
   
