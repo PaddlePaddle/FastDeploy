@@ -124,7 +124,7 @@ def process_on_mac(current_dir):
     for command in commands:
         assert os.system(
             command) == 0, "command execute failed! command: {}".format(
-            command)    
+            command)
 
 def process_on_windows(current_dir):
     libs_path = os.path.join(current_dir, "fastdeploy", "libs")
@@ -182,12 +182,13 @@ def process_libraries(current_dir):
             if f.count(flt) > 0:
                 remain = False
         filename = os.path.split(f)[-1]
-        if filename in [
-                "libnvinfer_plugin.so",
-                "libnvinfer.so", "libnvonnxparser.so",
-                "libnvparsers.so", "libnvcaffe_parser.so"
-        ]:
-            continue
+# Note(zhoushunjie): To add the trt libs below will increase the size of whl package by 450M.
+#        if filename in [
+#                "libnvinfer_plugin.so",
+#                "libnvinfer.so", "libnvonnxparser.so",
+#                "libnvparsers.so", "libnvcaffe_parser.so"
+#        ]:
+#            continue
 
         for lib_prefix in ["libnvinfer_plugin.so.8.",
             "libnvinfer.so.8.", "libnvonnxparser.so.8.",
