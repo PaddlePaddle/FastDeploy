@@ -275,9 +275,6 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
 }
 
 void RuntimeOption::EnableLiteFP16() {
-  FDASSERT(false,
-           "FP16 with LiteBackend for FastDeploy is not fully supported, "
-           "please do not use it now!");
   lite_enable_fp16 = true;
 }
 
