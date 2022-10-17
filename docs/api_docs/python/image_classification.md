@@ -7,3 +7,11 @@
     :members:
     :inherited-members:
 ```
+
+## fastdeploy.vision.classification.YOLOv5Cls
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.classification.YOLOv5Cls
+    :members:
+    :inherited-members:
+```
