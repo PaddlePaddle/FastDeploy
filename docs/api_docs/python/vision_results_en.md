@@ -25,7 +25,7 @@ API: `fastdeploy.vision.DetectionResult`, The DetectionResult will return:
 - **socres**(list of float):Member variable indicating the confidence of all targets detected by a single image.
 - **label_ids**(list of int):Member variable indicating all target categories detected for a single image.
 - **masks**:Member variable that represents all instances of mask detected from a single image, with the same number of elements and shape size as boxes.
-- **contain_masks**:Member variable indicating whether the detection result contains the instance mask, the result of the instance segmentation model is generally set to True.
+- **contain_masks**:Member variable indicating whether the detection result contains the instance mask, the result of the instance segmentation model is generally set to `True`.
 
 API: `fastdeploy.vision.Mask`, The Mask will return:
 - **data**:Member variable indicating a detected mask.
