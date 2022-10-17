@@ -36,8 +36,8 @@ bool Crop::ImplByOpenCV(Mat* mat) {
 }
 
 bool Crop::ImplByOpenCV(const Mat& src_im, Mat* dst_im) {
-  const cv::Mat* img = src_im.GetCpuMat();
-  cv::Mat* crop_img = dst_im->GetCpuMat();
+  const cv::Mat* img = src_im.GetOpenCVMat();
+  cv::Mat* crop_img = dst_im->GetOpenCVMat();
   int xmin = static_cast<int>(area_[0]);
   int ymin = static_cast<int>(area_[1]);
   int xmax = static_cast<int>(area_[2]);

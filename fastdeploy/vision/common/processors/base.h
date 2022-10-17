@@ -34,10 +34,18 @@ class Processor {
 
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
-  virtual bool ImplByOpenCV(const Mat& src_im, Mat* dst_im);
+  virtual bool ImplByOpenCV(const Mat& src_im, Mat* dst_im) {
+    FDASSERT(false,
+             "%s is not implemented function(source_mat, dest_mat) with OpenCV,"
+             "please use function(source_mat) instead.",
+             Name().c_str());
+    return false;
+  }
 
   virtual bool ImplByFalconCV(Mat* mat) {
-    FDASSERT(false, "%s is not implemented with FalconCV, please use OpenCV instead.", Name().c_str());
+    FDASSERT(false,
+             "%s is not implemented with FalconCV, please use OpenCV instead.",
+             Name().c_str());
     return false;
   }
 

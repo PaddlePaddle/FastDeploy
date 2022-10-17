@@ -23,8 +23,8 @@
 #endif
 
 namespace fcv {
-  class Mat;
-}
+class Mat;
+}  // namespace fcv
 
 namespace fastdeploy {
 namespace vision {
@@ -52,6 +52,11 @@ struct FASTDEPLOY_DECL Mat {
   }
 
   inline cv::Mat* GetOpenCVMat() {
+    FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
+    return &cpu_mat;
+  }
+
+  inline const cv::Mat* GetOpenCVMat() const {
     FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
     return &cpu_mat;
   }
@@ -85,9 +90,6 @@ struct FASTDEPLOY_DECL Mat {
   T* GetMat() {
     return &cpu_mat;
   }
-
-  cv::Mat* GetCpuMat();
-  const cv::Mat* GetCpuMat() const;
 
   FDDataType Type();
   int Channels() const { return channels; }

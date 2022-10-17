@@ -32,12 +32,6 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ret;
 }
 
-bool Processor::ImplByOpenCV(const Mat& src_im, Mat* dst_im) {
-  std::cerr << "The function ImplByOpenCV(const Mat& src_im, Mat* dst_im) don't realize in child class," 
-	       "If you want to use it, please realize in the specific child class "<< std::endl;
-  return false;
-}
-
 bool Processor::operator()(const Mat& src_im, Mat* dst_im, ProcLib lib) {
   // if default_lib is set
   // then use default_lib

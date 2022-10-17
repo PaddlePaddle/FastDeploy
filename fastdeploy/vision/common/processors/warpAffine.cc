@@ -22,7 +22,7 @@ bool WarpAffine::ImplByOpenCV(Mat* mat) {
     FDERROR << "WarpAffine: The format of input is not HWC." << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   if (width_ > 0 && height_ > 0) {
     cv::warpAffine(*im, *im, trans_matrix_, cv::Size(width_, height_), interp_, border_mode_, borderValue_);
   } else {
