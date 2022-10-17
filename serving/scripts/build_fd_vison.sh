@@ -23,7 +23,7 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
 fi
 
 docker run -it --rm --name build_fd_vison \
-           -v`pwd`:/workspace/fastdeploy \
+           -v`pwd`/..:/workspace/fastdeploy \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;
@@ -31,7 +31,7 @@ docker run -it --rm --name build_fd_vison \
             apt-get update;
             apt-get install -y --no-install-recommends patchelf python3-dev python3-pip;
             ln -s /usr/bin/python3 /usr/bin/python;
-            export PATH=/workspace/fastdeploy/cmake-3.18.6-Linux-x86_64/bin:$PATH;
+            export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
             export ENABLE_ORT_BACKEND=OFF;
             export ENABLE_VISION=ON;
@@ -42,7 +42,7 @@ docker run -it --rm --name build_fd_vison \
 else
 
 docker run -it --rm --name build_fd_vison \
-           -v`pwd`:/workspace/fastdeploy \
+           -v`pwd`/..:/workspace/fastdeploy \
            paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
