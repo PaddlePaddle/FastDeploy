@@ -19,7 +19,7 @@ make -j
 
 #下载官方转换好的yolov5模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n-cls.onnx
-wget hhttps://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
+wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 
 # CPU推理
