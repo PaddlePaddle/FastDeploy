@@ -203,6 +203,11 @@ bool PPTracking::Initialize() {
            << ")." << std::endl;
     has_nms_ = false;
   }
+
+  // create JDETracker instance
+  std::unique_ptr<JDETracker> jdeTracker(new JDETracker);
+  jdeTracker_ = std::move(jdeTracker);
+
   return true;
 }
 
@@ -294,7 +299,7 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
       new_dets.push_back(dets.row(valid[i]));
       new_emb.push_back(emb.row(valid[i]));
   }
-  JDETracker::instance()->update(new_dets, new_emb, &tracks);
+  jdeTracker_->update(new_dets, new_emb, &tracks);
   if (tracks.size() == 0) {
     std::array<int ,4> box={int(*dets.ptr<float>(0, 0)),
                             int(*dets.ptr<float>(0, 1)),

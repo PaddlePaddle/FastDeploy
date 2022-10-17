@@ -70,6 +70,7 @@ private:
   float tracked_thresh_;
   float min_box_area_;
   bool is_scale_ = true;
+  std::unique_ptr<JDETracker> jdeTracker_;
 
   // configuration for nms
   int64_t background_label = -1;

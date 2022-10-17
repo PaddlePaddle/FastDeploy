@@ -42,14 +42,15 @@ struct Track {
 
 class JDETracker {
  public:
-  static JDETracker *instance(void);
+
+  JDETracker();
+
   virtual bool update(const cv::Mat &dets,
                       const cv::Mat &emb,
                       std::vector<Track> *tracks);
-
+  virtual ~JDETracker() {}
  private:
-  JDETracker(void);
-  virtual ~JDETracker(void) {}
+
   cv::Mat motion_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b);
   void linear_assignment(const cv::Mat &cost,
                          float cost_limit,

@@ -45,11 +45,8 @@ static std::map<int, float> chi2inv95 = {{1, 3.841459f},
                                          {8, 15.507313f},
                                          {9, 16.918978f}};
 
-JDETracker *JDETracker::me = new JDETracker;
 
-JDETracker *JDETracker::instance(void) { return me; }
-
-JDETracker::JDETracker(void)
+JDETracker::JDETracker()
     : timestamp(0), max_lost_time(30), lambda(0.98f), det_thresh(0.3f) {}
 
 bool JDETracker::update(const cv::Mat &dets,
