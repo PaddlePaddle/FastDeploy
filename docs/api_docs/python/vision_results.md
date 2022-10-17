@@ -1,4 +1,4 @@
-# Description of vision model prediction results
+# Description of Vision Results
 
 ## ClassifyResult
 The code of ClassifyResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the classification label result and confidence the image.
@@ -59,8 +59,8 @@ API:`fastdeploy.vision.MattingResult`, The MattingResult will return:
 The OCRResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the text box detected in the image, the text box orientation classification, and the text content recognized inside the text box.
 
 API:`fastdeploy.vision.OCRResult`, The OCRResult will return:
-- **boxes**: Member variable, indicates the coordinates of all target boxes detected in a single image, `boxes.size()` indicates the number of boxes detected in a single image, each box is represented by 8 int values in order of the 4 coordinate points of the box, the order is lower left, lower right, upper right, upper left
-- **text**:Member variable indicating the content of the recognized text in multiple text boxes, with the same number of elements as `boxes.size()`
-- **rec_scores**:Member variable indicating the confidence level of the text identified in the box, the number of elements is the same as `boxes.size()`
-- **cls_scores**:Member variable indicating the confidence level of the classification result of the text box, with the same number of elements as `boxes.size()`
-- **cls_scores**:Member variable indicating the orientation category of the text box, the number of elements is the same as `boxes.size(`)
+- **boxes**(list of list(int)): Member variable, indicates the coordinates of all target boxes detected in a single image, `boxes.size()` indicates the number of boxes detected in a single image, each box is represented by 8 int values in order of the 4 coordinate points of the box, the order is lower left, lower right, upper right, upper left.
+- **text**(list of string):Member variable indicating the content of the recognized text in multiple text boxes, with the same number of elements as `boxes.size()`
+- **rec_scores**(list of float):Member variable indicating the confidence level of the text identified in the box, the number of elements is the same as `boxes.size()`
+- **cls_scores**(list of float):Member variable indicating the confidence level of the classification result of the text box, with the same number of elements as `boxes.size()`
+- **cls_labels**(list if int):Member variable indicating the orientation category of the text box, the number of elements is the same as `boxes.size(`)
