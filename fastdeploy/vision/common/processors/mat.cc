@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/utils.h"
 #include "fastdeploy/utils/utils.h"
+
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat* Mat::GetCpuMat() {
-  return &cpu_mat;
+void* Mat::Data() {
+  if (mat_type == ProcLib::FALCONCV) {
+#ifdef ENABLE_FALCONCV
+    return fcv_mat.data();
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");
+#endif
+  }
+  return cpu_mat.ptr();
 }
 
 const cv::Mat* Mat::GetCpuMat() const {
@@ -26,7 +35,7 @@ const cv::Mat* Mat::GetCpuMat() const {
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
-                          GetCpuMat()->ptr());
+                          Data());
   tensor->device = Device::CPU;
   if (layout == Layout::HWC) {
     tensor->shape = {Height(), Width(), Channels()};
@@ -34,8 +43,7 @@ void Mat::ShareWithTensor(FDTensor* tensor) {
 }
 
 bool Mat::CopyToTensor(FDTensor* tensor) {
-  cv::Mat* im = GetCpuMat();
-  int total_bytes = im->total() * im->elemSize();
+  int total_bytes = Height() * Width() * Channels() * FDDataTypeSize(Type());
   if (total_bytes != tensor->Nbytes()) {
     FDERROR << "While copy Mat to Tensor, requires the memory size be same, "
                "but now size of Tensor = "
@@ -43,53 +51,52 @@ bool Mat::CopyToTensor(FDTensor* tensor) {
             << std::endl;
     return false;
   }
-  memcpy(tensor->MutableData(), im->ptr(), im->total() * im->elemSize());
+  memcpy(tensor->MutableData(), Data(), total_bytes);
   return true;
 }
 
 void Mat::PrintInfo(const std::string& flag) {
-  cv::Mat* im = GetCpuMat();
-  cv::Scalar mean = cv::mean(*im);
-  std::cout << flag << ": "
-            << "Channel=" << Channels() << ", height=" << Height()
-            << ", width=" << Width() << ", mean=";
-  for (int i = 0; i < Channels(); ++i) {
-    std::cout << mean[i] << " ";
+  if (mat_type == ProcLib::FALCONCV) {
+#ifdef ENABLE_FALCONCV
+    fcv::Scalar mean = fcv::mean(fcv_mat);
+    std::cout << flag << ": "
+	      << "DataType=" << Type() << ", "
+	      << "Channel=" << Channels() << ", "
+	      << "Height=" << Height() << ", "
+	      << "Width=" << Width() << ", "
+	      << "Mean=";
+    for (int i = 0; i < Channels(); ++i) {
+      std::cout << mean[i] << " ";
+    }
+    std::cout << std::endl;
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");
+#endif
+  } else {
+    cv::Scalar mean = cv::mean(cpu_mat);
+    std::cout << flag << ": "
+	      << "DataType=" << Type() << ", "
+	      << "Channel=" << Channels() << ", "
+	      << "Height=" << Height() << ", "
+	      << "Width=" << Width() << ", "
+	      << "Mean=";
+    for (int i = 0; i < Channels(); ++i) {
+      std::cout << mean[i] << " ";
+    }
+    std::cout << std::endl;
   }
-  std::cout << std::endl;
 }
 
 FDDataType Mat::Type() {
-  int type = -1;
-  type = cpu_mat.type();
-  if (type < 0) {
-    FDASSERT(false,
-             "While calling Mat::Type(), get negative value, which is not "
-             "expected!.");
+  int type = -1; 
+  if (mat_type == ProcLib::FALCONCV) {
+#ifdef ENABLE_FALCONCV
+    return FalconCVDataTypeToFD(fcv_mat.type());
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");
+#endif
   }
-  type = type % 8;
-  if (type == 0) {
-    return FDDataType::UINT8;
-  } else if (type == 1) {
-    return FDDataType::INT8;
-  } else if (type == 2) {
-    FDASSERT(false,
-             "While calling Mat::Type(), get UINT16 type which is not "
-             "supported now.");
-  } else if (type == 3) {
-    return FDDataType::INT16;
-  } else if (type == 4) {
-    return FDDataType::INT32;
-  } else if (type == 5) {
-    return FDDataType::FP32;
-  } else if (type == 6) {
-    return FDDataType::FP64;
-  } else {
-    FDASSERT(
-        false,
-        "While calling Mat::Type(), get type = %d, which is not expected!.",
-        type);
-  }
+  return OpenCVDataTypeToFD(cpu_mat.type());
 }
 
 Mat CreateFromTensor(const FDTensor& tensor) {
@@ -142,6 +149,7 @@ Mat CreateFromTensor(const FDTensor& tensor) {
   Mat mat = Mat(temp_mat);
   return mat;
 }
+
 
 }  // namespace vision
 }  // namespace fastdeploy

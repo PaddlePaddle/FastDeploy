@@ -36,9 +36,10 @@ class Processor {
 
   virtual bool ImplByOpenCV(const Mat& src_im, Mat* dst_im);
 
-//  virtual bool ImplByFalconCV(Mat* mat) {
-//    return ImplByOpenCV(mat);
-//  }
+  virtual bool ImplByFalconCV(Mat* mat) {
+    FDASSERT(false, "%s is not implemented with FalconCV, please use OpenCV instead.", Name().c_str());
+    return false;
+  }
 
   virtual bool operator()(Mat* mat,
                           ProcLib lib = ProcLib::OPENCV);
