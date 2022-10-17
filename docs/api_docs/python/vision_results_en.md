@@ -4,17 +4,17 @@
 The code of ClassifyResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the classification label result and confidence the image.
 
 API: `fastdeploy.vision.ClassifyResult`, The ClassifyResult will return:
-- **label_ids**(list of int):Member variables that represent the classification label results of a single image, the number of which is determined by the  `topk ` passed in when using the classification model. For example, you can return the label results of the Top 5 categories.
+- **label_ids**(list of int):Member variables that represent the classification label results of a single image, the number of which is determined by the  `topk` passed in when using the classification model. For example, you can return the label results of the Top 5 categories.
 
-- **scores**(list of float):Member variables that indicate the confidence level of a single image on the corresponding classification result, the number of which is determined by the  `topk ` passed in when using the classification model, e.g. the confidence level of a Top 5 classification can be returned.
+- **scores**(list of float):Member variables that indicate the confidence level of a single image on the corresponding classification result, the number of which is determined by the  `topk` passed in when using the classification model, e.g. the confidence level of a Top 5 classification can be returned.
 
 ## SegmentationResult
 The code of SegmentationResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the segmentation category predicted for each pixel in the image and the probability of the segmentation category.
 
 API: `fastdeploy.vision.SegmentationResult`, The SegmentationResult will return:
 - **label_ids**(list of int):Member variable indicating the segmentation category for each pixel of a single image.
-- **score_map**(list of float):Member variable, the predicted probability value of the segmentation category corresponding to  `label_map ` (specified when exporting the model `--output_op argmax`) or the probability value normalized by softmax (specified when exporting the model `--output_op softmax` or when exporting the model `--output_op none` and set the model class member attribute `apply_softmax=true` when initializing the model).
-- **shape**(list of int):Member variable indicating the shape of the output image, as  `H*W `.
+- **score_map**(list of float):Member variable, the predicted probability value of the segmentation category corresponding to  `label_map` (specified when exporting the model `--output_op argmax`) or the probability value normalized by softmax (specified when exporting the model `--output_op softmax` or when exporting the model `--output_op none` and set the model class member attribute `apply_softmax=true` when initializing the model).
+- **shape**(list of int):Member variable indicating the shape of the output image, as  `H*W`.
 
 
 ## DetectionResult
@@ -27,9 +27,9 @@ API: `fastdeploy.vision.DetectionResult`, The DetectionResult will return:
 - **masks**:Member variable that represents all instances of mask detected from a single image, with the same number of elements and shape size as boxes.
 - **contain_masks**:Member variable indicating whether the detection result contains the instance mask, the result of the instance segmentation model is generally set to True.
 
-API: `fastdeploy.vision.Mask `, The Mask will return:
+API: `fastdeploy.vision.Mask`, The Mask will return:
 - **data**:Member variable indicating a detected mask.
-- **shape**:Member variable representing the shape of the mask, e.g.  `(H,W) `.
+- **shape**:Member variable representing the shape of the mask, e.g.  `(H,W)`.
 
 ## FaceDetectionResult
 The FaceDetectionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the target frames detected by face detection, face landmarks, target confidence and the number of landmarks per face.
