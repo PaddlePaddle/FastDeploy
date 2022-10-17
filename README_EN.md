@@ -28,17 +28,24 @@ English | [简体中文](README_CN.md)
 | **Face Alignment**                                                                                                                             | **3D Object Detection**                                                                                                                        | **Face Editing**                                                                                                                                 | **Image Animation**                                                                                                                            |
 | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054663-b0c9c037-6d12-4e90-a7e4-e9abf4cf9b97.gif' height="126px" width="126px">   | <img src='https://user-images.githubusercontent.com/54695910/188056800-2190e05e-ad1f-40ef-bf71-df24c3407b2d.gif' height="126px" width="190px"> |
 
-## Updates
+## 📣 Recent Updates
 
-- 🔥 **2022.8.18：Release FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/releases/tag/release%2F0.2.0)** <br>
-  - **New server-side deployment upgrade: faster inference performance, support more vision model**
+- 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.3.0)** <br>
+  - **New server-side deployment upgrade: support more CV model and NLP model**
+       - Integrate OpenVINO and provide a seamless deployment experience with other inference engines include TensorRT、ONNX Runtime、Paddle Inference；
+       - Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
+       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
+       - New information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie).
+
+- 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
+  - **New server-side deployment upgrade: faster inference performance, support more CV model**
     - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
-    - Integrate Paddle Inference, ONNXRuntime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [End-To-End Deployment Demos](examples/vision/detection/)
-    - Support over 40 key models and [Demo Examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
+    - Integrate Paddle Inference, ONNX Runtime, TensorRT and other inference engines and provide a seamless deployment experience
+    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [end-to-end deployment demos](examples/vision/detection/)
+    - Support over 40 key models and [demo examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
     - Support deployment in both Python and C++
   - **Supports Rockchip, Amlogic, NXP and other NPU chip deployment capabilities on edge device deployment**
-    - Release Lightweight Object Detection [Picodet-NPU Deployment Demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
+    - Release Lightweight Object Detection [Picodet-NPU deployment demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
@@ -71,19 +78,19 @@ English | [简体中文](README_CN.md)
 - python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### Install Library with GPU Support
+##### Install Fastdeploy SDK with CPU&GPU support
 
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [Conda Installation (Recommended)](docs/quick_start/Python_prebuilt_wheels.md)
+##### [Conda Installation (Recommended)](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### Install CPU-only Library
+##### Install Fastdeploy SDK with only CPU support
 
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -122,7 +129,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 #### Installation
 
-- Please refer to [C++ Prebuilt Libraries Download](docs/quick_start/CPP_prebuilt_libraries.md)
+- Please refer to [C++ Prebuilt Libraries Download](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 #### C++ Inference Example
 
@@ -155,8 +162,7 @@ int main(int argc, char* argv[]) {
   return 0;
  }
 ```
-
-### For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
+For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
 
 
@@ -164,9 +170,7 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-server-models"></div>
 
-Notes:
-
-✅: already supported; ❔: to be supported in the future; ❌: not supported now; 
+Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supported now;
 
 
 
@@ -218,8 +222,8 @@ Notes:
 | <font size=2> Face Recognition | <font size=2> [insightface/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ |
 | <font size=2> Face Recognition | <font size=2> [insightface/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ |
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PPMatting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PPHumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
+| <font size=2> Matting | <font size=2> [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
+| <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 | <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 | <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅|
 
@@ -303,15 +307,15 @@ Notes:
 <div id="fastdeploy-community"></div>
 
 - If you have any question or suggestion, please give us your valuable input via GitHub Issues
-- **Join Us👬：** 
+- **Join Us👬：**
     - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
     - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/194988203-d5e70b90-f2bb-4d45-b79b-4081b375dc41.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/196074889-259434b0-48a1-4a41-9946-6c5a701395c3.png"  width = "225" height = "225" />
 </div>
-    
-    
+
+
 
 ## Acknowledge
 

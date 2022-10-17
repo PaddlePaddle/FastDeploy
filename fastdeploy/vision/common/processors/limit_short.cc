@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool LimitShort::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   int im_size_min = std::min(origin_w, origin_h);

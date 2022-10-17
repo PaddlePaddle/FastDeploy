@@ -20,7 +20,7 @@ COPY --from=full /opt/tritonserver/lib /opt/tritonserver/lib
 COPY --from=full /opt/tritonserver/include /opt/tritonserver/include
 COPY --from=full /opt/tritonserver/backends/python /opt/tritonserver/backends/python
 
-COPY TensorRT-8.4.1.5 /opt/
+COPY serving/TensorRT-8.4.1.5 /opt/
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \

@@ -22,7 +22,7 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
             << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat im_clone = im->clone();
   int rh = im->rows;
   int rw = im->cols;
