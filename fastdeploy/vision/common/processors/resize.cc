@@ -22,7 +22,7 @@ bool Resize::ImplByOpenCV(Mat* mat) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   if (width_ > 0 && height_ > 0) {

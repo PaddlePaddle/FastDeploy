@@ -29,7 +29,7 @@ Convert::Convert(const std::vector<float>& alpha,
 }
 
 bool Convert::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
   for (int c = 0; c < im->channels(); c++) {
