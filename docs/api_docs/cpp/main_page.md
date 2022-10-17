@@ -11,6 +11,7 @@ Currently, FastDeploy supported backends listed as below,
 | ONNX Runtime | CPU/Nvidia GPU | Paddle/ONNX | Windows(x64)/Linux(x64/aarch64)/Mac(x86/arm64) |
 | TensorRT | Nvidia GPU | Paddle/ONNX | Windows(x64)/Linux(x64)/Jetson |
 | OpenVINO | CPU | Paddle/ONNX | Windows(x64)/Linux(x64)/Mac(x86) |
+| Poros | CPU/Nvidia GPU | TorchScript | Linux(x64) |
 
 ### Example code
 - [Python examples](./)
