@@ -432,7 +432,7 @@ Page({
       const me = this;
       // 初始化Runner
       detectRunner = new paddlejs.Runner({
-          modelPath: 'https://paddleocr.bj.bcebos.com/PaddleJS/PP-OCRv3/ch/ch_PP-OCRv3_det_infer_js_640/model.json',
+          modelPath: 'https://paddleocr.bj.bcebos.com/PaddleJS/PP-OCRv3/ch/ch_PP-OCRv3_det_infer_js_960/model.json',
           mean: [0.485, 0.456, 0.406],
           std: [0.229, 0.224, 0.225],
           bgr: true,

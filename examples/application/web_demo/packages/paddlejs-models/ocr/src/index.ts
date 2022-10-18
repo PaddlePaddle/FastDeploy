@@ -30,7 +30,7 @@ export interface DetPostConfig {
 }
 const defaultPostConfig: DetPostConfig = {shape: 960, thresh: 0.3, box_thresh: 0.6, unclip_ratio:1.5};
 
-let DEFAULTDETSHAPE = 640;
+let DEFAULTDETSHAPE = 960;
 let RECWIDTH = 320;
 let RECHEIGHT = 48;
 const canvas_det = document.createElement('canvas') as HTMLCanvasElement;
@@ -50,7 +50,7 @@ function initCanvas(canvas: HTMLCanvasElement) {
 }
 
 export async function init(detCustomModel = '', recCustomModel = '') {
-    const detModelPath = 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_640/model.json';
+    const detModelPath = 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json';
     const recModelPath = 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_rec_infer_js/model.json';
     env.set('webgl_pack_output', true);
     detectRunner = new Runner({
