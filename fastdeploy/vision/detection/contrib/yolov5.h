@@ -28,6 +28,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
          const RuntimeOption& custom_option = RuntimeOption(),
          const ModelFormat& model_format = ModelFormat::ONNX);
 
+  ~YOLOv5();
+
   std::string ModelName() const { return "yolov5"; }
 
   virtual bool Predict(cv::Mat* im, DetectionResult* result,

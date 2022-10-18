@@ -119,6 +119,14 @@ bool YOLOv5::Initialize() {
   return true;
 }
 
+YOLOv5::~YOLOv5() {
+  if (runtime_option.use_cuda_preprocessing) {
+    CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
+    CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
+    CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
+  }
+}
+
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
                         std::map<std::string, std::array<float, 2>>* im_info,
                         const std::vector<int>& size,
@@ -197,6 +205,7 @@ bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
                             mat->Height(), input_tensor_cuda_buffer_device_,
                             size[0], size[1], padding_value, stream);
   cudaStreamSynchronize(stream);
+  cudaStreamDestroy(stream);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(size[0]), static_cast<float>(size[1])};
