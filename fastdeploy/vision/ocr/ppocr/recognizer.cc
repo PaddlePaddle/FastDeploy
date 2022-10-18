@@ -158,11 +158,15 @@ bool Recognizer::Postprocess(FDTensor& infer_result,
     if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
       score += max_value;
       count += 1;
+      if(argmax_idx > label_list.size()){
+        FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "
+        << label_list.size() << ". Please check the label file!" << std::endl;
+        return false; 
+      }
       str_res += label_list[argmax_idx];
     }
     last_index = argmax_idx;
   }
-
   score /= count;
 
   std::get<0>(*rec_result) = str_res;
