@@ -208,7 +208,7 @@ void YOLOv5Lite::UseCudaPreprocessing(int max_image_size) {
 }
 
 bool YOLOv5Lite::CudaPreprocess(Mat* mat, FDTensor* output,
-                            std::map<std::string, std::array<float, 2>>* im_info) {
+                                std::map<std::string, std::array<float, 2>>* im_info) {
 #ifdef ENABLE_CUDA_SRC
   if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
     FDERROR << "Upsupported arguments for CUDA preprocess." << std::endl;

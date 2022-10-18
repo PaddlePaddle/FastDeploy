@@ -103,7 +103,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
-                 
+
   // generate anchors for decodeing when ONNX file without decode module.
   void GenerateAnchors(const std::vector<int>& size,
                        const std::vector<int>& downsample_strides,

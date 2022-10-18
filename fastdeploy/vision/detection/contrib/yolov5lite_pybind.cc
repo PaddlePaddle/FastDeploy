@@ -29,7 +29,7 @@ void BindYOLOv5Lite(pybind11::module& m) {
              return res;
            })
       .def("use_cuda_preprocessing",
-           [](vision::detection::YOLOv5Lite& self,, int max_image_size) {
+           [](vision::detection::YOLOv5Lite& self, int max_image_size) {
              self.UseCudaPreprocessing(max_image_size);
            })
       .def_readwrite("size", &vision::detection::YOLOv5Lite::size)
