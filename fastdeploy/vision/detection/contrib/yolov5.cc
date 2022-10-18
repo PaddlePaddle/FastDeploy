@@ -82,7 +82,7 @@ bool YOLOv5::Initialize() {
   padding_value_ = {114.0, 114.0, 114.0};
   is_mini_pad_ = false;
   is_no_pad_ = false;
-  is_scale_up_ = false;
+  is_scale_up_ = runtime_option.use_cuda_preprocessing ? true : false;
   stride_ = 32;
   max_wh_ = 7680.0;
   multi_label_ = true;
@@ -175,6 +175,11 @@ bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
                             bool is_mini_pad, bool is_no_pad, bool is_scale_up,
                             int stride, float max_wh, bool multi_label) {
 #ifdef ENABLE_CUDA_SRC
+  if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
+    FDERROR << "Upsupported arguments for CUDA preprocess." << std::endl;
+    return false;
+  }
+
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
