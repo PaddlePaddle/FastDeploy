@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
-#include "fastdeploy/vision.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
@@ -163,8 +162,8 @@ bool PPMatting::Postprocess(
     const std::map<std::string, std::array<int, 2>>& im_info) {
   FDASSERT((infer_result.size() == 1),
            "The default number of output tensor must be 1 ");
-  FDTensor& alpha_tensor = infer_result.at(0);  // (1,h,w,1)
-  FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch =1 now.");
+  FDTensor& alpha_tensor = infer_result.at(0);  // (1, 1, h, w)
+  FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch = 1 now.");
   if (alpha_tensor.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;

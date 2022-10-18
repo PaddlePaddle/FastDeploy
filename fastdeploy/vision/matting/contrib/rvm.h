@@ -32,12 +32,8 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
 
   std::string ModelName() const { return "matting/RobustVideoMatting"; }
 
-  // tuple of (width, height), default (256, 256)
+  // tuple of (width, height), default (1080, 1920)
   std::vector<int> size;
-  std::vector<float> alpha;
-  std::vector<float> beta;
-  // whether to swap the B and R channel, such as BGR->RGB, default true.
-  bool swap_rb;
 
   bool Predict(cv::Mat* im, MattingResult* result);
 
@@ -49,6 +45,22 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
 
   bool Postprocess(std::vector<FDTensor>& infer_result, MattingResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
+  // init dynamic inputs datas
+  std::vector<std::vector<float>> dynamic_inputs_datas_ = {
+     {0.0f},  // r1i
+     {0.0f},  // r2i
+     {0.0f},  // r3i
+     {0.0f},  // r4i
+     {0.25f},  // downsample_ratio
+  };
+  // init dynamic inputs dims
+  std::vector<std::vector<int64_t>> dynamic_inputs_dims_ = {
+     {1, 1, 1, 1},  // r1i
+     {1, 1, 1, 1},  // r2i
+     {1, 1, 1, 1},  // r3i
+     {1, 1, 1, 1},  // r4i
+     {1},  // downsample_ratio
+  };
 };
 
 }  // namespace matting

@@ -86,7 +86,7 @@ bool MODNet::Postprocess(
   FDASSERT((infer_result.size() == 1),
            "The default number of output tensor must be 1 according to "
            "modnet.");
-  FDTensor& alpha_tensor = infer_result.at(0);  // (1,h,w,1)
+  FDTensor& alpha_tensor = infer_result.at(0);  // (1, 1, h, w)
   FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch =1 now.");
   if (alpha_tensor.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;

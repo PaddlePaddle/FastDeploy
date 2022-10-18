@@ -41,7 +41,7 @@ RobustVideoMatting::RobustVideoMatting(const std::string& model_file, const std:
 
 bool RobustVideoMatting::Initialize() {
   // parameters for preprocess
-  size = {256, 256};
+  size = {1080, 1920};
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -78,39 +78,50 @@ bool RobustVideoMatting::Preprocess(Mat* mat, FDTensor* output,
 bool RobustVideoMatting::Postprocess(
     std::vector<FDTensor>& infer_result, MattingResult* result,
     const std::map<std::string, std::array<int, 2>>& im_info) {
-  FDASSERT((infer_result.size() == 1),
-           "The default number of output tensor must be 1 according to "
+  FDASSERT((infer_result.size() == 6),
+           "The default number of output tensor must be 6 according to "
            "RobustVideoMatting.");
-  FDTensor& alpha_tensor = infer_result.at(0);  // (1,h,w,1)
-  FDASSERT((alpha_tensor.shape[0] == 1), "Only support batch =1 now.");
-  if (alpha_tensor.dtype != FDDataType::FP32) {
+  FDTensor& fgr = infer_result.at(0); // fgr (1, 3, h, w) 0.~1.
+  FDTensor& alpha = infer_result.at(1);  // alpha (1, 1, h, w) 0.~1.
+  FDASSERT((fgr.shape[0] == 1), "Only support batch = 1 now.");
+  FDASSERT((alpha.shape[0] == 1), "Only support batch = 1 now.");
+  if (fgr.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
   }
+  if (alpha.dtype != FDDataType::FP32) {
+    FDERROR << "Only support post process with float32 data." << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < 4; ++i) {
+    FDTensor& rki = infer_result.at(i+2);
+    dynamic_inputs_dims_[i] = rki.shape;
+    dynamic_inputs_datas_[i].resize(rki.Numel());
+    memcpy(dynamic_inputs_datas_[i].data(), rki.Data(),
+                        rki.Numel() * FDDataTypeSize(rki.dtype));
+  }
 
-  auto iter_ipt = im_info.find("input_shape");
+  auto iter_in = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
-  FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
+  FDASSERT(iter_out != im_info.end() && iter_in != im_info.end(),
            "Cannot find input_shape or output_shape from im_info.");
   int out_h = iter_out->second[0];
   int out_w = iter_out->second[1];
-  int ipt_h = iter_ipt->second[0];
-  int ipt_w = iter_ipt->second[1];
+  int in_h = iter_in->second[0];
+  int in_w = iter_in->second[1];
 
-  float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
+  float* alpha_ptr = static_cast<float*>(alpha.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
-  if ((out_h != ipt_h) || (out_w != ipt_w)) {
+  if ((out_h != in_h) || (out_w != in_w)) {
     // already allocated a new continuous memory after resize.
-    // cv::resize(alpha_resized, alpha_resized, cv::Size(ipt_w, ipt_h));
-    Resize::Run(&alpha_resized, ipt_w, ipt_h, -1, -1);
+    Resize::Run(&alpha_resized, in_w, in_h, -1, -1);
   }
 
   result->Clear();
-  // note: must be setup shape before Resize
   result->contain_foreground = false;
-  result->shape = {static_cast<int64_t>(ipt_h), static_cast<int64_t>(ipt_w)};
-  int numel = ipt_h * ipt_w;
+  result->shape = {static_cast<int64_t>(in_h), static_cast<int64_t>(in_w)};
+  int numel = in_h * in_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
   std::memcpy(result->alpha.data(), alpha_resized.GetCpuMat()->data, nbytes);
@@ -119,18 +130,23 @@ bool RobustVideoMatting::Postprocess(
 
 bool RobustVideoMatting::Predict(cv::Mat* im, MattingResult* result) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
-
+  std::vector<FDTensor> input_tensors(6);
   std::map<std::string, std::array<int, 2>> im_info;
   // Record the shape of image and the shape of preprocessed image
   im_info["input_shape"] = {mat.Height(), mat.Width()};
   im_info["output_shape"] = {mat.Height(), mat.Width()};
-
+  // convert vector to FDTensor
+  for (size_t i = 1; i < 6; ++i) {
+    input_tensors[i].SetExternalData(dynamic_inputs_dims_[i-1], FDDataType::FP32, dynamic_inputs_datas_[i-1].data());
+    input_tensors[i].device = Device::CPU;
+  }
   if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
+  for (size_t i = 0; i < 6; ++i) {
+    input_tensors[i].name = InputInfoOfRuntime(i).name;
+  }
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;

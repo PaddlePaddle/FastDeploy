@@ -39,6 +39,7 @@
 #include "fastdeploy/vision/faceid/contrib/partial_fc.h"
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
+#include "fastdeploy/vision/matting/contrib/rvm.h"
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
