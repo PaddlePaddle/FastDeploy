@@ -1,0 +1,32 @@
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM paddlepaddle/fastdeploy:22.09-cpu-only-min
+
+ENV TZ=Asia/Shanghai \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 \
+    && python3 -m pip install -U pip \
+    && python3 -m pip install paddlepaddle paddlenlp faster_tokenizer 
+
+COPY python/dist/*.whl *.whl /opt/fastdeploy/ 
+RUN python3 -m pip install  /opt/fastdeploy/*.whl \
+    && rm -rf /opt/fastdeploy/*.whl
+
+COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
+COPY build/fastdeploy-0.0.3 /opt/fastdeploy/
+
+RUN mv /opt/tritonserver/bin/tritonserver /opt/tritonserver/bin/fastdeployserver
+ENV LD_LIBRARY_PATH="/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
