@@ -57,10 +57,6 @@
 #cmakedefine ENABLE_TEXT
 #endif
 
-#ifndef ENABLE_PIPELINE
-#cmakedefine ENABLE_PIPELINE
-#endif
-
 #ifndef ENABLE_OPENCV_CUDA
 #cmakedefine ENABLE_OPENCV_CUDA
 #endif

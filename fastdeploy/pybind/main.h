@@ -24,14 +24,11 @@
 
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision.h"
+#include "fastdeploy/pipeline.h"
 #endif
 
 #ifdef ENABLE_TEXT
 #include "fastdeploy/text.h"
-#endif
-
-#ifdef ENABLE_PIPELINE
-#include "fastdeploy/pipeline.h"
 #endif
 
 #include "fastdeploy/core/float16.h"

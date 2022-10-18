@@ -14,7 +14,7 @@
 #pragma once
 
 #include "fastdeploy/core/config.h"
-#ifdef ENABLE_PIPELINE
+#ifdef ENABLE_VISION
 #include "fastdeploy/pipeline/pptinypose/pipeline.h"
 #endif
 
