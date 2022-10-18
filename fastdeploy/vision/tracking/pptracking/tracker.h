@@ -25,6 +25,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/tracking/pptracking/trajectory.h"
 
 namespace fastdeploy {
@@ -40,7 +41,7 @@ struct Track {
   cv::Vec4f ltrb;
 };
 
-class JDETracker {
+class FASTDEPLOY_DECL JDETracker {
  public:
 
   JDETracker();
@@ -62,7 +63,6 @@ class JDETracker {
                                    float iou_thresh = 0.15f);
 
  private:
-  static JDETracker *me;
   int timestamp;
   TrajectoryPool tracked_trajectories;
   TrajectoryPool lost_trajectories;
