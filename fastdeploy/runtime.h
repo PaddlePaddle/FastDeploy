@@ -100,6 +100,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
+  /// Use CUDA code to do preprocessing
+  void UseCudaPreprocessing();
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -206,6 +209,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int device_id = 0;
 
   Device device = Device::CPU;
+
+  bool use_cuda_preprocessing = false;
 
   // ======Only for ORT Backend========
   // -1 means use default value by ort

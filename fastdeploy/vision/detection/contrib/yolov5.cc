@@ -109,13 +109,13 @@ bool YOLOv5::Initialize() {
   //   is_mini_pad_ = false;
   // }
 
-#ifdef ENABLE_CUDA_SRC
-  // prepare input data cache in GPU pinned memory 
-  CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size_ * 3));
-  // prepare input data cache in GPU device memory
-  CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size_ * 3));
-  CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size_[0] * size_[1] * sizeof(float)));
-#endif  // ENABLE_CUDA_SRC
+  if (runtime_option.use_cuda_preprocessing) {
+    // prepare input data cache in GPU pinned memory 
+    CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size_ * 3));
+    // prepare input data cache in GPU device memory
+    CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size_ * 3));
+    CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size_[0] * size_[1] * sizeof(float)));
+  }
   return true;
 }
 
@@ -168,13 +168,13 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-#ifdef ENABLE_CUDA_SRC
 bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
                             std::map<std::string, std::array<float, 2>>* im_info,
                             const std::vector<int>& size,
                             const std::vector<float> padding_value,
                             bool is_mini_pad, bool is_no_pad, bool is_scale_up,
                             int stride, float max_wh, bool multi_label) {
+#ifdef ENABLE_CUDA_SRC
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
@@ -197,8 +197,11 @@ bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
   output->device = Device::GPU;
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
-}
+#else
+  FDERROR << "CUDA src code was not enabled." << std::endl;
+  return false;
 #endif  // ENABLE_CUDA_SRC
+}
 
 bool YOLOv5::Postprocess(
     std::vector<FDTensor>& infer_results, DetectionResult* result,
@@ -306,21 +309,21 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 
   std::map<std::string, std::array<float, 2>> im_info;
 
-#ifdef ENABLE_CUDA_SRC
-  if (!CUDAPreprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
-                      is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
-                      multi_label_)) {
-    FDERROR << "Failed to preprocess input image." << std::endl;
-    return false;
+  if (runtime_option.use_cuda_preprocessing) {
+    if (!CUDAPreprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
+                        is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
+                        multi_label_)) {
+      FDERROR << "Failed to preprocess input image." << std::endl;
+      return false;
+    }
+  } else {
+    if (!Preprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
+                    is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
+                    multi_label_)) {
+      FDERROR << "Failed to preprocess input image." << std::endl;
+      return false;
+    }
   }
-#else
-  if (!Preprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
-                  is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
-                  multi_label_)) {
-    FDERROR << "Failed to preprocess input image." << std::endl;
-    return false;
-  }
-#endif  // ENABLE_CUDA_SRC
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
