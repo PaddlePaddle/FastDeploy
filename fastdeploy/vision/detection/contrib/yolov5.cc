@@ -184,7 +184,7 @@ bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
   cudaStream_t stream;
   CUDA_CHECK(cudaStreamCreate(&stream));
   int src_img_buf_size = mat->Height() * mat->Width() * mat->Channels();
-  memcpy(input_img_cuda_buffer_host_, mat->GetCpuMat()->data, src_img_buf_size);
+  memcpy(input_img_cuda_buffer_host_, mat->Data(), src_img_buf_size);
   CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_, input_img_cuda_buffer_host_, src_img_buf_size, cudaMemcpyHostToDevice, stream));
   utils::CUDAYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(), mat->Height(), input_tensor_cuda_buffer_device_, size[0], size[1], stream);
   cudaStreamSynchronize(stream);
