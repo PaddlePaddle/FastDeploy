@@ -26,14 +26,13 @@
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 
 namespace fastdeploy {
-namespace application {
-/** \brief OCR system can launch detection model, classification model and recognition model sequentially. All OCR system APIs are defined inside this namespace.
+/** \brief This pipeline can launch detection model, classification model and recognition model sequentially. All OCR pipeline APIs are defined inside this namespace.
  *
  */
-namespace ocrsystem {
-/*! @brief PPOCRSystemv2 is used to load PP-OCRv2 series models provided by PaddleOCR.
+namespace pipeline {
+/*! @brief PPOCRv2 is used to load PP-OCRv2 series models provided by PaddleOCR.
  */
-class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
+class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
  public:
   /** \brief Set up the detection model path, classification model path and recognition model path respectively.
    *
@@ -41,7 +40,7 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
    * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
    */
-  PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+  PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
@@ -50,7 +49,7 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
    * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv2_det_infer
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
    */
-  PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+  PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
   /** \brief Predict the input image and get OCR result.
@@ -74,6 +73,11 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
   virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 };
 
+namespace application {
+namespace ocrsystem {
+  typedef pipeline::PPOCRv2 PPOCRSystemv2;
 }  // namespace ocrsystem
 }  // namespace application
+
+}  // namespace pipeline
 }  // namespace fastdeploy

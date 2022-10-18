@@ -229,7 +229,7 @@ class Recognizer(FastDeployModel):
         self._model.rec_batch_num = value
 
 
-class PPOCRSystemv3(FastDeployModel):
+class PPOCRv3(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
         """Consruct a pipeline with text detector, direction classifier and text recognizer models
 
@@ -239,10 +239,10 @@ class PPOCRSystemv3(FastDeployModel):
         """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRSystemv3(det_model._model,
-                                                     rec_model._model)
+            self.system = C.vision.ocr.PPOCRv3(det_model._model,
+                                               rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRSystemv3(
+            self.system = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
@@ -254,7 +254,7 @@ class PPOCRSystemv3(FastDeployModel):
         return self.system.predict(input_image)
 
 
-class PPOCRSystemv2(FastDeployModel):
+class PPOCRv2(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
         """Consruct a pipeline with text detector, direction classifier and text recognizer models
 
@@ -264,10 +264,10 @@ class PPOCRSystemv2(FastDeployModel):
         """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
-            self.system = C.vision.ocr.PPOCRSystemv2(det_model._model,
-                                                     rec_model._model)
+            self.system = C.vision.ocr.PPOCRv2(det_model._model,
+                                               rec_model._model)
         else:
-            self.system = C.vision.ocr.PPOCRSystemv2(
+            self.system = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
