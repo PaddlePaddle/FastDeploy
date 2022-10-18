@@ -88,11 +88,21 @@ class FASTDEPLOY_DECL FastDeployModel {
   */
   virtual std::map<std::string, float> PrintStatisInfoOfRuntime();
 
+
+
+  // RKNPU2 can run normalize and hwc2chw on the NPU.
+  // This function is used to close normalize and hwc2chw operations in preprocessing.
+  virtual void DisableNormalizeAndPermute();
+
  protected:
   virtual bool InitRuntime();
   virtual bool CreateCpuBackend();
   virtual bool CreateGpuBackend();
   virtual bool CreateNpuBackend();
+
+  // for recording the switch of normalize and hwc2chw
+  bool switch_of_nor_and_per = true;  
+
   bool initialized = false;
   std::vector<Backend> valid_external_backends;
 
@@ -104,6 +114,7 @@ class FASTDEPLOY_DECL FastDeployModel {
 
   // record inference time for backend
   std::vector<double> time_of_runtime_;
+
 };
 
 }  // namespace fastdeploy

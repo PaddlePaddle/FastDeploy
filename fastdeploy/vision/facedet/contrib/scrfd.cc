@@ -142,19 +142,16 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                    is_scale_up, stride);
 
   BGR2RGB::Run(mat);
-  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-  //                std::vector<float>(mat->Channels(), 1.0));
-  // Compute `result = mat * alpha + beta` directly by channel
-  // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
-  // input_size, (127.5, 127.5, 127.5), swapRB=True)
-   std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-   std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-   Convert::Run(mat, alpha, beta);
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
+  if(this->switch_of_nor_and_per){
+    std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+    std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+    Convert::Run(mat, alpha, beta);
+    HWC2CHW::Run(mat);
+    Cast::Run(mat, "float");
+  }
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1); // reshape to n, h, w, c
   return true;

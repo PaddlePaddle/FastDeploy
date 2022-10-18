@@ -239,4 +239,8 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
   return statis_info_of_runtime_dict;
 }
+
+void FastDeployModel::DisableNormalizeAndPermute(){
+  switch_of_nor_and_per = false;
+}
 } // namespace fastdeploy
