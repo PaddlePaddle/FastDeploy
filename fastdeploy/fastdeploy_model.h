@@ -85,6 +85,12 @@ class FASTDEPLOY_DECL FastDeployModel {
   */
   virtual std::map<std::string, float> PrintStatisInfoOfRuntime();
 
+  /** \brief Check if the `EnableRecordTimeOfRuntime()` method is enabled.
+  */
+  virtual bool EnabledRecordTimeOfRuntime() {
+    return enable_record_time_of_runtime_;
+  }
+
  protected:
   virtual bool InitRuntime();
   virtual bool CreateCpuBackend();
