@@ -13,6 +13,7 @@
 # limitations under the License.
 from __future__ import absolute_import
 import logging
+import numpy as np
 from . import ModelFormat
 from . import c_lib_wrap as C
 
@@ -28,8 +29,24 @@ class Runtime:
         """
 
         self._runtime = C.Runtime()
+        self.runtime_option = runtime_option
         assert self._runtime.init(
-            runtime_option._option), "Initialize Runtime Failed!"
+            self.runtime_option._option), "Initialize Runtime Failed!"
+
+    def forward(self, *inputs):
+        """Inference with input data for poros
+
+        :param data: (list[str : numpy.ndarray])The input data list
+        :return list of numpy.ndarray
+        """
+        if self.runtime_option._option.model_format != ModelFormat.TORCHSCRIPT:
+            raise Exception(
+                "The forward function is only used for Poros backend, please call infer function"
+            )
+        inputs_dict = dict()
+        for i in range(len(inputs)):
+            inputs_dict["x" + str(i)] = inputs[i]
+        return self.infer(inputs_dict)
 
     def infer(self, data):
         """Inference with input data.
@@ -40,6 +57,27 @@ class Runtime:
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
         return self._runtime.infer(data)
+
+    def compile(self, warm_datas):
+        """compile with prewarm data for poros
+
+        :param data: (list[str : numpy.ndarray])The prewarm data list
+        :return TorchScript Model
+        """
+        if self.runtime_option._option.model_format != ModelFormat.TORCHSCRIPT:
+            raise Exception(
+                "The compile function is only used for Poros backend, please call infer function"
+            )
+        assert isinstance(warm_datas,
+                          list), "The prewarm data should be type of list."
+        for i in range(len(warm_datas)):
+            warm_data = warm_datas[i]
+            if isinstance(warm_data[0], np.ndarray):
+                warm_data = list(data for data in warm_data)
+            else:
+                warm_data = list(data.numpy() for data in warm_data)
+            warm_datas[i] = warm_data
+        return self._runtime.compile(warm_datas, self.runtime_option._option)
 
     def num_inputs(self):
         """Get number of inputs of the loaded model.
@@ -85,6 +123,65 @@ class RuntimeOption:
     def __init__(self):
         self._option = C.RuntimeOption()
 
+    @property
+    def is_dynamic(self):
+        """Only for Poros backend
+
+        :param value: (bool)Whether to enable dynamic shape, default False
+        """
+        return self._option.is_dynamic
+
+    @property
+    def unconst_ops_thres(self):
+        """Only for Poros backend
+
+        :param value: (int)Minimum number of subgraph OPs, default 10
+        """
+        return self._option.unconst_ops_thres
+
+    @property
+    def long_to_int(self):
+        """Only for Poros backend
+
+        :param value: (bool)Whether to convert long dtype to int dtype, default True
+        """
+        return self._option.long_to_int
+
+    @property
+    def use_nvidia_tf32(self):
+        """Only for Poros backend
+
+        :param value: (bool)The calculation accuracy of tf32 mode exists on the A card, which can bring some performance improvements, default False
+        """
+        return self._option.use_nvidia_tf32
+
+    @is_dynamic.setter
+    def is_dynamic(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_dynamic` must be type of bool."
+        self._option.is_dynamic = value
+
+    @unconst_ops_thres.setter
+    def unconst_ops_thres(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `unconst_ops_thres` must be type of int."
+        self._option.unconst_ops_thres = value
+
+    @long_to_int.setter
+    def long_to_int(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `long_to_int` must be type of bool."
+        self._option.long_to_int = value
+
+    @use_nvidia_tf32.setter
+    def use_nvidia_tf32(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `use_nvidia_tf32` must be type of bool."
+        self._option.use_nvidia_tf32 = value
+
     def set_model_path(self,
                        model_path,
                        params_path="",
@@ -124,6 +221,11 @@ class RuntimeOption:
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
         return self._option.use_paddle_backend()
+
+    def use_poros_backend(self):
+        """Use Poros backend, support inference TorchScript model on CPU/Nvidia GPU.
+        """
+        return self._option.use_poros_backend()
 
     def use_ort_backend(self):
         """Use ONNX Runtime backend, support inference Paddle/ONNX model on CPU/Nvidia GPU.
@@ -217,6 +319,11 @@ class RuntimeOption:
         """
         return self._option.disable_trt_fp16()
 
+    def enable_paddle_to_trt(self):
+        """While using TensorRT backend, enable_paddle_to_trt() will change to use Paddle Inference backend, and use its integrated TensorRT instead.
+        """
+        return self._option.enable_paddle_to_trt()
+
     def set_trt_max_workspace_size(self, trt_max_workspace_size):
         """Set max workspace size while using TensorRT backend.
         """
@@ -230,7 +337,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message
