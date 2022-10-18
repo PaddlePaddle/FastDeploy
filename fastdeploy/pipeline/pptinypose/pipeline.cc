@@ -52,7 +52,7 @@ bool PPTinyPose::Predict(
   }
   fastdeploy::vision::DetectionResult filter_detection_res;
   for (size_t i = 0; i < detection_res.boxes.size(); ++i) {
-    if (detection_res.scores[i] > detect_model_score_threshold) {
+    if (detection_res.scores[i] > detection_model_score_threshold) {
       filter_detection_res.boxes.push_back(detection_res.boxes[i]);
       filter_detection_res.scores.push_back(detection_res.scores[i]);
       filter_detection_res.label_ids.push_back(detection_res.label_ids[i]);

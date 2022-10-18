@@ -20,17 +20,36 @@
 #include "fastdeploy/vision/keypointdet/pptinypose/pptinypose.h"
 
 namespace fastdeploy {
+/** \brief All pipeline model APIs are defined inside this namespace
+ *
+ */
 namespace pipeline {
 
+/*! @brief PPTinyPose Pipeline object used when to load a detection model + pptinypose model
+ */
 class FASTDEPLOY_DECL PPTinyPose {
  public:
+  /** \brief Set initialized detection model object and pptinypose model object
+   *
+   * \param[in] det_model Initialized detection model object
+   * \param[in] pptinypose_model Initialized pptinypose model object
+   */
   PPTinyPose(
       fastdeploy::vision::detection::PPYOLOE* det_model,
       fastdeploy::vision::keypointdetection::PPTinyPose* pptinypose_model);
 
+  /** \brief Predict the keypoint detection result for an input image
+   *
+   * \param[in] img The input image data, comes from cv::imread()
+   * \param[in] result The output keypoint detection result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* img,
                        fastdeploy::vision::KeyPointDetectionResult* result);
-  float detect_model_score_threshold = 0;
+
+  /* \brief The score threshold for detectin model to filter bbox before inputting pptinypose model
+   */
+  float detection_model_score_threshold = 0;
 
  protected:
   fastdeploy::vision::detection::PPYOLOE* detector_ = nullptr;

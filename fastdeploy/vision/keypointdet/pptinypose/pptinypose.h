@@ -21,34 +21,65 @@
 
 namespace fastdeploy {
 namespace vision {
+/** \brief All keypoint detection model APIs are defined inside this namespace
+ *
+ */
 namespace keypointdetection {
 
+/*! @brief PPTinyPose model object used when to load a PPTinyPose model exported by PaddleDetection
+ */
 class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  public:
+ /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g pptinypose/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g pptinypose/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g pptinypose/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   PPTinyPose(const std::string& model_file, const std::string& params_file,
              const std::string& config_file,
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /// Get model's name
   std::string ModelName() const { return "PaddleDetection/PPTinyPose"; }
 
+  /** \brief Predict the keypoint detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output keypoint detection result will be writen to this structure
+   * \return true if the keypoint prediction successed, otherwise false
+   */
+  bool Predict(cv::Mat* im, KeyPointDetectionResult* result);
+
+  /** \brief Predict the keypoint detection result with given detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output keypoint detection result will be writen to this structure
+   * \param[in] detection_result The structure strores pedestrian detection result, which is used to crop image for multi-persons keypoint detection
+   * \return true if the keypoint prediction successed, otherwise false
+   */
+  bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
+               const DetectionResult& detection_result);
+
+  /** \brief Whether using Distribution-Aware Coordinate Representation for Human Pose Estimation(DARK for short) in postprocess
+   */
+  bool use_dark = true;
+
+ protected:
   bool Initialize();
-
+  /// Build the preprocess pipeline from the loaded model
   bool BuildPreprocessPipelineFromConfig();
-
+  /// Preprocess an input image, and set the preprocessed results to `outputs`
   bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 
+  /// Postprocess the inferenced results, and set the final result to `result`
   bool Postprocess(std::vector<FDTensor>& infer_result,
                    KeyPointDetectionResult* result,
                    const std::vector<float>& center,
                    const std::vector<float>& scale);
-
-  bool Predict(cv::Mat* im, KeyPointDetectionResult* result);
-
-  bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
-               const DetectionResult& detection_result);
-
-  bool use_dark = true;
 
  private:
   std::vector<std::shared_ptr<Processor>> processors_;

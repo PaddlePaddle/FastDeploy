@@ -33,8 +33,8 @@ void BindPPTinyPosePipeline(pybind11::module& m) {
         return res;
       })
 
-      .def_readwrite("detect_model_score_threshold", 
-                     &pipeline::PPTinyPose::detect_model_score_threshold);
+      .def_readwrite("detection_model_score_threshold", 
+                     &pipeline::PPTinyPose::detection_model_score_threshold);
 }
 
 }  // namespace fastdeploy

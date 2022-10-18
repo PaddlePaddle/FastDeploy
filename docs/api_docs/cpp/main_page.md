@@ -25,3 +25,4 @@ Currently, FastDeploy supported backends listed as below,
 | Task | Model | API | Example |
 | :---- | :---- | :---- | :----- |
 | object detection | PaddleDetection/PPYOLOE | [fastdeploy::vision::detection::PPYOLOE](./classfastdeploy_1_1vision_1_1detection_1_1PPYOLOE.html) | [C++](./)/[Python](./) |
+| keypoint detection | PaddleDetection/PPTinyPose | [fastdeploy::vision::keypointdetection::PPTinyPose](./classfastdeploy_1_1vision_1_1detection_1_1PPYOLOE.html) | [C++](./)/[Python](./) |
