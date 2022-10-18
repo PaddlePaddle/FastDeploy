@@ -190,8 +190,12 @@ bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
   CUDA_CHECK(cudaStreamCreate(&stream));
   int src_img_buf_size = mat->Height() * mat->Width() * mat->Channels();
   memcpy(input_img_cuda_buffer_host_, mat->Data(), src_img_buf_size);
-  CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_, input_img_cuda_buffer_host_, src_img_buf_size, cudaMemcpyHostToDevice, stream));
-  utils::CudaYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(), mat->Height(), input_tensor_cuda_buffer_device_, size[0], size[1], stream);
+  CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_,
+                             input_img_cuda_buffer_host_,
+                             src_img_buf_size, cudaMemcpyHostToDevice, stream));
+  utils::CudaYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(),
+                            mat->Height(), input_tensor_cuda_buffer_device_,
+                            size[0], size[1], padding_value, stream);
   cudaStreamSynchronize(stream);
 
   // Record output shape of preprocessed image

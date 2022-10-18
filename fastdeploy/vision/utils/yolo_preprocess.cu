@@ -35,7 +35,8 @@ struct AffineMatrix {
 __global__ void YoloPreprocessCudaKernel( 
     uint8_t* src, int src_line_size, int src_width, 
     int src_height, float* dst, int dst_width, 
-    int dst_height, uint8_t const_value_st,
+    int dst_height, uint8_t padding_color_b,
+    uint8_t padding_color_g, uint8_t padding_color_r,
     AffineMatrix d2s, int edge) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
   if (position >= edge) return;
@@ -55,16 +56,16 @@ __global__ void YoloPreprocessCudaKernel(
 
   if (src_x <= -1 || src_x >= src_width || src_y <= -1 || src_y >= src_height) {
     // out of range
-    c0 = const_value_st;
-    c1 = const_value_st;
-    c2 = const_value_st;
+    c0 = padding_color_b;
+    c1 = padding_color_g;
+    c2 = padding_color_r;
   } else {
     int y_low = floorf(src_y);
     int x_low = floorf(src_x);
     int y_high = y_low + 1;
     int x_high = x_low + 1;
 
-    uint8_t const_value[] = {const_value_st, const_value_st, const_value_st};
+    uint8_t const_value[] = {padding_color_b, padding_color_g, padding_color_r};
     float ly = src_y - y_low;
     float lx = src_x - x_low;
     float hy = 1 - ly;
@@ -113,7 +114,7 @@ __global__ void YoloPreprocessCudaKernel(
 void CudaYoloPreprocess(
     uint8_t* src, int src_width, int src_height,
     float* dst, int dst_width, int dst_height,
-    cudaStream_t stream) {
+    const std::vector<float> padding_value, cudaStream_t stream) {
   AffineMatrix s2d, d2s;
   float scale = std::min(dst_height / (float)src_height, dst_width / (float)src_width);
 
@@ -136,7 +137,7 @@ void CudaYoloPreprocess(
   YoloPreprocessCudaKernel<<<blocks, threads, 0, stream>>>(
       src, src_width * 3, src_width,
       src_height, dst, dst_width,
-      dst_height, 128, d2s, jobs);
+      dst_height, padding_value[0], padding_value[1], padding_value[2], d2s, jobs);
 
 }
 

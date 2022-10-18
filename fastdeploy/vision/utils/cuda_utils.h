@@ -16,6 +16,7 @@
 
 #include <cuda_runtime.h>
 #include <cstdint>
+#include <vector>
 
 #ifndef CUDA_CHECK
 #define CUDA_CHECK(callstr)\
@@ -34,6 +35,7 @@ namespace vision {
 namespace utils {
 void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height,
                         float* dst, int dst_width, int dst_height,
+                        const std::vector<float> padding_value,
                         cudaStream_t stream);
 }  // namespace utils
 }  // namespace vision
