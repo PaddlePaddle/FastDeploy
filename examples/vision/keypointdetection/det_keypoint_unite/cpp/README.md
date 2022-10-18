@@ -57,8 +57,8 @@ PPTinyPose Pipeline模型加载和初始化。
 
 **参数**
 
-> * **model_det_modelfile**(fastdeploy::vision::detection): 初始化后的检测模型，参考[PP-TinyPose]()
-> * **pptinypose_model**(fastdeploy::vision::keypointdetection): 初始化后的关键点检测模型[Detection]()
+> * **model_det_modelfile**(fastdeploy::vision::detection): 初始化后的检测模型，参考[PP-TinyPose](../../tiny_pose/README.md)
+> * **pptinypose_model**(fastdeploy::vision::keypointdetection): 初始化后的检测模型[Detection](../../../detection/paddledetection/README.md)，暂时只提供PaddleDetection系列
 
 #### Predict函数
 
