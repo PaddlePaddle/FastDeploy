@@ -31,6 +31,10 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
         const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "scrfd"; }
+  
+  // RKNPU2 can run normalize and hwc2chw on the NPU.
+  // This function is used to close normalize and hwc2chw operations in preprocessing.
+  void DisableNormalizeAndPermute();
 
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25f,
@@ -80,6 +84,9 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
+  
+  // for recording the switch of normalize and hwc2chw
+  bool switch_of_nor_and_per = true;  
 
   bool is_dynamic_input_;
 

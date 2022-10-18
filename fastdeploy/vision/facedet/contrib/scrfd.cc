@@ -153,7 +153,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     Cast::Run(mat, "float");
   }
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1); // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1); // reshape to n, c, h, w
   return true;
 }
 
@@ -351,6 +351,10 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
     return false;
   }
   return true;
+}
+
+void SCRFD::DisableNormalizeAndPermute(){
+  this->switch_of_nor_and_per = false;
 }
 
 } // namespace facedet

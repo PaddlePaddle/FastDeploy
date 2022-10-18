@@ -19,6 +19,7 @@ namespace vision {
 bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "HWC2CHW: The input data is not Layout::HWC format!"
+            << "The input data's layout is " << mat->layout
             << std::endl;
     return false;
   }
