@@ -298,7 +298,7 @@ bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                              static_cast<float>(mat.Width())};
 
   if (use_cuda_preprocessing_) {
-      if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }

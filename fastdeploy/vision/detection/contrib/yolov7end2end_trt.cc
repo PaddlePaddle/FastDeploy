@@ -15,6 +15,9 @@
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_trt.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
+#ifdef ENABLE_CUDA_SRC
+#include "fastdeploy/vision/utils/cuda_utils.h"
+#endif  // ENABLE_CUDA_SRC
 
 namespace fastdeploy {
 namespace vision {
@@ -119,6 +122,16 @@ bool YOLOv7End2EndTRT::Initialize() {
   return true;
 }
 
+YOLOv7End2EndTRT::~YOLOv7End2EndTRT() {
+#ifdef ENABLE_CUDA_SRC
+  if (use_cuda_preprocessing_) {
+    CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
+    CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
+    CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
+  }
+#endif  // ENABLE_CUDA_SRC
+}
+
 bool YOLOv7End2EndTRT::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info) {
@@ -148,6 +161,65 @@ bool YOLOv7End2EndTRT::Preprocess(
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
+}
+
+void YOLOv7End2EndTRT::UseCudaPreprocessing(int max_image_size) {
+#ifdef ENABLE_CUDA_SRC
+  use_cuda_preprocessing_ = true;
+  is_scale_up = true;
+  if (input_img_cuda_buffer_host_ == nullptr) {
+    // prepare input data cache in GPU pinned memory 
+    CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size * 3));
+    // prepare input data cache in GPU device memory
+    CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size * 3));
+    CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size[0] * size[1] * sizeof(float)));
+  }
+#else
+  FDWARNING << "The FastDeploy didn't compile with BUILD_CUDA_SRC=ON."
+            << std::endl;
+  use_cuda_preprocessing_ = false;
+#endif
+}
+
+bool YOLOv7End2EndTRT::CudaPreprocess(Mat* mat, FDTensor* output,
+                                      std::map<std::string, std::array<float, 2>>* im_info) {
+#ifdef ENABLE_CUDA_SRC
+  if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
+    FDERROR << "Upsupported arguments for CUDA preprocess." << std::endl;
+    return false;
+  }
+
+  // Record the shape of image and the shape of preprocessed image
+  (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
+                               static_cast<float>(mat->Width())};
+  (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
+                                static_cast<float>(mat->Width())};
+
+  cudaStream_t stream;
+  CUDA_CHECK(cudaStreamCreate(&stream));
+  int src_img_buf_size = mat->Height() * mat->Width() * mat->Channels();
+  memcpy(input_img_cuda_buffer_host_, mat->Data(), src_img_buf_size);
+  CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_,
+                             input_img_cuda_buffer_host_,
+                             src_img_buf_size, cudaMemcpyHostToDevice, stream));
+  utils::CudaYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(),
+                            mat->Height(), input_tensor_cuda_buffer_device_,
+                            size[0], size[1], padding_value, stream);
+  cudaStreamSynchronize(stream);
+  cudaStreamDestroy(stream);
+
+  // Record output shape of preprocessed image
+  (*im_info)["output_shape"] = {static_cast<float>(size[0]), static_cast<float>(size[1])};
+
+  output->SetExternalData({mat->Channels(), size[0], size[1]}, FDDataType::FP32,
+                          input_tensor_cuda_buffer_device_);
+  output->device = Device::GPU;
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  return true;
+#else
+  FDERROR << "CUDA src code was not enabled." << std::endl;
+  return false;
+#endif  // ENABLE_CUDA_SRC
 }
 
 bool YOLOv7End2EndTRT::Postprocess(
@@ -242,9 +314,16 @@ bool YOLOv7End2EndTRT::Predict(cv::Mat* im, DetectionResult* result,
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
 
-  if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
-    FDERROR << "Failed to preprocess input image." << std::endl;
-    return false;
+  if (use_cuda_preprocessing_) {
+    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
+      FDERROR << "Failed to preprocess input image." << std::endl;
+      return false;
+    }
+  } else {
+    if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+      FDERROR << "Failed to preprocess input image." << std::endl;
+      return false;
+    }
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
