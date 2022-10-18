@@ -205,7 +205,3 @@ bool Recognizer::Predict(cv::Mat* img,
 }  // namesapce ocr
 }  // namespace vision
 }  // namespace fastdeploy
-
-
-
-
