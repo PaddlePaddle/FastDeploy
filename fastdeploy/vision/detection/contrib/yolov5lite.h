@@ -27,11 +27,15 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::ONNX);
 
+  ~YOLOv5Lite();
+
   virtual std::string ModelName() const { return "YOLOv5-Lite"; }
 
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.45,
                        float nms_iou_threshold = 0.25);
+
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
   // tuple of (width, height)
   std::vector<int> size;
@@ -79,7 +83,9 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  
+  bool CudaPreprocess(Mat* mat, FDTensor* output,
+                      std::map<std::string, std::array<float, 2>>* im_info);
+
   bool Postprocess(FDTensor& infer_result, DetectionResult* result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
@@ -109,6 +115,14 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+  // CUDA host buffer for input image
+  uint8_t* input_img_cuda_buffer_host_ = nullptr;
+  // CUDA device buffer for input image
+  uint8_t* input_img_cuda_buffer_device_ = nullptr;
+  // CUDA device buffer for TRT input tensor
+  float* input_tensor_cuda_buffer_device_ = nullptr;
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 }  // namespace detection
 }  // namespace vision

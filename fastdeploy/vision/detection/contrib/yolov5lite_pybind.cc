@@ -28,6 +28,10 @@ void BindYOLOv5Lite(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
+      .def("use_cuda_preprocessing",
+           [](vision::detection::YOLOv5Lite& self,, int max_image_size) {
+             self.UseCudaPreprocessing(max_image_size);
+           })
       .def_readwrite("size", &vision::detection::YOLOv5Lite::size)
       .def_readwrite("padding_value",
                      &vision::detection::YOLOv5Lite::padding_value)
