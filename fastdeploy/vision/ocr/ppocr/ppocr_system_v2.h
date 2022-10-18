@@ -27,17 +27,38 @@
 
 namespace fastdeploy {
 namespace application {
+/** \brief OCR system can launch detection model, classification model and recognition model sequentially. All OCR system APIs are defined inside this namespace.
+ *
+ */
 namespace ocrsystem {
-
+/*! @brief PPOCRSystemv2 is used to load PP-OCRv2 series models provided by PaddleOCR.
+ */
 class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
  public:
+  /** \brief Set up the detection model path, classification model path and recognition model path respectively.
+   *
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv2_det_infer
+   * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
+   */
   PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
+  /** \brief Classification model is optional, so this function is set up the detection model path and recognition model path respectively.
+   *
+   * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv2_det_infer
+   * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
+   */
   PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 
+  /** \brief Predict the input image and get OCR result.
+   *
+   * \param[in] im The input image data, comes from cv::imread().
+   * \param[in] result The output OCR result will be writen to this structure.
+   * \return true if the prediction successed, otherwise false.
+   */
   virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
   bool Initialized() const override;
 
@@ -45,9 +66,11 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
   fastdeploy::vision::ocr::Classifier* classifier_ = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
-
+  /// Launch the detection process in OCR.
   virtual bool Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  /// Launch the recognition process in OCR.
   virtual bool Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  /// Launch the classification process in OCR.
   virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 };
 

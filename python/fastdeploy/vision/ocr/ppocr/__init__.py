@@ -24,8 +24,13 @@ class DBDetector(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
+        """Load OCR detection model provided by PaddleOCR.
+
+        :param model_file: (str)Path of model file, e.g ./ch_PP-OCRv3_det_infer/model.pdmodel.
+        :param params_file: (str)Path of parameter file, e.g ./ch_PP-OCRv3_det_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU.
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model.
+        """
         super(DBDetector, self).__init__(runtime_option)
 
         if (len(model_file) == 0):
@@ -33,7 +38,6 @@ class DBDetector(FastDeployModel):
         else:
             self._model = C.vision.ocr.DBDetector(
                 model_file, params_file, self._runtime_option, model_format)
-            # 通过self.initialized判断整个模型的初始化是否成功
             assert self.initialized, "DBDetector initialize failed."
 
     # 一些跟DBDetector模型有关的属性封装
@@ -81,8 +85,8 @@ class DBDetector(FastDeployModel):
     @det_db_box_thresh.setter
     def det_db_box_thresh(self, value):
         assert isinstance(
-            value,
-            float), "The value to set `det_db_box_thresh` must be type of float."
+            value, float
+        ), "The value to set `det_db_box_thresh` must be type of float."
         self._model.det_db_box_thresh = value
 
     @det_db_unclip_ratio.setter
@@ -119,8 +123,13 @@ class Classifier(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
+        """Load OCR classification model provided by PaddleOCR.
+
+        :param model_file: (str)Path of model file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdmodel.
+        :param params_file: (str)Path of parameter file, e.g ./ch_ppocr_mobile_v2.0_cls_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU.
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model.
+        """
         super(Classifier, self).__init__(runtime_option)
 
         if (len(model_file) == 0):
@@ -128,7 +137,6 @@ class Classifier(FastDeployModel):
         else:
             self._model = C.vision.ocr.Classifier(
                 model_file, params_file, self._runtime_option, model_format)
-            # 通过self.initialized判断整个模型的初始化是否成功
             assert self.initialized, "Classifier initialize failed."
 
     @property
@@ -159,7 +167,8 @@ class Classifier(FastDeployModel):
     @cls_batch_num.setter
     def cls_batch_num(self, value):
         assert isinstance(
-            value, int), "The value to set `cls_batch_num` must be type of int."
+            value,
+            int), "The value to set `cls_batch_num` must be type of int."
         self._model.cls_batch_num = value
 
 
@@ -170,8 +179,14 @@ class Recognizer(FastDeployModel):
                  label_path="",
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
+        """Load OCR recognition model provided by PaddleOCR
+
+        :param model_file: (str)Path of model file, e.g ./ch_PP-OCRv3_rec_infer/model.pdmodel.
+        :param params_file: (str)Path of parameter file, e.g ./ch_PP-OCRv3_rec_infer/model.pdiparams, if the model format is ONNX, this parameter will be ignored.
+        :param label_path: (str)Path of label file used by OCR recognition model. e.g ./ppocr_keys_v1.txt
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU.
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model.
+        """
         super(Recognizer, self).__init__(runtime_option)
 
         if (len(model_file) == 0):
@@ -180,7 +195,6 @@ class Recognizer(FastDeployModel):
             self._model = C.vision.ocr.Recognizer(
                 model_file, params_file, label_path, self._runtime_option,
                 model_format)
-            # 通过self.initialized判断整个模型的初始化是否成功
             assert self.initialized, "Recognizer initialize failed."
 
     @property
@@ -210,12 +224,19 @@ class Recognizer(FastDeployModel):
     @rec_batch_num.setter
     def rec_batch_num(self, value):
         assert isinstance(
-            value, int), "The value to set `rec_batch_num` must be type of int."
+            value,
+            int), "The value to set `rec_batch_num` must be type of int."
         self._model.rec_batch_num = value
 
 
 class PPOCRSystemv3(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
+        """Consruct a pipeline with text detector, direction classifier and text recognizer models
+
+        :param det_model: (FastDeployModel) The detection model object created by fastdeploy.vision.ocr.DBDetector.
+        :param cls_model: (FastDeployModel) The classification model object created by fastdeploy.vision.ocr.Classifier.
+        :param rec_model: (FastDeployModel) The recognition model object created by fastdeploy.vision.ocr.Recognizer.
+        """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system = C.vision.ocr.PPOCRSystemv3(det_model._model,
@@ -225,11 +246,22 @@ class PPOCRSystemv3(FastDeployModel):
                 det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
+        """Predict an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: OCRResult
+        """
         return self.system.predict(input_image)
 
 
 class PPOCRSystemv2(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
+        """Consruct a pipeline with text detector, direction classifier and text recognizer models
+
+        :param det_model: (FastDeployModel) The detection model object created by fastdeploy.vision.ocr.DBDetector.
+        :param cls_model: (FastDeployModel) The classification model object created by fastdeploy.vision.ocr.Classifier.
+        :param rec_model: (FastDeployModel) The recognition model object created by fastdeploy.vision.ocr.Recognizer.
+        """
         assert det_model is not None and rec_model is not None, "The det_model and rec_model cannot be None."
         if cls_model is None:
             self.system = C.vision.ocr.PPOCRSystemv2(det_model._model,
@@ -239,4 +271,9 @@ class PPOCRSystemv2(FastDeployModel):
                 det_model._model, cls_model._model, rec_model._model)
 
     def predict(self, input_image):
+        """Predict an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: OCRResult
+        """
         return self.system.predict(input_image)
