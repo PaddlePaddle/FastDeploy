@@ -108,7 +108,7 @@ bool YOLOv5::Initialize() {
   // if (!is_dynamic_input_) {
   //   is_mini_pad_ = false;
   // }
-
+#ifdef ENABLE_CUDA_SRC
   if (runtime_option.use_cuda_preprocessing) {
     // prepare input data cache in GPU pinned memory 
     CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size_ * 3));
@@ -116,15 +116,18 @@ bool YOLOv5::Initialize() {
     CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size_ * 3));
     CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size_[0] * size_[1] * sizeof(float)));
   }
+#endif  // ENABLE_CUDA_SRC
   return true;
 }
 
 YOLOv5::~YOLOv5() {
+#ifdef ENABLE_CUDA_SRC
   if (runtime_option.use_cuda_preprocessing) {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
   }
+#endif  // ENABLE_CUDA_SRC
 }
 
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
