@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 
+#include <algorithm>
 #include <mutex>
 #include <vector>
 
@@ -169,83 +170,156 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   // instance when creating that instance's runtime.
   runtime_options_.reset(new fastdeploy::RuntimeOption());
 
+  triton::common::TritonJson::Value optimization;
+  if (not ModelConfig().Find("optimization", &optimization)) {
+    return;
+  }
+
+  triton::common::TritonJson::Value eas;
+  if (not optimization.Find("execution_accelerators", &eas)) {
+    return;
+  }
+
+  // CPU execution providers
   {
-    triton::common::TritonJson::Value optimization;
-    if (ModelConfig().Find("optimization", &optimization)) {
-      triton::common::TritonJson::Value backend;
-      if (optimization.Find("onnxruntime", &backend)) {
-        runtime_options_->UseOrtBackend();
-        std::vector<std::string> param_keys;
-        THROW_IF_BACKEND_MODEL_ERROR(backend.Members(&param_keys));
-        for (const auto& param_key : param_keys) {
-          std::string value_string;
-          if (param_key == "graph_level") {
+    triton::common::TritonJson::Value cpu_eas;
+    if (eas.Find("cpu_execution_accelerator", &cpu_eas)) {
+      for (size_t idx = 0; idx < cpu_eas.ArraySize(); idx++) {
+        triton::common::TritonJson::Value ea;
+        THROW_IF_BACKEND_MODEL_ERROR(cpu_eas.IndexAsObject(idx, &ea));
+        std::string name;
+        THROW_IF_BACKEND_MODEL_ERROR(ea.MemberAsString("name", &name));
+        if (name == "onnxruntime") {
+          runtime_options_->UseOrtBackend();
+        } else if (name == "paddle") {
+          runtime_options_->UsePaddleBackend();
+        } else if (name == "openvino") {
+          runtime_options_->UseOpenVINOBackend();
+        } else if (name != "") {
+          TRITONSERVER_Error* error = TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              std::string("unknown cpu_execution_accelerator name '" + name +
+                          "' is provided. Available choices are [onnxruntime, "
+                          "paddle, openvino]")
+                  .c_str());
+          THROW_IF_BACKEND_MODEL_ERROR(error);
+        }
+
+        triton::common::TritonJson::Value params;
+        if (ea.Find("parameters", &params)) {
+          std::vector<std::string> param_keys;
+          THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+          for (const auto& param_key : param_keys) {
+            std::string value_string;
             THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-                value_string, &runtime_options_->ort_graph_opt_level));
-          } else if (param_key == "inter_op_num_threads") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-                value_string, &runtime_options_->ort_inter_op_num_threads));
-          } else if (param_key == "execution_mode") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-                value_string, &runtime_options_->ort_execution_mode));
+                params.MemberAsString(param_key.c_str(), &value_string));
+            if (param_key == "cpu_threads") {
+              int cpu_thread_num;
+              THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseIntValue(value_string, &cpu_thread_num));
+              runtime_options_->SetCpuThreadNum(cpu_thread_num);
+              // } else if (param_key == "graph_level") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string, &runtime_options_->ort_graph_opt_level));
+              // } else if (param_key == "inter_op_num_threads") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string,
+              //       &runtime_options_->ort_inter_op_num_threads));
+              // } else if (param_key == "execution_mode") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string, &runtime_options_->ort_execution_mode));
+              // } else if (param_key == "capacity") {
+              //     THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //     value_string, &runtime_options_->pd_mkldnn_cache_size));
+            } else if (param_key == "use_mkldnn") {
+              bool pd_enable_mkldnn;
+              THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseBoolValue(value_string, &pd_enable_mkldnn));
+              runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
+            }
           }
         }
-      } else if (optimization.Find("tensorrt", &backend)) {
-        runtime_options_->UseTrtBackend();
-        std::vector<std::string> param_keys;
-        THROW_IF_BACKEND_MODEL_ERROR(backend.Members(&param_keys));
-        for (const auto& param_key : param_keys) {
-          std::string value_string;
-          if (param_key == "cpu_threads") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(
-                ParseIntValue(value_string, &runtime_options_->cpu_thread_num));
-          }
-          // TODO(liqi): add tensorrt
+      }
+    }
+  }
+
+  // GPU execution providers
+  {
+    triton::common::TritonJson::Value gpu_eas;
+    if (eas.Find("gpu_execution_accelerator", &gpu_eas)) {
+      for (size_t idx = 0; idx < gpu_eas.ArraySize(); idx++) {
+        triton::common::TritonJson::Value ea;
+        THROW_IF_BACKEND_MODEL_ERROR(gpu_eas.IndexAsObject(idx, &ea));
+        std::string name;
+        THROW_IF_BACKEND_MODEL_ERROR(ea.MemberAsString("name", &name));
+
+        if (name == "onnxruntime") {
+          runtime_options_->UseOrtBackend();
+        } else if (name == "paddle") {
+          runtime_options_->UsePaddleBackend();
+        } else if (name == "tensorrt") {
+          runtime_options_->UseTrtBackend();
         }
-      } else if (optimization.Find("paddle", &backend)) {
-        runtime_options_->UsePaddleBackend();
-        std::vector<std::string> param_keys;
-        THROW_IF_BACKEND_MODEL_ERROR(backend.Members(&param_keys));
-        for (const auto& param_key : param_keys) {
-          std::string value_string;
-          if (param_key == "cpu_threads") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(
-                ParseIntValue(value_string, &runtime_options_->cpu_thread_num));
-          } else if (param_key == "capacity") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-                value_string, &runtime_options_->pd_mkldnn_cache_size));
-          } else if (param_key == "use_mkldnn") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(ParseBoolValue(
-                value_string, &runtime_options_->pd_enable_mkldnn));
+        if (name == "min_shape" or name == "max_shape" or name == "opt_shape") {
+          triton::common::TritonJson::Value params;
+          if (ea.Find("parameters", &params)) {
+            std::vector<std::string> input_names;
+            THROW_IF_BACKEND_MODEL_ERROR(params.Members(&input_names));
+            for (const auto& input_name : input_names) {
+              std::vector<int32_t> shape;
+              FDParseShape(params, input_name, &shape);
+              if (name == "min_shape") {
+                runtime_options_->trt_min_shape[input_name] = shape;
+              } else if (name == "max_shape") {
+                runtime_options_->trt_max_shape[input_name] = shape;
+              } else {
+                runtime_options_->trt_opt_shape[input_name] = shape;
+              }
+            }
           }
-        }
-      } else if (optimization.Find("openvino", &backend)) {
-        runtime_options_->UseOpenVINOBackend();
-        std::vector<std::string> param_keys;
-        THROW_IF_BACKEND_MODEL_ERROR(backend.Members(&param_keys));
-        for (const auto& param_key : param_keys) {
-          std::string value_string;
-          if (param_key == "cpu_threads") {
-            THROW_IF_BACKEND_MODEL_ERROR(
-                backend.MemberAsString(param_key.c_str(), &value_string));
-            THROW_IF_BACKEND_MODEL_ERROR(
-                ParseIntValue(value_string, &runtime_options_->cpu_thread_num));
+        } else {
+          triton::common::TritonJson::Value params;
+          if (ea.Find("parameters", &params)) {
+            std::vector<std::string> param_keys;
+            THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+            for (const auto& param_key : param_keys) {
+              std::string value_string;
+              THROW_IF_BACKEND_MODEL_ERROR(
+                  params.MemberAsString(param_key.c_str(), &value_string));
+              // if (param_key == "graph_level") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string, &runtime_options_->ort_graph_opt_level));
+              // } else if (param_key == "inter_op_num_threads") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string,
+              //       &runtime_options_->ort_inter_op_num_threads));
+              // } else if (param_key == "execution_mode") {
+              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
+              //       value_string, &runtime_options_->ort_execution_mode));
+              // }
+              if (param_key == "precision") {
+                std::transform(value_string.begin(), value_string.end(),
+                               value_string.begin(), ::tolower);
+                if (value_string == "trt_fp16") {
+                  runtime_options_->EnableTrtFP16();
+                } else if (value_string == "trt_int8") {
+                  // TODO(liqi): use EnableTrtINT8
+                  runtime_options_->trt_enable_int8 = true;
+                }
+                // } else if( param_key == "max_batch_size") {
+                //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
+                //       value_string, &runtime_options_->trt_max_batch_size));
+                // } else if( param_key == "workspace_size") {
+                //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
+                //       value_string,
+                //       &runtime_options_->trt_max_workspace_size));
+              } else if (param_key == "cache_file") {
+                runtime_options_->SetTrtCacheFile(value_string);
+              } else if (param_key == "use_paddle") {
+                runtime_options_->EnablePaddleToTrt();
+              }
+            }
           }
-          // TODO(liqi): add openvino
         }
       }
     }
@@ -285,11 +359,11 @@ TRITONSERVER_Error* ModelState::LoadModel(
                         "not provided.'")
                 .c_str());
       }
-      runtime_options_->model_format = fastdeploy::Frontend::PADDLE;
+      runtime_options_->model_format = fastdeploy::ModelFormat::PADDLE;
       runtime_options_->model_file = *model_path;
       runtime_options_->params_file = *params_path;
     } else {
-      runtime_options_->model_format = fastdeploy::Frontend::ONNX;
+      runtime_options_->model_format = fastdeploy::ModelFormat::ONNX;
       runtime_options_->model_file = *model_path;
     }
   }
@@ -846,7 +920,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+  FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
       responses, request_count, all_response_failed,
       SetInputTensors(total_batch_size, requests, request_count, &responses,
                       &collector, &cuda_copy));
@@ -862,7 +936,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_start_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(responses, request_count,
                                       all_response_failed,
                                       Run(&responses, request_count));
   }
@@ -871,7 +945,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
   SET_TIMESTAMP(compute_end_ns);
 
   if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+    FD_RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
         responses, request_count, all_response_failed,
         ReadOutputTensors(total_batch_size, requests, request_count,
                           &responses));
@@ -953,12 +1027,13 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
 
-    if (input_tensors_[input_idx].name != std::string(input_name)) {
+    int index = GetInfoIndex(std::string(input_name), input_tensor_infos_);
+    if (index < 0) {
       auto err = TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL,
           (std::string("Input name [") + input_name +
            std::string("] is not one of the FD predictor input: ") +
-           input_tensors_[input_idx].name)
+           input_tensors_[index].name)
               .c_str());
       // SendErrorForResponses(responses, request_count, err);
       return err;
@@ -1003,12 +1078,12 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
       memory_type = TRITONSERVER_MEMORY_CPU;
       device = fastdeploy::Device::CPU;
     }
-    input_tensors_[input_idx].Resize(
+    input_tensors_[index].Resize(
         batchn_shape, ConvertDataTypeToFD(input_datatype), input_name, device);
     collector->ProcessTensor(
         input_name,
-        reinterpret_cast<char*>(input_tensors_[input_idx].MutableData()),
-        input_tensors_[input_idx].Nbytes(), memory_type, device_id);
+        reinterpret_cast<char*>(input_tensors_[index].MutableData()),
+        input_tensors_[index].Nbytes(), memory_type, device_id);
   }
 
   // Finalize...
@@ -1024,7 +1099,7 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   // BackendOutputResponder responder(
   //     requests, request_count, responses,
   //     model_state_->TritonMemoryManager(), model_state_->MaxBatchSize() > 0,
-  //     model_state_->EnablePinnedInput(), CudaStream());
+  //     model_state_->EnablePinnedOutput(), CudaStream());
   // r21.10
   BackendOutputResponder responder(
       requests, request_count, responses, StateForModel()->MaxBatchSize(),

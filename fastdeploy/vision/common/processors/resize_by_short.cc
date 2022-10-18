@@ -17,8 +17,8 @@
 namespace fastdeploy {
 namespace vision {
 
-bool ResizeByShort::CpuRun(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+bool ResizeByShort::ImplByOpenCV(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
@@ -35,28 +35,6 @@ bool ResizeByShort::CpuRun(Mat* mat) {
   mat->SetHeight(im->rows);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool ResizeByShort::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  double scale = GenerateScale(origin_w, origin_h);
-  im->convertTo(*im, CV_32FC(im->channels()));
-  if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
-    cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
-  } else {
-    int width = static_cast<int>(round(scale * im->cols));
-    int height = static_cast<int>(round(scale * im->rows));
-    if (width != origin_w || height != origin_h) {
-      cv::cuda::resize(*im, *im, cv::Size(width, height), 0, 0, interp_);
-    }
-  }
-  mat->SetWidth(im->cols);
-  mat->SetHeight(im->rows);
-  return true;
-}
-#endif
 
 double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   int im_size_max = std::max(origin_w, origin_h);

@@ -17,8 +17,8 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Crop::CpuRun(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+bool Crop::ImplByOpenCV(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);
   int width = static_cast<int>(im->cols);
   if (height < height_ + offset_h_ || width < width_ + offset_w_) {
@@ -34,26 +34,6 @@ bool Crop::CpuRun(Mat* mat) {
   mat->SetHeight(height_);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Crop::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int height = static_cast<int>(im->rows);
-  int width = static_cast<int>(im->cols);
-  if (height < height_ + offset_h_ || width < width_ + offset_w_) {
-    FDERROR << "[Crop] Cannot crop [" << height_ << ", " << width_
-            << "] from the input image [" << height << ", " << width
-            << "], with offset [" << offset_h_ << ", " << offset_w_ << "]."
-            << std::endl;
-    return false;
-  }
-  cv::Rect crop_roi(offset_w_, offset_h_, width_, height_);
-  *im = (*im)(crop_roi);
-  mat->SetWidth(width_);
-  mat->SetHeight(height_);
-  return true;
-}
-#endif
 
 bool Crop::Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                ProcLib lib) {

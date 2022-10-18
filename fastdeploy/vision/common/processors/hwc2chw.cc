@@ -16,13 +16,13 @@
 
 namespace fastdeploy {
 namespace vision {
-bool HWC2CHW::CpuRun(Mat* mat) {
+bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "HWC2CHW: The input data is not Layout::HWC format!"
             << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat im_clone = im->clone();
   int rh = im->rows;
   int rw = im->cols;
@@ -42,29 +42,6 @@ bool HWC2CHW::CpuRun(Mat* mat) {
   mat->layout = Layout::CHW;
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool HWC2CHW::GpuRun(Mat* mat) {
-  if (mat->layout != Layout::HWC) {
-    FDERROR << "HWC2CHW: The input data is not Layout::HWC format!"
-            << std::endl;
-    return false;
-  }
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  cv::cuda::GpuMat im_clone = im->clone();
-  int rh = im->rows;
-  int rw = im->cols;
-  int rc = im->channels();
-  int num_pixels = rh * rw;
-  std::vector<cv::cuda::GpuMat> channels{
-      cv::cuda::GpuMat(rh, rw, im->type() % 8, &(im->ptr()[0])),
-      cv::cuda::GpuMat(rh, rw, im->type() % 8, &(im->ptr()[num_pixels])),
-      cv::cuda::GpuMat(rh, rw, im->type() % 8, &(im->ptr()[num_pixels * 2]))};
-  cv::cuda::split(im_clone, channels);
-  mat->layout = Layout::CHW;
-  return true;
-}
-#endif
 
 bool HWC2CHW::Run(Mat* mat, ProcLib lib) {
   auto h = HWC2CHW();

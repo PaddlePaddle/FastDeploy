@@ -17,12 +17,12 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Resize::CpuRun(Mat* mat) {
+bool Resize::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   if (width_ > 0 && height_ > 0) {
@@ -45,37 +45,6 @@ bool Resize::CpuRun(Mat* mat) {
   mat->SetHeight(im->rows);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Resize::GpuRun(Mat* mat) {
-  if (mat->layout != Layout::HWC) {
-    FDERROR << "Resize: The format of input is not HWC." << std::endl;
-    return false;
-  }
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  if (width_ > 0 && height_ > 0) {
-    if (use_scale_) {
-      float scale_w = width_ * 1.0 / origin_w;
-      float scale_h = height_ * 1.0 / origin_h;
-      cv::cuda::resize(*im, *im, cv::Size(0, 0), scale_w, scale_h, interp_);
-    } else {
-      cv::cuda::resize(*im, *im, cv::Size(width_, height_), 0, 0, interp_);
-    }
-  } else if (scale_w_ > 0 && scale_h_ > 0) {
-    cv::cuda::resize(*im, *im, cv::Size(0, 0), scale_w_, scale_h_, interp_);
-  } else {
-    FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
-               "or (scale_w > 0 && scale_h > 0)."
-            << std::endl;
-    return false;
-  }
-  mat->SetWidth(im->cols);
-  mat->SetHeight(im->rows);
-  return true;
-}
-#endif
 
 bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
                  int interp, bool use_scale, ProcLib lib) {

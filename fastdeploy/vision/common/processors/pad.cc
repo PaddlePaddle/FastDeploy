@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Pad::CpuRun(Mat* mat) {
+bool Pad::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;
     return false;
@@ -34,7 +34,7 @@ bool Pad::CpuRun(Mat* mat) {
             << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   cv::Scalar value;
   if (value_.size() == 1) {
     value = cv::Scalar(value_[0]);
@@ -51,43 +51,6 @@ bool Pad::CpuRun(Mat* mat) {
   mat->SetWidth(im->cols);
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Pad::GpuRun(Mat* mat) {
-  if (mat->layout != Layout::HWC) {
-    FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;
-    return false;
-  }
-  if (mat->Channels() > 4) {
-    FDERROR << "Pad: Only support channels <= 4." << std::endl;
-    return false;
-  }
-  if (mat->Channels() != value_.size()) {
-    FDERROR << "Pad: Require input channels equals to size of padding value, "
-               "but now channels = "
-            << mat->Channels()
-            << ", the size of padding values = " << value_.size() << "."
-            << std::endl;
-    return false;
-  }
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  cv::Scalar value;
-  if (value_.size() == 1) {
-    value = cv::Scalar(value_[0]);
-  } else if (value_.size() == 2) {
-    value = cv::Scalar(value_[0], value_[1]);
-  } else if (value_.size() == 3) {
-    value = cv::Scalar(value_[0], value_[1], value_[2]);
-  } else {
-    value = cv::Scalar(value_[0], value_[1], value_[2], value_[3]);
-  }
-  cv::cuda::copyMakeBorder(*im, *im, top_, bottom_, left_, right_,
-                           cv::BORDER_CONSTANT, value);
-  mat->SetHeight(im->rows);
-  mat->SetWidth(im->cols);
-  return true;
-}
-#endif
 
 bool Pad::Run(Mat* mat, const int& top, const int& bottom, const int& left,
               const int& right, const std::vector<float>& value,

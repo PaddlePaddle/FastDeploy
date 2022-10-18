@@ -123,6 +123,27 @@ std::string FDTypeToModelConfigDataType(fastdeploy::FDDataType data_type) {
   return "TYPE_INVALID";
 }
 
+TRITONSERVER_Error* FDParseShape(triton::common::TritonJson::Value& io,
+                                 const std::string& name,
+                                 std::vector<int32_t>* shape) {
+  std::string shape_string;
+  RETURN_IF_ERROR(io.MemberAsString(name.c_str(), &shape_string));
+
+  std::vector<std::string> str_shapes;
+  std::istringstream in(shape_string);
+  std::copy(std::istream_iterator<std::string>(in),
+            std::istream_iterator<std::string>(),
+            std::back_inserter(str_shapes));
+
+  std::transform(str_shapes.cbegin(), str_shapes.cend(),
+                 std::back_inserter(*shape),
+                 [](const std::string& str) -> int32_t {
+                   return static_cast<int32_t>(std::stoll(str));
+                 });
+
+  return nullptr;  // success
+}
+
 }  // namespace fastdeploy_runtime
 }  // namespace backend
 }  // namespace triton

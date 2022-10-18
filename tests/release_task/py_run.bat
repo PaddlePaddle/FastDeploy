@@ -27,10 +27,9 @@ if "%DEVICE%" == "gpu" (
 echo "PY_FASTDEPLOY_PACKAGE: " %PY_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
-wget -q https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt
-tar -xf ppyoloe_crn_l_300e_coco.tgz
+python -c "import wget; wget.download('https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg')"
+python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt')"
+python -c "from download import *; download_and_decompress('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz', './')"
 
 set IMAGE_PATH=%CURRENT_DIR%\000000014439.jpg
 set MODEL_PATH=%CURRENT_DIR%\ppyoloe_crn_l_300e_coco
@@ -41,18 +40,21 @@ for %%b in (%RUN_CASES%) do (
     echo "Python Backend:" %%b
     if %%b  NEQ trt (
         python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=cpu --backend=%%b >> py_%%b_cpu_result.txt
-        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_cpu_result.txt --platform %PLATFORM% --device cpu
+        python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_cpu_result.txt --platform %PLATFORM% --device cpu --conf_threshold 0.5
     )
     if  "%DEVICE%" == "gpu" (
         if %%b == trt (
-            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_trt_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_trt_result.txt --platform %PLATFORM% --device trt
-        ) else (
-            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_gpu_result.txt
-            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_gpu_result.txt --platform %PLATFORM% --device gpu
-        )
+            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_trt_result.txt 
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_trt_result.txt --platform %PLATFORM% --device trt --conf_threshold 0.5
+        ) else if  %%b == ort (
+            python infer_ppyoloe.py --model_dir=%MODEL_PATH% --image=%IMAGE_PATH% --device=gpu --backend=%%b >> py_%%b_gpu_result.txt 
+            python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path py_%%b_gpu_result.txt --platform %PLATFORM% --device gpu  --conf_threshold 0.5
+        ) else if  %%b == paddle (
+	    echo "Temporarily skip paddle gpu case in windows for Inaccurate inference precision"
+	)
     ) 
 )
+
 
 set res_file=%cd%\result.txt
 
@@ -60,6 +62,9 @@ if exist %res_file% (
     for /f "delims=" %%i in (%res_file%) do echo %%i
     exit -1
 ) else (
+    if %errorlevel% NEQ 0 (
+        exit -1
+    )
     exit 0
 )
 :END

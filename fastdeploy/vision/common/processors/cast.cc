@@ -17,8 +17,8 @@
 namespace fastdeploy {
 namespace vision {
 
-bool Cast::CpuRun(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+bool Cast::ImplByOpenCV(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
   int c = im->channels();
   if (dtype_ == "float") {
     if (im->type() != CV_32FC(c)) {
@@ -34,26 +34,6 @@ bool Cast::CpuRun(Mat* mat) {
   }
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool Cast::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int c = im->channels();
-  if (dtype_ == "float") {
-    if (im->type() != CV_32FC(c)) {
-      im->convertTo(*im, CV_32FC(c));
-    }
-  } else if (dtype_ == "double") {
-    if (im->type() != CV_64FC(c)) {
-      im->convertTo(*im, CV_64FC(c));
-    }
-  } else {
-    FDWARNING << "Cast not support for " << dtype_
-              << " now! will skip this operation." << std::endl;
-  }
-  return true;
-}
-#endif
 
 bool Cast::Run(Mat* mat, const std::string& dtype, ProcLib lib) {
   auto c = Cast(dtype);

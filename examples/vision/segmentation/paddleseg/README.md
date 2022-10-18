@@ -12,12 +12,16 @@
 - [FCN系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/fcn/README.md)
 - [DeepLabV3系列模型](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/configs/deeplabv3/README.md)
 
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../matting)
+
 ## 准备PaddleSeg部署模型
 
 PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/docs/model_export_cn.md)  
 
-注意：在使用PaddleSeg模型导出时，可指定`--input_shape`参数，若预测输入图片尺寸并不固定，建议使用默认值即不指定该参数。PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息。
-
+**注意**
+- PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
+- aarch64平台（如：Jetson）暂时只支持`onnxruntime`和`tensorrt`作为后端推理（**不支持**非固定shape的图片输入即动态输入），因此请**指定**`--input_shape`导出具有固定输入的PaddleSeg模型（FastDeploy会在预处理阶段，对原图进行resize操作）
+- 在使用其他平台（如：Windows、Mac、Linux），在导出PaddleSeg模型模型时，可指定`--input_shape`参数，若输入的预测图片尺寸并不固定，建议使用默认值即**不指定**该参数
 
 ## 下载预训练模型
 

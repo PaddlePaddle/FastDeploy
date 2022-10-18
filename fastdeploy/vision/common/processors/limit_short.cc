@@ -17,8 +17,8 @@
 namespace fastdeploy {
 namespace vision {
 
-bool LimitShort::CpuRun(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+bool LimitShort::ImplByOpenCV(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   int im_size_min = std::min(origin_w, origin_h);
@@ -39,32 +39,6 @@ bool LimitShort::CpuRun(Mat* mat) {
   }
   return true;
 }
-
-#ifdef ENABLE_OPENCV_CUDA
-bool LimitShort::GpuRun(Mat* mat) {
-  cv::cuda::GpuMat* im = mat->GetGpuMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  im->convertTo(*im, CV_32FC(im->channels()));
-  int im_size_min = std::min(origin_w, origin_h);
-  int target = im_size_min;
-  if (max_short_ > 0 && im_size_min > max_short_) {
-    target = max_short_;
-  } else if (min_short_ > 0 && im_size_min < min_short_) {
-    target = min_short_;
-  }
-  double scale = -1.f;
-  if (target != im_size_min) {
-    scale = static_cast<double>(target) / static_cast<double>(im_size_min);
-  }
-  if (scale > 0) {
-    cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
-    mat->SetWidth(im->cols);
-    mat->SetHeight(im->rows);
-  }
-  return true;
-}
-#endif
 
 bool LimitShort::Run(Mat* mat, int max_short, int min_short, ProcLib lib) {
   auto l = LimitShort(max_short, min_short);

@@ -29,6 +29,10 @@
 #cmakedefine ENABLE_PADDLE_BACKEND
 #endif
 
+#ifndef ENABLE_POROS_BACKEND
+#cmakedefine ENABLE_POROS_BACKEND
+#endif
+
 #ifndef ENABLE_OPENVINO_BACKEND
 #cmakedefine ENABLE_OPENVINO_BACKEND
 #endif
@@ -43,6 +47,10 @@
 
 #ifndef ENABLE_VISION
 #cmakedefine ENABLE_VISION
+#endif
+
+#ifndef ENABLE_FALCONCV
+#cmakedefine ENABLE_FALCONCV
 #endif
 
 #ifndef ENABLE_TEXT

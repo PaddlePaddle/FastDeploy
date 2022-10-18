@@ -22,6 +22,7 @@
 
 #include <map>
 #include <vector>
+#include <algorithm>
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
@@ -37,6 +38,7 @@ enum Backend {
   ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
+  POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
 };
@@ -46,6 +48,7 @@ enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
+  TORCHSCRIPT,  ///< Model with TorchScript format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -104,6 +107,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetCpuThreadNum(int thread_num);
 
+  /// Set ORT graph opt level, default is decide by ONNX Runtime itself
+  void SetOrtGraphOptLevel(int level = -1);
+
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
 
@@ -113,17 +119,22 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
 
+  /// Set Poros backend as inference backend, support CPU/GPU
+  void UsePorosBackend();
+
   /// Set OpenVINO as inference backend, only support CPU
   void UseOpenVINOBackend();
 
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
 
-  /// Enable mkldnn while using Paddle Inference as inference backend
-  void EnablePaddleMKLDNN();
+  /// Set mkldnn switch while using Paddle Inference as inference backend
+  void SetPaddleMKLDNN(bool pd_mkldnn = true);
 
-  /// Disable mkldnn while using Paddle Inference as inference backend
-  void DisablePaddleMKLDNN();
+  /*
+   * @brief If TensorRT backend is used, EnablePaddleToTrt will change to use Paddle Inference backend, and use its integrated TensorRT instead.
+   */
+  void EnablePaddleToTrt();
 
   /**
    * @brief Delete pass by name while using Paddle Inference as inference backend, this can be called multiple times to delete a set of passes
@@ -213,6 +224,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // ======Only for Paddle Backend=====
   bool pd_enable_mkldnn = true;
   bool pd_enable_log_info = false;
+  bool pd_enable_trt = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 
@@ -235,6 +247,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+
+  // ======Only for Poros Backend=======
+  bool is_dynamic = false;
+  bool long_to_int = true;
+  bool use_nvidia_tf32 = false;
+  int unconst_ops_thres = -1;
+  std::string poros_file = "";
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
@@ -262,6 +281,15 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
+
+  /** \brief Compile TorchScript Module, only for Poros backend
+   *
+   * \param[in] prewarm_tensors Prewarm datas for compile
+   * \param[in] _option Runtime option
+   * \return true if compile successed, otherwise false
+   */
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+               const RuntimeOption& _option);
 
   /** \brief Get number of inputs
    */

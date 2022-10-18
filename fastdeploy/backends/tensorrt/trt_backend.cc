@@ -131,10 +131,13 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   }
   char* model_content_ptr;
   int model_content_size = 0;
+  char* calibration_cache_ptr;
+  int calibration_cache_size = 0;
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size())) {
+                           custom_ops.size(), "tensorrt",
+                           &calibration_cache_ptr, &calibration_cache_size)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -151,6 +154,13 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
     delete[] model_content_ptr;
     std::string onnx_model_proto(new_model, new_model + new_model_size);
     delete[] new_model;
+    if (calibration_cache_size) {
+      std::string calibration_str(
+          calibration_cache_ptr,
+          calibration_cache_ptr + calibration_cache_size);
+      calibration_str_ = calibration_str;
+      delete[] calibration_cache_ptr;
+    }
     return InitFromOnnx(onnx_model_proto, option, true);
   }
 
@@ -158,6 +168,12 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
+  if (calibration_cache_size) {
+    std::string calibration_str(calibration_cache_ptr,
+                                calibration_cache_ptr + calibration_cache_size);
+    calibration_str_ = calibration_str;
+    delete[] calibration_cache_ptr;
+  }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
   FDERROR << "Didn't compile with PaddlePaddle frontend, you can try to "
@@ -282,8 +298,8 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
         << "TensorRT engine will be rebuilt once shape range information "
            "changed, this may take lots of time, you can set a proper shape "
            "range before loading model to avoid rebuilding process. refer "
-           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
-           "tensorrt.md for more details."
+           "https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/en/faq/"
+           "tensorrt_tricks.md for more details."
         << std::endl;
     BuildTrtEngine();
   }
@@ -409,6 +425,7 @@ bool TrtBackend::BuildTrtEngine() {
                    "will use FP32 instead."
                 << std::endl;
     } else {
+      FDINFO << "[TrtBackend] Use FP16 to inference." << std::endl;
       config->setFlag(nvinfer1::BuilderFlag::kFP16);
     }
   }
@@ -458,6 +475,20 @@ bool TrtBackend::BuildTrtEngine() {
     }
   }
   config->addOptimizationProfile(profile);
+
+  if (calibration_str_.size()) {
+    if (!builder_->platformHasFastInt8()) {
+      FDWARNING << "Detected INT8 is not supported in the current GPU, "
+                   "will use FP32 instead."
+                << std::endl;
+    } else {
+      FDINFO << "[TrtBackend] Use INT8 to inference." << std::endl;
+      config->setFlag(nvinfer1::BuilderFlag::kINT8);
+      Int8EntropyCalibrator2* calibrator =
+          new Int8EntropyCalibrator2(calibration_str_);
+      config->setInt8Calibrator(calibrator);
+    }
+  }
 
   FDUniquePtr<nvinfer1::IHostMemory> plan{
       builder_->buildSerializedNetwork(*network_, *config)};
@@ -561,8 +592,8 @@ bool TrtBackend::CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer) {
            "should be noticed that FastDeploy will rebuild the engine while "
            "new input shape is out of the collected shape range, this may "
            "bring some time consuming problem, refer "
-           "https://github.com/PaddlePaddle/FastDeploy/docs/backends/"
-           "tensorrt.md for more details."
+           "https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/en/faq/"
+           "tensorrt_tricks.md for more details."
         << std::endl;
     initialized_ = true;
     return true;
