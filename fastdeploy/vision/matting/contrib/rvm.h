@@ -20,32 +20,52 @@
 namespace fastdeploy {
 
 namespace vision {
-
+/** \brief All image/video matting model APIs are defined inside this namespace
+ *
+ */
 namespace matting {
 
+/*! @brief RobustVideoMatting model object used when to load a RobustVideoMatting model exported by RobustVideoMatting
+ */
 class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
  public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g rvm/rvm_mobilenetv3_fp32.onnx
+   * \param[in] params_file Path of parameter file, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   RobustVideoMatting(const std::string& model_file,
                      const std::string& params_file = "",
                      const RuntimeOption& custom_option = RuntimeOption(),
                      const ModelFormat& model_format = ModelFormat::ONNX);
 
+  /// Get model's name
   std::string ModelName() const { return "matting/RobustVideoMatting"; }
 
-  // tuple of (width, height), default (1080, 1920)
-  std::vector<int> size;
-
+  /** \brief Predict the matting result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output matting result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   bool Predict(cv::Mat* im, MattingResult* result);
+
+  /// Preprocess image size, the default is (1080, 1920)
+  std::vector<int> size;
 
  private:
   bool Initialize();
-
+  /// Preprocess an input image, and set the preprocessed results to `outputs`
   bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<int, 2>>* im_info);
 
+  /// Postprocess the inferenced results, and set the final result to `result`
   bool Postprocess(std::vector<FDTensor>& infer_result, MattingResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
-  // init dynamic inputs datas
+
+  /// Init dynamic inputs datas
   std::vector<std::vector<float>> dynamic_inputs_datas_ = {
      {0.0f},  // r1i
      {0.0f},  // r2i
@@ -53,7 +73,8 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
      {0.0f},  // r4i
      {0.25f},  // downsample_ratio
   };
-  // init dynamic inputs dims
+
+  /// Init dynamic inputs dims
   std::vector<std::vector<int64_t>> dynamic_inputs_dims_ = {
      {1, 1, 1, 1},  // r1i
      {1, 1, 1, 1},  // r2i
