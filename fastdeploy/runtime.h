@@ -102,9 +102,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  /// Use CUDA code to do preprocessing
-  void UseCudaPreprocessing();
-
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
