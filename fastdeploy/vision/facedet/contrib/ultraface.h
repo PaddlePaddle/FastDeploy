@@ -22,9 +22,17 @@ namespace fastdeploy {
 namespace vision {
 
 namespace facedet {
-
+/*! @brief UltraFace model object used when to load a UltraFace model exported by UltraFace.
+ */
 class FASTDEPLOY_DECL UltraFace : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./ultraface.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   UltraFace(const std::string& model_file, const std::string& params_file = "",
             const RuntimeOption& custom_option = RuntimeOption(),
             const ModelFormat& model_format = ModelFormat::ONNX);
@@ -32,12 +40,19 @@ class FASTDEPLOY_DECL UltraFace : public FastDeployModel {
   std::string ModelName() const {
     return "Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB";
   }
-
+  /** \brief Predict the face detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output face detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.7
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.3
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.7f,
                        float nms_iou_threshold = 0.3f);
 
-  // tuple of (width, height), default (320, 240)
+  /// tuple of (width, height), default (320, 240)
   std::vector<int> size;
 
  private:

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+﻿  // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,34 +20,51 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-
+/*! @brief YOLOv7 model object used when to load a YOLOv7 model exported by YOLOv7.
+ */
 class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./yolov7.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   YOLOv7(const std::string& model_file, const std::string& params_file = "",
          const RuntimeOption& custom_option = RuntimeOption(),
          const ModelFormat& model_format = ModelFormat::ONNX);
 
   virtual std::string ModelName() const { return "yolov7"; }
-
+  /** \brief Predict the detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.25
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.5
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.25,
                        float nms_iou_threshold = 0.5);
 
-  // tuple of (width, height)
+  /// tuple of (width, height)
   std::vector<int> size;
-  // padding value, size should be same with Channels
+  /// padding value, size should be the same as channels
   std::vector<float> padding_value;
-  // only pad to the minimum rectange which height and width is times of stride
+  /// only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad;
-  // while is_mini_pad = false and is_no_pad = true, will resize the image to
-  // the set size
+  /*! @brief
+  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
+  */
   bool is_no_pad;
-  // if is_scale_up is false, the input image only can be zoom out, the maximum
-  // resize scale cannot exceed 1.0
+  /*! @brief
+  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
+  */
   bool is_scale_up;
-  // padding stride, for is_mini_pad
+  /// padding stride, for is_mini_pad
   int stride;
-  // for offseting the boxes by classes when using NMS
+  /// for offseting the boxes by classes when using NMS
   float max_wh;
 
  private:

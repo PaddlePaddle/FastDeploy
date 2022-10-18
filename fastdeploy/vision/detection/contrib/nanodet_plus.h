@@ -23,34 +23,51 @@ namespace fastdeploy {
 namespace vision {
 
 namespace detection {
-
+/*! @brief NanoDetPlus model object used when to load a NanoDetPlus model exported by NanoDet.
+ */
 class FASTDEPLOY_DECL NanoDetPlus : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./nanodet_plus_320.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   NanoDetPlus(const std::string& model_file,
               const std::string& params_file = "",
               const RuntimeOption& custom_option = RuntimeOption(),
               const ModelFormat& model_format = ModelFormat::ONNX);
-
+  /// Get model's name
   std::string ModelName() const { return "nanodet"; }
 
-
+  /** \brief Predict the detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.35
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.5
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.35f,
                        float nms_iou_threshold = 0.5f);
 
-  // tuple of input size (width, height), e.g (320, 320)
+  /// tuple of input size (width, height), e.g (320, 320)
   std::vector<int> size;
-  // padding value, size should be same with Channels
+  /// padding value, size should be the same as channels
   std::vector<float> padding_value;
-  // keep aspect ratio or not when perform resize operation.
-  // This option is set as `false` by default in NanoDet-Plus.
+  /*! @brief
+  keep aspect ratio or not when perform resize operation. This option is set as `false` by default in NanoDet-Plus
+  */
   bool keep_ratio;
-  // downsample strides for NanoDet-Plus to generate anchors, will
-  // take (8, 16, 32, 64) as default values.
+  /*! @brief
+  downsample strides for NanoDet-Plus to generate anchors, will take (8, 16, 32, 64) as default values
+  */
   std::vector<int> downsample_strides;
-  // for offseting the boxes by classes when using NMS, default 4096.
+  /// for offseting the boxes by classes when using NMS, default 4096
   float max_wh;
-  // reg_max for GFL regression, default 7
+  /// reg_max for GFL regression, default 7
   int reg_max;
 
  private:

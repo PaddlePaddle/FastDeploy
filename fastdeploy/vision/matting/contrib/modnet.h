@@ -22,22 +22,37 @@ namespace fastdeploy {
 namespace vision {
 
 namespace matting {
-
+/*! @brief MODNet model object used when to load a MODNet model exported by MODNet.
+ */
 class FASTDEPLOY_DECL MODNet : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./modnet.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   MODNet(const std::string& model_file, const std::string& params_file = "",
          const RuntimeOption& custom_option = RuntimeOption(),
          const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "matting/MODNet"; }
 
-  // tuple of (width, height), default (256, 256)
+  /// tuple of (width, height), default (256, 256)
   std::vector<int> size;
+  /// parameters for normalization
   std::vector<float> alpha;
+  /// parameters for normalization
   std::vector<float> beta;
-  // whether to swap the B and R channel, such as BGR->RGB, default true.
+  /// whether to swap the B and R channel, such as BGR->RGB, default true.
   bool swap_rb;
-
+  /** \brief Predict the matting result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output matting result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   bool Predict(cv::Mat* im, MattingResult* result);
 
  private:

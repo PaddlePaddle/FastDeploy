@@ -18,22 +18,35 @@
 
 namespace fastdeploy {
 namespace vision {
+/** \brief All object matting model APIs are defined inside this namespace
+ *
+ */
 namespace matting {
-
+/*! @brief PPMatting model object used when to load a PPMatting model exported by PPMatting.
+ */
 class FASTDEPLOY_DECL PPMatting : public FastDeployModel {
  public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g PPMatting-512/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g PPMatting-512/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g PPMatting-512/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   PPMatting(const std::string& model_file, const std::string& params_file,
             const std::string& config_file,
             const RuntimeOption& custom_option = RuntimeOption(),
             const ModelFormat& model_format = ModelFormat::PADDLE);
 
   std::string ModelName() const { return "PaddleMatting"; }
-
+  /** \brief Predict the matting result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output matting result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, MattingResult* result);
-
-  bool with_softmax = false;
-
-  bool is_vertical_screen = false;
 
  private:
   bool Initialize();
