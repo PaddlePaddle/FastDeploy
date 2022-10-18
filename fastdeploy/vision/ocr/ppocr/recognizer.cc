@@ -159,7 +159,7 @@ bool Recognizer::Postprocess(FDTensor& infer_result,
       score += max_value;
       count += 1;
       if(argmax_idx > label_list.size()){
-        FDERROR << "The output index:" << argmax_idx << " is larger than the size of label_list: "<< label_list.size() << ". Please check the label file!" << std::endl;
+        FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "<< label_list.size() << ". Please check the label file!" << std::endl;
         return false; 
       }
       str_res += label_list[argmax_idx];
