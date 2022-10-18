@@ -53,6 +53,8 @@ setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
 setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
                                                    "OFF")
+setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND",
+                                                  "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_PIPELINE"] = os.getenv("ENABLE_PIPELINE", "OFF")
