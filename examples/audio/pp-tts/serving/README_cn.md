@@ -1,14 +1,13 @@
 (简体中文|[English](./README.md))
 
-# 流式语音合成服务
+# PP-TTS流式语音合成服务化部署
 
 ## 介绍
-
 本文介绍了使用FastDeploy搭建流式语音合成服务的方法。
 
-`服务端`必须在docker内启动,而`客户端`不是必须在docker容器内.
+服务端必须在docker内启动,而客户端不是必须在docker容器内.
 
-**本文所在路径`($PWD)下的streaming_tts_serving里包含模型的配置和代码`(服务端会加载模型和代码以启动服务),需要将其映射到docker中使用。**
+**本文所在路径($PWD)下的streaming_pp_tts里包含模型的配置和代码(服务端会加载模型和代码以启动服务),需要将其映射到docker中使用。**
 
 ## 使用
 ### 1. 服务端
@@ -30,25 +29,35 @@ export LANGUAGE="zh_CN:zh:en_US:en"
 
 #### 1.3 下载模型(在docker内)
 ```bash
-cd /models/streaming_tts_serving/1
+cd /models/streaming_pp_tts/1
 wget https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip
 wget https://paddlespeech.bj.bcebos.com/Parakeet/released_models/mb_melgan/mb_melgan_csmsc_onnx_0.2.0.zip
 unzip fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip
 unzip mb_melgan_csmsc_onnx_0.2.0.zip
 ```
-**为了方便用户使用，我们推荐用户使用1.1中的`docker -v`命令将`$PWD(streaming_tts_serving及里面包含的模型的配置和代码)映射到了docker内的/models路径`,用户也可以使用其他办法,但无论使用哪种方法,最终在docker内的模型目录及结构如下图所示。**
+**为了方便用户使用，我们推荐用户使用1.1中的`docker -v`命令将$PWD(streaming_pp_tts及里面包含的模型的配置和代码)映射到了docker内的`/models`路径,用户也可以使用其他办法,但无论使用哪种方法,最终在docker内的模型目录及结构如下图所示。**
 
-<p align="center">
-  <img src="./tree.png" />
-</p>
+```
+/models 
+│
+└───streaming_pp_tts                                              #整个服务模型文件夹
+    │   config.pbtxt                                              #服务模型配置文件
+    │   stream_client.py                                          #客户端代码
+    │
+    └───1                                                         #模型版本号,此处为1
+        │   model.py                                              #模型启动代码
+        └───fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0     #启动代码所需的模型文件
+        └───mb_melgan_csmsc_onnx_0.2.0                            #启动代码所需的模型文件
+
+```
 
 #### 1.4 启动服务端(在docker内)
 ```bash
-fastdeployserver --model-repository=/models --model-control-mode=explicit --load-model=streaming_tts_serving
+fastdeployserver --model-repository=/models --model-control-mode=explicit --load-model=streaming_pp_tts
 ```
 
 参数:
-  - `model-repository`(required): 整套模型streaming_tts_serving存放的路径.
+  - `model-repository`(required): 整套模型streaming_pp_tts存放的路径.
   - `model-control-mode`(required): 模型加载的方式,现阶段, 使用'explicit'即可.
   - `load-model`(required): 需要加载的模型的名称.
   - `http-port`(optional): HTTP服务的端口号. 默认: `8000`. 本示例中未使用该端口.
@@ -63,5 +72,5 @@ pip3 install tritonclient[all]
 
 #### 2.2 发送请求
 ```bash
-python3 /models/streaming_tts_serving/stream_client.py
+python3 /models/streaming_pp_tts/stream_client.py
 ```

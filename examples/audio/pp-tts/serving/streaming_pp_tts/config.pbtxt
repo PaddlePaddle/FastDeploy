@@ -1,4 +1,4 @@
-name: "streaming_tts_serving"
+name: "streaming_pp_tts"
 backend: "python"
 max_batch_size: 0
 model_transaction_policy {
