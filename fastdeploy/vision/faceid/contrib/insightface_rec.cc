@@ -29,7 +29,11 @@ InsightFaceRecognitionModel::InsightFaceRecognitionModel(
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
-  } else {
+  } else if (model_format == ModelFormat::RKNN) {
+    valid_cpu_backends = {Backend::ORT};
+    valid_gpu_backends = {Backend::ORT};
+    valid_npu_backends = {Backend::RKNPU2};
+  } else{
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
@@ -71,9 +75,11 @@ bool InsightFaceRecognitionModel::Preprocess(Mat* mat, FDTensor* output) {
     BGR2RGB::Run(mat);
   }
 
-  Convert::Run(mat, alpha, beta);
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
+  if(this->switch_of_nor_and_per){
+    Convert::Run(mat, alpha, beta);
+    HWC2CHW::Run(mat);
+    Cast::Run(mat, "float");
+  }
 
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
@@ -132,6 +138,9 @@ bool InsightFaceRecognitionModel::Predict(cv::Mat* im,
   return true;
 }
 
+void InsightFaceRecognitionModel::DisableNormalizeAndPermute(){
+  this->switch_of_nor_and_per = false;
+}
 }  // namespace faceid
 }  // namespace vision
 }  // namespace fastdeploy

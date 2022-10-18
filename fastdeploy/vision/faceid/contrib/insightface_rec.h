@@ -49,6 +49,14 @@ class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
 
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            FaceRecognitionResult* result);
+
+  // RKNPU2 can run normalize and hwc2chw on the NPU.
+  // This function is used to close normalize and hwc2chw operations in preprocessing.
+  void DisableNormalizeAndPermute();
+
+  private:
+  // for recording the switch of normalize and hwc2chw
+  bool switch_of_nor_and_per = true;  
 };
 
 }  // namespace faceid
