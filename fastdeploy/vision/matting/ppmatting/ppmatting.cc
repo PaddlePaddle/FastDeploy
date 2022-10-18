@@ -195,7 +195,7 @@ bool PPMatting::Postprocess(
   int numel = iter_ipt->second[0] * iter_ipt->second[1];
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  std::memcpy(result->alpha.data(), mat.GetCpuMat()->data, nbytes);
+  std::memcpy(result->alpha.data(), mat.GetOpenCVMat()->data, nbytes);
   return true;
 }
 

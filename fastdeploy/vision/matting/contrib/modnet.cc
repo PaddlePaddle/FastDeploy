@@ -118,7 +118,7 @@ bool MODNet::Postprocess(
   int numel = ipt_h * ipt_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  std::memcpy(result->alpha.data(), alpha_resized.GetCpuMat()->data, nbytes);
+  std::memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
   return true;
 }
 

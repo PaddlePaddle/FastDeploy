@@ -85,9 +85,13 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     int input_height = input_shape[2].as<int>();
     int input_width = input_shape[3].as<int>();
     if (input_height == -1 || input_width == -1) {
-      FDWARNING << "The exported PaddleSeg model is with dynamic shape input,"
-	        << "which is not supported by ONNX Runtime and Tensorrt."
-		<< "Only OpenVINO and Paddle Inference are available now." << std::endl;
+      FDWARNING << "The exported PaddleSeg model is with dynamic shape input, "
+	        << "which is not supported by ONNX Runtime and Tensorrt. "
+		<< "Only OpenVINO and Paddle Inference are available now. " 
+	        << "For using ONNX Runtime or Tensorrt, "
+	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
+	        << " to export model with fixed input shape."
+	        << std::endl;
       valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
       valid_gpu_backends = {Backend::PDINFER};
     }
@@ -111,12 +115,6 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
       FDERROR << "Unexcepted output_op operator in deploy.yml: " << output_op
               << "." << std::endl;
     }
-  }
-  if (is_with_argmax) {
-    FDWARNING << "The PaddleSeg model is exported with argmax."
-              << " If you want the edge of segmentation image more"
-              << " smoother. Please export model with parameters"
-              << "  --output_op softmax." << std::endl;
   }
   processors_.push_back(std::make_shared<HWC2CHW>());
   return true;
