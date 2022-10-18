@@ -1,10 +1,10 @@
-# PP-PicoDet + PP-TinyPose 模型(Pipeline)部署
+# PP-PicoDet + PP-TinyPose 联合部署(Pipeline)
 
 ## 模型版本说明
 
 - [PaddleDetection release/2.5](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5)
 
-目前FastDeploy支持如下模型的部署 
+目前FastDeploy支持如下模型的部署
 
 - [PP-PicoDet + PP-TinyPose系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
 
@@ -13,7 +13,6 @@
 PP-TinyPose以及PP-PicoDet模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.5/deploy/EXPORT_MODEL.md)  
 
 **注意**:导出的推理模型包含`model.pdmodel`、`model.pdiparams`和`infer_cfg.yml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息。
-
 
 ## 下载预训练模型
 

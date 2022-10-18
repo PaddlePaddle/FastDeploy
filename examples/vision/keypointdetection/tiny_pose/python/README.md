@@ -5,7 +5,9 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
-本目录下提供`pptinypose_infer.py`快速完成PP-TinyPose在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`pptinypose_infer.py`快速完成PP-TinyPose在CPU/GPU，以及GPU上通过TensorRT加速部署的`单图单人关键点检测`示例。执行如下脚本即可完成
+
+>> **注意**: PP-Tinypose单模型目前只支持单图单人关键点检测，因此输入的图片应只包含一个人或者进行过裁剪的图像。多人关键点检测请参考[PP-TinyPose Pipeline](../../det_keypoint_unite/python/README.md)
 
 ```bash
 #下载部署示例代码
@@ -27,7 +29,7 @@ python pptinypose_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --imag
 
 运行完成可视化结果如下图所示
 <div  align="center">  
-<img src="", width=512px, height=256px />
+<img src="https://user-images.githubusercontent.com/16222477/196386764-dd51ad56-c410-4c54-9580-643f282f5a83.jpeg", width=359px, height=423px />
 </div>
 
 ## PP-TinyPose Python接口

@@ -34,7 +34,7 @@ def build_tinypose_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("image", [1, 3, 128, 96])
+        option.set_trt_input_shape("image", [1, 3, 256, 192])
     return option
 
 

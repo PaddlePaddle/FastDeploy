@@ -49,7 +49,7 @@ def build_tinypose_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("image", [1, 3, 128, 96])
+        option.set_trt_input_shape("image", [1, 3, 256, 192])
     return option
 
 
@@ -86,6 +86,6 @@ print("Paddle TinyPose Result:\n", pipeline_result)
 
 # 预测结果可视化
 vis_im = fd.vision.vis_keypoint_detection(
-    im, pipeline_result, conf_threshold=0.6)
+    im, pipeline_result, conf_threshold=0.2)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("TinyPose visualized result save in ./visualized_result.jpg")
