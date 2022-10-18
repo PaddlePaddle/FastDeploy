@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
+#include "fastdeploy/pipeline.h"
 
 #ifdef WIN32
 const char sep = '\\';
@@ -46,9 +47,8 @@ void CpuInfer(const std::string& det_model_dir,
   auto im = cv::imread(image_file);
   fastdeploy::vision::KeyPointDetectionResult res;
 
-  auto pipeline =
-      fastdeploy::pipeline::PPTinyPose(
-          &det_model, &tinypose_model);
+  auto pipeline =fastdeploy::pipeline::PPTinyPose(&det_model, &tinypose_model);
+  pipeline.detection_model_score_threshold = 0.5;
   if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
@@ -60,7 +60,7 @@ void CpuInfer(const std::string& det_model_dir,
 
   // 可视化预测结果
   auto vis_im =
-      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;
@@ -97,6 +97,7 @@ void GpuInfer(const std::string& det_model_dir,
   auto pipeline =
       fastdeploy::pipeline::PPTinyPose(
           &det_model, &tinypose_model);
+  pipeline.detection_model_score_threshold = 0.5;
   if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
@@ -108,7 +109,7 @@ void GpuInfer(const std::string& det_model_dir,
 
   // 可视化预测结果
   auto vis_im =
-      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;
@@ -153,18 +154,19 @@ void TrtInfer(const std::string& det_model_dir,
   auto pipeline =
       fastdeploy::pipeline::PPTinyPose(
           &det_model, &tinypose_model);
+  pipeline.detection_model_score_threshold = 0.5;
   if (!pipeline.Predict(&im, &res)) {
     std::cerr << "TinyPose Prediction Failed." << std::endl;
     return;
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  // 输出预测关键点结果
   std::cout << res.Str() << std::endl;
 
   // 可视化预测结果
   auto vis_im =
-      fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
             << std::endl;

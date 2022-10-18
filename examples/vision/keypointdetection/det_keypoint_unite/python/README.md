@@ -6,7 +6,7 @@
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
 
 本目录下提供`det_keypoint_unite_infer.py`快速完成多人模型配置 PP-PicoDet + PP-TinyPose 在CPU/GPU，以及GPU上通过TensorRT加速部署的`单图多人关键点检测`示例。执行如下脚本即可完成
->> **注意**: PP-TinyPose单模型独立部署，请参考[PP-TinyPose 单模型](../../det_keypoint_unite/python/README.md)
+>> **注意**: PP-TinyPose单模型独立部署，请参考[PP-TinyPose 单模型](../../tiny_pose//python/README.md)
 
 ```bash
 #下载部署示例代码
@@ -60,6 +60,11 @@ PPTinyPosePipeline模型加载和初始化，其中det_model是使用`fd.vision.
 > **返回**
 >
 > > 返回`fastdeploy.vision.KeyPointDetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+
+### 类成员属性
+#### 后处理参数
+> > * **detection_model_score_threshold**(bool):
+输入PP-TinyPose模型前，Detectin模型过滤检测框的分数阈值
 
 ## 其它文档
 
