@@ -11,6 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Part of the following code in this file refs to
+// https://github.com/wang-xinyu/tensorrtx/blob/yolov5-v6.0/yolov5/preprocess.cu
+//
+// Copyright (c) 2022 tensorrtx
+// Licensed under The MIT License
+// \file preprocess.cu
+// \brief
+// \author Qi Liu, Xinyu Wang
 
 #include "fastdeploy/vision/utils/cuda_utils.h"
 #include <opencv2/opencv.hpp>
@@ -23,7 +32,7 @@ struct AffineMatrix {
   float value[6];
 };
 
-__global__ void YoloPreprocessCUDAKernel( 
+__global__ void YoloPreprocessCudaKernel( 
     uint8_t* src, int src_line_size, int src_width, 
     int src_height, float* dst, int dst_width, 
     int dst_height, uint8_t const_value_st,
@@ -101,7 +110,7 @@ __global__ void YoloPreprocessCUDAKernel(
   *pdst_c2 = c2;
 }
 
-void CUDAYoloPreprocess(
+void CudaYoloPreprocess(
     uint8_t* src, int src_width, int src_height,
     float* dst, int dst_width, int dst_height,
     cudaStream_t stream) {
@@ -124,7 +133,7 @@ void CUDAYoloPreprocess(
   int jobs = dst_height * dst_width;
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
-  YoloPreprocessCUDAKernel<<<blocks, threads, 0, stream>>>(
+  YoloPreprocessCudaKernel<<<blocks, threads, 0, stream>>>(
       src, src_width * 3, src_width,
       src_height, dst, dst_width,
       dst_height, 128, d2s, jobs);

@@ -168,7 +168,7 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
+bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
                             std::map<std::string, std::array<float, 2>>* im_info,
                             const std::vector<int>& size,
                             const std::vector<float> padding_value,
@@ -191,7 +191,7 @@ bool YOLOv5::CUDAPreprocess(Mat* mat, FDTensor* output,
   int src_img_buf_size = mat->Height() * mat->Width() * mat->Channels();
   memcpy(input_img_cuda_buffer_host_, mat->Data(), src_img_buf_size);
   CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_, input_img_cuda_buffer_host_, src_img_buf_size, cudaMemcpyHostToDevice, stream));
-  utils::CUDAYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(), mat->Height(), input_tensor_cuda_buffer_device_, size[0], size[1], stream);
+  utils::CudaYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(), mat->Height(), input_tensor_cuda_buffer_device_, size[0], size[1], stream);
   cudaStreamSynchronize(stream);
 
   // Record output shape of preprocessed image
@@ -315,7 +315,7 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   std::map<std::string, std::array<float, 2>> im_info;
 
   if (runtime_option.use_cuda_preprocessing) {
-    if (!CUDAPreprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
+    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
                         is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
                         multi_label_)) {
       FDERROR << "Failed to preprocess input image." << std::endl;

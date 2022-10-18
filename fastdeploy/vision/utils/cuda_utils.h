@@ -32,7 +32,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace utils {
-void CUDAYoloPreprocess(uint8_t* src, int src_width, int src_height,
+void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height,
                         float* dst, int dst_width, int dst_height,
                         cudaStream_t stream);
 }  // namespace utils

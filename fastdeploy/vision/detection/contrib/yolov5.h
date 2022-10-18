@@ -44,7 +44,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
                          float max_wh = 7680.0, bool multi_label = true);
 
 #ifdef ENABLE_CUDA_SRC
-  bool CUDAPreprocess(Mat* mat, FDTensor* output,
+  bool CudaPreprocess(Mat* mat, FDTensor* output,
                       std::map<std::string, std::array<float, 2>>* im_info,
                       const std::vector<int>& size = {640, 640},
                       const std::vector<float> padding_value = {114.0, 114.0,
