@@ -255,8 +255,13 @@ bool Initialize();
 你需要为resnet.py文件中的函数和变量增加适当的注释，示例如下，具体可参考[resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157)。
 
 ```python  
-# Predict and return the inference result of "input_image".
-def predict(self, input_image, topk=1):
+  def predict(self, input_image, topk=1):
+    """Classify an input image
+
+    :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param topk: (int)The topk result by the classify confidence score, default 1
+    :return: ClassifyResult
+    """
     return self._model.predict(input_image, topk)
 ```
 

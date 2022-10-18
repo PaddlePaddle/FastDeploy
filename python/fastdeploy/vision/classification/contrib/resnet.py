@@ -24,6 +24,13 @@ class ResNet(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
+        """Load a image classification model exported by ResNet.
+
+        :param model_file: (str)Path of model file, e.g resnet/resnet50.onnx
+        :param params_file: (str)Path of parameters file, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model, default is ONNX
+        """
 
         # call super() to initialize the backend_option
         # the result of initialization will be saved in self._runtime_option
@@ -37,19 +44,34 @@ class ResNet(FastDeployModel):
 
     # Predict and return the inference result of "input_image".
     def predict(self, input_image, topk=1):
+        """Classify an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param topk: (int)The topk result by the classify confidence score, default 1
+        :return: ClassifyResult
+        """
         return self._model.predict(input_image, topk)
 
     # Implement the setter and getter method for variables
     @property
     def size(self):
+        """
+        Returns the preprocess image size
+        """
         return self._model.size
 
     @property
     def mean_vals(self):
+        """
+        Returns the mean value of normlization
+        """
         return self._model.mean_vals
 
     @property
     def std_vals(self):
+        """
+        Returns the std value of normlization
+        """
         return self._model.std_vals
 
     @size.setter
