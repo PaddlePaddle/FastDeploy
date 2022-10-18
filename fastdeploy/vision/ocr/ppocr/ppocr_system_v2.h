@@ -66,11 +66,11 @@ class FASTDEPLOY_DECL PPOCRSystemv2 : public FastDeployModel {
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
   fastdeploy::vision::ocr::Classifier* classifier_ = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
-  /// Luanch the detection process in OCR.
+  /// Launch the detection process in OCR.
   virtual bool Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  /// Luanch the recognition process in OCR.
+  /// Launch the recognition process in OCR.
   virtual bool Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
-  /// Luanch the classification process in OCR.
+  /// Launch the classification process in OCR.
   virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
 };
 

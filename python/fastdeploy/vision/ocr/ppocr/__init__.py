@@ -231,7 +231,7 @@ class Recognizer(FastDeployModel):
 
 class PPOCRSystemv3(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        """Load detetion, classification and recognition models to construct PP-OCRv3
+        """Consruct a pipeline with text detector, direction classifier and text recognizer models
 
         :param det_model: (FastDeployModel) The detection model object created by fastdeploy.vision.ocr.DBDetector.
         :param cls_model: (FastDeployModel) The classification model object created by fastdeploy.vision.ocr.Classifier.
@@ -256,7 +256,7 @@ class PPOCRSystemv3(FastDeployModel):
 
 class PPOCRSystemv2(FastDeployModel):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        """Load detetion, classification and recognition models to construct PP-OCRv2.
+        """Consruct a pipeline with text detector, direction classifier and text recognizer models
 
         :param det_model: (FastDeployModel) The detection model object created by fastdeploy.vision.ocr.DBDetector.
         :param cls_model: (FastDeployModel) The classification model object created by fastdeploy.vision.ocr.Classifier.
