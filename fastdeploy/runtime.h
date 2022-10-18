@@ -215,8 +215,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   Device device = Device::CPU;
 
-  bool use_cuda_preprocessing = false;
-
   // ======Only for ORT Backend========
   // -1 means use default value by ort
   // 0: ORT_DISABLE_ALL 1: ORT_ENABLE_BASIC 2: ORT_ENABLE_EXTENDED 3:

@@ -45,6 +45,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
                          bool is_scale_up = false, int stride = 32,
                          float max_wh = 7680.0, bool multi_label = true);
 
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
+
   bool CudaPreprocess(Mat* mat, FDTensor* output,
                       std::map<std::string, std::array<float, 2>>* im_info,
                       const std::vector<int>& size = {640, 640},
@@ -78,8 +80,6 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   float max_wh_;
   // for different strategies to get boxes when postprocessing
   bool multi_label_;
-  // max input image size(width * height), which is used to allocate GPU buffer
-  int max_image_size_;
 
  private:
   bool Initialize();
@@ -105,6 +105,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   uint8_t* input_img_cuda_buffer_device_ = nullptr;
   // CUDA device buffer for TRT input tensor
   float* input_tensor_cuda_buffer_device_ = nullptr;
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 
 }  // namespace detection

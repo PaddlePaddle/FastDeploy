@@ -221,16 +221,6 @@ void RuntimeOption::UseGpu(int gpu_id) {
 #endif
 }
 
-void RuntimeOption::UseCudaPreprocessing() {
-#ifdef ENABLE_CUDA_SRC
-  use_cuda_preprocessing = true;
-#else
-  FDWARNING << "The FastDeploy didn't compile with BUILD_CUDA_SRC=ON."
-            << std::endl;
-  use_cuda_preprocessing = false;
-#endif
-}
-
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
 void RuntimeOption::SetCpuThreadNum(int thread_num) {

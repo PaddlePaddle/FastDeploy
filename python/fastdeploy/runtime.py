@@ -247,11 +247,6 @@ class RuntimeOption:
         """
         return self._option.use_lite_backend()
 
-    def use_cuda_preprocessing(self):
-        """Use CUDA preprocessing.
-        """
-        return self._option.use_cuda_preprocessing()
-
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
         """

@@ -82,11 +82,10 @@ bool YOLOv5::Initialize() {
   padding_value_ = {114.0, 114.0, 114.0};
   is_mini_pad_ = false;
   is_no_pad_ = false;
-  is_scale_up_ = runtime_option.use_cuda_preprocessing ? true : false;
+  is_scale_up_ = false;
   stride_ = 32;
   max_wh_ = 7680.0;
   multi_label_ = true;
-  max_image_size_ = 3840 * 2160;  // Only used by CUDA preprocessing
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -108,21 +107,13 @@ bool YOLOv5::Initialize() {
   // if (!is_dynamic_input_) {
   //   is_mini_pad_ = false;
   // }
-#ifdef ENABLE_CUDA_SRC
-  if (runtime_option.use_cuda_preprocessing) {
-    // prepare input data cache in GPU pinned memory 
-    CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size_ * 3));
-    // prepare input data cache in GPU device memory
-    CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size_ * 3));
-    CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size_[0] * size_[1] * sizeof(float)));
-  }
-#endif  // ENABLE_CUDA_SRC
+
   return true;
 }
 
 YOLOv5::~YOLOv5() {
 #ifdef ENABLE_CUDA_SRC
-  if (runtime_option.use_cuda_preprocessing) {
+  if (use_cuda_preprocessing_) {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
@@ -177,6 +168,24 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
+}
+
+void YOLOv5::UseCudaPreprocessing(int max_image_size) {
+#ifdef ENABLE_CUDA_SRC
+  use_cuda_preprocessing_ = true;
+  is_scale_up_ = true;
+  if (input_img_cuda_buffer_host_ == nullptr) {
+    // prepare input data cache in GPU pinned memory 
+    CUDA_CHECK(cudaMallocHost((void**)&input_img_cuda_buffer_host_, max_image_size * 3));
+    // prepare input data cache in GPU device memory
+    CUDA_CHECK(cudaMalloc((void**)&input_img_cuda_buffer_device_, max_image_size * 3));
+    CUDA_CHECK(cudaMalloc((void**)&input_tensor_cuda_buffer_device_, 3 * size_[0] * size_[1] * sizeof(float)));
+  }
+#else
+  FDWARNING << "The FastDeploy didn't compile with BUILD_CUDA_SRC=ON."
+            << std::endl;
+  use_cuda_preprocessing_ = false;
+#endif
 }
 
 bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
@@ -330,7 +339,7 @@ bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
 
   std::map<std::string, std::array<float, 2>> im_info;
 
-  if (runtime_option.use_cuda_preprocessing) {
+  if (use_cuda_preprocessing_) {
     if (!CudaPreprocess(&mat, &input_tensors[0], &im_info, size_, padding_value_,
                         is_mini_pad_, is_no_pad_, is_scale_up_, stride_, max_wh_,
                         multi_label_)) {
