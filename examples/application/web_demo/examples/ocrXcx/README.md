@@ -1,10 +1,22 @@
 # OCR 微信小程序代码示例
 
+- [1.介绍](#1)
+- [2. 项目启动](#2)
+  * [2.1 准备工作](#21)
+  * [2.2 启动步骤](#22)
+  * [2.3 效果展示](#23)
+- [3. Paddle.js 框架推理](#3)
+- [4. 常见问题](#4)
+- [5. 其他](#5)
+
+<a name="1"></a>
 ## 1.介绍
 本目录为文本识别小程序代码，通过使用 [Paddle.js](https://github.com/PaddlePaddle/Paddle.js) 以及 [Paddle.js微信小程序插件](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx7138a7bb793608c3&token=956931339&lang=zh_CN) 完成在小程序上利用用户终端算力实现文本检测框选效果。
 
+<a name="2"></a>
 ## 2. 项目启动
 
+<a name="21"></a>
 ### 2.1 准备工作
 * [申请微信小程序账号](https://mp.weixin.qq.com/)
 * [微信小程序开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)
@@ -13,15 +25,17 @@
 
 详情参考:https://mp.weixin.qq.com/wxamp/devprofile/get_profile?token=1132303404&lang=zh_CN)
 
+<a name="22"></a>
 ### 2.2 启动步骤
 #### **1. clone Paddle.js**
 ```sh
-git clone https://github.com/PaddlePaddle/Paddle.js.git
+git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy/examples/application/web_demo/examples/
 ```
 
 #### **2. 进入 ocrXcx 目录，安装依赖**
 ```sh
-cd Paddle.js/packages/paddlejs-examples/ocrXcx && npm install
+cd ./ocrXcx && npm install
 ```
 
 #### **3. 微信小程序导入代码**
@@ -37,9 +51,11 @@ cd Paddle.js/packages/paddlejs-examples/ocrXcx && npm install
 原因：node_modules 目录不会参与编译、上传和打包中，小程序想要使用 npm 包必须走一遍“构建 npm”的过程，构建完成会生成一个 miniprogram_npm 目录，里面会存放构建打包后的 npm 包，也就是小程序真正使用的 npm 包。*  
 [参考文档](https://developers.weixin.qq.com/miniprogram/dev/devtools/npm.html)
 
+<a name="23"></a>
 ### 2.3 效果展示
 ![image](https://user-images.githubusercontent.com/43414102/157648579-cdbbee61-9866-4364-9edd-a97ac0eda0c1.png)
 
+<a name="3"></a>
 ## 3. Paddle.js 框架推理
 ```typescript
 // 引入 paddlejs 和 paddlejs-plugin，注册小程序环境变量和合适的 backend
@@ -73,6 +89,7 @@ wx.canvasGetImageData({
 });
 ```
 
+<a name="4"></a>
 ## 4. 常见问题
 ### 4.1 出现报错 `Invalid context type [webgl2] for Canvas#getContext`
 
@@ -97,5 +114,6 @@ wx.canvasGetImageData({
 
 请继续等待，模型推理需要一定时间
 
-## 5. 更多
+<a name="5"></a>
+## 5. 其他
 * [详细文档](https://mp.weixin.qq.com/s/KBjXawSfBreUCsIYbUgF-w)
