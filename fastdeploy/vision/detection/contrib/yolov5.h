@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
@@ -35,6 +36,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
          const RuntimeOption& custom_option = RuntimeOption(),
          const ModelFormat& model_format = ModelFormat::ONNX);
 
+  ~YOLOv5();
+
   std::string ModelName() const { return "yolov5"; }
   /** \brief Predict the detection result for an input image
    *
@@ -56,6 +59,17 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
                          bool is_mini_pad = false, bool is_no_pad = false,
                          bool is_scale_up = false, int stride = 32,
                          float max_wh = 7680.0, bool multi_label = true);
+
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
+
+  bool CudaPreprocess(Mat* mat, FDTensor* output,
+                      std::map<std::string, std::array<float, 2>>* im_info,
+                      const std::vector<int>& size = {640, 640},
+                      const std::vector<float> padding_value = {114.0, 114.0,
+                                                                114.0},
+                      bool is_mini_pad = false, bool is_no_pad = false,
+                      bool is_scale_up = false, int stride = 32,
+                      float max_wh = 7680.0, bool multi_label = true);
 
   static bool Postprocess(
       std::vector<FDTensor>& infer_results, DetectionResult* result,
@@ -102,6 +116,14 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+  // CUDA host buffer for input image
+  uint8_t* input_img_cuda_buffer_host_ = nullptr;
+  // CUDA device buffer for input image
+  uint8_t* input_img_cuda_buffer_device_ = nullptr;
+  // CUDA device buffer for TRT input tensor
+  float* input_tensor_cuda_buffer_device_ = nullptr;
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 
 }  // namespace detection
