@@ -256,8 +256,9 @@ class PPOCRv3(FastDeployModel):
 
 class PPOCRSystemv3(PPOCRv3):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        print("DEPRECATED: fd.vision.ocr.PPOCRSystemv3 is deprecated, "
-              "please use fd.vision.ocr.PPOCRv3 instead.")
+        logging.warning(
+            "DEPRECATED: fd.vision.ocr.PPOCRSystemv3 is deprecated, "
+            "please use fd.vision.ocr.PPOCRv3 instead.")
         super(PPOCRSystemv3, self).__init__(det_model, cls_model, rec_model)
 
     def predict(self, input_image):
@@ -291,8 +292,9 @@ class PPOCRv2(FastDeployModel):
 
 class PPOCRSystemv2(PPOCRv2):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
-        print("DEPRECATED: fd.vision.ocr.PPOCRSystemv2 is deprecated, "
-              "please use fd.vision.ocr.PPOCRv2 instead.")
+        logging.warning(
+            "DEPRECATED: fd.vision.ocr.PPOCRSystemv2 is deprecated, "
+            "please use fd.vision.ocr.PPOCRv2 instead.")
         super(PPOCRSystemv2, self).__init__(det_model, cls_model, rec_model)
 
     def predict(self, input_image):
