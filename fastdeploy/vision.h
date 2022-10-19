@@ -43,8 +43,8 @@
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
-#include "fastdeploy/vision/ocr/ppocr/ppocr_system_v2.h"
-#include "fastdeploy/vision/ocr/ppocr/ppocr_system_v3.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #endif

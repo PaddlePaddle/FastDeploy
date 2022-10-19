@@ -28,10 +28,14 @@ class FASTDEPLOY_DECL YOLOv7End2EndTRT : public FastDeployModel {
                    const RuntimeOption& custom_option = RuntimeOption(),
                    const ModelFormat& model_format = ModelFormat::ONNX);
 
+  ~YOLOv7End2EndTRT();
+
   virtual std::string ModelName() const { return "yolov7end2end_trt"; }
 
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.25);
+
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
   // tuple of (width, height)
   std::vector<int> size;
@@ -54,6 +58,9 @@ class FASTDEPLOY_DECL YOLOv7End2EndTRT : public FastDeployModel {
   bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
+  bool CudaPreprocess(Mat* mat, FDTensor* output,
+                      std::map<std::string, std::array<float, 2>>* im_info);
+
   bool Postprocess(std::vector<FDTensor>& infer_results,
                    DetectionResult* result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
@@ -65,6 +72,14 @@ class FASTDEPLOY_DECL YOLOv7End2EndTRT : public FastDeployModel {
                  int stride = 32);
 
   bool is_dynamic_input_;
+  // CUDA host buffer for input image
+  uint8_t* input_img_cuda_buffer_host_ = nullptr;
+  // CUDA device buffer for input image
+  uint8_t* input_img_cuda_buffer_device_ = nullptr;
+  // CUDA device buffer for TRT input tensor
+  float* input_tensor_cuda_buffer_device_ = nullptr;
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 }  // namespace detection
 }  // namespace vision
