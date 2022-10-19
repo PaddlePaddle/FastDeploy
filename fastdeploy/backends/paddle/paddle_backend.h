@@ -102,6 +102,7 @@ class PaddleBackend : public BaseBackend {
       std::map<std::string, std::vector<int>>* max_shape,
       std::map<std::string, std::vector<int>>* min_shape,
       std::map<std::string, std::vector<int>>* opt_shape) const;
+  void SetTRTDynamicShapeToConfig(const PaddleBackendOption& option);
   paddle_infer::Config config_;
   std::shared_ptr<paddle_infer::Predictor> predictor_;
   std::vector<TensorInfo> inputs_desc_;

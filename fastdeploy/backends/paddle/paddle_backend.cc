@@ -32,13 +32,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         use_static = true;
       }
       config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, precision, use_static);
-      std::map<std::string, std::vector<int>> max_shape;
-      std::map<std::string, std::vector<int>> min_shape;
-      std::map<std::string, std::vector<int>> opt_shape;
-      GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
-      if (min_shape.size() > 0) {
-        config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
-      }
+      SetTRTDynamicShapeToConfig(option);
 #else
       FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
 #endif
@@ -98,6 +92,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
           use_static = true;
         }
         config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, true);
+        SetTRTDynamicShapeToConfig(option);
 #endif
       }
     }
@@ -154,6 +149,16 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   predictor_ = paddle_infer::CreatePredictor(config_);
   initialized_ = true;
   return true;
+}
+
+void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option) {
+    std::map<std::string, std::vector<int>> max_shape;
+    std::map<std::string, std::vector<int>> min_shape;
+    std::map<std::string, std::vector<int>> opt_shape;
+    GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+    if (min_shape.size() > 0) {
+      config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
+    }
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
