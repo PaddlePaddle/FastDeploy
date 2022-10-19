@@ -14,6 +14,7 @@
 
 #include "fastdeploy/backends/paddle/paddle_backend.h"
 #include "fastdeploy/utils/path.h"
+#include <sstream>
 
 namespace fastdeploy {
 
@@ -91,7 +92,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
           FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
           use_static = true;
         }
-        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, true);
+        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, false);
         SetTRTDynamicShapeToConfig(option);
 #endif
       }
@@ -156,9 +157,11 @@ void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option
     std::map<std::string, std::vector<int>> min_shape;
     std::map<std::string, std::vector<int>> opt_shape;
     GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+    FDINFO << "Start setting trt dynamic shape." << std::endl;
     if (min_shape.size() > 0) {
       config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
     }
+    FDINFO << "Finish setting trt dynamic shape." << std::endl;
 }
 
 TensorInfo PaddleBackend::GetInputInfo(int index) {
@@ -208,6 +211,18 @@ void PaddleBackend::GetDynamicShapeFromOption(const PaddleBackendOption& option,
       std::map<std::string, std::vector<int>>* max_shape,
       std::map<std::string, std::vector<int>>* min_shape,
       std::map<std::string, std::vector<int>>* opt_shape) const {
+  auto print_shape = [](const std::vector<int>& shape) -> std::string {
+    std::ostringstream oss;
+    oss << "[";
+    for (int i = 0; i < shape.size(); ++i) {
+      oss << i;
+      if (i < shape.size() - 1) {
+        oss << ", ";
+      }
+      oss << "]";
+    }
+    return oss.str();
+  };
   for (const auto& item : option.trt_option.min_shape) {
     auto max_iter = option.trt_option.max_shape.find(item.first);
     auto opt_iter = option.trt_option.opt_shape.find(item.first);
@@ -216,6 +231,9 @@ void PaddleBackend::GetDynamicShapeFromOption(const PaddleBackendOption& option,
     (*max_shape)[item.first].assign(max_iter->second.begin(), max_iter->second.end());
     (*opt_shape)[item.first].assign(opt_iter->second.begin(), opt_iter->second.end());
     (*min_shape)[item.first].assign(item.second.begin(), item.second.end());
+    FDINFO << item.first << ": the max shape = " << print_shape(max_iter->second)
+           << ", the min shape = " << print_shape(item.second)
+           << ", the opt shape = " << print_shape(opt_iter->second) << std::endl;
   }
 }
 
