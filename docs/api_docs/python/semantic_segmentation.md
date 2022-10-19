@@ -1,3 +1,9 @@
 # Semantic Segmentation API
 
-comming soon...
+## fastdeploy.vision.segmentation.PaddleSegModel
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.segmentation.PaddleSegModel
+    :members:
+    :inherited-members:
+```
