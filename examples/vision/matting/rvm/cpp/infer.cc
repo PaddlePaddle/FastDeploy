@@ -20,14 +20,10 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void CpuInfer(const std::string& model_dir, const std::string& image_file,
+void CpuInfer(const std::string& model_file, const std::string& image_file,
               const std::string& background_file) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
-  auto config_file = model_dir + sep + "deploy.yaml";
   auto option = fastdeploy::RuntimeOption();
-  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
-                                                      config_file, option);
+  auto model = fastdeploy::vision::matting::RobustVideoMatting(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -51,52 +47,11 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
             << std::endl;
 }
 
-void GpuInfer(const std::string& model_dir, const std::string& image_file,
+void GpuInfer(const std::string& model_file, const std::string& image_file,
               const std::string& background_file) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
-  auto config_file = model_dir + sep + "deploy.yaml";
-
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  option.UsePaddleBackend();
-  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
-                                                      config_file, option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-  cv::Mat bg = cv::imread(background_file);
-  fastdeploy::vision::MattingResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
-  auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
-  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
-  cv::imwrite("visualized_result_fg.jpg", vis_im);
-  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
-               "and ./visualized_result_fg.jpg"
-            << std::endl;
-}
-
-void TrtInfer(const std::string& model_dir, const std::string& image_file,
-              const std::string& background_file) {
-  auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams";
-  auto config_file = model_dir + sep + "deploy.yaml";
-
-  auto option = fastdeploy::RuntimeOption();
-  option.UseGpu();
-  option.UseTrtBackend();
-  option.SetTrtInputShape("img", {1, 3, 512, 512});
-  auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
-                                                      config_file, option);
+  auto model = fastdeploy::vision::matting::RobustVideoMatting(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -124,10 +79,10 @@ int main(int argc, char* argv[]) {
   if (argc < 5) {
     std::cout
         << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-           "e.g ./infer_model ./PP-Matting-512 ./test.jpg ./test_bg.jpg 0"
+           "e.g ./infer_model ./rvm_mobilenetv3_fp32.onnx ./test.jpg ./test_bg.jpg 0"
         << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
+                 "with gpu."
               << std::endl;
     return -1;
   }
@@ -135,8 +90,6 @@ int main(int argc, char* argv[]) {
     CpuInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 1) {
     GpuInfer(argv[1], argv[2], argv[3]);
-  } else if (std::atoi(argv[4]) == 2) {
-    TrtInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

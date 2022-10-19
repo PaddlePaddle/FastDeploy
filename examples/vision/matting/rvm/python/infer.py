@@ -32,11 +32,6 @@ def parse_arguments():
         type=str,
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
-    parser.add_argument(
-        "--use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
     return parser.parse_args()
 
 
@@ -44,16 +39,6 @@ def build_option(args):
     option = fd.RuntimeOption()
     if args.device.lower() == "gpu":
         option.use_gpu()
-        option.use_paddle_backend()
-
-    if args.use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("src", [1, 3, 1920, 1080])
-        option.set_trt_input_shape("r1i", [1, 16, 1920, 1080])
-        option.set_trt_input_shape("r2i", [1, 20, 1920, 1080])
-        option.set_trt_input_shape("r3i", [1, 40, 1920, 1080])
-        option.set_trt_input_shape("r4i", [1, 64, 1920, 1080])
-        option.set_trt_input_shape("downsample_ratio", [1])
 
     return option
 
@@ -65,16 +50,17 @@ output_alpha = args.output_alpha
 # 配置runtime，加载模型
 runtime_option = build_option(args)
 model = fd.vision.matting.RobustVideoMatting(
-    model_file, runtime_option=runtime_option)
+    args.model, runtime_option=runtime_option)
+bg = cv2.imread(args.bg)
 
 if args.video is not None:
     # for video
     cap = cv2.VideoCapture(args.video)
     # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     composition = cv2.VideoWriter(output_composition, fourcc, 20.0,
-                                  (1920, 1080))
-    alpha = cv2.VideoWriter(output_alpha, fourcc, 20.0, (1920, 1080))
+                                  (1080, 1920))
+    alpha = cv2.VideoWriter(output_alpha, fourcc, 20.0, (1080, 1920))
 
     frame_id = 0
     while True:
@@ -83,8 +69,8 @@ if args.video is not None:
         if frame is None:
             break
         result = model.predict(frame)
-        vis_im = fd.vision.vis_matting(im, result)
-        vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
+        vis_im = fd.vision.vis_matting(frame, result)
+        vis_im_with_bg = fd.vision.swap_background_matting(frame, bg, result)
         alpha.write(vis_im)
         composition.write(vis_im_with_bg)
         cv2.waitKey(30)
@@ -98,7 +84,6 @@ if args.video is not None:
 if args.image is not None:
     # for image
     im = cv2.imread(args.image)
-    bg = cv2.imread(args.bg)
     result = model.predict(im.copy())
     print(result)
     # 可视化结果

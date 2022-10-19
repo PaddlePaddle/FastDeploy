@@ -26,8 +26,8 @@ RobustVideoMatting::RobustVideoMatting(const std::string& model_file, const std:
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT}; 
+    valid_gpu_backends = {Backend::ORT}; 
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -124,19 +124,20 @@ bool RobustVideoMatting::Postprocess(
   int numel = in_h * in_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  std::memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
+  memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
   return true;
 }
 
 bool RobustVideoMatting::Predict(cv::Mat* im, MattingResult* result) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(6);
+  int inputs_nums = NumInputsOfRuntime();
+  std::vector<FDTensor> input_tensors(inputs_nums);
   std::map<std::string, std::array<int, 2>> im_info;
   // Record the shape of image and the shape of preprocessed image
   im_info["input_shape"] = {mat.Height(), mat.Width()};
   im_info["output_shape"] = {mat.Height(), mat.Width()};
   // convert vector to FDTensor
-  for (size_t i = 1; i < 6; ++i) {
+  for (size_t i = 1; i < inputs_nums; ++i) {
     input_tensors[i].SetExternalData(dynamic_inputs_dims_[i-1], FDDataType::FP32, dynamic_inputs_datas_[i-1].data());
     input_tensors[i].device = Device::CPU;
   }
@@ -144,7 +145,7 @@ bool RobustVideoMatting::Predict(cv::Mat* im, MattingResult* result) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
-  for (size_t i = 0; i < 6; ++i) {
+  for (size_t i = 0; i < inputs_nums; ++i) {
     input_tensors[i].name = InputInfoOfRuntime(i).name;
   }
   std::vector<FDTensor> output_tensors;
