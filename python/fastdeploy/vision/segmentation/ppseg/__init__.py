@@ -25,6 +25,14 @@ class PaddleSegModel(FastDeployModel):
                  config_file,
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
+        """Load a image segmentation model exported by PaddleSeg.
+
+        :param model_file: (str)Path of model file, e.g unet/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g unet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str) Path of configuration file for deploy, e.g unet/deploy.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
         super(PaddleSegModel, self).__init__(runtime_option)
 
         assert model_format == ModelFormat.PADDLE, "PaddleSeg only support model format of ModelFormat.Paddle now."
@@ -34,14 +42,27 @@ class PaddleSegModel(FastDeployModel):
         assert self.initialized, "PaddleSeg model initialize failed."
 
     def predict(self, input_image):
+        """Predict the segmentation result for an input image
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: SegmentationResult
+        """
         return self._model.predict(input_image)
 
     @property
     def apply_softmax(self):
+        """Atrribute of PaddleSeg model. Stating Whether applying softmax operator in the postprocess, default value is False
+
+        :return: value of apply_softmax(bool)
+        """
         return self._model.apply_softmax
 
     @apply_softmax.setter
     def apply_softmax(self, value):
+        """Set attribute apply_softmax of PaddleSeg model.
+
+        :param value: (bool)The value to set apply_softmax
+        """
         assert isinstance(
             value,
             bool), "The value to set `apply_softmax` must be type of bool."
@@ -49,10 +70,18 @@ class PaddleSegModel(FastDeployModel):
 
     @property
     def is_vertical_screen(self):
+        """Atrribute of PP-HumanSeg model. Stating Whether the input image is vertical image(height > width), default value is False
+
+        :return: value of is_vertical_screen(bool)
+        """
         return self._model.is_vertical_screen
 
     @is_vertical_screen.setter
     def is_vertical_screen(self, value):
+        """Set attribute is_vertical_screen of PP-HumanSeg model.
+
+        :param value: (bool)The value to set is_vertical_screen
+        """
         assert isinstance(
             value,
             bool), "The value to set `is_vertical_screen` must be type of bool."

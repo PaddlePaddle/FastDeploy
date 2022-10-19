@@ -19,17 +19,37 @@
 
 namespace fastdeploy {
 namespace vision {
+/** \brief All classification model APIs are defined inside this namespace
+ *
+ */
 namespace classification {
-
+/*! @brief PaddleClas serials model object used when to load a PaddleClas model exported by PaddleClas repository
+ */
 class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
  public:
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
+   *
+   * \param[in] model_file Path of model file, e.g resnet/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g resnet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
+   * \param[in] model_format Model format of the loaded model, default is Paddle format
+   */
   PaddleClasModel(const std::string& model_file, const std::string& params_file,
                   const std::string& config_file,
                   const RuntimeOption& custom_option = RuntimeOption(),
                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
+  /** \brief Predict the classification result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] result The output classification result will be writen to this structure
+   * \param[in] topk (int)The topk result by the classify confidence score, default 1
+   * \return true if the prediction successed, otherwise false
+   */
   // TODO(jiangjiajun) Batch is on the way
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
