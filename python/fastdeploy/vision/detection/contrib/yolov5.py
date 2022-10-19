@@ -37,6 +37,9 @@ class YOLOv5(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
+    def use_cuda_preprocessing(self, max_image_size=3840 * 2160):
+        return self._model.use_cuda_preprocessing(max_image_size)
+
     @staticmethod
     def preprocess(input_image,
                    size=[640, 640],
