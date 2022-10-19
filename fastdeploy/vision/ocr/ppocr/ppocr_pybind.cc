@@ -15,17 +15,17 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindPPOCRSystemv3(pybind11::module& m) {
-  // OCRSys
-  pybind11::class_<application::ocrsystem::PPOCRSystemv3, FastDeployModel>(
-      m, "PPOCRSystemv3")
+void BindPPOCRv3(pybind11::module& m) {
+  // PPOCRv3
+  pybind11::class_<pipeline::PPOCRv3, FastDeployModel>(
+      m, "PPOCRv3")
 
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Classifier*,
                           fastdeploy::vision::ocr::Recognizer*>())
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Recognizer*>())
-      .def("predict", [](application::ocrsystem::PPOCRSystemv3& self,
+      .def("predict", [](pipeline::PPOCRv3& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;
@@ -34,16 +34,16 @@ void BindPPOCRSystemv3(pybind11::module& m) {
       });
 }
 
-void BindPPOCRSystemv2(pybind11::module& m) {
-  // OCRSys
-  pybind11::class_<application::ocrsystem::PPOCRSystemv2, FastDeployModel>(
-      m, "PPOCRSystemv2")
+void BindPPOCRv2(pybind11::module& m) {
+  // PPOCRv2
+  pybind11::class_<pipeline::PPOCRv2, FastDeployModel>(
+      m, "PPOCRv2")
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Classifier*,
                           fastdeploy::vision::ocr::Recognizer*>())
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Recognizer*>())
-      .def("predict", [](application::ocrsystem::PPOCRSystemv2& self,
+      .def("predict", [](pipeline::PPOCRv2& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;

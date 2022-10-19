@@ -37,12 +37,12 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
   
-  // The classification model is optional, so the OCR system can also be connected in series as follows
-  // auto ocr_system_v2 = fastdeploy::application::ocrsystem::PPOCRSystemv2(&det_model, &rec_model);
-  auto ocr_system_v2 = fastdeploy::application::ocrsystem::PPOCRSystemv2(&det_model, &cls_model, &rec_model);
+  // The classification model is optional, so the PP-OCR can also be connected in series as follows
+  // auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &rec_model);
+  auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &cls_model, &rec_model);
 
-  if(!ocr_system_v2.Initialized()){
-    std::cerr << "Failed to initialize OCR system." << std::endl;
+  if(!ppocr_v2.Initialized()){
+    std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
 
@@ -50,14 +50,14 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto im_bak = im.clone();
   
   fastdeploy::vision::OCRResult result;
-  if (!ocr_system_v2.Predict(&im, &result)) {
+  if (!ppocr_v2.Predict(&im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
   std::cout << result.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisOcr(im_bak, result);
+  auto vis_im = fastdeploy::vision::VisOcr(im_bak, result);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

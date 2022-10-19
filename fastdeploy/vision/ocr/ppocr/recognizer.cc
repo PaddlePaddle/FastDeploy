@@ -56,9 +56,6 @@ Recognizer::Recognizer(const std::string& model_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-  runtime_option.DeletePaddleBackendPass("matmul_transpose_reshape_fuse_pass");
-  runtime_option.DeletePaddleBackendPass(
-      "matmul_transpose_reshape_mkldnn_fuse_pass");
 
   initialized = Initialize();
 

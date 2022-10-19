@@ -13,6 +13,8 @@
 # limitations under the License.
 from __future__ import absolute_import
 
+from .ppocr import PPOCRv3
+from .ppocr import PPOCRv2
 from .ppocr import PPOCRSystemv3
 from .ppocr import PPOCRSystemv2
 from .ppocr import DBDetector
