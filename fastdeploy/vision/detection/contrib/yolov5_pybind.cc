@@ -27,6 +27,10 @@ void BindYOLOv5(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
+      .def("use_cuda_preprocessing",
+           [](vision::detection::YOLOv5& self, int max_image_size) {
+             self.UseCudaPreprocessing(max_image_size);
+           })
       .def_static("preprocess",
                   [](pybind11::array& data, const std::vector<int>& size,
                      const std::vector<float> padding_value, bool is_mini_pad,
