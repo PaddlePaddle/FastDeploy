@@ -46,7 +46,7 @@ npm run dev
 
 在浏览器中打开网址 `http://localhost:5173/main/index.html` 即可快速体验在浏览器中运行计算机视觉任务。
 
-![02f81ab34d6007b54daef9a451240a5c](https://user-images.githubusercontent.com/26592129/196321732-1f089e4a-d053-4d9a-9685-e2eb467e51fb.png)
+![22416f4a3e7d63f950b838be3cd11e80](https://user-images.githubusercontent.com/26592129/196685868-93ab53bd-cb2e-44ff-a56b-50c1781b8679.jpg)
 
 <a name="2"></a>
 ## 2. npm包调用
@@ -144,7 +144,7 @@ const res = await ocr.recognize(img, { canvas: canvas.value }, detConfig);
 `Paddle.js`转换后的模型不仅支持浏览器中使用，也可以在百度小程序和微信小程序环境下运行。
 
 |名称|目录|
-|-|-|-|
+|-|-|
 |OCR文本检测| [ocrdetecXcx](./examples/ocrdetectXcx/) |
 |OCR文本识别| [ocrXcx](./examples/ocrXcx/) |
 |目标检测| coming soon |
