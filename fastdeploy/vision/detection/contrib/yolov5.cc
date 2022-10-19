@@ -16,9 +16,9 @@
 
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
 #include "fastdeploy/vision/utils/cuda_utils.h"
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 
 namespace fastdeploy {
 namespace vision {
@@ -112,13 +112,13 @@ bool YOLOv5::Initialize() {
 }
 
 YOLOv5::~YOLOv5() {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   if (use_cuda_preprocessing_) {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
   }
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 }
 
 bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
@@ -171,7 +171,7 @@ bool YOLOv5::Preprocess(Mat* mat, FDTensor* output,
 }
 
 void YOLOv5::UseCudaPreprocessing(int max_image_size) {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   use_cuda_preprocessing_ = true;
   is_scale_up_ = true;
   if (input_img_cuda_buffer_host_ == nullptr) {
@@ -194,9 +194,9 @@ bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
                             const std::vector<float> padding_value,
                             bool is_mini_pad, bool is_no_pad, bool is_scale_up,
                             int stride, float max_wh, bool multi_label) {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
-    FDERROR << "Upsupported arguments for CUDA preprocess." << std::endl;
+    FDERROR << "Preprocessing with CUDA is only available when the arguments satisfy (is_mini_pad=false, is_no_pad=false, is_scale_up=true)." << std::endl;
     return false;
   }
 
@@ -230,7 +230,7 @@ bool YOLOv5::CudaPreprocess(Mat* mat, FDTensor* output,
 #else
   FDERROR << "CUDA src code was not enabled." << std::endl;
   return false;
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 }
 
 bool YOLOv5::Postprocess(

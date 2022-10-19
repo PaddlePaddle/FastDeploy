@@ -15,9 +15,9 @@
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
 #include "fastdeploy/vision/utils/cuda_utils.h"
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 
 namespace fastdeploy {
 
@@ -112,13 +112,13 @@ bool YOLOv6::Initialize() {
 }
 
 YOLOv6::~YOLOv6() {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   if (use_cuda_preprocessing_) {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
   }
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 }
 
 bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
@@ -161,7 +161,7 @@ bool YOLOv6::Preprocess(Mat* mat, FDTensor* output,
 }
 
 void YOLOv6::UseCudaPreprocessing(int max_image_size) {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   use_cuda_preprocessing_ = true;
   is_scale_up = true;
   if (input_img_cuda_buffer_host_ == nullptr) {
@@ -180,9 +180,9 @@ void YOLOv6::UseCudaPreprocessing(int max_image_size) {
 
 bool YOLOv6::CudaPreprocess(Mat* mat, FDTensor* output,
                             std::map<std::string, std::array<float, 2>>* im_info) {
-#ifdef ENABLE_CUDA_SRC
+#ifdef ENABLE_CUDA_PREPROCESS
   if (is_mini_pad != false || is_no_pad != false || is_scale_up != true) {
-    FDERROR << "Upsupported arguments for CUDA preprocess." << std::endl;
+    FDERROR << "Preprocessing with CUDA is only available when the arguments satisfy (is_mini_pad=false, is_no_pad=false, is_scale_up=true)." << std::endl;
     return false;
   }
 
@@ -216,7 +216,7 @@ bool YOLOv6::CudaPreprocess(Mat* mat, FDTensor* output,
 #else
   FDERROR << "CUDA src code was not enabled." << std::endl;
   return false;
-#endif  // ENABLE_CUDA_SRC
+#endif  // ENABLE_CUDA_PREPROCESS
 }
 
 bool YOLOv6::Postprocess(

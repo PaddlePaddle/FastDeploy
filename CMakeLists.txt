@@ -93,11 +93,9 @@ if(BUILD_ON_JETSON)
 endif()
 
 # Whether to build CUDA source files in fastdeploy
-# Only support CPU Inference & GPU(TensorRT) Inference Now
-option(BUILD_CUDA_SRC "Whether to build CUDA source files in fastdeploy" OFF)
+# CUDA source files include CUDA preprocessing, TRT plugins, etc.
 if(WITH_GPU AND UNIX)
   set(BUILD_CUDA_SRC ON)
-  add_definitions(-DENABLE_CUDA_SRC)
   enable_language(CUDA)
   set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
 else()
@@ -387,6 +385,7 @@ if(ENABLE_VISION)
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
   if(BUILD_CUDA_SRC)
+    add_definitions(-DENABLE_CUDA_PREPROCESS)
     list(APPEND DEPLOY_VISION_SRCS ${DEPLOY_VISION_CUDA_SRCS})
   endif()
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_VISION_SRCS})
