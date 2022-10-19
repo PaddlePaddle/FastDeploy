@@ -12,27 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/ocr/ppocr/ppocr_system_v2.h"
+#include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 
 namespace fastdeploy {
-namespace application {
-namespace ocrsystem {
-PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+namespace pipeline {
+PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Classifier* cls_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), classifier_(cls_model), recognizer_(rec_model) {
   recognizer_->rec_image_shape[1] = 32;
 }
 
-PPOCRSystemv2::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                              fastdeploy::vision::ocr::Recognizer* rec_model)
     : detector_(det_model), recognizer_(rec_model) {
   recognizer_->rec_image_shape[1] = 32;
 }
 
-bool PPOCRSystemv2::Initialized() const {
+bool PPOCRv2::Initialized() const {
   
   if (detector_ != nullptr && !detector_->Initialized()){
     return false;
@@ -48,21 +47,21 @@ bool PPOCRSystemv2::Initialized() const {
   return true; 
 }
 
-bool PPOCRSystemv2::Detect(cv::Mat* img,
+bool PPOCRv2::Detect(cv::Mat* img,
                            fastdeploy::vision::OCRResult* result) {
   if (!detector_->Predict(img, &(result->boxes))) {
-    FDERROR << "There's error while detecting image in PPOCRSystem." << std::endl;
+    FDERROR << "There's error while detecting image in PPOCR." << std::endl;
     return false;
   }
   vision::ocr::SortBoxes(result);
   return true;
 }
 
-bool PPOCRSystemv2::Recognize(cv::Mat* img,
+bool PPOCRv2::Recognize(cv::Mat* img,
                               fastdeploy::vision::OCRResult* result) {
   std::tuple<std::string, float> rec_result;
   if (!recognizer_->Predict(img, &rec_result)) {
-    FDERROR << "There's error while recognizing image in PPOCRSystem." << std::endl;
+    FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
     return false;
   }
 
@@ -71,12 +70,12 @@ bool PPOCRSystemv2::Recognize(cv::Mat* img,
   return true;
 }
 
-bool PPOCRSystemv2::Classify(cv::Mat* img,
+bool PPOCRv2::Classify(cv::Mat* img,
                              fastdeploy::vision::OCRResult* result) {
   std::tuple<int, float> cls_result;
 
   if (!classifier_->Predict(img, &cls_result)) {
-    FDERROR << "There's error while classifying image in PPOCRSystem." << std::endl;
+    FDERROR << "There's error while classifying image in PPOCR." << std::endl;
     return false;
   }
 
@@ -85,7 +84,7 @@ bool PPOCRSystemv2::Classify(cv::Mat* img,
   return true;
 }
 
-bool PPOCRSystemv2::Predict(cv::Mat* img,
+bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   result->Clear();
   if (nullptr != detector_ && !Detect(img, result)) {
@@ -120,6 +119,5 @@ bool PPOCRSystemv2::Predict(cv::Mat* img,
   return true;
 };
 
-}  // namesapce ocrsystem
-}  // namespace application
+}  // namesapce pipeline
 }  // namespace fastdeploy
