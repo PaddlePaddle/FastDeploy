@@ -29,16 +29,13 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
   tensor->Reshape(shape);
   auto place = ConvertFDDeviceToPlace(fd_tensor.device);
   if (fd_tensor.dtype == FDDataType::FP32) {
-    tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
-                              shape, place);
+    tensor->CopyFromCpu(static_cast<const float*>(fd_tensor.Data()));
     return;
   } else if (fd_tensor.dtype == FDDataType::INT32) {
-    tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
-                              shape, place);
+    tensor->CopyFromCpu(static_cast<const int32_t*>(fd_tensor.Data()));
     return;
   } else if (fd_tensor.dtype == FDDataType::INT64) {
-    tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
-                              shape, place);
+    tensor->CopyFromCpu(static_cast<const int64_t*>(fd_tensor.Data()));
     return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
