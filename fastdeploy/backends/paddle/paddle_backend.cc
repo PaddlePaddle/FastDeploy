@@ -215,12 +215,12 @@ void PaddleBackend::GetDynamicShapeFromOption(const PaddleBackendOption& option,
     std::ostringstream oss;
     oss << "[";
     for (int i = 0; i < shape.size(); ++i) {
-      oss << i;
+      oss << shape[i];
       if (i < shape.size() - 1) {
         oss << ", ";
       }
-      oss << "]";
     }
+    oss << "]";
     return oss.str();
   };
   for (const auto& item : option.trt_option.min_shape) {
