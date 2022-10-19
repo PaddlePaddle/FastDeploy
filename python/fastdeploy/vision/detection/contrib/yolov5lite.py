@@ -37,6 +37,9 @@ class YOLOv5Lite(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
+    def use_cuda_preprocessing(self, max_image_size=3840 * 2160):
+        return self._model.use_cuda_preprocessing(max_image_size)
+
     # 一些跟YOLOv5Lite模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
     @property
