@@ -64,7 +64,7 @@ class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
   bool Predict(cv::Mat* im, KeyPointDetectionResult* result,
                const DetectionResult& detection_result);
 
-  /** \brief Whether using Distribution-Aware Coordinate Representation for Human Pose Estimation(DARK for short) in postprocess
+  /** \brief Whether using Distribution-Aware Coordinate Representation for Human Pose Estimation(DARK for short) in postprocess, default is true
    */
   bool use_dark = true;
 
