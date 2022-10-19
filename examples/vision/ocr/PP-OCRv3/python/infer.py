@@ -110,7 +110,7 @@ rec_model = fd.vision.ocr.Recognizer(
     rec_label_file,
     runtime_option=runtime_option)
 
-# 创建OCR系统，串联3个模型，其中cls_model可选，如无需求，可设置为None
+# 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
 ppocr_v3 = fd.vision.ocr.PPOCRv3(
     det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 
