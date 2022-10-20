@@ -1,4 +1,4 @@
-# PP-Humansegv1模型前端部署
+# PP-Humanseg v1模型前端部署
 
 ## 模型版本说明
 
