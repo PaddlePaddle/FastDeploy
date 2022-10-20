@@ -74,7 +74,7 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
     if (score.size() > 4) {
       score = score.substr(0, 4);
     }
-    std::string text = id + "," + text;
+    std::string text = id + "," + score;
     if (labels.size() > result.label_ids[i]) {
       text = labels[result.label_ids[i]] + "," + text;
     } else {
