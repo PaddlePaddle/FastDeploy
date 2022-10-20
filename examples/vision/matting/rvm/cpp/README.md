@@ -7,7 +7,7 @@
 
 以Linux上 RobustVideoMatting 推理为例，在本目录执行如下命令即可完成编译测试（如若只需在CPU上部署，可在[Fastdeploy C++预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md/CPP_prebuilt_libraries.md)下载CPU推理库）
 
-本目录下提供`infer.cc`快速完成RobustVideoMatting在CPU/GPU。执行如下脚本即可完成
+本目录下提供`infer.cc`快速完成RobustVideoMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
@@ -19,7 +19,10 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x
 make -j
 
 # 下载RobustVideoMatting模型文件和测试图片以及视频
+## 原版ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_fp32.onnx
+## 为加载TRT特殊处理ONNX模型
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4
@@ -28,6 +31,8 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4
 ./infer_demo rvm_mobilenetv3_fp32.onnx matting_input.jpg matting_bgr.jpg 0
 # GPU推理
 ./infer_demo rvm_mobilenetv3_fp32.onnx matting_input.jpg matting_bgr.jpg 1
+# TRT推理
+./infer_demo rvm_mobilenetv3_trt.onnx matting_input.jpg matting_bgr.jpg 2
 ```
 
 运行完成可视化结果如下图所示
@@ -42,8 +47,6 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## RobustVideoMatting C++接口
-
-### RobustVideoMatting类
 
 ```c++
 fastdeploy::vision::matting::RobustVideoMatting(
@@ -75,10 +78,8 @@ RobustVideoMatting模型加载和初始化，其中model_file为导出的ONNX模
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 抠图结果， MattingResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
+## 其它文档
 
 - [模型介绍](../../)
 - [Python部署](../python)

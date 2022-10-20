@@ -75,6 +75,40 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
             << std::endl;
 }
 
+void TrtInfer(const std::string& model_file, const std::string& image_file,
+              const std::string& background_file) {
+  auto option = fastdeploy::RuntimeOption();
+  option.UseGpu();
+  option.UseTrtBackend();
+  option.SetTrtInputShape("src", {1, 3, 1920, 1080});
+  option.SetTrtInputShape("r1i", {1, 1, 1, 1}, {1, 16, 240, 135}, {1, 16, 240, 135});
+  option.SetTrtInputShape("r2i", {1, 1, 1, 1}, {1, 20, 120, 68}, {1, 20, 120, 68});
+  option.SetTrtInputShape("r3i", {1, 1, 1, 1}, {1, 40, 60, 34}, {1, 40, 60, 34});
+  option.SetTrtInputShape("r4i", {1, 1, 1, 1}, {1, 64, 30, 17}, {1, 64, 30, 17});
+  auto model = fastdeploy::vision::matting::RobustVideoMatting(model_file, "", option);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
+  cv::Mat bg = cv::imread(background_file);
+  fastdeploy::vision::MattingResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
+  auto vis_im_with_bg =
+      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+  cv::imwrite("visualized_result.jpg", vis_im_with_bg);
+  cv::imwrite("visualized_result_fg.jpg", vis_im);
+  std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
+               "and ./visualized_result_fg.jpg"
+            << std::endl;
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 5) {
     std::cout
@@ -82,7 +116,7 @@ int main(int argc, char* argv[]) {
            "e.g ./infer_model ./rvm_mobilenetv3_fp32.onnx ./test.jpg ./test_bg.jpg 0"
         << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu."
+                 "with gpu; 2: run with gpu and use tensorrt backend."
               << std::endl;
     return -1;
   }
@@ -90,6 +124,8 @@ int main(int argc, char* argv[]) {
     CpuInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 1) {
     GpuInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 2) {
+    TrtInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

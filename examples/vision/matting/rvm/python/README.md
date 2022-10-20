@@ -5,7 +5,7 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成RobustVideoMatting在CPU/GPU。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成RobustVideoMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
@@ -13,7 +13,10 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/matting/rvm/python
 
 # 下载RobustVideoMatting模型文件和测试图片以及视频
+## 原版ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_fp32.onnx
+## 为加载TRT特殊处理ONNX模型
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4
@@ -28,6 +31,11 @@ python infer.py --model rvm_mobilenetv3_fp32.onnx --video video.mp4 --bg matting
 python infer.py --model rvm_mobilenetv3_fp32.onnx --image matting_input.jpg --bg matting_bgr.jpg --device gpu
 ## 视频
 python infer.py --model rvm_mobilenetv3_fp32.onnx --video video.mp4 --bg matting_bgr.jpg --device gpu
+# TRT推理
+## 图片
+python infer.py --model rvm_mobilenetv3_trt.onnx --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
+## 视频
+python infer.py --model rvm_mobilenetv3_trt.onnx --video video.mp4 --bg matting_bgr.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
@@ -70,11 +78,6 @@ RobustVideoMatting模型加载和初始化，其中model_file为导出的ONNX模
 > **返回**
 >
 > > 返回`fastdeploy.vision.MattingResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
-
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
-
 
 
 ## 其它文档
