@@ -65,7 +65,7 @@ bool FastDeployModel::InitRuntime() {
     }
 
     if (is_supported) {
-      runtime_ = std::unique_ptr<Runtime>(new Runtime());
+      runtime_ = std::shared_ptr<Runtime>(new Runtime());
       if (!runtime_->Init(runtime_option)) {
         return false;
       }
@@ -122,7 +122,7 @@ bool FastDeployModel::CreateCpuBackend() {
       continue;
     }
     runtime_option.backend = valid_cpu_backends[i];
-    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    runtime_ = std::shared_ptr<Runtime>(new Runtime());
     if (!runtime_->Init(runtime_option)) {
       return false;
     }
@@ -145,7 +145,7 @@ bool FastDeployModel::CreateGpuBackend() {
       continue;
     }
     runtime_option.backend = valid_gpu_backends[i];
-    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    runtime_ = std::shared_ptr<Runtime>(new Runtime());
     if (!runtime_->Init(runtime_option)) {
       return false;
     }
