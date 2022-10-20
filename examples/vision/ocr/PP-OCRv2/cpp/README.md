@@ -1,6 +1,6 @@
-# PPOCRSystemv2 C++部署示例
+# PPOCRv2 C++部署示例
 
-本目录下提供`infer.cc`快速完成PPOCRSystemv2在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成PPOCRv2在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -19,14 +19,14 @@ make -j
 
 
 # 下载模型,图片和字典文件
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
-tar -xvf ch_PP-OCRv2_det_infer.tar.gz
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
+tar -xvf ch_PP-OCRv2_det_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
-tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
-tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
+wgethttps://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
+tar -xvf ch_PP-OCRv2_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
@@ -48,17 +48,17 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
 
-## PPOCRSystemv2 C++接口
+## PPOCRv2 C++接口
 
-### PPOCRSystemv2类
+### PPOCRv2类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
-PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
+PPOCRv2 的初始化，由检测，分类和识别模型串联构成
 
 **参数**
 
@@ -67,10 +67,10 @@ PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
 > * **Recognizer**(model): OCR中的识别模型
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
-PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
+PPOCRv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 **参数**
 
