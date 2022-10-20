@@ -1,15 +1,15 @@
 
-# PP-OCRv3 前端部署示例
+# MobileNet 前端部署示例
 
 本节介绍部署PaddleClas的图像分类mobilenet模型在浏览器中运行，以及@paddle-js-models/mobilenet npm包中的js接口。
 
 
 ## 前端部署图像分类模型
 
-图像分类模型web demo使用参考[文档](../../../../application/web_demo/README.md)
+图像分类模型web demo使用[**参考文档**](../../../../examples/application/js/web_demo)
 
 
-## PP-OCRv3 js接口
+## MobileNet js接口
 
 ```
 import * as mobilenet from "@paddle-js-models/mobilenet";
