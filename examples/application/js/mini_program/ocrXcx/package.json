@@ -1,0 +1,19 @@
+{
+  "name": "paddlejs-demo",
+  "version": "0.0.1",
+  "description": "",
+  "main": "app.js",
+  "dependencies": {
+    "@paddlejs/paddlejs-backend-webgl": "^1.2.0",
+    "@paddlejs/paddlejs-core": "^2.1.18",
+    "d3-polygon": "2.0.0",
+    "js-clipper": "1.0.1",
+    "number-precision": "1.5.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
