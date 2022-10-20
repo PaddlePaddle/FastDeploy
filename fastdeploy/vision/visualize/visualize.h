@@ -54,6 +54,18 @@ FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      const DetectionResult& result,
                                      float score_threshold = 0.0,
                                      int line_size = 1, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
+                                     const DetectionResult& result,
+                                     const std::vector<std::string>& labels,
+                                     float score_threshold = 0.0,
+                                     int line_size = 1, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisClassification(
+  const cv::Mat& im, const ClassifyResult& result, int top_k = 5,
+  float score_threshold = 0.0f, float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisClassification(
+  const cv::Mat& im, const ClassifyResult& result,
+  const std::vector<std::string>& labels, int top_k = 5,
+  float score_threshold = 0.0f, float font_size = 0.5f);
 FASTDEPLOY_DECL cv::Mat VisFaceDetection(const cv::Mat& im,
                                          const FaceDetectionResult& result,
                                          int line_size = 1,
