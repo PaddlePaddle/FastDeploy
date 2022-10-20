@@ -27,17 +27,26 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--unet_onnx_file",
-        default='unet_v1_4_sim.onnx',
-        help="The onnx file path of unet model.")
+        "--diffusion_model_dir",
+        default="diffusion_model",
+        help="The model directory of diffusion_model.")
     parser.add_argument(
-        "--vae_onnx_file",
-        default='vae_decoder_v1_4.onnx',
-        help="The onnx file path of vae model.")
+        "--format",
+        default="paddle",
+        choices=['paddle', 'onnx'],
+        help="The model format.")
     parser.add_argument(
-        "--text_encoder_onnx_file",
-        default='text_encoder_v1_4.onnx',
-        help="The onnx file path of text_encoder model.")
+        "--unet_model_prefix",
+        default='unet_v1_4_sim',
+        help="The file prefix of unet model.")
+    parser.add_argument(
+        "--vae_model_prefix",
+        default='vae_decoder_v1_4',
+        help="The file prefix of vae model.")
+    parser.add_argument(
+        "--text_encoder_model_prefix",
+        default='text_encoder_v1_4',
+        help="The file prefix of text_encoder model.")
     parser.add_argument(
         "--inference_steps",
         type=int,
@@ -51,8 +60,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default='onnx_runtime',
-        choices=['onnx_runtime', 'tensorrt'],
+        default='ort',
+        choices=['ort', 'tensorrt', 'pp', 'pp-trt'],
         help="The inference runtime backend of unet model and text encoder model."
     )
     return parser.parse_args()

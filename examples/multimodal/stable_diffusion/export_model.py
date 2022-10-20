@@ -17,7 +17,7 @@ import paddle
 import paddlenlp
 
 from diffusers_paddle import UNet2DConditionModel, AutoencoderKL
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import CLIPTextModel
 
 
 def parse_arguments():
@@ -44,8 +44,6 @@ class VAEDecoder(AutoencoderKL):
 if __name__ == "__main__":
     args = parse_arguments()
     # Load models and create wrapper for stable diffusion
-    tokenizer = CLIPTokenizer.from_pretrained(
-        os.path.join(args.pretrained_model_name_or_path, "tokenizer"))
     text_encoder = CLIPTextModel.from_pretrained(
         os.path.join(args.pretrained_model_name_or_path, "text_encoder"))
     vae_decoder = VAEDecoder.from_pretrained(
