@@ -6,7 +6,7 @@
 
 ## 微信小程序部署PP-OCRv3模型
 
-PP-OCRv3模型部署到微信小程序参考[文档](../../../../application/js/mini_program)
+PP-OCRv3模型部署到微信小程序[**参考文档**](../../../../application/js/mini_program)
 
 
 ## PP-OCRv3 js接口
