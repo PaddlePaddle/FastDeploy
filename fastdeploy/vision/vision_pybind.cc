@@ -100,6 +100,7 @@ void BindVision(pybind11::module& m) {
                                                     "KeyPointDetectionResult")
       .def(pybind11::init())
       .def_readwrite("keypoints", &vision::KeyPointDetectionResult::keypoints)
+      .def_readwrite("scores", &vision::KeyPointDetectionResult::scores)
       .def_readwrite("num_joints", &vision::KeyPointDetectionResult::num_joints)
       .def("__repr__", &vision::KeyPointDetectionResult::Str)
       .def("__str__", &vision::KeyPointDetectionResult::Str);
