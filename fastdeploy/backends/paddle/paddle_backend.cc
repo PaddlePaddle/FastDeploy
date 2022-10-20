@@ -152,18 +152,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   return true;
 }
 
-void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option) {
-    std::map<std::string, std::vector<int>> max_shape;
-    std::map<std::string, std::vector<int>> min_shape;
-    std::map<std::string, std::vector<int>> opt_shape;
-    GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
-    FDINFO << "Start setting trt dynamic shape." << std::endl;
-    if (min_shape.size() > 0) {
-      config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
-    }
-    FDINFO << "Finish setting trt dynamic shape." << std::endl;
-}
-
 TensorInfo PaddleBackend::GetInputInfo(int index) {
   FDASSERT(index < NumInputs(),
            "The index: %d should less than the number of inputs: %d.", index,
@@ -205,6 +193,19 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     CopyTensorToCpu(handle, &((*outputs)[i]));
   }
   return true;
+}
+
+#ifdef ENABLE_TRT_BACKEND
+void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option) {
+    std::map<std::string, std::vector<int>> max_shape;
+    std::map<std::string, std::vector<int>> min_shape;
+    std::map<std::string, std::vector<int>> opt_shape;
+    GetDynamicShapeFromOption(option, &max_shape, &min_shape, &opt_shape);
+    FDINFO << "Start setting trt dynamic shape." << std::endl;
+    if (min_shape.size() > 0) {
+      config_.SetTRTDynamicShapeInfo(min_shape, max_shape, opt_shape);
+    }
+    FDINFO << "Finish setting trt dynamic shape." << std::endl;
 }
 
 void PaddleBackend::GetDynamicShapeFromOption(const PaddleBackendOption& option,
@@ -274,5 +275,7 @@ void PaddleBackend::CollectShapeRun(paddle_infer::Predictor* predictor,
   }
   predictor->Run();
 }
+#endif
+
 
 }  // namespace fastdeploy
