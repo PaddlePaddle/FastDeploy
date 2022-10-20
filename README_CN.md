@@ -115,7 +115,9 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-
+<details>
+<summary>C++ SDK快速开始</summary>
+    
 ### C++ SDK快速开始
 <div id="fastdeploy-quick-start-cpp"></div>
 
@@ -154,6 +156,7 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 ```
+</details>
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
