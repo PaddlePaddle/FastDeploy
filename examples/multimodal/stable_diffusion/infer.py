@@ -83,6 +83,17 @@ def create_ort_runtime(model_dir, model_prefix, model_format):
     return fd.Runtime(option)
 
 
+def create_paddle_inference_runtime(model_dir, model_prefix):
+    option = fd.RuntimeOption()
+    option.use_paddle_backend()
+    option.use_gpu()
+
+    model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
+    params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+    option.set_model_path(model_file, params_file)
+    return fd.Runtime(option)
+
+
 def create_trt_runtime(model_dir,
                        model_prefix,
                        model_format,
@@ -135,7 +146,7 @@ if __name__ == "__main__":
         unet_runtime = create_ort_runtime(
             args.model_dir, args.unet_model_prefix, args.model_format)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
-    else:
+    elif args.backend == "trt":
         vae_dynamic_shape = {
             "latent": {
                 "min_shape": [1, 4, 64, 64],
