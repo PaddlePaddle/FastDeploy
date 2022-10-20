@@ -10,22 +10,19 @@
 
 简言之，利用Paddle.js，我们可以在浏览器、小程序等前端应用场景上线AI功能，包括但不限于目标检测，图像分割，OCR，物品分类等AI能力。
 
-## Paddle.js Web Demo使用
+## Web Demo使用
 
 在浏览器中直接运行官方demo参考[文档](./web_demo/README.md)
 
-|demo名称|web demo目录|
-|-|-|
-|人脸检测|[FaceDetection](./web_demo/demo/src/pages/cv/detection/FaceDetection/)| 
-|螺丝钉检测|[ScrewDetection](./web_demo//demo/src/pages/cv/detection/ScrewDetection)| 
-|人像分割背景替换|[HumanSeg](./web_demo//demo/src/pages/cv/segmentation/HumanSeg)|
-|手势识别AI猜丁壳|[GestureRecognition](./web_demo//demo/src/pages/cv/recognition/GestureRecognition)|
-|1000种物品识别|[ItemIdentification](./web_demo//demo/src/pages/cv/recognition/ItemIdentification)|
-|文本检测|[TextDetection](./web_demo//demo/src/pages/cv/ocr/TextDetection)|
-|文本识别|[TextRecognition](./web_demo//demo/src/pages/cv/ocr/TextRecognition)|
+|demo名称|web demo目录|可视化|
+|-|-|-|
+|目标检测|[ScrewDetection/FaceDetection](./web_demo/demo/src/pages/cv/detection/)| <img src="https://user-images.githubusercontent.com/26592129/196874536-b7fa2c0a-d71f-4271-8c40-f9088bfad3c9.png" height="200px">|
+|人像分割背景替换|[HumanSeg](./web_demo//demo/src/pages/cv/segmentation/HumanSeg)|<img src="https://user-images.githubusercontent.com/26592129/196874452-4ef2e770-fbb3-4a35-954b-f871716d6669.png" height="200px">|
+|物体识别|[GestureRecognition/ItemIdentification](./web_demo//demo/src/pages/cv/recognition/)|<img src="https://user-images.githubusercontent.com/26592129/196874416-454e6bb0-4ebd-4b51-a88a-8c40614290ae.png" height="200px">|
+|OCR|[TextDetection/TextRecognition](./web_demo//demo/src/pages/cv/ocr/)|<img src="https://user-images.githubusercontent.com/26592129/196874354-1b5eecb0-f273-403c-aa6c-4463bf6d78db.png" height="200px">|
 
 
-## Paddle.js 小程序Demo使用
+## 微信小程序Demo使用
 
 在微信小程序运行官方demo参考[文档](./mini_program/README.md)
 

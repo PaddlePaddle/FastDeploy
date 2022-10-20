@@ -1,4 +1,4 @@
-# Paddle.js Web Demo
+# Web Demo介绍
 
 - [简介](#0)
 - [1. 快速开始](#1)
@@ -29,12 +29,12 @@
 
 本节介绍如何在浏览器中直接运行官方demo。
 
-**安装Node.js**
+**1. 安装Node.js**
 
 从`Node.js`官网https://nodejs.org/en/download/ 下载适合自己平台的`Node.js`安装包并安装。
 
-**安装demo依赖并运行**
-在`./web_mode/demo`目录下执行如下指令：
+**2. 安装demo依赖并启动**
+在`./web_demo/demo`目录下执行如下指令：
 
 ```
 # 安装依赖

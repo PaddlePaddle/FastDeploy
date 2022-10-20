@@ -1,17 +1,16 @@
 
 # Paddle.js微信小程序Demo
 
-- [1.介绍](#1)
+- [1.简介](#1)
 - [2. 项目启动](#2)
   * [2.1 准备工作](#21)
   * [2.2 启动步骤](#22)
   * [2.3 效果展示](#23)
-- [3. Paddle.js 框架推理](#3)
+- [3. 模型推理pipeline](#3)
 - [4. 常见问题](#4)
-- [5. 其他](#5)
 
 <a name="1"></a>
-## 1.介绍
+## 1.简介
 
 
 本目录下包含文本检测、文本识别小程序demo，通过使用 [Paddle.js](https://github.com/PaddlePaddle/Paddle.js) 以及 [Paddle.js微信小程序插件](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx7138a7bb793608c3&token=956931339&lang=zh_CN) 完成在小程序上利用用户终端算力实现文本检测框选效果。
@@ -31,7 +30,7 @@
 <a name="22"></a>
 ### 2.2 启动步骤
 
-#### **1. clone Demo代码**
+#### **1. 克隆Demo代码**
 ```sh
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy/examples/application/js/mini_program
@@ -61,10 +60,12 @@ cd ./ocrXcx && npm install
 
 <a name="23"></a>
 ### 2.3 效果展示
-![image](https://user-images.githubusercontent.com/43414102/157648579-cdbbee61-9866-4364-9edd-a97ac0eda0c1.png)
+
+<img src="https://user-images.githubusercontent.com/43414102/157648579-cdbbee61-9866-4364-9edd-a97ac0eda0c1.png" width="300px">
 
 <a name="3"></a>
-## 3. Paddle.js 框架推理
+## 3. 模型推理pipeline
+
 ```typescript
 // 引入 paddlejs 和 paddlejs-plugin，注册小程序环境变量和合适的 backend
 import * as paddlejs from '@paddlejs/paddlejs-core';
@@ -103,7 +104,7 @@ wx.canvasGetImageData({
 
 可以不管，不影响正常代码运行和demo功能
 
-### 4.2 预览 看不到结果
+### 4.2 预览看不到结果
 
 建议尝试真机调试
 
@@ -122,6 +123,4 @@ wx.canvasGetImageData({
 
 请继续等待，模型推理需要一定时间
 
-<a name="5"></a>
-## 5. 其他
-* [详细文档](https://mp.weixin.qq.com/s/KBjXawSfBreUCsIYbUgF-w)
+
