@@ -85,11 +85,11 @@ if __name__ == "__main__":
         unet,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, 4, 64, 64], dtype="float32"),  # latent
+                shape=[None, 4, None, None], dtype="float32"),  # latent
             paddle.static.InputSpec(
                 shape=[1], dtype="float32"),  # timesteps
             paddle.static.InputSpec(
-                shape=[None, None], dtype="float32")  # encoder_embedding
+                shape=[None, None, 768], dtype="float32")  # encoder_embedding
         ])
     save_path = os.path.join(args.output_path, "unet")
     paddle.jit.save(unet, save_path)
