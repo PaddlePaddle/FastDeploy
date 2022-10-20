@@ -144,6 +144,10 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     std::string text = id + "," + score;
     if (labels.size() > result.label_ids[i]) {
       text = labels[result.label_ids[i]] + "," + text;
+    } else {
+      FDWARNING << "The label_id: " << result.label_ids[i] 
+                << " in DetectionResult should be less than length of labels:" 
+                << labels.size() << "." << std::endl;
     }
     if (text.size() > 16) {
       text = text.substr(0, 16);
