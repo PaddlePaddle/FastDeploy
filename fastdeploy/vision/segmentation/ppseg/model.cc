@@ -15,6 +15,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+  valid_npu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -54,16 +55,17 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
       if (op["type"].as<std::string>() == "Normalize") {
-        std::vector<float> mean = {0.5, 0.5, 0.5};
-        std::vector<float> std = {0.5, 0.5, 0.5};
-        if (op["mean"]) {
-          mean = op["mean"].as<std::vector<float>>();
+        if(this->switch_of_nor_and_per){
+          std::vector<float> mean = {0.5, 0.5, 0.5};
+          std::vector<float> std = {0.5, 0.5, 0.5};
+          if (op["mean"]) {
+            mean = op["mean"].as<std::vector<float>>();
+          }
+          if (op["std"]) {
+            std = op["std"].as<std::vector<float>>();
+          }
+          processors_.push_back(std::make_shared<Normalize>(mean, std));
         }
-        if (op["std"]) {
-          std = op["std"].as<std::vector<float>>();
-        }
-        processors_.push_back(std::make_shared<Normalize>(mean, std));
-
       } else if (op["type"].as<std::string>() == "Resize") {
         yml_contain_resize_op = true;
         const auto& target_size = op["target_size"];
@@ -119,7 +121,9 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << " smoother. Please export model with parameters"
               << "  --output_op softmax." << std::endl;
   }
-  processors_.push_back(std::make_shared<HWC2CHW>());
+  if(this->switch_of_nor_and_per){
+    processors_.push_back(std::make_shared<HWC2CHW>());
+  }
   return true;
 }
 
@@ -344,6 +348,14 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
     return false;
   }
   return true;
+}
+
+void PaddleSegModel::DisableNormalizeAndPermute(){
+  this->switch_of_nor_and_per = false;
+  // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
 }
 
 }  // namespace segmentation

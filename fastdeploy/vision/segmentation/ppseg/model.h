@@ -22,6 +22,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   bool is_vertical_screen = false;
 
+  // RKNPU2 can run normalize and hwc2chw on the NPU.
+  // This function is used to close normalize and hwc2chw operations in preprocessing.
+  void DisableNormalizeAndPermute();
  private:
   bool Initialize();
 
@@ -38,6 +41,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
+  
+  // for recording the switch of normalize and hwc2chw
+  bool switch_of_nor_and_per = true;  
 };
 
 }  // namespace segmentation
