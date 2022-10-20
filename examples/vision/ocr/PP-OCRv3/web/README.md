@@ -6,7 +6,7 @@
 
 ## 前端部署PP-OCRv3模型
 
-PP-OCRv3模型web demo使用参考[文档](../../../../application/web_demo/README.md)
+PP-OCRv3模型web demo使用[**参考文档**](../../../../application/js/web_demo/)
 
 
 ## PP-OCRv3 js接口
