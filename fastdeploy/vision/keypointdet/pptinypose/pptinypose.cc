@@ -216,7 +216,7 @@ bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result,
     std::vector<float> scale;
     if (label_id == 0) {
       Mat mat(*im);
-      Crop::Run(mat, &crop_img, rect, &center, &scale);
+      utils::CropImageByBox(mat, &crop_img, rect, &center, &scale);
       center_bs.emplace_back(center);
       scale_bs.emplace_back(scale);
       crop_imgs.emplace_back(crop_img);

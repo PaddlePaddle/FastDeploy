@@ -16,15 +16,15 @@ struct KeyPointDetectionResult {
 };
 ```
 
-- **keypoints**: 成员变量，表示识别到的目标行为的关键点坐标。
-                 `keypoints.size()= N * J * 2`
-                 `N`:图片中的目标数量
-                 `J`:num_joints（一个目标的关键点数量）
-                 `3`:坐标信息[x, y]
-- **scores**: 成员变量，表示识别到的目标行为的关键点坐标的置信度。
-                 `scores.size()= N * J`
-                 `N`:图片中的目标数量
-                 `J`:num_joints（一个目标的关键点数量）
+- **keypoints**: 成员变量，表示识别到的目标行为的关键点坐标。`keypoints.size()= N * J * 2`，
+    - `N`：图片中的目标数量
+    - `J`：num_joints（一个目标的关键点数量）
+    - `3`:坐标信息[x, y]
+- **scores**: 成员变量，表示识别到的目标行为的关键点坐标的置信度。`scores.size()= N * J`
+    - `N`：图片中的目标数量
+    - `J`:num_joints（一个目标的关键点数量）
+- **num_joints**: 成员变量，一个目标的关键点数量
+
 - **num_joints**: 成员变量，一个目标的关键点数量
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）

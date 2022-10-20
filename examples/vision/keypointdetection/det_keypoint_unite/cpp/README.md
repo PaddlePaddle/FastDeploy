@@ -20,7 +20,7 @@ cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.3.0
 make -j
 
-# 下载Unet模型文件和测试图片
+# 下载PP-TinyPose和PP-PicoDet模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_256x192_infer.tgz
 tar -xvf PP_TinyPose_256x192_infer.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_PicoDet_V2_S_Pedestrian_320x320_infer.tgz

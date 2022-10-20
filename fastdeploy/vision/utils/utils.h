@@ -25,6 +25,7 @@
 #include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/function/transpose.h"
+#include "fastdeploy/vision/common/processors/mat.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -74,17 +75,23 @@ FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-// 功能：关键点检测模型，后处理中对关键点做精细定位
-// 参数：
-// heatmap：关键点检测模型的模型推理结果
-// dim：推理结果的shape信息
-// coords：精细化定位后的坐标
-// px：px = int(coords[ch * 2] + 0.5) 参考detection::GetFinalPredictions
-// py：px = int(coords[ch * 2 + 1] + 0.5) 参考detection::GetFinalPredictions
-// index：heatmap像素点的index信息
-// ch：channel
-// 论文参考：DARK postpocessing, Zhang et al. Distribution-Aware Coordinate
-//         Representation for Human Pose Estimation (CVPR 2020).
+bool CropImageByBox(const Mat& src_im, Mat* dst_im,
+                    const std::vector<float>& box, std::vector<float>* center,
+                    std::vector<float>* scale, const float expandratio = 0.3);
+
+/**
+  * Function: for keypoint detection model, fine positioning of keypoints in postprocess
+  * Parameters:
+  * heatmap: model inference results for keypoint detection models
+  * dim: shape information of the inference result
+  * coords: coordinates after refined positioning
+  * px: px = int(coords[ch * 2] + 0.5) , refer to API detection::GetFinalPredictions
+  * py: px = int(coords[ch * 2 + 1] + 0.5), refer to API detection::GetFinalPredictions
+  * index: index information of heatmap pixels
+  * ch: channel
+  * Paper reference: DARK postpocessing, Zhang et al. Distribution-Aware Coordinate
+  *         Representation for Human Pose Estimation (CVPR 2020).
+  */
 void DarkParse(const std::vector<float>& heatmap, const std::vector<int>& dim,
                std::vector<float>* coords, const int px, const int py,
                const int index, const int ch);

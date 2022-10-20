@@ -34,14 +34,6 @@ class Processor {
 
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
-  virtual bool ImplByOpenCV(const Mat& src_im, Mat* dst_im) {
-    FDASSERT(false,
-             "%s is not implemented function(source_mat, dest_mat) with OpenCV,"
-             "please use function(source_mat) instead.",
-             Name().c_str());
-    return false;
-  }
-
   virtual bool ImplByFalconCV(Mat* mat) {
     FDASSERT(false,
              "%s is not implemented with FalconCV, please use OpenCV instead.",
@@ -50,9 +42,6 @@ class Processor {
   }
 
   virtual bool operator()(Mat* mat,
-                          ProcLib lib = ProcLib::OPENCV);
-
-  virtual bool operator()(const Mat& src_im, Mat* dst_im,
                           ProcLib lib = ProcLib::OPENCV);
 };
 

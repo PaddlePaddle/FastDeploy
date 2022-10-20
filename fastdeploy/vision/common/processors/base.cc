@@ -32,17 +32,5 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ret;
 }
 
-bool Processor::operator()(const Mat& src_im, Mat* dst_im, ProcLib lib) {
-  // if default_lib is set
-  // then use default_lib
-  ProcLib target = lib;
-  if (default_lib != ProcLib::DEFAULT) {
-    target = default_lib;
-  }
-
-  bool ret = ImplByOpenCV(src_im, dst_im);
-  return ret;
-}
-
 }  // namespace vision
 }  // namespace fastdeploy

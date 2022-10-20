@@ -28,24 +28,10 @@ class Crop : public Processor {
     height_ = height;
   }
 
-  Crop(const std::vector<float> area,
-       std::vector<float>* center,
-       std::vector<float>* scale,
-       const float expandratio) {
-    area_ = area;
-    center_ = center;
-    scale_ = scale;
-    expandratio_ = expandratio;
-  }
   bool ImplByOpenCV(Mat* mat);
-  bool ImplByOpenCV(const Mat& src_im, Mat* dst_im);
   std::string Name() { return "Crop"; }
 
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
-                  ProcLib lib = ProcLib::OPENCV);
-  static bool Run(const Mat& src_im, Mat* dst_im,
-                  const std::vector<float>& area, std::vector<float>* center,
-                  std::vector<float>* scale, const float expandratio = 0.3,
                   ProcLib lib = ProcLib::OPENCV);
 
  private:
@@ -53,11 +39,6 @@ class Crop : public Processor {
   int offset_h_;
   int height_;
   int width_;
-
-  std::vector<float> area_;
-  std::vector<float>* center_;
-  std::vector<float>* scale_;
-  float expandratio_;
 };
 
 }  // namespace vision
