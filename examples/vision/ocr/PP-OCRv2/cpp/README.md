@@ -1,32 +1,32 @@
-# PPOCRSystemv2 C++部署示例
+# PPOCRv2 C++部署示例
 
-本目录下提供`infer.cc`快速完成PPOCRSystemv2在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成PPOCRv2在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/environment.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.2.1.tgz
-tar xvf fastdeploy-linux-x64-0.2.1.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.2.1
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
+tar xvf fastdeploy-linux-x64-0.3.0.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
 make -j
 
 
 # 下载模型,图片和字典文件
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tar.gz
-tar -xvf ch_PP-OCRv2_det_infer.tar.gz
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_det_infer.tar
+tar -xvf ch_PP-OCRv2_det_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
-tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tar.gz
-tar -xvf ch_PP-OCRv2_rec_infer.tar.gz
+wgethttps://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
+tar -xvf ch_PP-OCRv2_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
@@ -41,24 +41,24 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/compile/how_to_use_sdk_on_windows.md)
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
 
-## PPOCRSystemv2 C++接口
+## PPOCRv2 C++接口
 
-### PPOCRSystemv2类
+### PPOCRv2类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
-PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
+PPOCRv2 的初始化，由检测，分类和识别模型串联构成
 
 **参数**
 
@@ -67,10 +67,10 @@ PPOCRSystemv2 的初始化，由检测，分类和识别模型串联构成
 > * **Recognizer**(model): OCR中的识别模型
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv2(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
-PPOCRSystemv2 的初始化，由检测，识别模型串联构成(无分类器)
+PPOCRv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 **参数**
 
@@ -147,4 +147,4 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 - [PPOCR 系列模型介绍](../../)
 - [PPOCRv2 Python部署](../python)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)

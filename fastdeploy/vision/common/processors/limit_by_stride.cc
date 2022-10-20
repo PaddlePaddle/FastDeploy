@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool LimitByStride::ImplByOpenCV(Mat* mat) {
-  cv::Mat* im = mat->GetCpuMat();
+  cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   int rw = origin_w - origin_w % stride_;

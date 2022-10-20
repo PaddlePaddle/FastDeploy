@@ -1,3 +1,0 @@
-# OCR API
-
-comming soon...
