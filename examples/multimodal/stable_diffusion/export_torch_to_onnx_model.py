@@ -71,6 +71,9 @@ if __name__ == "__main__":
     unet.cuda()
     text_encoder.cuda()
 
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+
     with torch.inference_mode():
         # Export vae decoder model
         vae_inputs = (torch.randn(
@@ -105,7 +108,7 @@ if __name__ == "__main__":
             unet,  # model being run
             unet_inputs,  # model input (or a tuple for multiple inputs)
             os.path.join(
-                args.output_path, "unet_v1_4.onnx"
+                args.output_path, "unet.onnx"
             ),  # where to save the model (can be a file or file-like object)
             export_params=True,  # store the trained parameter weights inside the model file
             opset_version=12,  # the ONNX version to export the model to
