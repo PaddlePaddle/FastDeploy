@@ -3,9 +3,13 @@ Global:
   format: 'onnx'
   model_filename: model.pdmodel
   params_filename: model.pdiparams
-  image_path: ./COCO_val_320
+  qat_image_path: ./COCO_train_320
+  ptq_image_path: ./COCO_val_320
   arch: YOLOv6
   input_list: ['x2paddle_image_arrays']
+  qat_preprocess: yolo_image_preprocess
+  ptq_preprocess: yolo_image_preprocess
+  qat_batch_size: 1
 
 Distillation:
   alpha: 1.0

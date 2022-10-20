@@ -3,11 +3,13 @@ Global:
   format: 'paddle'
   model_filename: inference.pdmodel
   params_filename: inference.pdiparams
-  image_path: ./ImageNet_val_640
+  qat_image_path: ./ImageNet_val_640
+  ptq_image_path: ./ImageNet_val_640
   arch: MobileNetV1
   input_list: ['input']
-  preprocess: cls_image_preprocess
-
+  qat_preprocess: cls_image_preprocess
+  ptq_preprocess: cls_image_preprocess
+  qat_batch_size: 32
 
 Distillation:
   alpha: 1.0

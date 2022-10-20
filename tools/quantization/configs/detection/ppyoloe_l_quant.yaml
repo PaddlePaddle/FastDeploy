@@ -3,10 +3,13 @@ Global:
   format: paddle
   model_filename: model.pdmodel
   params_filename: model.pdiparams
-  image_path: ./COCO_val_320
+  qat_image_path: ./COCO_train_320
+  ptq_image_path: ./COCO_val_320
   arch: PPYOLOE
   input_list: ['image','scale_factor']
-  preprocess: ppdet_image_preprocess
+  qat_preprocess: ppdet_image_preprocess
+  ptq_preprocess: ppdet_image_preprocess
+  qat_batch_size: 4
 
 Distillation:
   alpha: 1.0

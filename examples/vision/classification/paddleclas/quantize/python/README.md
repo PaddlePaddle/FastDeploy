@@ -22,7 +22,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar
 tar -xvf resnet50_vd_ptq.tar
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# 在CPU上使用Paddle-Inference推理量化模型
+# 在CPU上使用ONNX Runtime推理量化模型
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device cpu --backend ort
 # 在GPU上使用TensorRT推理量化模型
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device gpu --backend trt

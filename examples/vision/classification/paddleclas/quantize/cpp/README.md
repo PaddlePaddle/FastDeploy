@@ -1,4 +1,4 @@
-# PaddleClas 量化模型 Python部署示例
+# PaddleClas 量化模型 C++部署示例
 本目录下提供的`infer.cc`,可以帮助用户快速完成PaddleClas量化模型在CPU/GPU上的部署推理加速.
 
 ## 部署准备
@@ -26,7 +26,7 @@ tar -xvf resnet50_vd_ptq.tar
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 
-# 在CPU上使用Paddle-Inference推理量化模型
+# 在CPU上使用ONNX Runtime推理量化模型
 ./infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg 0
 # 在GPU上使用TensorRT推理量化模型
 ./infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg 1

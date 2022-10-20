@@ -16,7 +16,7 @@ FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置�
 | [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | ONNX Runtime |    CPU    |     30.99   |   10.24    |     3.03        |77.89 | 75.09 |离线量化 |
 | [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | TensorRT  |    GPU    |       1.80  |   0.58    |      3.10       |77.89 | 76.86 | 离线量化 |
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
 - 测试图片为ImageNet-2012验证集中的图片.
 - 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.

@@ -6,7 +6,9 @@ Global:
   image_path: ./ImageNet_val_640
   arch: ResNet50
   input_list: ['input']
-  preprocess: cls_image_preprocess
+  qat_preprocess: cls_image_preprocess
+  ptq_preprocess: cls_image_preprocess
+  qat_batch_size: 32
 
 
 Distillation:

@@ -15,6 +15,8 @@
 import cv2
 import os
 import numpy as np
+import random
+from PIL import Image, ImageEnhance
 import paddle
 
 
@@ -148,3 +150,233 @@ def ppdet_image_preprocess(img):
     img /= img_std
 
     return img.astype(np.float32), scale_factor
+
+
+def ppseg_cityscapes_ptq_preprocess(img):
+
+    #ToCHWImage & Normalize
+    img = np.transpose(img / 255.0, [2, 0, 1])
+
+    img_mean = np.array([0.5, 0.5, 0.5]).reshape((3, 1, 1))
+    img_std = np.array([0.5, 0.5, 0.5]).reshape((3, 1, 1))
+    img -= img_mean
+    img /= img_std
+
+    return img.astype(np.float32)
+
+
+def ResizeStepScaling(img,
+                      min_scale_factor=0.75,
+                      max_scale_factor=1.25,
+                      scale_step_size=0.25):
+    # refer form ppseg
+    if min_scale_factor == max_scale_factor:
+        scale_factor = min_scale_factor
+    elif scale_step_size == 0:
+        scale_factor = np.random.uniform(min_scale_factor, max_scale_factor)
+    else:
+        num_steps = int((max_scale_factor - min_scale_factor) / scale_step_size
+                        + 1)
+        scale_factors = np.linspace(min_scale_factor, max_scale_factor,
+                                    num_steps).tolist()
+        np.random.shuffle(scale_factors)
+        scale_factor = scale_factors[0]
+
+    w = int(round(scale_factor * img.shape[1]))
+    h = int(round(scale_factor * img.shape[0]))
+
+    img = cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR)
+
+    return img
+
+
+def RandomPaddingCrop(img,
+                      crop_size=(512, 512),
+                      im_padding_value=(127.5, 127.5, 127.5),
+                      label_padding_value=255):
+
+    if isinstance(crop_size, list) or isinstance(crop_size, tuple):
+        if len(crop_size) != 2:
+            raise ValueError(
+                'Type of `crop_size` is list or tuple. It should include 2 elements, but it is {}'
+                .format(crop_size))
+    else:
+        raise TypeError(
+            "The type of `crop_size` is invalid. It should be list or tuple, but it is {}"
+            .format(type(crop_size)))
+
+    if isinstance(crop_size, int):
+        crop_width = crop_size
+        crop_height = crop_size
+    else:
+        crop_width = crop_size[0]
+        crop_height = crop_size[1]
+
+    img_height = img.shape[0]
+    img_width = img.shape[1]
+
+    if img_height == crop_height and img_width == crop_width:
+        return img
+    else:
+        pad_height = max(crop_height - img_height, 0)
+        pad_width = max(crop_width - img_width, 0)
+        if (pad_height > 0 or pad_width > 0):
+            img = cv2.copyMakeBorder(
+                img,
+                0,
+                pad_height,
+                0,
+                pad_width,
+                cv2.BORDER_CONSTANT,
+                value=im_padding_value)
+
+            img_height = img.shape[0]
+            img_width = img.shape[1]
+
+        if crop_height > 0 and crop_width > 0:
+            h_off = np.random.randint(img_height - crop_height + 1)
+            w_off = np.random.randint(img_width - crop_width + 1)
+
+            img = img[h_off:(crop_height + h_off), w_off:(w_off + crop_width
+                                                          ), :]
+
+        return img
+
+
+def RandomHorizontalFlip(img, prob=0.5):
+    if random.random() < prob:
+
+        if len(img.shape) == 3:
+            img = img[:, ::-1, :]
+        elif len(img.shape) == 2:
+            img = img[:, ::-1]
+
+        return img
+    else:
+        return img
+
+
+def brightness(im, brightness_lower, brightness_upper):
+    brightness_delta = np.random.uniform(brightness_lower, brightness_upper)
+    im = ImageEnhance.Brightness(im).enhance(brightness_delta)
+    return im
+
+
+def contrast(im, contrast_lower, contrast_upper):
+    contrast_delta = np.random.uniform(contrast_lower, contrast_upper)
+    im = ImageEnhance.Contrast(im).enhance(contrast_delta)
+    return im
+
+
+def saturation(im, saturation_lower, saturation_upper):
+    saturation_delta = np.random.uniform(saturation_lower, saturation_upper)
+    im = ImageEnhance.Color(im).enhance(saturation_delta)
+    return im
+
+
+def hue(im, hue_lower, hue_upper):
+    hue_delta = np.random.uniform(hue_lower, hue_upper)
+    im = np.array(im.convert('HSV'))
+    im[:, :, 0] = im[:, :, 0] + hue_delta
+    im = Image.fromarray(im, mode='HSV').convert('RGB')
+    return im
+
+
+def sharpness(im, sharpness_lower, sharpness_upper):
+    sharpness_delta = np.random.uniform(sharpness_lower, sharpness_upper)
+    im = ImageEnhance.Sharpness(im).enhance(sharpness_delta)
+    return im
+
+
+def RandomDistort(img,
+                  brightness_range=0.5,
+                  brightness_prob=0.5,
+                  contrast_range=0.5,
+                  contrast_prob=0.5,
+                  saturation_range=0.5,
+                  saturation_prob=0.5,
+                  hue_range=18,
+                  hue_prob=0.5,
+                  sharpness_range=0.5,
+                  sharpness_prob=0):
+
+    brightness_lower = 1 - brightness_range
+    brightness_upper = 1 + brightness_range
+    contrast_lower = 1 - contrast_range
+    contrast_upper = 1 + contrast_range
+    saturation_lower = 1 - saturation_range
+    saturation_upper = 1 + saturation_range
+    hue_lower = -hue_range
+    hue_upper = hue_range
+    sharpness_lower = 1 - sharpness_range
+    sharpness_upper = 1 + sharpness_range
+    ops = [brightness, contrast, saturation, hue, sharpness]
+    random.shuffle(ops)
+    params_dict = {
+        'brightness': {
+            'brightness_lower': brightness_lower,
+            'brightness_upper': brightness_upper
+        },
+        'contrast': {
+            'contrast_lower': contrast_lower,
+            'contrast_upper': contrast_upper
+        },
+        'saturation': {
+            'saturation_lower': saturation_lower,
+            'saturation_upper': saturation_upper
+        },
+        'hue': {
+            'hue_lower': hue_lower,
+            'hue_upper': hue_upper
+        },
+        'sharpness': {
+            'sharpness_lower': sharpness_lower,
+            'sharpness_upper': sharpness_upper,
+        }
+    }
+    prob_dict = {
+        'brightness': brightness_prob,
+        'contrast': contrast_prob,
+        'saturation': saturation_prob,
+        'hue': hue_prob,
+        'sharpness': sharpness_prob
+    }
+
+    img = img.astype('uint8')
+    img = Image.fromarray(img)
+
+    for id in range(len(ops)):
+        params = params_dict[ops[id].__name__]
+        prob = prob_dict[ops[id].__name__]
+        params['im'] = img
+        if np.random.uniform(0, 1) < prob:
+            img = ops[id](**params)
+    img = np.asarray(img).astype('float32')
+    return img
+
+
+def ppseg_cityscapes_qat_preprocess(img):
+
+    min_scale_factor = 0.5
+    max_scale_factor = 2.0
+    scale_step_size = 0.25
+
+    crop_size = (1024, 512)
+
+    brightness_range = 0.5
+    contrast_range = 0.5
+    saturation_range = 0.5
+
+    img = ResizeStepScaling(
+        img, min_scale_factor=0.5, max_scale_factor=2.0, scale_step_size=0.25)
+    img = RandomPaddingCrop(img, crop_size=(1024, 512))
+    img = RandomHorizontalFlip(img)
+    img = RandomDistort(
+        img, brightness_range=0.5, contrast_range=0.5, saturation_range=0.5)
+
+    img = np.transpose(img / 255.0, [2, 0, 1])
+    img_mean = np.array([0.5, 0.5, 0.5]).reshape((3, 1, 1))
+    img_std = np.array([0.5, 0.5, 0.5]).reshape((3, 1, 1))
+    img -= img_mean
+    img /= img_std
+    return img.astype(np.float32)

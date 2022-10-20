@@ -47,7 +47,7 @@ Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请�
 | [YOLOv7](../../examples/vision/detection/yolov7/quantize/)             | ONNX Runtime     |    CPU    |     976.88         |  462.69          |  2.11            | 51.1 | 42.5|量化蒸馏训练 |
 | [YOLOv7](../../examples/vision/detection/yolov7/quantize/)             | Paddle Inference  |    CPU    |         1022.55    |     490.87      |   2.08         |51.1 | 46.3|量化蒸馏训练 |
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
 - 测试数据为COCO2017验证集中的图片.
 - 推理时延为在不同Runtime上推理的时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
@@ -59,7 +59,7 @@ Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请�
 | [ppyoloe_crn_l_300e_coco](../../examples/vision/detection/paddledetection/quantize )  | TensorRT         |    GPU    |  24.52       |  11.53    |      2.13        | 51.4  | 50.7 | 量化蒸馏训练 |
 | [ppyoloe_crn_l_300e_coco](../../examples/vision/detection/paddledetection/quantize)  | ONNX Runtime |    CPU    |     1085.62 |   457.56     |      2.37        |51.4 | 50.0 |量化蒸馏训练 |
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
 - 测试图片为COCO val2017中的图片.
 - 推理时延为在不同Runtime上推理的时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
@@ -73,7 +73,21 @@ Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请�
 | [MobileNetV1_ssld](../../examples/vision/classification/paddleclas/quantize/)             | ONNX Runtime |    CPU    |     30.99   |   10.24    |     3.03        |77.89 | 75.09 |离线量化 |
 | [MobileNetV1_ssld](../../examples/vision/classification/paddleclas/quantize/)             | TensorRT  |    GPU    |     1.80  |   0.58    |      3.10       |77.89 | 76.86 | 离线量化 |
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
 - 测试数据为ImageNet-2012验证集中的图片.
 - 推理时延为在不同Runtime上推理的时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
+
+
+### PaddleSeg 系列
+
+| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 MIoU | INT8 MIoU |量化方式   |
+| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
+| [PP-LiteSeg-T(STDC1)-cityscapes](../../examples/vision/segmentation/paddleseg/quantize/)            | Paddle Inference        |    CPU    |    1217.46      |   651.79    |     1.87       | 77.37  | 73.56 | 量化蒸馏训练 |
+
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
+- 本模型只使用Cityscapes的训练集中的一个子文件夹下的少量数据进行训练, 顾精度稍低, 追求高精度的用户可以尝试对全量数据进行训练.
+- 测试数据为Cityscapes验证集中的所有图片.
+- 推理时延为在不同Runtime上推理的时延, 单位是毫秒.
+- CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1
+- PP-LiteSeg量化模型目前暂只支持在Paddle Inference上推理

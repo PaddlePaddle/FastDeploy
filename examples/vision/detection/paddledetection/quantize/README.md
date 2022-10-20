@@ -13,7 +13,7 @@ FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置�
 | [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | TensorRT         |    GPU    |  24.52       |  11.53    |      2.13        | 51.4  | 50.7 | 量化蒸馏训练 |
 | [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | ONNX Runtime |    CPU    |     1085.62 |   457.56     |      2.37        |51.4 | 50.0 |量化蒸馏训练 |
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
+上表中的数据, 为模型量化前后，在FastDeploy部署的Runtime推理性能.
 - 测试图片为COCO val2017中的图片.
 - 推理时延为在不同Runtime上推理的时延, 单位是毫秒.
 - CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
