@@ -14,8 +14,25 @@
 
 在浏览器中直接运行官方demo参考[文档](./web_demo/README.md)
 
+|demo名称|web demo目录|
+|-|-|
+|人脸检测|[FaceDetection](./web_demo/demo/src/pages/cv/detection/FaceDetection/)| 
+|螺丝钉检测|[ScrewDetection](./web_demo//demo/src/pages/cv/detection/ScrewDetection)| 
+|人像分割背景替换|[HumanSeg](./web_demo//demo/src/pages/cv/segmentation/HumanSeg)|
+|手势识别AI猜丁壳|[GestureRecognition](./web_demo//demo/src/pages/cv/recognition/GestureRecognition)|
+|1000种物品识别|[ItemIdentification](./web_demo//demo/src/pages/cv/recognition/ItemIdentification)|
+|文本检测|[TextDetection](./web_demo//demo/src/pages/cv/ocr/TextDetection)|
+|文本识别|[TextRecognition](./web_demo//demo/src/pages/cv/ocr/TextRecognition)|
+
+
 ## Paddle.js 小程序Demo使用
 
 在微信小程序运行官方demo参考[文档](./mini_program/README.md)
 
-
+|名称|目录|
+|-|-|
+|OCR文本检测| [ocrdetecXcx](./mini_program/ocrdetectXcx/) |
+|OCR文本识别| [ocrXcx](./mini_program/ocrXcx/) |
+|目标检测| coming soon |
+|图像分割| coming soon | 
+|物品分类| coming soon | 
