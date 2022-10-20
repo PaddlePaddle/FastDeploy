@@ -81,9 +81,10 @@ make install
 
 | 任务场景             | 模型                | 模型版本(表示已经测试的版本)                                                                                        | 大小  | ONNX/RKNN是否支持 | ONNX/RKNN速度(ms) |
 |------------------|-------------------|--------------------------------------------------------------------------------------------------------|-----|---------------|-----------------|
-| Segmentation   | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes                                                                          | 大小  | True/False    | 6634/5598       |
-| Segmentation     | PP-HumanSegV2Lite | portrait                                                                                               | 大小  | True/False    | 456/266        |
-| Segmentation     | PP-HumanSegV2Lite | human                                                                                                  | 大小  | True/False    | 496/256        |
+| Detection        | Picodet           | Picodet-s-npu                                                                                          | 大小  | True/False    | 454/177         |
+| Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes                                                                          | 大小  | True/False    | 6634/5598       |
+| Segmentation     | PP-HumanSegV2Lite | portrait                                                                                               | 大小  | True/False    | 456/266         |
+| Segmentation     | PP-HumanSegV2Lite | human                                                                                                  | 大小  | True/False    | 496/256         |
 | Face Detection   | SCRFD             | [SCRFD-2.5G-kps-640](https://bj.bcebos.com/fastdeploy/models/rknn2/scrfd_2.5g_bnkps_shape640x640.rknn) | 大小  | True/True     | 963/142         |
 | Face Recognition | ArcFace           | [ArcFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_ms1mv3_arcface_r18.rknn)               | 大小  | True/True     | 600/3           |
 | Face Recognition | cosFace           | [cosFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_glint360k_cosface_r18.rknn)            | 大小  | True/True     | 600/3           |

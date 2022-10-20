@@ -53,6 +53,7 @@ PicoDet::PicoDet(const std::string& model_file, const std::string& params_file,
   config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+  valid_npu_backends = {Backend::RKNPU2};
   if (model_format == ModelFormat::RKNN or model_format == ModelFormat::ONNX) {
     has_nms_ = false;
   }
@@ -133,6 +134,89 @@ bool PicoDet::CheckIfContainDecodeAndNMS() {
           << std::endl;
   return false;
 }
+
+bool PicoDet::BuildPreprocessPipelineFromConfig() {
+  processors_.clear();
+  YAML::Node cfg;
+  try {
+    cfg = YAML::LoadFile(config_file_);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file_
+            << ", maybe you should check this file." << std::endl;
+    return false;
+  }
+
+  processors_.push_back(std::make_shared<BGR2RGB>());
+
+  for (const auto& op : cfg["Preprocess"]) {
+    std::string op_name = op["type"].as<std::string>();
+    if (op_name == "NormalizeImage") {
+      if(this->switch_of_nor_and_per){
+        auto mean = op["mean"].as<std::vector<float>>();
+        auto std = op["std"].as<std::vector<float>>();
+        bool is_scale = true;
+        if (op["is_scale"]) {
+          is_scale = op["is_scale"].as<bool>();
+        }
+        std::string norm_type = "mean_std";
+        if (op["norm_type"]) {
+          norm_type = op["norm_type"].as<std::string>();
+        }
+        if (norm_type != "mean_std") {
+          std::fill(mean.begin(), mean.end(), 0.0);
+          std::fill(std.begin(), std.end(), 1.0);
+        }
+        processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
+      }
+    } else if (op_name == "Resize") {
+      bool keep_ratio = op["keep_ratio"].as<bool>();
+      auto target_size = op["target_size"].as<std::vector<int>>();
+      int interp = op["interp"].as<int>();
+      FDASSERT(target_size.size() == 2,
+               "Require size of target_size be 2, but now it's %lu.",
+               target_size.size());
+      if (!keep_ratio) {
+        int width = target_size[1];
+        int height = target_size[0];
+        processors_.push_back(
+            std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
+      } else {
+        int min_target_size = std::min(target_size[0], target_size[1]);
+        int max_target_size = std::max(target_size[0], target_size[1]);
+        std::vector<int> max_size;
+        if (max_target_size > 0) {
+          max_size.push_back(max_target_size);
+          max_size.push_back(max_target_size);
+        }
+        processors_.push_back(std::make_shared<ResizeByShort>(
+            min_target_size, interp, true, max_size));
+      }
+    } else if (op_name == "Permute") {
+      // Do nothing, do permute as the last operation
+      continue;
+      // processors_.push_back(std::make_shared<HWC2CHW>());
+    } else if (op_name == "Pad") {
+      auto size = op["size"].as<std::vector<int>>();
+      auto value = op["fill_value"].as<std::vector<float>>();
+      processors_.push_back(std::make_shared<Cast>("float"));
+      processors_.push_back(
+          std::make_shared<PadToSize>(size[1], size[0], value));
+    } else if (op_name == "PadStride") {
+      auto stride = op["stride"].as<int>();
+      processors_.push_back(
+          std::make_shared<StridePad>(stride, std::vector<float>(3, 0)));
+    } else {
+      FDERROR << "Unexcepted preprocess operator: " << op_name << "."
+              << std::endl;
+      return false;
+    }
+  }
+  if(this->switch_of_nor_and_per){
+    processors_.push_back(std::make_shared<HWC2CHW>());
+  }
+  return true;
+}
+
 bool PicoDet::Postprocess(std::vector<FDTensor>& infer_result,
                           DetectionResult* result) {
   FDASSERT(infer_result[1].shape[0] == 1,
@@ -164,11 +248,11 @@ bool PicoDet::Postprocess(std::vector<FDTensor>& infer_result,
     for (size_t i = 0; i < dets.size(); ++i) {
       result->label_ids.push_back(dets[i].label);
       result->scores.push_back(dets[i].score);
-      result->boxes.emplace_back(std::array<float, 4>{
-          static_cast<float>(dets[i].x1 / this->ptr[1]),
-          static_cast<float>(dets[i].y1 / this->ptr[0]),
-          static_cast<float>(dets[i].x2 / this->ptr[1]),
-          static_cast<float>(dets[i].y2 / this->ptr[0])});
+      result->boxes.emplace_back(
+          std::array<float, 4>{static_cast<float>(dets[i].x1 / this->ptr[1]),
+                               static_cast<float>(dets[i].y1 / this->ptr[0]),
+                               static_cast<float>(dets[i].x2 / this->ptr[1]),
+                               static_cast<float>(dets[i].y2 / this->ptr[0])});
     }
     return true;
   } else {
@@ -269,6 +353,11 @@ void PicoDet::picodet_nms(std::vector<BoxInfo>& input_boxes, float NMS_THRESH) {
       }
     }
   }
+}
+
+void PicoDet::DisableNormalizeAndPermute() {
+  this->switch_of_nor_and_per = false;
+  this->BuildPreprocessPipelineFromConfig();
 }
 } // namespace detection
 } // namespace vision

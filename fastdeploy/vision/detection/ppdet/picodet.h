@@ -38,8 +38,8 @@ class FASTDEPLOY_DECL PicoDet : public PPYOLOE {
   bool CheckIfContainDecodeAndNMS();
 
   virtual std::string ModelName() const { return "PicoDet"; }
-
-
+  /// Build the preprocess pipeline from the loaded model
+  virtual bool BuildPreprocessPipelineFromConfig();
   /// Preprocess an input image, and set the preprocessed results to `outputs`
   virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
 
@@ -47,19 +47,22 @@ class FASTDEPLOY_DECL PicoDet : public PPYOLOE {
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result);
 
+  void DisableNormalizeAndPermute();
+
  private:
   std::vector<int> strides = {8, 16, 32, 64};
   std::vector<double> ptr{};
   void decode_infer(const float*& cls_pred, const float*& dis_pred, int stride,
                     float threshold,
                     std::vector<std::vector<BoxInfo>>& results);
-  BoxInfo disPred2Bbox(const float *&dfl_det, int label, float score, int x,
+  BoxInfo disPred2Bbox(const float*& dfl_det, int label, float score, int x,
                        int y, int stride);
-  static void picodet_nms(std::vector<BoxInfo> &result, float nms_threshold);
+  static void picodet_nms(std::vector<BoxInfo>& result, float nms_threshold);
   int input_size_ = image_size;
   int num_class_ = 80;
   int reg_max_ = 7;
-
+  // for recording the switch of normalize and hwc2chw
+  bool switch_of_nor_and_per = true;
 };
 } // namespace detection
 } // namespace vision
