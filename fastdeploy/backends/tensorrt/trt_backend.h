@@ -70,6 +70,7 @@ struct TrtBackendOption {
   std::map<std::string, std::vector<int32_t>> min_shape;
   std::map<std::string, std::vector<int32_t>> opt_shape;
   std::string serialize_file = "";
+  bool enable_pinned_memory = false;
 
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
@@ -120,7 +121,6 @@ class TrtBackend : public BaseBackend {
   std::vector<TrtValueInfo> outputs_desc_;
   std::map<std::string, FDDeviceBuffer> inputs_device_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_device_buffer_;
-  std::map<std::string, FDDeviceHostBuffer> outputs_pinned_buffer_;
 
   std::string calibration_str_;
 

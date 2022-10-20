@@ -204,6 +204,15 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  /**
+   * @brief Enable pinned memory in trt backend
+   */
+  void EnableTrtPinnedMemory();
+
+  /**
+   * @brief Disable pinned memory in trt backend
+   */
+  void DisableTrtPinnedMemory();
 
   /**
    * @brief Enable to collect shape in paddle trt backend
@@ -259,6 +268,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+  bool trt_enable_pinned_memory = false;
 
   // ======Only for Poros Backend=======
   bool is_dynamic = false;

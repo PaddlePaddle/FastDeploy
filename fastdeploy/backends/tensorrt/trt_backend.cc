@@ -312,7 +312,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
   for (size_t i = 0; i < outputs->size(); ++i) {
-    FDASSERT(cudaMemcpyAsync(outputs_pinned_buffer_[(*outputs)[i].name].data(),
+    FDASSERT(cudaMemcpyAsync((*outputs)[i].Data(),
                              outputs_device_buffer_[(*outputs)[i].name].data(),
                              (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
                              stream_) == 0,
@@ -340,7 +340,6 @@ void TrtBackend::GetInputOutputInfo() {
     } else {
       outputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype});
       outputs_device_buffer_[name] = FDDeviceBuffer(dtype);
-      outputs_pinned_buffer_[name] = FDDeviceHostBuffer(dtype);
     }
   }
   bindings_.resize(num_binds);
@@ -406,17 +405,15 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
         outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
 
-    // Allocate output buffer memory
-    outputs_device_buffer_[outputs_desc_[i].name].resize(output_dims);
-    outputs_pinned_buffer_[outputs_desc_[i].name].resize(output_dims);
-
     // set user's outputs info
     std::vector<int64_t> shape(output_dims.d,
                                output_dims.d + output_dims.nbDims);
-    (*outputs)[ori_idx].SetExternalData(shape, GetFDDataType(outputs_desc_[i].dtype),
-                                        outputs_pinned_buffer_[outputs_desc_[i].name].data());
-    (*outputs)[ori_idx].name = outputs_desc_[i].name;
-    (*outputs)[ori_idx].is_pinned_memory = true;
+    (*outputs)[ori_idx].is_pinned_memory = option_.enable_pinned_memory;
+    (*outputs)[ori_idx].Resize(shape, GetFDDataType(outputs_desc_[i].dtype),
+                               outputs_desc_[i].name);
+
+    // Allocate output buffer memory
+    outputs_device_buffer_[outputs_desc_[i].name].resize(output_dims);
   
     // binding output buffer
     bindings_[idx] = outputs_device_buffer_[outputs_desc_[i].name].data();

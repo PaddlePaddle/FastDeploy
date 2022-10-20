@@ -356,6 +356,10 @@ void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
 
 void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
 
+void RuntimeOption::EnableTrtPinnedMemory() { trt_enable_pinned_memory = true; }
+
+void RuntimeOption::DisableTrtPinnedMemory() { trt_enable_pinned_memory = false; }
+
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
@@ -606,6 +610,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.min_shape = option.trt_min_shape;
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
+  trt_option.enable_pinned_memory = option.trt_enable_pinned_memory;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
