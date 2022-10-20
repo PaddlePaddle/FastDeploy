@@ -46,10 +46,11 @@ else
 
 docker run -it --rm --name build_fd_runtime \
            -v`pwd`/..:/workspace/fastdeploy \
-           paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
+           paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy;
             rm -rf build; mkdir build; cd build;
+            ln -s /usr/bin/python3 /usr/bin/python;
             cmake .. -DENABLE_TRT_BACKEND=OFF -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3 -DWITH_GPU=OFF -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_FRONTEND=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install'

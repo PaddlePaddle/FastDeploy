@@ -25,5 +25,5 @@ bash scripts/build.sh OFF
 
 # 退出到FastDeploy主目录，制作镜像
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-cpu-only -f serving/Dockerfile_cpu .
+docker build -t paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```

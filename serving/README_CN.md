@@ -17,7 +17,7 @@ FastDeploy基于[Triton Inference Server](https://github.com/triton-inference-se
 #### CPU镜像
 CPU镜像仅支持Paddle/ONNX模型在CPU上进行服务化部署，支持的推理后端包括OpenVINO、Paddle Inference和ONNX Runtime
 ``` shell
-docker pull paddlepaddle/fastdeploy:0.3.0-cpu-only
+docker pull paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10
 ```
 
 #### GPU镜像
