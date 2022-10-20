@@ -516,7 +516,7 @@ bool TrtBackend::BuildTrtEngine() {
       engine_->createExecutionContext());
   GetInputOutputInfo();
 
-  FDINFO << "TensorRT Engine is built succussfully." << std::endl;
+  FDINFO << "TensorRT Engine is built successfully." << std::endl;
   if (option_.serialize_file != "") {
     FDINFO << "Serialize TensorRTEngine to local file "
            << option_.serialize_file << "." << std::endl;
