@@ -44,6 +44,7 @@ struct PaddleBackendOption {
   bool enable_trt = false;
 #ifdef ENABLE_TRT_BACKEND
   TrtBackendOption trt_option;
+  bool collect_shape = false;
 #endif
 
   int mkldnn_cache_size = 1;
@@ -95,6 +96,15 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
+#ifdef ENABLE_TRT_BACKEND
+  void CollectShapeRun(paddle_infer::Predictor* predictor,
+          const std::map<std::string, std::vector<int>>& shape) const;
+  void GetDynamicShapeFromOption(const PaddleBackendOption& option,
+      std::map<std::string, std::vector<int>>* max_shape,
+      std::map<std::string, std::vector<int>>* min_shape,
+      std::map<std::string, std::vector<int>>* opt_shape) const;
+  void SetTRTDynamicShapeToConfig(const PaddleBackendOption& option);
+#endif
   paddle_infer::Config config_;
   std::shared_ptr<paddle_infer::Predictor> predictor_;
   std::vector<TensorInfo> inputs_desc_;
