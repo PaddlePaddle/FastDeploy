@@ -415,6 +415,14 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
            "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
+}  
+
+void RuntimeOption::EnablePaddleTrtCollectShape() {
+  pd_collect_shape = true;
+}
+
+void RuntimeOption::DisablePaddleTrtCollectShape() {
+  pd_collect_shape = false;
 }
 
 bool Runtime::Init(const RuntimeOption& _option) {
@@ -534,6 +542,7 @@ void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
+    pd_option.collect_shape = option.pd_collect_shape;
     auto trt_option = TrtBackendOption();
     trt_option.gpu_id = option.device_id;
     trt_option.enable_fp16 = option.trt_enable_fp16;

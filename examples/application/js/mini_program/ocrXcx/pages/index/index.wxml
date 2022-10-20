@@ -1,0 +1,56 @@
+<view>
+  <view>
+    <button bindtap="switch_choose" wx:if="{{!select_mode}}">切换选择本地图片模式</button>
+    <button bindtap="switch_example" wx:else>切换示例图片模式</button>
+  </view>
+  <view class="photo_box" wx:if="{{select_mode}}">
+    <view wx:if="{{photo_src != ''}}" class="photo_preview">
+      <image src="{{photo_src}}" mode="aspectFit" bindtap="photo_preview"></image>
+      <view class="reselect" bindtap="reselect">重新选择</view>
+    </view>
+    <view wx:else class="photo_text" bindtap="chose_photo">点击拍照或上传本地照片</view>
+    <button bindtap="predect_choose_img">检测</button>
+  </view>
+  <view wx:else>
+    <text class="title">点击图片进行预测</text>
+    <scroll-view class="imgWrapper" scroll-x="true">
+        <image
+            class="img {{selectedIndex == index ? 'selected' : ''}}"
+            wx:for="{{imgList}}"
+            wx:key="index"
+            src="{{item}}"
+            mode="aspectFit"
+            bindtap="selectImage"
+            data-index="{{index}}"
+        ></image>
+    </scroll-view>
+  </view>
+  <view class="img-view">
+    <scroll-view class="imgWrapper" scroll-x="true" style="width: 960px; height: 960px;">
+        <canvas
+          id="myCanvas" 
+          type="2d"
+          style="width: 960px; height: 960px;"
+        ></canvas>
+    </scroll-view>
+    <scroll-view class="imgWrapper" scroll-x="true" style="width: 960px; height: 960px;">
+        <canvas
+          id="canvas_det"
+          type="2d"
+          style="width: 960px; height: 960px;"
+        ></canvas>
+    </scroll-view>
+    <scroll-view class="imgWrapper" scroll-x="true" style="width: 960px; height: 960px;">
+        <canvas
+          id="canvas_rec"
+          type="2d"
+          style="width: 960px; height: 960px;"
+        ></canvas>
+    </scroll-view>
+    <text class="result" wx:if="{{result}}" style="height: 300rpx;">文本框选坐标：{{result}}</text>
+  </view>
+</view>
+
+<view class="mask" wx:if="{{!loaded}}">
+    <text class="loading">loading…</text>
+</view>
