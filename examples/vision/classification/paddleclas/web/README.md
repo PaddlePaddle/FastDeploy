@@ -6,7 +6,7 @@
 
 ## 前端部署图像分类模型
 
-图像分类模型web demo使用参考[文档](../../../../application/web_demo/README.md)
+图像分类模型web demo使用[**参考文档**](../../../../examples/application/js/web_demo)
 
 
 ## MobileNet js接口
