@@ -14,6 +14,7 @@
 #pragma once
 
 #include <vector>
+#include <cmath>
 #include "gtest/gtest.h"
 
 namespace fastdeploy {
@@ -35,15 +36,28 @@ struct CheckData {
       ASSERT_EQ(lhs_ptr[i], rhs_ptr[i]);
     }
   }
-  void operator()(const float* lhs_ptr, const float* rhs_ptr, int num) {
+  void operator()(const float* lhs_ptr, const float* rhs_ptr, int num, float atol = 1e-06, float rtol = 1e-06) {
     for (int i = 0; i < num; ++i) {
-      ASSERT_FLOAT_EQ(lhs_ptr[i], rhs_ptr[i]);
+      float abs_diff = fabs(lhs_ptr[i] - rhs_ptr[i]);
+      float rel_diff = abs_diff / (std::max(fabs(lhs_ptr[i]), fabs(rhs_ptr[i])) + 1e-06);
+      if (abs_diff > atol && rel_diff > rtol) {
+        std::cout << "lhs_ptr: " << lhs_ptr[i] << " rhs_ptr: " << rhs_ptr[i] << " abs_diff: " << abs_diff << " rel_diff: " << rel_diff << std::endl;
+        ASSERT_EQ(1, 0);
+      }
+      ASSERT_EQ(1, 1);
     }
   }
+
   void operator()(const double* lhs_ptr, const double* rhs_ptr, int num) {
     for (int i = 0; i < num; ++i) {
       ASSERT_DOUBLE_EQ(lhs_ptr[i], rhs_ptr[i]);
     }
+  }
+};
+
+struct CheckType {
+  void operator()(FDDataType type1, FDDataType type2) {
+    ASSERT_EQ(type1, type2);
   }
 };
 

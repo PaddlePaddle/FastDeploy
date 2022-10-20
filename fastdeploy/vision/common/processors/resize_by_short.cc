@@ -36,6 +36,48 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_FALCONCV
+bool ResizeByShort::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int origin_w = im->width();
+  int origin_h = im->height();
+  double scale = GenerateScale(origin_w, origin_h);
+
+  auto interp_method = fcv::InterpolationType::INTER_LINEAR;
+  if (interp_ == 0) {
+    interp_method = fcv::InterpolationType::INTER_NEAREST;
+  } else if (interp_ == 1) {
+    interp_method = fcv::InterpolationType::INTER_LINEAR;
+  } else if (interp_ == 2) {
+    interp_method = fcv::InterpolationType::INTER_CUBIC;
+  } else {
+    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+               "now it's "
+            << interp_ << "." << std::endl;
+    return false;
+  }
+
+  if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
+    fcv::Mat new_im;
+    fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
+    mat->SetMat(new_im);
+    mat->SetHeight(new_im.height());
+    mat->SetWidth(new_im.width());
+  } else {
+    int width = static_cast<int>(round(scale * im->width()));
+    int height = static_cast<int>(round(scale * im->height()));
+    if (width != origin_w || height != origin_h) {
+      fcv::Mat new_im;
+      fcv::resize(*im, new_im, fcv::Size(width, height), 0, 0, interp_method);
+      mat->SetMat(new_im);
+      mat->SetHeight(new_im.height());
+      mat->SetWidth(new_im.width());
+    }
+  }
+  return true;
+}
+#endif
+
 double ResizeByShort::GenerateScale(const int origin_w, const int origin_h) {
   int im_size_max = std::max(origin_w, origin_h);
   int im_size_min = std::min(origin_w, origin_h);

@@ -108,7 +108,7 @@ FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type) {
   return FDDataType::UNKNOWN1;
 }
 
-fcv::FCVImageType CreateFalconDataCVType(FDDataType type, int channel) {
+fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel) {
   FDASSERT(channel == 1 || channel == 3 || channel == 4,
            "Only support channel be 1/3/4 in Falcon.");
   if (type == FDDataType::UINT8) {
@@ -130,6 +130,16 @@ fcv::FCVImageType CreateFalconDataCVType(FDDataType type, int channel) {
   }
   FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
   return fcv::FCVImageType::PACKAGE_BGR_F32;
+}
+
+fcv::Mat ConvertOpenCVMatToFalconCV(cv::Mat& im) {
+  int type = im.type() % 8;
+  // 0: uint8; 5: float32; 6: float64
+  if (type != 0 && type != 5 && type != 6) {
+    FDASSERT(false, "Only support type of uint8/float/double, but now it's %d.", im.type());
+  }
+  auto fcv_type = CreateFalconCVDataType(OpenCVDataTypeToFD(im.type()), im.channels());
+  return fcv::Mat(im.cols, im.rows, fcv_type, im.ptr());
 }
 #endif
 

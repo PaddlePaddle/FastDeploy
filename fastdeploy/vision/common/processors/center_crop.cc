@@ -34,6 +34,27 @@ bool CenterCrop::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_FALCONCV
+bool CenterCrop::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int height = static_cast<int>(im->height());
+  int width = static_cast<int>(im->width());
+  if (height < height_ || width < width_) {
+    FDERROR << "[CenterCrop] Image size less than crop size" << std::endl;
+    return false;
+  }
+  int offset_x = static_cast<int>((width - width_) / 2);
+  int offset_y = static_cast<int>((height - height_) / 2);
+  fcv::Rect crop_roi(offset_x, offset_y, width_, height_);
+  fcv::Mat new_im;
+  im->copy_to(new_im, crop_roi);
+  mat->SetMat(new_im);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  return true;
+}
+#endif
+
 bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
                      ProcLib lib) {
   auto c = CenterCrop(width, height);

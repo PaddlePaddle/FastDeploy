@@ -39,6 +39,23 @@ bool Convert::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_FALCONCV
+bool Convert::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  FDASSERT(im->channels() == 3, "Only support 3-channels image in FalconCV.");
+  std::vector<float> mean(3, 0);
+  std::vector<float> std(3, 0);
+  for (size_t i = 0; i < 3; ++i) {
+    std[i]  = 1.0 / (alpha_[i] + 1e-06);
+    mean[i] = -1 * beta_[i] * std[i];
+  }
+  fcv::Mat new_im;
+  fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(), new_im, true);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
+
 bool Convert::Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta, ProcLib lib) {
   auto c = Convert(alpha, beta);

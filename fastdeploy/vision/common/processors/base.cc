@@ -28,8 +28,21 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
     target = default_lib;
   }
 
-  bool ret = ImplByOpenCV(mat);
-  return ret;
+  if (lib == ProcLib::FALCONCV) {
+#ifdef ENABLE_FALCONCV
+    if (mat->mat_type != ProcLib::FALCONCV) {
+      if (mat->layout != Layout::HWC) {
+        FDERROR << "Cannot convert cv::Mat to fcv::Mat while layout is not HWC." << std::endl;
+      }
+      fcv::Mat fcv_mat = ConvertOpenCVMatToFalconCV(*(mat->GetOpenCVMat()));
+      mat->SetMat(fcv_mat);
+    }
+    return ImplByFalconCV(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FalconCV.");
+#endif
+  }
+  return ImplByOpenCV(mat);
 }
 
 } // namespace vision

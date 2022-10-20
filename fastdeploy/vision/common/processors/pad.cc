@@ -52,6 +52,45 @@ bool Pad::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_FALCONCV
+bool Pad::ImplByFalconCV(Mat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;
+    return false;
+  }
+  if (mat->Channels() > 4) {
+    FDERROR << "Pad: Only support channels <= 4." << std::endl;
+    return false;
+  }
+  if (mat->Channels() != value_.size()) {
+    FDERROR << "Pad: Require input channels equals to size of padding value, "
+               "but now channels = "
+            << mat->Channels()
+            << ", the size of padding values = " << value_.size() << "."
+            << std::endl;
+    return false;
+  }
+  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Scalar value;
+  if (value_.size() == 1) {
+    value = fcv::Scalar(value_[0]);
+  } else if (value_.size() == 2) {
+    value = fcv::Scalar(value_[0], value_[1]);
+  } else if (value_.size() == 3) {
+    value = fcv::Scalar(value_[0], value_[1], value_[2]);
+  } else {
+    value = fcv::Scalar(value_[0], value_[1], value_[2], value_[3]);
+  }
+  fcv::Mat new_im;
+  fcv::copy_make_border(*im, new_im, top_, bottom_, left_, right_,
+                    fcv::FcvBorderTypes::BORDER_CONSTANT, value);
+  mat->SetMat(new_im);
+  mat->SetHeight(new_im.height());
+  mat->SetWidth(new_im.width());
+  return true;
+}
+#endif
+
 bool Pad::Run(Mat* mat, const int& top, const int& bottom, const int& left,
               const int& right, const std::vector<float>& value,
               ProcLib lib) {

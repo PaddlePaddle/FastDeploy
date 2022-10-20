@@ -15,6 +15,7 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
+#include "opencv2/core/core.hpp"
 #include "fastdeploy/core/fd_tensor.h"
 
 #ifdef ENABLE_FALCONCV
@@ -32,6 +33,8 @@ FDDataType OpenCVDataTypeToFD(int type);
 FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type);
 // Create data type of falconcv by FDDataType
 fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel = 1);
+// Convert cv::Mat to fcv::Mat
+fcv::Mat ConvertOpenCVMatToFalconCV(cv::Mat& im);
 #endif
 
 } // namespace vision

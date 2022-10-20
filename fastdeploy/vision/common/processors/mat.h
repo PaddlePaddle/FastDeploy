@@ -16,13 +16,6 @@
 #include "opencv2/core/core.hpp"
 #include "fastdeploy/vision/common/processors/utils.h"
 
-#ifdef ENABLE_OPENCV_CUDA
-#include "opencv2/core/cuda.hpp"
-#include "opencv2/cudaarithm.hpp"
-#include "opencv2/cudaimgproc.hpp"
-#include "opencv2/cudawarping.hpp"
-#endif
-
 namespace fastdeploy {
 namespace vision {
 

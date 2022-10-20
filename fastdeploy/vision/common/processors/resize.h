@@ -32,6 +32,9 @@ class Resize : public Processor {
   }
 
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "Resize"; }
 
   static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,

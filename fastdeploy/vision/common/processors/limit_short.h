@@ -33,6 +33,9 @@ class LimitShort : public Processor {
   // If the short edge is smaller than min_short_, resize the short edge
   // to min_short_, while scale the long edge proportionally.
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "LimitShort"; }
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,

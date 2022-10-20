@@ -66,9 +66,6 @@ endfunction()
 
 # vision examples
 if(BUILD_EXAMPLES AND ENABLE_VISION)
-  if(NOT ENABLE_VISION_VISUALIZE)
-    message(FATAL_ERROR "ENABLE_VISION_VISUALIZE must be ON while BUILD_EXAMPLES and ENABLE_VISION both ON.")
-  endif()
   if(EXISTS ${PROJECT_SOURCE_DIR}/examples/vision)
     message(STATUS "")
     message(STATUS "*************FastDeploy Vision Examples Summary**********")

@@ -28,6 +28,9 @@ class PadToSize : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "PadToSize"; }
 
   static bool Run(Mat* mat, int width, int height,

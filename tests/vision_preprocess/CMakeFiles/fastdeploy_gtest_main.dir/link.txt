@@ -1,0 +1,2 @@
+/usr/bin/ar qc libfastdeploy_gtest_main.a  CMakeFiles/fastdeploy_gtest_main.dir/gtest_main.o
+/usr/bin/ranlib libfastdeploy_gtest_main.a

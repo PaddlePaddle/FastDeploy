@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class LimitByStride : public Processor {
+class FASTDEPLOY_DECL LimitByStride : public Processor {
  public:
   explicit LimitByStride(int stride = 32, int interp = 1) {
     stride_ = stride;
@@ -27,8 +27,10 @@ class LimitByStride : public Processor {
   }
 
   // Resize Mat* mat to make the size divisible by stride_.
-
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "LimitByStride"; }
 
   static bool Run(Mat* mat, int stride = 32, int interp = 1,

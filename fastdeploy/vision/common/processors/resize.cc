@@ -25,6 +25,14 @@ bool Resize::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
+
+  if (width_ == origin_w && height_ == origin_h) {
+    return true;
+  }
+  if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
+    return true;
+  }
+
   if (width_ > 0 && height_ > 0) {
     if (use_scale_) {
       float scale_w = width_ * 1.0 / origin_w;
@@ -45,6 +53,66 @@ bool Resize::ImplByOpenCV(Mat* mat) {
   mat->SetHeight(im->rows);
   return true;
 }
+
+#ifdef ENABLE_FALCONCV
+bool Resize::ImplByFalconCV(Mat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "Resize: The format of input is not HWC." << std::endl;
+    return false;
+  }
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int origin_w = im->width();
+  int origin_h = im->height();
+
+  if (width_ == origin_w && height_ == origin_h) {
+    return true;
+  }
+  if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
+    return true;
+  }
+
+  auto interp_method = fcv::InterpolationType::INTER_LINEAR;
+  if (interp_ == 0) {
+    interp_method = fcv::InterpolationType::INTER_NEAREST;
+  } else if (interp_ == 1) {
+    interp_method = fcv::InterpolationType::INTER_LINEAR;
+  } else if (interp_ == 2) {
+    interp_method = fcv::InterpolationType::INTER_CUBIC;
+  } else {
+    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+               "now it's "
+            << interp_ << "." << std::endl;
+    return false;
+  }
+
+  if (width_ > 0 && height_ > 0) {
+    fcv::Mat new_im;
+    if (use_scale_) {
+      float scale_w = width_ * 1.0 / origin_w;
+      float scale_h = height_ * 1.0 / origin_h;
+      fcv::resize(*im, new_im, fcv::Size(), scale_w, scale_h, interp_method);
+    } else {
+      fcv::Mat new_im;
+      fcv::resize(*im, new_im, fcv::Size(width_, height_), 0, 0, interp_method);
+    }
+    mat->SetMat(new_im);
+    mat->SetWidth(new_im.width());
+    mat->SetHeight(new_im.height());
+  } else if (scale_w_ > 0 && scale_h_ > 0) {
+    fcv::Mat new_im;
+    fcv::resize(*im, new_im, fcv::Size(0, 0), scale_w_, scale_h_, interp_method);
+    mat->SetMat(new_im);
+    mat->SetWidth(new_im.width());
+    mat->SetHeight(new_im.height());
+  } else {
+    FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
+               "or (scale_w > 0 && scale_h > 0)."
+            << std::endl;
+    return false;
+  }
+  return true;
+}
+#endif
 
 bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
                  int interp, bool use_scale, ProcLib lib) {

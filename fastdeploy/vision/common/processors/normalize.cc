@@ -54,6 +54,7 @@ Normalize::Normalize(const std::vector<float>& mean,
 
 bool Normalize::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
+
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
   for (int c = 0; c < im->channels(); c++) {
@@ -62,6 +63,28 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
   cv::merge(split_im, *im);
   return true;
 }
+
+#ifdef ENABLE_FALCONCV
+bool Normalize::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (im->channels() != 3) {
+    FDERROR << "Only supports 3-channels image in FalconCV, but now it's " << im->channels() << "." << std::endl;
+    return false;
+  }
+
+  std::vector<float> mean(3, 0);
+  std::vector<float> std(3, 0);
+  for (size_t i = 0; i < 3; ++i) {
+    std[i]  = 1.0 / alpha_[i];
+    mean[i] = -1 * beta_[i] * std[i];
+  }
+  fcv::Mat new_im(im->width(), im->height(), fcv::FCVImageType::PACKAGE_BGR_F32);
+  fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(), new_im, true);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
+
 
 bool Normalize::Run(Mat* mat, const std::vector<float>& mean,
                     const std::vector<float>& std, bool is_scale,

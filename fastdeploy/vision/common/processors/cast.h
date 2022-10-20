@@ -19,10 +19,13 @@
 namespace fastdeploy {
 namespace vision {
 
-class Cast : public Processor {
+class FASTDEPLOY_DECL Cast : public Processor {
  public:
   explicit Cast(const std::string& dtype = "float") : dtype_(dtype) {}
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "Cast"; }
   static bool Run(Mat* mat, const std::string& dtype,
                   ProcLib lib = ProcLib::OPENCV);

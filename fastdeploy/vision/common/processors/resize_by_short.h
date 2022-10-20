@@ -29,6 +29,9 @@ class ResizeByShort : public Processor {
     use_scale_ = use_scale;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FALCONCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "ResizeByShort"; }
 
   static bool Run(Mat* mat, int target_size, int interp = 1,

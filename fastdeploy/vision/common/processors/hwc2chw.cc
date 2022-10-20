@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/hwc2chw.h"
+#include "fastdeploy/function/transpose.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -28,11 +29,7 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   int rw = im->cols;
   int rc = im->channels();
 
-  //  float* data = reinterpret_cast<float*>(im->data);
   for (int i = 0; i < rc; ++i) {
-    //    cv::extractChannel(im_clone, cv::Mat(rh, rw, im->type() % 8, data + i
-    //    * rh * rw),
-    //                       i);
     cv::extractChannel(
         im_clone,
         cv::Mat(rh, rw, im->type() % 8,
@@ -42,6 +39,25 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   mat->layout = Layout::CHW;
   return true;
 }
+
+#ifdef ENABLE_FALCONCV
+bool HWC2CHW::ImplByFalconCV(Mat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "HWC2CHW: The input data is not Layout::HWC format!" << std::endl;
+    return false;
+  }
+  if (mat->Type() != FDDataType::FP32) {
+    FDERROR << "HWC2CHW: Only support float data while use FalconCV, but now it's " << mat->Type() << "." << std::endl;
+    return false;
+  }
+  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat new_im;
+  fcv::normalize_to_submean_to_reorder(*im, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}, std::vector<uint32_t>(), new_im, false);
+  mat->SetMat(new_im);
+  mat->layout = Layout::CHW;
+  return true;
+}
+#endif
 
 bool HWC2CHW::Run(Mat* mat, ProcLib lib) {
   auto h = HWC2CHW();
