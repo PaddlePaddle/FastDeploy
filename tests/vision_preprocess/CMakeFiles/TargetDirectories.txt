@@ -1,3 +1,0 @@
-/home/leiqingtx2/jiangjiajun/1016/FastDeploy/tests/vision_preprocess/CMakeFiles/rebuild_cache.dir
-/home/leiqingtx2/jiangjiajun/1016/FastDeploy/tests/vision_preprocess/CMakeFiles/fastdeploy_gtest_main.dir
-/home/leiqingtx2/jiangjiajun/1016/FastDeploy/tests/vision_preprocess/CMakeFiles/edit_cache.dir
