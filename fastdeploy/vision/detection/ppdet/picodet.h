@@ -14,11 +14,19 @@
 
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
+#define image_size 416
+typedef struct BoxInfo {
+  float x1;
+  float y1;
+  float x2;
+  float y2;
+  float score;
+  int label;
+} BoxInfo;
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-
 class FASTDEPLOY_DECL PicoDet : public PPYOLOE {
  public:
   PicoDet(const std::string& model_file, const std::string& params_file,
@@ -30,7 +38,29 @@ class FASTDEPLOY_DECL PicoDet : public PPYOLOE {
   bool CheckIfContainDecodeAndNMS();
 
   virtual std::string ModelName() const { return "PicoDet"; }
+
+
+  /// Preprocess an input image, and set the preprocessed results to `outputs`
+  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
+
+  /// Postprocess the inferenced results, and set the final result to `result`
+  virtual bool Postprocess(std::vector<FDTensor>& infer_result,
+                           DetectionResult* result);
+
+ private:
+  std::vector<int> strides = {8, 16, 32, 64};
+  std::vector<double> ptr{};
+  void decode_infer(const float*& cls_pred, const float*& dis_pred, int stride,
+                    float threshold,
+                    std::vector<std::vector<BoxInfo>>& results);
+  BoxInfo disPred2Bbox(const float *&dfl_det, int label, float score, int x,
+                       int y, int stride);
+  static void picodet_nms(std::vector<BoxInfo> &result, float nms_threshold);
+  int input_size_ = image_size;
+  int num_class_ = 80;
+  int reg_max_ = 7;
+
 };
-}  // namespace detection
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace detection
+} // namespace vision
+} // namespace fastdeploy
