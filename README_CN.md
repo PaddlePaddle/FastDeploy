@@ -36,7 +36,7 @@
        - 新增加NLP信息抽取模型 UIE 并提供[端到端部署示例](examples/text/uie).
        - 
 
-- 🔥 **2022.8.18：发布FastDeploy [release/v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
+- 🔥 **2022.8.18：发布FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
     - **服务端部署全新升级：更快的推理性能，更多的视觉模型支持**  
         - 发布基于x86 CPU、NVIDIA GPU的高性能推理引擎SDK，推理速度大幅提升
         - 集成Paddle Inference、ONNX Runtime、TensorRT等推理引擎并提供统一的部署体验
@@ -167,9 +167,11 @@ int main(int argc, char* argv[]) {
 符号说明: (1)  ✅: 已经支持; (2) ❔: 未来支持; (3) ❌: 暂不支持; (4) --: 暂不考虑;<br>
 链接说明：「模型列」会跳转到模型推理Demo代码
 
-| 任务场景 | 模型  | API | Linux   |   Linux      |   Win   |  Win    |   Mac     | Mac     |  Linux |   Linux |  [web_demo](examples/application/js/web_demo)         |       [mini_program](examples/application/js/mini_program)         |
-| :--------:  | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: | :--------: |:--------: |:--------: |:--------: |
-|  --- | --- |  --- |  <font size=2> X86 CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel  CPU |  <font size=2> NVIDIA GPU |  <font size=2> Intel CPU | <font size=2> Classification | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  |❔|❔|
+
+| 任务场景                         | 模型                                                                                   | API                                                                                                                               | Linux                 | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux                       |   [web_demo](examples/application/js/web_demo)         |       [mini_program](examples/application/js/mini_program)         |
+|:-----------------------------:|:---------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:|:---------------------------:|:--------------------------:|:---------------------------:|
+| ---                           | ---                                                                                     | ---                                                                                                                               | <font size=2> X86 CPU | <font size=2> NVIDIA GPU | <font size=2> Intel  CPU | <font size=2> NVIDIA GPU | <font size=2> Intel CPU | <font size=2> Arm CPU | <font size=2>  AArch64 CPU | <font size=2> NVIDIA Jetson |[Paddle.js](examples/application/js)| [Paddle.js](examples/application/js)|
+| <font size=2> Classification | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  |❔|❔|
 | <font size=2> Classification | <font size=2> [PaddleClas/PP-LCNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |   ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  |❔|❔|
 | <font size=2> Classification | <font size=2> [PaddleClas/PP-LCNetv2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  |❔|❔|
 | <font size=2> Classification | <font size=2> [PaddleClas/EfficientNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  |❔|❔|
