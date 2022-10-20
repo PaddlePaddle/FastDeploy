@@ -29,7 +29,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--diffusion_model_dir",
+        "--model_dir",
         default="diffusion_model",
         help="The model directory of diffusion_model.")
     parser.add_argument(
@@ -76,7 +76,7 @@ def create_ort_runtime(model_dir, model_prefix, model_format):
     if model_format == "paddle":
         model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
         params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
-        option.set_model_path(onnx_file, model_file, params_file)
+        option.set_model_path(model_file, params_file)
     else:
         onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
         option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
@@ -103,7 +103,7 @@ def create_trt_runtime(model_dir,
     if model_format == "paddle":
         model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
         params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
-        option.set_model_path(onnx_file, model_file, params_file)
+        option.set_model_path(model_file, params_file)
     else:
         onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
         option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
@@ -125,12 +125,15 @@ if __name__ == "__main__":
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     # 3. Init runtime
-    text_encoder_runtime = create_ort_runtime(args.text_encoder_onnx_file)
+    text_encoder_runtime = create_ort_runtime(
+        args.model_dir, args.text_encoder_model_prefix, args.model_format)
 
-    if args.backend == "onnx_runtime":
-        vae_decoder_runtime = create_ort_runtime(args.vae_onnx_file)
+    if args.backend == "ort":
+        vae_decoder_runtime = create_ort_runtime(
+            args.model_dir, args.vae_model_prefix, args.model_format)
         start = time.time()
-        unet_runtime = create_ort_runtime(args.unet_onnx_file)
+        unet_runtime = create_ort_runtime(
+            args.model_dir, args.unet_model_prefix, args.model_format)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     else:
         vae_dynamic_shape = {
@@ -141,7 +144,9 @@ if __name__ == "__main__":
             }
         }
         vae_decoder_runtime = create_trt_runtime(
-            args.vae_onnx_file,
+            args.model_dir,
+            args.vae_model_prefix,
+            args.model_format,
             workspace=(1 << 30),
             dynamic_shape=vae_dynamic_shape)
         unet_dynamic_shape = {
@@ -158,7 +163,10 @@ if __name__ == "__main__":
         }
         start = time.time()
         unet_runtime = create_trt_runtime(
-            args.unet_onnx_file, dynamic_shape=unet_dynamic_shape)
+            args.model_dir,
+            args.unet_model_prefix,
+            args.model_format,
+            dynamic_shape=unet_dynamic_shape)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,

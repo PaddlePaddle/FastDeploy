@@ -126,11 +126,6 @@ if __name__ == "__main__":
             output_names=['latent_output'])
         print("Finish exporting unet.")
 
-        unet_model = onnx.load("unet_v1_4.onnx")
-        unet_model_simp, check = onnxsim.simplify(unet_model)
-        onnx.save(unet_model_simp, "unet.onnx")
-        print("Finish simplifying unet.")
-
         # Export the text_encoder
         text_encoder_inputs = (torch.randint(0, 1, (2, 77), device='cuda'), )
         torch.onnx.export(
