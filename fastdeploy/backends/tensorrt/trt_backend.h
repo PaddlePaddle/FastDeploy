@@ -118,8 +118,9 @@ class TrtBackend : public BaseBackend {
   std::vector<void*> bindings_;
   std::vector<TrtValueInfo> inputs_desc_;
   std::vector<TrtValueInfo> outputs_desc_;
-  std::map<std::string, FDDeviceBuffer> inputs_buffer_;
-  std::map<std::string, FDDeviceBuffer> outputs_buffer_;
+  std::map<std::string, FDDeviceBuffer> inputs_device_buffer_;
+  std::map<std::string, FDDeviceBuffer> outputs_device_buffer_;
+  std::map<std::string, FDDeviceHostBuffer> outputs_pinned_buffer_;
 
   std::string calibration_str_;
 
