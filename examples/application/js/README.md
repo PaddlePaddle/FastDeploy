@@ -16,10 +16,10 @@
 
 |demo名称|web demo目录|可视化|
 |-|-|-|
-|目标检测|[ScrewDetection/FaceDetection](./web_demo/demo/src/pages/cv/detection/)| <img src="https://user-images.githubusercontent.com/26592129/196874536-b7fa2c0a-d71f-4271-8c40-f9088bfad3c9.png" height="300px">|
-|人像分割背景替换|[HumanSeg](./web_demo//demo/src/pages/cv/segmentation/HumanSeg)|<img src="https://user-images.githubusercontent.com/26592129/196874452-4ef2e770-fbb3-4a35-954b-f871716d6669.png" height="300px">|
-|物体识别|[GestureRecognition/ItemIdentification](./web_demo//demo/src/pages/cv/recognition/)|<img src="https://user-images.githubusercontent.com/26592129/196874416-454e6bb0-4ebd-4b51-a88a-8c40614290ae.png" height="300px">|
-|OCR|[TextDetection/TextRecognition](./web_demo//demo/src/pages/cv/ocr/)|<img src="https://user-images.githubusercontent.com/26592129/196874354-1b5eecb0-f273-403c-aa6c-4463bf6d78db.png" height="300px">|
+|目标检测|[ScrewDetection/FaceDetection](./web_demo/demo/src/pages/cv/detection/)| <img src="https://user-images.githubusercontent.com/26592129/196874536-b7fa2c0a-d71f-4271-8c40-f9088bfad3c9.png" height="200px">|
+|人像分割背景替换|[HumanSeg](./web_demo//demo/src/pages/cv/segmentation/HumanSeg)|<img src="https://user-images.githubusercontent.com/26592129/196874452-4ef2e770-fbb3-4a35-954b-f871716d6669.png" height="200px">|
+|物体识别|[GestureRecognition/ItemIdentification](./web_demo//demo/src/pages/cv/recognition/)|<img src="https://user-images.githubusercontent.com/26592129/196874416-454e6bb0-4ebd-4b51-a88a-8c40614290ae.png" height="200px">|
+|OCR|[TextDetection/TextRecognition](./web_demo//demo/src/pages/cv/ocr/)|<img src="https://user-images.githubusercontent.com/26592129/196874354-1b5eecb0-f273-403c-aa6c-4463bf6d78db.png" height="200px">|
 
 
 ## 微信小程序Demo使用
