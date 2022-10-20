@@ -26,7 +26,7 @@ def process_paddle_inference(paddle_inference_so_file):
     rpaths = [
         "$ORIGIN", "$ORIGIN/../../third_party/install/mkldnn/lib/",
         "$ORIGIN/../../third_party/install/mklml/lib/",
-        "$ORIGIN/../../../tensorrt/lib"
+        "$ORIGIN/../../../tensorrt/lib/"
     ]
 
     patchelf_exe = os.getenv("PATCHELF_EXE", "patchelf")
