@@ -1,6 +1,6 @@
-# PPOCRSystemv3 C++部署示例
+# PPOCRv3 C++部署示例
 
-本目录下提供`infer.cc`快速完成PPOCRSystemv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer.cc`快速完成PPOCRv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -22,8 +22,8 @@ make -j
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
 tar -xvf ch_PP-OCRv3_det_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
-tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
 tar -xvf ch_PP-OCRv3_rec_infer.tar
@@ -48,17 +48,17 @@ wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
 
-## PPOCRSystemv3 C++接口
+## PPOCRv3 C++接口
 
-### PPOCRSystemv3类
+### PPOCRv3类
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv3(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Classifier* cls_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
 
-PPOCRSystemv3 的初始化，由检测，分类和识别模型串联构成
+PPOCRv3 的初始化，由检测，分类和识别模型串联构成
 
 **参数**
 
@@ -67,10 +67,10 @@ PPOCRSystemv3 的初始化，由检测，分类和识别模型串联构成
 > * **Recognizer**(model): OCR中的识别模型
 
 ```
-fastdeploy::application::ocrsystem::PPOCRSystemv3(fastdeploy::vision::ocr::DBDetector* det_model,
+fastdeploy::pipeline::PPOCRv3(fastdeploy::vision::ocr::DBDetector* det_model,
                 fastdeploy::vision::ocr::Recognizer* rec_model);
 ```
-PPOCRSystemv3 的初始化，由检测，识别模型串联构成(无分类器)
+PPOCRv3 的初始化，由检测，识别模型串联构成(无分类器)
 
 **参数**
 

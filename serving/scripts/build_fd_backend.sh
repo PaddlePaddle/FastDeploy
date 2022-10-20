@@ -35,10 +35,9 @@ docker run -it --rm --name build_fd_backend \
 else
 docker run -it --rm --name build_fd_backend \
            -v`pwd`/..:/workspace/fastdeploy \
-           paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
+           paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/serving;
             rm -rf build; mkdir build; cd build;
-            apt-get update; apt-get install -y --no-install-recommends rapidjson-dev;
-            cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy-0.0.3 -DTRITON_COMMON_REPO_TAG=r22.09 -DTRITON_CORE_REPO_TAG=r22.09 -DTRITON_BACKEND_REPO_TAG=r22.09; make -j`nproc`'
+            cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy-0.0.3 -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10; make -j`nproc`'
 fi
