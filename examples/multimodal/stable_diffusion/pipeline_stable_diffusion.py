@@ -16,10 +16,10 @@
 
 import inspect
 from typing import List, Optional, Union
-
 import numpy as np
+
+from paddlenlp.transformers import CLIPTokenizer
 import fastdeploy as fd
-from transformers import CLIPTokenizer
 from scheduling_utils import PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler
 import PIL
 from PIL import Image

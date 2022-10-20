@@ -13,13 +13,15 @@
 # limitations under the License.
 
 import time
+import os
+
+from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
+from scheduling_utils import PNDMScheduler
+from paddlenlp.transformers import CLIPTokenizer
 
 import fastdeploy as fd
 from fastdeploy import ModelFormat
 import numpy as np
-from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
-from transformers import CLIPTokenizer
-from scheduling_utils import PNDMScheduler
 
 
 def parse_arguments():
@@ -31,21 +33,21 @@ def parse_arguments():
         default="diffusion_model",
         help="The model directory of diffusion_model.")
     parser.add_argument(
-        "--format",
+        "--model_format",
         default="paddle",
         choices=['paddle', 'onnx'],
         help="The model format.")
     parser.add_argument(
         "--unet_model_prefix",
-        default='unet_v1_4_sim',
+        default='unet',
         help="The file prefix of unet model.")
     parser.add_argument(
         "--vae_model_prefix",
-        default='vae_decoder_v1_4',
+        default='vae_decoder',
         help="The file prefix of vae model.")
     parser.add_argument(
         "--text_encoder_model_prefix",
-        default='text_encoder_v1_4',
+        default='text_encoder',
         help="The file prefix of text_encoder model.")
     parser.add_argument(
         "--inference_steps",
@@ -67,15 +69,25 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def create_ort_runtime(onnx_file):
+def create_ort_runtime(model_dir, model_prefix, model_format):
     option = fd.RuntimeOption()
     option.use_ort_backend()
     option.use_gpu()
-    option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
+    if model_format == "paddle":
+        model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
+        params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+        option.set_model_path(onnx_file, model_file, params_file)
+    else:
+        onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
+        option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
     return fd.Runtime(option)
 
 
-def create_trt_runtime(onnx_file, workspace=(1 << 31), dynamic_shape=None):
+def create_trt_runtime(model_dir,
+                       model_prefix,
+                       model_format,
+                       workspace=(1 << 31),
+                       dynamic_shape=None):
     option = fd.RuntimeOption()
     option.use_trt_backend()
     option.use_gpu()
@@ -88,8 +100,14 @@ def create_trt_runtime(onnx_file, workspace=(1 << 31), dynamic_shape=None):
                 min_shape=shape_dict["min_shape"],
                 opt_shape=shape_dict.get("opt_shape", None),
                 max_shape=shape_dict.get("max_shape", None))
-    option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
-    option.set_trt_cache_file(f"{onnx_file}.trt")
+    if model_format == "paddle":
+        model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
+        params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+        option.set_model_path(onnx_file, model_file, params_file)
+    else:
+        onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
+        option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
+    option.set_trt_cache_file(f"{model_prefix}.trt")
     return fd.Runtime(option)
 
 
