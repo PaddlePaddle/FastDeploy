@@ -44,6 +44,8 @@ void BindRuntime(pybind11::module& m) {
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)
+      .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
+      .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
