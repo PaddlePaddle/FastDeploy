@@ -236,6 +236,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &pd_enable_mkldnn));
               runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
+            } else if (param_key == "use_paddle_log") {
+                runtime_options_->EnablePaddleLogInfo();
             }
           }
         }
@@ -305,6 +307,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 } else if (value_string == "trt_int8") {
                   // TODO(liqi): use EnableTrtINT8
                   runtime_options_->trt_enable_int8 = true;
+                } else if (value_string == "pd_fp16") {
+                  // TODO(liqi): paddle inference don't currently have interface for fp16.
                 }
                 // } else if( param_key == "max_batch_size") {
                 //   THROW_IF_BACKEND_MODEL_ERROR(ParseUnsignedLongLongValue(
@@ -317,6 +321,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 runtime_options_->SetTrtCacheFile(value_string);
               } else if (param_key == "use_paddle") {
                 runtime_options_->EnablePaddleToTrt();
+              } else if (param_key == "use_paddle_log") {
+                runtime_options_->EnablePaddleLogInfo();
               }
             }
           }
