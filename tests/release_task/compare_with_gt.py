@@ -1,6 +1,39 @@
 import numpy as np
 import re
 
+diff_score_threshold = {
+    "linux-x64": {
+        "label_diff": 0,
+        "score_diff": 1e-4,
+        "boxes_diff_ratio": 1e-4,
+        "boxes_diff": 1e-3
+    },
+    "linux-aarch64": {
+        "label_diff": 0,
+        "score_diff": 1e-4,
+        "boxes_diff_ratio": 1e-4,
+        "boxes_diff": 1e-3
+    },
+    "osx-x86_64": {
+        "label_diff": 0,
+        "score_diff": 1e-4,
+        "boxes_diff_ratio": 2e-4,
+        "boxes_diff": 1e-3
+    },
+    "osx-arm64": {
+        "label_diff": 0,
+        "score_diff": 1e-4,
+        "boxes_diff_ratio": 2e-4,
+        "boxes_diff": 1e-3
+    },
+    "win-x64": {
+        "label_diff": 0,
+        "score_diff": 5e-4,
+        "boxes_diff_ratio": 1e-3,
+        "boxes_diff": 1e-3
+    }
+}
+
 
 def parse_arguments():
     import argparse
@@ -59,6 +92,7 @@ def save_numpy_result(file_path, error_msg):
 
 
 def check_result(gt_result, infer_result, args):
+    platform = args.platform
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
@@ -68,17 +102,19 @@ def check_result(gt_result, infer_result, args):
     boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
     is_diff = False
     backend = args.result_path.split(".")[0]
-    if (label_diff > 0).any():
+    if (label_diff > diff_score_threshold[platform]["label_diff"]).any():
         print(args.platform, args.device, "label diff ", label_diff)
         is_diff = True
         label_diff_bool_file = args.platform + "_" + backend + "_" + "label_diff_bool.txt"
         save_numpy_result(label_diff_bool_file, label_diff > 0)
-    if (score_diff > 5e-4).any():
+    if (score_diff > diff_score_threshold[platform]["score_diff"]).any():
         print(args.platform, args.device, "score diff ", score_diff)
         is_diff = True
         score_diff_bool_file = args.platform + "_" + backend + "_" + "score_diff_bool.txt"
         save_numpy_result(score_diff_bool_file, score_diff > 1e-4)
-    if (boxes_diff_ratio > 1e-3).any() and (boxes_diff > 1e-3).any():
+    if (boxes_diff_ratio > diff_score_threshold[platform]["boxes_diff_ratio"]
+        ).any() and (
+            boxes_diff > diff_score_threshold[platform]["boxes_diff"]).any():
         print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
         is_diff = True
         boxes_diff_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_bool.txt"

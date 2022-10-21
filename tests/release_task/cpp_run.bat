@@ -47,7 +47,6 @@ echo "FASTDEPLOY_HOME" %FASTDEPLOY_HOME%
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\onnxruntime* Release\
 set PATH=%FASTDEPLOY_HOME%\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\paddle\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mklml\lib;%PATH%
@@ -56,9 +55,9 @@ set PATH=%FASTDEPLOY_HOME%\third_libs\install\tensorrt\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\third_party\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\bin;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin;%PATH%
-
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin;%PATH%
 echo "set path done"
 cd %cd%\Release
 for %%b in (%RUN_CASES%) do (
