@@ -25,7 +25,7 @@ namespace vision {
  *
  */
 namespace classification {
-/*! @brief ResNet series model
+/*! @brief Torchvision ResNet series model
  */
 class FASTDEPLOY_DECL ResNet : public FastDeployModel {
  public:
@@ -44,7 +44,7 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   virtual std::string ModelName() const { return "ResNet"; }
    /** \brief Predict for the input "im", the result will be saved in "result".
    *
-   * \param[in] im Input image for inference.
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result Saving the inference result.
    * \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
    */
