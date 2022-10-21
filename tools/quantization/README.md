@@ -90,7 +90,7 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README.md)|
+| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README_EN.md)|
 | --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
