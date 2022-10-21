@@ -8,7 +8,7 @@ FastDeploy当前在Android仅支持Paddle-Lite后端推理，支持armeabi-v7a�
 |WITH_OPENCV_STATIC|OFF|是否使用OpenCV静态库| - |
 |WITH_LITE_STATIC|OFF|是否使用Lite静态库| 暂不支持使用Lite静态库 |
 |WITH_LITE_FULL_API|ON|是否使用Lite Full API库| 目前必须为ON |
-|WITH_LITE_FP16|ON|是否使用带FP16支持的Lite库| 目前仅支持 arm64-v8a 架构|
+|WITH_LITE_FP16|OFF|是否使用带FP16支持的Lite库| 目前仅支持 arm64-v8a 架构|
 
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
