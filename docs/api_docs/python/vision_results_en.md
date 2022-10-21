@@ -1,5 +1,7 @@
 # Description of Vision Results
 
+本文档的中文版本参考[视觉模型预测结果说明](./vision_results_cn.md)
+
 ## ClassifyResult
 The code of ClassifyResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the classification label result and confidence the image.
 
