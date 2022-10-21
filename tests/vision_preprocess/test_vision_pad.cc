@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, falconcv_pad1) {
+TEST(fastdeploy, flycv_pad1) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -32,24 +32,24 @@ TEST(fastdeploy, falconcv_pad1) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
   vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-  vision::Cast::Run(&mat_falconcv, "float", vision::ProcLib::FLYCV);
+  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
   vision::Pad::Run(&mat_opencv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::OPENCV);
-  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
+  vision::Pad::Run(&mat_flycv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 
-TEST(fastdeploy, falconcv_pad2) {
+TEST(fastdeploy, flycv_pad2) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -59,19 +59,19 @@ TEST(fastdeploy, falconcv_pad2) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
   vision::Pad::Run(&mat_opencv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::OPENCV);
-  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
+  vision::Pad::Run(&mat_flycv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 #endif
 

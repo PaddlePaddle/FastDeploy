@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, falconcv_cast) {
+TEST(fastdeploy, flycv_cast) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -32,19 +32,19 @@ TEST(fastdeploy, falconcv_cast) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
   vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-  vision::Cast::Run(&mat_falconcv, "float", vision::ProcLib::FLYCV);
+  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 #endif
 

@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, falconcv_bgr2rgb) {
+TEST(fastdeploy, flycv_bgr2rgb) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -32,22 +32,22 @@ TEST(fastdeploy, falconcv_bgr2rgb) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
   vision::BGR2RGB::Run(&mat_opencv, vision::ProcLib::OPENCV);
-  vision::BGR2RGB::Run(&mat_falconcv, vision::ProcLib::FLYCV);
+  vision::BGR2RGB::Run(&mat_flycv, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 
-TEST(fastdeploy, falconcv_rgb2bgr) {
+TEST(fastdeploy, flycv_rgb2bgr) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -57,19 +57,19 @@ TEST(fastdeploy, falconcv_rgb2bgr) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
   vision::RGB2BGR::Run(&mat_opencv, vision::ProcLib::OPENCV);
-  vision::RGB2BGR::Run(&mat_falconcv, vision::ProcLib::FLYCV);
+  vision::RGB2BGR::Run(&mat_flycv, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 #endif
 

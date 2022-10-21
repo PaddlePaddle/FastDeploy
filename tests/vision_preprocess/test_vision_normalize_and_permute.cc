@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, falconcv_norm_and_perm0) {
+TEST(fastdeploy, flycv_norm_and_perm0) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -39,26 +39,26 @@ TEST(fastdeploy, falconcv_norm_and_perm0) {
 
   vision::Mat mat_opencv(mat);
   vision::Mat mat_opencv1(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
 
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
   vision::HWC2CHW::Run(&mat_opencv, vision::ProcLib::OPENCV);
   vision::NormalizeAndPermute::Run(&mat_opencv1, mean, std, true, min, max, vision::ProcLib::OPENCV);
 
-  vision::NormalizeAndPermute::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
+  vision::NormalizeAndPermute::Run(&mat_flycv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor opencv1;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
   mat_opencv1.ShareWithTensor(&opencv1);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_data(reinterpret_cast<const float*>(opencv1.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv1.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_data(reinterpret_cast<const float*>(opencv1.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv1.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 #endif
 

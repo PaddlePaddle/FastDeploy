@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, falconcv_norm1) {
+TEST(fastdeploy, flycv_norm1) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -32,27 +32,27 @@ TEST(fastdeploy, falconcv_norm1) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
 
   std::vector<float> mean({0.25, 0.35, 0.45});
   std::vector<float> std({0.33, 0.22, 0.54});
   std::vector<float> min;
   std::vector<float> max;
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
+  vision::Normalize::Run(&mat_flycv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 
-TEST(fastdeploy, falconcv_norm2) {
+TEST(fastdeploy, flycv_norm2) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -62,27 +62,27 @@ TEST(fastdeploy, falconcv_norm2) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
 
   std::vector<float> mean({0.25, 0.35, 0.45});
   std::vector<float> std({0.33, 0.22, 0.54});
   std::vector<float> min({1, 2, 3});
   std::vector<float> max({300, 400, 500});
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
+  vision::Normalize::Run(&mat_flycv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 
-TEST(fastdeploy, falconcv_norm3) {
+TEST(fastdeploy, flycv_norm3) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -92,24 +92,24 @@ TEST(fastdeploy, falconcv_norm3) {
   cv::Mat mat1 = mat.clone();
 
   vision::Mat mat_opencv(mat);
-  vision::Mat mat_falconcv(mat1);
+  vision::Mat mat_flycv(mat1);
 
   std::vector<float> mean({0.25, 0.35, 0.45});
   std::vector<float> std({0.33, 0.22, 0.54});
   std::vector<float> min({1, 2, 3});
   std::vector<float> max({300, 400, 500});
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
+  vision::Normalize::Run(&mat_flycv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
-  FDTensor falconcv;
+  FDTensor flycv;
 
   mat_opencv.ShareWithTensor(&opencv);
-  mat_falconcv.ShareWithTensor(&falconcv);
+  mat_flycv.ShareWithTensor(&flycv);
 
-  check_shape(opencv.shape, falconcv.shape);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(falconcv.Data()), opencv.Numel());
-  check_type(opencv.dtype, falconcv.dtype);
+  check_shape(opencv.shape, flycv.shape);
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel());
+  check_type(opencv.dtype, flycv.dtype);
 }
 #endif
 

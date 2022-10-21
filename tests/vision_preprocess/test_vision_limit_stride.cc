@@ -50,7 +50,7 @@ TEST(fastdeploy, flycv_limit_stride1) {
   uint8_t* ptr0 = static_cast<uint8_t*>(mat_opencv.Data());
   uint8_t* ptr1 = static_cast<uint8_t*>(mat_flycv.Data());
   for (int i = 0; i < 32 * 32 * 3; ++i) {
-    if (fabs(ptr0[i] - ptr1[i]) > 1) {
+    if (fabs(ptr0[i] - ptr1[i]) > 0) {
       std::cout << "======= " << i << " " << int(ptr0[i]) << " " << int(ptr1[i]) << std::endl;
       ASSERT_EQ(1, 0);
       break;

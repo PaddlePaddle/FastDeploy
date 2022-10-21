@@ -52,10 +52,10 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
-    mat_type = Proclib::FALCONCV;
+    mat_type = ProcLib::FLYCV;
   }
 
   inline fcv::Mat* GetFalconCVMat() {
