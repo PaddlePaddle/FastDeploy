@@ -1,6 +1,6 @@
 [简体中文](README_CN.md) | English
 
-# Quantization Config File on FastDeploy
+# FastDeploy Quantification Profile Description
 
 The FastDeploy quantization configuration file contains global configuration, quantization distillation training configuration, post-training quantization configuration and training configuration.
 In addition to using the configuration files provided by FastDeploy directly in this directory, users can modify the relevant configuration files according to their needs
