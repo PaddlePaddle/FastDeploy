@@ -45,5 +45,5 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

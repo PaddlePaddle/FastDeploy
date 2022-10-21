@@ -27,6 +27,7 @@ class FASTDEPLOY_DECL Crop : public Processor {
     width_ = width;
     height_ = height;
   }
+
   bool ImplByOpenCV(Mat* mat);
 
 #ifdef ENABLE_FLYCV
