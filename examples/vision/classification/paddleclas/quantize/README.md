@@ -6,7 +6,7 @@ Users can use the one-click model quantization tool to quantize and deploy the m
 ## FastDeploy One-Click Model Quantization Tool
 
 FastDeploy provides a one-click quantization tool that allows users to quantize a model simply with a configuration file.
-For a detailed tutorial, please refer to [One-Click Model Quantization Tool](... /... /... /... /... /... /... /tools/quantization/)
+For a detailed tutorial, please refer to [One-Click Model Quantization Tool](../../../../../tools/quantization/)
 
 Note: The quantized classification model still needs the inference_cls.yaml file in the FP32 model folder, while the model folder quantized by users does not contain this yaml file. Users can copy yaml file from the FP32 model folder to the quantized model folder.
 
