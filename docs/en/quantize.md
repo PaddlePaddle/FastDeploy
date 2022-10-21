@@ -36,7 +36,7 @@ Fastdeploy, based on PaddleSlim, provides users with a one-click model quantific
 
 ## Quantization Benchmark
 
-Now, FastDeploy supports:
+Currently, FastDeploy has supported model quantification as shown in the following table:
 
 ### YOLO  Series
 
