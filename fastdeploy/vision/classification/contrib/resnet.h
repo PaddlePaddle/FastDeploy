@@ -49,12 +49,13 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
    * \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
    */
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
-
-  /// Tuple of (width, height)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  */
   std::vector<int> size;
-  /// Mean parameters for normalize
+  /// Mean parameters for normalize, size should be the the same as channels
   std::vector<float> mean_vals;
-  /// Std parameters for normalize
+  /// Std parameters for normalize, size should be the the same as channels
   std::vector<float> std_vals;
 
 
