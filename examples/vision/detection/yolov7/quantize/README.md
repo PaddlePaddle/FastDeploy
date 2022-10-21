@@ -1,3 +1,5 @@
+[简体中文](README.md) | English
+
 # YOLOv7 Quantized Model Deployment
 
 FastDeploy supports the deployment of quantized models and provides a one-click model quantization tool.
