@@ -24,6 +24,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
+      .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
       .def("use_ort_backend", &RuntimeOption::UseOrtBackend)
       .def("set_ort_graph_opt_level", &RuntimeOption::SetOrtGraphOptLevel)
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
@@ -43,6 +44,8 @@ void BindRuntime(pybind11::module& m) {
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)
+      .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
+      .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
@@ -62,7 +65,12 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("trt_enable_int8", &RuntimeOption::trt_enable_int8)
       .def_readwrite("trt_max_batch_size", &RuntimeOption::trt_max_batch_size)
       .def_readwrite("trt_max_workspace_size",
-                     &RuntimeOption::trt_max_workspace_size);
+                     &RuntimeOption::trt_max_workspace_size)
+      .def_readwrite("is_dynamic", &RuntimeOption::is_dynamic)
+      .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
+      .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
+      .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
+      .def_readwrite("poros_file", &RuntimeOption::poros_file);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -72,6 +80,30 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<Runtime>(m, "Runtime")
       .def(pybind11::init())
       .def("init", &Runtime::Init)
+      .def("compile",
+           [](Runtime& self,
+              std::vector<std::vector<pybind11::array>>& warm_datas,
+              const RuntimeOption& _option) {
+             size_t rows = warm_datas.size();
+             size_t columns = warm_datas[0].size();
+             std::vector<std::vector<FDTensor>> warm_tensors(
+                 rows, std::vector<FDTensor>(columns));
+             for (size_t i = 0; i < rows; ++i) {
+               for (size_t j = 0; j < columns; ++j) {
+                 auto dtype =
+                     NumpyDataTypeToFDDataType(warm_datas[i][j].dtype());
+                 std::vector<int64_t> data_shape;
+                 data_shape.insert(
+                     data_shape.begin(), warm_datas[i][j].shape(),
+                     warm_datas[i][j].shape() + warm_datas[i][j].ndim());
+                 warm_tensors[i][j].Resize(data_shape, dtype);
+                 memcpy(warm_tensors[i][j].MutableData(),
+                        warm_datas[i][j].mutable_data(),
+                        warm_datas[i][j].nbytes());
+               }
+             }
+             return self.Compile(warm_tensors, _option);
+           })
       .def("infer",
            [](Runtime& self, std::vector<FDTensor>& inputs) {
              std::vector<FDTensor> outputs(self.NumOutputs());
@@ -121,11 +153,13 @@ void BindRuntime(pybind11::module& m) {
       .value("UNKOWN", Backend::UNKNOWN)
       .value("ORT", Backend::ORT)
       .value("TRT", Backend::TRT)
+      .value("POROS", Backend::POROS)
       .value("PDINFER", Backend::PDINFER)
       .value("LITE", Backend::LITE);
   pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
                                "ModelFormat for inference.")
       .value("PADDLE", ModelFormat::PADDLE)
+      .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
       .value("ONNX", ModelFormat::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")

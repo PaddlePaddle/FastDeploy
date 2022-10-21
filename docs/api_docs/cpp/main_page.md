@@ -11,6 +11,7 @@ Currently, FastDeploy supported backends listed as below,
 | ONNX Runtime | CPU/Nvidia GPU | Paddle/ONNX | Windows(x64)/Linux(x64/aarch64)/Mac(x86/arm64) |
 | TensorRT | Nvidia GPU | Paddle/ONNX | Windows(x64)/Linux(x64)/Jetson |
 | OpenVINO | CPU | Paddle/ONNX | Windows(x64)/Linux(x64)/Mac(x86) |
+| Poros | CPU/Nvidia GPU | TorchScript | Linux(x64) |
 
 ### Example code
 - [Python examples](./)
@@ -25,3 +26,6 @@ Currently, FastDeploy supported backends listed as below,
 | Task | Model | API | Example |
 | :---- | :---- | :---- | :----- |
 | object detection | PaddleDetection/PPYOLOE | [fastdeploy::vision::detection::PPYOLOE](./classfastdeploy_1_1vision_1_1detection_1_1PPYOLOE.html) | [C++](./)/[Python](./) |
+| keypoint detection | PaddleDetection/PPTinyPose | [fastdeploy::vision::keypointdetection::PPTinyPose](./classfastdeploy_1_1vision_1_1keypointdetection_1_1PPTinyPose.html) | [C++](./)/[Python](./) |
+| image classification | PaddleClassification serials | [fastdeploy::vision::classification::PaddleClasModel](./classfastdeploy_1_1vision_1_1classification_1_1PaddleClasModel.html) | [C++](./)/[Python](./) |
+| semantic segmentation | PaddleSegmentation serials | [fastdeploy::vision::classification::PaddleSegModel](./classfastdeploy_1_1vision_1_1segmentation_1_1PaddleSegModel.html) | [C++](./)/[Python](./) |

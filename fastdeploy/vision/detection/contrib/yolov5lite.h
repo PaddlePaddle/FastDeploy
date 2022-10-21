@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.  //NOLINT
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,47 +20,73 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-
+/*! @brief YOLOv5Lite model object used when to load a YOLOv5Lite model exported by YOLOv5Lite.
+ */
 class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./yolov5lite.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   YOLOv5Lite(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::ONNX);
 
-  virtual std::string ModelName() const { return "YOLOv5-Lite"; }
+  ~YOLOv5Lite();
 
+  virtual std::string ModelName() const { return "YOLOv5-Lite"; }
+  /** \brief Predict the detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.45
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.25
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
                        float conf_threshold = 0.45,
                        float nms_iou_threshold = 0.25);
 
-  // tuple of (width, height)
+
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
+
+  /// tuple of (width, height)
   std::vector<int> size;
-  // padding value, size should be same with Channels
+  /// padding value, size should be the same as channels
   std::vector<float> padding_value;
-  // only pad to the minimum rectange which height and width is times of stride
+  /// only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad;
-  // while is_mini_pad = false and is_no_pad = true, will resize the image to
-  // the set size
+  /*! @brief
+  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
+  */
   bool is_no_pad;
-  // if is_scale_up is false, the input image only can be zoom out, the maximum
-  // resize scale cannot exceed 1.0
+  /*! @brief
+  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
+  */
   bool is_scale_up;
-  // padding stride, for is_mini_pad
+  /// padding stride, for is_mini_pad
   int stride;
-  // for offseting the boxes by classes when using NMS
+  /// for offseting the boxes by classes when using NMS
   float max_wh;
-  // downsample strides for YOLOv5Lite to generate anchors, will take
-  // (8,16,32) as default values, might have stride=64.
+  /*! @brief
+  downsample strides for YOLOv5Lite to generate anchors, will take (8,16,32) as default values, might have stride=64.
+  */
   std::vector<int> downsample_strides;
-  // anchors parameters, downsample_strides will take
-  // (8,16,32), each stride has three anchors with width and hight.
+  /*! @brief
+  anchors parameters, downsample_strides will take (8,16,32), each stride has three anchors with width and hight
+  */
   std::vector<std::vector<float>> anchor_config;
-  // whether the model_file was exported with decode module. The official
-  // YOLOv5Lite/export.py script will export ONNX file without
-  // decode module. Please set it 'true' manually if the model file
-  // was exported with decode module.
-  // false : ONNX files without decode module.
-  // true : ONNX file with decode module.
+  /*! @brief
+    whether the model_file was exported with decode module. The official
+    YOLOv5Lite/export.py script will export ONNX file without
+    decode module. Please set it 'true' manually if the model file
+    was exported with decode module.
+    false : ONNX files without decode module.
+    true : ONNX file with decode module.
+  */
   bool is_decode_exported;
 
  private:
@@ -79,7 +105,10 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   bool Preprocess(Mat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  
+
+  bool CudaPreprocess(Mat* mat, FDTensor* output,
+                      std::map<std::string, std::array<float, 2>>* im_info);
+
   bool Postprocess(FDTensor& infer_result, DetectionResult* result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    float conf_threshold, float nms_iou_threshold);
@@ -97,7 +126,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
-                 
+
   // generate anchors for decodeing when ONNX file without decode module.
   void GenerateAnchors(const std::vector<int>& size,
                        const std::vector<int>& downsample_strides,
@@ -109,6 +138,14 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+  // CUDA host buffer for input image
+  uint8_t* input_img_cuda_buffer_host_ = nullptr;
+  // CUDA device buffer for input image
+  uint8_t* input_img_cuda_buffer_device_ = nullptr;
+  // CUDA device buffer for TRT input tensor
+  float* input_tensor_cuda_buffer_device_ = nullptr;
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 }  // namespace detection
 }  // namespace vision
