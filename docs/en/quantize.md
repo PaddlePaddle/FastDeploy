@@ -34,7 +34,7 @@ Fastdeploy, based on PaddleSlim, provides users with a one-click model quantific
 - [FastDeploy One-Click Quantization Tool](../../tools/quantization/)
   Once developers obtain a quantitative model, they can use FastDeploy to deploy the quantized model.
 
-## Quantization Demo
+## Quantization Benchmark
 
 Now, FastDeploy supports:
 
