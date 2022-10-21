@@ -23,7 +23,7 @@ class FASTDEPLOY_DECL Cast : public Processor {
  public:
   explicit Cast(const std::string& dtype = "float") : dtype_(dtype) {}
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "Cast"; }
@@ -33,5 +33,5 @@ class FASTDEPLOY_DECL Cast : public Processor {
  private:
   std::string dtype_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

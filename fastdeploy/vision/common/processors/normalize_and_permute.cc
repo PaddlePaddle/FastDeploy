@@ -73,7 +73,7 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool NormalizeAndPermute::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Only supports input with HWC layout." << std::endl;

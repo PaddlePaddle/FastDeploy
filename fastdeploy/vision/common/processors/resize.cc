@@ -54,7 +54,7 @@ bool Resize::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool Resize::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;

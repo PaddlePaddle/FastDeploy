@@ -28,9 +28,9 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
     target = default_lib;
   }
 
-  if (lib == ProcLib::FALCONCV) {
-#ifdef ENABLE_FALCONCV
-    if (mat->mat_type != ProcLib::FALCONCV) {
+  if (lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    if (mat->mat_type != ProcLib::FLYCV) {
       if (mat->layout != Layout::HWC) {
         FDERROR << "Cannot convert cv::Mat to fcv::Mat while layout is not HWC." << std::endl;
       }

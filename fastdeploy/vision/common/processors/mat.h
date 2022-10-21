@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-enum ProcLib { DEFAULT, OPENCV, FALCONCV};
+enum ProcLib { DEFAULT, OPENCV, FLYCV};
 enum Layout { HWC, CHW };
 
 struct FASTDEPLOY_DECL Mat {
@@ -36,8 +36,8 @@ struct FASTDEPLOY_DECL Mat {
   // this only used if you don't want to write
   // the original data, and write to a new cv::Mat
   // then replace the old cv::Mat of this structure
-  void SetMat(const cv::Mat& mat) { 
-    cpu_mat = mat; 
+  void SetMat(const cv::Mat& mat) {
+    cpu_mat = mat;
     mat_type = ProcLib::OPENCV;
   }
 
@@ -46,14 +46,14 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
-#ifdef ENABLE_FALCONCV
-  void SetMat(const fcv::Mat& mat) { 
-    fcv_mat = mat; 
-    mat_type = ProcLib::FALCONCV;
+#ifdef ENABLE_FLYCV
+  void SetMat(const fcv::Mat& mat) {
+    fcv_mat = mat;
+    mat_type = ProcLib::FLYCV;
   }
 
   inline fcv::Mat* GetFalconCVMat() {
-    FDASSERT(mat_type == ProcLib::FALCONCV, "Met non fcv::Mat data strucure.");
+    FDASSERT(mat_type == ProcLib::FLYCV, "Met non fcv::Mat data strucure.");
     return &fcv_mat;
   }
 #endif
@@ -66,7 +66,7 @@ struct FASTDEPLOY_DECL Mat {
   int width;
   cv::Mat cpu_mat;
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
 

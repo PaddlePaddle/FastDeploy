@@ -27,7 +27,7 @@ class StridePad : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "StridePad"; }

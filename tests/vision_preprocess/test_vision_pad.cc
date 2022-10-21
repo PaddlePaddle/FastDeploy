@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 TEST(fastdeploy, falconcv_pad1) {
   CheckShape check_shape;
   CheckData check_data;
@@ -34,9 +34,9 @@ TEST(fastdeploy, falconcv_pad1) {
   vision::Mat mat_opencv(mat);
   vision::Mat mat_falconcv(mat1);
   vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-  vision::Cast::Run(&mat_falconcv, "float", vision::ProcLib::FALCONCV);
+  vision::Cast::Run(&mat_falconcv, "float", vision::ProcLib::FLYCV);
   vision::Pad::Run(&mat_opencv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::OPENCV);
-  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FALCONCV);
+  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;
@@ -61,7 +61,7 @@ TEST(fastdeploy, falconcv_pad2) {
   vision::Mat mat_opencv(mat);
   vision::Mat mat_falconcv(mat1);
   vision::Pad::Run(&mat_opencv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::OPENCV);
-  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FALCONCV);
+  vision::Pad::Run(&mat_falconcv, 1, 2, 3, 4, {1, 2, 3}, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;

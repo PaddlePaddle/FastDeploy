@@ -20,12 +20,13 @@ namespace fastdeploy {
 namespace vision {
 class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
  public:
-  NormalizeAndPermute(const std::vector<float>& mean, const std::vector<float>& std,
+  NormalizeAndPermute(const std::vector<float>& mean,
+            const std::vector<float>& std,
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "NormalizeAndPermute"; }
@@ -45,9 +46,10 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV);
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

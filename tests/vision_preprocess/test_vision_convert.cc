@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 TEST(fastdeploy, falconcv_convert1) {
   CheckShape check_shape;
   CheckData check_data;
@@ -37,7 +37,7 @@ TEST(fastdeploy, falconcv_convert1) {
   std::vector<float> alpha({0.1, 0.2, 0.3});
   std::vector<float> beta({0.24, 0.77, 0.32});
   vision::Convert::Run(&mat_opencv, alpha, beta, vision::ProcLib::OPENCV);
-  vision::Convert::Run(&mat_falconcv, alpha, beta,  vision::ProcLib::FALCONCV);
+  vision::Convert::Run(&mat_falconcv, alpha, beta,  vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;
@@ -65,9 +65,9 @@ TEST(fastdeploy, falconcv_convert2) {
   std::vector<float> alpha({0.1, 0.2, 0.3});
   std::vector<float> beta({0.24, 0.77, 0.32});
   vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-  vision::Cast::Run(&mat_falconcv, "float",  vision::ProcLib::FALCONCV);
+  vision::Cast::Run(&mat_falconcv, "float",  vision::ProcLib::FLYCV);
   vision::Convert::Run(&mat_opencv, alpha, beta, vision::ProcLib::OPENCV);
-  vision::Convert::Run(&mat_falconcv, alpha, beta,  vision::ProcLib::FALCONCV);
+  vision::Convert::Run(&mat_falconcv, alpha, beta,  vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;

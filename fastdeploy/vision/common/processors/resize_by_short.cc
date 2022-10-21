@@ -36,7 +36,7 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool ResizeByShort::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   int origin_w = im->width();

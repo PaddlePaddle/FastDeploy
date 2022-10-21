@@ -30,7 +30,7 @@ class FASTDEPLOY_DECL Pad : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "Pad"; }
@@ -46,5 +46,5 @@ class FASTDEPLOY_DECL Pad : public Processor {
   int right_;
   std::vector<float> value_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

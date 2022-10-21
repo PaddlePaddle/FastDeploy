@@ -40,7 +40,7 @@ bool LimitShort::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool LimitShort::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   int origin_w = im->width();

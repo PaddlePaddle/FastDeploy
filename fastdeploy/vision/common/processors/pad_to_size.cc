@@ -75,7 +75,7 @@ bool PadToSize::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool PadToSize::ImplByFalconCV(Mat* mat) {
   if (width_ == -1 || height_ == -1) {
     return true;

@@ -24,7 +24,7 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool BGR2RGB::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   if (im->channels() != 3) {
@@ -46,7 +46,7 @@ bool RGB2BGR::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool RGB2BGR::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   if (im->channels() != 3) {

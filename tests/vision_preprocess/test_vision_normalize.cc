@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 TEST(fastdeploy, falconcv_norm1) {
   CheckShape check_shape;
   CheckData check_data;
@@ -39,7 +39,7 @@ TEST(fastdeploy, falconcv_norm1) {
   std::vector<float> min;
   std::vector<float> max;
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FALCONCV);
+  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;
@@ -69,7 +69,7 @@ TEST(fastdeploy, falconcv_norm2) {
   std::vector<float> min({1, 2, 3});
   std::vector<float> max({300, 400, 500});
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FALCONCV);
+  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;
@@ -99,7 +99,7 @@ TEST(fastdeploy, falconcv_norm3) {
   std::vector<float> min({1, 2, 3});
   std::vector<float> max({300, 400, 500});
   vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
-  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FALCONCV);
+  vision::Normalize::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;

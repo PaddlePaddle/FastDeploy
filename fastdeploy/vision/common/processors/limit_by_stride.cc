@@ -37,7 +37,7 @@ bool LimitByStride::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool LimitByStride::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   int origin_w = im->width();
@@ -66,11 +66,7 @@ bool LimitByStride::ImplByFalconCV(Mat* mat) {
     }
 
     fcv::Mat new_im;
-    std::cout << "??? " << rw << " " << rh << std::endl;
-    float* data = static_cast<float*>(im->data());
-    FDERROR << im->width() << " " << im->height() << " " <<  data[0] << " " << data[1224] << std::endl;
     fcv::resize(*im, new_im, fcv::Size(rw, rh), 0, 0, interp_method);
-    std::cout << "1111 " << new_im.width() << " " << new_im.height() << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

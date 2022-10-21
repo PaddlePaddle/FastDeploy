@@ -19,8 +19,8 @@ namespace fastdeploy {
 namespace vision {
 
 void* Mat::Data() {
-  if (mat_type == ProcLib::FALCONCV) {
-#ifdef ENABLE_FALCONCV
+  if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
     return fcv_mat.data();
 #else
     FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");
@@ -52,8 +52,8 @@ bool Mat::CopyToTensor(FDTensor* tensor) {
 }
 
 void Mat::PrintInfo(const std::string& flag) {
-  if (mat_type == ProcLib::FALCONCV) {
-#ifdef ENABLE_FALCONCV
+  if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
     fcv::Scalar mean = fcv::mean(fcv_mat);
     std::cout << flag << ": "
 	      << "DataType=" << Type() << ", "
@@ -85,8 +85,8 @@ void Mat::PrintInfo(const std::string& flag) {
 
 FDDataType Mat::Type() {
   int type = -1; 
-  if (mat_type == ProcLib::FALCONCV) {
-#ifdef ENABLE_FALCONCV
+  if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
     return FalconCVDataTypeToFD(fcv_mat.type());
 #else
     FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");

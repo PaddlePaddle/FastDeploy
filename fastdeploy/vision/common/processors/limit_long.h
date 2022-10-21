@@ -33,7 +33,7 @@ class LimitLong : public Processor {
   // If the long edge is smaller than min_long_, resize the long edge
   // to min_long_, while scale the short edge proportionally.
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "LimitLong"; }

@@ -35,7 +35,7 @@ bool Cast::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool Cast::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR
@@ -62,8 +62,6 @@ bool Cast::ImplByFalconCV(Mat* mat) {
     FDWARNING << "Cast not support for " << dtype_
               << " now! will skip this operation." << std::endl;
   }
-  float* tmp = static_cast<float*>(mat->GetFalconCVMat()->data());
-  FDERROR << mat->GetFalconCVMat()->width() << " " << mat->GetFalconCVMat()->height() << " " << tmp[0] << " " << tmp[1224] << std::endl;
   return true;
 }
 #endif

@@ -49,8 +49,8 @@
 #cmakedefine ENABLE_VISION
 #endif
 
-#ifndef ENABLE_FALCONCV
-#cmakedefine ENABLE_FALCONCV
+#ifndef ENABLE_FLYCV
+#cmakedefine ENABLE_FLYCV
 #endif
 
 #ifndef ENABLE_TEXT

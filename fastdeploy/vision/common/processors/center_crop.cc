@@ -28,13 +28,14 @@ bool CenterCrop::ImplByOpenCV(Mat* mat) {
   int offset_x = static_cast<int>((width - width_) / 2);
   int offset_y = static_cast<int>((height - height_) / 2);
   cv::Rect crop_roi(offset_x, offset_y, width_, height_);
-  *im = (*im)(crop_roi);
+  cv::Mat new_im = (*im)(crop_roi).clone();
+  mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool CenterCrop::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   int height = static_cast<int>(im->height());
@@ -47,7 +48,7 @@ bool CenterCrop::ImplByFalconCV(Mat* mat) {
   int offset_y = static_cast<int>((height - height_) / 2);
   fcv::Rect crop_roi(offset_x, offset_y, width_, height_);
   fcv::Mat new_im;
-  im->copy_to(new_im, crop_roi);
+  fcv::crop(*im, new_im, crop_roi);
   mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);

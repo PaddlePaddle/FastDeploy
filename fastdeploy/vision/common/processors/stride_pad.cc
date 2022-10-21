@@ -63,7 +63,7 @@ bool StridePad::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool StridePad::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "StridePad: The input data must be Layout::HWC format!"

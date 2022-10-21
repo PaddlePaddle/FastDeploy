@@ -23,7 +23,7 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
  public:
   CenterCrop(int width, int height) : height_(height), width_(width) {}
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "CenterCrop"; }
@@ -36,5 +36,5 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
   int width_;
 };
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

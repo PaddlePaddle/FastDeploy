@@ -52,7 +52,7 @@ bool Pad::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool Pad::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;

@@ -29,13 +29,14 @@ bool Crop::ImplByOpenCV(Mat* mat) {
     return false;
   }
   cv::Rect crop_roi(offset_w_, offset_h_, width_, height_);
-  *im = (*im)(crop_roi);
+  cv::Mat new_im = (*im)(crop_roi).clone();
+  mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool Crop::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   int height = static_cast<int>(im->height());
@@ -49,7 +50,7 @@ bool Crop::ImplByFalconCV(Mat* mat) {
   }
   fcv::Rect crop_roi(offset_w_, offset_h_, width_, height_);
   fcv::Mat new_im;
-  im->copy_to(new_im, crop_roi);
+  fcv::crop(*im, new_im, crop_roi);
   mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);

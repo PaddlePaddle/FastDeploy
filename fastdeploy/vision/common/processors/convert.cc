@@ -39,14 +39,14 @@ bool Convert::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool Convert::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
   FDASSERT(im->channels() == 3, "Only support 3-channels image in FalconCV.");
   std::vector<float> mean(3, 0);
   std::vector<float> std(3, 0);
   for (size_t i = 0; i < 3; ++i) {
-    std[i]  = 1.0 / (alpha_[i] + 1e-06);
+    std[i]  = 1.0 / alpha_[i];
     mean[i] = -1 * beta_[i] * std[i];
   }
   fcv::Mat new_im;

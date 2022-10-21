@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL LimitByStride : public Processor {
 
   // Resize Mat* mat to make the size divisible by stride_.
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "LimitByStride"; }

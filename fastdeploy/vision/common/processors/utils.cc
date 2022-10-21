@@ -41,7 +41,7 @@ FDDataType OpenCVDataTypeToFD(int type) {
   }
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type) {
   if (type == fcv::FCVImageType::GRAY_U8) {
     return FDDataType::UINT8;

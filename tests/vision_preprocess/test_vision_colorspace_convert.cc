@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 TEST(fastdeploy, falconcv_bgr2rgb) {
   CheckShape check_shape;
   CheckData check_data;
@@ -34,7 +34,7 @@ TEST(fastdeploy, falconcv_bgr2rgb) {
   vision::Mat mat_opencv(mat);
   vision::Mat mat_falconcv(mat1);
   vision::BGR2RGB::Run(&mat_opencv, vision::ProcLib::OPENCV);
-  vision::BGR2RGB::Run(&mat_falconcv, vision::ProcLib::FALCONCV);
+  vision::BGR2RGB::Run(&mat_falconcv, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;
@@ -59,7 +59,7 @@ TEST(fastdeploy, falconcv_rgb2bgr) {
   vision::Mat mat_opencv(mat);
   vision::Mat mat_falconcv(mat1);
   vision::RGB2BGR::Run(&mat_opencv, vision::ProcLib::OPENCV);
-  vision::RGB2BGR::Run(&mat_falconcv, vision::ProcLib::FALCONCV);
+  vision::RGB2BGR::Run(&mat_falconcv, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor falconcv;

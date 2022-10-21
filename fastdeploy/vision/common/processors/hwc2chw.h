@@ -22,12 +22,12 @@ namespace vision {
 class FASTDEPLOY_DECL HWC2CHW : public Processor {
  public:
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "HWC2CHW"; }
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

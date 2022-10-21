@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 TEST(fastdeploy, falconcv_norm_and_perm0) {
   CheckShape check_shape;
   CheckData check_data;
@@ -45,7 +45,7 @@ TEST(fastdeploy, falconcv_norm_and_perm0) {
   vision::HWC2CHW::Run(&mat_opencv, vision::ProcLib::OPENCV);
   vision::NormalizeAndPermute::Run(&mat_opencv1, mean, std, true, min, max, vision::ProcLib::OPENCV);
 
-  vision::NormalizeAndPermute::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FALCONCV);
+  vision::NormalizeAndPermute::Run(&mat_falconcv, mean, std, true, min, max, vision::ProcLib::FLYCV);
 
   FDTensor opencv;
   FDTensor opencv1;

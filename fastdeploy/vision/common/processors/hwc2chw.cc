@@ -40,7 +40,7 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
 bool HWC2CHW::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "HWC2CHW: The input data is not Layout::HWC format!" << std::endl;

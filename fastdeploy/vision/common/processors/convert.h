@@ -23,7 +23,7 @@ class FASTDEPLOY_DECL Convert : public Processor {
   Convert(const std::vector<float>& alpha, const std::vector<float>& beta);
 
   bool ImplByOpenCV(Mat* mat);
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
   std::string Name() { return "Convert"; }
