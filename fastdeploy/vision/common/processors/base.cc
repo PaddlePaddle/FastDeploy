@@ -32,5 +32,5 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ret;
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

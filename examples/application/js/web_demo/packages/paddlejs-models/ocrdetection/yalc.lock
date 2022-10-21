@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "packages": {
+    "@paddle-js-models/ocrdet": {
+      "version": "3.1.1",
+      "signature": "a745a1de22bdd7e71effce74b212715b",
+      "file": true
+    }
+  }
+}

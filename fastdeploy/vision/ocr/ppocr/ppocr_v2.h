@@ -54,7 +54,7 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
 
   /** \brief Predict the input image and get OCR result.
    *
-   * \param[in] im The input image data, comes from cv::imread().
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
    * \param[in] result The output OCR result will be writen to this structure.
    * \return true if the prediction successed, otherwise false.
    */
