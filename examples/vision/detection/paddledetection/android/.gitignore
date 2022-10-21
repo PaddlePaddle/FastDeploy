@@ -1,0 +1,13 @@
+.DS_Store
+.idea
+.gradle
+.cxx
+cache
+build
+app/cache
+app/libs/fastdeploy*
+app/.cxx
+app/build
+app/src/main/assets/models/*
+app/.gradle
+app/.idea
