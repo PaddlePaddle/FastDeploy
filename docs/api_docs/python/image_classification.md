@@ -15,3 +15,11 @@
     :members:
     :inherited-members:
 ```
+
+## fastdeploy.vision.classification.ResNet
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.classification.ResNet
+    :members:
+    :inherited-members:
+```
