@@ -329,6 +329,12 @@ class RuntimeOption:
         """
         return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
 
+    def enable_paddle_trt_collect_shape(self):
+        return self._option.enable_paddle_trt_collect_shape()
+
+    def disable_paddle_trt_collect_shape(self):
+        return self._option.disable_paddle_trt_collect_shape()
+
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"

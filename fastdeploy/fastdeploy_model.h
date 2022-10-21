@@ -99,7 +99,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_external_backends;
 
  private:
-  std::unique_ptr<Runtime> runtime_;
+  std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
