@@ -52,6 +52,10 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
       tensor->CopyFromCpu(static_cast<const int64_t*>(fd_tensor.Data()));
     }
     return;
+  } else if (fd_tensor.dtype == FDDataType::UINT8) {
+    tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),
+                              shape, paddle_infer::PlaceType::kCPU);
+    return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
            Str(fd_tensor.dtype).c_str());
