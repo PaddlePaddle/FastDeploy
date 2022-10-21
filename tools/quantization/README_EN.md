@@ -65,7 +65,7 @@ To complete the quantization, developers only need to provide a customized model
 
 | Parameter     | Description                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
-| --config_path | Quantization profiles needed for one-click quantization.[Configs](./configs/README_EN.md)                        |
+| --config_path | Quantization profiles needed for one-click quantization [Configs](./configs/README_EN.md)                        |
 | --method      | Quantization method selection, PTQ for post-training quantization, QAT for quantization distillation training |
 | --save_dir    | Output of quantized model paths, which can be deployed directly in FastDeploy                                 |
 
