@@ -319,6 +319,16 @@ class RuntimeOption:
         """
         return self._option.disable_trt_fp16()
 
+    def enable_pinned_memory(self):
+        """Enable pinned memory. Pinned memory can be utilized to speedup the data transfer between CPU and GPU. Currently it's only suppurted in TRT backend and Paddle Inference backend.
+        """
+        return self._option.enable_pinned_memory()
+
+    def disable_pinned_memory(self):
+        """Disable pinned memory.
+        """
+        return self._option.disable_pinned_memory()
+
     def enable_paddle_to_trt(self):
         """While using TensorRT backend, enable_paddle_to_trt() will change to use Paddle Inference backend, and use its integrated TensorRT instead.
         """

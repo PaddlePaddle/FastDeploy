@@ -44,6 +44,8 @@ void BindRuntime(pybind11::module& m) {
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
       .def("set_trt_cache_file", &RuntimeOption::SetTrtCacheFile)
+      .def("enable_pinned_memory", &RuntimeOption::EnablePinnedMemory)
+      .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
       .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
       .def_readwrite("model_file", &RuntimeOption::model_file)
@@ -200,6 +202,7 @@ void BindRuntime(pybind11::module& m) {
       .def("numel", &FDTensor::Numel)
       .def("nbytes", &FDTensor::Nbytes)
       .def_readwrite("name", &FDTensor::name)
+      .def_readwrite("is_pinned_memory", &FDTensor::is_pinned_memory)
       .def_readonly("shape", &FDTensor::shape)
       .def_readonly("dtype", &FDTensor::dtype)
       .def_readonly("device", &FDTensor::device);
