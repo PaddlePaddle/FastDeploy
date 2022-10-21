@@ -1,3 +1,5 @@
+[简体中文](README_CN.md) | English
+
 # PaddleClas Quantized Model Deployment
 
 FastDeploy supports the deployment of quantized models and provides a one-click model quantization tool.
