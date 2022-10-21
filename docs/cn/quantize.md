@@ -31,7 +31,8 @@ Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请�
 当用户获得产出的量化模型之后，即可以使用FastDeploy来部署量化模型。
 
 
-## 量化示例
+## 量化benchmark
+
 目前, FastDeploy已支持的模型量化如下表所示:
 
 ### YOLO 系列
