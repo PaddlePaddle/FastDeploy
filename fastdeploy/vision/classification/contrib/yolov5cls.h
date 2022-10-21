@@ -44,7 +44,7 @@ class FASTDEPLOY_DECL YOLOv5Cls : public FastDeployModel {
 
   /** \brief Predict the classification result for an input image
    *
-   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result The output classification result will be writen to this structure
    * \param[in] topk Returns the topk classification result with the highest predicted probability, the default is 1
    * \return true if the prediction successed, otherwise false

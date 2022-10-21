@@ -43,7 +43,7 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
   std::string ModelName() const { return "ppocr/ocr_cls"; }
   /** \brief Predict the input image and get OCR classification model result.
    *
-   * \param[in] im The input image data, comes from cv::imread().
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
    * \param[in] result The output of OCR classification model result will be writen to this structure.
    * \return true if the prediction is successed, otherwise false.
    */

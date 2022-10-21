@@ -20,32 +20,51 @@
 namespace fastdeploy {
 
 namespace vision {
-
+/** \brief All object face detection model APIs are defined inside this namespace
+ *
+ */
 namespace facedet {
-
+/*! @brief RetinaFace model object used when to load a RetinaFace model exported by RetinaFace.
+ */
 class FASTDEPLOY_DECL RetinaFace : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./retinaface.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   RetinaFace(const std::string& model_file, const std::string& params_file = "",
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "Pytorch_Retinaface"; }
-
+  /** \brief Predict the face detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output face detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.25
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.4
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25f,
                        float nms_iou_threshold = 0.4f);
 
-  // tuple of (width, height), default (640, 640)
+  /// tuple of (width, height), default (640, 640)
   std::vector<int> size;
-  // variance in RetinaFace's prior-box(anchor) generate process,
-  // default (0.1, 0.2)
+  /*! @brief
+  variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
+  */
   std::vector<float> variance;
-  // downsample strides (namely, steps) for RetinaFace to
-  // generate anchors, will take (8,16,32) as default values.
+  /*! @brief
+  downsample strides (namely, steps) for RetinaFace to generate anchors, will take (8,16,32) as default values
+  */
   std::vector<int> downsample_strides;
-  // min sizes, width and height for each anchor.
+  /// min sizes, width and height for each anchor
   std::vector<std::vector<int>> min_sizes;
-  // landmarks_per_face, default 5 in RetinaFace
+  /// landmarks_per_face, default 5 in RetinaFace
   int landmarks_per_face;
 
  private:
