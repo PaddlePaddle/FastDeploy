@@ -56,15 +56,13 @@ class YOLOX(FastDeployModel):
     @property
     def size(self):
         """
-        The preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
         """
         return self._model.size
 
     @property
     def padding_value(self):
-        """
-        padding value, size should be the same as channels
-        """
+        #  padding value, size should be the same as channels
         return self._model.padding_value
 
     @property
@@ -85,9 +83,7 @@ class YOLOX(FastDeployModel):
 
     @property
     def max_wh(self):
-        """
-        for offseting the boxes by classes when using NMS
-        """
+        # for offseting the boxes by classes when using NMS
         return self._model.max_wh
 
     @size.setter

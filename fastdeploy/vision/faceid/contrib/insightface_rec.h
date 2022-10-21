@@ -50,7 +50,7 @@ class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
   std::vector<float> beta;
   /// Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
   bool swap_rb;
-  /// Argument for image postprocessing step, whether to apply l2 normalize to embedding values, default;
+  /// Argument for image postprocessing step, whether to apply l2 normalize to embedding values, default false;
   bool l2_normalize;
   /** \brief Predict the face recognition result for an input image
    *

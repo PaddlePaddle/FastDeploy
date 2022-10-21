@@ -56,35 +56,35 @@ class RetinaFace(FastDeployModel):
     @property
     def size(self):
         """
-        The preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
         """
         return self._model.size
 
     @property
     def variance(self):
         """
-        variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
+        Argument for image postprocessing step, variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
         """
         return self._model.variance
 
     @property
     def downsample_strides(self):
         """
-        downsample strides (namely, steps) for RetinaFace to generate anchors, will take (8,16,32) as default values
+        Argument for image postprocessing step, downsample strides (namely, steps) for RetinaFace to generate anchors, will take (8,16,32) as default values
         """
         return self._model.downsample_strides
 
     @property
     def min_sizes(self):
         """
-        min sizes, width and height for each anchor
+        Argument for image postprocessing step, min sizes, width and height for each anchor
         """
         return self._model.min_sizes
 
     @property
     def landmarks_per_face(self):
         """
-        landmarks_per_face, default 5 in RetinaFace
+        Argument for image postprocessing step, landmarks_per_face, default 5 in RetinaFace
         """
         return self._model.landmarks_per_face
 

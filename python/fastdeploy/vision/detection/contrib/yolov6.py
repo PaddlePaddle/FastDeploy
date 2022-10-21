@@ -56,50 +56,38 @@ class YOLOv6(FastDeployModel):
     @property
     def size(self):
         """
-        The preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
         """
         return self._model.size
 
     @property
     def padding_value(self):
-        """
-        padding value, size should be the same as channels
-        """
+        #  padding value, size should be the same as channels
         return self._model.padding_value
 
     @property
     def is_no_pad(self):
-        """
-        while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
-        """
+        # while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
         return self._model.is_no_pad
 
     @property
     def is_mini_pad(self):
-        """
-        only pad to the minimum rectange which height and width is times of stride
-        """
+        # only pad to the minimum rectange which height and width is times of stride
         return self._model.is_mini_pad
 
     @property
     def is_scale_up(self):
-        """
-        if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
-        """
+        # if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
         return self._model.is_scale_up
 
     @property
     def stride(self):
-        """
-        padding stride, for is_mini_pad
-        """
+        # padding stride, for is_mini_pad
         return self._model.stride
 
     @property
     def max_wh(self):
-        """
-        for offseting the boxes by classes when using NMS
-        """
+        # for offseting the boxes by classes when using NMS
         return self._model.max_wh
 
     @size.setter
