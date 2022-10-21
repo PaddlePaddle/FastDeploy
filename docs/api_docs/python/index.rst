@@ -18,3 +18,4 @@ FastDeploy
     image_classification.md
     keypoint_detection.md
     matting.md
+    vision_results_en.md
