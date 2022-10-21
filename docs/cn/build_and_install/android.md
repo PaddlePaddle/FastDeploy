@@ -43,7 +43,7 @@ TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake
 # Create build directory
 BUILD_ROOT=build/Android
 BUILD_DIR=${BUILD_ROOT}/${ANDROID_ABI}-api-21
-FASDEPLOY_INSTALL_DIR="${ROOT_PATH}/${BUILD_DIR}/install"
+FASDEPLOY_INSTALL_DIR="${BUILD_DIR}/install"
 mkdir build && mkdir ${BUILD_ROOT} && mkdir ${BUILD_DIR}
 cd ${BUILD_DIR}
 
@@ -53,7 +53,7 @@ if [ "$ANDROID_ABI" = "armeabi-v7a" ]; then
   WITH_LITE_FP16=OFF
 fi
 
-# Cmake configuration with Android toolchain
+# CMake configuration with Android toolchain
 cmake -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} \
       -DCMAKE_BUILD_TYPE=MinSizeRel \
       -DANDROID_ABI=${ANDROID_ABI} \
