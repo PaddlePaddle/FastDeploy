@@ -107,6 +107,17 @@ void BindVisualize(pybind11::module& m) {
                     return TensorToPyArray(out);
                   })
       .def_static(
+          "vis_keypoint_detection",
+          [](pybind11::array& im_data, vision::KeyPointDetectionResult& result,
+             float conf_threshold) {
+            auto im = PyArrayToCvMat(im_data);
+            auto vis_im = vision::VisKeypointDetection(
+                im, result, conf_threshold);
+            FDTensor out;
+            vision::Mat(vis_im).ShareWithTensor(&out);
+            return TensorToPyArray(out);
+          })
+      .def_static(
           "vis_face_detection",
           [](pybind11::array& im_data, vision::FaceDetectionResult& result,
              int line_size, float font_size) {

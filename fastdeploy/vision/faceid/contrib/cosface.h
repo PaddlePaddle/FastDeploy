@@ -23,9 +23,17 @@ namespace fastdeploy {
 namespace vision {
 
 namespace faceid {
-
+/*! @brief CosFace model object used when to load a CosFace model exported by IngsightFace.
+ */
 class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./cosface.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   CosFace(const std::string& model_file, const std::string& params_file = "",
           const RuntimeOption& custom_option = RuntimeOption(),
           const ModelFormat& model_format = ModelFormat::ONNX);
@@ -33,7 +41,12 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionModel {
   std::string ModelName() const override {
     return "deepinsight/insightface/recognition/arcface_pytorch";
   }
-
+  /** \brief Predict the face recognition result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output face recognition result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   bool Predict(cv::Mat* im, FaceRecognitionResult* result) override;
 
  private:

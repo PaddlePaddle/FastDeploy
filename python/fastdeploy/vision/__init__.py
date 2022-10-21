@@ -17,6 +17,7 @@ from . import detection
 from . import classification
 from . import segmentation
 from . import tracking
+from . import keypointdetection
 from . import matting
 from . import facedet
 from . import faceid
