@@ -26,6 +26,11 @@ def vis_detection(im_data,
                                   line_size, font_size)
 
 
+def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
+    return C.vision.Visualize.vis_keypoint_detection(
+        im_data, keypoint_det_result, conf_threshold)
+
+
 def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
     return C.vision.vis_face_detection(im_data, face_det_result, line_size,
                                        font_size)

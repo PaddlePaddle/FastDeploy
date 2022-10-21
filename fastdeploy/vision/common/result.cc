@@ -117,6 +117,29 @@ std::string DetectionResult::Str() {
   return out;
 }
 
+void KeyPointDetectionResult::Clear() {
+  std::vector<std::array<float, 2>>().swap(keypoints);
+  std::vector<float>().swap(scores);
+  num_joints = -1;
+}
+
+void KeyPointDetectionResult::Reserve(int size) { keypoints.reserve(size); }
+
+void KeyPointDetectionResult::Resize(int size) { keypoints.resize(size); }
+
+std::string KeyPointDetectionResult::Str() {
+  std::string out;
+
+  out = "KeyPointDetectionResult: [x, y, conf]\n";
+  for (size_t i = 0; i < keypoints.size(); ++i) {
+    out = out + std::to_string(keypoints[i][0]) + "," +
+          std::to_string(keypoints[i][1]) + ", " +
+          std::to_string(scores[i]) + "\n";
+  }
+  out += "num_joints:" + std::to_string(num_joints) + "\n";
+  return out;
+}
+
 void OCRResult::Clear() {
   boxes.clear();
   text.clear();

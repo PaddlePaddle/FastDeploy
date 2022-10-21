@@ -1,3 +1,9 @@
 # Keypoint Detection API
 
-comming soon...
+## fastdeploy.vision.keypointdetection.PPTinyPose
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.keypointdetection.PPTinyPose
+    :members:
+    :inherited-members:
+```

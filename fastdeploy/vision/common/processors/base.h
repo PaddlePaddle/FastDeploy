@@ -35,7 +35,9 @@ class Processor {
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
   virtual bool ImplByFalconCV(Mat* mat) {
-    FDASSERT(false, "%s is not implemented with FalconCV, please use OpenCV instead.", Name().c_str());
+    FDASSERT(false,
+             "%s is not implemented with FalconCV, please use OpenCV instead.",
+             Name().c_str());
     return false;
   }
 
@@ -43,5 +45,5 @@ class Processor {
                           ProcLib lib = ProcLib::OPENCV);
 };
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

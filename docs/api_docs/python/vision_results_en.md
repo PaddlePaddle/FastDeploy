@@ -40,6 +40,19 @@ API: `fastdeploy.vision.FaceDetectionResult`, The FaceDetectionResult will retur
 - **landmarks**(list of list(float)): Member variables that represent the key points of all faces detected by a single image.
 - **landmarks_per_face**(int):Member variable indicating the number of key points in each face frame.
 
+## KeyPointDetectionResult
+The KeyPointDetectionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the coordinates and confidence of each keypoint of the target behavior in the image.
+
+API:`fastdeploy.vision.KeyPointDetectionResult`, The KeyPointDetectionResult will return:
+- **keypoints**(list of list(float)): Member variable, representing the key point coordinates of the identified target behavior. `keypoints.size()= N * J * 2`，
+    - `N`: number of objects in the picture
+    - `J`: num_joints（number of keypoints for a target）
+    - `3`: 坐标信息[x, y]
+- **scores**(list of float): Member variable, representing the confidence of the keypoint coordinates of the recognized target behavior. `scores.size()= N * J`
+    - `N`: number of objects in the picture
+    - `J`: num_joints（number of keypoints for a target）
+- **num_joints**(int): Member variable, representing the number of keypoints for a target
+
 ## FaceRecognitionResult
 The FaceRecognitionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the embedding of the image features by the face recognition model.
 
