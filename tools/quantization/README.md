@@ -1,7 +1,6 @@
+[简体中文](README_EN.md) | English
+
 # FastDeploy One-Click Quantization Tool
-
-
-
 
 FastDeploy, based on PaddleSlim, provides developers with a one-click model quantization tool that supports post-training quantization and knowledge distillation training.
 We take the Yolov5 series as an example to demonstrate how to install and execute FastDeploy's one-click model quantization.
