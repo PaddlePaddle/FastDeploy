@@ -14,9 +14,8 @@
 
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "yaml-cpp/yaml.h"
-#ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
-#endif
+
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
@@ -153,7 +152,6 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
 }
 
 void PPTracking::GetNmsInfo() {
-#ifdef ENABLE_PADDLE_FRONTEND
   if (runtime_option.model_format == ModelFormat::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
@@ -171,18 +169,14 @@ void PPTracking::GetNmsInfo() {
       normalized = reader.nms_params.normalized;
     }
   }
-#endif
 }
 
 bool PPTracking::Initialize() {
-
-#ifdef ENABLE_PADDLE_FRONTEND
   // remove multiclass_nms3 now
   // this is a trick operation for ppyoloe while inference on trt
   GetNmsInfo();
   runtime_option.remove_multiclass_nms_ = true;
   runtime_option.custom_op_info_["multiclass_nms3"] = "MultiClassNMS";
-#endif
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
