@@ -1,4 +1,4 @@
-简体中文(../cn/quantize.md) ｜English 
+[简体中文](../cn/quantize.md) ｜English 
 
 # Quantization Acceleration
 
