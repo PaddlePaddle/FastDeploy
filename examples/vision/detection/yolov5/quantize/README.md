@@ -14,8 +14,8 @@ Users can also directly download the quantized models in the table below for dep
 
 | Model                                                                   | Inference Backend | Hardware | FP32 Inference Time Delay | INT8  Inference Time Delay | Acceleration ratio | FP32 mAP | INT8 mAP | Method                          |
 | ----------------------------------------------------------------------- | ----------------- | -------- | ------------------------- | -------------------------- | ------------------ | -------- | -------- | ------------------------------- |
-| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_quant.tar) | TensorRT          | GPU      | 8.79                      | 5.17                       | 1.70               | 37.6     | 36.6     | Quantized distillation training |
-| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_quant.tar) | Paddle Inference  | CPU      | 217.05                    | 133.31                     | 1.63               | 37.6     | 36.8     | Quantized distillation training |
+| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_quant.tar) | TensorRT          | GPU      | 14.13	                     | 11.22	                       | 1.26	              | 37.6	     | 36.6      | Quantized distillation training |
+| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_quant.tar) | Paddle Inference  | CPU      | 226.36	                   | 152.27	                 | 1.48	                | 37.6	   | 36.8        | Quantized distillation training |
 
 The data in the above table shows the end-to-end inference performance of FastDeploy deployment before and after model quantization.
 
