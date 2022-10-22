@@ -61,7 +61,7 @@ const isLoadingModel = ref(true);
 onMounted(async () => {
   canvas.value = document.getElementById("canvas") as HTMLCanvasElement;
 
-  await ocr.init("https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json", "https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_rec_infer_js/model.json");
+  await ocr.init();
   isLoadingModel.value = false;
 });
 

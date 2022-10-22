@@ -32,7 +32,7 @@ function initCanvas(canvas) {
 
 const defaultModelPath = 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json';
 
-export async function load(detPath) {
+export async function load(detPath = '') {
     detectRunner = new Runner({
         modelPath: detPath ? detPath : defaultModelPath,
         fill: '#fff',

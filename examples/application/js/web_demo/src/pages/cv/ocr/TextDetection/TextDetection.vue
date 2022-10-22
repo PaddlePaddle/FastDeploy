@@ -52,7 +52,7 @@ const isLoadingModel = ref(true);
 
 onMounted(async () => {
   canvas.value = document.getElementById("canvas") as HTMLCanvasElement;
-  await ocrDet.load("https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json");
+  await ocrDet.load();
   isLoadingModel.value = false;
 });
 
