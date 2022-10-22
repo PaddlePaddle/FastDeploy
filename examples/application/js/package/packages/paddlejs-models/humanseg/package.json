@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "yalc publish --push",
     "prepublish": "pnpm lint & pnpm test",
-    "prepublishOnly": "pnpm build & pnpm changelog",
+    "prepublishOnly": "pnpm build",
     "build": "gulp build",
     "lint": "eslint --ext .js,.ts src --fix",
     "api": "api-extractor run",
