@@ -67,7 +67,7 @@ void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
   shape.assign(tmp_shape.begin(), tmp_shape.end());
-  fd_tensor->Allocate(shape, fd_dtype, tensor->name());
+  fd_tensor->Resize(shape, fd_dtype, tensor->name());
   if (fd_tensor->dtype == FDDataType::FP32) {
     tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
     return;

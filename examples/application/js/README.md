@@ -33,3 +33,9 @@
 |目标检测| coming soon |
 |图像分割| coming soon | 
 |物品分类| coming soon | 
+
+
+## Contributor
+
+感谢飞桨开发者专家(PPDE)陈千鹤(github: [chenqianhe](https://github.com/chenqianhe))贡献的小程序、Web demo，项目[链接](https://github.com/chenqianhe/Paddle.js)。
+
