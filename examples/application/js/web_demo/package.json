@@ -18,7 +18,7 @@
     "@paddle-js-models/humanseg_gpu": "3.0.1",
     "@paddle-js-models/mobilenet": "3.0.1",
     "@paddle-js-models/ocr": "4.0.0",
-    "@paddle-js-models/ocrdet": "4.0.0",
+    "@paddle-js-models/ocrdet": "4.0.1",
     "@paddlejs/paddlejs-backend-webgl": "^1.2.9",
     "@paddlejs/paddlejs-core": "^2.2.0",
     "element-plus": "^2.2.16",
