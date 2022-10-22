@@ -26,23 +26,25 @@
 >> 如果以上步骤仍旧无法解决 NDK 配置错误，请尝试根据 Andriod Studio 官方文档中的[更新 Android Gradle 插件](https://developer.android.com/studio/releases/gradle-plugin?hl=zh-cn#updating-plugin)章节，尝试更新Android Gradle plugin版本。
 
 4. 点击 Run 按钮，自动编译 APP 并安装到手机。(该过程会自动下载预编译的 FastDeploy Android 库，需要联网)
-成功后效果如下，图一：APP 安装到手机        图二： APP 打开后的效果，会自动识别图片中的物体并标记
+成功后效果如下，图一：APP 安装到手机；图二： APP 打开后的效果，会自动识别图片中的物体并标记；图三：APP设置选项，点击右上角的设置图片，可以设置不同选项进行体验。
 
-  | APP 图标 | APP 效果 |
-  | ---     | --- |
-  | ![app_pic ](https://user-images.githubusercontent.com/31974251/197170082-a2bdd49d-60ea-4df0-af63-18ed898a746e.jpg)   | ![app_res](https://user-images.githubusercontent.com/31974251/197169609-bb214af3-d6e7-4433-bb96-1225cddd441c.jpg) |
+  | APP 图标 | APP 效果 | APP设置项
+  | ---     | --- | --- |
+  | ![app_pic ](https://user-images.githubusercontent.com/31974251/197170082-a2bdd49d-60ea-4df0-af63-18ed898a746e.jpg)   | ![app_res](https://user-images.githubusercontent.com/31974251/197169609-bb214af3-d6e7-4433-bb96-1225cddd441c.jpg) |  ![app_setup](https://user-images.githubusercontent.com/31974251/197332983-afbfa6d5-4a3b-4c54-a528-4a3e58441be1.jpg) |
 
 ## PicoDet Java API 说明  
-- 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数进行初始化。初始化参数说明：  
+- 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PicoDet初始化参数说明如下：  
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
   - paramFile: String, paddle格式的参数文件路径，如 model.pdiparams  
   - configFile: String, 模型推理的预处理配置文件，如 infer_cfg.yml  
-  - labelFile: String, 可选参数，表示label标签文件所在路径，用于可视化  
-  - option: RuntimeOption，模型初始化option  
+  - labelFile: String, 可选参数，表示label标签文件所在路径，用于可视化，如 coco_label_list.txt，每一行包含一个label  
+  - option: RuntimeOption，可选参数，模型初始化option。如果不传入该参数则会使用默认的运行时选项。  
 
 ```java
 // 构造函数: constructor w/o label file
 public PicoDet(); // 空构造函数，之后可以调用init初始化
+public PicoDet(String modelFile, String paramsFile, String configFile);
+public PicoDet(String modelFile, String paramsFile, String configFile, String labelFile);
 public PicoDet(String modelFile, String paramsFile, String configFile, RuntimeOption option);
 public PicoDet(String modelFile, String paramsFile, String configFile, String labelFile, RuntimeOption option);
 // 手动调用init初始化: call init manually w/o label file
@@ -73,20 +75,78 @@ public void enableRecordTimeOfRuntime();  // 是否打印模型运行耗时
 
 - 模型结果DetectionResult说明  
 ```java
-// Not support MaskRCNN now.
 public float[][] mBoxes; // [n,4] 检测框 (x1,y1,x2,y2)
 public float[] mScores;  // [n]   得分
 public int[] mLabelIds;  // [n]   分类ID
 public boolean initialized(); // 检测结果是否有效
+```  
+
+- 模型调用示例1：使用构造函数以及默认的RuntimeOption
+```java  
+import java.nio.ByteBuffer;
+import android.graphics.Bitmap;
+import android.opengl.GLES20;
+
+import com.baidu.paddle.fastdeploy.vision.DetectionResult;
+import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+
+// 初始化模型
+PicoDet model = new PicoDet("picodet_s_320_coco_lcnet/model.pdmodel",
+                            "picodet_s_320_coco_lcnet/model.pdiparams",
+                            "picodet_s_320_coco_lcnet/infer_cfg.yml");
+
+// 读取图片: 以下仅为读取Bitmap的伪代码
+ByteBuffer pixelBuffer = ByteBuffer.allocate(width * height * 4);
+GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixelBuffer);
+Bitmap ARGB8888ImageBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+ARGB8888ImageBitmap.copyPixelsFromBuffer(pixelBuffer);
+
+// 模型推理
+DetectionResult result = model.predict(ARGB8888ImageBitmap);  
+
+// 释放模型资源  
+model.release();
+```  
+
+- 模型调用示例2: 在合适的程序节点，手动调用init，并自定义RuntimeOption
+```java  
+// import 同上 ...
+import com.baidu.paddle.fastdeploy.RuntimeOption;
+import com.baidu.paddle.fastdeploy.LitePowerMode;
+import com.baidu.paddle.fastdeploy.vision.DetectionResult;
+import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+// 新建空模型
+PicoDet model = new PicoDet();  
+// 模型路径
+String modelFile = "picodet_s_320_coco_lcnet/model.pdmodel";
+String paramFile = "picodet_s_320_coco_lcnet/model.pdiparams";
+String configFile = "picodet_s_320_coco_lcnet/infer_cfg.yml";
+// 指定RuntimeOption
+RuntimeOption option = new RuntimeOption();
+option.setCpuThreadNum(2);
+option.setLitePowerMode(LitePowerMode.LITE_POWER_HIGH);
+option.enableRecordTimeOfRuntime();
+option.enableLiteFp16();
+// 使用init函数初始化  
+model.init(modelFile, paramFile, configFile, option);
+// Bitmap读取、模型预测、资源释放 同上 ...
 ```
-
-
-## PicoDet Android Demo 工程简介  
+更详细的用法请参考 [MainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/examples/MainActivity.java#L207) 中的用法
 
 ## 替换 FastDeploy 预测库和模型  
+替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-xxx-shared`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/picodet_s_320_coco_lcnet`。  
+- 替换FastDeploy预测库的步骤：（1）下载或编译最新的FastDeploy Android预测库，解压缩后放在 `app/libs` 目录下；（2）修改 `app/src/main/cpp/CMakeLists.txt` 中的预测库路径，指向您下载或编译的预测库路径。如：  
+```cmake  
+set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-xxx-shared")
+```
+- 替换PicoDet模型的步骤：（1）将您的PicoDet模型放在 `app/src/main/assets/models` 目录下；（2）修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：  
+```xml
+<!-- 将这个路径指修改成您的模型，如 models/picodet_l_320_coco_lcnet -->
+<string name="MODEL_DIR_DEFAULT">models/picodet_s_320_coco_lcnet</string>  
+<string name="LABEL_PATH_DEFAULT">labels/coco_label_list.txt</string>
+```  
 
 ## 如何通过 JNI 在 Native 层接入 FastDeploy C++ API ?  
-
 如果您对如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
 - [app/src/main/cpp 代码实现](./app/src/main/cpp/)
 - [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
