@@ -152,4 +152,4 @@ set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android
 ## 如何通过 JNI 在 Native 层接入 FastDeploy C++ API ?  
 如果您对如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
 - [app/src/main/cpp 代码实现](./app/src/main/cpp/)
-- [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+- [在 Android 中通过 JNI 使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
