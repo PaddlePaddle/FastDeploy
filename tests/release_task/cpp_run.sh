@@ -12,7 +12,8 @@ fi
 echo $CPP_FASTDEPLOY_PACKAGE
 LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
-LINUX_AARCH_CPU_CASE=('ort' 'openvino')
+#LINUX_AARCH_CPU_CASE=('ort' 'openvino')
+LINUX_AARCH_CPU_CASE=('ort')
 MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -25,6 +26,7 @@ GROUND_TRUTH_PATH=$CURRENT_DIR/release_task_groud_truth_result.txt
 COMPARE_SHELL=$CURRENT_DIR/compare_with_gt.py
 
 RUN_CASE=()
+CONF_THRESHOLD=0
 if [ "$DEVICE" = "gpu" ] && [ "$PLATFORM" = "linux-x64" ];then
 	RUN_CASE=(${LINUX_X64_GPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "linux-x64" ];then
@@ -35,6 +37,7 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-x86_64" ];then
 	RUN_CASE=(${MACOS_INTEL_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
 	RUN_CASE=(${MACOS_ARM64_CPU_CASE[*]})
+	CONF_THRESHOLD=0.5
 fi
 
 case_number=${#RUN_CASE[@]}
@@ -52,16 +55,16 @@ do
        echo "Cpp Backend:" $backend
        if [ "$backend" != "trt" ];then
                ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=cpu --backend=$backend >> cpp_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_cpu_result.txt --platform $PLATFORM --device cpu
+               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold $CONF_THRESHOLD
        fi
        if [ "$DEVICE" = "gpu" ];then
 
 	       if [ "$backend" = "trt" ];then
                        ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_trt_result.txt
-                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_trt_result.txt --platform $PLATFORM --device trt
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_trt_result.txt --platform $PLATFORM --device trt --conf_threshold $CONF_THRESHOLD
 	       else
                        ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_gpu_result.txt
-                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_gpu_result.txt --platform $PLATFORM --device gpu
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
                fi
        fi
 done
@@ -78,4 +81,3 @@ else
        cat $res_file
        exit -1
 fi
-
