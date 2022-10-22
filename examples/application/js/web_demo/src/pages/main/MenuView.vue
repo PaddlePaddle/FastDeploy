@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { routerJump } from "@/pages/main/utools/routerJump";
+import { routerJump } from "@/pages/main/utils/routerJump";
 
 const handleOpen = (key: string, keyPath: string[]) => {
   console.log(key, keyPath);
