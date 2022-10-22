@@ -16,6 +16,7 @@ import fastdeploy as fd
 import cv2
 import os
 import numpy as np
+import pickle
 
 
 def test_pptracking_cpu():
@@ -38,11 +39,12 @@ def test_pptracking_cpu():
             break
         result = model.predict(frame)
         # compare diff
-        expect_scores = np.load("pptracking/tracking_result" + str(frame_id) + ".npy")
-        result_scores = np.array(result.scores)
-        diff = np.fabs(expect_scores - result_scores)
+        expect = pickle.load(open("pptracking/frame" + str(frame_id) + ".pkl", "rb"))
+        diff_boxes = np.fabs(np.array(expect["boxes"]) - np.array(result.boxes))
+        diff_scores = np.fabs(np.array(expect["scores"]) - np.array(result.scores))
+        diff = max(diff_boxes.max(), diff_scores.max())
         thres = 1e-05
-        assert diff.max() < thres, "The label diff is %f, which is bigger than %f" % (diff.max(), thres)
+        assert diff < thres, "The label diff is %f, which is bigger than %f" % (diff, thres)
         frame_id = frame_id + 1
         cv2.waitKey(30)
         if frame_id >= 10:
@@ -72,11 +74,12 @@ def test_pptracking_gpu_trt():
             break
         result = model.predict(frame)
         # compare diff
-        expect_scores = np.load("pptracking/tracking_result" + str(frame_id) + ".npy")
-        result_scores = np.array(result.scores)
-        diff = np.fabs(expect_scores - result_scores)
+        expect = pickle.load(open("pptracking/frame" + str(frame_id) + ".pkl", "rb"))
+        diff_boxes = np.fabs(np.array(expect["boxes"]) - np.array(result.boxes))
+        diff_scores = np.fabs(np.array(expect["scores"]) - np.array(result.scores))
+        diff = max(diff_boxes.max(), diff_scores.max())
         thres = 1e-05
-        assert diff.max() < thres, "The label diff is %f, which is bigger than %f" % (diff.max(), thres)
+        assert diff < thres, "The label diff is %f, which is bigger than %f" % (diff, thres)
         frame_id = frame_id + 1
         cv2.waitKey(30)
         if frame_id >= 10:
