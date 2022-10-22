@@ -135,11 +135,15 @@ model.init(modelFile, paramFile, configFile, option);
 
 ## 替换 FastDeploy 预测库和模型  
 替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-xxx-shared`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/picodet_s_320_coco_lcnet`。  
-- 替换FastDeploy预测库的步骤：（1）下载或编译最新的FastDeploy Android预测库，解压缩后放在 `app/libs` 目录下；（2）修改 `app/src/main/cpp/CMakeLists.txt` 中的预测库路径，指向您下载或编译的预测库路径。如：  
+- 替换FastDeploy预测库的步骤:  
+  - 下载或编译最新的FastDeploy Android预测库，解压缩后放在 `app/libs` 目录下；  
+  - 修改 `app/src/main/cpp/CMakeLists.txt` 中的预测库路径，指向您下载或编译的预测库路径。如：  
 ```cmake  
 set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-xxx-shared")
 ```
-- 替换PicoDet模型的步骤：（1）将您的PicoDet模型放在 `app/src/main/assets/models` 目录下；（2）修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：  
+- 替换PicoDet模型的步骤：  
+  - 将您的PicoDet模型放在 `app/src/main/assets/models` 目录下；  
+  - 修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：  
 ```xml
 <!-- 将这个路径指修改成您的模型，如 models/picodet_l_320_coco_lcnet -->
 <string name="MODEL_DIR_DEFAULT">models/picodet_s_320_coco_lcnet</string>  
