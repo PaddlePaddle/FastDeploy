@@ -1,31 +1,32 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import codecs
 import json
 import math
+import os
 import sys
 import threading
 import time
 
+import fastdeploy as fd
 import numpy as np
-import onnxruntime as ort
 import triton_python_backend_utils as pb_utils
+from fastdeploy import ModelFormat
 
 from paddlespeech.server.utils.util import denorm
 from paddlespeech.server.utils.util import get_chunks
 from paddlespeech.t2s.frontend.zh_frontend import Frontend
+
+if not os.path.exists("fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0"):
+    if os.path.exists("fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip"):
+        os.remove("fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip")
+    model_url = "https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip"
+    fd.download_and_decompress(model_url, path=".")
+    os.remove("fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip")
+if not os.path.exists("mb_melgan_csmsc_onnx_0.2.0"):
+    if os.path.exists("mb_melgan_csmsc_onnx_0.2.0.zip"):
+        os.remove("mb_melgan_csmsc_onnx_0.2.0.zip")
+    model_url = "https://paddlespeech.bj.bcebos.com/Parakeet/released_models/mb_melgan/mb_melgan_csmsc_onnx_0.2.0.zip"
+    fd.download_and_decompress(model_url, path=".")
+    os.remove("mb_melgan_csmsc_onnx_0.2.0.zip")
 
 voc_block = 36
 voc_pad = 14
@@ -35,6 +36,7 @@ voc_upsample = 300
 
 # 模型路径
 dir_name = "/models/streaming_tts_serving/1/"
+
 phones_dict = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/phone_id_map.txt"
 am_stat_path = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/speech_stats.npy"
 
@@ -46,21 +48,33 @@ onnx_voc_melgan = dir_name + "mb_melgan_csmsc_onnx_0.2.0/mb_melgan_csmsc.onnx"
 frontend = Frontend(phone_vocab_path=phones_dict, tone_vocab_path=None)
 am_mu, am_std = np.load(am_stat_path)
 
-# 用CPU推理
-providers = ['CPUExecutionProvider']
+option_1 = fd.RuntimeOption()
+option_1.set_model_path(onnx_am_encoder, model_format=ModelFormat.ONNX)
+option_1.use_cpu()
+option_1.use_ort_backend()
+option_1.set_cpu_thread_num(12)
+am_encoder_runtime = fd.Runtime(option_1)
 
-# 配置ort session
-sess_options = ort.SessionOptions()
+option_2 = fd.RuntimeOption()
+option_2.set_model_path(onnx_am_decoder, model_format=ModelFormat.ONNX)
+option_2.use_cpu()
+option_2.use_ort_backend()
+option_2.set_cpu_thread_num(12)
+am_decoder_runtime = fd.Runtime(option_2)
 
-# 创建session
-am_encoder_infer_sess = ort.InferenceSession(
-    onnx_am_encoder, providers=providers, sess_options=sess_options)
-am_decoder_sess = ort.InferenceSession(
-    onnx_am_decoder, providers=providers, sess_options=sess_options)
-am_postnet_sess = ort.InferenceSession(
-    onnx_am_postnet, providers=providers, sess_options=sess_options)
-voc_melgan_sess = ort.InferenceSession(
-    onnx_voc_melgan, providers=providers, sess_options=sess_options)
+option_3 = fd.RuntimeOption()
+option_3.set_model_path(onnx_am_postnet, model_format=ModelFormat.ONNX)
+option_3.use_cpu()
+option_3.use_ort_backend()
+option_3.set_cpu_thread_num(12)
+am_postnet_runtime = fd.Runtime(option_3)
+
+option_4 = fd.RuntimeOption()
+option_4.set_model_path(onnx_voc_melgan, model_format=ModelFormat.ONNX)
+option_4.use_cpu()
+option_4.use_ort_backend()
+option_4.set_cpu_thread_num(12)
+voc_melgan_runtime = fd.Runtime(option_4)
 
 
 def depadding(data, chunk_num, chunk_id, block, pad, upsample):
@@ -199,8 +213,10 @@ class TritonPythonModel:
             part_phone_ids = phone_ids[i].numpy()
             voc_chunk_id = 0
 
-            orig_hs = am_encoder_infer_sess.run(
-                None, input_feed={'text': part_phone_ids})
+            orig_hs = am_encoder_runtime.infer({
+                'text':
+                part_phone_ids.astype("int64")
+            })
             orig_hs = orig_hs[0]
 
             # streaming voc chunk info
@@ -213,13 +229,16 @@ class TritonPythonModel:
             hss = get_chunks(orig_hs, am_block, am_pad, "am")
             am_chunk_num = len(hss)
             for i, hs in enumerate(hss):
-                am_decoder_output = am_decoder_sess.run(
-                    None, input_feed={'xs': hs})
-                am_postnet_output = am_postnet_sess.run(
-                    None,
-                    input_feed={
-                        'xs': np.transpose(am_decoder_output[0], (0, 2, 1))
-                    })
+
+                am_decoder_output = am_decoder_runtime.infer({
+                    'xs':
+                    hs.astype("float32")
+                })
+
+                am_postnet_output = am_postnet_runtime.infer({
+                    'xs':
+                    np.transpose(am_decoder_output[0], (0, 2, 1))
+                })
                 am_output_data = am_decoder_output + np.transpose(
                     am_postnet_output[0], (0, 2, 1))
                 normalized_mel = am_output_data[0][0]
@@ -239,9 +258,10 @@ class TritonPythonModel:
                 while (mel_streaming.shape[0] >= end and
                        voc_chunk_id < voc_chunk_num):
                     voc_chunk = mel_streaming[start:end, :]
-
-                    sub_wav = voc_melgan_sess.run(
-                        output_names=None, input_feed={'logmel': voc_chunk})
+                    sub_wav = voc_melgan_runtime.infer({
+                        'logmel':
+                        voc_chunk.astype("float32")
+                    })
                     sub_wav = depadding(sub_wav[0], voc_chunk_num, voc_chunk_id,
                                         voc_block, voc_pad, voc_upsample)
 

@@ -21,13 +21,18 @@ docker exec -it -u root fastdeploy bash
 #### 1.2 安装(在docker内)
 ```bash
 apt-get install build-essential python3-dev libssl-dev libffi-dev libxml2 libxml2-dev libxslt1-dev zlib1g-dev libsndfile1 language-pack-zh-hans wget zip
+python3 -m pip install --upgrade pip
+pip3 install -U fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 pip3 install paddlespeech
 export LC_ALL="zh_CN.UTF-8"
 export LANG="zh_CN.UTF-8"
 export LANGUAGE="zh_CN:zh:en_US:en"
 ```
 
-#### 1.3 下载模型(在docker内)
+#### 1.3 下载模型(在docker内,可跳过)
+
+模型文件会自动下载并解压缩,如果您想要手动下载，请使用下面的命令.
+
 ```bash
 cd /models/streaming_pp_tts/1
 wget https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip
