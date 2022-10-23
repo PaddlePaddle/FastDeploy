@@ -149,9 +149,6 @@ class StableDiffusionFastDeployPipeline(object):
             input_type = [np.float16, np.float16, np.float16]
             if self.unet_runtime.get_input_info(0).dtype == fd.FDDataType.FP32:
                 input_type = [np.float32, np.int64, np.float32]
-            print(
-                f"dtype = {self.unet_runtime.get_input_info(0).dtype}",
-                flush=True)
             noise_pred = self.unet_runtime.infer({
                 sample_name: latent_model_input.astype(input_type[0]),
                 timestep_name: np.array(
