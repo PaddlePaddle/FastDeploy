@@ -56,9 +56,7 @@ if __name__ == "__main__":
         text_encoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, None], dtype="int64"),  # input_ids
-            paddle.static.InputSpec(
-                shape=[None, None], dtype="int64")  # segment_ids
+                shape=[None, None], dtype="int64")  # input_ids
         ])
 
     # Save text_encoder in static graph model.
@@ -85,7 +83,7 @@ if __name__ == "__main__":
             paddle.static.InputSpec(
                 shape=[None, 4, None, None], dtype="float32"),  # latent
             paddle.static.InputSpec(
-                shape=[1], dtype="float32"),  # timesteps
+                shape=[1], dtype="int64"),  # timesteps
             paddle.static.InputSpec(
                 shape=[None, None, 768], dtype="float32")  # encoder_embedding
         ])

@@ -63,7 +63,7 @@ def parse_arguments():
         "--backend",
         type=str,
         default='ort',
-        choices=['ort', 'tensorrt', 'pp', 'pp-trt'],
+        choices=['ort', 'trt', 'pp', 'pp-trt'],
         help="The inference runtime backend of unet model and text encoder model."
     )
     return parser.parse_args()
@@ -118,7 +118,8 @@ def create_trt_runtime(model_dir,
     else:
         onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
         option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
-    option.set_trt_cache_file(f"{model_prefix}.trt")
+    cache_file = os.path.join(model_dir, f"{model_prefix}.trt")
+    option.set_trt_cache_file(cache_file)
     return fd.Runtime(option)
 
 
@@ -136,17 +137,27 @@ if __name__ == "__main__":
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
     # 3. Init runtime
-    text_encoder_runtime = create_ort_runtime(
-        args.model_dir, args.text_encoder_model_prefix, args.model_format)
-
     if args.backend == "ort":
+        text_encoder_runtime = create_ort_runtime(
+            args.model_dir, args.text_encoder_model_prefix, args.model_format)
         vae_decoder_runtime = create_ort_runtime(
             args.model_dir, args.vae_model_prefix, args.model_format)
         start = time.time()
         unet_runtime = create_ort_runtime(
             args.model_dir, args.unet_model_prefix, args.model_format)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
+    elif args.backend == "pp":
+        text_encoder_runtime = create_paddle_inference_runtime(
+            args.model_dir, args.text_encoder_model_prefix)
+        vae_decoder_runtime = create_paddle_inference_runtime(
+            args.model_dir, args.vae_model_prefix)
+        start = time.time()
+        unet_runtime = create_paddle_inference_runtime(args.model_dir,
+                                                       args.unet_model_prefix)
+        print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "trt":
+        text_encoder_runtime = create_ort_runtime(
+            args.model_dir, args.text_encoder_model_prefix, args.model_format)
         vae_dynamic_shape = {
             "latent": {
                 "min_shape": [1, 4, 64, 64],
@@ -201,8 +212,8 @@ if __name__ == "__main__":
         time_costs += [latency]
         print(f"No {step:3d} time cost: {latency:2f} s")
     print(
-        f"Mean latency: {np.mean(time_costs):2f}, p50 latency: {np.percentile(time_costs, 50):2f}, "
-        f"p90 latency: {np.percentile(time_costs, 90):2f}, p95 latency: {np.percentile(time_costs, 95):2f}."
+        f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
+        f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
     )
     image.save("fd_astronaut_rides_horse.png")
     print(f"Image saved!")

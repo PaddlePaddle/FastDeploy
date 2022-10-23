@@ -1,5 +1,4 @@
 # Copyright 2022 The HuggingFace Inc. team.
-# Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 # Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,9 +41,9 @@ class StableDiffusionFastDeployPipeline(object):
                              LMSDiscreteScheduler], ):
         self.vae_decoder_runtime = vae_decoder_runtime
         self.text_encoder_runtime = text_encoder_runtime
-        self.tokenizer = tokenizer
         self.unet_runtime = unet_runtime
         self.scheduler = scheduler
+        self.tokenizer = tokenizer
 
     def __call__(
             self,
@@ -147,11 +146,18 @@ class StableDiffusionFastDeployPipeline(object):
             encoder_hidden_states_name = self.unet_runtime.get_input_info(
                 2).name
             # Required fp16 input.
+            input_type = [np.float16, np.float16, np.float16]
+            if self.unet_runtime.get_input_info(0).dtype == fd.FDDataType.FP32:
+                input_type = [np.float32, np.int64, np.float32]
+            print(
+                f"dtype = {self.unet_runtime.get_input_info(0).dtype}",
+                flush=True)
             noise_pred = self.unet_runtime.infer({
-                sample_name: latent_model_input.astype(np.float16),
+                sample_name: latent_model_input.astype(input_type[0]),
                 timestep_name: np.array(
-                    [t], dtype=np.float16),
-                encoder_hidden_states_name: text_embeddings.astype(np.float16),
+                    [t], dtype=input_type[1]),
+                encoder_hidden_states_name:
+                text_embeddings.astype(input_type[2]),
             })[0]
             # perform guidance
             if do_classifier_free_guidance:
@@ -170,8 +176,12 @@ class StableDiffusionFastDeployPipeline(object):
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
         sample_name = self.vae_decoder_runtime.get_input_info(0).name
+        input_dtype = np.float16
+        if self.vae_decoder_runtime.get_input_info(
+                0).dtype == fd.FDDataType.FP32:
+            input_dtype = np.float32
         image = self.vae_decoder_runtime.infer({
-            sample_name: latents.astype(np.float16)
+            sample_name: latents.astype(input_dtype)
         })[0]
 
         image = np.clip(image / 2 + 0.5, 0, 1)
