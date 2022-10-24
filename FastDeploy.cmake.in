@@ -181,7 +181,7 @@ if(ENABLE_VISION)
     endif()
   # Win/Linux/Mac
   else()
-    find_package(OpenCV REQUIRED PATHS ${OpenCV_DIR})
+    find_package(OpenCV REQUIRED PATHS ${OpenCV_DIR} NO_DEFAULT_PATH)
     list(APPEND FASTDEPLOY_INCS ${OpenCV_INCLUDE_DIRS})
     list(APPEND FASTDEPLOY_LIBS ${OpenCV_LIBS})
   endif()
