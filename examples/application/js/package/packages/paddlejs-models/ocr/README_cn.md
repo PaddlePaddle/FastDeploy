@@ -8,6 +8,8 @@ ocr 为文本识别模块，包括两个模型：ocr_detection 和 ocr_recogniti
 
 模块提供简单易用的接口，使用者只需上传图片即可获取文本识别结果。
 
+ocr_detection和ocr_recognition模型是[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)发布[PP-OCRv3](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_ch/PP-OCRv3_introduction.md)模型的压缩版本，在损失一小部分精度的情况下，大幅提升在js上的运行速度。
+
 ocr_recognition模型输入shape为[1, 3, 48, 320],模型推理前会对图片文本框选区域进行处理：图片文本框选区域宽高比 <= 10，将整个框选区域传入识别模型；框选区域宽高比 > 10，则对框选区域按宽度进行裁剪，将裁剪区域传入识别模型，最终拼接裁剪区域每一部分的识别结果。
 
 

@@ -8,6 +8,8 @@ OCR is a text recognition module, which includes two models: ocr_detection and o
 
 The module provides a simple and easy-to-use interface. Users only need to upload pictures to obtain text recognition results.
 
+The ocr_detection and ocr_recognition models are compressed from [PP-OCRv3](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/PP-OCRv3_introduction_en.md) which released by [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), which greatly improves the running speed on js at a small loss of accuracy.
+
 The input shape of the ocr_recognition model is [1, 3, 48, 320], and the selected area of the picture text box will be processed before the model reasoning: the width height ratio of the selected area of the picture text box is < = 10, and the whole selected area will be transferred into the recognition model; If the width height ratio of the frame selected area is > 10, the frame selected area will be cropped according to the width, the cropped area will be introduced into the recognition model, and finally the recognition results of each part of the cropped area will be spliced.
 
 
