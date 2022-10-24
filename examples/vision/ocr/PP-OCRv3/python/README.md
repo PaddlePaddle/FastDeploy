@@ -1,11 +1,11 @@
-# PPOCRSystemv3 Python部署示例
+# PPOCRv3 Python部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成PPOCRSystemv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成PPOCRv3在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```
 
@@ -13,8 +13,8 @@
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
 tar xvf ch_PP-OCRv3_det_infer.tar
 
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tar.gz
-tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar.gz
+wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
 tar xvf ch_PP-OCRv3_rec_infer.tar
@@ -38,12 +38,12 @@ python infer.py --det_model ch_PP-OCRv3_det_infer --cls_model ch_ppocr_mobile_v2
 运行完成可视化结果如下图所示
 <img width="640" src="https://user-images.githubusercontent.com/109218879/185826024-f7593a0c-1bd2-4a60-b76c-15588484fa08.jpg">
 
-## PPOCRSystemv3 Python接口
+## PPOCRv3 Python接口
 
 ```
-fd.vision.ocr.PPOCRSystemv3(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+fd.vision.ocr.PPOCRv3(det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 ```
-PPOCRSystemv3的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
+PPOCRv3的初始化,输入的参数是检测模型，分类模型和识别模型，其中cls_model可选，如无需求，可设置为None
 
 **参数**
 
@@ -54,7 +54,7 @@ PPOCRSystemv3的初始化,输入的参数是检测模型，分类模型和识别
 ### predict函数
 
 > ```
-> result = ocr_system.predict(im)
+> result = ppocr_v3.predict(im)
 > ```
 >
 > 模型预测接口，输入是一张图片

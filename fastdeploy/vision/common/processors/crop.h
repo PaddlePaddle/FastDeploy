@@ -27,6 +27,7 @@ class Crop : public Processor {
     width_ = width;
     height_ = height;
   }
+
   bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "Crop"; }
 

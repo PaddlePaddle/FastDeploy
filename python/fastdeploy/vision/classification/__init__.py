@@ -15,7 +15,7 @@ from __future__ import absolute_import
 
 from .contrib.yolov5cls import YOLOv5Cls
 from .ppcls import PaddleClasModel
-
+from .contrib.resnet import ResNet
 PPLCNet = PaddleClasModel
 PPLCNetv2 = PaddleClasModel
 EfficientNet = PaddleClasModel
