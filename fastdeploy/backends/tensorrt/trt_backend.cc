@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
+#include "fastdeploy/function/cuda_cast.h"
 
 #include <cstring>
 
@@ -354,11 +355,15 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
 
     if (item.device == Device::GPU) {
       if (item.dtype == FDDataType::INT64) {
-        // TODO(liqi): cast int64 to int32
-        // TRT don't support INT64
-        FDASSERT(false,
-                 "TRT don't support INT64 input on GPU, "
-                 "please use INT32 input");
+        FDWARNING << "TRT doesn't support INT64 input, the input tensor will be "
+                     "casted to INT32" << std::endl;
+
+        inputs_device_buffer_[item.name].resize(dims);
+        FDTensor input_tensor;
+        input_tensor.SetExternalData(item.shape, FDDataType::INT32,
+                                     inputs_device_buffer_[item.name].data(),
+                                     Device::GPU);
+        CudaCast(item, &input_tensor, stream_);
       } else {
         // no copy
         inputs_device_buffer_[item.name].SetExternalData(dims, item.Data());

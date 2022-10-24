@@ -92,16 +92,6 @@ if(BUILD_ON_JETSON)
   set(ENABLE_ORT_BACKEND ON)
 endif()
 
-# Whether to build CUDA source files in fastdeploy
-# CUDA source files include CUDA preprocessing, TRT plugins, etc.
-if(WITH_GPU AND UNIX)
-  set(BUILD_CUDA_SRC ON)
-  enable_language(CUDA)
-  set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
-else()
-  set(BUILD_CUDA_SRC OFF)
-endif()
-
 # config GIT_URL with github mirrors to speed up dependent repos clone
 option(GIT_URL "Git URL to clone dependent repos" ${GIT_URL})
 if(NOT GIT_URL)
@@ -177,6 +167,7 @@ configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
 file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
+file(GLOB_RECURSE FDTENSOR_FUNC_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cu)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/*.cc)
@@ -318,6 +309,17 @@ if(WITH_GPU)
     endif()
     list(APPEND DEPEND_LIBS ${CUDA_LIB})
   endif()
+endif()
+
+# Whether to build CUDA source files in fastdeploy
+# CUDA source files include CUDA preprocessing, TRT plugins, etc.
+if(WITH_GPU AND UNIX)
+  set(BUILD_CUDA_SRC ON)
+  enable_language(CUDA)
+  set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
+  list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_CUDA_SRCS})
+else()
+  set(BUILD_CUDA_SRC OFF)
 endif()
 
 if(ENABLE_TRT_BACKEND)
