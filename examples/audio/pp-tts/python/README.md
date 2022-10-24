@@ -12,7 +12,8 @@ This demo is an implementation of starting the streaming speech synthesis.
 apt-get install libsndfile1 wget zip
 **For Centos,use the command `yum install libsndfile-devel wget zip`**
 python3 -m pip install --upgrade pip
-pip3 install -U fastdeploy-python paddlespeech soundfile matplotlib
+pip3 install -U fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip3 install -U paddlespeech paddlepaddle soundfile matplotlib
 ```
 
 ### 2. Run the example

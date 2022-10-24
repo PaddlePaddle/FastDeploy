@@ -23,7 +23,7 @@ docker exec -it -u root fastdeploy bash
 apt-get install build-essential python3-dev libssl-dev libffi-dev libxml2 libxml2-dev libxslt1-dev zlib1g-dev libsndfile1 language-pack-zh-hans wget zip
 python3 -m pip install --upgrade pip
 pip3 install -U fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-pip3 install paddlespeech
+pip3 install -U paddlespeech paddlepaddle
 export LC_ALL="zh_CN.UTF-8"
 export LANG="zh_CN.UTF-8"
 export LANGUAGE="zh_CN:zh:en_US:en"
