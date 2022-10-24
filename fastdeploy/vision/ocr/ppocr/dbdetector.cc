@@ -44,17 +44,16 @@ DBDetector::DBDetector(const std::string& model_file,
 // Init
 bool DBDetector::Initialize() {
   // pre&post process parameters
-  max_side_len = 960;
+  max_side_len_ = 960;
+  ratio_h_ = 1.0;
+  ratio_w_ = 1.0;
 
-  det_db_thresh = 0.3;
-  det_db_box_thresh = 0.6;
-  det_db_unclip_ratio = 1.5;
-  det_db_score_mode = "slow";
-  use_dilation = false;
-
-  mean = {0.485f, 0.456f, 0.406f};
-  scale = {0.229f, 0.224f, 0.225f};
-  is_scale = true;
+  det_db_thresh_ = 0.3;
+  det_db_box_thresh_ = 0.6;
+  det_db_unclip_ratio_ = 1.5;
+  det_db_score_mode_ = "slow";
+  use_dilation_ = false;
+  post_processor_;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -93,11 +92,16 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
 
 bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
-    std::map<std::string, std::array<float, 2>>* im_info) {
+    std::map<std::string, std::array<float, 2>>* im_info,
+    int max_side_len, float ratio_h, float ratio_w) {
+  
   // Resize
   OcrDetectorResizeImage(mat, max_side_len, &ratio_h, &ratio_w);
   // Normalize
-  Normalize::Run(mat, mean, scale, true);
+  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
+  std::vector<float> scale = {0.229f, 0.224f, 0.225f};
+  bool is_scale = true;
+  Normalize::Run(mat, mean, scale, is_scale);
 
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
@@ -112,7 +116,15 @@ bool DBDetector::Preprocess(
 
 bool DBDetector::Postprocess(
     FDTensor& infer_result, std::vector<std::array<int, 8>>* boxes_result,
-    const std::map<std::string, std::array<float, 2>>& im_info) {
+    const std::map<std::string, std::array<float, 2>>& im_info,
+    PostProcessor post_processor,
+    double det_db_thresh,
+    double det_db_box_thresh,
+    double det_db_unclip_ratio,
+    std::string det_db_score_mode,
+    bool use_dilation,
+    float ratio_h,
+    float ratio_w) {
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
   int n2 = output_shape[2];
@@ -144,10 +156,10 @@ bool DBDetector::Postprocess(
   std::vector<std::vector<std::vector<int>>> boxes;
 
   boxes =
-      post_processor_.BoxesFromBitmap(pred_map, bit_map, det_db_box_thresh,
+      post_processor.BoxesFromBitmap(pred_map, bit_map, det_db_box_thresh,
                                       det_db_unclip_ratio, det_db_score_mode);
 
-  boxes = post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, im_info);
+  boxes = post_processor.FilterTagDetRes(boxes, ratio_h, ratio_w, im_info);
 
   // boxes to boxes_result
   for (int i = 0; i < boxes.size(); i++) {
@@ -178,7 +190,7 @@ bool DBDetector::Predict(cv::Mat* img,
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
 
-  if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+  if (!Preprocess(&mat, &input_tensors[0], &im_info, max_side_len_ , ratio_h_, ratio_w_ )) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
@@ -190,7 +202,13 @@ bool DBDetector::Predict(cv::Mat* img,
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], boxes_result, im_info)) {
+  if (!Postprocess(output_tensors[0], boxes_result, im_info, post_processor_, det_db_thresh_,
+    det_db_box_thresh_,
+    det_db_unclip_ratio_,
+    det_db_score_mode_,
+    use_dilation_,
+    ratio_h_,
+    ratio_w_ )) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
