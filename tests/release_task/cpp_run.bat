@@ -17,7 +17,7 @@ if "%DEVICE%" == "gpu" (
     set CPP_FASTDEPLOY_PACKAGE=fastdeploy-%PLATFORM%-%DEVICE%-%VERSION%
     set RUN_CASES=ort paddle trt
 ) else (
-    set CPP_FASTDEPLOY_PACKAGE=fastdeploy-python
+    set CPP_FASTDEPLOY_PACKAGE=fastdeploy-%PLATFORM%-%VERSION%
     set RUN_CASES=ort paddle openvino
 )
 
@@ -36,7 +36,7 @@ set COMPARE_SHELL=%CURRENT_DIR%\compare_with_gt.py
 python -c "from download import *; download_and_decompress('https://fastdeploy.bj.bcebos.com/dev/cpp/%CPP_FASTDEPLOY_PACKAGE%.zip', './')"
 
 mkdir build && cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"  -DCMAKE_CXX_COMPILER=%CMAKE_CXX_COMPILER%
+cmake .. -G "Visual Studio 16 2019" -A x64 -DFASTDEPLOY_INSTALL_DIR=%cd%\..\%CPP_FASTDEPLOY_PACKAGE% -DCUDA_DIRECTORY="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2"
 
 msbuild infer_demo.sln /m:4 /p:Configuration=Release /p:Platform=x64
 
@@ -47,7 +47,6 @@ echo "FASTDEPLOY_HOME" %FASTDEPLOY_HOME%
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib\onnxruntime* Release\
 set PATH=%FASTDEPLOY_HOME%\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\onnxruntime\lib;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv-win-x64-3.4.16\build\x64\vc15\bin;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\paddle\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mkldnn\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\paddle_inference\third_party\install\mklml\lib;%PATH%
@@ -56,9 +55,9 @@ set PATH=%FASTDEPLOY_HOME%\third_libs\install\tensorrt\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\faster_tokenizer\third_party\lib;%PATH%
 set PATH=%FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\bin;%PATH%
-set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin;%PATH%
-
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\bin;%PATH%
+set PATH=%FASTDEPLOY_HOME%\third_libs\install\openvino\runtime\3rdparty\tbb\bin;%PATH%
 echo "set path done"
 cd %cd%\Release
 for %%b in (%RUN_CASES%) do (
@@ -71,11 +70,9 @@ for %%b in (%RUN_CASES%) do (
         if %%b == trt (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_trt_result.txt
             python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_trt_result.txt --platform %PLATFORM% --device trt --conf_threshold 0.5
-        ) else if %%b == ort (
+        ) else (
             infer_ppyoloe_demo.exe --model_dir=%MODEL_PATH% --image_file=%IMAGE_PATH% --device=gpu --backend=%%b >> cpp_%%b_gpu_result.txt
             python %COMPARE_SHELL% --gt_path %GROUND_TRUTH_PATH% --result_path cpp_%%b_gpu_result.txt --platform %PLATFORM% --device gpu --conf_threshold 0.5
-        ) else if %%b == paddle (
-            echo "Temporarily skip paddle gpu case in windows for Inaccurate inference precision" 
         )
     ) 
 )

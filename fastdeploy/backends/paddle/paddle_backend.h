@@ -53,6 +53,7 @@ struct PaddleBackendOption {
   int gpu_mem_init_size = 100;
   // gpu device id
   int gpu_id = 0;
+  bool enable_pinned_memory = false;
 
   std::vector<std::string> delete_pass_names = {};
 };
@@ -105,6 +106,7 @@ class PaddleBackend : public BaseBackend {
       std::map<std::string, std::vector<int>>* opt_shape) const;
   void SetTRTDynamicShapeToConfig(const PaddleBackendOption& option);
 #endif
+  PaddleBackendOption option_;
   paddle_infer::Config config_;
   std::shared_ptr<paddle_infer::Predictor> predictor_;
   std::vector<TensorInfo> inputs_desc_;

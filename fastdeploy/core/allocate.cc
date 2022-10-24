@@ -34,6 +34,12 @@ bool FDDeviceAllocator::operator()(void** ptr, size_t size) const {
 
 void FDDeviceFree::operator()(void* ptr) const { cudaFree(ptr); }
 
+bool FDDeviceHostAllocator::operator()(void** ptr, size_t size) const {
+  return cudaMallocHost(ptr, size) == cudaSuccess;
+}
+
+void FDDeviceHostFree::operator()(void* ptr) const { cudaFreeHost(ptr); }
+
 #endif
 
 }  // namespace fastdeploy

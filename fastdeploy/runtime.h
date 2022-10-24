@@ -204,6 +204,15 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  /**
+   * @brief Enable pinned memory. Pinned memory can be utilized to speedup the data transfer between CPU and GPU. Currently it's only suppurted in TRT backend and Paddle Inference backend.
+   */
+  void EnablePinnedMemory();
+
+  /**
+   * @brief Disable pinned memory
+   */
+  void DisablePinnedMemory();
 
   /**
    * @brief Enable to collect shape in paddle trt backend
@@ -222,6 +231,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int device_id = 0;
 
   Device device = Device::CPU;
+
+  bool enable_pinned_memory = false;
 
   // ======Only for ORT Backend========
   // -1 means use default value by ort
