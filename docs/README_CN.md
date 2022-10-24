@@ -19,8 +19,8 @@
 
 ## API文档(进行中)
 
-- [Python API文档](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-- [C++ API文档](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
+- [Python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/)
+- [C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/)
 
 ## 性能调优
 

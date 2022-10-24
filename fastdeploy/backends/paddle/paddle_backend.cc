@@ -72,6 +72,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
+  config_.EnableMemoryOptim();
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use PaddleReader instead now
