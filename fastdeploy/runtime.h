@@ -38,6 +38,7 @@ enum Backend {
   ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
   TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
+  POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
 };
@@ -47,6 +48,7 @@ enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
+  TORCHSCRIPT,  ///< Model with TorchScript format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -116,6 +118,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
+
+  /// Set Poros backend as inference backend, support CPU/GPU
+  void UsePorosBackend();
 
   /// Set OpenVINO as inference backend, only support CPU
   void UseOpenVINOBackend();
@@ -199,6 +204,26 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetTrtCacheFile(const std::string& cache_file_path);
 
+  /**
+   * @brief Enable pinned memory. Pinned memory can be utilized to speedup the data transfer between CPU and GPU. Currently it's only suppurted in TRT backend and Paddle Inference backend.
+   */
+  void EnablePinnedMemory();
+
+  /**
+   * @brief Disable pinned memory
+   */
+  void DisablePinnedMemory();
+
+  /**
+   * @brief Enable to collect shape in paddle trt backend
+   */
+  void EnablePaddleTrtCollectShape();
+
+  /**
+   * @brief Disable to collect shape in paddle trt backend
+   */
+  void DisablePaddleTrtCollectShape();
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   // default will let the backend choose their own default value
@@ -206,6 +231,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int device_id = 0;
 
   Device device = Device::CPU;
+
+  bool enable_pinned_memory = false;
 
   // ======Only for ORT Backend========
   // -1 means use default value by ort
@@ -220,6 +247,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool pd_enable_mkldnn = true;
   bool pd_enable_log_info = false;
   bool pd_enable_trt = false;
+  bool pd_collect_shape = false;
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 
@@ -242,6 +270,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+
+  // ======Only for Poros Backend=======
+  bool is_dynamic = false;
+  bool long_to_int = true;
+  bool use_nvidia_tf32 = false;
+  int unconst_ops_thres = -1;
+  std::string poros_file = "";
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
@@ -269,6 +304,15 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
+
+  /** \brief Compile TorchScript Module, only for Poros backend
+   *
+   * \param[in] prewarm_tensors Prewarm datas for compile
+   * \param[in] _option Runtime option
+   * \return true if compile successed, otherwise false
+   */
+  bool Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
+               const RuntimeOption& _option);
 
   /** \brief Get number of inputs
    */

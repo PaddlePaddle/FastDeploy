@@ -1,3 +1,17 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision.h"
 #include "fastdeploy/vision/utils/utils.h"
@@ -86,9 +100,13 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     int input_height = input_shape[2].as<int>();
     int input_width = input_shape[3].as<int>();
     if (input_height == -1 || input_width == -1) {
-      FDWARNING << "The exported PaddleSeg model is with dynamic shape input,"
-	        << "which is not supported by ONNX Runtime and Tensorrt."
-		<< "Only OpenVINO and Paddle Inference are available now." << std::endl;
+      FDWARNING << "The exported PaddleSeg model is with dynamic shape input, "
+	        << "which is not supported by ONNX Runtime and Tensorrt. "
+		<< "Only OpenVINO and Paddle Inference are available now. " 
+	        << "For using ONNX Runtime or Tensorrt, "
+	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
+	        << " to export model with fixed input shape."
+	        << std::endl;
       valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
       valid_gpu_backends = {Backend::PDINFER};
     }
@@ -113,12 +131,6 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << "." << std::endl;
     }
   }
-  if (is_with_argmax) {
-    FDWARNING << "The PaddleSeg model is exported with argmax."
-              << " If you want the edge of segmentation image more"
-              << " smoother. Please export model with parameters"
-              << "  --output_op softmax." << std::endl;
-  }
   processors_.push_back(std::make_shared<HWC2CHW>());
   return true;
 }
@@ -131,9 +143,9 @@ bool PaddleSegModel::Preprocess(Mat* mat, FDTensor* output) {
       int resize_height = -1;
       std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
       if (is_vertical_screen && (resize_width > resize_height)) {
-        if (processor->SetWidthAndHeight(resize_height, resize_width)) {
-          FDERROR << "Failed to set Resize processor width and height "
-                  << processors_[i]->Name() << "." << std::endl;
+        if (!(processor->SetWidthAndHeight(resize_height, resize_width))) {
+          FDERROR << "Failed to set width and height of "
+                  << processors_[i]->Name() << " processor." << std::endl;
         }
       }
     }
