@@ -170,7 +170,8 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   std::vector<float> scores;
   ResultType type = ResultType::FACE_DETECTION;
   /** \brief
-   * User can set landmarks_per_face manually in the post processes.
+   * `landmarks_per_face` indicates the number of face landmarks for each detected face
+   * if the model's output contains face landmarks (such as YOLOv5Face, SCRFD, ...)
   */
   int landmarks_per_face;
 
@@ -190,11 +191,11 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   /** \brief
-   * label_map stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
+   * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
   */
   std::vector<uint8_t> label_map;
   /** \brief
-   * score_map stores the probability of the predicted label for each pixel of input image.
+   * `score_map` stores the probability of the predicted label for each pixel of input image.
   */
   std::vector<float> score_map;
   /// The output shape, means [H, W]
@@ -236,13 +237,12 @@ struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
 /*! @brief Matting result structure for all the Matting models
  */
 struct FASTDEPLOY_DECL MattingResult : public BaseResult {
-  // alpha matte and fgr (predicted foreground: HWC/BGR float32)
   /** \brief
-  alpha is a one-dimensional vector, which is the predicted alpha transparency value. The range of values is [0., 1.], and the length is hxw. h, w are the height and width of the input image
+  `alpha` is a one-dimensional vector, which is the predicted alpha transparency value. The range of values is [0., 1.], and the length is hxw. h, w are the height and width of the input image
   */
   std::vector<float> alpha;       // h x w
   /** \brief
-  If the model can predict foreground, foreground save the predicted foreground image, the shape is [hight,width,channel] generally.
+  If the model can predict foreground, `foreground` save the predicted foreground image, the shape is [hight,width,channel] generally.
   */
   std::vector<float> foreground;  // h x w x c (c=3 default)
   /** \brief
