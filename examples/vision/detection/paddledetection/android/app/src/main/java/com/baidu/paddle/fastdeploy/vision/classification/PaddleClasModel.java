@@ -14,6 +14,20 @@ public class PaddleClasModel {
         mInitialized = false;
     }
 
+    // Constructor with default runtime option
+    public PaddleClasModel(String modelFile,
+                           String paramsFile,
+                           String configFile) {
+        init_(modelFile, paramsFile, configFile, "", new RuntimeOption());
+    }
+
+    public PaddleClasModel(String modelFile,
+                           String paramsFile,
+                           String configFile,
+                           String labelFile) {
+        init_(modelFile, paramsFile, configFile, labelFile, new RuntimeOption());
+    }
+
     // Constructor without label file
     public PaddleClasModel(String modelFile,
                            String paramsFile,

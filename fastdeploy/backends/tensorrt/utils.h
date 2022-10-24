@@ -206,6 +206,8 @@ class FDGenericBuffer {
 };
 
 using FDDeviceBuffer = FDGenericBuffer<FDDeviceAllocator, FDDeviceFree>;
+using FDDeviceHostBuffer = FDGenericBuffer<FDDeviceHostAllocator,
+                                           FDDeviceHostFree>;
 
 class FDTrtLogger : public nvinfer1::ILogger {
  public:

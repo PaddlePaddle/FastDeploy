@@ -1,0 +1,51 @@
+{
+  "name": "paddle-js",
+  "version": "3.0.0",
+  "description": "paddlejs",
+  "keywords": [
+    "paddlejs",
+    "web AI",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "dev:@paddle-js-models/detect": "pnpm -F @paddle-js-models/detect dev",
+    "dev:@paddle-js-models/facedetect": "pnpm -F @paddle-js-models/facedetect dev",
+    "dev:@paddle-js-models/ocrdet": "pnpm -F @paddle-js-models/ocrdet dev",
+    "dev:@paddle-js-models/ocr": "pnpm -F @paddle-js-models/ocr dev",
+    "dev:@paddle-js-models/gesture": "pnpm -F @paddle-js-models/gesture dev",
+    "dev:@paddle-js-models/humanseg": "pnpm -F @paddle-js-models/humanseg dev",
+    "dev:@paddle-js-models/humanseg_gpu": "pnpm -F @paddle-js-models/humanseg_gpu dev",
+    "dev:@paddle-js-models/mobilenet": "pnpm -F @paddle-js-models/mobilenet dev",
+    "build:@paddle-js-models/detect": "pnpm -F @paddle-js-models/detect build",
+    "build:@paddle-js-models/facedetect": "pnpm -F @paddle-js-models/facedetect build",
+    "build:@paddle-js-models/ocrdet": "pnpm -F @paddle-js-models/ocrdet build",
+    "build:@paddle-js-models/ocr": "pnpm -F @paddle-js-models/ocr build",
+    "build:@paddle-js-models/gesture": "pnpm -F @paddle-js-models/gesture build",
+    "build:@paddle-js-models/humanseg": "pnpm -F @paddle-js-models/humanseg build",
+    "build:@paddle-js-models/humanseg_gpu": "pnpm -F @paddle-js-models/humanseg_gpu build",
+    "build:@paddle-js-models/mobilenet": "pnpm -F @paddle-js-models/mobilenet build",
+    "publish:@paddle-js-models/detect": "pnpm -F @paddle-js-models/detect publish",
+    "publish:@paddle-js-models/facedetect": "pnpm -F @paddle-js-models/facedetect publish",
+    "publish:@paddle-js-models/ocrdet": "pnpm -F @paddle-js-models/ocrdet publish",
+    "publish:@paddle-js-models/ocr": "pnpm -F @paddle-js-models/ocr publish",
+    "publish:@paddle-js-models/gesture": "pnpm -F @paddle-js-models/gesture publish",
+    "publish:@paddle-js-models/humanseg": "pnpm -F @paddle-js-models/humanseg publish",
+    "publish:@paddle-js-models/humanseg_gpu": "pnpm -F @paddle-js-models/humanseg_gpu publish",
+    "publish:@paddle-js-models/mobilenet": "pnpm -F @paddle-js-models/mobilenet publish",
+    "lint": "eslint --ext .js,.ts packages --fix",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^17.1.2",
+    "@commitlint/config-conventional": "^17.1.0",
+    "@typescript-eslint/eslint-plugin": "^5.37.0",
+    "@typescript-eslint/parser": "^5.37.0",
+    "commitlint": "^17.1.2",
+    "eslint": "8.22.0",
+    "husky": "^8.0.1",
+    "lint-staged": "^13.0.3",
+    "typescript": "^4.8.3"
+  }
+}

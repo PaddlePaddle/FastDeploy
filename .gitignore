@@ -25,3 +25,14 @@ python/scripts/process_libraries.py
 .vs
 .idea
 .DS_Store
+miniprogram_npm
+node_modules
+.DS_Store
+dist
+etc
+lib
+dist-ssr
+coverage
+*.local
+yalc.*
+.yalc

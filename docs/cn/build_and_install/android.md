@@ -102,3 +102,4 @@ make install
 如何使用FastDeploy Android C++ SDK 请参考使用案例文档：  
 - [图像分类Android使用文档](../../../examples/vision/classification/paddleclas/android/README.md)  
 - [目标检测Android使用文档](../../../examples/vision/detection/paddledetection/android/README.md)  
+- [在 Android 通过 JNI 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)

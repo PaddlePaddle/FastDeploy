@@ -14,6 +14,20 @@ public class PicoDet {
         mInitialized = false;
     }
 
+    // Constructor with default runtime option
+    public PicoDet(String modelFile,
+                   String paramsFile,
+                   String configFile) {
+        init_(modelFile, paramsFile, configFile, "", new RuntimeOption());
+    }
+
+    public PicoDet(String modelFile,
+                   String paramsFile,
+                   String configFile,
+                   String labelFile) {
+        init_(modelFile, paramsFile, configFile, labelFile, new RuntimeOption());
+    }
+
     // Constructor without label file
     public PicoDet(String modelFile,
                    String paramsFile,

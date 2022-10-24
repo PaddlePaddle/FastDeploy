@@ -40,6 +40,10 @@ struct FASTDEPLOY_DECL FDTensor {
   // so we can skip data transfer, which may improve the efficience
   Device device = Device::CPU;
 
+  // Whether the data buffer is in pinned memory, which is allocated
+  // with cudaMallocHost()
+  bool is_pinned_memory = false;
+
   // if the external data is not on CPU, we use this temporary buffer
   // to transfer data to CPU at some cases we need to visit the
   // other devices' data
