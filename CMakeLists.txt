@@ -465,7 +465,7 @@ endif()
 set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 if(MSVC)
   # disable warnings for dll export
-  target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
+  target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
