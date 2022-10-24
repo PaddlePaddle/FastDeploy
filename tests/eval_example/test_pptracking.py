@@ -31,7 +31,7 @@ def test_pptracking_cpu():
     params_file = os.path.join(model_path, "model.pdiparams")
     config_file = os.path.join(model_path, "infer_cfg.yml")
     model = fd.vision.tracking.PPTracking(model_file, params_file, config_file, runtime_option=runtime_option)
-    cap = cv2.VideoCapture(input_url)
+    cap = cv2.VideoCapture("./person.mp4")
     frame_id = 0
     while True:
         _, frame = cap.read()
@@ -53,7 +53,7 @@ def test_pptracking_cpu():
             break
 
 
-def test_pptracking_gpu_trt():
+def test_pptracking_gpu():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4"
     fd.download_and_decompress(model_url, ".")
@@ -61,12 +61,13 @@ def test_pptracking_gpu_trt():
     model_path = "pptracking/fairmot_hrnetv2_w18_dlafpn_30e_576x320"
     runtime_option = fd.RuntimeOption()
     runtime_option.use_gpu()
-    runtime_option.use_trt_backend()
+    # Not supported trt backend, up to now
+    # runtime_option.use_trt_backend()
     model_file = os.path.join(model_path, "model.pdmodel")
     params_file = os.path.join(model_path, "model.pdiparams")
     config_file = os.path.join(model_path, "infer_cfg.yml")
     model = fd.vision.tracking.PPTracking(model_file, params_file, config_file, runtime_option=runtime_option)
-    cap = cv2.VideoCapture(input_url)
+    cap = cv2.VideoCapture("./person.mp4")
     frame_id = 0
     while True:
         _, frame = cap.read()
