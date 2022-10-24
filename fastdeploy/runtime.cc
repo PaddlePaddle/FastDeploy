@@ -356,6 +356,10 @@ void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
 
 void RuntimeOption::DisableTrtFP16() { trt_enable_fp16 = false; }
 
+void RuntimeOption::EnablePinnedMemory() { enable_pinned_memory = true; }
+
+void RuntimeOption::DisablePinnedMemory() { enable_pinned_memory = false; }
+
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
@@ -503,6 +507,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.gpu_id = option.device_id;
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
+  pd_option.enable_pinned_memory = option.enable_pinned_memory;
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -516,6 +521,7 @@ void Runtime::CreatePaddleBackend() {
     trt_option.min_shape = option.trt_min_shape;
     trt_option.opt_shape = option.trt_opt_shape;
     trt_option.serialize_file = option.trt_serialize_file;
+    trt_option.enable_pinned_memory = option.enable_pinned_memory;
     pd_option.trt_option = trt_option;
   }
 #endif
@@ -606,6 +612,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.min_shape = option.trt_min_shape;
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
+  trt_option.enable_pinned_memory = option.enable_pinned_memory;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
