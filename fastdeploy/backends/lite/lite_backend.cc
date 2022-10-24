@@ -42,7 +42,11 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
-  if (option.enable_fp16) {
+  if (option_.enable_int8) {
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+  }
+  if (option_.enable_fp16) {
     paddle::lite_api::MobileConfig check_fp16_config;
     // Determine whether the device supports the FP16
     // instruction set (or whether it is an arm device
@@ -58,12 +62,12 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
-  if (option.threads > 0) {
-    config_.set_threads(option.threads);
+  if (option_.threads > 0) {
+    config_.set_threads(option_.threads);
   }
-  if (option.power_mode > 0) {
+  if (option_.power_mode > 0) {
     config_.set_power_mode(
-        static_cast<paddle::lite_api::PowerMode>(option.power_mode));
+        static_cast<paddle::lite_api::PowerMode>(option_.power_mode));
   }
 }
 
