@@ -47,6 +47,7 @@ tar -xvf COCO_val_320.tar.gz
 ```shell
 fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
+【说明】离线量化（训练后量化）：post-training quantization，缩写是PTQ
 
 ##### 3.参数说明
 
