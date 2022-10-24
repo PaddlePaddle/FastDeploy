@@ -31,7 +31,7 @@ export LANGUAGE="zh_CN:zh:en_US:en"
 ```
 
 #### 1.3 Download models (inside the docker, skippable)
-The model file will be downloaded and decompressed automatically.If you want to download manually, please use the following command.
+The model file will be downloaded and decompressed automatically. If you want to download manually, please use the following command.
 ```bash
 cd /models/streaming_pp_tts/1
 wget https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip

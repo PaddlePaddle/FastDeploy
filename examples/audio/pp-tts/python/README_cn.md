@@ -9,7 +9,7 @@
 ### 1. 安装
 ```bash
 apt-get install libsndfile1 wget zip
-**对于Centos系统,使用`yum install libsndfile-devel wget zip`**
+对于Centos系统,使用yum install libsndfile-devel wget zip
 python3 -m pip install --upgrade pip
 pip3 install -U fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 pip3 install -U paddlespeech paddlepaddle soundfile matplotlib
