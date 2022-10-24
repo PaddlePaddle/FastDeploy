@@ -6,6 +6,10 @@ ocr_detection model is used to detect the text area in the image.
 
 <img src="https://img.shields.io/npm/v/@paddle-js-models/ocrdet?color=success" alt="version"> <img src="https://img.shields.io/bundlephobia/min/@paddle-js-models/ocrdet" alt="size"> <img src="https://img.shields.io/npm/dm/@paddle-js-models/ocrdet?color=orange" alt="downloads"> <img src="https://img.shields.io/npm/dt/@paddle-js-models/ocrdet" alt="downloads">
 
+
+The ocr_detection model is compressed from [PP-OCRv3](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.6/doc/doc_en/PP-OCRv3_introduction_en.md) which released by [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), which greatly improves the running speed on js at a small loss of accuracy.
+
+
 # Usage
 
 ```js
