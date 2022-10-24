@@ -313,7 +313,7 @@ endif()
 
 # Whether to build CUDA source files in fastdeploy
 # CUDA source files include CUDA preprocessing, TRT plugins, etc.
-if(WITH_GPU AND UNIX)
+if(WITH_GPU)
   set(BUILD_CUDA_SRC ON)
   enable_language(CUDA)
   set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
