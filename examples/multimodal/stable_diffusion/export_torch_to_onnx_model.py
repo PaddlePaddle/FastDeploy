@@ -71,8 +71,12 @@ if __name__ == "__main__":
     unet.cuda()
     text_encoder.cuda()
 
-    if not os.path.exists(args.output_path):
-        os.makedirs(args.output_path)
+    os.makedirs(args.output_path, exist_ok=True)
+    vae_decoder_path = os.path.join(args.output_path, "vae_decoder")
+    text_encoder_path = os.path.join(args.output_path, "text_encoder")
+    unet_path = os.path.join(args.output_path, "unet")
+    for p in [vae_decoder_path, text_encoder_path, unet_path]:
+        os.makedirs(p, exist_ok=True)
 
     with torch.inference_mode():
         # Export vae decoder model
@@ -82,7 +86,7 @@ if __name__ == "__main__":
             vae_decoder,  # model being run
             vae_inputs,  # model input (or a tuple for multiple inputs)
             os.path.join(
-                args.output_path, "vae_decoder.onnx"
+                vae_decoder_path, "inference.onnx"
             ),  # where to save the model (can be a file or file-like object)
             export_params=True,  # store the trained parameter weights inside the model file
             opset_version=12,  # the ONNX version to export the model to
@@ -108,7 +112,7 @@ if __name__ == "__main__":
             unet,  # model being run
             unet_inputs,  # model input (or a tuple for multiple inputs)
             os.path.join(
-                args.output_path, "unet.onnx"
+                unet_path, "inference.onnx"
             ),  # where to save the model (can be a file or file-like object)
             export_params=True,  # store the trained parameter weights inside the model file
             opset_version=12,  # the ONNX version to export the model to
@@ -135,7 +139,7 @@ if __name__ == "__main__":
             text_encoder,  # model being run
             text_encoder_inputs,  # model input (or a tuple for multiple inputs)
             os.path.join(
-                args.output_path, "text_encoder.onnx"
+                text_encoder_path, "inference.onnx"
             ),  # where to save the model (can be a file or file-like object)
             export_params=True,  # store the trained parameter weights inside the model file
             opset_version=14,  # the ONNX version to export the model to

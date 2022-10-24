@@ -30,7 +30,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        default="diffusion_model",
+        default="paddle_diffusion_model",
         help="The model directory of diffusion_model.")
     parser.add_argument(
         "--model_format",
@@ -66,6 +66,10 @@ def parse_arguments():
         choices=['ort', 'trt', 'pp', 'pp-trt'],
         help="The inference runtime backend of unet model and text encoder model."
     )
+    parser.add_argument(
+        "--image_path",
+        default="fd_astronaut_rides_horse.png",
+        help="The model directory of diffusion_model.")
     return parser.parse_args()
 
 
@@ -74,22 +78,37 @@ def create_ort_runtime(model_dir, model_prefix, model_format):
     option.use_ort_backend()
     option.use_gpu()
     if model_format == "paddle":
-        model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
-        params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+        model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
+        params_file = os.path.join(model_dir, model_prefix,
+                                   "inference.pdiparams")
         option.set_model_path(model_file, params_file)
     else:
-        onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
+        onnx_file = os.path.join(model_dir, model_prefix, "inference.onnx")
         option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
     return fd.Runtime(option)
 
 
-def create_paddle_inference_runtime(model_dir, model_prefix):
+def create_paddle_inference_runtime(model_dir,
+                                    model_prefix,
+                                    use_trt=False,
+                                    dynamic_shape=None):
     option = fd.RuntimeOption()
     option.use_paddle_backend()
+    if use_trt:
+        option.use_trt_backend()
+        option.enable_paddle_to_trt()
+        # Need to enable collect shape for ernie
+        option.enable_paddle_trt_collect_shape()
+        if dynamic_shape is not None:
+            for key, shape_dict in dynamic_shape.items():
+                option.set_trt_input_shape(
+                    key,
+                    min_shape=shape_dict["min_shape"],
+                    opt_shape=shape_dict.get("opt_shape", None),
+                    max_shape=shape_dict.get("max_shape", None))
     option.use_gpu()
-
-    model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
-    params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+    model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
+    params_file = os.path.join(model_dir, model_prefix, "inference.pdiparams")
     option.set_model_path(model_file, params_file)
     return fd.Runtime(option)
 
@@ -112,13 +131,14 @@ def create_trt_runtime(model_dir,
                 opt_shape=shape_dict.get("opt_shape", None),
                 max_shape=shape_dict.get("max_shape", None))
     if model_format == "paddle":
-        model_file = os.path.join(model_dir, f"{model_prefix}.pdmodel")
-        params_file = os.path.join(model_dir, f"{model_prefix}.pdiparams")
+        model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
+        params_file = os.path.join(model_dir, model_prefix,
+                                   "inference.pdiparams")
         option.set_model_path(model_file, params_file)
     else:
-        onnx_file = os.path.join(model_dir, f"{model_prefix}.onnx")
+        onnx_file = os.path.join(model_dir, model_prefix, "inference.onnx")
         option.set_model_path(onnx_file, model_format=ModelFormat.ONNX)
-    cache_file = os.path.join(model_dir, f"{model_prefix}.trt")
+    cache_file = os.path.join(model_dir, model_prefix, "inference.trt")
     option.set_trt_cache_file(cache_file)
     return fd.Runtime(option)
 
@@ -136,7 +156,29 @@ if __name__ == "__main__":
     # 2. Init tokenizer
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
 
-    # 3. Init runtime
+    # 3. Set dynamic shape for trt backend
+    vae_dynamic_shape = {
+        "latent": {
+            "min_shape": [1, 4, 64, 64],
+            "max_shape": [2, 4, 64, 64],
+            "opt_shape": [2, 4, 64, 64],
+        }
+    }
+
+    unet_dynamic_shape = {
+        "latent_input": {
+            "min_shape": [1, 4, 64, 64],
+            "max_shape": [2, 4, 64, 64],
+            "opt_shape": [2, 4, 64, 64],
+        },
+        "encoder_embedding": {
+            "min_shape": [1, 77, 768],
+            "max_shape": [2, 77, 768],
+            "opt_shape": [2, 77, 768],
+        },
+    }
+
+    # 4. Init runtime
     if args.backend == "ort":
         text_encoder_runtime = create_ort_runtime(
             args.model_dir, args.text_encoder_model_prefix, args.model_format)
@@ -146,43 +188,26 @@ if __name__ == "__main__":
         unet_runtime = create_ort_runtime(
             args.model_dir, args.unet_model_prefix, args.model_format)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
-    elif args.backend == "pp":
+    elif args.backend == "pp" or args.backend == "pp-trt":
+        use_trt = True if args.backend == "pp-trt" else False
         text_encoder_runtime = create_paddle_inference_runtime(
             args.model_dir, args.text_encoder_model_prefix)
         vae_decoder_runtime = create_paddle_inference_runtime(
-            args.model_dir, args.vae_model_prefix)
+            args.model_dir, args.vae_model_prefix, use_trt, vae_dynamic_shape)
         start = time.time()
-        unet_runtime = create_paddle_inference_runtime(args.model_dir,
-                                                       args.unet_model_prefix)
+        unet_runtime = create_paddle_inference_runtime(
+            args.model_dir, args.unet_model_prefix, use_trt,
+            unet_dynamic_shape)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "trt":
         text_encoder_runtime = create_ort_runtime(
             args.model_dir, args.text_encoder_model_prefix, args.model_format)
-        vae_dynamic_shape = {
-            "latent": {
-                "min_shape": [1, 4, 64, 64],
-                "max_shape": [2, 4, 64, 64],
-                "opt_shape": [2, 4, 64, 64],
-            }
-        }
         vae_decoder_runtime = create_trt_runtime(
             args.model_dir,
             args.vae_model_prefix,
             args.model_format,
             workspace=(1 << 30),
             dynamic_shape=vae_dynamic_shape)
-        unet_dynamic_shape = {
-            "latent_input": {
-                "min_shape": [1, 4, 64, 64],
-                "max_shape": [2, 4, 64, 64],
-                "opt_shape": [2, 4, 64, 64],
-            },
-            "encoder_embedding": {
-                "min_shape": [1, 77, 768],
-                "max_shape": [2, 77, 768],
-                "opt_shape": [2, 77, 768],
-            },
-        }
         start = time.time()
         unet_runtime = create_trt_runtime(
             args.model_dir,
@@ -215,5 +240,5 @@ if __name__ == "__main__":
         f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
         f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
     )
-    image.save("fd_astronaut_rides_horse.png")
-    print(f"Image saved!")
+    image.save(args.image_path)
+    print(f"Image saved in {args.image_path}!")

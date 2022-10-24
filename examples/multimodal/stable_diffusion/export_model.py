@@ -56,11 +56,12 @@ if __name__ == "__main__":
         text_encoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, None], dtype="int64")  # input_ids
+                shape=[None, None], dtype="int64",
+                name="input_ids")  # input_ids
         ])
 
     # Save text_encoder in static graph model.
-    save_path = os.path.join(args.output_path, "text_encoder")
+    save_path = os.path.join(args.output_path, "text_encoder", "inference")
     paddle.jit.save(text_encoder, save_path)
     print(f"Save text_encoder model in {save_path} successfully.")
 
@@ -69,10 +70,11 @@ if __name__ == "__main__":
         vae_decoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, 4, 64, 64], dtype="float32"),  # latent
+                shape=[None, 4, 64, 64], dtype="float32",
+                name="latent"),  # latent
         ])
     # Save vae_decoder in static graph model.
-    save_path = os.path.join(args.output_path, "vae_decoder")
+    save_path = os.path.join(args.output_path, "vae_decoder", "inference")
     paddle.jit.save(vae_decoder, save_path)
     print(f"Save vae_decoder model in {save_path} successfully.")
 
@@ -81,12 +83,16 @@ if __name__ == "__main__":
         unet,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, 4, None, None], dtype="float32"),  # latent
+                shape=[None, 4, None, None],
+                dtype="float32",
+                name="latent_input"),  # latent
             paddle.static.InputSpec(
-                shape=[1], dtype="int64"),  # timesteps
+                shape=[1], dtype="int64", name="timestep"),  # timesteps
             paddle.static.InputSpec(
-                shape=[None, None, 768], dtype="float32")  # encoder_embedding
+                shape=[None, None, 768],
+                dtype="float32",
+                name="encoder_embedding")  # encoder_embedding
         ])
-    save_path = os.path.join(args.output_path, "unet")
+    save_path = os.path.join(args.output_path, "unet", "inference")
     paddle.jit.save(unet, save_path)
     print(f"Save unet model in {save_path} successfully.")
