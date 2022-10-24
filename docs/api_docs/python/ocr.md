@@ -24,18 +24,18 @@
     :inherited-members:
 ```
 
-## fastdeploy.vision.ocr.PPOCRSystemv2
+## fastdeploy.vision.ocr.PPOCRv2
 
 ```{eval-rst}
-.. autoclass:: fastdeploy.vision.ocr.PPOCRSystemv2
+.. autoclass:: fastdeploy.vision.ocr.PPOCRv2
     :members:
     :inherited-members:
 ```
 
-## fastdeploy.vision.ocr.PPOCRSystemv3
+## fastdeploy.vision.ocr.PPOCRv3
 
 ```{eval-rst}
-.. autoclass:: fastdeploy.vision.ocr.PPOCRSystemv3
+.. autoclass:: fastdeploy.vision.ocr.PPOCRv3
     :members:
     :inherited-members:
 ```

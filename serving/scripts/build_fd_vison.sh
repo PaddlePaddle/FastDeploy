@@ -43,10 +43,11 @@ else
 
 docker run -it --rm --name build_fd_vison \
            -v`pwd`/..:/workspace/fastdeploy \
-           paddlepaddle/fastdeploy:22.09-cpu-only-buildbase \
+           paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist;
+            ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;

@@ -23,8 +23,8 @@
 #endif
 
 namespace fcv {
-  class Mat;
-}
+class Mat;
+}  // namespace fcv
 
 namespace fastdeploy {
 namespace vision {
@@ -46,8 +46,8 @@ struct FASTDEPLOY_DECL Mat {
   // this only used if you don't want to write
   // the original data, and write to a new cv::Mat
   // then replace the old cv::Mat of this structure
-  void SetMat(const cv::Mat& mat) { 
-    cpu_mat = mat; 
+  void SetMat(const cv::Mat& mat) {
+    cpu_mat = mat;
     mat_type = ProcLib::OPENCV;
   }
 
@@ -56,9 +56,14 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
+  inline const cv::Mat* GetOpenCVMat() const {
+    FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
+    return &cpu_mat;
+  }
+
 #ifdef ENABLE_FALCONCV
-  void SetMat(const fcv::Mat& mat) { 
-    fcv_mat = mat; 
+  void SetMat(const fcv::Mat& mat) {
+    fcv_mat = mat;
     mat_type = Proclib::FALCONCV;
   }
 

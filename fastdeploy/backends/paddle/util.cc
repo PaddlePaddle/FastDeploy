@@ -29,16 +29,32 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
   tensor->Reshape(shape);
   auto place = ConvertFDDeviceToPlace(fd_tensor.device);
   if (fd_tensor.dtype == FDDataType::FP32) {
-    tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
+    if (place == paddle_infer::PlaceType::kGPU) {
+       tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
                               shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const float*>(fd_tensor.Data()));
+    }
     return;
   } else if (fd_tensor.dtype == FDDataType::INT32) {
-    tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
+    if (place == paddle_infer::PlaceType::kGPU) {
+       tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
                               shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const int32_t*>(fd_tensor.Data()));
+    }
     return;
   } else if (fd_tensor.dtype == FDDataType::INT64) {
-    tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
+    if (place == paddle_infer::PlaceType::kGPU) {
+       tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
                               shape, place);
+    } else {
+      tensor->CopyFromCpu(static_cast<const int64_t*>(fd_tensor.Data()));
+    }
+    return;
+  } else if (fd_tensor.dtype == FDDataType::UINT8) {
+    tensor->ShareExternalData(static_cast<const uint8_t*>(fd_tensor.Data()),
+                              shape, paddle_infer::PlaceType::kCPU);
     return;
   }
   FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
@@ -51,7 +67,7 @@ void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
   shape.assign(tmp_shape.begin(), tmp_shape.end());
-  fd_tensor->Allocate(shape, fd_dtype, tensor->name());
+  fd_tensor->Resize(shape, fd_dtype, tensor->name());
   if (fd_tensor->dtype == FDDataType::FP32) {
     tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
     return;

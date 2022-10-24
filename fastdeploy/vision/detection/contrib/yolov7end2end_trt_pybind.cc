@@ -28,6 +28,10 @@ void BindYOLOv7End2EndTRT(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold);
              return res;
            })
+      .def("use_cuda_preprocessing",
+           [](vision::detection::YOLOv7End2EndTRT& self, int max_image_size) {
+             self.UseCudaPreprocessing(max_image_size);
+           })
       .def_readwrite("size", &vision::detection::YOLOv7End2EndTRT::size)
       .def_readwrite("padding_value",
                      &vision::detection::YOLOv7End2EndTRT::padding_value)
