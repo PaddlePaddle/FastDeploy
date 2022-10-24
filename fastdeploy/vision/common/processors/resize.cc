@@ -92,7 +92,6 @@ bool Resize::ImplByFalconCV(Mat* mat) {
       float scale_h = height_ * 1.0 / origin_h;
       fcv::resize(*im, new_im, fcv::Size(), scale_w, scale_h, interp_method);
     } else {
-      fcv::Mat new_im;
       fcv::resize(*im, new_im, fcv::Size(width_, height_), 0, 0, interp_method);
     }
     mat->SetMat(new_im);

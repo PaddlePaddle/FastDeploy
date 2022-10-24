@@ -50,7 +50,7 @@ bool LimitByStride::ImplByFalconCV(Mat* mat) {
   if (rh == 0) {
     rh = stride_;
   }
-  if (rw != origin_w || rh != origin_w) {
+  if (rw != origin_w || rh != origin_h) {
     auto interp_method = fcv::InterpolationType::INTER_LINEAR;
     if (interp_ == 0) {
       interp_method = fcv::InterpolationType::INTER_NEAREST;
@@ -66,7 +66,9 @@ bool LimitByStride::ImplByFalconCV(Mat* mat) {
     }
 
     fcv::Mat new_im;
+    FDERROR << "Before " << im->width() << " " << im->height() << std::endl;
     fcv::resize(*im, new_im, fcv::Size(rw, rh), 0, 0, interp_method);
+    FDERROR << "After " << new_im.width() << " " << new_im.height() << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

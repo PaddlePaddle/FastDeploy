@@ -56,7 +56,6 @@ bool LimitLong::ImplByFalconCV(Mat* mat) {
     if (fabs(scale - 1.0) < 1e-06) {
       return true;
     }
-
     auto interp_method = fcv::InterpolationType::INTER_LINEAR;
     if (interp_ == 0) {
       interp_method = fcv::InterpolationType::INTER_NEAREST;
@@ -71,7 +70,10 @@ bool LimitLong::ImplByFalconCV(Mat* mat) {
       return false;
     }
     fcv::Mat new_im;
+    FDERROR << "origin " << im->width() << " " << im->height() << std::endl;
+    FDERROR << "scale " << scale << std::endl;
     fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
+    FDERROR << "after " << new_im.width() << " " << new_im.height() << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

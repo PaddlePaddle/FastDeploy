@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class StridePad : public Processor {
+class FASTDEPLOY_DECL StridePad : public Processor {
  public:
   // only support pad with left-top padding mode
   StridePad(int stride, const std::vector<float>& value) {

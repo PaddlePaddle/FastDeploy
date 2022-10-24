@@ -22,7 +22,7 @@
 namespace fastdeploy {
 
 #ifdef ENABLE_FLYCV
-TEST(fastdeploy, flycv_limit_stride1) {
+TEST(fastdeploy, flycv_limit_long1) {
   CheckShape check_shape;
   CheckData check_data;
   CheckType check_type;
@@ -33,8 +33,11 @@ TEST(fastdeploy, flycv_limit_stride1) {
 
   vision::Mat mat_opencv(mat);
   vision::Mat mat_flycv(mat1);
-  vision::LimitByStride::Run(&mat_opencv, 38, 1, vision::ProcLib::OPENCV);
-  vision::LimitByStride::Run(&mat_flycv, 38, 1, vision::ProcLib::FLYCV);
+  vision::LimitLong::Run(&mat_opencv, 38, -1, vision::ProcLib::OPENCV);
+  vision::LimitLong::Run(&mat_flycv, 38, -1, vision::ProcLib::FLYCV);
+  
+  std::cout << "opencv " << mat_opencv.GetOpenCVMat()->cols << " " << mat_opencv.GetOpenCVMat()->rows << std::endl;
+  std::cout << "flycv " << mat_flycv.GetFalconCVMat()->width() << " " << mat_flycv.GetFalconCVMat()->height() << std::endl;
 
   FDTensor opencv;
   FDTensor flycv;
@@ -44,64 +47,10 @@ TEST(fastdeploy, flycv_limit_stride1) {
 
   check_shape(opencv.shape, flycv.shape);
   check_type(opencv.dtype, flycv.dtype);
-  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel(), 1);
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel(), 20);
 }
 
-TEST(fastdeploy, flycv_limit_stride2) {
-  CheckShape check_shape;
-  CheckData check_data;
-  CheckType check_type;
-
-  cv::Mat mat(35, 69, CV_8UC3);
-  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
-  cv::Mat mat1 = mat.clone();
-
-  vision::Mat mat_opencv(mat);
-  vision::Mat mat_flycv(mat1);
-  vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
-  vision::LimitByStride::Run(&mat_opencv, 32, 1, vision::ProcLib::OPENCV);
-  vision::LimitByStride::Run(&mat_flycv, 32, 1, vision::ProcLib::FLYCV);
-
-  FDTensor opencv;
-  FDTensor flycv;
-
-  mat_opencv.ShareWithTensor(&opencv);
-  mat_flycv.ShareWithTensor(&flycv);
-
-  check_shape(opencv.shape, flycv.shape);
-  check_type(opencv.dtype, flycv.dtype);
-  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel(), 0, 0);
-}
-
-//TEST(fastdeploy, flycv_limit_stride3) {
-//  CheckShape check_shape;
-//  CheckData check_data;
-//  CheckType check_type;
-//
-//  cv::Mat mat(35, 69, CV_8UC3);
-//  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
-//  cv::Mat mat1 = mat.clone();
-//
-//  vision::Mat mat_opencv(mat);
-//  vision::Mat mat_flycv(mat1);
-////  vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
-////  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
-//  vision::LimitByStride::Run(&mat_opencv, 32, 0, vision::ProcLib::OPENCV);
-//  vision::LimitByStride::Run(&mat_flycv, 32, 0, vision::ProcLib::FLYCV);
-//
-//  FDTensor opencv;
-//  FDTensor flycv;
-//
-//  mat_opencv.ShareWithTensor(&opencv);
-//  mat_flycv.ShareWithTensor(&flycv);
-//
-//  check_shape(opencv.shape, flycv.shape);
-//  check_type(opencv.dtype, flycv.dtype);
-//  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(flycv.Data()), opencv.Numel(), 1);
-//}
-
-//TEST(fastdeploy, flycv_limit_stride4) {
+//TEST(fastdeploy, flycv_limit_long2) {
 //  CheckShape check_shape;
 //  CheckData check_data;
 //  CheckType check_type;
@@ -114,8 +63,8 @@ TEST(fastdeploy, flycv_limit_stride2) {
 //  vision::Mat mat_flycv(mat1);
 //  vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
 //  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
-//  vision::LimitByStride::Run(&mat_opencv, 32, 2, vision::ProcLib::OPENCV);
-//  vision::LimitByStride::Run(&mat_flycv, 32, 2, vision::ProcLib::FLYCV);
+//  vision::LimitByStride::Run(&mat_opencv, 38, -1, vision::ProcLib::OPENCV);
+//  vision::LimitByStride::Run(&mat_flycv, 38, -1, vision::ProcLib::FLYCV);
 //
 //  FDTensor opencv;
 //  FDTensor flycv;
@@ -127,7 +76,33 @@ TEST(fastdeploy, flycv_limit_stride2) {
 //  check_type(opencv.dtype, flycv.dtype);
 //  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel(), 0, 0);
 //}
-
+//
+//TEST(fastdeploy, flycv_limit_long3) {
+//  CheckShape check_shape;
+//  CheckData check_data;
+//  CheckType check_type;
+//
+//  cv::Mat mat(35, 69, CV_8UC3);
+//  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
+//  cv::Mat mat1 = mat.clone();
+//
+//  vision::Mat mat_opencv(mat);
+//  vision::Mat mat_flycv(mat1);
+//  vision::Cast::Run(&mat_opencv, "float", vision::ProcLib::OPENCV);
+//  vision::Cast::Run(&mat_flycv, "float", vision::ProcLib::FLYCV);
+//  vision::LimitByStride::Run(&mat_opencv, 108, 50, vision::ProcLib::OPENCV);
+//  vision::LimitByStride::Run(&mat_flycv, 108, 50, vision::ProcLib::FLYCV);
+//
+//  FDTensor opencv;
+//  FDTensor flycv;
+//
+//  mat_opencv.ShareWithTensor(&opencv);
+//  mat_flycv.ShareWithTensor(&flycv);
+//
+//  check_shape(opencv.shape, flycv.shape);
+//  check_type(opencv.dtype, flycv.dtype);
+//  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(flycv.Data()), opencv.Numel(), 0, 0);
+//}
 #endif
 
 }  // namespace fastdeploy

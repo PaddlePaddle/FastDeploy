@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class LimitLong : public Processor {
+class FASTDEPLOY_DECL LimitLong : public Processor {
  public:
   explicit LimitLong(int max_long = -1, int min_long = -1, int interp = 1) {
     max_long_ = max_long;

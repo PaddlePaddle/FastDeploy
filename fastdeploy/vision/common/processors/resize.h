@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class Resize : public Processor {
+class FASTDEPLOY_DECL Resize : public Processor {
  public:
   Resize(int width, int height, float scale_w = -1.0, float scale_h = -1.0,
          int interp = 1, bool use_scale = false) {

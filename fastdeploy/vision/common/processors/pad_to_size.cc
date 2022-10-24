@@ -129,7 +129,8 @@ bool PadToSize::ImplByFalconCV(Mat* mat) {
   fcv::Mat new_im;
   // top, bottom, left, right
   fcv::copy_make_border(*im, new_im, 0, height_ - origin_h, 0, width_ - origin_w,
-                    fcv::FcvBorderTypes::BORDER_CONSTANT, value);
+                    fcv::BorderTypes::BORDER_CONSTANT, value);
+  mat->SetMat(new_im);
   mat->SetHeight(height_);
   mat->SetWidth(width_);
   return true;

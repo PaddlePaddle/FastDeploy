@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByShort : public Processor {
+class FASTDEPLOY_DECL ResizeByShort : public Processor {
  public:
   ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
                 const std::vector<int>& max_hw = std::vector<int>()) {

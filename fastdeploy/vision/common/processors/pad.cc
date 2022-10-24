@@ -83,7 +83,7 @@ bool Pad::ImplByFalconCV(Mat* mat) {
   }
   fcv::Mat new_im;
   fcv::copy_make_border(*im, new_im, top_, bottom_, left_, right_,
-                    fcv::FcvBorderTypes::BORDER_CONSTANT, value);
+                    fcv::BorderTypes::BORDER_CONSTANT, value);
   mat->SetMat(new_im);
   mat->SetHeight(new_im.height());
   mat->SetWidth(new_im.width());

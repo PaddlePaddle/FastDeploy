@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class PadToSize : public Processor {
+class FASTDEPLOY_DECL PadToSize : public Processor {
  public:
   // only support pad with right-bottom padding mode
   PadToSize(int width, int height, const std::vector<float>& value) {

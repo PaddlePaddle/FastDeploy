@@ -105,7 +105,7 @@ bool StridePad::ImplByFalconCV(Mat* mat) {
   }
   fcv::Mat new_im;
   // top, bottom, left, right
-  fcv::copy_make_border(*im, new_im, 0, pad_h, 0, pad_w, fcv::FcvBorderTypes::BORDER_CONSTANT, value);
+  fcv::copy_make_border(*im, new_im, 0, pad_h, 0, pad_w, fcv::BorderTypes::BORDER_CONSTANT, value);
   mat->SetMat(new_im);
   mat->SetHeight(new_im.height());
   mat->SetWidth(new_im.width());
