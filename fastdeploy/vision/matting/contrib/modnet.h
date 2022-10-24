@@ -40,14 +40,20 @@ class FASTDEPLOY_DECL MODNet : public FastDeployModel {
   std::string ModelName() const { return "matting/MODNet"; }
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
-  */, default (256, 256)
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (256, 256)
+  */
   std::vector<int> size;
-  /// Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  /*! @brief
+  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  */
   std::vector<float> alpha;
-  /// Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  /*! @brief
+  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  */
   std::vector<float> beta;
-  /// Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+  /*! @brief
+  Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+  */
   bool swap_rb;
   /** \brief Predict the matting result for an input image
    *

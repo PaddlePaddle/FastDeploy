@@ -41,16 +41,20 @@ class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
   virtual std::string ModelName() const { return "deepinsight/insightface"; }
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
-  */, default (112, 112)
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (112, 112)
+  */
   std::vector<int> size;
   ///  Argument for image preprocessing step, alpha values for normalization
   std::vector<float> alpha;
   ///  Argument for image preprocessing step, beta values for normalization
   std::vector<float> beta;
-  /// Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+  /*! @brief
+  Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+  */
   bool swap_rb;
-  /// Argument for image postprocessing step, whether to apply l2 normalize to embedding values, default false;
+  /*! @brief
+  Argument for image postprocessing step, whether to apply l2 normalize to embedding values, default false;
+  */
   bool l2_normalize;
   /** \brief Predict the face recognition result for an input image
    *

@@ -52,8 +52,8 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
                        float nms_iou_threshold = 0.4f);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
-  */, default (640, 640)
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (640, 640)
+  */
   std::vector<int> size;
   // padding value, size should be the same as channels
 

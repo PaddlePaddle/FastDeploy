@@ -53,8 +53,8 @@ class FASTDEPLOY_DECL RetinaFace : public FastDeployModel {
                        float nms_iou_threshold = 0.4f);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
-  */, default (640, 640)
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (640, 640)
+  */
   std::vector<int> size;
   /*! @brief
   Argument for image postprocessing step, variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
