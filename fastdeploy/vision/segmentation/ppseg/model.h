@@ -46,7 +46,7 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   /** \brief Predict the segmentation result for an input image
    *
-   * \param[in] im The input image data, comes from cv::imread()
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result The output segmentation result will be writen to this structure
    * \return true if the segmentation prediction successed, otherwise false
    */

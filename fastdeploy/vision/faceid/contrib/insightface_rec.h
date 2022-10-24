@@ -22,9 +22,17 @@ namespace fastdeploy {
 namespace vision {
 
 namespace faceid {
-
+/*! @brief CosFace model object used when to load a CosFace model exported by IngsightFace.
+ */
 class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./arcface.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   InsightFaceRecognitionModel(
       const std::string& model_file, const std::string& params_file = "",
       const RuntimeOption& custom_option = RuntimeOption(),
@@ -32,15 +40,22 @@ class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
 
   virtual std::string ModelName() const { return "deepinsight/insightface"; }
 
-  // tuple of (width, height), default (112, 112)
+  /// tuple of (width, height), default (112, 112)
   std::vector<int> size;
+  ///  alpha values for normalization
   std::vector<float> alpha;
+  ///  beta values for normalization
   std::vector<float> beta;
-  // whether to swap the B and R channel, such as BGR->RGB, default true.
+  /// whether to swap the B and R channel, such as BGR->RGB, default true.
   bool swap_rb;
-  // whether to apply l2 normalize to embedding values, default;
+  /// whether to apply l2 normalize to embedding values, default;
   bool l2_normalize;
-
+  /** \brief Predict the face recognition result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output face recognition result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, FaceRecognitionResult* result);
 
   virtual bool Initialize();

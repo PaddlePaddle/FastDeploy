@@ -79,15 +79,15 @@ make install
 
 ## RKNPU2已经支持的模型列表
 
-| 任务场景             | 模型                | 模型版本(表示已经测试的版本)                                                                                        | 大小  | ONNX/RKNN是否支持 | ONNX/RKNN速度(ms) |
-|------------------|-------------------|--------------------------------------------------------------------------------------------------------|-----|---------------|-----------------|
-| Detection        | Picodet           | Picodet-s-npu                                                                                          | 大小  | True/False    | 454/177         |
-| Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes                                                                          | 大小  | True/False    | 6634/5598       |
-| Segmentation     | PP-HumanSegV2Lite | portrait                                                                                               | 大小  | True/False    | 456/266         |
-| Segmentation     | PP-HumanSegV2Lite | human                                                                                                  | 大小  | True/False    | 496/256         |
-| Face Detection   | SCRFD             | [SCRFD-2.5G-kps-640](https://bj.bcebos.com/fastdeploy/models/rknn2/scrfd_2.5g_bnkps_shape640x640.rknn) | 大小  | True/True     | 963/142         |
-| Face Recognition | ArcFace           | [ArcFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_ms1mv3_arcface_r18.rknn)               | 大小  | True/True     | 600/3           |
-| Face Recognition | cosFace           | [cosFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_glint360k_cosface_r18.rknn)            | 大小  | True/True     | 600/3           |
+| 任务场景             | 模型                | 模型版本(表示已经测试的版本)                                                                                                                            | 大小  | ONNX/RKNN是否支持 | ONNX/RKNN速度(ms) |
+|------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----|---------------|-----------------|
+| Detection        | Picodet           | [Picodet-s-npu](https://bj.bcebos.com/fastdeploy/models/rknn2/picodet_s_416_coco_npu_3588.tgz)                                             | -   | True/True     | 454/177         |
+| Segmentation     | PP-LiteSeg        | [PP_LiteSeg_T_STDC1_cityscapes](https://bj.bcebos.com/fastdeploy/models/rknn2/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_3588.tgz) | -   | True/True     | 6634/5598       |
+| Segmentation     | PP-HumanSegV2Lite | [portrait](https://bj.bcebos.com/fastdeploy/models/rknn2/portrait_pp_humansegv2_lite_256x144_inference_model_without_softmax_3588.tgz)     | -   | True/True     | 456/266         |
+| Segmentation     | PP-HumanSegV2Lite | [human](https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz)                                | -   | True/True     | 496/256         |
+| Face Detection   | SCRFD             | [SCRFD-2.5G-kps-640](https://bj.bcebos.com/fastdeploy/models/rknn2/scrfd_2.5g_bnkps_shape640x640.rknn)                                     | -   | True/True     | 963/142         |
+| Face Recognition | ArcFace           | [ArcFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_ms1mv3_arcface_r18.rknn)                                                   | -   | True/True     | 600/3           |
+| Face Recognition | cosFace           | [cosFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_glint360k_cosface_r18.rknn)                                                | -   | True/True     | 600/3           |
 
 ## RKNPU2 Backend推理使用教程
 

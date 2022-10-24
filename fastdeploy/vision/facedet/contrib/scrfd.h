@@ -13,58 +13,76 @@
 // limitations under the License.
 
 #pragma once
+#include <unordered_map>
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include <unordered_map>
 
 namespace fastdeploy {
 
 namespace vision {
 
 namespace facedet {
-
+/*! @brief SCRFD model object used when to load a SCRFD model exported by SCRFD.
+ */
 class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
  public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./scrfd.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   SCRFD(const std::string& model_file, const std::string& params_file = "",
         const RuntimeOption& custom_option = RuntimeOption(),
         const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "scrfd"; }
-  
+
   // RKNPU2 can run normalize and hwc2chw on the NPU.
   // This function is used to close normalize and hwc2chw operations in preprocessing.
   void DisableNormalizeAndPermute();
 
+  /** \brief Predict the face detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output face detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.25
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.4
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25f,
                        float nms_iou_threshold = 0.4f);
 
-  // tuple of (width, height), default (640, 640)
+  /// tuple of (width, height), default (640, 640)
   std::vector<int> size;
-  // downsample strides (namely, steps) for SCRFD to
-  // generate anchors, will take (8,16,32) as default values.
-  // padding value, size should be same with Channels
+  /// padding value, size should be the same as channels
   std::vector<float> padding_value;
-  // only pad to the minimum rectange which height and width is times of stride
+  /// only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad;
-  // while is_mini_pad = false and is_no_pad = true, will resize the image to
-  // the set size
+  /*! @brief
+  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
+  */
   bool is_no_pad;
-  // if is_scale_up is false, the input image only can be zoom out, the maximum
-  // resize scale cannot exceed 1.0
+  /*! @brief
+  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
+  */
   bool is_scale_up;
-  // padding stride, for is_mini_pad
+  /// padding stride, for is_mini_pad
   int stride;
-  // for offseting the boxes by classes when using NMS
+  /*! @brief
+  downsample strides (namely, steps) for SCRFD to generate anchors, will take (8,16,32) as default values
+  */
   std::vector<int> downsample_strides;
-  // landmarks_per_face, default 5 in SCRFD
+  /// landmarks_per_face, default 5 in SCRFD
   int landmarks_per_face;
-  // are the outputs of onnx file with key points features or not
+  /// the outputs of onnx file with key points features or not
   bool use_kps;
-  // the upperbond number of boxes processed by nms.
+  /// the upperbond number of boxes processed by nms
   int max_nms;
-  // number anchors of each stride
+  /// number anchors of each stride
   unsigned int num_anchors;
 
  private:
@@ -84,9 +102,9 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
                  const std::vector<float>& color, bool _auto,
                  bool scale_fill = false, bool scale_up = true,
                  int stride = 32);
-  
+
   // for recording the switch of normalize and hwc2chw
-  bool switch_of_nor_and_per = true;  
+  bool switch_of_nor_and_per = true;
 
   bool is_dynamic_input_;
 
@@ -99,6 +117,6 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
 
   std::unordered_map<int, std::vector<SCRFDPoint>> center_points_;
 };
-} // namespace facedet
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace facedet
+}  // namespace vision
+}  // namespace fastdeploy
