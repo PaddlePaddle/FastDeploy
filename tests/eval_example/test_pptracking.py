@@ -20,7 +20,7 @@ import pickle
 
 
 def test_pptracking_cpu():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/pptracking.tgz"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4"
     fd.download_and_decompress(model_url, ".")
     fd.download(input_url, ".")
@@ -54,7 +54,7 @@ def test_pptracking_cpu():
 
 
 def test_pptracking_gpu():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/pptracking.tgz"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4"
     fd.download_and_decompress(model_url, ".")
     fd.download(input_url, ".")
