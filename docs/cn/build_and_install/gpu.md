@@ -122,8 +122,8 @@ set ENABLE_OPENVINO_BACKEND=ON
 set ENABLE_VISION=ON
 set ENABLE_TRT_BACKEND=ON
 set WITH_GPU=ON
-set TRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5"
-set CUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+set TRT_DIRECTORY=D:\Paddle\TensorRT-8.4.1.5
+set CUDA_DIRECTORY=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
 
 python setup.py build
 python setup.py bdist_wheel
