@@ -19,6 +19,7 @@
 namespace fastdeploy {
 
 void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
+  option_ = option;
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
     if (option.enable_trt) {
@@ -71,6 +72,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
+  config_.EnableMemoryOptim();
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use PaddleReader instead now
@@ -190,6 +192,7 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);
+    (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
     CopyTensorToCpu(handle, &((*outputs)[i]));
   }
   return true;
