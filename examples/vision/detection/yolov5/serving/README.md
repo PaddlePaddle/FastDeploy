@@ -22,7 +22,7 @@ nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving pad
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=models --backend-config=python,shm-default-byte-size=10485760
 ```
->> **注意**: 当出现"Address already in use", 请使用`--grpc-port`指定端口号
+>> **注意**: 当出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改yolov5_grpc_client.py中的请求端口号
 
 服务启动成功后， 会有以下输出:
 ```
