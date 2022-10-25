@@ -20,6 +20,7 @@ from . import keypointdetection
 
 from . import matting
 from . import facedet
+from . import facealign
 from . import faceid
 from . import ocr
 from . import evaluation

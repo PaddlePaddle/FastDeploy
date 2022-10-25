@@ -36,6 +36,10 @@ def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
                                        font_size)
 
 
+def vis_face_alignment(im_data, face_align_result, line_size=1):
+    return C.vision.vis_face_alignment(im_data, face_align_result, line_size)
+
+
 def vis_segmentation(im_data, seg_result):
     return C.vision.vis_segmentation(im_data, seg_result)
 
@@ -63,12 +67,14 @@ def swap_background_matting(im_data,
         "DEPRECATED: fastdeploy.vision.swap_background_matting is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
     assert isinstance(
-        result, C.vision.MattingResult), "The result must be MattingResult type"
+        result,
+        C.vision.MattingResult), "The result must be MattingResult type"
     return C.vision.Visualize.swap_background_matting(
         im_data, background, result, remove_small_connected_area)
 
 
-def swap_background_segmentation(im_data, background, background_label, result):
+def swap_background_segmentation(im_data, background, background_label,
+                                 result):
     logging.warning(
         "DEPRECATED: fastdeploy.vision.swap_background_segmentation is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
