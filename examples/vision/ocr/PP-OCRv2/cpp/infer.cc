@@ -48,7 +48,6 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   std::cout << "Backend::Lite initialized done!\n";
 
   auto im = cv::imread(image_file);
-  // cv::resize(im, im, cv::Size(256, 256));
   auto im_bak = im.clone();
   
   fastdeploy::vision::OCRResult result;
@@ -84,7 +83,6 @@ int main(int argc, char* argv[]) {
 
   if (flag == 0) {
     option.UseCpu(); 
-    option.UseLiteBackend();
   } else if (flag == 1) {
     option.UseGpu();
   } else if (flag == 2) {

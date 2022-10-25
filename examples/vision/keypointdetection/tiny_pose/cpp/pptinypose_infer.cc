@@ -27,7 +27,6 @@ void CpuInfer(const std::string& tinypose_model_dir,
   auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
-  option.UseLiteBackend();
   auto tinypose_model = fastdeploy::vision::keypointdetection::PPTinyPose(
       tinypose_model_file, tinypose_params_file, tinypose_config_file, option);
   if (!tinypose_model.Initialized()) {

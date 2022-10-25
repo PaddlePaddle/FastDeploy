@@ -83,7 +83,6 @@ int main(int argc, char* argv[]) {
 
   if (flag == 0) {
     option.UseCpu(); 
-    option.UseLiteBackend();
   } else if (flag == 1) {
     option.UseGpu();
   } else if (flag == 2) {

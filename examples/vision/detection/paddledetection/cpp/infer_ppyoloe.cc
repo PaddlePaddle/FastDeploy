@@ -26,7 +26,6 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto config_file = model_dir + sep + "infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
-  option.UseLiteBackend();
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
