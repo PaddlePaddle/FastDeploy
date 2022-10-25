@@ -140,14 +140,13 @@ TensorInfo LiteBackend::GetOutputInfo(int index) {
 std::vector<TensorInfo> LiteBackend::GetOutputInfos() { return outputs_desc_; }
 
 bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
-                        std::vector<FDTensor>* outputs) {
+                        std::vector<FDTensor>* outputs) {                                                
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
-
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -156,12 +155,29 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
     auto tensor = predictor_->GetInput(iter->second);
-    tensor->Resize(inputs[i].shape);
-    tensor->ShareExternalMemory(const_cast<void*>(inputs[i].CpuData()),
-                                inputs[i].Nbytes(),
-                                paddle::lite_api::TargetType::kARM);
+    // Adjust dims only, allocate lazy. 
+    tensor->Resize(inputs[i].shape); 
+    if (inputs[i].dtype == FDDataType::FP32) {
+      tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const float*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT32) {
+      tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT8) {
+      tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int8_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::UINT8) {
+      tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const uint8_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else {
+      FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
+    }
   }
-
+  
   predictor_->Run();
 
   outputs->resize(outputs_desc_.size());

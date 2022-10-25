@@ -45,6 +45,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
+  std::cout << "Backend::Lite initialized done!\n";
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
@@ -82,6 +83,7 @@ int main(int argc, char* argv[]) {
 
   if (flag == 0) {
     option.UseCpu(); 
+    option.UseLiteBackend();
   } else if (flag == 1) {
     option.UseGpu();
   } else if (flag == 2) {

@@ -107,7 +107,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
 	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
 	        << " to export model with fixed input shape."
 	        << std::endl;
-      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
+      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER};
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {

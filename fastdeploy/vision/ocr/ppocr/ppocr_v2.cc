@@ -87,10 +87,13 @@ bool PPOCRv2::Classify(cv::Mat* img,
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   result->Clear();
+  std::cout << "Detect(img, result) end\n";
   if (nullptr != detector_ && !Detect(img, result)) {
     FDERROR << "Failed to detect image." << std::endl;
     return false;
   }
+
+  std::cout << "Detect(img, result) end\n";
 
   // Get croped images by detection result
   std::vector<cv::Mat> image_list;
@@ -103,18 +106,21 @@ bool PPOCRv2::Predict(cv::Mat* img,
   }
 
   for (size_t i = 0; i < image_list.size(); ++i) {
+    std::cout << i << ":Classify(&(image_list[i]), result) start ...\n";
     if (nullptr != classifier_ && !Classify(&(image_list[i]), result)) {
       FDERROR << "Failed to classify croped image of index " << i << "." << std::endl;
       return false;
     }
+    std::cout << i << ":Classify(&(image_list[i]), result) end\n";
     if (nullptr != classifier_ && result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
       cv::rotate(image_list[i], image_list[i], 1);
     }
-
+    std::cout << i << ":Recognize(&(image_list[i]), result) start\n";
     if (nullptr != recognizer_ && !Recognize(&(image_list[i]), result)) {
       FDERROR << "Failed to recgnize croped image of index " << i << "." << std::endl;
       return false;
     }
+    std::cout << i << ":Recognize(&(image_list[i]), result) done\n";
   }
   return true;
 };

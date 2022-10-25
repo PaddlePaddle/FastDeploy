@@ -26,6 +26,8 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file,
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
   auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+  option.UseLiteBackend();
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
