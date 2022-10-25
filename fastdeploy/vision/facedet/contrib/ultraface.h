@@ -52,7 +52,9 @@ class FASTDEPLOY_DECL UltraFace : public FastDeployModel {
                        float conf_threshold = 0.7f,
                        float nms_iou_threshold = 0.3f);
 
-  /// tuple of (width, height), default (320, 240)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (320, 240)
+  */
   std::vector<int> size;
 
  private:

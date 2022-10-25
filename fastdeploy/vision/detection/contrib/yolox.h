@@ -51,9 +51,11 @@ class FASTDEPLOY_DECL YOLOX : public FastDeployModel {
                        float conf_threshold = 0.25,
                        float nms_iou_threshold = 0.5);
 
-  /// tuple of (width, height)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  */
   std::vector<int> size;
-  /// padding value, size should be the same as channels
+  // padding value, size should be the same as channels
   std::vector<float> padding_value;
   /*! @brief
     whether the model_file was exported with decode module. The official
@@ -62,11 +64,10 @@ class FASTDEPLOY_DECL YOLOX : public FastDeployModel {
     was exported with decode module.
   */
   bool is_decode_exported;
-  /*! @brief
-  downsample strides for YOLOX to generate anchors, will take (8,16,32) as default values, might have stride=64
-  */
+  // downsample strides for YOLOX to generate anchors,
+  // will take (8,16,32) as default values, might have stride=64
   std::vector<int> downsample_strides;
-  /// for offseting the boxes by classes when using NMS, default 4096
+  // for offseting the boxes by classes when using NMS, default 4096
   float max_wh;
 
  private:

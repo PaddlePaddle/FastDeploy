@@ -53,31 +53,30 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
 
   void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
-  /// tuple of (width, height)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  */
   std::vector<int> size;
-  /// padding value, size should be the same as channels
+  // padding value, size should be the same as channels
+
   std::vector<float> padding_value;
-  /// only pad to the minimum rectange which height and width is times of stride
+  // only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad;
-  /*! @brief
-  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
-  */
+  // while is_mini_pad = false and is_no_pad = true,
+  // will resize the image to the set size
   bool is_no_pad;
-  /*! @brief
-  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
-  */
+  // if is_scale_up is false, the input image only can be zoom out,
+  // the maximum resize scale cannot exceed 1.0
   bool is_scale_up;
-  /// padding stride, for is_mini_pad
+  // padding stride, for is_mini_pad
   int stride;
-  /// for offseting the boxes by classes when using NMS
+  // for offseting the boxes by classes when using NMS
   float max_wh;
-  /*! @brief
-  downsample strides for YOLOv5Lite to generate anchors, will take (8,16,32) as default values, might have stride=64.
-  */
+  // downsample strides for YOLOv5Lite to generate anchors,
+  // will take (8,16,32) as default values, might have stride=64.
   std::vector<int> downsample_strides;
-  /*! @brief
-  anchors parameters, downsample_strides will take (8,16,32), each stride has three anchors with width and hight
-  */
+  // anchors parameters, downsample_strides will take (8,16,32),
+  // each stride has three anchors with width and hight
   std::vector<std::vector<float>> anchor_config;
   /*! @brief
     whether the model_file was exported with decode module. The official

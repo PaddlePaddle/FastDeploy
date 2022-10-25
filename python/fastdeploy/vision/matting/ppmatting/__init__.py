@@ -25,6 +25,14 @@ class PPMatting(FastDeployModel):
                  config_file,
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
+        """Load a PPMatting model exported by PaddleSeg.
+
+        :param model_file: (str)Path of model file, e.g PPMatting-512/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g PPMatting-512/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g PPMatting-512/deploy.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
         super(PPMatting, self).__init__(runtime_option)
 
         assert model_format == ModelFormat.PADDLE, "PPMatting model only support model format of ModelFormat.Paddle now."
@@ -34,5 +42,10 @@ class PPMatting(FastDeployModel):
         assert self.initialized, "PPMatting model initialize failed."
 
     def predict(self, input_image):
+        """ Predict the matting result for an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: MattingResult
+        """
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
