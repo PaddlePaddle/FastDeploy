@@ -268,12 +268,17 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
 
 bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   Mat mat(*im);
+
+  TimeCounter tc;
+  tc.Start();
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
   }
+  tc.End();
+  std::cout << "Preprocess Time: " << tc.Duration() << std::endl;
 
   float* tmp = static_cast<float*>(processed_data[1].Data());
   std::vector<FDTensor> infer_result;

@@ -29,8 +29,8 @@ from .. import C
 
 
 def enable_flycv():
-    return C.enable_flycv()
+    return C.vision.enable_flycv()
 
 
 def disable_flycv():
-    return C.disable_flycv()
+    return C.vision.disable_flycv()
