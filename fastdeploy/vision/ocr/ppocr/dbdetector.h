@@ -56,9 +56,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   // 所有预处理参数，包含完
   static bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<float, 2>>* im_info,
-                  int max_side_len = 960,
-                  float ratio_h = 1.0,
-                  float ratio_w = 1.0);
+                  int max_side_len = 960);
 
 
   /*! @brief Postprocess the inferenced results, and set the final result to `boxes_result`
@@ -67,19 +65,19 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
                    std::vector<std::array<int, 8>>* boxes_result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
                    PostProcessor post_processor,
+                   float ratio_h ,
+                   float ratio_w,
                    double det_db_thresh = 0.3,
                    double det_db_box_thresh = 0.6,
                    double det_db_unclip_ratio = 1.5,
                    std::string det_db_score_mode = "slow",
-                   bool use_dilation = false,
-                   float ratio_h = 1.0,
-                   float ratio_w = 1.0);
+                   bool use_dilation = false);
 
   // Pre-process parameters
   int max_side_len_;
+  // Post-process parameters
   float ratio_h_;
   float ratio_w_;
-  // Post-process parameters
   double det_db_thresh_;
   double det_db_box_thresh_;
   double det_db_unclip_ratio_;
