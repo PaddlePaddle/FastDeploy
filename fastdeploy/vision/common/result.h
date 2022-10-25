@@ -27,6 +27,7 @@ enum FASTDEPLOY_DECL ResultType {
   SEGMENTATION,
   OCR,
   FACE_DETECTION,
+  FACE_ALIGNMENT,
   FACE_RECOGNITION,
   MATTING,
   MASK,
@@ -179,21 +180,22 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   std::string Str();
 };
 
-struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
-  // mask
-  std::vector<uint8_t> label_map;
-  std::vector<float> score_map;
-  std::vector<int64_t> shape;
-  bool contain_score_map = false;
+/*! @brief Face Alignment result structure for all the face alignment models
+ */
+struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
+  /** \brief All the coordinates of detected landmarks for an input image, and the element of `landmarks` is a array of 2 float values, means [x, y]
+   */
+  std::vector<std::array<float, 2>> landmarks;
 
-  ResultType type = ResultType::SEGMENTATION;
-
+  ResultType type = ResultType::FACE_ALIGNMENT;
+  /// Clear facealignment result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
 
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
@@ -205,6 +207,24 @@ struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
 
   FaceRecognitionResult() {}
   FaceRecognitionResult(const FaceRecognitionResult& res);
+
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  std::string Str();
+};
+
+struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  // mask
+  std::vector<uint8_t> label_map;
+  std::vector<float> score_map;
+  std::vector<int64_t> shape;
+  bool contain_score_map = false;
+
+  ResultType type = ResultType::SEGMENTATION;
 
   void Clear();
 

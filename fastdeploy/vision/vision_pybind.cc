@@ -21,6 +21,7 @@ void BindClassification(pybind11::module& m);
 void BindSegmentation(pybind11::module& m);
 void BindMatting(pybind11::module& m);
 void BindFaceDet(pybind11::module& m);
+void BindFaceAlign(pybind11::module& m);
 void BindFaceId(pybind11::module& m);
 void BindOcr(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
@@ -73,6 +74,18 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::FaceDetectionResult::Str)
       .def("__str__", &vision::FaceDetectionResult::Str);
 
+  pybind11::class_<vision::FaceAlignmentResult>(m, "FaceAlignmentResult")
+      .def(pybind11::init())
+      .def_readwrite("landmarks", &vision::FaceAlignmentResult::landmarks)
+      .def("__repr__", &vision::FaceAlignmentResult::Str)
+      .def("__str__", &vision::FaceAlignmentResult::Str);
+
+  pybind11::class_<vision::FaceRecognitionResult>(m, "FaceRecognitionResult")
+      .def(pybind11::init())
+      .def_readwrite("embedding", &vision::FaceRecognitionResult::embedding)
+      .def("__repr__", &vision::FaceRecognitionResult::Str)
+      .def("__str__", &vision::FaceRecognitionResult::Str);
+
   pybind11::class_<vision::SegmentationResult>(m, "SegmentationResult")
       .def(pybind11::init())
       .def_readwrite("label_map", &vision::SegmentationResult::label_map)
@@ -80,12 +93,6 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("shape", &vision::SegmentationResult::shape)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
-
-  pybind11::class_<vision::FaceRecognitionResult>(m, "FaceRecognitionResult")
-      .def(pybind11::init())
-      .def_readwrite("embedding", &vision::FaceRecognitionResult::embedding)
-      .def("__repr__", &vision::FaceRecognitionResult::Str)
-      .def("__str__", &vision::FaceRecognitionResult::Str);
 
   pybind11::class_<vision::MattingResult>(m, "MattingResult")
       .def(pybind11::init())
@@ -109,6 +116,7 @@ void BindVision(pybind11::module& m) {
   BindClassification(m);
   BindSegmentation(m);
   BindFaceDet(m);
+  BindFaceAlign(m);
   BindFaceId(m);
   BindMatting(m);
   BindOcr(m);
