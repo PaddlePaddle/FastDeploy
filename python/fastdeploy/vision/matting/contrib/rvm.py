@@ -52,6 +52,10 @@ class RobustVideoMatting(FastDeployModel):
         """
         return self._model.size
 
+    @property
+    def video_mode(self):
+        return self._model.video_mode
+
     @size.setter
     def size(self, wh):
         """
@@ -63,3 +67,9 @@ class RobustVideoMatting(FastDeployModel):
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
             len(wh))
         self._model.size = wh
+
+    @video_mode.setter
+    def video_mode(self, value):
+        assert isinstance(
+            value, bool), "The value to set `video_mode` must be type of bool."
+        self._model.video_mode = value

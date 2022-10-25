@@ -55,6 +55,9 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
   /// Preprocess image size, the default is (1080, 1920)
   std::vector<int> size;
 
+  /// Whether to open the video mode, if there are some irrelevant pictures, set it to fasle, the default is true // NOLINT
+  bool video_mode;
+
  private:
   bool Initialize();
   /// Preprocess an input image, and set the preprocessed results to `outputs`

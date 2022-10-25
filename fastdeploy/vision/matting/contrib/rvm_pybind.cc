@@ -27,7 +27,8 @@ void BindRobustVideoMatting(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            })
-      .def_readwrite("size", &vision::matting::RobustVideoMatting::size);
+      .def_readwrite("size", &vision::matting::RobustVideoMatting::size)
+      .def_readwrite("video_mode", &vision::matting::RobustVideoMatting::video_mode);
 }
 
 }  // namespace fastdeploy

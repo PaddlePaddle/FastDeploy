@@ -43,6 +43,8 @@ bool RobustVideoMatting::Initialize() {
   // parameters for preprocess
   size = {1080, 1920};
 
+  video_mode = true;
+
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -93,12 +95,15 @@ bool RobustVideoMatting::Postprocess(
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
   }
-  for (size_t i = 0; i < 4; ++i) {
-    FDTensor& rki = infer_result.at(i+2);
-    dynamic_inputs_dims_[i] = rki.shape;
-    dynamic_inputs_datas_[i].resize(rki.Numel());
-    memcpy(dynamic_inputs_datas_[i].data(), rki.Data(),
-                        rki.Numel() * FDDataTypeSize(rki.dtype));
+  // update context
+  if (video_mode) {
+    for (size_t i = 0; i < 4; ++i) {
+      FDTensor& rki = infer_result.at(i+2);
+      dynamic_inputs_dims_[i] = rki.shape;
+      dynamic_inputs_datas_[i].resize(rki.Numel());
+      memcpy(dynamic_inputs_datas_[i].data(), rki.Data(),
+              rki.Numel() * FDDataTypeSize(rki.dtype));
+    }
   }
 
   auto iter_in = im_info.find("input_shape");
@@ -110,6 +115,7 @@ bool RobustVideoMatting::Postprocess(
   int in_h = iter_in->second[0];
   int in_w = iter_in->second[1];
 
+  // for alpha
   float* alpha_ptr = static_cast<float*>(alpha.Data());
   cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
   Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
@@ -118,13 +124,23 @@ bool RobustVideoMatting::Postprocess(
     Resize::Run(&alpha_resized, in_w, in_h, -1, -1);
   }
 
+  // for foreground
+  float* fgr_ptr = static_cast<float*>(fgr.Data());
+  cv::Mat fgr_zero_copy_ref(out_h, out_w, CV_32FC1, fgr_ptr);
+  Mat fgr_resized(fgr_zero_copy_ref);  // ref-only, zero copy.
+  if ((out_h != in_h) || (out_w != in_w)) {
+    // already allocated a new continuous memory after resize.
+    Resize::Run(&fgr_resized, in_w, in_h, -1, -1);
+  }
+
   result->Clear();
-  result->contain_foreground = false;
+  result->contain_foreground = true;
   result->shape = {static_cast<int64_t>(in_h), static_cast<int64_t>(in_w)};
   int numel = in_h * in_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
   memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
+  memcpy(result->foreground.data(), fgr_resized.GetOpenCVMat()->data, nbytes);
   return true;
 }
 

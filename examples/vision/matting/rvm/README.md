@@ -21,6 +21,9 @@
 | [rvm_mobilenetv3_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx) | 15MB | - |
 | [rvm_resnet50_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_resnet50_trt.onnx) | 103MB | - |
 
+**Note**：
+- 如果要使用 TensorRT 进行推理，需要下载后缀为 trt 的 onnx 模型文件
+
 ## 详细部署文档
 
 - [Python部署](python)
