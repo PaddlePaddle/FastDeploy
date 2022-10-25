@@ -363,6 +363,7 @@ endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
+#  set(ENABLE_VISION_VISUALIZE ON)
   add_definitions(-DENABLE_VISION_VISUALIZE)
   if(ENABLE_OPENCV_CUDA)
     if(NOT WITH_GPU)

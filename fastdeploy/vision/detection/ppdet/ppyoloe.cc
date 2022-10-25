@@ -160,6 +160,8 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
 
+//  // Fusion will improve performance
+//  FuseTransforms(&processors);
   return true;
 }
 

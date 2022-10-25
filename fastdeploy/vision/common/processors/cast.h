@@ -30,6 +30,10 @@ class FASTDEPLOY_DECL Cast : public Processor {
   static bool Run(Mat* mat, const std::string& dtype,
                   ProcLib lib = ProcLib::OPENCV);
 
+  std::string GetDtype() const {
+    return dtype_;
+  }
+
  private:
   std::string dtype_;
 };

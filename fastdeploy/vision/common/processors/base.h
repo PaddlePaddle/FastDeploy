@@ -22,7 +22,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class Processor {
+class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority
   // all the function in `processor` will force to use

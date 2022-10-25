@@ -37,27 +37,29 @@ bool Cast::ImplByOpenCV(Mat* mat) {
 
 #ifdef ENABLE_FLYCV
 bool Cast::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (dtype_ == "float" && mat->Type() == FDDataType::FP32) {
+    return true;
+  }
+  if (dtype_ == "double" && mat->Type() == FDDataType::FP64) {
+    return true;
+  }
   if (mat->layout != Layout::HWC) {
     FDERROR
         << "While using Falcon to cast image, the image must be layout of HWC."
         << std::endl;
     return false;
   }
-  fcv::Mat* im = mat->GetFalconCVMat();
   if (dtype_ == "float") {
-    if (mat->Type() != FDDataType::FP32) {
-      fcv::Mat new_im;
-      auto fcv_type = CreateFalconCVDataType(FDDataType::FP32, im->channels());
-      im->convert_to(new_im, fcv_type);
-      mat->SetMat(new_im);
-    }
+    fcv::Mat new_im;
+    auto fcv_type = CreateFalconCVDataType(FDDataType::FP32, im->channels());
+    im->convert_to(new_im, fcv_type);
+    mat->SetMat(new_im);
   } else if (dtype_ == "double") {
-    if (mat->Type() != FDDataType::FP64) {
-      fcv::Mat new_im;
-      auto fcv_type = CreateFalconCVDataType(FDDataType::FP64, im->channels());
-      im->convert_to(new_im, fcv_type);
-      mat->SetMat(new_im);
-    }
+    fcv::Mat new_im;
+    auto fcv_type = CreateFalconCVDataType(FDDataType::FP64, im->channels());
+    im->convert_to(new_im, fcv_type);
+    mat->SetMat(new_im);
   } else {
     FDWARNING << "Cast not support for " << dtype_
               << " now! will skip this operation." << std::endl;

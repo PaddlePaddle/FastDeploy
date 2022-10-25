@@ -56,6 +56,7 @@ setup_configs["ENABLE_PADDLE_BACKEND"] = os.getenv("ENABLE_PADDLE_BACKEND",
 setup_configs["ENABLE_POROS_BACKEND"] = os.getenv("ENABLE_POROS_BACKEND",
                                                   "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
+setup_configs["ENABLE_FLYCV"] = os.getenv("ENABLE_FLYCV", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")

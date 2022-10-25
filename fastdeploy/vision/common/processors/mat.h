@@ -19,8 +19,10 @@
 namespace fastdeploy {
 namespace vision {
 
-enum ProcLib { DEFAULT, OPENCV, FLYCV};
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV};
 enum Layout { HWC, CHW };
+
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(cv::Mat& mat) {

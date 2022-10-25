@@ -47,6 +47,18 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV);
 
+  void SetAlpha(const std::vector<float>& alpha) {
+    alpha_.clear();
+    std::vector<float>().swap(alpha_);
+    alpha_.assign(alpha.begin(), alpha.end());
+  }
+
+  void SetBeta(const std::vector<float>& beta) {
+    beta_.clear();
+    std::vector<float>().swap(beta_);
+    beta_.assign(beta.begin(), beta.end());
+  }
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;

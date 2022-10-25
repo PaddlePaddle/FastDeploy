@@ -46,6 +46,13 @@ class FASTDEPLOY_DECL Normalize : public Processor {
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV);
 
+  std::vector<float> GetAlpha() const {
+    return alpha_;
+  }
+  std::vector<float> GetBeta() const {
+    return beta_;
+  }
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;

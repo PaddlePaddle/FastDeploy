@@ -28,7 +28,7 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
     target = default_lib;
   }
 
-  if (lib == ProcLib::FLYCV) {
+  if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
     if (mat->mat_type != ProcLib::FLYCV) {
       if (mat->layout != Layout::HWC) {
