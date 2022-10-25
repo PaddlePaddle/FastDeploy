@@ -1,10 +1,6 @@
 {
   "name": "@paddle-js-models/ocrdet",
-<<<<<<< HEAD:examples/application/js/package/packages/paddlejs-models/ocrdetection/package.json
   "version": "4.1.1",
-=======
-  "version": "4.0.1",
->>>>>>> 1d3a114b66e33450dbeb56ed7a9eafd432cda877:examples/application/js/web_demo/packages/paddlejs-models/ocrdetection/package.json
   "description": "",
   "main": "lib/index.js",
   "module": "lib/index.esm.js",
