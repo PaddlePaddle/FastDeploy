@@ -4,10 +4,10 @@ SegmentationResult代码定义在`fastdeploy/vision/common/result.h`中，用于
 
 ## C++ 定义
 
-`fastdeploy::vision::DetectionResult`
+`fastdeploy::vision::SegmentationResult`
 
 ```c++
-struct DetectionResult {
+struct SegmentationResult {
   std::vector<uint8_t> label_map;
   std::vector<float> score_map;
   std::vector<int64_t> shape;
