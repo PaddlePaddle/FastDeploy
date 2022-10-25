@@ -18,6 +18,7 @@ namespace fastdeploy {
 namespace vision {
 
 bool Resize::ImplByOpenCV(Mat* mat) {
+  std::cout << "imple by opencv" << std::endl;
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
@@ -56,6 +57,7 @@ bool Resize::ImplByOpenCV(Mat* mat) {
 
 #ifdef ENABLE_FLYCV
 bool Resize::ImplByFalconCV(Mat* mat) {
+  std::cout << "impl by flycv" << std::endl;
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
