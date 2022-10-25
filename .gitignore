@@ -13,6 +13,7 @@ fastdeploy/version.py
 fastdeploy/core/config.h
 python/fastdeploy/c_lib_wrap.py
 python/fastdeploy/LICENSE*
+python/build_cpu.sh
 python/fastdeploy/ThirdPartyNotices*
 *.so*
 fpython/astdeploy/libs/third_libs

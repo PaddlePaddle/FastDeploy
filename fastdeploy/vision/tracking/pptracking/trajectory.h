@@ -20,7 +20,6 @@
 #pragma once
 
 #include <vector>
-#include "fastdeploy/fastdeploy_model.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -38,7 +37,7 @@ typedef std::vector<Trajectory>::iterator TrajectoryPoolIterator;
 typedef std::vector<Trajectory *> TrajectoryPtrPool;
 typedef std::vector<Trajectory *>::iterator TrajectoryPtrPoolIterator;
 
-class FASTDEPLOY_DECL TKalmanFilter : public cv::KalmanFilter {
+class TKalmanFilter : public cv::KalmanFilter {
  public:
   TKalmanFilter(void);
   virtual ~TKalmanFilter(void) {}
@@ -61,7 +60,7 @@ inline TKalmanFilter::TKalmanFilter(void) : cv::KalmanFilter(8, 4) {
   std_weight_velocity = 1 / 160.f;
 }
 
-class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
+class Trajectory : public TKalmanFilter {
  public:
   Trajectory();
   Trajectory(const cv::Vec4f &ltrb, float score, const cv::Mat &embedding);
