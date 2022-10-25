@@ -77,6 +77,10 @@ make -j8
 make install
 ```
 
+## ONNX模型转换为RKNN模型
+
+RKNPU2不支持直接使用ONNX模型进行推导，因此我们首先需要把ONNX模型转换为RKNN模型。为了简化流程了，我新建了一个仓库负责这部分的抓换，详情请查看[LuFeng](https://github.com/Zheng-Bicheng/LuFeng)
+
 ## RKNPU2已经支持的模型列表
 
 | 任务场景             | 模型                | 模型版本(表示已经测试的版本)                                                                                                                            | 大小  | ONNX/RKNN是否支持 | ONNX/RKNN速度(ms) |
