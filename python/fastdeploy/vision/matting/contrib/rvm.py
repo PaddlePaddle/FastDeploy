@@ -54,6 +54,9 @@ class RobustVideoMatting(FastDeployModel):
 
     @property
     def video_mode(self):
+        """
+        Whether to open the video mode, if there are some irrelevant pictures, set it to fasle, the default is true
+        """
         return self._model.video_mode
 
     @size.setter
@@ -70,6 +73,9 @@ class RobustVideoMatting(FastDeployModel):
 
     @video_mode.setter
     def video_mode(self, value):
+        """
+        Set video_mode property, the default is true
+        """
         assert isinstance(
             value, bool), "The value to set `video_mode` must be type of bool."
         self._model.video_mode = value
