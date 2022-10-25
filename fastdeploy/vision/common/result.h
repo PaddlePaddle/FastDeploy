@@ -193,6 +193,8 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
 struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
   /** \brief All the coordinates of detected landmarks for an input image, and the element of `landmarks` is a array of 2 float values, means [x, y]
    */
+  FaceAlignmentResult(const FaceAlignmentResult& res);
+
   std::vector<std::array<float, 2>> landmarks;
 
   ResultType type = ResultType::FACE_ALIGNMENT;
