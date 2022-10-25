@@ -126,14 +126,14 @@ Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Me
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export ENABLE_ORT_BACKEND=ON
-export ENABLE_PADDLE_BACKEND=ON
-export ENABLE_OPENVINO_BACKEND=ON
-export ENABLE_VISION=ON
-export ENABLE_TRT_BACKEND=ON
-export WITH_GPU=ON
-export TRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5"
-export CUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+set ENABLE_ORT_BACKEND=ON
+set ENABLE_PADDLE_BACKEND=ON
+set ENABLE_OPENVINO_BACKEND=ON
+set ENABLE_VISION=ON
+set ENABLE_TRT_BACKEND=ON
+set WITH_GPU=ON
+set TRT_DIRECTORY=D:\Paddle\TensorRT-8.4.1.5
+set CUDA_DIRECTORY=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
 
 python setup.py build
 python setup.py bdist_wheel

@@ -22,13 +22,16 @@ docker exec -it -u root fastdeploy bash
 #### 1.2 Installation (inside the docker)
 ```bash
 apt-get install build-essential python3-dev libssl-dev libffi-dev libxml2 libxml2-dev libxslt1-dev zlib1g-dev libsndfile1 language-pack-zh-hans wget zip
-pip3 install paddlespeech
+python3 -m pip install --upgrade pip
+pip3 install -U fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip3 install -U paddlespeech paddlepaddle
 export LC_ALL="zh_CN.UTF-8"
 export LANG="zh_CN.UTF-8"
 export LANGUAGE="zh_CN:zh:en_US:en"
 ```
 
-#### 1.3 Download models (inside the docker)
+#### 1.3 Download models (inside the docker, skippable)
+The model file will be downloaded and decompressed automatically. If you want to download manually, please use the following command.
 ```bash
 cd /models/streaming_pp_tts/1
 wget https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0.zip
