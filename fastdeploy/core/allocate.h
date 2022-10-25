@@ -45,6 +45,16 @@ class FASTDEPLOY_DECL FDDeviceFree {
   void operator()(void* ptr) const;
 };
 
+class FASTDEPLOY_DECL FDDeviceHostAllocator {
+ public:
+  bool operator()(void** ptr, size_t size) const;
+};
+
+class FASTDEPLOY_DECL FDDeviceHostFree {
+ public:
+  void operator()(void* ptr) const;
+};
+
 #endif
 
 }  // namespace fastdeploy
