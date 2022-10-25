@@ -10,7 +10,7 @@ cd FastDeploy/examples/vision/detection/yolov5/serving/
 #下载yolov5模型文件
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 
-# 将模型放入 models/infer/1目录下, 并重命名为model.onnx
+# 将模型放入 models/runtime/1目录下, 并重命名为model.onnx
 mv yolov5s.onnx models/runtime/1/model.onnx
 
 # 拉取fastdeploy镜像
