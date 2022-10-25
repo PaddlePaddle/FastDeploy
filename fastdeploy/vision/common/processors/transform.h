@@ -50,7 +50,6 @@ inline void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processor
        cast_index = i;
     }
   }
-  std::cout << "????? " << cast_index << std::endl;
   if (cast_index < 0) {
     return;
   }
@@ -60,7 +59,7 @@ inline void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processor
     return;
   }
   processors->erase(processors->begin() + cast_index);
-  FDINFO << (*processors)[cast_index]->Name() << " and Cast are fused to " << (*processors)[cast_index]->Name() << " in preprocessing pipeline." << std::endl;
+  FDINFO << (*processors)[cast_index - 1]->Name() << " and Cast are fused to " << (*processors)[cast_index - 1]->Name() << " in preprocessing pipeline." << std::endl;
 }
 
 inline void FuseNormalizeHWC2CHW(std::vector<std::shared_ptr<Processor>>* processors) {
@@ -69,10 +68,10 @@ inline void FuseNormalizeHWC2CHW(std::vector<std::shared_ptr<Processor>>* proces
   for (size_t i = 0; i < processors->size(); ++i) {
     if ((*processors)[i]->Name() == "HWC2CHW") {
       if (i == 0) {
-	continue;
+	    continue;
       }
-      if ((*processors)[i]->Name() != "Normalize") {
-	continue;
+      if ((*processors)[i - 1]->Name() != "Normalize") {
+	    continue;
       }
       hwc2chw_index = i;
     }
