@@ -99,8 +99,6 @@ void TKalmanFilter::project(cv::Mat *mean, cv::Mat *covariance) const {
        cv::GEMM_2_T);
 }
 
-int Trajectory::count = 0;
-
 const cv::Mat &Trajectory::predict(void) {
   if (state != Tracked) *cv::KalmanFilter::statePost.ptr<float>(7) = 0;
   return TKalmanFilter::predict();
@@ -120,8 +118,8 @@ void Trajectory::update(Trajectory *traj,
   if (update_embedding_) update_embedding(traj->current_embedding);
 }
 
-void Trajectory::activate(int timestamp_) {
-  id = next_id();
+void Trajectory::activate(int &cnt,int timestamp_) {
+  id = next_id(cnt);
   TKalmanFilter::init(cv::Mat(xyah));
   length = 0;
   state = Tracked;
@@ -132,14 +130,14 @@ void Trajectory::activate(int timestamp_) {
   starttime = timestamp_;
 }
 
-void Trajectory::reactivate(Trajectory *traj, int timestamp_, bool newid) {
+void Trajectory::reactivate(Trajectory *traj,int &cnt, int timestamp_, bool newid) {
   TKalmanFilter::correct(cv::Mat(traj->xyah));
   update_embedding(traj->current_embedding);
   length = 0;
   state = Tracked;
   is_activated = true;
   timestamp = timestamp_;
-  if (newid) id = next_id();
+  if (newid) id = next_id(cnt);
 }
 
 void Trajectory::update_embedding(const cv::Mat &embedding) {

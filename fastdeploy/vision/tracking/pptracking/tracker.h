@@ -70,6 +70,7 @@ class FASTDEPLOY_DECL JDETracker {
   int max_lost_time;
   float lambda;
   float det_thresh;
+  int count = 0;
 };
 
 } // namespace tracking

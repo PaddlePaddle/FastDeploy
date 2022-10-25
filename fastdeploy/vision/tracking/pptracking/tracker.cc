@@ -95,7 +95,7 @@ bool JDETracker::update(const cv::Mat &dets,
       pt->update(&ct, timestamp);
       activated_trajectories.push_back(pt);
     } else {
-      pt->reactivate(&ct, timestamp);
+      pt->reactivate(&ct, count,timestamp);
       retrieved_trajectories.push_back(pt);
     }
   }
@@ -121,7 +121,7 @@ bool JDETracker::update(const cv::Mat &dets,
       pt->update(ct, timestamp);
       activated_trajectories.push_back(pt);
     } else {
-      pt->reactivate(ct, timestamp);
+      pt->reactivate(ct,count, timestamp);
       retrieved_trajectories.push_back(pt);
     }
   }
@@ -156,7 +156,7 @@ bool JDETracker::update(const cv::Mat &dets,
 
   for (size_t i = 0; i < mismatch_col.size(); ++i) {
     if (nnext_candidates[mismatch_col[i]]->score < det_thresh) continue;
-    nnext_candidates[mismatch_col[i]]->activate(timestamp);
+    nnext_candidates[mismatch_col[i]]->activate(count, timestamp);
     activated_trajectories.push_back(nnext_candidates[mismatch_col[i]]);
   }
 

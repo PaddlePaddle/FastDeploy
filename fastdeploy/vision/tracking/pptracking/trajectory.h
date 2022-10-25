@@ -20,6 +20,7 @@
 #pragma once
 
 #include <vector>
+#include "fastdeploy/fastdeploy_model.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -37,7 +38,7 @@ typedef std::vector<Trajectory>::iterator TrajectoryPoolIterator;
 typedef std::vector<Trajectory *> TrajectoryPtrPool;
 typedef std::vector<Trajectory *>::iterator TrajectoryPtrPoolIterator;
 
-class TKalmanFilter : public cv::KalmanFilter {
+class FASTDEPLOY_DECL TKalmanFilter : public cv::KalmanFilter {
  public:
   TKalmanFilter(void);
   virtual ~TKalmanFilter(void) {}
@@ -60,7 +61,7 @@ inline TKalmanFilter::TKalmanFilter(void) : cv::KalmanFilter(8, 4) {
   std_weight_velocity = 1 / 160.f;
 }
 
-class Trajectory : public TKalmanFilter {
+class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
  public:
   Trajectory();
   Trajectory(const cv::Vec4f &ltrb, float score, const cv::Mat &embedding);
@@ -68,13 +69,13 @@ class Trajectory : public TKalmanFilter {
   Trajectory &operator=(const Trajectory &rhs);
   virtual ~Trajectory(void) {}
 
-  static int next_id();
+  int next_id(int &nt);
   virtual const cv::Mat &predict(void);
   virtual void update(Trajectory *traj,
                       int timestamp,
                       bool update_embedding = true);
-  virtual void activate(int timestamp);
-  virtual void reactivate(Trajectory *traj, int timestamp, bool newid = false);
+  virtual void activate(int& cnt, int timestamp);
+  virtual void reactivate(Trajectory *traj, int & cnt,int timestamp, bool newid = false);
   virtual void mark_lost(void);
   virtual void mark_removed(void);
 
@@ -129,7 +130,7 @@ class Trajectory : public TKalmanFilter {
   float score;
 
  private:
-  static int count;
+//  int count=0;
   cv::Vec4f xyah;
   cv::Mat current_embedding;
   float eta;
@@ -219,9 +220,9 @@ inline Trajectory &Trajectory::operator=(const Trajectory &rhs) {
   return *this;
 }
 
-inline int Trajectory::next_id() {
-  ++count;
-  return count;
+inline int Trajectory::next_id(int &cnt) {
+  ++cnt;
+  return cnt;
 }
 
 inline void Trajectory::mark_lost(void) { state = Lost; }
