@@ -36,20 +36,50 @@
 namespace fastdeploy {
 namespace vision {
 
-inline void FuseTransforms(
-    std::vector<std::shared_ptr<Processor>>* processors) {
-  // Fuse Normalize and HWC2CHW
-  int hwc2chw_index = 0;
+inline void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processors) {
+  // Fuse Normalize and Cast<Float>
+  int cast_index = -1;
+  for (size_t i = 0; i < processors->size(); ++i) {
+    if ((*processors)[i]->Name() == "Cast") {
+       if (i == 0) {
+	 continue;
+       }
+       if ((*processors)[i - 1]->Name() != "Normalize" && (*processors)[i - 1]->Name() != "NormalizeAndPermute") {
+	 continue;
+       }
+       cast_index = i;
+    }
+  }
+  std::cout << "????? " << cast_index << std::endl;
+  if (cast_index < 0) {
+    return;
+  }
+
+  std::cout << dynamic_cast<Cast*>((*processors)[cast_index].get())->GetDtype() << "-----" << std::endl;
+  if (dynamic_cast<Cast*>((*processors)[cast_index].get())->GetDtype() != "float") {
+    return;
+  }
+  processors->erase(processors->begin() + cast_index);
+  FDINFO << (*processors)[cast_index]->Name() << " and Cast are fused to " << (*processors)[cast_index]->Name() << " in preprocessing pipeline." << std::endl;
+}
+
+inline void FuseNormalizeHWC2CHW(std::vector<std::shared_ptr<Processor>>* processors) {
+  // Fuse Normalize and HWC2CHW to NormalizeAndPermute
+  int hwc2chw_index = -1;
   for (size_t i = 0; i < processors->size(); ++i) {
     if ((*processors)[i]->Name() == "HWC2CHW") {
       if (i == 0) {
-        return;
+	continue;
       }
       if ((*processors)[i]->Name() != "Normalize") {
-        return;
+	continue;
       }
       hwc2chw_index = i;
     }
+  }
+
+  if (hwc2chw_index < 0) {
+    return;
   }
 
   // Get alpha and beta of Normalize
@@ -73,8 +103,14 @@ inline void FuseTransforms(
 
   processor->SetAlpha(alpha);
   processor->SetBeta(beta);
-  FDINFO << "Normalize and HWC2CHW are fused to NormalizeAndPermute."
-         << std::endl;
+  FDINFO << "Normalize and HWC2CHW are fused to NormalizeAndPermute "
+	 " in preprocessing pipeline." << std::endl;
+}
+
+inline void FuseTransforms(
+    std::vector<std::shared_ptr<Processor>>* processors) {
+  FuseNormalizeCast(processors);
+  FuseNormalizeHWC2CHW(processors);
 }
 
 }  // namespace vision
