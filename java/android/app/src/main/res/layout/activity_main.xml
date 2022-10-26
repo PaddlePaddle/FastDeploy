@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context=".MainActivity">
+    tools:context="com.baidu.paddle.fastdeploy.app.examples.detection.MainActivity">
 
     <RelativeLayout
         android:layout_width="match_parent"

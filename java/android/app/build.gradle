@@ -6,7 +6,7 @@ android {
     compileSdk 28
 
     defaultConfig {
-        applicationId 'com.baidu.paddle.fastdeploy.app'
+        applicationId 'com.baidu.paddle.fastdeploy.app.examples'
         minSdkVersion 15
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 28

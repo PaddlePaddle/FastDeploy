@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples;
+package com.baidu.paddle.fastdeploy.app.examples.detection;
 
 
 import android.Manifest;
@@ -23,10 +23,10 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.baidu.paddle.fastdeploy.RuntimeOption;
+import com.baidu.paddle.fastdeploy.app.examples.detection.R;
 import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 

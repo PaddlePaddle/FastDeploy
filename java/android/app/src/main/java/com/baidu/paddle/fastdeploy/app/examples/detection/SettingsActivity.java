@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples;
+package com.baidu.paddle.fastdeploy.app.examples.detection;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -9,9 +9,9 @@ import android.preference.ListPreference;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
 
+import com.baidu.paddle.fastdeploy.app.examples.detection.R;
 import com.baidu.paddle.fastdeploy.app.ui.AppCompatPreferenceActivity;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.examples.R;
 
 import java.util.ArrayList;
 import java.util.List;
