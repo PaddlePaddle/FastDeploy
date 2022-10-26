@@ -104,3 +104,7 @@ def swap_background(im_data,
 
 def vis_ppocr(im_data, det_result):
     return C.vision.vis_ppocr(im_data, det_result)
+
+
+def vis_mot(im_data, mot_result, fps, frame_id):
+    return C.vision.vis_mot(im_data, mot_result, fps, frame_id)
