@@ -102,6 +102,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
+  void SetExternalStream(void* external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -171,6 +173,16 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void DisableLiteFP16();
 
+   /**
+   * @brief enable int8 precision while use paddle lite backend
+   */
+  void EnableLiteInt8();
+
+  /**
+   * @brief disable int8 precision, change to full precision(float32)
+   */
+  void DisableLiteInt8();
+
   /**
    * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
    */
@@ -232,6 +244,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   Device device = Device::CPU;
 
+  void* external_stream_ = nullptr;
+
   bool enable_pinned_memory = false;
 
   // ======Only for ORT Backend========
@@ -256,6 +270,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
   LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
+  // enable int8 or not
+  bool lite_enable_int8 = false;
   // enable fp16 or not
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig

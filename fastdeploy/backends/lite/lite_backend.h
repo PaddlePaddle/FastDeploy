@@ -37,6 +37,8 @@ struct LiteBackendOption {
   int power_mode = 3;
   // enable fp16
   bool enable_fp16 = false;
+  // enable int8
+  bool enable_int8 = false;
   // optimized model dir for CxxConfig
   std::string optimized_model_dir = "";
   // TODO(qiuyanjun): support more options for lite backend.
