@@ -68,9 +68,6 @@ setup_configs["LIBRARY_NAME"] = PACKAGE_NAME
 setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
-#TODO(czr): ipu has no binary to download.
-setup_configs["PADDLE_INFER_INSTALL_DIR"] = os.getenv(
-    "PADDLE_INFER_INSTALL_DIR", "")
 
 if setup_configs["WITH_GPU"] == "ON" or setup_configs[
         "BUILD_ON_JETSON"] == "ON":
