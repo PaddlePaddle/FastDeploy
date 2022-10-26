@@ -32,7 +32,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png
 运行完成可视化结果如下图所示
 
 <div width="240">
-<img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852040-759da522-fca4-4786-9205-88c622cd4a39.jpg">
+<img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/19977378/197931737-c2d8e760-a76d-478a-a6c9-4574fb5c70eb.png">
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  

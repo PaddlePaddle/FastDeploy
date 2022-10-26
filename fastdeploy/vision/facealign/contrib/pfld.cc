@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/contrib/pfld.h"
+#include "fastdeploy/vision/facealign/contrib/pfld.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -108,13 +108,11 @@ bool PFLD::Predict(cv::Mat* im, FaceAlignmentResult* result) {
   Mat mat(*im);
   std::vector<FDTensor> input_tensors(1);
 
-  std::map<std::string, std::array<float, 2>> im_info;
+  std::map<std::string, std::array<int, 2>> im_info;
 
   // Record the shape of image and the shape of preprocessed image
-  im_info["input_shape"] = {static_cast<float>(mat.Height()),
-                            static_cast<float>(mat.Width())};
-  im_info["output_shape"] = {static_cast<float>(mat.Height()),
-                             static_cast<float>(mat.Width())};
+  im_info["input_shape"] = {mat.Height(), mat.Width()};
+  im_info["output_shape"] = {mat.Height(), mat.Width()};
 
   if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;

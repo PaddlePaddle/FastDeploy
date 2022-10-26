@@ -215,10 +215,6 @@ std::string FaceDetectionResult::Str() {
   return out;
 }
 
-FaceAlignmentResult::FaceAlignmentResult(const FaceAlignmentResult& res) {
-  landmarks.assign(res.landmarks.begin(), res.landmarks.end());
-}
-
 void FaceAlignmentResult::Clear() {
   std::vector<std::array<float, 2>>().swap(landmarks);
 }
