@@ -36,9 +36,9 @@ def test_matting_ppmatting():
     # 预测图片抠图结果
     im = cv2.imread("./matting_input.jpg")
     result = model.predict(im.copy())
-    pkl_url = ""
+    pkl_url = "https://bj.bcebos.com/fastdeploy/tests/ppmatting_result.pkl"
     if pkl_url:
-        fd.download("ppmatting_result.pkl", ".")
+        fd.download(pkl_url, ".")
     with open("./ppmatting_result.pkl", "rb") as f:
         baseline = pickle.load(f)
 
@@ -66,9 +66,9 @@ def test_matting_ppmodnet():
     im = cv2.imread("./matting_input.jpg")
     result = model.predict(im.copy())
 
-    pkl_url = ""
+    pkl_url = "https://bj.bcebos.com/fastdeploy/tests/ppmodnet_result.pkl"
     if pkl_url:
-        fd.download("ppmodnet_result.pkl", ".")
+        fd.download(pkl_url, ".")
     with open("./ppmodnet_result.pkl", "rb") as f:
         baseline = pickle.load(f)
 
@@ -96,9 +96,9 @@ def test_matting_pphumanmatting():
     im = cv2.imread("./matting_input.jpg")
     result = model.predict(im.copy())
 
-    pkl_url = ""
+    pkl_url = "https://bj.bcebos.com/fastdeploy/tests/pphumanmatting_result.pkl"
     if pkl_url:
-        fd.download("pphumanmatting_result.pkl", ".")
+        fd.download(pkl_url, ".")
 
     with open("./pphumanmatting_result.pkl", "rb") as f:
         baseline = pickle.load(f)
