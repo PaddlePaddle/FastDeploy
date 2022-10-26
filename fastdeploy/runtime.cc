@@ -223,6 +223,10 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
+void RuntimeOption::SetExternalStream(void* external_stream) {
+  external_stream_ = external_stream;
+}
+
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
@@ -317,7 +321,17 @@ void RuntimeOption::EnableLiteFP16() {
   lite_enable_fp16 = true;
 }
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+void RuntimeOption::DisableLiteFP16() { 
+  lite_enable_fp16 = false; 
+}
+
+void RuntimeOption::EnableLiteInt8() {
+  lite_enable_int8 = true;
+}
+
+void RuntimeOption::DisableLiteInt8() { 
+  lite_enable_int8 = false; 
+}
 
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
@@ -508,6 +522,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   pd_option.enable_pinned_memory = option.enable_pinned_memory;
+  pd_option.external_stream_ = option.external_stream_;
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -574,6 +589,7 @@ void Runtime::CreateOrtBackend() {
   ort_option.execution_mode = option.ort_execution_mode;
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
+  ort_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
@@ -613,6 +629,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
+  trt_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
@@ -643,6 +660,7 @@ void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
+  lite_option.enable_int8 = option.lite_enable_int8;
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
