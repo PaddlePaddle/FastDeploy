@@ -45,7 +45,6 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
-  std::cout << "Backend::Lite initialized done!\n";
 
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
