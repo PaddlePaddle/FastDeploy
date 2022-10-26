@@ -16,6 +16,7 @@
 #include "fastdeploy/function/cuda_cast.h"
 
 #include <cstring>
+#include <unordered_map>
 
 #include "NvInferRuntime.h"
 #include "fastdeploy/utils/utils.h"
@@ -235,6 +236,7 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
     inputs_desc_[i].name = name;
     inputs_desc_[i].shape.assign(shape.begin(), shape.end());
     inputs_desc_[i].dtype = ReaderDtypeToTrtDtype(onnx_reader.inputs[i].dtype);
+    inputs_desc_[i].original_dtype = ReaderDtypeToFDDtype(onnx_reader.inputs[i].dtype);
     auto info = ShapeRangeInfo(shape);
     info.name = name;
     auto iter_min = option.min_shape.find(name);
@@ -257,6 +259,8 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype =
         ReaderDtypeToTrtDtype(onnx_reader.outputs[i].dtype);
+    outputs_desc_[i].original_dtype =
+        ReaderDtypeToFDDtype(onnx_reader.outputs[i].dtype);
   }
 
   FDASSERT(cudaStreamCreate(&stream_) == 0,
@@ -313,8 +317,34 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
   for (size_t i = 0; i < outputs->size(); ++i) {
+    // if the final output tensor's dtype is different from the model output tensor's dtype,
+    // then we need cast the data to the final output's dtype
+    auto model_output_dtype = GetFDDataType(outputs_device_buffer_[(*outputs)[i].name].dtype());
+    if ((*outputs)[i].dtype != model_output_dtype) {
+      FDTensor output_tensor;
+      output_tensor.SetExternalData((*outputs)[i].shape, model_output_dtype,
+                                    outputs_device_buffer_[(*outputs)[i].name].data(),
+                                    Device::GPU);
+  
+      if (casted_output_tensors_.count((*outputs)[i].name) == 0) {
+        casted_output_tensors_[(*outputs)[i].name] = FDTensor();
+      }
+      casted_output_tensors_[(*outputs)[i].name].Resize((*outputs)[i].shape, (*outputs)[i].dtype,
+                                                        (*outputs)[i].name, Device::GPU);
+      CudaCast(output_tensor, &casted_output_tensors_[(*outputs)[i].name], stream_);
+    } else {
+      if (casted_output_tensors_.count((*outputs)[i].name) == 0) {
+        casted_output_tensors_[(*outputs)[i].name] = FDTensor();
+      }
+      casted_output_tensors_[(*outputs)[i].name].SetExternalData(
+          (*outputs)[i].shape, model_output_dtype,
+          outputs_device_buffer_[(*outputs)[i].name].data(),
+          Device::GPU);
+    }
+  }
+  for (size_t i = 0; i < outputs->size(); ++i) {
     FDASSERT(cudaMemcpyAsync((*outputs)[i].Data(),
-                             outputs_device_buffer_[(*outputs)[i].name].data(),
+                             casted_output_tensors_[(*outputs)[i].name].Data(),
                              (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
                              stream_) == 0,
              "[ERROR] Error occurs while copy memory from GPU to CPU.");
@@ -326,6 +356,17 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
 }
 
 void TrtBackend::GetInputOutputInfo() {
+  // Read the original dtypes from inputs_desc_ and outputs_desc_
+  std::unordered_map<std::string, FDDataType> inputs_original_dtype_map;
+  std::unordered_map<std::string, FDDataType> outputs_original_dtype_map;
+  for (size_t i = 0; i < inputs_desc_.size(); ++i) {
+    inputs_original_dtype_map[inputs_desc_[i].name] = inputs_desc_[i].original_dtype;
+  }
+  for (size_t i = 0; i < outputs_desc_.size(); ++i) {
+    outputs_original_dtype_map[outputs_desc_[i].name] = outputs_desc_[i].original_dtype;
+  }
+
+  // Re-read the tensor infos from TRT model and write into inputs_desc_ and outputs_desc_
   std::vector<TrtValueInfo>().swap(inputs_desc_);
   std::vector<TrtValueInfo>().swap(outputs_desc_);
   inputs_desc_.clear();
@@ -336,10 +377,12 @@ void TrtBackend::GetInputOutputInfo() {
     auto shape = ToVec(engine_->getBindingDimensions(i));
     auto dtype = engine_->getBindingDataType(i);
     if (engine_->bindingIsInput(i)) {
-      inputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype});
+      auto original_dtype = inputs_original_dtype_map.count(name) ? inputs_original_dtype_map[name] : GetFDDataType(dtype);
+      inputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype, original_dtype});
       inputs_device_buffer_[name] = FDDeviceBuffer(dtype);
     } else {
-      outputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype});
+      auto original_dtype = outputs_original_dtype_map.count(name) ? outputs_original_dtype_map[name] : GetFDDataType(dtype);
+      outputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype, original_dtype});
       outputs_device_buffer_[name] = FDDeviceBuffer(dtype);
     }
   }
@@ -414,7 +457,7 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
     std::vector<int64_t> shape(output_dims.d,
                                output_dims.d + output_dims.nbDims);
     (*outputs)[ori_idx].is_pinned_memory = option_.enable_pinned_memory;
-    (*outputs)[ori_idx].Resize(shape, GetFDDataType(outputs_desc_[i].dtype),
+    (*outputs)[ori_idx].Resize(shape, outputs_desc_[i].original_dtype,
                                outputs_desc_[i].name);
 
     // Allocate output buffer memory
