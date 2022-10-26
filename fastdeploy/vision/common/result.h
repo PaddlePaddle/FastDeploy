@@ -26,6 +26,7 @@ enum FASTDEPLOY_DECL ResultType {
   DETECTION,
   SEGMENTATION,
   OCR,
+  MOT,
   FACE_DETECTION,
   FACE_RECOGNITION,
   MATTING,
@@ -154,6 +155,21 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::string Str();
 };
 
+struct FASTDEPLOY_DECL MOTResult : public BaseResult {
+  // left top right bottom
+  std::vector<std::array<int, 4>> boxes;
+  std::vector<int> ids;
+  std::vector<float> scores;
+  std::vector<int> class_ids;
+  ResultType type = ResultType::MOT;
+
+  void Clear();
+
+  std::string Str();
+};
+
+
+
 /*! @brief Face detection result structure for all the face detection models
  */
 struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
@@ -267,6 +283,7 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
   /// Debug function, convert the result to string to print
   std::string Str();
 };
+
 
 }  // namespace vision
 }  // namespace fastdeploy
