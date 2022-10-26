@@ -23,6 +23,13 @@ class AdaFace(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
+        """Load a AdaFace model exported by InsigtFace.
+
+        :param model_file: (str)Path of model file, e.g ./adaface.onnx
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(AdaFace, self).__init__(runtime_option)
@@ -33,28 +40,48 @@ class AdaFace(FastDeployModel):
         assert self.initialized, "AdaFace initialize failed."
 
     def predict(self, input_image):
+        """ Predict the face recognition result for an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: FaceRecognitionResult
+        """
         return self._model.predict(input_image)
 
     # 一些跟模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [112, 112]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
+        """
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        """
         return self._model.size
 
     @property
     def alpha(self):
+        """
+        Argument for image preprocessing step, alpha value for normalization
+        """
         return self._model.alpha
 
     @property
     def beta(self):
+        """
+        Argument for image preprocessing step, beta value for normalization
+        """
         return self._model.beta
 
     @property
     def swap_rb(self):
+        """
+        Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+        """
         return self._model.swap_rb
 
     @property
     def l2_normalize(self):
+        """
+        Argument for image preprocessing step, whether to apply l2 normalize to embedding values, default;
+        """
         return self._model.l2_normalize
 
     @size.setter
