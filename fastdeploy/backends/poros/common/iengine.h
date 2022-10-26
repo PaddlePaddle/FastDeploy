@@ -27,11 +27,6 @@ namespace baidu {
 namespace mirana {
 namespace poros {
 
-/**
- * the base engine class
- * every registered engine should inherit from this IEngine
- **/
-
 struct PorosGraph {
     torch::jit::Graph* graph = NULL;
     torch::jit::Node* node = NULL;
