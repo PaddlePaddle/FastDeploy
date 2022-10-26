@@ -15,7 +15,6 @@
 #ifdef ENABLE_VISION_VISUALIZE
 
 #include "fastdeploy/vision/visualize/visualize.h"
-#include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
 namespace vision {

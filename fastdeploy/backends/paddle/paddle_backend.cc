@@ -22,6 +22,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+    if(option_.external_stream_) {
+      config_.SetExecStream(option_.external_stream_);
+    }
     if (option.enable_trt) {
 #ifdef ENABLE_TRT_BACKEND
       auto precision = paddle_infer::PrecisionType::kFloat32;
@@ -72,6 +75,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
+  config_.EnableMemoryOptim();
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use PaddleReader instead now
