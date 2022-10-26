@@ -44,6 +44,7 @@ struct OrtBackendOption {
   int execution_mode = -1;
   bool use_gpu = false;
   int gpu_id = 0;
+  void* external_stream_ = nullptr;
 
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
@@ -66,7 +67,8 @@ class OrtBackend : public BaseBackend {
                     const OrtBackendOption& option = OrtBackendOption(),
                     bool from_memory_buffer = false);
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override;
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs) override;
 
   int NumInputs() const override { return inputs_desc_.size(); }
 

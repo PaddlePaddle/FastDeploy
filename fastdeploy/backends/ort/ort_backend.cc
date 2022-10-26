@@ -63,6 +63,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     } else {
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = option.gpu_id;
+      if(option.external_stream_) {
+        cuda_options.has_user_compute_stream = 1;
+        cuda_options.user_compute_stream = option.external_stream_;
+      }
       session_options_.AppendExecutionProvider_CUDA(cuda_options);
     }
   }
