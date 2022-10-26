@@ -51,33 +51,40 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
                        float conf_threshold = 0.25f,
                        float nms_iou_threshold = 0.4f);
 
-  /// tuple of (width, height), default (640, 640)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (640, 640)
+  */
   std::vector<int> size;
-  /// padding value, size should be the same as channels
+  // padding value, size should be the same as channels
+
   std::vector<float> padding_value;
-  /// only pad to the minimum rectange which height and width is times of stride
+  // only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad;
-  /*! @brief
-  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
-  */
+  // while is_mini_pad = false and is_no_pad = true,
+  // will resize the image to the set size
   bool is_no_pad;
-  /*! @brief
-  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
-  */
+  // if is_scale_up is false, the input image only can be zoom out,
+  // the maximum resize scale cannot exceed 1.0
   bool is_scale_up;
-  /// padding stride, for is_mini_pad
+  // padding stride, for is_mini_pad
   int stride;
   /*! @brief
-  downsample strides (namely, steps) for SCRFD to generate anchors, will take (8,16,32) as default values
+  Argument for image postprocessing step, downsample strides (namely, steps) for SCRFD to generate anchors, will take (8,16,32) as default values
   */
   std::vector<int> downsample_strides;
-  /// landmarks_per_face, default 5 in SCRFD
+  /*! @brief
+  Argument for image postprocessing step, landmarks_per_face, default 5 in SCRFD
+  */
   int landmarks_per_face;
-  /// the outputs of onnx file with key points features or not
+  /*! @brief
+  Argument for image postprocessing step, the outputs of onnx file with key points features or not
+  */
   bool use_kps;
-  /// the upperbond number of boxes processed by nms
+  /*! @brief
+  Argument for image postprocessing step, the upperbond number of boxes processed by nms
+  */
   int max_nms;
-  /// number anchors of each stride
+  /// Argument for image postprocessing step, anchor number of each stride
   unsigned int num_anchors;
 
  private:

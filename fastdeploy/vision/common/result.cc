@@ -148,6 +148,26 @@ void OCRResult::Clear() {
   cls_labels.clear();
 }
 
+void MOTResult::Clear(){
+  boxes.clear();
+  ids.clear();
+  scores.clear();
+  class_ids.clear();
+}
+
+std::string MOTResult::Str(){
+  std::string out;
+  out = "MOTResult:\nall boxes counts: "+std::to_string(boxes.size())+"\n";
+  out += "[xmin\tymin\txmax\tymax\tid\tscore]\n";
+  for (size_t i = 0; i < boxes.size(); ++i) {
+    out = out + "["+ std::to_string(boxes[i][0]) + "\t" +
+          std::to_string(boxes[i][1]) + "\t" + std::to_string(boxes[i][2]) +
+          "\t" + std::to_string(boxes[i][3]) + "\t" +
+          std::to_string(ids[i]) + "\t" + std::to_string(scores[i]) + "]\n";
+  }
+  return out;
+}
+
 FaceDetectionResult::FaceDetectionResult(const FaceDetectionResult& res) {
   boxes.assign(res.boxes.begin(), res.boxes.end());
   landmarks.assign(res.landmarks.begin(), res.landmarks.end());

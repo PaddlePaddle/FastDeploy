@@ -25,7 +25,7 @@ PPMatting::PPMatting(const std::string& model_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+  valid_cpu_backends = {Backend::ORT, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -69,9 +69,9 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
            "dimension is %zu.",
            input_shape.size());
 
-  bool is_fixed_input_shape = false;
+  is_fixed_input_shape_ = false;
   if (input_shape[2] > 0 && input_shape[3] > 0) {
-    is_fixed_input_shape = true;
+    is_fixed_input_shape_ = true;
   }
   if (input_shape[2] < 0 || input_shape[3] < 0) {
     FDWARNING << "Detected dynamic input shape of your model, only Paddle "
@@ -87,7 +87,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
       if (op["type"].as<std::string>() == "LimitShort") {
         int max_short = op["max_short"] ? op["max_short"].as<int>() : -1;
         int min_short = op["min_short"] ? op["min_short"].as<int>() : -1;
-        if (is_fixed_input_shape) {
+        if (is_fixed_input_shape_) {
           // if the input shape is fixed, will resize by scale, and the max
           // shape will not exceed input_shape
           long_size = max_short;
@@ -99,7 +99,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
               std::make_shared<LimitShort>(max_short, min_short));
         }
       } else if (op["type"].as<std::string>() == "ResizeToIntMult") {
-        if (is_fixed_input_shape) {
+        if (is_fixed_input_shape_) {
           std::vector<int> max_size = {input_shape[2], input_shape[3]};
           processors_.push_back(
               std::make_shared<ResizeByShort>(long_size, 1, true, max_size));
@@ -119,7 +119,7 @@ bool PPMatting::BuildPreprocessPipelineFromConfig() {
         processors_.push_back(std::make_shared<Normalize>(mean, std));
       } else if (op["type"].as<std::string>() == "ResizeByShort") {
         long_size = op["short_size"].as<int>();
-        if (is_fixed_input_shape) {
+        if (is_fixed_input_shape_) {
           std::vector<int> max_size = {input_shape[2], input_shape[3]};
           processors_.push_back(
               std::make_shared<ResizeByShort>(long_size, 1, true, max_size));
@@ -168,24 +168,26 @@ bool PPMatting::Postprocess(
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
   }
-
-  auto iter_ipt = im_info.find("input_shape");
-  auto iter_out = im_info.find("output_shape");
-
-  double scale_h = static_cast<double>(iter_out->second[0]) /
-                   static_cast<double>(iter_ipt->second[0]);
-  double scale_w = static_cast<double>(iter_out->second[1]) /
-                   static_cast<double>(iter_ipt->second[1]);
-  double actual_scale = std::min(scale_h, scale_w);
-
-  int size_before_pad_h = round(actual_scale * iter_ipt->second[0]);
-  int size_before_pad_w = round(actual_scale * iter_ipt->second[1]);
   std::vector<int64_t> dim{0, 2, 3, 1};
   Transpose(alpha_tensor, &alpha_tensor, dim);
   alpha_tensor.Squeeze(0);
   Mat mat = CreateFromTensor(alpha_tensor);
 
-  Crop::Run(&mat, 0, 0, size_before_pad_w, size_before_pad_h);
+  auto iter_ipt = im_info.find("input_shape");
+  auto iter_out = im_info.find("output_shape");
+  if (is_fixed_input_shape_){
+    double scale_h = static_cast<double>(iter_out->second[0]) /
+                    static_cast<double>(iter_ipt->second[0]);
+    double scale_w = static_cast<double>(iter_out->second[1]) /
+                    static_cast<double>(iter_ipt->second[1]);
+    double actual_scale = std::min(scale_h, scale_w);
+
+    int size_before_pad_h = round(actual_scale * iter_ipt->second[0]);
+    int size_before_pad_w = round(actual_scale * iter_ipt->second[1]);
+
+    Crop::Run(&mat, 0, 0, size_before_pad_w, size_before_pad_h);
+  }
+
   Resize::Run(&mat, iter_ipt->second[1], iter_ipt->second[0]);
 
   result->Clear();

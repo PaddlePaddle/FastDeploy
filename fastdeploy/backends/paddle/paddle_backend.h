@@ -54,6 +54,7 @@ struct PaddleBackendOption {
   // gpu device id
   int gpu_id = 0;
   bool enable_pinned_memory = false;
+  void* external_stream_ = nullptr;
 
   std::vector<std::string> delete_pass_names = {};
 };
