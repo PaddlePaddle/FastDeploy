@@ -55,6 +55,15 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
   }
+#ifdef TIMVX
+  config_.set_nnadapter_device_names({"verisilicon_timvx"});
+  valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
+  valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
+  valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+#endif
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);

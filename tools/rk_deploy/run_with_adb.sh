@@ -1,0 +1,41 @@
+#!/bin/bash
+HOST_SPACE=${PWD}
+echo ${HOST_SPACE}
+WORK_SPACE=/data/local/tmp/test
+
+DEMO_NAME=image_classification_demo
+if [ -n "$1" ]; then
+  DEMO_NAME=$1
+fi
+
+MODEL_NAME=mobilenet_v1_fp32_224
+if [ -n "$2" ]; then
+  MODEL_NAME=$2
+fi
+
+IMAGE_NAME=0001.jpg
+if [ -n "$3" ]; then
+  IMAGE_NAME=$3
+fi
+
+ADB_DEVICE_NAME=
+if [ -n "$4" ]; then
+  ADB_DEVICE_NAME="-s $4"
+fi
+
+EXPORT_ENVIRONMENT_VARIABLES="export GLOG_v=5; export VIV_VX_ENABLE_GRAPH_TRANSFORM=-pcq:1; export VIV_VX_SET_PER_CHANNEL_ENTROPY=100; export TIMVX_BATCHNORM_FUSION_MAX_ALLOWED_QUANT_SCALE_DEVIATION=300000; export VSI_NN_LOG_LEVEL=5;"
+
+EXPORT_ENVIRONMENT_VARIABLES="${EXPORT_ENVIRONMENT_VARIABLES}export LD_LIBRARY_PATH=${WORK_SPACE}/libs:\$LD_LIBRARY_PATH;"
+echo ${EXPORT_ENVIRONMENT_VARIABLES}
+
+# Please install adb, and DON'T run this in the docker.
+set -e
+adb $ADB_DEVICE_NAME shell "rm -rf $WORK_SPACE"
+adb $ADB_DEVICE_NAME shell "mkdir -p $WORK_SPACE"
+
+adb $ADB_DEVICE_NAME push ${HOST_SPACE}/libs $WORK_SPACE
+adb $ADB_DEVICE_NAME push ${HOST_SPACE}/${DEMO_NAME} $WORK_SPACE
+adb $ADB_DEVICE_NAME push ${MODEL_NAME} $WORK_SPACE
+adb $ADB_DEVICE_NAME push ${IMAGE_NAME} $WORK_SPACE
+
+adb $ADB_DEVICE_NAME shell "cd $WORK_SPACE; ${EXPORT_ENVIRONMENT_VARIABLES} chmod +x ./${DEMO_NAME}; ./${DEMO_NAME} ${MODEL_NAME} $IMAGE_NAME 0"
