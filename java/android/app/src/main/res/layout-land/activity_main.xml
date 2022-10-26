@@ -5,14 +5,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context="com.baidu.paddle.fastdeploy.examples.MainActivity">
+    tools:context="com.baidu.paddle.fastdeploy.app.examples.MainActivity">
 
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/colorWindow">
 
-        <com.baidu.paddle.fastdeploy.common.CameraSurfaceView
+        <com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView
             android:id="@+id/sv_preview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

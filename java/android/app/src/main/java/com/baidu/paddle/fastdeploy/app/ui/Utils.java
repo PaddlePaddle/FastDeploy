@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.common;
+package com.baidu.paddle.fastdeploy.app.ui;
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -9,7 +9,14 @@ import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 
 public class Utils {
@@ -151,8 +158,8 @@ public class Utils {
     }
 
     public static int getCameraDisplayOrientation(Context context, int cameraId) {
-        android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
-        android.hardware.Camera.getCameraInfo(cameraId, info);
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(cameraId, info);
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         int rotation = wm.getDefaultDisplay().getRotation();
         int degrees = 0;

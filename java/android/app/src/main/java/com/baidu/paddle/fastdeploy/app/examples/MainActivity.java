@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.examples;
+package com.baidu.paddle.fastdeploy.app.examples;
 
 
 import android.Manifest;
@@ -9,20 +9,24 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.*;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
-import android.view.*;
-import android.widget.*;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
 
+import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.RuntimeOption;
-import com.baidu.paddle.fastdeploy.common.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.common.Utils;
-import com.baidu.paddle.fastdeploy.examples.R;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 

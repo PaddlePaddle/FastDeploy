@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:background="@color/colorWindow">
 
-        <com.baidu.paddle.fastdeploy.common.ActionBarLayout
+        <com.baidu.paddle.fastdeploy.app.ui.ActionBarLayout
             android:id="@+id/action_bar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -53,10 +53,10 @@
                     android:textAlignment="center" />
             </LinearLayout>
 
-        </com.baidu.paddle.fastdeploy.common.ActionBarLayout>
+        </com.baidu.paddle.fastdeploy.app.ui.ActionBarLayout>
 
         <!--        时实-->
-        <com.baidu.paddle.fastdeploy.common.CameraSurfaceView
+        <com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView
             android:id="@+id/sv_preview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

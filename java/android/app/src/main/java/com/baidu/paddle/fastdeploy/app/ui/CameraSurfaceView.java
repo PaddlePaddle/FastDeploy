@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.common;
+package com.baidu.paddle.fastdeploy.app.ui;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -15,14 +15,14 @@ import android.opengl.Matrix;
 import android.util.AttributeSet;
 import android.util.Log;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.List;
+
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
 
 public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         SurfaceTexture.OnFrameAvailableListener {

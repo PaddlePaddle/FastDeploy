@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.examples;
+package com.baidu.paddle.fastdeploy.app.examples;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -8,11 +8,10 @@ import android.preference.EditTextPreference;
 import android.preference.ListPreference;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
-import android.util.Log;
 
-import com.baidu.paddle.fastdeploy.common.AppCompatPreferenceActivity;
-import com.baidu.paddle.fastdeploy.common.Utils;
-import com.baidu.paddle.fastdeploy.examples.R;
+import com.baidu.paddle.fastdeploy.app.ui.AppCompatPreferenceActivity;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.examples.R;
 
 import java.util.ArrayList;
 import java.util.List;
