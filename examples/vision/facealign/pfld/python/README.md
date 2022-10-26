@@ -52,7 +52,7 @@ PFLD模型加载和初始化，其中model_file为导出的ONNX模型格式
 > PFLD.predict(input_image)
 > ```
 >
-> 模型预测结口，输入图像直接输出人脸关键点结果。
+> 模型预测结口，输入图像直接输出landmarks坐标结果。
 >
 > **参数**
 >

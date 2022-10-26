@@ -63,14 +63,14 @@ PFLD模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
 > ```c++
 > PFLD::Predict(cv::Mat* im, FaceAlignmentResult* result)
-> ```s
+> ```
 >
 > 模型预测接口，输入图像直接输出landmarks结果。
 >
 > **参数**
 >
 > > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceAlignmentResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **result**: landmarks坐标结果, FaceAlignmentResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 ### 类成员变量
 
