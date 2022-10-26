@@ -51,7 +51,7 @@ def archives = [
 
 task downloadAndExtractArchives(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting archives including libs and models"
+        println "Downloading and extracting archives including models ..."
     }
     doLast {
         // Prepare cache folder for archives
