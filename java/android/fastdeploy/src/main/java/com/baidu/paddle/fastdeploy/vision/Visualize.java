@@ -134,7 +134,7 @@ public class Visualize {
                 result.mText,
                 result.mRecScores,
                 result.mClsScores,
-                result.mLabels);
+                result.mClsLabels);
     }
 
     // VisDetection in native
@@ -162,7 +162,7 @@ public class Visualize {
                                               String[] text,
                                               float[] recScores,
                                               float[] clsScores,
-                                              int[] labels);
+                                              int[] clsLabels);
 
 
     /* Initializes at the beginning */

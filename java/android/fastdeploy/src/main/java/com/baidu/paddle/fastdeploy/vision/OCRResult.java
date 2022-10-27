@@ -11,7 +11,7 @@ public class OCRResult {
     public String[] mText;  // [n]
     public float[] mRecScores;  // [n]
     public float[] mClsScores;  // [n]
-    public int[] mLabels;  // [n]
+    public int[] mClsLabels;  // [n]
     public boolean mInitialized = false;
 
     public OCRResult() {
@@ -36,7 +36,7 @@ public class OCRResult {
             setText(copyTextFromNative(nativeResultContext));
             setRecScores(copyRecScoresFromNative(nativeResultContext));
             setClsScores(copyClsScoresFromNative(nativeResultContext));
-            setLabels(copyLabelsFromNative(nativeResultContext));
+            setClsLabels(copyClsLabelsFromNative(nativeResultContext));
         }
         // WARN: must release ctx.
         return releaseNative(nativeResultContext);
@@ -71,9 +71,9 @@ public class OCRResult {
         }
     }
 
-    private void setLabels(@NonNull int[] labelBuffer) {
-        if (labelBuffer.length > 0) {
-            mLabels = labelBuffer.clone();
+    private void setClsLabels(@NonNull int[] clsLabelBuffer) {
+        if (clsLabelBuffer.length > 0) {
+            mClsLabels = clsLabelBuffer.clone();
         }
     }
 
@@ -88,7 +88,7 @@ public class OCRResult {
 
     private static native float[] copyClsScoresFromNative(long nativeResultContext);
 
-    private static native int[] copyLabelsFromNative(long nativeResultContext);
+    private static native int[] copyClsLabelsFromNative(long nativeResultContext);
 
     private static native boolean releaseNative(long nativeResultContext);
 

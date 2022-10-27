@@ -102,7 +102,7 @@ JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
     JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
     jobjectArray boxes, jobjectArray text, jfloatArray rec_scores,
-    jfloatArray cls_scores, jintArray labels) {
+    jfloatArray cls_scores, jintArray cls_labels) {
   // TODO: implement visOcrNative()
 }
 
