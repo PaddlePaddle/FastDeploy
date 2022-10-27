@@ -26,7 +26,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const RuntimeOption& custom_option,
                                const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -106,7 +106,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
 	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
 	        << " to export model with fixed input shape."
 	        << std::endl;
-      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER};
+      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER};
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
