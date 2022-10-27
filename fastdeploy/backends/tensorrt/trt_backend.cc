@@ -326,16 +326,10 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
                                     outputs_device_buffer_[(*outputs)[i].name].data(),
                                     Device::GPU);
   
-      if (casted_output_tensors_.count((*outputs)[i].name) == 0) {
-        casted_output_tensors_[(*outputs)[i].name] = FDTensor();
-      }
       casted_output_tensors_[(*outputs)[i].name].Resize((*outputs)[i].shape, (*outputs)[i].dtype,
                                                         (*outputs)[i].name, Device::GPU);
       CudaCast(output_tensor, &casted_output_tensors_[(*outputs)[i].name], stream_);
     } else {
-      if (casted_output_tensors_.count((*outputs)[i].name) == 0) {
-        casted_output_tensors_[(*outputs)[i].name] = FDTensor();
-      }
       casted_output_tensors_[(*outputs)[i].name].SetExternalData(
           (*outputs)[i].shape, model_output_dtype,
           outputs_device_buffer_[(*outputs)[i].name].data(),
@@ -384,6 +378,7 @@ void TrtBackend::GetInputOutputInfo() {
       auto original_dtype = outputs_original_dtype_map.count(name) ? outputs_original_dtype_map[name] : GetFDDataType(dtype);
       outputs_desc_.emplace_back(TrtValueInfo{name, shape, dtype, original_dtype});
       outputs_device_buffer_[name] = FDDeviceBuffer(dtype);
+      casted_output_tensors_[name] = FDTensor();
     }
   }
   bindings_.resize(num_binds);
