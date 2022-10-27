@@ -53,28 +53,28 @@ class MODNet(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [256,256]
         """
         return self._model.size
 
     @property
     def alpha(self):
         """
-        Argument for image preprocessing step, alpha value for normalization
+        Argument for image preprocessing step, alpha value for normalization, default alpha = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f}
         """
         return self._model.alpha
 
     @property
     def beta(self):
         """
-        Argument for image preprocessing step, beta value for normalization
+        Argument for image preprocessing step, beta value for normalization, default beta = {-1.f, -1.f, -1.f}
         """
         return self._model.beta
 
     @property
     def swap_rb(self):
         """
-        Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+        Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default True.
         """
         return self._model.swap_rb
 
