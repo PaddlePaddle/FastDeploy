@@ -33,6 +33,8 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
   }
   fastdeploy::vision::DetectionResult c_result;
   c_result.Resize(len);
+
+  // boxes [n,4]
   bool check_validation = true;
   for (int i = 0; i < len; ++i) {
     auto j_box =
@@ -49,14 +51,16 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
   if (!check_validation) {
     return JNI_FALSE;
   }
+  // scores [n]
   jfloat *j_scores_ptr = env->GetFloatArrayElements(scores, nullptr);
   std::memcpy(c_result.scores.data(), j_scores_ptr, len * sizeof(float));
   env->ReleaseFloatArrayElements(scores, j_scores_ptr, 0);
+  // label_ids [n]
   jint *j_label_ids_ptr = env->GetIntArrayElements(label_ids, nullptr);
   std::memcpy(c_result.label_ids.data(), j_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(label_ids, j_label_ids_ptr, 0);
 
-  // Get labels from Java
+  // Get labels from Java [n]
   std::vector<std::string> c_labels;
   int label_len = env->GetArrayLength(labels);
   if (label_len > 0) {
@@ -101,14 +105,16 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
   fastdeploy::vision::ClassifyResult c_result;
   c_result.scores.resize(len);
   c_result.label_ids.resize(len);
+  // scores [n]
   jfloat *j_scores_ptr = env->GetFloatArrayElements(scores, nullptr);
   std::memcpy(c_result.scores.data(), j_scores_ptr, len * sizeof(float));
   env->ReleaseFloatArrayElements(scores, j_scores_ptr, 0);
+  // label_ids [n]
   jint *j_label_ids_ptr = env->GetIntArrayElements(label_ids, nullptr);
   std::memcpy(c_result.label_ids.data(), j_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(label_ids, j_label_ids_ptr, 0);
 
-  // Get labels from Java
+  // Get labels from Java [n]
   std::vector<std::string> c_labels;
   int label_len = env->GetArrayLength(labels);
   if (label_len > 0) {
@@ -154,7 +160,6 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
   }
   fastdeploy::vision::OCRResult c_result;
   c_result.boxes.resize(len);
-  // c_result.text.resize(len);
   c_result.rec_scores.resize(len);
   c_result.cls_scores.resize(len);
   c_result.cls_labels.resize(len);

@@ -368,6 +368,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
     return 0;
   }
   LOGD("Predict from native costs %f ms", fastdeploy::jni::GetElapsedTime(t));
+  // DEBUG: show result
+  LOGD("Result: %s", c_result_ptr->Str().c_str());
   c_ppocr_handler_ptr->PrintPPOCRHandlerTimeOfRuntime();
   if (!c_result_ptr->boxes.empty() && rendering) {
     t = fastdeploy::jni::GetCurrentTime();
