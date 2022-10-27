@@ -23,6 +23,7 @@ void BindMatting(pybind11::module& m);
 void BindFaceDet(pybind11::module& m);
 void BindFaceId(pybind11::module& m);
 void BindOcr(pybind11::module& m);
+void BindTracking(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
@@ -62,6 +63,15 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("cls_labels", &vision::OCRResult::cls_labels)
       .def("__repr__", &vision::OCRResult::Str)
       .def("__str__", &vision::OCRResult::Str);
+
+  pybind11::class_<vision::MOTResult>(m, "MOTResult")
+      .def(pybind11::init())
+      .def_readwrite("boxes", &vision::MOTResult::boxes)
+      .def_readwrite("ids", &vision::MOTResult::ids)
+      .def_readwrite("scores", &vision::MOTResult::scores)
+      .def_readwrite("class_ids", &vision::MOTResult::class_ids)
+      .def("__repr__", &vision::MOTResult::Str)
+      .def("__str__", &vision::MOTResult::Str);
 
   pybind11::class_<vision::FaceDetectionResult>(m, "FaceDetectionResult")
       .def(pybind11::init())
@@ -115,6 +125,7 @@ void BindVision(pybind11::module& m) {
   BindFaceId(m);
   BindMatting(m);
   BindOcr(m);
+  BindTracking(m);
   BindKeyPointDetection(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);

@@ -39,7 +39,7 @@ class LimitShort : public Processor {
   std::string Name() { return "LimitShort"; }
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
-                  ProcLib lib = ProcLib::OPENCV);
+                  int interp = 1, ProcLib lib = ProcLib::OPENCV);
   int GetMaxShort() const { return max_short_; }
 
  private:

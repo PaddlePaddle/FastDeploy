@@ -81,8 +81,8 @@ bool LimitShort::ImplByFalconCV(Mat* mat) {
 }
 #endif
 
-bool LimitShort::Run(Mat* mat, int max_short, int min_short, ProcLib lib) {
-  auto l = LimitShort(max_short, min_short);
+bool LimitShort::Run(Mat* mat, int max_short, int min_short, int interp, ProcLib lib) {
+  auto l = LimitShort(max_short, min_short, interp);
   return l(mat, lib);
 }
 }  // namespace vision

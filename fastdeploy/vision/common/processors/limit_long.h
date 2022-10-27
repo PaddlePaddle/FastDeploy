@@ -39,7 +39,7 @@ class FASTDEPLOY_DECL LimitLong : public Processor {
   std::string Name() { return "LimitLong"; }
 
   static bool Run(Mat* mat, int max_long = -1, int min_long = -1,
-                  ProcLib lib = ProcLib::OPENCV);
+                  int interp = 1, ProcLib lib = ProcLib::OPENCV);
   int GetMaxLong() const { return max_long_; }
 
  private:
