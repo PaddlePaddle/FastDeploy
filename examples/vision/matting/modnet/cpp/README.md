@@ -10,11 +10,11 @@
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-0.3.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-0.4.0.tgz
 
 mkdir build && cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.4.0
 make -j
 
 #下载官方转换好的MODNet模型文件和测试图片
