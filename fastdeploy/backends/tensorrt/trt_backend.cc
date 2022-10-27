@@ -397,9 +397,6 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
 
     if (item.device == Device::GPU) {
       if (item.dtype == FDDataType::INT64) {
-        FDWARNING << "TRT doesn't support INT64 input, the input tensor will be "
-                     "casted to INT32" << std::endl;
-
         inputs_device_buffer_[item.name].resize(dims);
         FDTensor input_tensor;
         input_tensor.SetExternalData(item.shape, FDDataType::INT32,
@@ -672,7 +669,7 @@ TensorInfo TrtBackend::GetInputInfo(int index) {
   info.name = inputs_desc_[index].name;
   info.shape.assign(inputs_desc_[index].shape.begin(),
                     inputs_desc_[index].shape.end());
-  info.dtype = GetFDDataType(inputs_desc_[index].dtype);
+  info.dtype = inputs_desc_[index].original_dtype;
   return info;
 }
 
@@ -692,7 +689,7 @@ TensorInfo TrtBackend::GetOutputInfo(int index) {
   info.name = outputs_desc_[index].name;
   info.shape.assign(outputs_desc_[index].shape.begin(),
                     outputs_desc_[index].shape.end());
-  info.dtype = GetFDDataType(outputs_desc_[index].dtype);
+  info.dtype = outputs_desc_[index].original_dtype;
   return info;
 }
 
