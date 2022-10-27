@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+/// VisDetection
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
     JNIEnv *env, jclass clazz, jobject argb8888_bitmap, jobjectArray boxes,
@@ -87,6 +88,25 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
   return JNI_TRUE;
 }
 
+/// VisClassification
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap, jfloatArray scores,
+    jintArray label_ids, jfloat score_threshold, jint line_size,
+    jfloat font_size, jobjectArray labels) {
+  // TODO: implement visClassificationNative()
+}
+
+/// VisOcr
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobjectArray boxes, jobjectArray text, jfloatArray rec_scores,
+    jfloatArray cls_scores, jintArray labels) {
+  // TODO: implement visOcrNative()
+}
+
 #ifdef __cplusplus
 }
 #endif
+

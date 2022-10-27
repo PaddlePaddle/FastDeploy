@@ -127,6 +127,51 @@ Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_releaseNative(
   return JNI_TRUE;
 }
 
+/// Native OCRResult for vision::OCRResult.
+JNIEXPORT jint JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesNumFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyBoxesNumFromNative()
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyBoxesFromNative()
+}
+
+
+JNIEXPORT jobjectArray JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyTextFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyTextFromNative()
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyRecScoresFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyRecScoresFromNative()
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyClsScoresFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyClsScoresFromNative()
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyLabelsFromNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement copyLabelsFromNative()
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_OCRResult_releaseNative(
+    JNIEnv *env, jclass clazz, jlong native_result_context) {
+  // TODO: implement releaseNative()
+}
+
 #ifdef __cplusplus
 }
 #endif
+
