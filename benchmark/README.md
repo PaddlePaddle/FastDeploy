@@ -10,7 +10,7 @@ FastDeploy 目前支持多种推理后端，下面以 PaddleClas MobileNetV1 为
 ```bash
 # 下载 MobileNetV1 模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_x0_25_infer.tgz
-tar -xvf MobileNetV1_x0_25_infer
+tar -xvf MobileNetV1_x0_25_infer.tgz
 
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
