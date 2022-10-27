@@ -51,14 +51,14 @@ class PFLD(FastDeployModel):
     @property
     def size(self):
         """
-        Returns the preprocess image size
+        Returns the preprocess image size, default (112, 112)
         """
         return self._model.size
 
     @size.setter
     def size(self, wh):
         """
-        Set the preprocess image size
+        Set the preprocess image size, default (112, 112)
         """
         assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."

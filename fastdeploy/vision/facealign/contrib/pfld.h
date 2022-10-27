@@ -46,7 +46,7 @@ class FASTDEPLOY_DECL PFLD : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, FaceAlignmentResult* result);
 
-  /// tuple of (width, height)
+  /// tuple of (width, height), default (112, 112)
   std::vector<int> size;
 
  private:
