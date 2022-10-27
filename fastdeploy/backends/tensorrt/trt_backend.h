@@ -72,6 +72,7 @@ struct TrtBackendOption {
   std::map<std::string, std::vector<int32_t>> opt_shape;
   std::string serialize_file = "";
   bool enable_pinned_memory = false;
+  void* external_stream_ = nullptr;
 
   // inside parameter, maybe remove next version
   bool remove_multiclass_nms_ = false;
