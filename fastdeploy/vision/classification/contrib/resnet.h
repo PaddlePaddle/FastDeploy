@@ -50,12 +50,16 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {224, 224}
   */
   std::vector<int> size;
-  /// Mean parameters for normalize, size should be the the same as channels
+  /*! @brief
+  Mean parameters for normalize, size should be the the same as channels, default mean_vals = {0.485f, 0.456f, 0.406f}
+  */
   std::vector<float> mean_vals;
-  /// Std parameters for normalize, size should be the the same as channels
+  /*! @brief
+  Std parameters for normalize, size should be the the same as channels, default std_vals = {0.229f, 0.224f, 0.225f}
+  */
   std::vector<float> std_vals;
 
 
