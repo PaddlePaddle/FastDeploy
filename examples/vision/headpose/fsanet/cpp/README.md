@@ -30,7 +30,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/headpose_input.png
 运行完成可视化结果如下图所示
 
 <div width="520">
-<img width="500" height="514" float="left" src="https://user-images.githubusercontent.com/19977378/197931737-c2d8e760-a76d-478a-a6c9-4574fb5c70eb.png">
+<img width="500" height="514" float="left" src="https://user-images.githubusercontent.com/19977378/198279932-3eee424e-98a2-4249-bdeb-0f79127cbc9d.png">
 </div>
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
