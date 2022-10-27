@@ -14,7 +14,9 @@
 
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "yaml-cpp/yaml.h"
+#ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -152,6 +154,7 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
 }
 
 void PPTracking::GetNmsInfo() {
+#ifdef ENABLE_PADDLE_FRONTEND
   if (runtime_option.model_format == ModelFormat::PADDLE) {
     std::string contents;
     if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
@@ -169,6 +172,7 @@ void PPTracking::GetNmsInfo() {
       normalized = reader.nms_params.normalized;
     }
   }
+#endif
 }
 
 bool PPTracking::Initialize() {
