@@ -102,6 +102,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
+  void SetExternalStream(void* external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -241,6 +243,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int device_id = 0;
 
   Device device = Device::CPU;
+
+  void* external_stream_ = nullptr;
 
   bool enable_pinned_memory = false;
 
