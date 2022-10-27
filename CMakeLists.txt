@@ -54,7 +54,7 @@ if(ANDROID)
 endif()
 
 ############################# Basic Options for FastDeploy ################################
-option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." OFF)
+option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)

@@ -58,6 +58,7 @@ FASDEPLOY_INSTALL_DIR=./arm_install
 # CMake configuration with RK toolchain
 cmake -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} \
       -DCMAKE_BUILD_TYPE=MinSizeRel \
+      -DENABLE_PADDLE_FRONTEND=OFF \
       -DTARGET_ABI=${TARGET_ABI} \
       -DENABLE_LITE_BACKEND=ON \
       -DENABLE_VISION=ON \
