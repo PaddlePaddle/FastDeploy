@@ -54,7 +54,10 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
 
   // Preprocess the input data, and set the preprocessed results to `outputs`
   static bool Preprocess(Mat* img, FDTensor* outputs,
-                  const std::vector<int>& rec_image_shape);
+                  const std::vector<int>& rec_image_shape,
+                  const std::vector<float>& mean = {0.5f, 0.5f, 0.5f},
+                  const std::vector<float>& scale = {0.5f, 0.5f, 0.5f},
+                  bool is_scale = True);
   /*! @brief Postprocess the inferenced results, and set the final result to `rec_result`
    */
   static bool Postprocess(std::vector<FDTensor&> infer_results,
@@ -68,9 +71,9 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
   int rec_img_w;
   std::vector<int> rec_image_shape;
 
-  // std::vector<float> mean;
-  // std::vector<float> scale;
-  // bool is_scale;
+  std::vector<float> mean;
+  std::vector<float> scale;
+  bool is_scale;
 
  private:
   bool Initialize();

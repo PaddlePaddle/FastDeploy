@@ -68,6 +68,9 @@ Recognizer::Recognizer(const std::string& model_file,
 // Init
 bool Recognizer::Initialize() {
   // pre&post process parameters
+  mean = {0.5f, 0.5f, 0.5f};
+  scale = {0.5f, 0.5f, 0.5f};
+  is_scale = true;
   rec_batch_num = 1;
   rec_img_h = 48;
   rec_img_w = 320;
@@ -104,11 +107,10 @@ void OcrRecognizerResizeImage(Mat* mat, const float& wh_ratio,
 }
 
 bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
-                            const std::vector<int>& rec_image_shape) {
-  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
-  std::vector<float> scale = {0.5f, 0.5f, 0.5f};
-  bool is_scale = true;
-
+                            const std::vector<int>& rec_image_shape,
+                            const std::vector<float>& mean,
+                            const std::vector<float>& scale,
+                            bool is_scale) {
   int imgH = rec_image_shape[1];
   int imgW = rec_image_shape[2];
   float wh_ratio = imgW * 1.0 / imgH;
@@ -118,7 +120,7 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
 
   OcrRecognizerResizeImage(mat, wh_ratio, rec_image_shape);
 
-  Normalize::Run(mat, mean, scale, true);
+  Normalize::Run(mat, mean, scale, is_scale);
 
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
@@ -180,7 +182,7 @@ bool Recognizer::Predict(cv::Mat* img,
 
   std::vector<FDTensor> input_tensors(1);
 
-  if (!Preprocess(&mat, &input_tensors[0], rec_image_shape)) {
+  if (!Preprocess(&mat, &input_tensors[0], rec_image_shape, mean, scale, is_scale)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }

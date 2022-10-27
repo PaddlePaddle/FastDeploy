@@ -40,6 +40,14 @@ class DBDetector(FastDeployModel):
                 model_file, params_file, self._runtime_option, model_format)
             assert self.initialized, "DBDetector initialize failed."
 
+    @staticmethod
+    def preprocess(input_image):
+        return C.vision.ocr.DBDetector.preprocess(input_image)
+
+    @staticmethod
+    def postprocess(infer_result, im_info):
+        return C.vision.ocr.DBDetector.postprocess(infer_result, im_info)
+
     # 一些跟DBDetector模型有关的属性封装
     @property
     def max_side_len(self):
@@ -138,6 +146,14 @@ class Classifier(FastDeployModel):
             self._model = C.vision.ocr.Classifier(
                 model_file, params_file, self._runtime_option, model_format)
             assert self.initialized, "Classifier initialize failed."
+
+    @staticmethod
+    def preprocess(input_image):
+        return C.vision.ocr.Classifier.preprocess(input_image)
+
+    @staticmethod
+    def postprocess(infer_result):
+        return C.vision.ocr.Classifier.postprocess(infer_result)
 
     @property
     def cls_thresh(self):

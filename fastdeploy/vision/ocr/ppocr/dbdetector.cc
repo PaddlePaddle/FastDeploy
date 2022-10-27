@@ -44,16 +44,15 @@ DBDetector::DBDetector(const std::string& model_file,
 // Init
 bool DBDetector::Initialize() {
   // pre&post process parameters
-  max_side_len_ = 960;
-
-  ratio_h_ = 1.0;
-  ratio_w_ = 1.0;
-  det_db_thresh_ = 0.3;
-  det_db_box_thresh_ = 0.6;
-  det_db_unclip_ratio_ = 1.5;
-  det_db_score_mode_ = "slow";
-  use_dilation_ = false;
-  post_processor_;
+  mean = {0.485f, 0.456f, 0.406f};
+  scale = {0.229f, 0.224f, 0.225f};
+  is_scale = true;
+  max_side_len = 960;
+  det_db_thresh = 0.3;
+  det_db_box_thresh = 0.6;
+  det_db_unclip_ratio = 1.5;
+  det_db_score_mode = "slow";
+  use_dilation = false;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -93,19 +92,25 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
 bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info,
+    std::vector<float> mean;
+    std::vector<float> scale;
+    bool is_scale;
     int max_side_len) {
-  
+  //
+  (*im_info)["input_shape"] = {static_cast<float>(mat.Height()),
+                            static_cast<float>(mat.Width())};
+  (*im_info)["output_shape"] = {static_cast<float>(mat.Height()),
+                             static_cast<float>(mat.Width())};
+  (*im_info)["hw_ratio"] = {static_cast<float>(1.0),
+                             static_cast<float>(1.0)};
   // Resize
   float ratio_h = 1.0;
   float ratio_w = 1.0;
   OcrDetectorResizeImage(mat, max_side_len, &ratio_h, &ratio_w);
 
-  std::cout<<"after pre, the h and w are: " << ratio_h << "And " << ratio_w << std::endl; 
+  // std::cout<<"after pre, the h and w are: " << ratio_h << "And " << ratio_w << std::endl; 
 
   // Normalize
-  std::vector<float> mean = {0.485f, 0.456f, 0.406f};
-  std::vector<float> scale = {0.229f, 0.224f, 0.225f};
-  bool is_scale = true;
   Normalize::Run(mat, mean, scale, is_scale);
 
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
@@ -123,16 +128,17 @@ bool DBDetector::Preprocess(
 }
 
 bool DBDetector::Postprocess(
-    FDTensor& infer_result, std::vector<std::array<int, 8>>* boxes_result,
+    std::vector<FDTensor>& infer_results, std::vector<std::array<int, 8>>* boxes_result,
     const std::map<std::string, std::array<float, 2>>& im_info,
-    PostProcessor post_processor,
-    float ratio_h,
-    float ratio_w,
     double det_db_thresh,
     double det_db_box_thresh,
     double det_db_unclip_ratio,
     std::string det_db_score_mode,
     bool use_dilation) {
+  auto& infer_result = infer_results[0];
+  float ratio_h = im_info.at("hw_ratio")[0];
+  float ratio_w = im_info.at("hw_ratio")[1];
+  PostProcessor post_processor,
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
   int n2 = output_shape[2];
@@ -192,15 +198,7 @@ bool DBDetector::Predict(cv::Mat* img,
 
   std::map<std::string, std::array<float, 2>> im_info;
 
-  // Record the shape of image and the shape of preprocessed image
-  im_info["input_shape"] = {static_cast<float>(mat.Height()),
-                            static_cast<float>(mat.Width())};
-  im_info["output_shape"] = {static_cast<float>(mat.Height()),
-                             static_cast<float>(mat.Width())};
-  im_info["hw_ratio"] = {static_cast<float>(1.0),
-                             static_cast<float>(1.0)}; 
-
-  if (!Preprocess(&mat, &input_tensors[0], &im_info, max_side_len_ )) {
+  if (!Preprocess(&mat, &input_tensors[0], &im_info, mean, scale, is_scale, max_side_len )) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
@@ -212,17 +210,12 @@ bool DBDetector::Predict(cv::Mat* img,
     return false;
   }
 
-  ratio_h_ = im_info.at("hw_ratio")[0];
-  ratio_w_ = im_info.at("hw_ratio")[1];
-  std::cout<<"xyy debug, the h and w : "<< ratio_h_ << " And " << ratio_w_ << std::endl;
-  if (!Postprocess(output_tensors[0], boxes_result, im_info, post_processor_, 
-    ratio_h_,
-    ratio_w_,
-    det_db_thresh_,
-    det_db_box_thresh_,
-    det_db_unclip_ratio_,
-    det_db_score_mode_,
-    use_dilation_)) {
+  if (!Postprocess(output_tensors, boxes_result, im_info,
+    det_db_thresh,
+    det_db_box_thresh,
+    det_db_unclip_ratio,
+    det_db_score_mode,
+    use_dilation)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

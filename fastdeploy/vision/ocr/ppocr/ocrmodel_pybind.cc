@@ -21,7 +21,28 @@ void BindPPOCRModel(pybind11::module& m) {
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def(pybind11::init<>())
-
+      .def_static("preprocess",
+                  [](pybind11::array& data) {
+                    auto mat = PyArrayToCvMat(data);
+                    fastdeploy::vision::Mat fd_mat(mat);
+                    FDTensor output;
+                    std::map<std::string, std::array<float, 2>> im_info;
+                    vision::ocr::DBDetector::Preprocess(
+                        &fd_mat, &output, &im_info);
+                    return make_pair(TensorToPyArray(output), im_info);
+                  })
+      .def_static(
+          "postprocess",
+          [](std::vector<pybind11::array> infer_results,
+             const std::map<std::string, std::array<float, 2>>& im_info) {
+            std::vector<FDTensor> fd_infer_results(infer_results.size());
+            PyArrayToTensorList(infer_results, &fd_infer_results, true);
+            std::vector<std::array<int, 8>> boxes_result;
+            vision::ocr::DBDetector::Postprocess(
+                fd_infer_results, &boxes_result, im_info);
+            return boxes_result;
+          })
+        
       .def_readwrite("max_side_len", &vision::ocr::DBDetector::max_side_len)
       .def_readwrite("det_db_thresh", &vision::ocr::DBDetector::det_db_thresh)
       .def_readwrite("det_db_box_thresh",
@@ -40,7 +61,25 @@ void BindPPOCRModel(pybind11::module& m) {
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def(pybind11::init<>())
-
+      .def_static("preprocess",
+                  [](pybind11::array& data) {
+                    auto mat = PyArrayToCvMat(data);
+                    fastdeploy::vision::Mat fd_mat(mat);
+                    FDTensor output;
+                    vision::ocr::Classifier::Preprocess(
+                        &fd_mat, &output);
+                    return TensorToPyArray(output);
+                  })
+      .def_static(
+          "postprocess",
+          [](std::vector<pybind11::array> infer_results) {
+            std::vector<FDTensor> fd_infer_results(infer_results.size());
+            PyArrayToTensorList(infer_results, &fd_infer_results, true);
+            std::tuple<int, float> result;
+            vision::ocr::Classifier::Postprocess(
+                fd_infer_results, &result);
+            return result;
+          })
       .def_readwrite("cls_thresh", &vision::ocr::Classifier::cls_thresh)
       .def_readwrite("cls_image_shape",
                      &vision::ocr::Classifier::cls_image_shape)
@@ -58,7 +97,7 @@ void BindPPOCRModel(pybind11::module& m) {
                     auto mat = PyArrayToCvMat(data);
                     fastdeploy::vision::Mat fd_mat(mat);
                     FDTensor output;
-                    vision::detection::Recognizer::Preprocess(
+                    vision::ocr::Recognizer::Preprocess(
                         &fd_mat, &output, rec_image_shape);
                     return TensorToPyArray(output);
                   })
@@ -69,7 +108,7 @@ void BindPPOCRModel(pybind11::module& m) {
             std::vector<FDTensor> fd_infer_results(infer_results.size());
             PyArrayToTensorList(infer_results, &fd_infer_results, true);
             std::tuple<std::string, float> rec_result;
-            vision::detection::YOLOv5::Postprocess(
+            vision::ocr::Recognizer::Postprocess(
                 fd_infer_results, &rec_result, label_list);
             return rec_result;
           })

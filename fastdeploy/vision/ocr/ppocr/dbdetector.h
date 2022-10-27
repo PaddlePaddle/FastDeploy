@@ -56,37 +56,36 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   // 所有预处理参数，包含完
   static bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<float, 2>>* im_info,
+                  const std::vector<float>& mean = {0.485f, 0.456f, 0.406f};
+                  const std::vector<float>& scale = {0.229f, 0.224f, 0.225f};
+                  bool is_scale = true;
                   int max_side_len = 960);
 
 
   /*! @brief Postprocess the inferenced results, and set the final result to `boxes_result`
   */
-  static bool Postprocess(FDTensor& infer_result,
+  static bool Postprocess(std::vector<FDTensor&> infer_results,
                    std::vector<std::array<int, 8>>* boxes_result,
                    const std::map<std::string, std::array<float, 2>>& im_info,
-                   PostProcessor post_processor,
-                   float ratio_h ,
-                   float ratio_w,
                    double det_db_thresh = 0.3,
                    double det_db_box_thresh = 0.6,
                    double det_db_unclip_ratio = 1.5,
                    std::string det_db_score_mode = "slow",
                    bool use_dilation = false);
-
   // Pre-process parameters
-  int max_side_len_;
+  std::vector<float> mean;
+  std::vector<float> scale;
+  bool is_scale;
+  int max_side_len;
   // Post-process parameters
-  float ratio_h_;
-  float ratio_w_;
-  double det_db_thresh_;
-  double det_db_box_thresh_;
-  double det_db_unclip_ratio_;
-  std::string det_db_score_mode_;
-  bool use_dilation_;
+  double det_db_thresh;
+  double det_db_box_thresh;
+  double det_db_unclip_ratio;
+  std::string det_db_score_mode;
+  bool use_dilation;
 
  private:
   bool Initialize();
-  PostProcessor post_processor_;
 };
 
 }  // namespace ocr

@@ -44,9 +44,9 @@ Classifier::Classifier(const std::string& model_file,
 // Init
 bool Classifier::Initialize() {
   // pre&post process parameters
-  cls_image_shape_ = {3, 48, 192};
-  cls_thresh_ = 0.9;
-  cls_batch_num_ = 1;
+  cls_image_shape = {3, 48, 192};
+  cls_thresh = 0.9;
+  cls_batch_num = 1;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -78,7 +78,7 @@ void OcrClassifierResizeImage(Mat* mat,
   }
 }
 
-bool Classifier::Preprocess(Mat* mat, FDTensor* output , std::vector<int> cls_image_shape) {
+bool Classifier::Preprocess(Mat* mat, FDTensor* output , const std::vector<int>& cls_image_shape) {
   // 1. cls resizes
   // 2. normalize
   // 3. batch_permute
@@ -98,8 +98,9 @@ bool Classifier::Preprocess(Mat* mat, FDTensor* output , std::vector<int> cls_im
   return true;
 }
 
-bool Classifier::Postprocess(FDTensor& infer_result,
+bool Classifier::Postprocess(std::vector<FDTensor>& infer_results,
                              std::tuple<int, float>* cls_result) {
+  auto& infer_result = infer_results[0];
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
@@ -121,7 +122,7 @@ bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
   Mat mat(*img);
   std::vector<FDTensor> input_tensors(1);
 
-  if (!Preprocess(&mat, &input_tensors[0],cls_image_shape_ )) {
+  if (!Preprocess(&mat, &input_tensors[0], cls_image_shape)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
@@ -133,7 +134,7 @@ bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], cls_result)) {
+  if (!Postprocess(output_tensors, cls_result)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
