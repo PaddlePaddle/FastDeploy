@@ -53,7 +53,7 @@ public class OCRResult {
         }
     }
 
-    public void setText(@NonNull String[] textBuffer) {
+    private void setText(@NonNull String[] textBuffer) {
         if (textBuffer.length > 0) {
             mText = textBuffer.clone();
         }
@@ -78,19 +78,19 @@ public class OCRResult {
     }
 
     // Fetch native buffers from native context.
-    private static native int copyBoxesNumFromNative(long nativeResultContext);
+    private native int copyBoxesNumFromNative(long nativeResultContext);
 
-    private static native int[] copyBoxesFromNative(long nativeResultContext);
+    private native int[] copyBoxesFromNative(long nativeResultContext);
 
-    private static native String[] copyTextFromNative(long nativeResultContext);
+    private native String[] copyTextFromNative(long nativeResultContext);
 
-    private static native float[] copyRecScoresFromNative(long nativeResultContext);
+    private native float[] copyRecScoresFromNative(long nativeResultContext);
 
-    private static native float[] copyClsScoresFromNative(long nativeResultContext);
+    private native float[] copyClsScoresFromNative(long nativeResultContext);
 
-    private static native int[] copyClsLabelsFromNative(long nativeResultContext);
+    private native int[] copyClsLabelsFromNative(long nativeResultContext);
 
-    private static native boolean releaseNative(long nativeResultContext);
+    private native boolean releaseNative(long nativeResultContext);
 
     // Initializes at the beginning.
     static {

@@ -187,7 +187,7 @@ extern "C" {
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
     JNIEnv *env,
-    jclass clazz,
+    jobject thiz,
     jint ocr_version_tag,
     jstring det_model_file,
     jstring det_params_file,
@@ -347,7 +347,7 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
 
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
-    JNIEnv *env, jclass clazz, jlong native_handler_context,
+    JNIEnv *env, jobject thiz, jlong native_handler_context,
     jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
     jboolean rendering) {
   if (native_handler_context == 0) {
@@ -396,7 +396,7 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_handler_context) {
+    JNIEnv *env, jobject thiz, jlong native_handler_context) {
   if (native_handler_context == 0) {
     return JNI_FALSE;
   }

@@ -25,7 +25,7 @@ extern "C" {
 /// Native DetectionResult for vision::DetectionResult.
 JNIEXPORT jint JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyBoxesNumFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return 0;
   }
@@ -36,7 +36,7 @@ Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyBoxesNumFromNative(
 
 JNIEXPORT jfloatArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyBoxesFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -56,7 +56,7 @@ Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyBoxesFromNative(
 
 JNIEXPORT jfloatArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyScoresFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -72,7 +72,7 @@ Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyScoresFromNative(
 
 JNIEXPORT jintArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyLabelIdsFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -88,7 +88,7 @@ Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_copyLabelIdsFromNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return JNI_FALSE;
   }
@@ -102,7 +102,7 @@ Java_com_baidu_paddle_fastdeploy_vision_DetectionResult_releaseNative(
 /// Native ClassifyResult for vision::ClassifyResult.
 JNIEXPORT jfloatArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_copyScoresFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -118,7 +118,7 @@ Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_copyScoresFromNative(
 
 JNIEXPORT jintArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_copyLabelIdsFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -134,7 +134,7 @@ Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_copyLabelIdsFromNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return JNI_FALSE;
   }
@@ -148,7 +148,7 @@ Java_com_baidu_paddle_fastdeploy_vision_ClassifyResult_releaseNative(
 /// Native OCRResult for vision::OCRResult.
 JNIEXPORT jint JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesNumFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return 0;
   }
@@ -159,7 +159,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesNumFromNative(
 
 JNIEXPORT jintArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -179,7 +179,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyBoxesFromNative(
 
 JNIEXPORT jobjectArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyTextFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -202,7 +202,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyTextFromNative(
 
 JNIEXPORT jfloatArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyRecScoresFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -218,7 +218,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyRecScoresFromNative(
 
 JNIEXPORT jfloatArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyClsScoresFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -234,7 +234,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyClsScoresFromNative(
 
 JNIEXPORT jintArray JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyClsLabelsFromNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return {};
   }
@@ -250,7 +250,7 @@ Java_com_baidu_paddle_fastdeploy_vision_OCRResult_copyClsLabelsFromNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_OCRResult_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_result_context) {
+    JNIEnv *env, jobject thiz, jlong native_result_context) {
   if (native_result_context == 0) {
     return JNI_FALSE;
   }

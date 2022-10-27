@@ -138,31 +138,31 @@ public class Visualize {
     }
 
     // VisDetection in native
-    public static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
-                                                    float[][] boxes,
-                                                    float[] scores,
-                                                    int[] labelIds,
-                                                    float score_threshold,
-                                                    int line_size,
-                                                    float font_size,
-                                                    String[] labels);
+    private static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
+                                                     float[][] boxes,
+                                                     float[] scores,
+                                                     int[] labelIds,
+                                                     float score_threshold,
+                                                     int line_size,
+                                                     float font_size,
+                                                     String[] labels);
 
     // VisClassification in native
-    public static native boolean visClassificationNative(Bitmap ARGB8888Bitmap,
-                                                         float[] scores,
-                                                         int[] labelIds,
-                                                         float score_threshold,
-                                                         int line_size,
-                                                         float font_size,
-                                                         String[] labels);
+    private static native boolean visClassificationNative(Bitmap ARGB8888Bitmap,
+                                                          float[] scores,
+                                                          int[] labelIds,
+                                                          float score_threshold,
+                                                          int line_size,
+                                                          float font_size,
+                                                          String[] labels);
 
     // VisOCRResult in native
-    public static native boolean visOcrNative(Bitmap ARGB8888Bitmap,
-                                              int[][] boxes,
-                                              String[] text,
-                                              float[] recScores,
-                                              float[] clsScores,
-                                              int[] clsLabels);
+    private static native boolean visOcrNative(Bitmap ARGB8888Bitmap,
+                                               int[][] boxes,
+                                               String[] text,
+                                               float[] recScores,
+                                               float[] clsScores,
+                                               int[] clsLabels);
 
 
     /* Initializes at the beginning */

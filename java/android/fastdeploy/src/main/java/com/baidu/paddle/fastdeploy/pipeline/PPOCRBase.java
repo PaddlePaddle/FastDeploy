@@ -152,40 +152,40 @@ public class PPOCRBase {
     }
 
     // Bind predictor from native context.
-    private static native long bindNative(int PPOCRVersionTag,
-                                          String detModelFile,
-                                          String detParamsFile,
-                                          String clsModelFile,
-                                          String clsParamsFile,
-                                          String recModelFile,
-                                          String recParamsFile,
-                                          String recLabelPath,
-                                          int detCpuNumThread,
-                                          int clsCpuNumThread,
-                                          int recCpuNumThread,
-                                          boolean detEnableLiteFp16,
-                                          boolean clsEnableLiteFp16,
-                                          boolean recEnableLiteFp16,
-                                          int detLitePowerMode,
-                                          int clsLitePowerMode,
-                                          int recLitePowerMode,
-                                          String detLiteOptimizedModelDir,
-                                          String clsLiteOptimizedModelDir,
-                                          String recLiteOptimizedModelDir,
-                                          boolean detEnableRecordTimeOfRuntime,
-                                          boolean clsEnableRecordTimeOfRuntime,
-                                          boolean recEnableRecordTimeOfRuntime,
-                                          boolean haveClsModel);
+    private native long bindNative(int PPOCRVersionTag,
+                                   String detModelFile,
+                                   String detParamsFile,
+                                   String clsModelFile,
+                                   String clsParamsFile,
+                                   String recModelFile,
+                                   String recParamsFile,
+                                   String recLabelPath,
+                                   int detCpuNumThread,
+                                   int clsCpuNumThread,
+                                   int recCpuNumThread,
+                                   boolean detEnableLiteFp16,
+                                   boolean clsEnableLiteFp16,
+                                   boolean recEnableLiteFp16,
+                                   int detLitePowerMode,
+                                   int clsLitePowerMode,
+                                   int recLitePowerMode,
+                                   String detLiteOptimizedModelDir,
+                                   String clsLiteOptimizedModelDir,
+                                   String recLiteOptimizedModelDir,
+                                   boolean detEnableRecordTimeOfRuntime,
+                                   boolean clsEnableRecordTimeOfRuntime,
+                                   boolean recEnableRecordTimeOfRuntime,
+                                   boolean haveClsModel);
 
     // Call prediction from native context.
-    private static native long predictNative(long nativeHandlerContext,
-                                             Bitmap ARGB8888Bitmap,
-                                             boolean saved,
-                                             String savedImagePath,
-                                             boolean rendering);
+    private native long predictNative(long nativeHandlerContext,
+                                      Bitmap ARGB8888Bitmap,
+                                      boolean saved,
+                                      String savedImagePath,
+                                      boolean rendering);
 
     // Release buffers allocated in native context.
-    private static native boolean releaseNative(long nativeHandlerContext);
+    private native boolean releaseNative(long nativeHandlerContext);
 
     // Initializes at the beginning.
     static {
