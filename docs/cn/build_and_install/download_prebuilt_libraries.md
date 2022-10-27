@@ -15,7 +15,7 @@ FastDeploy提供各平台预编译库，供开发者直接下载安装使用。�
 
 ### Python安装
 
-Release版本（当前最新0.3.0）安装
+Release版本（当前最新0.4.0）安装
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
@@ -27,12 +27,12 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 
 ### C++ SDK安装
 
-Release版本（当前最新0.3.0）
+Release版本（当前最新0.4.0）
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-gpu-0.3.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.3.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
+| Linux x64 | [fastdeploy-linux-x64-gpu-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
+| Windows x64 | [fastdeploy-win-x64-gpu-0.4.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.4.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
 
 ## CPU部署环境
 
@@ -44,20 +44,20 @@ Release版本（当前最新0.3.0）
 
 ### Python安装
 
-Release版本（当前最新0.3.0）安装
+Release版本（当前最新0.4.0）安装
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
 ## C++ SDK安装
 
-Release版本（当前最新0.3.0，Android为0.4.0 pre-release）
+Release版本（当前最新0.4.0，Android为0.4.0 pre-release）
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Linux x64 | [fastdeploy-linux-x64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz) | g++ 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-0.3.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-0.3.0.zip) | Visual Studio 16 2019编译产出 |
-| Mac OSX x64 | [fastdeploy-osx-x86_64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.3.0.tgz) | clang++ 10.0.0编译产出|
-| Mac OSX arm64 | [fastdeploy-osx-arm64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.3.0.tgz) | clang++ 13.0.0编译产出 |
-| Linux aarch64 | [fastdeploy-linux-aarch64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.3.0.tgz) | g++ 6.3.0编译产出 |  
+| Linux x64 | [fastdeploy-linux-x64-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.4.0.tgz) | g++ 8.2编译产出 |
+| Windows x64 | [fastdeploy-win-x64-0.4.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-0.4.0.zip) | Visual Studio 16 2019编译产出 |
+| Mac OSX x64 | [fastdeploy-osx-x86_64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.4.0.tgz) | clang++ 10.0.0编译产出|
+| Mac OSX arm64 | [fastdeploy-osx-arm64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.4.0.tgz) | clang++ 13.0.0编译产出 |
+| Linux aarch64 | [fastdeploy-linux-aarch64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.4.0.tgz) | g++ 6.3.0编译产出 |  
 | Android armv7&v8 | [fastdeploy-android-0.4.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-0.4.0-shared.tgz) | NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
