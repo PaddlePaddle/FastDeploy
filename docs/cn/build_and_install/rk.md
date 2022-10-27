@@ -1,4 +1,4 @@
-# RK 部署库编译和运行分类模型运行示例
+# RK 部署库编译和分类模型运行示例
 
 FastDeploy在瑞芯微（Rockchip）Soc上支持基于芯原 TIM-VX 的 Paddle-Lite 后端推理。芯原（verisilicon）作为 IP 设计厂商，本身并不提供实体SoC产品，而是授权其 IP 给芯片厂商，如：晶晨（Amlogic），瑞芯微（Rockchip）等。因此本文是适用于被芯原授权了 NPU IP 的芯片产品。只要芯片产品没有大副修改芯原的底层库，则该芯片就可以使用本文档作为推理部署的参考和教程，更多详细的信息请参考：[PaddleLite芯原 TIM-VX 部署示例](https://paddle-lite.readthedocs.io/zh/develop/demo_guides/verisilicon_timvx.html)
 
