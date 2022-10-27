@@ -57,7 +57,7 @@ Release版本（当前最新0.4.0，Android为0.4.0 pre-release）
 | :--- | :--- | :---- |
 | Linux x64 | [fastdeploy-linux-x64-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.4.0.tgz) | g++ 8.2编译产出 |
 | Windows x64 | [fastdeploy-win-x64-0.4.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-0.4.0.zip) | Visual Studio 16 2019编译产出 |
-| Mac OSX x64 | [fastdeploy-osx-x86_64-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.4.0.tgz) | clang++ 10.0.0编译产出|
-| Mac OSX arm64 | [fastdeploy-osx-arm64-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.4.0.tgz) | clang++ 13.0.0编译产出 |
-| Linux aarch64 | [fastdeploy-linux-aarch64-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.4.0.tgz) | g++ 6.3.0编译产出 |  
+| Mac OSX x64 | [fastdeploy-osx-x86_64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.4.0.tgz) | clang++ 10.0.0编译产出|
+| Mac OSX arm64 | [fastdeploy-osx-arm64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.4.0.tgz) | clang++ 13.0.0编译产出 |
+| Linux aarch64 | [fastdeploy-linux-aarch64-0.3.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-0.4.0.tgz) | g++ 6.3.0编译产出 |  
 | Android armv7&v8 | [fastdeploy-android-0.4.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-0.4.0-shared.tgz) | NDK 25及clang++编译产出, 支持arm64-v8a及armeabi-v7a |
