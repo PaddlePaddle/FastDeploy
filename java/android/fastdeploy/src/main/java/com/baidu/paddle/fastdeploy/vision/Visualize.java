@@ -74,7 +74,7 @@ public class Visualize {
                 ARGB8888Bitmap,
                 result.mScores,
                 result.mLabelIds,
-                0.f, 1, 0.5f,
+                0.f, 1,
                 new String[]{});
 
     }
@@ -82,14 +82,12 @@ public class Visualize {
     public static boolean visClassification(Bitmap ARGB8888Bitmap,
                                             ClassifyResult result,
                                             float score_threshold,
-                                            int line_size,
                                             float font_size) {
         return visClassificationNative(
                 ARGB8888Bitmap,
                 result.mScores,
                 result.mLabelIds,
                 score_threshold,
-                line_size,
                 font_size,
                 new String[]{});
 
@@ -103,7 +101,7 @@ public class Visualize {
                 ARGB8888Bitmap,
                 result.mScores,
                 result.mLabelIds,
-                0.f, 1, 0.5f,
+                0.f, 1,
                 labels);
 
     }
@@ -112,14 +110,12 @@ public class Visualize {
                                             ClassifyResult result,
                                             String[] labels,
                                             float score_threshold,
-                                            int line_size,
                                             float font_size) {
         return visClassificationNative(
                 ARGB8888Bitmap,
                 result.mScores,
                 result.mLabelIds,
                 score_threshold,
-                line_size,
                 font_size,
                 labels);
 
@@ -152,7 +148,6 @@ public class Visualize {
                                                           float[] scores,
                                                           int[] labelIds,
                                                           float score_threshold,
-                                                          int line_size,
                                                           float font_size,
                                                           String[] labels);
 
