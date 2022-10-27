@@ -258,8 +258,12 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
         ReaderDtypeToTrtDtype(onnx_reader.outputs[i].dtype);
   }
 
-  FDASSERT(cudaStreamCreate(&stream_) == 0,
+  if (option_.external_stream_) {
+    stream_ = reinterpret_cast<cudaStream_t>(option_.external_stream_);
+  } else {
+    FDASSERT(cudaStreamCreate(&stream_) == 0,
            "[ERROR] Error occurs while calling cudaStreamCreate().");
+  }
 
   if (!CreateTrtEngineFromOnnx(onnx_content)) {
     FDERROR << "Failed to create tensorrt engine." << std::endl;
@@ -525,7 +529,7 @@ bool TrtBackend::BuildTrtEngine() {
       engine_->createExecutionContext());
   GetInputOutputInfo();
 
-  FDINFO << "TensorRT Engine is built succussfully." << std::endl;
+  FDINFO << "TensorRT Engine is built successfully." << std::endl;
   if (option_.serialize_file != "") {
     FDINFO << "Serialize TensorRTEngine to local file "
            << option_.serialize_file << "." << std::endl;

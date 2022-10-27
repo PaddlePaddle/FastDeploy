@@ -223,6 +223,10 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
+void RuntimeOption::SetExternalStream(void* external_stream) {
+  external_stream_ = external_stream;
+}
+
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
@@ -518,6 +522,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   pd_option.enable_pinned_memory = option.enable_pinned_memory;
+  pd_option.external_stream_ = option.external_stream_;
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -584,6 +589,7 @@ void Runtime::CreateOrtBackend() {
   ort_option.execution_mode = option.ort_execution_mode;
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
+  ort_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
@@ -623,6 +629,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
+  trt_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;

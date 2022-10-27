@@ -78,7 +78,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
       float max_wh = 7680.0);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {640, 640}
   */
   std::vector<int> size_;
   // padding value, size should be the same as channels
@@ -96,7 +96,9 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   int stride_;
   // for offseting the boxes by classes when using NMS
   float max_wh_;
-  /// for different strategies to get boxes when postprocessing
+  /*! @brief
+  Argument for image preprocessing step, for different strategies to get boxes when postprocessing, default true
+  */
   bool multi_label_;
 
  private:
