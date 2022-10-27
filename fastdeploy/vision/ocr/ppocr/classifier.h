@@ -49,21 +49,20 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* img, std::tuple<int, float>* result);
 
-  // Pre & Post parameters
-  float cls_thresh;
-  std::vector<int> cls_image_shape;
-  int cls_batch_num;
+  /// Preprocess the input data, and set the preprocessed results to `outputs`
+  static bool Preprocess(Mat* img, FDTensor* output,
+                        std::vector<int> cls_image_shape);
+  /// Postprocess the inferenced results, and set the final result to `result`
+  static bool Postprocess(FDTensor& infer_result,
+                        std::tuple<int, float>* result);
 
-  std::vector<float> mean;
-  std::vector<float> scale;
-  bool is_scale;
+  // Pre & Post parameters
+  std::vector<int> cls_image_shape_;
+  float cls_thresh_;
+  int cls_batch_num_;
 
  private:
   bool Initialize();
-  /// Preprocess the input data, and set the preprocessed results to `outputs`
-  bool Preprocess(Mat* img, FDTensor* output);
-  /// Postprocess the inferenced results, and set the final result to `result`
-  bool Postprocess(FDTensor& infer_result, std::tuple<int, float>* result);
 };
 
 }  // namespace ocr

@@ -44,12 +44,9 @@ Classifier::Classifier(const std::string& model_file,
 // Init
 bool Classifier::Initialize() {
   // pre&post process parameters
-  cls_thresh = 0.9;
-  cls_image_shape = {3, 48, 192};
-  cls_batch_num = 1;
-  mean = {0.5f, 0.5f, 0.5f};
-  scale = {0.5f, 0.5f, 0.5f};
-  is_scale = true;
+  cls_image_shape_ = {3, 48, 192};
+  cls_thresh_ = 0.9;
+  cls_batch_num_ = 1;
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -81,13 +78,16 @@ void OcrClassifierResizeImage(Mat* mat,
   }
 }
 
-bool Classifier::Preprocess(Mat* mat, FDTensor* output) {
+bool Classifier::Preprocess(Mat* mat, FDTensor* output , std::vector<int> cls_image_shape) {
   // 1. cls resizes
   // 2. normalize
   // 3. batch_permute
   OcrClassifierResizeImage(mat, cls_image_shape);
 
-  Normalize::Run(mat, mean, scale, true);
+  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
+  std::vector<float>  scale = {0.5f, 0.5f, 0.5f};
+  bool is_scale = true;
+  Normalize::Run(mat, mean, scale, is_scale);
 
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
@@ -121,7 +121,7 @@ bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
   Mat mat(*img);
   std::vector<FDTensor> input_tensors(1);
 
-  if (!Preprocess(&mat, &input_tensors[0])) {
+  if (!Preprocess(&mat, &input_tensors[0],cls_image_shape_ )) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
