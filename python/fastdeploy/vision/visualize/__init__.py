@@ -63,12 +63,14 @@ def swap_background_matting(im_data,
         "DEPRECATED: fastdeploy.vision.swap_background_matting is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
     assert isinstance(
-        result, C.vision.MattingResult), "The result must be MattingResult type"
+        result,
+        C.vision.MattingResult), "The result must be MattingResult type"
     return C.vision.Visualize.swap_background_matting(
         im_data, background, result, remove_small_connected_area)
 
 
-def swap_background_segmentation(im_data, background, background_label, result):
+def swap_background_segmentation(im_data, background, background_label,
+                                 result):
     logging.warning(
         "DEPRECATED: fastdeploy.vision.swap_background_segmentation is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
@@ -102,3 +104,7 @@ def vis_ppocr(im_data, det_result):
 
 def vis_mot(im_data, mot_result, fps, frame_id):
     return C.vision.vis_mot(im_data, mot_result, fps, frame_id)
+
+
+def vis_headpose(im_data, headpose_result, size=50, line_size=1):
+    return C.vision.vis_headpose(im_data, headpose_result, size, line_size)

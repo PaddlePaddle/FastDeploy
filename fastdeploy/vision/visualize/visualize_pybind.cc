@@ -92,6 +92,16 @@ void BindVisualize(pybind11::module& m) {
              FDTensor out;
              vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);
+           })
+      .def("vis_headpose",
+           [](pybind11::array& im_data, vision::HeadPoseResult& result,
+              int size, int line_size) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im =
+                 vision::VisHeadPose(im, result, size, line_size);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
            });
 
   pybind11::class_<vision::Visualize>(m, "Visualize")

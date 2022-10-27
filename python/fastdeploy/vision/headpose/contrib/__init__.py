@@ -11,18 +11,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
 
-from . import detection
-from . import classification
-from . import segmentation
-from . import tracking
-from . import keypointdetection
-from . import matting
-from . import facedet
-from . import faceid
-from . import ocr
-from . import headpose
-from . import evaluation
-from .utils import fd_result_to_json
-from .visualize import *
+from __future__ import absolute_import
