@@ -89,6 +89,7 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 bash run_with_adb.sh vision_classification_paddleclas_infer ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg $DEVICE_ID
 ```
 部署成功后运行结果如下：
+
 <img width="640" src="https://user-images.githubusercontent.com/30516196/198015942-b5f27cea-e62e-4efe-9248-085e4f468e0f.jpg">
 
 需要特别注意的是，在RK上部署的模型需要是量化后的模型，模型的量化请参考：[模型量化](./../quantize.md)
