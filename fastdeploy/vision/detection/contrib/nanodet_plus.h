@@ -54,7 +54,7 @@ class FASTDEPLOY_DECL NanoDetPlus : public FastDeployModel {
                        float nms_iou_threshold = 0.5f);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of input size (width, height), e.g (320, 320)
+  Argument for image preprocessing step, tuple of input size (width, height), default (320, 320)
   */
   std::vector<int> size;
   // padding value, size should be the same as channels
