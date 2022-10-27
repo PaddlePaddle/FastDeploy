@@ -73,10 +73,6 @@ bool Recognizer::Initialize() {
   rec_img_w = 320;
   rec_image_shape = {3, rec_img_h, rec_img_w};
 
-  mean = {0.5f, 0.5f, 0.5f};
-  scale = {0.5f, 0.5f, 0.5f};
-  is_scale = true;
-
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -109,6 +105,10 @@ void OcrRecognizerResizeImage(Mat* mat, const float& wh_ratio,
 
 bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
                             const std::vector<int>& rec_image_shape) {
+  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
+  std::vector<float> scale = {0.5f, 0.5f, 0.5f};
+  bool is_scale = true;
+
   int imgH = rec_image_shape[1];
   int imgW = rec_image_shape[2];
   float wh_ratio = imgW * 1.0 / imgH;
@@ -129,8 +129,10 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool Recognizer::Postprocess(FDTensor& infer_result,
-                             std::tuple<std::string, float>* rec_result) {
+bool Recognizer::Postprocess(std::vector<FDTensor&> infer_results,
+                             std::tuple<std::string, float>* rec_result,
+                             std::vector<std::string>& label_list) {
+  FDTensor& infer_result = infer_results[0];
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
 
@@ -191,7 +193,7 @@ bool Recognizer::Predict(cv::Mat* img,
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], rec_result)) {
+  if (!Postprocess(output_tensors, rec_result, label_list)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

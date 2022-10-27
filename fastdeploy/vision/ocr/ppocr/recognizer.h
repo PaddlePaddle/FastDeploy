@@ -52,6 +52,15 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
   virtual bool Predict(cv::Mat* img,
                        std::tuple<std::string, float>* rec_result);
 
+  // Preprocess the input data, and set the preprocessed results to `outputs`
+  static bool Preprocess(Mat* img, FDTensor* outputs,
+                  const std::vector<int>& rec_image_shape);
+  /*! @brief Postprocess the inferenced results, and set the final result to `rec_result`
+   */
+  static bool Postprocess(std::vector<FDTensor&> infer_results,
+                   std::tuple<std::string, float>* rec_result,
+                   std::vector<std::string>& label_list);
+
   // Pre & Post parameters
   std::vector<std::string> label_list;
   int rec_batch_num;
@@ -59,19 +68,12 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
   int rec_img_w;
   std::vector<int> rec_image_shape;
 
-  std::vector<float> mean;
-  std::vector<float> scale;
-  bool is_scale;
+  // std::vector<float> mean;
+  // std::vector<float> scale;
+  // bool is_scale;
 
  private:
   bool Initialize();
-  /// Preprocess the input data, and set the preprocessed results to `outputs`
-  bool Preprocess(Mat* img, FDTensor* outputs,
-                  const std::vector<int>& rec_image_shape);
-  /*! @brief Postprocess the inferenced results, and set the final result to `rec_result`
-   */
-  bool Postprocess(FDTensor& infer_result,
-                   std::tuple<std::string, float>* rec_result);
 };
 
 }  // namespace ocr

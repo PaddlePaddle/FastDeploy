@@ -197,6 +197,14 @@ class Recognizer(FastDeployModel):
                 model_format)
             assert self.initialized, "Recognizer initialize failed."
 
+    @staticmethod
+    def preprocess(input_image, rec_image_shape=[3, 48, 320]):
+        return C.vision.ocr.Recognizer.preprocess(input_image, rec_image_shape)
+
+    @staticmethod
+    def postprocess(infer_result, label_list):
+        return C.vision.ocr.Recognizer.postprocess(infer_result, label_list)
+
     @property
     def rec_img_h(self):
         return self._model.rec_img_h

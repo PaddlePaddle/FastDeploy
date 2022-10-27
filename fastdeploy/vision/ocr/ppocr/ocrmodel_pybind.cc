@@ -52,7 +52,27 @@ void BindPPOCRModel(pybind11::module& m) {
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def(pybind11::init<>())
-
+      .def_static("preprocess",
+                  [](pybind11::array& data,
+                     const std::vector<int>& rec_image_shape) {
+                    auto mat = PyArrayToCvMat(data);
+                    fastdeploy::vision::Mat fd_mat(mat);
+                    FDTensor output;
+                    vision::detection::Recognizer::Preprocess(
+                        &fd_mat, &output, rec_image_shape);
+                    return TensorToPyArray(output);
+                  })
+      .def_static(
+          "postprocess",
+          [](std::vector<pybind11::array> infer_results,
+             std::vector<std::string>& label_list) {
+            std::vector<FDTensor> fd_infer_results(infer_results.size());
+            PyArrayToTensorList(infer_results, &fd_infer_results, true);
+            std::tuple<std::string, float> rec_result;
+            vision::detection::YOLOv5::Postprocess(
+                fd_infer_results, &rec_result, label_list);
+            return rec_result;
+          })
       .def_readwrite("rec_img_h", &vision::ocr::Recognizer::rec_img_h)
       .def_readwrite("rec_img_w", &vision::ocr::Recognizer::rec_img_w)
       .def_readwrite("rec_batch_num", &vision::ocr::Recognizer::rec_batch_num);
