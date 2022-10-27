@@ -290,7 +290,7 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
   /** \brief EulerAngles for an input image, and the element of `eulerangles` is a vector, contains {yaw, pitch, roll}
    */
-  std::vector<float> eulerangles(3);
+  std::vector<float> eulerangles;
 
   ResultType type = ResultType::HEADPOSE;
   /// Clear headpose result
