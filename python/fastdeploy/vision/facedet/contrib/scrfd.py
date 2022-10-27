@@ -56,7 +56,7 @@ class SCRFD(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default (640, 640)
         """
         return self._model.size
 
@@ -87,22 +87,40 @@ class SCRFD(FastDeployModel):
 
     @property
     def downsample_strides(self):
+        """
+        Argument for image postprocessing step,
+        downsample strides (namely, steps) for SCRFD to generate anchors,
+        will take (8,16,32) as default values
+        """
         return self._model.downsample_strides
 
     @property
     def landmarks_per_face(self):
+        """
+        Argument for image postprocessing step, landmarks_per_face, default 5 in SCRFD
+        """
         return self._model.landmarks_per_face
 
     @property
     def use_kps(self):
+        """
+        Argument for image postprocessing step,
+        the outputs of onnx file with key points features or not, default true
+        """
         return self._model.use_kps
 
     @property
     def max_nms(self):
+        """
+        Argument for image postprocessing step, the upperbond number of boxes processed by nms, default 30000
+        """
         return self._model.max_nms
 
     @property
     def num_anchors(self):
+        """
+        Argument for image postprocessing step, anchor number of each stride, default 2
+        """
         return self._model.num_anchors
 
     @size.setter

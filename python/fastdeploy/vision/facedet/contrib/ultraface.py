@@ -56,7 +56,7 @@ class UltraFace(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default (320, 240)
         """
         return self._model.size
 

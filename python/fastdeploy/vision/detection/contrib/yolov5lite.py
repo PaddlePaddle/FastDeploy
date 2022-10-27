@@ -56,7 +56,7 @@ class YOLOv5Lite(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
         """
         return self._model.size
 
@@ -96,7 +96,8 @@ class YOLOv5Lite(FastDeployModel):
         whether the model_file was exported with decode module.
         The official YOLOv5Lite/export.py script will export ONNX file without decode module.
         Please set it 'true' manually if the model file was exported with decode module.
-        false : ONNX files without decode module. true : ONNX file with decode module.
+        False : ONNX files without decode module. True : ONNX file with decode module.
+        default False
         """
         return self._model.is_decode_exported
 

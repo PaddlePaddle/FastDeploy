@@ -81,7 +81,7 @@ class YOLOv5(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
         """
         return self._model.size
 
@@ -117,6 +117,9 @@ class YOLOv5(FastDeployModel):
 
     @property
     def multi_label(self):
+        """
+        Argument for image preprocessing step, for different strategies to get boxes when postprocessing, default True
+        """
         return self._model.multi_label
 
     @size.setter

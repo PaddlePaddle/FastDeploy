@@ -44,11 +44,11 @@ class FASTDEPLOY_DECL MODNet : public FastDeployModel {
   */
   std::vector<int> size;
   /*! @brief
-  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels, default alpha = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f}
   */
   std::vector<float> alpha;
   /*! @brief
-  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels
+  Argument for image preprocessing step, parameters for normalization, size should be the the same as channels, default beta = {-1.f, -1.f, -1.f}
   */
   std::vector<float> beta;
   /*! @brief

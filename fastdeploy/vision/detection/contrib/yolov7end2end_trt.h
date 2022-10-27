@@ -53,7 +53,7 @@ class FASTDEPLOY_DECL YOLOv7End2EndTRT : public FastDeployModel {
   void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {640, 640}
   */
   std::vector<int> size;
   // padding value, size should be the same as channels

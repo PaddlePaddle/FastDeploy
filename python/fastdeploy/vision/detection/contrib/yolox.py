@@ -56,7 +56,7 @@ class YOLOX(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
         """
         return self._model.size
 
@@ -71,6 +71,7 @@ class YOLOX(FastDeployModel):
         whether the model_file was exported with decode module.
         The official YOLOX/tools/export_onnx.py script will export ONNX file without decode module.
         Please set it 'true' manually if the model file was exported with decode module.
+        Defalut False.
         """
         return self._model.is_decode_exported
 

@@ -65,7 +65,7 @@ class FASTDEPLOY_DECL RetinaFace : public FastDeployModel {
   */
   std::vector<int> downsample_strides;
   /*! @brief
-  Argument for image postprocessing step, min sizes, width and height for each anchor
+  Argument for image postprocessing step, min sizes, width and height for each anchor, default min_sizes = {{16, 32}, {64, 128}, {256, 512}}
   */
   std::vector<std::vector<int>> min_sizes;
   /*! @brief

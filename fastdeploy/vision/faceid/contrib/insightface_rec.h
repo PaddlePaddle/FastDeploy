@@ -44,9 +44,13 @@ class FASTDEPLOY_DECL InsightFaceRecognitionModel : public FastDeployModel {
   Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (112, 112)
   */
   std::vector<int> size;
-  ///  Argument for image preprocessing step, alpha values for normalization
+  /*! @brief
+  Argument for image preprocessing step, alpha values for normalization, default alpha = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
+  */
   std::vector<float> alpha;
-  ///  Argument for image preprocessing step, beta values for normalization
+  /*! @brief
+  Argument for image preprocessing step, beta values for normalization, default beta = {-1.f, -1.f, -1.f}
+  */
   std::vector<float> beta;
   /*! @brief
   Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.

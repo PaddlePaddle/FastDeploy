@@ -52,35 +52,36 @@ class AdaFace(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default (112, 112)
         """
         return self._model.size
 
     @property
     def alpha(self):
         """
-        Argument for image preprocessing step, alpha value for normalization
+        Argument for image preprocessing step, alpha value for normalization, default alpha = [1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f]
         """
         return self._model.alpha
 
     @property
     def beta(self):
         """
-        Argument for image preprocessing step, beta value for normalization
+        Argument for image preprocessing step, beta values for normalization, default beta = {-1.f, -1.f, -1.f}
+
         """
         return self._model.beta
 
     @property
     def swap_rb(self):
         """
-        Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default true.
+        Argument for image preprocessing step, whether to swap the B and R channel, such as BGR->RGB, default True.
         """
         return self._model.swap_rb
 
     @property
     def l2_normalize(self):
         """
-        Argument for image preprocessing step, whether to apply l2 normalize to embedding values, default;
+        Argument for image preprocessing step, whether to apply l2 normalize to embedding values, default False;
         """
         return self._model.l2_normalize
 

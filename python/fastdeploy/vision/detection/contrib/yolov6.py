@@ -56,7 +56,7 @@ class YOLOv6(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
         """
         return self._model.size
 

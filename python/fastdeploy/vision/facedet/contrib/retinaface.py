@@ -56,7 +56,7 @@ class RetinaFace(FastDeployModel):
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height)
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default (640, 640)
         """
         return self._model.size
 
@@ -77,7 +77,7 @@ class RetinaFace(FastDeployModel):
     @property
     def min_sizes(self):
         """
-        Argument for image postprocessing step, min sizes, width and height for each anchor
+        Argument for image postprocessing step, min sizes, width and height for each anchor, default min_sizes = [[16, 32], [64, 128], [256, 512]]
         """
         return self._model.min_sizes
 
