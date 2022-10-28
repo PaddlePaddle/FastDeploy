@@ -90,6 +90,8 @@ class FASTDEPLOY_DECL YOLOR : public FastDeployModel {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
+  // Stores output tensors, to avoid reallocating output buffers
+  std::vector<FDTensor> output_tensors_;
 };
 
 }  // namespace detection

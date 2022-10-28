@@ -236,12 +236,11 @@ bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-  std::vector<FDTensor> output_tensors;
-  if (!Infer(input_tensors, &output_tensors)) {
+  if (!Infer(input_tensors, &output_tensors_)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(output_tensors_[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
