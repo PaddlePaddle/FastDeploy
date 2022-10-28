@@ -16,7 +16,11 @@ from fastdeploy.hub.model_server import model_server
 import fastdeploy.hub.env as hubenv
 from fastdeploy.download import download
 
-def download_model(name:str, path:str=None, format:str=None, version:str=None):
+
+def download_model(name: str,
+                   path: str=None,
+                   format: str=None,
+                   version: str=None):
     '''
     Download pre-trained model for FastDeploy inference engine.
     Args:
@@ -27,7 +31,7 @@ def download_model(name:str, path:str=None, format:str=None, version:str=None):
     '''
     result = model_server.search_model(name, format, version)
     if path is None:
-      path = hubenv.MODEL_HOME
+        path = hubenv.MODEL_HOME
     if result:
         url = result[0]['url']
         format = result[0]['format']

@@ -37,11 +37,12 @@ class ModelServer(object):
         timeout(int) : Request timeout
     '''
 
-    def __init__(self, url: str, timeout: int = 10):
+    def __init__(self, url: str, timeout: int=10):
         self._url = url
         self._timeout = timeout
 
-    def search_model(self, name: str, format: str = None, version: str = None) -> List[dict]:
+    def search_model(self, name: str, format: str=None,
+                     version: str=None) -> List[dict]:
         '''
         Search model from model server.
 
@@ -62,7 +63,7 @@ class ModelServer(object):
         if result['status'] == 0 and len(result['data']) > 0:
             return result['data']
         return None
-    
+
     def stat_model(self, name: str, format: str, version: str):
         '''
         Note a record when download a model for statistics.
@@ -80,13 +81,13 @@ class ModelServer(object):
         params['version'] = version
         params['from'] = 'fastdeploy'
         try:
-          result = self.request(path='stat', params=params)
+            result = self.request(path='stat', params=params)
         except Exception:
-          return False
+            return False
         if result['status'] == 0:
-          return True
+            return True
         else:
-          return False
+            return False
 
     def request(self, path: str, params: dict) -> dict:
         '''Request server.'''
@@ -113,5 +114,6 @@ class ModelServer(object):
             return r.status_code == 200
         except:
             return False
+
 
 model_server = ModelServer(config.server)

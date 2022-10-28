@@ -34,7 +34,9 @@ def _get_hub_home():
             if os.path.isdir(home_path):
                 return home_path
             else:
-                raise RuntimeError('The environment variable FASTDEPLOY_HUB_HOME {} is not a directory.'.format(home_path))
+                raise RuntimeError(
+                    'The environment variable FASTDEPLOY_HUB_HOME {} is not a directory.'.
+                    format(home_path))
         else:
             return home_path
     return os.path.join(_get_user_home(), '.fastdeploy')

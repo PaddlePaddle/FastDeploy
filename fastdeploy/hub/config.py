@@ -22,6 +22,7 @@ from easydict import EasyDict
 
 import fastdeploy.hub.env as hubenv
 
+
 class HubConfig:
     '''
     FastDeploy model management configuration class.
@@ -46,7 +47,6 @@ class HubConfig:
         # Set default configuration values.
         self.data = EasyDict()
         self.data.server = 'http://paddlepaddle.org.cn/paddlehub'
-        
 
     def reset(self):
         '''Reset configuration to default.'''
@@ -73,5 +73,6 @@ class HubConfig:
     def __str__(self):
         cfg = json.loads(json.dumps(self.data))
         return yaml.dump(cfg)
+
 
 config = HubConfig()
