@@ -12,12 +12,12 @@
 以Linux上推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
-cd fastdeploy-linux-x64-gpu-0.3.0/examples/vision/keypointdetection/tiny_pose/cpp/
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
+cd fastdeploy-linux-x64-gpu-0.4.0/examples/vision/keypointdetection/tiny_pose/cpp/
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.3.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.4.0
 make -j
 
 # 下载PP-TinyPose模型文件和测试图片
