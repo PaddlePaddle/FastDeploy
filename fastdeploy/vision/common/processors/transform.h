@@ -32,6 +32,7 @@
 #include "fastdeploy/vision/common/processors/stride_pad.h"
 #include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 #include "fastdeploy/vision/common/processors/warp_affine.h"
+#include "fastdeploy/vision/common/processors/letter_box.h"
 
 namespace fastdeploy {
 namespace vision {
