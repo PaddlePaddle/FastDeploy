@@ -55,7 +55,7 @@ elseif(APPLE)
       CACHE FILEPATH "flycv compile library." FORCE)      
 elseif(ANDROID)
   set(FLYCV_COMPILE_LIB
-  "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv.so"
+  "${FLYCV_INSTALL_DIR}/lib/${ANDROID_ABI}/libflycv_shared.so"
   CACHE FILEPATH "flycv compile library." FORCE)   
 else()
   set(FLYCV_COMPILE_LIB
