@@ -92,9 +92,9 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
 bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info,
-    std::vector<float> mean;
-    std::vector<float> scale;
-    bool is_scale;
+    std::vector<float> mean,
+    std::vector<float> scale,
+    bool is_scale,
     int max_side_len) {
   //
   (*im_info)["input_shape"] = {static_cast<float>(mat.Height()),
