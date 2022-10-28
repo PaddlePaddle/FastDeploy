@@ -22,7 +22,7 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_bindNative(
-    JNIEnv *env, jclass clazz, jstring model_file, jstring params_file,
+    JNIEnv *env, jobject thiz, jstring model_file, jstring params_file,
     jstring config_file, jint cpu_num_thread, jboolean enable_lite_fp16,
     jint lite_power_mode, jstring lite_optimized_model_dir,
     jboolean enable_record_time_of_runtime, jstring label_file) {
@@ -66,7 +66,7 @@ Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_bindNative(
 
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_predictNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context,
+    JNIEnv *env, jobject thiz, jlong native_model_context,
     jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
     jfloat score_threshold, jboolean rendering) {
   if (native_model_context == 0) {
@@ -128,7 +128,7 @@ Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_predictNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context) {
+    JNIEnv *env, jobject thiz, jlong native_model_context) {
   if (native_model_context == 0) {
     return JNI_FALSE;
   }
