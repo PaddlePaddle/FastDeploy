@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.detection;
+package com.baidu.paddle.fastdeploy.app.examples.ocr;
 
 
 import android.Manifest;
@@ -27,8 +27,11 @@ import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.vision.DetectionResult;
-import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+import com.baidu.paddle.fastdeploy.vision.OCRResult;
+import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
+import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
+import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
+import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -51,7 +54,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
     long lastFrameTime;
 
     // Call 'init' and 'release' manually later
-    PicoDet predictor = new PicoDet();
+    PPOCRv2 predictor = new PPOCRv2();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -128,8 +131,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
             savedImagePath = MainActivity.this.savedImagePath;
         }
         boolean modified = false;
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, savedImagePath, SettingsActivity.scoreThreshold);
+        OCRResult result = predictor.predict(ARGB8888ImageBitmap, savedImagePath);
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
@@ -205,22 +207,54 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
     public void checkAndUpdateSettings() {
         if (SettingsActivity.checkAndUpdateSettings(this)) {
             String realModelDir = getCacheDir() + "/" + SettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, SettingsActivity.modelDir, realModelDir);
+            // String detModelName = "ch_PP-OCRv2_det_infer";
+            String detModelName = "ch_PP-OCRv3_det_infer";
+            // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
+            String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
+            // String recModelName = "ch_ppocr_mobile_v2.0_rec_infer";
+            String recModelName = "ch_PP-OCRv3_rec_infer";
+            // String recModelName = "ch_PP-OCRv2_rec_infer";
+            String realDetModelDir = realModelDir + "/" + detModelName;
+            String realClsModelDir = realModelDir + "/" + clsModelName;
+            String realRecModelDir = realModelDir + "/" + recModelName;
+            String srcDetModelDir =  SettingsActivity.modelDir + "/" + detModelName;
+            String srcClsModelDir =  SettingsActivity.modelDir + "/" + clsModelName;
+            String srcRecModelDir =  SettingsActivity.modelDir + "/" + recModelName;
+            Utils.copyDirectoryFromAssets(this, srcDetModelDir, realDetModelDir);
+            Utils.copyDirectoryFromAssets(this, srcClsModelDir, realClsModelDir);
+            Utils.copyDirectoryFromAssets(this, srcRecModelDir, realRecModelDir);
             String realLabelPath = getCacheDir() + "/" + SettingsActivity.labelPath;
             Utils.copyFileFromAssets(this, SettingsActivity.labelPath, realLabelPath);
 
-            String modelFile = realModelDir + "/" + "model.pdmodel";
-            String paramsFile = realModelDir + "/" + "model.pdiparams";
-            String configFile = realModelDir + "/" + "infer_cfg.yml";
-            String labelFile = realLabelPath;
-            RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(SettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            option.enableRecordTimeOfRuntime();
+            String detModelFile = realDetModelDir + "/" + "inference.pdmodel";
+            String detParamsFile = realDetModelDir + "/" + "inference.pdiparams";
+            String clsModelFile = realClsModelDir + "/" + "inference.pdmodel";
+            String clsParamsFile = realClsModelDir + "/" + "inference.pdiparams";
+            String recModelFile = realRecModelDir + "/" + "inference.pdmodel";
+            String recParamsFile = realRecModelDir + "/" + "inference.pdiparams";
+            String recLabelFilePath = realLabelPath; // ppocr_keys_v1.txt
+            RuntimeOption detOption = new RuntimeOption();
+            RuntimeOption clsOption = new RuntimeOption();
+            RuntimeOption recOption = new RuntimeOption();
+            detOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            clsOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            recOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            detOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            clsOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            recOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            detOption.enableRecordTimeOfRuntime();
+            clsOption.enableRecordTimeOfRuntime();
+            recOption.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
-                option.enableLiteFp16();
+                detOption.enableLiteFp16();
+                clsOption.enableLiteFp16();
+                recOption.enableLiteFp16();
             }
-            predictor.init(modelFile, paramsFile, configFile, labelFile, option);
+            DBDetector detModel = new DBDetector(detModelFile, detParamsFile, detOption);
+            Classifier clsModel = new Classifier(clsModelFile, clsParamsFile, clsOption);
+            Recognizer recModel = new Recognizer(recModelFile, recParamsFile, recLabelFilePath, recOption);
+            predictor.init(detModel, clsModel, recModel);
+
         }
     }
 
