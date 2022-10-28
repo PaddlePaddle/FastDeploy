@@ -97,10 +97,10 @@ bool DBDetector::Preprocess(
     bool is_scale,
     int max_side_len) {
   //
-  (*im_info)["input_shape"] = {static_cast<float>(mat.Height()),
-                            static_cast<float>(mat.Width())};
-  (*im_info)["output_shape"] = {static_cast<float>(mat.Height()),
-                             static_cast<float>(mat.Width())};
+  (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
+                            static_cast<float>(mat->Width())};
+  (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
+                             static_cast<float>(mat->Width())};
   (*im_info)["hw_ratio"] = {static_cast<float>(1.0),
                              static_cast<float>(1.0)};
   // Resize
