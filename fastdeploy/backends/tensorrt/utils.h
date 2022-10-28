@@ -223,10 +223,10 @@ class FDTrtLogger : public nvinfer1::ILogger {
            const char* msg) noexcept override {
     if (severity == nvinfer1::ILogger::Severity::kINFO) {
       // Disable this log
-      //      FDINFO << msg << std::endl;
+            FDINFO << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kWARNING) {
       // Disable this log
-      //      FDWARNING << msg << std::endl;
+            FDWARNING << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kERROR) {
       FDERROR << msg << std::endl;
     } else if (severity == nvinfer1::ILogger::Severity::kINTERNAL_ERROR) {

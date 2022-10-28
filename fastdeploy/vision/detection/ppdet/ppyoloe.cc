@@ -46,13 +46,6 @@ void PPYOLOE::GetNmsInfo() {
 }
 
 bool PPYOLOE::Initialize() {
-#ifdef ENABLE_PADDLE_FRONTEND
-  // remove multiclass_nms3 now
-  // this is a trick operation for ppyoloe while inference on trt
-  GetNmsInfo();
-  runtime_option.remove_multiclass_nms_ = true;
-  runtime_option.custom_op_info_["multiclass_nms3"] = "MultiClassNMS";
-#endif
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -63,16 +56,6 @@ bool PPYOLOE::Initialize() {
     return false;
   }
 
-  if (has_nms_ && runtime_option.backend == Backend::TRT) {
-    FDINFO << "Detected operator multiclass_nms3 in your model, will replace "
-              "it with fastdeploy::backend::MultiClassNMS(background_label="
-           << background_label << ", keep_top_k=" << keep_top_k
-           << ", nms_eta=" << nms_eta << ", nms_threshold=" << nms_threshold
-           << ", score_threshold=" << score_threshold
-           << ", nms_top_k=" << nms_top_k << ", normalized=" << normalized
-           << ")." << std::endl;
-    has_nms_ = false;
-  }
   return true;
 }
 
@@ -195,6 +178,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
   FDASSERT(infer_result[1].shape[0] == 1,
            "Only support batch = 1 in FastDeploy now.");
 
+  has_nms_ = true;
   if (!has_nms_) {
     int boxes_index = 0;
     int scores_index = 1;
@@ -234,19 +218,23 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
           nms.out_box_data[i * 6 + 4], nms.out_box_data[i * 6 + 5]});
     }
   } else {
-    int box_num = 0;
+    std::vector<int> num_boxes(infer_result[1].shape[0]);
     if (infer_result[1].dtype == FDDataType::INT32) {
-      box_num = *(static_cast<int32_t*>(infer_result[1].Data()));
+      int32_t* data = static_cast<int32_t*>(infer_result[1].Data());
+      for (size_t i = 0; i < infer_result[1].shape[0]; ++i) {
+        num_boxes[i] = static_cast<int>(data[i]);
+      }
     } else if (infer_result[1].dtype == FDDataType::INT64) {
-      box_num = *(static_cast<int64_t*>(infer_result[1].Data()));
-    } else {
-      FDASSERT(
-          false,
-          "The output box_num of PPYOLOE model should be type of int32/int64.");
+      int64_t* data = static_cast<int64_t*>(infer_result[1].Data());
+      for (size_t i = 0; i < infer_result[1].shape[0]; ++i) {
+        num_boxes[i] = static_cast<int>(data[i]);
+      }
     }
-    result->Reserve(box_num);
+
+    // Only support batch = 1 now
+    result->Reserve(num_boxes[0]);
     float* box_data = static_cast<float*>(infer_result[0].Data());
-    for (size_t i = 0; i < box_num; ++i) {
+    for (size_t i = 0; i < num_boxes[0]; ++i) {
       result->label_ids.push_back(box_data[i * 6]);
       result->scores.push_back(box_data[i * 6 + 1]);
       result->boxes.emplace_back(
