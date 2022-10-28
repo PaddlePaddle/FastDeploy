@@ -48,7 +48,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   auto im = cv::imread(image_file);
   auto im_bak = im.clone();
 
-  fastdeploy::vision::HeadposeResult res;
+  fastdeploy::vision::HeadPoseResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
