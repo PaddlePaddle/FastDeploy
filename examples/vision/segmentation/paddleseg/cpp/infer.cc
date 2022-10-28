@@ -43,7 +43,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -72,7 +72,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -102,7 +102,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

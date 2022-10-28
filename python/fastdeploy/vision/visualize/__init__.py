@@ -36,8 +36,8 @@ def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
                                        font_size)
 
 
-def vis_segmentation(im_data, seg_result):
-    return C.vision.vis_segmentation(im_data, seg_result)
+def vis_segmentation(im_data, seg_result, weight=0.5):
+    return C.vision.vis_segmentation(im_data, seg_result, weight)
 
 
 def vis_matting_alpha(im_data,
