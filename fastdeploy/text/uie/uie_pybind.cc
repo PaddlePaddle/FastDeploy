@@ -28,7 +28,7 @@ void BindUIE(pybind11::module& m) {
       .def_readwrite("relations", &text::SchemaNode::relations_)
       .def_readwrite("children", &text::SchemaNode::children_);
 
-  py::class_<text::UIEModel>(m, "UIEModel")
+  py::class_<text::UIEModel, FastDeployModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
                     std::vector<std::string>, RuntimeOption, ModelFormat>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),

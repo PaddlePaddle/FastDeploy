@@ -15,8 +15,7 @@
 from __future__ import absolute_import
 
 import logging
-from ... import ModelFormat
-from ... import RuntimeOption
+from ... import RuntimeOption, FastDeployModel, ModelFormat
 from ... import c_lib_wrap as C
 
 
@@ -38,7 +37,7 @@ class SchemaNode(object):
         self._schema_node_children = schema_node_children
 
 
-class UIEModel(object):
+class UIEModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
@@ -60,6 +59,7 @@ class UIEModel(object):
         self._model = C.text.UIEModel(model_file, params_file, vocab_file,
                                       position_prob, max_length, schema,
                                       runtime_option._option, model_format)
+        assert self.initialized, "UIEModel initialize failed."
 
     def set_schema(self, schema):
         if isinstance(schema, list):
