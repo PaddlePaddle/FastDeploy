@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.detection;
+package com.baidu.paddle.fastdeploy.app.examples.ocr;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -46,8 +46,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity implements
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // addPreferencesFromResource(R.xml.settings);
-        addPreferencesFromResource(R.xml.detection_settings);
+        addPreferencesFromResource(R.xml.ocr_settings);
         ActionBar supportActionBar = getSupportActionBar();
         if (supportActionBar != null) {
             supportActionBar.setDisplayHomeAsUpEnabled(true);
@@ -60,8 +59,8 @@ public class SettingsActivity extends AppCompatPreferenceActivity implements
         preInstalledCPUPowerModes = new ArrayList<String>();
         preInstalledScoreThresholds = new ArrayList<String>();
         preInstalledEnableLiteFp16s = new ArrayList<String>();
-        preInstalledModelDirs.add(getString(R.string.MODEL_DIR_DEFAULT));
-        preInstalledLabelPaths.add(getString(R.string.LABEL_PATH_DEFAULT));
+        preInstalledModelDirs.add(getString(R.string.OCR_MODEL_DIR_DEFAULT));
+        preInstalledLabelPaths.add(getString(R.string.OCR_REC_LABEL_DEFAULT));
         preInstalledCPUThreadNums.add(getString(R.string.CPU_THREAD_NUM_DEFAULT));
         preInstalledCPUPowerModes.add(getString(R.string.CPU_POWER_MODE_DEFAULT));
         preInstalledScoreThresholds.add(getString(R.string.SCORE_THRESHOLD_DEFAULT));
@@ -91,7 +90,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences sharedPreferences = getPreferenceScreen().getSharedPreferences();
 
         String selected_model_dir = sharedPreferences.getString(getString(R.string.CHOOSE_PRE_INSTALLED_MODEL_KEY),
-                getString(R.string.MODEL_DIR_DEFAULT));
+                getString(R.string.OCR_MODEL_DIR_DEFAULT));
         int selected_model_idx = lpChoosePreInstalledModel.findIndexOfValue(selected_model_dir);
         if (selected_model_idx >= 0 && selected_model_idx < preInstalledModelDirs.size() && selected_model_idx != selectedModelIdx) {
             SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -107,9 +106,9 @@ public class SettingsActivity extends AppCompatPreferenceActivity implements
         }
 
         String model_dir = sharedPreferences.getString(getString(R.string.MODEL_DIR_KEY),
-                getString(R.string.MODEL_DIR_DEFAULT));
+                getString(R.string.OCR_MODEL_DIR_DEFAULT));
         String label_path = sharedPreferences.getString(getString(R.string.LABEL_PATH_KEY),
-                getString(R.string.LABEL_PATH_DEFAULT));
+                getString(R.string.OCR_REC_LABEL_DEFAULT));
         String cpu_thread_num = sharedPreferences.getString(getString(R.string.CPU_THREAD_NUM_KEY),
                 getString(R.string.CPU_THREAD_NUM_DEFAULT));
         String cpu_power_mode = sharedPreferences.getString(getString(R.string.CPU_POWER_MODE_KEY),
@@ -137,12 +136,12 @@ public class SettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(ctx);
 
         String model_dir = sharedPreferences.getString(ctx.getString(R.string.MODEL_DIR_KEY),
-                ctx.getString(R.string.MODEL_DIR_DEFAULT));
+                ctx.getString(R.string.OCR_MODEL_DIR_DEFAULT));
         settingsChanged |= !modelDir.equalsIgnoreCase(model_dir);
         modelDir = model_dir;
 
         String label_path = sharedPreferences.getString(ctx.getString(R.string.LABEL_PATH_KEY),
-                ctx.getString(R.string.LABEL_PATH_DEFAULT));
+                ctx.getString(R.string.OCR_REC_LABEL_DEFAULT));
         settingsChanged |= !labelPath.equalsIgnoreCase(label_path);
         labelPath = label_path;
 
