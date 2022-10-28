@@ -16,6 +16,7 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/common/pre_post_process_base.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -23,6 +24,50 @@ namespace vision {
  *
  */
 namespace segmentation {
+
+class FASTDEPLOY_DECL PaddleSegPreprocess : public BasePreprocess {
+  public:
+   PaddleSegPreprocess() {}
+   PaddleSegPreprocess(const std::string& config_file) {
+    config_file_=config_file;
+   }
+   virtual bool BuildPreprocessPipelineFromConfig(std::vector<Backend>* valid_cpu_backends, 
+                                          std::vector<Backend>* valid_gpu_backends);
+   virtual bool Run(Mat* mat, FDTensor* outputs, 
+                     bool is_vertical_screen,
+                     std::vector<Backend>* valid_cpu_backends, 
+                     std::vector<Backend>* valid_gpu_backends);
+
+   bool is_with_softmax_ = false;
+
+   bool is_with_argmax_ = true;
+
+};
+
+class FASTDEPLOY_DECL PaddleSegPostprocess : public BasePostprocess {
+  public:
+   PaddleSegPostprocess() {}
+   PaddleSegPostprocess(std::map<std::string, std::array<int, 2>> im_info,
+                       const bool& is_with_argmax, const bool& is_with_softmax,
+                       const bool& apply_softmax) {
+    im_info_ = im_info;
+
+    is_with_argmax_ = is_with_argmax;
+
+    is_with_softmax_ = is_with_softmax;
+
+     apply_softmax_ =  apply_softmax;
+   }
+
+   virtual bool Run(FDTensor* infer_result, SegmentationResult* result);
+
+   bool is_with_softmax_ = false;
+
+   bool is_with_argmax_ = true;
+
+   bool apply_softmax_ = false;
+
+};
 
 /*! @brief PaddleSeg serials model object used when to load a PaddleSeg model exported by PaddleSeg repository
  */
@@ -63,19 +108,13 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
  private:
   bool Initialize();
 
-  bool BuildPreprocessPipelineFromConfig();
-
-  bool Preprocess(Mat* mat, FDTensor* outputs);
-
   bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
-                   const std::map<std::string, std::array<int, 2>>& im_info);
+                   const std::map<std::string, std::array<int, 2>>& im_info,
+                   const bool& is_with_argmax, const bool& is_with_softmax);
 
-  bool is_with_softmax = false;
+  PaddleSegPreprocess preprocess;
 
-  bool is_with_argmax = true;
-
-  std::vector<std::shared_ptr<Processor>> processors_;
-  std::string config_file_;
+  PaddleSegPostprocess postprocess;
 };
 
 }  // namespace segmentation
