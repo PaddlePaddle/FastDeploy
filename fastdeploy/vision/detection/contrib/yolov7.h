@@ -105,6 +105,10 @@ class FASTDEPLOY_DECL YOLOv7 : public FastDeployModel {
   float* input_tensor_cuda_buffer_device_ = nullptr;
   // Whether to use CUDA preprocessing
   bool use_cuda_preprocessing_ = false;
+  // CUDA stream
+  void* cuda_stream_ = nullptr;
+  // Stores output tensors, to avoid reallocating output buffers
+  std::vector<FDTensor> output_tensors_;
 };
 }  // namespace detection
 }  // namespace vision
