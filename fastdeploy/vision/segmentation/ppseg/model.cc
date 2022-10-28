@@ -32,7 +32,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
   initialized = Initialize();
-  preprocess = PaddleSegPreprocess(config_file);
+  preprocess = PaddleSegPreprocess(config_file, &valid_cpu_backends, &valid_gpu_backends);
 }
 
 bool PaddleSegModel::Initialize() {
@@ -43,8 +43,7 @@ bool PaddleSegModel::Initialize() {
   return true;
 }
 
-bool PaddleSegPreprocess::BuildPreprocessPipelineFromConfig(std::vector<Backend>* valid_cpu_backends, 
-                                                            std::vector<Backend>* valid_gpu_backends) {
+bool PaddleSegPreprocess::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   processors_.push_back(std::make_shared<BGR2RGB>());
@@ -102,8 +101,8 @@ bool PaddleSegPreprocess::BuildPreprocessPipelineFromConfig(std::vector<Backend>
                 << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
                 << " to export model with fixed input shape."
                 << std::endl;
-      *valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
-      *valid_gpu_backends = {Backend::PDINFER};
+      *valid_cpu_backends_ = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
+      *valid_gpu_backends_ = {Backend::PDINFER};
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
       processors_.push_back(
@@ -131,10 +130,8 @@ bool PaddleSegPreprocess::BuildPreprocessPipelineFromConfig(std::vector<Backend>
 }
 
 bool PaddleSegPreprocess::Run(Mat* mat, FDTensor* output, 
-                              bool is_vertical_screen,
-                              std::vector<Backend>* valid_cpu_backends, 
-                              std::vector<Backend>* valid_gpu_backends) {
-  if (!BuildPreprocessPipelineFromConfig(valid_cpu_backends, valid_gpu_backends)) {
+                              bool is_vertical_screen) {
+  if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
     return false;
@@ -338,7 +335,7 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   preprocess.im_info_["input_shape"] = {static_cast<int>(mat.Height()),
                             static_cast<int>(mat.Width())};
   (processed_data[0]).name = InputInfoOfRuntime(0).name;
-  if (!preprocess.Run(&mat, &(processed_data[0]), is_vertical_screen, &valid_cpu_backends, &valid_gpu_backends)) {
+  if (!preprocess.Run(&mat, &(processed_data[0]), is_vertical_screen)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;

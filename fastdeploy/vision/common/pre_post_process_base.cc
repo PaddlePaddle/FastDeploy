@@ -23,18 +23,6 @@ bool BasePreprocess::Run(Mat* mat, FDTensor* output) {
   return true;
 }
 
-bool BasePreprocess::BuildPreprocessPipelineFromConfig() {
-  processors_.clear();
-  YAML::Node cfg;
-  processors_.push_back(std::make_shared<BGR2RGB>());
-  try {
-    cfg = YAML::LoadFile(config_file_);
-  } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file_
-            << ", maybe you should check this file." << std::endl;
-    return false;
-  }   
-};
-
 }  // namespace vision
 }  // namespace fastdeploy
+
