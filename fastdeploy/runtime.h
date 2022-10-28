@@ -104,9 +104,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   void SetExternalStream(void* external_stream);
 
-  /// Use Graphcore IPU to inference
-  void UseIpu();
-
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -239,15 +236,15 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void DisablePaddleTrtCollectShape();
 
-  /** \brief Turn on IPU.
+  /** \Use Graphcore IPU to inference.
    *
    * \param[in] device_num the number of IPUs.
    * \param[in] micro_batch_size the batch size in the graph, only work when graph has no batch shape info.
    * \param[in] enable_pipelining enable pipelining.
    * \param[in] batches_per_step the number of batches per run in pipelining.
    */
-  void EnableIpu(int device_num = 1, int micro_batch_size = 1,
-                 bool enable_pipelining = false, int batches_per_step = 1);
+  void UseIpu(int device_num = 1, int micro_batch_size = 1,
+              bool enable_pipelining = false, int batches_per_step = 1);
 
   /** \brief Set IPU config.
    *

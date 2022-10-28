@@ -227,16 +227,6 @@ void RuntimeOption::SetExternalStream(void* external_stream) {
   external_stream_ = external_stream;
 }
 
-void RuntimeOption::UseIpu() {
-#ifdef WITH_IPU
-  device = Device::IPU;
-#else
-  FDWARNING << "The FastDeploy didn't compile with IPU, will force to use CPU."
-            << std::endl;
-  device = Device::CPU;
-#endif
-}
-
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
@@ -426,12 +416,19 @@ void RuntimeOption::DisablePaddleTrtCollectShape() {
   pd_collect_shape = false;
 }
 
-void RuntimeOption::EnableIpu(int device_num, int micro_batch_size,
-                              bool enable_pipelining, int batches_per_step) {
+void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
+                           bool enable_pipelining, int batches_per_step) {
+#ifdef WITH_IPU
+  device = Device::IPU;
   ipu_device_num = device_num;
   ipu_micro_batch_size = micro_batch_size;
   ipu_enable_pipelining = enable_pipelining;
   ipu_batches_per_step = batches_per_step;
+#else
+  FDWARNING << "The FastDeploy didn't compile with IPU, will force to use CPU."
+            << std::endl;
+  device = Device::CPU;
+#endif
 }
 
 void RuntimeOption::SetIpuConfig(bool enable_fp16, int replica_num,
