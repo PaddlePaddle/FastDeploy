@@ -16,7 +16,7 @@ import json
 import requests
 from typing import List
 
-from fastdeploy.hub.config import config
+from fastdeploy.utils.hub_config import config
 
 
 class ServerConnectionError(Exception):

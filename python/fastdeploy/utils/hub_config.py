@@ -20,7 +20,7 @@ import uuid
 import yaml
 from easydict import EasyDict
 
-import fastdeploy.hub.env as hubenv
+import fastdeploy.utils.hub_env as hubenv
 
 
 class HubConfig:

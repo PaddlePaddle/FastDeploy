@@ -27,4 +27,4 @@ from . import c_lib_wrap as C
 from . import vision
 from . import pipeline
 from . import text
-from .download import download, download_and_decompress
+from .download import download, download_and_decompress, download_model
