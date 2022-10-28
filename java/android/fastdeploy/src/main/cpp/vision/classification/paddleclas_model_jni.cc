@@ -22,7 +22,7 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_bindNative(
-    JNIEnv *env, jclass clazz, jstring model_file, jstring params_file,
+    JNIEnv *env, jobject thiz, jstring model_file, jstring params_file,
     jstring config_file, jint cpu_num_thread, jboolean enable_lite_fp16,
     jint lite_power_mode, jstring lite_optimized_model_dir,
     jboolean enable_record_time_of_runtime, jstring label_file) {
@@ -66,7 +66,7 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_bindNativ
 
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context,
+    JNIEnv *env, jobject thiz, jlong native_model_context,
     jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
     jfloat score_threshold, jboolean rendering) {
   if (native_model_context == 0) {
@@ -129,7 +129,7 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNa
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context) {
+    JNIEnv *env, jobject thiz, jlong native_model_context) {
   auto c_model_ptr =
       reinterpret_cast<fastdeploy::vision::classification::PaddleClasModel *>(
           native_model_context);

@@ -141,26 +141,26 @@ public class PicoDet {
     }
 
     // Bind predictor from native context.
-    private static native long bindNative(String modelFile,
-                                          String paramsFile,
-                                          String configFile,
-                                          int cpuNumThread,
-                                          boolean enableLiteFp16,
-                                          int litePowerMode,
-                                          String liteOptimizedModelDir,
-                                          boolean enableRecordTimeOfRuntime,
-                                          String labelFile);
+    private native long bindNative(String modelFile,
+                                   String paramsFile,
+                                   String configFile,
+                                   int cpuNumThread,
+                                   boolean enableLiteFp16,
+                                   int litePowerMode,
+                                   String liteOptimizedModelDir,
+                                   boolean enableRecordTimeOfRuntime,
+                                   String labelFile);
 
     // Call prediction from native context.
-    private static native long predictNative(long nativeModelContext,
-                                             Bitmap ARGB8888Bitmap,
-                                             boolean saved,
-                                             String savedImagePath,
-                                             float scoreThreshold,
-                                             boolean rendering);
+    private native long predictNative(long nativeModelContext,
+                                      Bitmap ARGB8888Bitmap,
+                                      boolean saved,
+                                      String savedImagePath,
+                                      float scoreThreshold,
+                                      boolean rendering);
 
     // Release buffers allocated in native context.
-    private static native boolean releaseNative(long nativeModelContext);
+    private native boolean releaseNative(long nativeModelContext);
 
     // Initializes at the beginning.
     static {

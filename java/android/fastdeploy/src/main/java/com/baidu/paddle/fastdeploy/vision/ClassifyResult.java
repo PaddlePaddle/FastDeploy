@@ -42,10 +42,10 @@ public class ClassifyResult {
     }
 
     // Fetch native buffers from native context.
-    private static native float[] copyScoresFromNative(long nativeResultContext);
+    private native float[] copyScoresFromNative(long nativeResultContext);
 
-    private static native int[] copyLabelIdsFromNative(long nativeResultContext);
+    private native int[] copyLabelIdsFromNative(long nativeResultContext);
 
-    private static native boolean releaseNative(long nativeResultContext);
+    private native boolean releaseNative(long nativeResultContext);
 
 }

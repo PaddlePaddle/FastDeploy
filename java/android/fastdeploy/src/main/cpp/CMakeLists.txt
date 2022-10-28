@@ -28,6 +28,7 @@ add_library(
         SHARED
         utils_jni.cc
         bitmap_jni.cc
+        pipeline/ppocr_jni.cc
         vision/results_jni.cc
         vision/visualize_jni.cc
         vision/detection/picodet_jni.cc

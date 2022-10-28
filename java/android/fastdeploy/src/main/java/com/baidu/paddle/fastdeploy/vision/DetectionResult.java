@@ -63,15 +63,15 @@ public class DetectionResult {
     }
 
     // Fetch native buffers from native context.
-    private static native int copyBoxesNumFromNative(long nativeResultContext);
+    private native int copyBoxesNumFromNative(long nativeResultContext);
 
-    private static native float[] copyBoxesFromNative(long nativeResultContext);
+    private native float[] copyBoxesFromNative(long nativeResultContext);
 
-    private static native float[] copyScoresFromNative(long nativeResultContext);
+    private native float[] copyScoresFromNative(long nativeResultContext);
 
-    private static native int[] copyLabelIdsFromNative(long nativeResultContext);
+    private native int[] copyLabelIdsFromNative(long nativeResultContext);
 
-    private static native boolean releaseNative(long nativeResultContext);
+    private native boolean releaseNative(long nativeResultContext);
 
     // Initializes at the beginning.
     static {
