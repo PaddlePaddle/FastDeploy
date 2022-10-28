@@ -312,6 +312,18 @@ if(WITH_GPU)
   endif()
 endif()
 
+# Whether to build CUDA source files in fastdeploy
+# CUDA source files include CUDA preprocessing, TRT plugins, etc.
+if(WITH_GPU)
+  set(BUILD_CUDA_SRC ON)
+  enable_language(CUDA)
+  set(CMAKE_CUDA_STANDARD 11)
+  set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
+  list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_CUDA_SRCS})
+else()
+  set(BUILD_CUDA_SRC OFF)
+endif()
+
 if(WITH_IPU)
   add_definitions(-DWITH_IPU)
 endif()
