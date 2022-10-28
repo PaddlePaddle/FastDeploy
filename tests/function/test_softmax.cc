@@ -20,29 +20,41 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-#ifdef ENABLE_FDTENSOR_FUNC
+
 TEST(fastdeploy, softmax) {
-  FDTensor input, output;
+  FDTensor input, input1, output;
   CheckShape check_shape;
   CheckData check_data;
   std::vector<float> inputs = {1, 2, 3, 4, 5, 6};
+  auto inputs1 = inputs;
   std::vector<float> expected_result_axis0 = {
       0.04742587, 0.04742587, 0.04742587, 0.95257413, 0.95257413, 0.95257413};
   std::vector<float> expected_result_axis1 = {
       0.09003057, 0.24472846, 0.66524088, 0.09003057, 0.24472846, 0.66524088};
   input.SetExternalData({2, 3}, FDDataType::FP32, inputs.data());
+  input1.SetExternalData({2, 3}, FDDataType::FP32, inputs1.data());
 
   // axis = 0
   Softmax(input, &output, 0);
   check_shape(output.shape, {2, 3});
   check_data(reinterpret_cast<const float*>(output.Data()),
              expected_result_axis0.data(), expected_result_axis0.size());
+  // Test the case when output eqauls to input
+  Softmax(input, &input, 0);
+  check_shape(output.shape, {2, 3});
+  check_data(reinterpret_cast<const float*>(input.Data()),
+             expected_result_axis0.data(), expected_result_axis0.size());
 
   // axis = 1
-  Softmax(input, &output, 1);
+  Softmax(input1, &output, 1);
   check_shape(output.shape, {2, 3});
   check_data(reinterpret_cast<const float*>(output.Data()),
              expected_result_axis1.data(), expected_result_axis1.size());
+  // Test the case when output eqauls to input
+  Softmax(input1, &input1, 1);
+  check_shape(output.shape, {2, 3});
+  check_data(reinterpret_cast<const float*>(input1.Data()),
+             expected_result_axis1.data(), expected_result_axis1.size());
 }
-#endif
+
 }  // namespace fastdeploy

@@ -24,8 +24,10 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
   auto model = fastdeploy::vision::detection::PicoDet(model_file, params_file,
-                                                      config_file);
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -40,6 +42,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -68,6 +71,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
@@ -81,8 +85,6 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
-  option.SetTrtInputShape("image", {1, 3, 320, 320});
-  option.SetTrtInputShape("scale_Factor", {1, 2});
   auto model = fastdeploy::vision::detection::PicoDet(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
@@ -99,6 +101,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
 
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;

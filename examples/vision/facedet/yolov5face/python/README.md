@@ -2,8 +2,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本目录下提供`infer.py`快速完成YOLOv5Face在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
@@ -31,7 +31,7 @@ python infer.py --model yolov5s-face.onnx --image test_lite_face_detector_3.jpg 
 ## YOLOv5Face Python接口
 
 ```python
-fastdeploy.vision.facedet.YOLOv5Face(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.facedet.YOLOv5Face(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格式
@@ -41,7 +41,7 @@ YOLOv5Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
 
 ### predict函数
 

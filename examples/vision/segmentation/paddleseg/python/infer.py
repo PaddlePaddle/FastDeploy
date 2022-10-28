@@ -32,8 +32,8 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
-        option.set_trt_input_shape("inputs", [1, 3, 224, 224],
-                                   [1, 3, 224, 224], [1, 3, 224, 224])
+        option.set_trt_input_shape("x", [1, 3, 256, 256], [1, 3, 1024, 1024],
+                                   [1, 3, 2048, 2048])
     return option
 
 
@@ -47,9 +47,9 @@ config_file = os.path.join(args.model, "deploy.yaml")
 model = fd.vision.segmentation.PaddleSegModel(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
-# 预测图片分类结果
+# 预测图片分割结果
 im = cv2.imread(args.image)
-result = model.predict(im)
+result = model.predict(im.copy())
 print(result)
 
 # 可视化结果

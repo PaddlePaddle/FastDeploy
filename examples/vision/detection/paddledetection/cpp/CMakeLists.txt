@@ -1,5 +1,5 @@
 PROJECT(infer_demo C CXX)
-CMAKE_MINIMUM_REQUIRED (VERSION 3.12)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 # 指定下载解压后的fastdeploy库路径
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
@@ -26,3 +26,6 @@ target_link_libraries(infer_yolov3_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_ppyolo_demo ${PROJECT_SOURCE_DIR}/infer_ppyolo.cc)
 target_link_libraries(infer_ppyolo_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_mask_rcnn_demo ${PROJECT_SOURCE_DIR}/infer_mask_rcnn.cc)
+target_link_libraries(infer_mask_rcnn_demo ${FASTDEPLOY_LIBS})

@@ -3,8 +3,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/the%20software%20and%20hardware%20requirements.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以ArcFace为例子, 提供`infer_arcface.py`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
@@ -47,10 +47,10 @@ Detect Done! Cosine 01: 0.814385, Cosine 02:-0.059388
 ## InsightFace Python接口
 
 ```python
-fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
-fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=Frontend.ONNX)
+fastdeploy.vision.faceid.ArcFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.CosFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.PartialFC(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+fastdeploy.vision.faceid.VPL(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
 ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
@@ -60,12 +60,12 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > * **model_file**(str): 模型文件路径
 > * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(Frontend): 模型格式，默认为ONNX
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
 
 ### predict函数
 
 > ```python
-> ArcFace.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
+> ArcFace.predict(image_data)
 > ```
 >
 > 模型预测结口，输入图像直接输出检测结果。
@@ -73,8 +73,6 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > **参数**
 >
 > > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **conf_threshold**(float): 检测框置信度过滤阈值
-> > * **nms_iou_threshold**(float): NMS处理过程中iou阈值
 
 > **返回**
 >
@@ -97,3 +95,4 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 - [InsightFace 模型介绍](..)
 - [InsightFace C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
