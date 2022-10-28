@@ -169,10 +169,10 @@ UIEModel::UIEModel(const std::string& model_file,
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
-  runtime_option_ = custom_option;
-  runtime_option_.model_format = model_format;
-  runtime_option_.SetModelPath(model_file, params_file);
-  runtime_.Init(runtime_option_);
+  runtime_option = custom_option;
+  runtime_option.model_format = model_format;
+  runtime_option.SetModelPath(model_file, params_file);
+  initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
       max_length, 0, faster_tokenizer::core::Direction::RIGHT,
@@ -188,10 +188,10 @@ UIEModel::UIEModel(const std::string& model_file,
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
-  runtime_option_ = custom_option;
-  runtime_option_.model_format = model_format;
-  runtime_option_.SetModelPath(model_file, params_file);
-  runtime_.Init(runtime_option_);
+  runtime_option = custom_option;
+  runtime_option.model_format = model_format;
+  runtime_option.SetModelPath(model_file, params_file);
+  initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
       max_length, 0, faster_tokenizer::core::Direction::RIGHT,
@@ -207,14 +207,25 @@ UIEModel::UIEModel(const std::string& model_file,
     : max_length_(max_length),
       position_prob_(position_prob),
       tokenizer_(vocab_file) {
-  runtime_option_ = custom_option;
-  runtime_option_.model_format = model_format;
-  runtime_option_.SetModelPath(model_file, params_file);
-  runtime_.Init(runtime_option_);
+  runtime_option = custom_option;
+  runtime_option.model_format = model_format;
+  runtime_option.SetModelPath(model_file, params_file);
+  initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
       max_length, 0, faster_tokenizer::core::Direction::RIGHT,
       faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+}
+
+bool UIEModel::Initialize() {
+  SetValidBackend();
+  return InitRuntime();
+}
+
+void UIEModel::SetValidBackend() {
+  // TODO(zhoushunjie): Add lite backend in future
+  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER};
+  valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
 }
 
 void UIEModel::SetSchema(const std::vector<std::string>& schema) {
@@ -542,10 +553,10 @@ void UIEModel::Preprocess(
   if (batch_size > 0) {
     seq_len = (*encodings)[0].GetIds().size();
   }
-  inputs->resize(runtime_.NumInputs());
-  for (int i = 0; i < runtime_.NumInputs(); ++i) {
+  inputs->resize(NumInputsOfRuntime());
+  for (int i = 0; i < NumInputsOfRuntime(); ++i) {
     (*inputs)[i].Allocate({batch_size, seq_len}, fastdeploy::FDDataType::INT64,
-                          runtime_.GetInputInfo(i).name);
+                          InputInfoOfRuntime(i).name);
   }
 
   // 2.2 Set the value of data
@@ -716,8 +727,11 @@ void UIEModel::Predict(
     Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
 
     // 3. Infer
-    std::vector<fastdeploy::FDTensor> outputs(runtime_.NumOutputs());
-    runtime_.Infer(inputs, &outputs);
+    std::vector<fastdeploy::FDTensor> outputs(NumOutputsOfRuntime());
+    if (!Infer(inputs, &outputs)) {
+      FDERROR << "Failed to inference while using model:" << ModelName() << "."
+              << std::endl;
+    }
 
     // 4. Convert FDTensor to UIEResult
     std::vector<std::vector<UIEResult>> results_list;

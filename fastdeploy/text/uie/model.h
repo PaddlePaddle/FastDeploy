@@ -89,7 +89,7 @@ struct Schema {
   friend class UIEModel;
 };
 
-struct FASTDEPLOY_DECL UIEModel {
+struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
  public:
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
@@ -112,6 +112,7 @@ struct FASTDEPLOY_DECL UIEModel {
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
                fastdeploy::ModelFormat::PADDLE);
+  virtual std::string ModelName() const { return "UIEModel"; }
   void SetSchema(const std::vector<std::string>& schema);
   void SetSchema(const std::vector<SchemaNode>& schema);
   void SetSchema(const SchemaNode& schema);
@@ -150,7 +151,7 @@ struct FASTDEPLOY_DECL UIEModel {
       std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
           results);
 
- private:
+ protected:
   using IDX_PROB = std::pair<int64_t, float>;
   struct IdxProbCmp {
     bool operator()(const std::pair<IDX_PROB, IDX_PROB>& lhs,
@@ -161,6 +162,8 @@ struct FASTDEPLOY_DECL UIEModel {
     faster_tokenizer::core::Offset offset_;
     bool is_prompt_;
   };
+  void SetValidBackend();
+  bool Initialize();
   void AutoSplitter(const std::vector<std::string>& texts, size_t max_length,
                     std::vector<std::string>* short_texts,
                     std::vector<std::vector<size_t>>* input_mapping);
@@ -185,8 +188,6 @@ struct FASTDEPLOY_DECL UIEModel {
       const std::vector<std::vector<SpanIdx>>& span_idxs,
       const std::vector<std::vector<float>>& probs,
       std::vector<std::vector<UIEResult>>* results) const;
-  fastdeploy::RuntimeOption runtime_option_;
-  fastdeploy::Runtime runtime_;
   std::unique_ptr<Schema> schema_;
   size_t max_length_;
   float position_prob_;
