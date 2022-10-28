@@ -92,8 +92,8 @@ void OcrDetectorResizeImage(Mat* img, int max_size_len, float* ratio_h,
 bool DBDetector::Preprocess(
     Mat* mat, FDTensor* output,
     std::map<std::string, std::array<float, 2>>* im_info,
-    std::vector<float> mean,
-    std::vector<float> scale,
+    const std::vector<float>& mean,
+    const std::vector<float>& scale,
     bool is_scale,
     int max_side_len) {
   //
@@ -138,7 +138,7 @@ bool DBDetector::Postprocess(
   auto& infer_result = infer_results[0];
   float ratio_h = im_info.at("hw_ratio")[0];
   float ratio_w = im_info.at("hw_ratio")[1];
-  PostProcessor post_processor,
+  PostProcessor post_processor;
   std::vector<int64_t> output_shape = infer_result.shape;
   FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
   int n2 = output_shape[2];

@@ -131,7 +131,7 @@ bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool Recognizer::Postprocess(std::vector<FDTensor&> infer_results,
+bool Recognizer::Postprocess(std::vector<FDTensor>& infer_results,
                              std::tuple<std::string, float>* rec_result,
                              std::vector<std::string>& label_list) {
   FDTensor& infer_result = infer_results[0];

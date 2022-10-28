@@ -57,10 +57,10 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
                   const std::vector<int>& rec_image_shape,
                   const std::vector<float>& mean = {0.5f, 0.5f, 0.5f},
                   const std::vector<float>& scale = {0.5f, 0.5f, 0.5f},
-                  bool is_scale = True);
+                  bool is_scale = true);
   /*! @brief Postprocess the inferenced results, and set the final result to `rec_result`
    */
-  static bool Postprocess(std::vector<FDTensor&> infer_results,
+  static bool Postprocess(std::vector<FDTensor>& infer_results,
                    std::tuple<std::string, float>* rec_result,
                    std::vector<std::string>& label_list);
 
