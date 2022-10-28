@@ -28,46 +28,28 @@ namespace segmentation {
 class FASTDEPLOY_DECL PaddleSegPreprocess : public BasePreprocess {
  public:
   PaddleSegPreprocess() {}
-  PaddleSegPreprocess(const std::string& config_file,
-                      std::vector<Backend>* valid_cpu_backends,
-                      std::vector<Backend>* valid_gpu_backends) {
+  explicit PaddleSegPreprocess(const std::string& config_file) {
     config_file_ = config_file;
-    valid_cpu_backends_ = valid_cpu_backends;
-    valid_gpu_backends_ = valid_gpu_backends;
   }
   virtual bool BuildPreprocessPipelineFromConfig();
   virtual bool Run(Mat* mat, FDTensor* outputs,
-                   bool is_vertical_screen);
+                   bool is_vertical_screen = false);
 
-  bool is_with_softmax_ = false;
-
-  bool is_with_argmax_ = true;
-
-  std::vector<Backend>* valid_cpu_backends_ = nullptr;
-
-  std::vector<Backend>* valid_gpu_backends_ = nullptr;
+  static bool is_with_softmax_;
+  static bool is_with_argmax_;
 };
 
 class FASTDEPLOY_DECL PaddleSegPostprocess : public BasePostprocess {
  public:
   PaddleSegPostprocess() {}
   PaddleSegPostprocess(std::map<std::string, std::array<int, 2>> im_info,
-                      const bool& is_with_argmax, const bool& is_with_softmax,
-                      const bool& apply_softmax) {
+                      const bool& apply_softmax = false) {
     im_info_ = im_info;
-
-    is_with_argmax_ = is_with_argmax;
-
-    is_with_softmax_ = is_with_softmax;
 
     apply_softmax_ =  apply_softmax;
   }
 
   virtual bool Run(FDTensor* infer_result, SegmentationResult* result);
-
-  bool is_with_softmax_ = false;
-
-  bool is_with_argmax_ = true;
 
   bool apply_softmax_ = false;
 };
@@ -108,16 +90,10 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
    */
   bool is_vertical_screen = false;
 
+  std::string config_file_;
+
  private:
   bool Initialize();
-
-  bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
-                   const std::map<std::string, std::array<int, 2>>& im_info,
-                   const bool& is_with_argmax, const bool& is_with_softmax);
-
-  PaddleSegPreprocess preprocess;
-
-  PaddleSegPostprocess postprocess;
 };
 
 }  // namespace segmentation

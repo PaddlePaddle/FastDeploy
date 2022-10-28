@@ -20,19 +20,23 @@ namespace fastdeploy {
 namespace vision {
 namespace segmentation {
 
+bool PaddleSegPreprocess::is_with_softmax_ = false;
+bool PaddleSegPreprocess::is_with_argmax_ = true;
+
 PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const std::string& params_file,
                                const std::string& config_file,
                                const RuntimeOption& custom_option,
                                const ModelFormat& model_format) {
+  config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+  utils::ChangeValidBackends(config_file, &valid_cpu_backends, &valid_gpu_backends);
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
   initialized = Initialize();
-  preprocess = PaddleSegPreprocess(config_file, &valid_cpu_backends, &valid_gpu_backends);
 }
 
 bool PaddleSegModel::Initialize() {
@@ -101,8 +105,6 @@ bool PaddleSegPreprocess::BuildPreprocessPipelineFromConfig() {
                 << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
                 << " to export model with fixed input shape."
                 << std::endl;
-      *valid_cpu_backends_ = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
-      *valid_gpu_backends_ = {Backend::PDINFER};
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
       processors_.push_back(
@@ -191,7 +193,7 @@ bool PaddleSegPostprocess::Run(
   int64_t infer_height = 0;
   int64_t infer_width = 0;
 
-  if (is_with_argmax_) {
+  if (PaddleSegPreprocess::is_with_argmax_) {
     infer_channel = 1;
     infer_height = infer_result->shape[1];
     infer_width = infer_result->shape[2];
@@ -211,11 +213,11 @@ bool PaddleSegPostprocess::Run(
     is_resized = true;
   }
 
-  if (!is_with_softmax_ && apply_softmax_) {
+  if (!PaddleSegPreprocess::is_with_softmax_ && apply_softmax_) {
     Softmax(*infer_result, infer_result, 1);
   }
 
-  if (!is_with_argmax_) {
+  if (!PaddleSegPreprocess::is_with_argmax_) {
     // output without argmax
     result->contain_score_map = true;
 
@@ -331,9 +333,10 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
 
+  PaddleSegPreprocess preprocess = PaddleSegPreprocess(config_file_);
   // Record the shape of image and the shape of preprocessed image
   preprocess.im_info_["input_shape"] = {static_cast<int>(mat.Height()),
-                            static_cast<int>(mat.Width())};
+                                        static_cast<int>(mat.Width())};
   (processed_data[0]).name = InputInfoOfRuntime(0).name;
   if (!preprocess.Run(&mat, &(processed_data[0]), is_vertical_screen)) {
     FDERROR << "Failed to preprocess input data while using model:"
@@ -346,7 +349,7 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
             << std::endl;
     return false;
   }
-  postprocess = PaddleSegPostprocess(preprocess.im_info_, preprocess.is_with_argmax_, preprocess.is_with_softmax_, apply_softmax);
+  PaddleSegPostprocess postprocess = PaddleSegPostprocess(preprocess.im_info_, apply_softmax);
   if (!postprocess.Run(&infer_result[0], result)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
