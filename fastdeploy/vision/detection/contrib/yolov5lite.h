@@ -54,7 +54,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
   void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, size = {640, 640}
   */
   std::vector<int> size;
   // padding value, size should be the same as channels
@@ -84,7 +84,7 @@ class FASTDEPLOY_DECL YOLOv5Lite : public FastDeployModel {
     decode module. Please set it 'true' manually if the model file
     was exported with decode module.
     false : ONNX files without decode module.
-    true : ONNX file with decode module.
+    true : ONNX file with decode module. default false.
   */
   bool is_decode_exported;
 
