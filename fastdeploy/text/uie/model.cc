@@ -164,10 +164,12 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<std::string>& schema,
+                   SchemaLanguage schema_language,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
+      schema_language_(schema_language),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -183,10 +185,12 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<SchemaNode>& schema,
+                   SchemaLanguage schema_language,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
+      schema_language_(schema_language),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -202,10 +206,12 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const SchemaNode& schema,
+                   SchemaLanguage schema_language,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format)
     : max_length_(max_length),
       position_prob_(position_prob),
+      schema_language_(schema_language),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -474,7 +480,7 @@ void UIEModel::AutoJoiner(const std::vector<std::string>& short_texts,
   *results = std::move(final_result);
 }
 
-void UIEModel::ConstructTextsAndPrompts(
+bool UIEModel::ConstructTextsAndPrompts(
     const std::vector<std::string>& raw_texts, const std::string& node_name,
     const std::vector<std::vector<std::string>> node_prefix,
     std::vector<std::string>* input_texts, std::vector<std::string>* prompts,
@@ -507,6 +513,10 @@ void UIEModel::ConstructTextsAndPrompts(
     }
   }
 
+  if (prompts->size() == 0) {
+    return false;
+  }
+
   // Shortten the input texts and prompts
   auto max_prompt_iter = std::max_element(
       prompts->begin(), prompts->end(),
@@ -517,7 +527,6 @@ void UIEModel::ConstructTextsAndPrompts(
             rhs.c_str(), rhs.length());
         return lhs_ulen < rhs_ulen;
       });
-
   auto max_prompt_len = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
       max_prompt_iter->c_str(), max_prompt_iter->length());
   auto max_predict_len = max_length_ - 3 - max_prompt_len;
@@ -532,6 +541,7 @@ void UIEModel::ConstructTextsAndPrompts(
   }
   (*input_texts) = std::move(short_texts);
   (*prompts) = std::move(short_texts_prompts);
+  return true;
 }
 
 void UIEModel::Preprocess(
@@ -630,8 +640,13 @@ void UIEModel::ConstructChildPromptPrefix(
     auto&& input_mapping_item = input_mapping_with_raw_texts[i];
     for (auto&& idx : input_mapping_item) {
       for (int j = 0; j < results_list[idx].size(); ++j) {
-        // Note(zhoushunjie): It's useful for Chinese model.
-        auto prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
+        std::string prefix_str;
+        if (schema_language_ == SchemaLanguage::ZH) {
+          // Note(zhoushunjie): It means "of" in Chinese.
+          prefix_str = results_list[idx][j].text_ + "\xe7\x9a\x84";
+        } else {
+          prefix_str = " of " + results_list[idx][j].text_;
+        }
         (*prefix)[i].push_back(prefix_str);
       }
     }
@@ -688,7 +703,7 @@ void UIEModel::ConstructChildRelations(
       }
     }
     for (int i = 0; i < curr_relations.size(); ++i) {
-      for (int j = 0; j < new_relations[i].size(); ++j) {
+      for (int j = 0; j < curr_relations[i].size(); ++j) {
         if (curr_relations[i][j]->relation_.count(node_name)) {
           auto& curr_relation = curr_relations[i][j]->relation_[node_name];
           for (auto&& curr_result_ref : curr_relation) {
@@ -717,27 +732,27 @@ void UIEModel::Predict(
     std::vector<std::string> short_input_texts;
     std::vector<std::string> short_prompts;
     // 1. Construct texts and prompts from raw text
-    ConstructTextsAndPrompts(
+    bool has_prompt = ConstructTextsAndPrompts(
         texts, node.name_, node.prefix_, &short_input_texts, &short_prompts,
         &input_mapping_with_raw_texts, &input_mapping_with_short_text);
-
-    // 2. Convert texts and prompts to FDTensor
-    std::vector<FDTensor> inputs;
-    std::vector<faster_tokenizer::core::Encoding> encodings;
-    Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
-
-    // 3. Infer
-    std::vector<fastdeploy::FDTensor> outputs(NumOutputsOfRuntime());
-    if (!Infer(inputs, &outputs)) {
-      FDERROR << "Failed to inference while using model:" << ModelName() << "."
-              << std::endl;
-    }
-
-    // 4. Convert FDTensor to UIEResult
     std::vector<std::vector<UIEResult>> results_list;
-    Postprocess(outputs, encodings, short_input_texts, short_prompts,
-                input_mapping_with_short_text, &results_list);
+    if (has_prompt) {
+      // 2. Convert texts and prompts to FDTensor
+      std::vector<FDTensor> inputs;
+      std::vector<faster_tokenizer::core::Encoding> encodings;
+      Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
 
+      // 3. Infer
+      std::vector<fastdeploy::FDTensor> outputs(NumOutputsOfRuntime());
+      if (!Infer(inputs, &outputs)) {
+        FDERROR << "Failed to inference while using model:" << ModelName()
+                << "." << std::endl;
+      }
+
+      // 4. Convert FDTensor to UIEResult
+      Postprocess(outputs, encodings, short_input_texts, short_prompts,
+                  input_mapping_with_short_text, &results_list);
+    }
     // 5. Construct the new relation of the UIEResult
     std::vector<std::vector<UIEResult*>> relations;
     ConstructChildRelations(node.relations_, input_mapping_with_raw_texts,

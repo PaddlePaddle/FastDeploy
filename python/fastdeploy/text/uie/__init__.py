@@ -17,6 +17,7 @@ from __future__ import absolute_import
 import logging
 from ... import RuntimeOption, FastDeployModel, ModelFormat
 from ... import c_lib_wrap as C
+from C.text import SchemaLanguage
 
 
 class SchemaNode(object):

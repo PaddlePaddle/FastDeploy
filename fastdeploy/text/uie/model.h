@@ -75,6 +75,11 @@ struct FASTDEPLOY_DECL SchemaNode {
   }
 };
 
+enum SchemaLanguage {
+  ZH,  // Chinese
+  EN   // English
+};
+
 struct Schema {
   explicit Schema(const std::string& schema, const std::string& name = "root");
   explicit Schema(const std::vector<std::string>& schema_list,
@@ -94,6 +99,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
            size_t max_length, const std::vector<std::string>& schema,
+           SchemaLanguage schema_language = SchemaLanguage::ZH,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -101,6 +107,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
            size_t max_length, const SchemaNode& schema,
+           SchemaLanguage schema_language = SchemaLanguage::ZH,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -108,6 +115,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
            size_t max_length, const std::vector<SchemaNode>& schema,
+           SchemaLanguage schema_language = SchemaLanguage::ZH,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -117,7 +125,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   void SetSchema(const std::vector<SchemaNode>& schema);
   void SetSchema(const SchemaNode& schema);
 
-  void ConstructTextsAndPrompts(
+  bool ConstructTextsAndPrompts(
       const std::vector<std::string>& raw_texts, const std::string& node_name,
       const std::vector<std::vector<std::string>> node_prefix,
       std::vector<std::string>* input_texts, std::vector<std::string>* prompts,
@@ -191,6 +199,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   std::unique_ptr<Schema> schema_;
   size_t max_length_;
   float position_prob_;
+  SchemaLanguage schema_language_;
   faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer_;
 };
 

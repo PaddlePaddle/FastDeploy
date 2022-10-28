@@ -28,6 +28,11 @@ void BindUIE(pybind11::module& m) {
       .def_readwrite("relations", &text::SchemaNode::relations_)
       .def_readwrite("children", &text::SchemaNode::children_);
 
+  py::enum_<text::SchemaLanguage>(m, "SchemaLanguage", py::arithmetic(),
+                                  "The language of schema.")
+      .value("ZH", text::SchemaLanguage::ZH)
+      .value("EN", text::SchemaLanguage::EN);
+
   py::class_<text::UIEModel, FastDeployModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
                     std::vector<std::string>, RuntimeOption, ModelFormat>(),
