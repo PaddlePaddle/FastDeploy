@@ -1,25 +1,31 @@
-# YOLOv7量化模型部署
-FastDeploy已支持部署量化模型,并提供一键模型量化的工具.
-用户可以使用一键模型量化工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
+[简体中文](README_CN.md) | English
 
-## FastDeploy一键模型量化工具
-FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
-详细教程请见: [一键模型量化工具](../../../../../tools/quantization/)
+# YOLOv7 Quantized Model Deployment
 
-## 下载量化完成的YOLOv7模型
-用户也可以直接下载下表中的量化模型进行部署.
+FastDeploy supports the deployment of quantized models and provides a one-click model quantization tool.
+Users can use the one-click model quantization tool to quantize and deploy the models themselves or download the quantized models provided by FastDeploy directly for deployment.
 
-| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 mAP | INT8 mAP | 量化方式   |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)            | TensorRT          |    GPU    |     30.43          |      15.40       |       1.98        | 51.1| 50.8| 量化蒸馏训练 |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar)          | Paddle Inference  |    CPU    |          1015.70     |      562.41       |    1.82           |51.1 | 46.3| 量化蒸馏训练 |
+## FastDeploy One-Click Model Quantization Tool
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
-- 测试图片为COCO val2017中的图片.
-- 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
-- CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
+FastDeploy provides a one-click quantization tool that allows users to quantize a model simply with a configuration file.
+For detailed tutorial, please refer to : [One-Click Model Quantization Tool](../../../../../tools/quantization/)
 
-## 详细部署文档
+## Download Quantized YOLOv7 Model
 
-- [Python部署](python)
-- [C++部署](cpp)
+Users can also directly download the quantized models in the table below for deployment.
+
+| Model                                                                 | Inference Backend | Hardware | FP32 Inference Time Delay | FP32 Inference Time Delay | Acceleration ratio | FP32 mAP | INT8 mAP | Method                          |
+| --------------------------------------------------------------------- | ----------------- | -------- | ------------------------- | ------------------------- | ------------------ | -------- | -------- | ------------------------------- |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar) | TensorRT          | GPU      | 24.57                     | 9.40                      | 2.61               | 51.1     | 50.8     | Quantized distillation training |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_quant.tar) | Paddle Inference  | CPU      | 1022.55                   | 490.87                    | 2.08               | 51.1     | 46.3     | Quantized distillation training |
+
+The data in the above table shows the end-to-end inference performance of FastDeploy deployment before and after model quantization.
+
+- The test images are from COCO val2017.
+- The inference time delay is the inference latency on different Runtimes in milliseconds.
+- CPU is Intel(R) Xeon(R) Gold 6271C, GPU is Tesla T4, TensorRT version 8.4.15, and the fixed CPU thread is 1 for all tests.
+
+## More Detailed Tutorials
+
+- [Python Deployment](python)
+- [C++ Deployment](cpp)

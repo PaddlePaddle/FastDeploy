@@ -1,27 +1,35 @@
-# PaddleClas 量化模型部署
-FastDeploy已支持部署量化模型,并提供一键模型量化的工具.
-用户可以使用一键模型量化工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
+[简体中文](README_CN.md) | English
 
-## FastDeploy一键模型量化工具
-FastDeploy 提供了一键量化工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
-详细教程请见: [一键模型量化工具](../../../../../tools/quantization/)
-注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。
+# PaddleClas Quantized Model Deployment
 
-## 下载量化完成的PaddleClas模型
-用户也可以直接下载下表中的量化模型进行部署.
-| 模型                 |推理后端            |部署硬件    | FP32推理时延    | INT8推理时延  | 加速比    | FP32 Top1 | INT8 Top1 |量化方式   |
-| ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | ONNX Runtime         |    CPU    |  86.87        |  59 .32     |      1.46         | 79.12  | 78.87|  离线量化|
-| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  7.85        |  5.42      |      1.45         | 79.12  | 79.06 | 离线量化 |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | ONNX Runtime |    CPU    |      40.32   |   16.87     |      2.39         |77.89 | 75.09 |离线量化 |
-| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)             | TensorRT  |    GPU    |      5.10   |   3.35     |      1.52         |77.89 | 76.86 | 离线量化 |
+FastDeploy supports the deployment of quantized models and provides a one-click model quantization tool.
+Users can use the one-click model quantization tool to quantize and deploy the models themselves or download the quantized models provided by FastDeploy directly for deployment.
 
-上表中的数据, 为模型量化前后，在FastDeploy部署的端到端推理性能.
-- 测试图片为ImageNet-2012验证集中的图片.
-- 推理时延为端到端推理(包含前后处理)的平均时延, 单位是毫秒.
-- CPU为Intel(R) Xeon(R) Gold 6271C, GPU为Tesla T4, TensorRT版本8.4.15, 所有测试中固定CPU线程数为1.
+## FastDeploy One-Click Model Quantization Tool
 
-## 详细部署文档
+FastDeploy provides a one-click quantization tool that allows users to quantize a model simply with a configuration file.
+For a detailed tutorial, please refer to [One-Click Model Quantization Tool](../../../../../tools/quantization/)
 
-- [Python部署](python)
-- [C++部署](cpp)
+Note: The quantized classification model still needs the inference_cls.yaml file in the FP32 model folder, while the model folder quantized by users does not contain this yaml file. Users can copy yaml file from the FP32 model folder to the quantized model folder.
+
+## Download Quantized PaddleClas Model
+
+Users can also directly download the quantized models in the table below for deployment.
+
+| Model                                                                                   | Inference Backend | Hardware | FP32 Inference Time Delay | INT8  Inference Time Delay | Accleration ratio | FP32 Top1 | INT8 Top1 | Method                     |
+| --------------------------------------------------------------------------------------- | ----------------- | -------- | ------------------------- | -------------------------- | ----------------- | --------- | --------- | -------------------------- |
+| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)           | ONNX Runtime      | CPU      | 77.20                     | 40.08                      | 1.93              | 79.12     | 78.87     | Post-training quantization |
+| [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)           | TensorRT          | GPU      | 3.70                      | 1.80                       | 2.06              | 79.12     | 79.06     | Post-training quantization |
+| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar) | ONNX Runtime      | CPU      | 30.99                     | 10.24                      | 3.03              | 77.89     | 75.09     | Post-training quantization |
+| [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar) | TensorRT          | GPU      | 1.80                      | 0.58                       | 3.10              | 77.89     | 76.86     | Post-training quantization |
+
+The data in the above table shows the end-to-end inference performance of FastDeploy deployment before and after model quantization.
+
+- The test images are from the ImageNet-2012 validation set.
+- The inference time delay is the average latency of end-to-end inference (including pre- and post-processing) in milliseconds.
+- CPU is Intel(R) Xeon(R) Gold 6271C, GPU is Tesla T4, TensorRT version 8.4.15, and the number of fixed CPU threads is 1 in all tests.
+
+## More Detailed Tutorials
+
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
