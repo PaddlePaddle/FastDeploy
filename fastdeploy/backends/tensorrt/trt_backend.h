@@ -57,7 +57,8 @@ namespace fastdeploy {
 struct TrtValueInfo {
   std::string name;
   std::vector<int> shape;
-  nvinfer1::DataType dtype;
+  nvinfer1::DataType dtype;  // dtype of TRT model
+  FDDataType original_dtype;  // dtype of original ONNX/Paddle model
 };
 
 struct TrtBackendOption {
@@ -140,6 +141,13 @@ class TrtBackend : public BaseBackend {
   // For dynmaic shape will record its range information
   // Also will update the range information while inferencing
   std::map<std::string, ShapeRangeInfo> shape_range_info_;
+
+  // If the final output tensor's dtype is different from the
+  // model output tensor's dtype, then we need cast the data
+  // to the final output's dtype.
+  // E.g. When trt model output tensor is int32, but final tensor is int64
+  // This map stores the casted tensors.
+  std::map<std::string, FDTensor> casted_output_tensors_;
 
   void GetInputOutputInfo();
   bool CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer);

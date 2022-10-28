@@ -104,6 +104,26 @@ nvinfer1::DataType ReaderDtypeToTrtDtype(int reader_dtype) {
   return nvinfer1::DataType::kFLOAT;
 }
 
+FDDataType ReaderDtypeToFDDtype(int reader_dtype) {
+  if (reader_dtype == 0) {
+    return FDDataType::FP32;
+  } else if (reader_dtype == 1) {
+    return FDDataType::FP64;
+  } else if (reader_dtype == 2) {
+    return FDDataType::UINT8;
+  } else if (reader_dtype == 3) {
+    return FDDataType::INT8;
+  } else if (reader_dtype == 4) {
+    return FDDataType::INT32;
+  } else if (reader_dtype == 5) {
+    return FDDataType::INT64;
+  } else if (reader_dtype == 6) {
+    return FDDataType::FP16;
+  }
+  FDASSERT(false, "Received unexpected data type of %d", reader_dtype);
+  return FDDataType::FP32;
+}
+
 std::vector<int> ToVec(const nvinfer1::Dims& dim) {
   std::vector<int> out(dim.d, dim.d + dim.nbDims);
   return out;
