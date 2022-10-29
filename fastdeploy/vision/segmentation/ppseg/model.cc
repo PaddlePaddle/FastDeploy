@@ -362,7 +362,7 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
 }
 
 void PaddleSegModel::DisableNormalizeAndPermute(){
-  this->switch_of_nor_and_per = false;
+  this->disable_normalize_and_permute = false;
   // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
