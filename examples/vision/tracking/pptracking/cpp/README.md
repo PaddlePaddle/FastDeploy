@@ -22,7 +22,6 @@ make -j
 wget https://bj.bcebos.com/paddlehub/fastdeploy/fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz
 tar -xvf fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4
-wget https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4
 
 
 # CPU推理
