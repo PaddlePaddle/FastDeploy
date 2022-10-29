@@ -41,6 +41,7 @@ enum Backend {
   POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
+  RKNPU2,  ///< RKNPU2, support RKNN format model, Rockchip NPU only
 };
 
 /*! Deep learning model format */
@@ -48,6 +49,7 @@ enum ModelFormat {
   AUTOREC,  ///< Auto recognize the model format by model file name
   PADDLE,  ///< Model with paddlepaddle format
   ONNX,  ///< Model with ONNX format
+  RKNN,  ///< Model with RKNN format
   TORCHSCRIPT,  ///< Model with TorchScript format
 };
 
@@ -65,6 +67,28 @@ enum LitePowerMode {
   LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
   LITE_POWER_RAND_LOW = 5  ///< Use Lite Backend with rand low power mode
 };
+
+/*! RKNPU2 core mask for mobile device. */
+typedef enum _rknpu2_core_mask {
+    RKNN_NPU_CORE_AUTO = 0,  /* default, run on NPU core randomly. */
+    RKNN_NPU_CORE_0 = 1,  /* run on NPU core 0. */
+    RKNN_NPU_CORE_1 = 2,  /* run on NPU core 1. */
+    RKNN_NPU_CORE_2 = 4,  /* run on NPU core 2. */
+    /* run on NPU core 1 and core 2. */
+    RKNN_NPU_CORE_0_1 = RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1,
+    /* run on NPU core 1 and core 2 and core 3. */
+    RKNN_NPU_CORE_0_1_2 = RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2,
+    RKNN_NPU_CORE_UNDEFINED,
+} rknn_core_mask;
+typedef rknn_core_mask RKNPU2CoreMask;
+
+/*! RKNPU2 device name for mobile device. */
+typedef enum _rknpu2_cpu_name {
+    RK356X = 0,  /* run on RK356X. */
+    RK3588 = 1,  /* default,run on RK3588. */
+    UNDEFINED,
+} RKNPU2CpuName;
+
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
@@ -101,6 +125,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
+
+  void UseRKNPU2(RKNPU2CpuName rknpu2_name = RKNPU2CpuName::RK3588,
+                 RKNPU2CoreMask rknpu2_core = RKNPU2CoreMask::RKNN_NPU_CORE_0);
 
   void SetExternalStream(void* external_stream);
 
@@ -172,16 +199,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief disable half precision, change to full precision(float32)
    */
   void DisableLiteFP16();
-
-   /**
-   * @brief enable int8 precision while use paddle lite backend
-   */
-  void EnableLiteInt8();
-
-  /**
-   * @brief disable int8 precision, change to full precision(float32)
-   */
-  void DisableLiteInt8();
 
   /**
    * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
@@ -270,8 +287,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
   LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
-  // enable int8 or not
-  bool lite_enable_int8 = false;
   // enable fp16 or not
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig
@@ -293,6 +308,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool use_nvidia_tf32 = false;
   int unconst_ops_thres = -1;
   std::string poros_file = "";
+
+  // ======Only for RKNPU2 Backend=======
+  RKNPU2CpuName rknpu2_cpu_name_ = RKNPU2CpuName::RK3588;
+  RKNPU2CoreMask rknpu2_core_mask_ = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
+
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
@@ -357,6 +377,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateTrtBackend();
   void CreateOpenVINOBackend();
   void CreateLiteBackend();
+  void CreateRKNPU2Backend();
   std::unique_ptr<BaseBackend> backend_;
 };
 }  // namespace fastdeploy
