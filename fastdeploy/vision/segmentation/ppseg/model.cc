@@ -68,7 +68,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
       if (op["type"].as<std::string>() == "Normalize") {
-        if(this->switch_of_nor_and_per){
+        if(this->disable_normalize_and_permute){
           std::vector<float> mean = {0.5, 0.5, 0.5};
           std::vector<float> std = {0.5, 0.5, 0.5};
           if (op["mean"]) {
@@ -132,7 +132,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << "." << std::endl;
     }
   }
-  if(this->switch_of_nor_and_per){
+  if(this->disable_normalize_and_permute){
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
   return true;
