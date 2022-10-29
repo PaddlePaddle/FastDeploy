@@ -249,6 +249,10 @@ void RuntimeOption::UseRKNPU2(RKNPU2CpuName rknpu2_name,
   device = Device::NPU;
 }
 
+void RuntimeOption::SetExternalStream(void* external_stream) {
+  external_stream_ = external_stream;
+}
+
 void RuntimeOption::SetCpuThreadNum(int thread_num) {
   FDASSERT(thread_num > 0, "The thread_num must be greater than 0.");
   cpu_thread_num = thread_num;
@@ -544,6 +548,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
   pd_option.enable_pinned_memory = option.enable_pinned_memory;
+  pd_option.external_stream_ = option.external_stream_;
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -569,8 +574,9 @@ void Runtime::CreatePaddleBackend() {
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
-  FDASSERT(false, "PaddleBackend is not available, please compiled with "
-                  "ENABLE_PADDLE_BACKEND=ON.");
+  FDASSERT(false,
+           "PaddleBackend is not available, please compiled with "
+           "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 
@@ -594,8 +600,9 @@ void Runtime::CreateOpenVINOBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OpenVINOBackend is not available, please compiled with "
-                  "ENABLE_OPENVINO_BACKEND=ON.");
+  FDASSERT(false,
+           "OpenVINOBackend is not available, please compiled with "
+           "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 
@@ -608,6 +615,7 @@ void Runtime::CreateOrtBackend() {
   ort_option.execution_mode = option.ort_execution_mode;
   ort_option.use_gpu = (option.device == Device::GPU) ? true : false;
   ort_option.gpu_id = option.device_id;
+  ort_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
@@ -628,8 +636,9 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OrtBackend is not available, please compiled with "
-                  "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false,
+           "OrtBackend is not available, please compiled with "
+           "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -646,6 +655,7 @@ void Runtime::CreateTrtBackend() {
   trt_option.opt_shape = option.trt_opt_shape;
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
+  trt_option.external_stream_ = option.external_stream_;
 
   // TODO(jiangjiajun): inside usage, maybe remove this later
   trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
@@ -666,8 +676,9 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false, "TrtBackend is not available, please compiled with "
-                  "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false,
+           "TrtBackend is not available, please compiled with "
+           "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
 
@@ -686,8 +697,9 @@ void Runtime::CreateLiteBackend() {
                                           lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false, "LiteBackend is not available, please compiled with "
-                  "ENABLE_LITE_BACKEND=ON.");
+  FDASSERT(false,
+           "LiteBackend is not available, please compiled with "
+           "ENABLE_LITE_BACKEND=ON.");
 #endif
 }
 
@@ -709,4 +721,4 @@ void Runtime::CreateRKNPU2Backend() {
 #endif
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

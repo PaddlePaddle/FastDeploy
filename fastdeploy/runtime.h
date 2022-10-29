@@ -129,6 +129,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseRKNPU2(RKNPU2CpuName rknpu2_name = RKNPU2CpuName::RK3588,
                  RKNPU2CoreMask rknpu2_core = RKNPU2CoreMask::RKNN_NPU_CORE_0);
 
+  void SetExternalStream(void* external_stream);
+
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
    */
@@ -258,6 +260,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int device_id = 0;
 
   Device device = Device::CPU;
+
+  void* external_stream_ = nullptr;
 
   bool enable_pinned_memory = false;
 

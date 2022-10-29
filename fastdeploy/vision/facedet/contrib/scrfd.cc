@@ -133,7 +133,6 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-
   // scrfd's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -153,7 +152,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     Cast::Run(mat, "float");
   }
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1); // reshape to n, c, h, w
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
 }
 
@@ -239,30 +238,29 @@ bool SCRFD::Postprocess(
     // loop each anchor
     for (unsigned int i = 0; i < num_points; ++i) {
       const float cls_conf = score_ptr[i];
-      if (cls_conf < conf_threshold)
-        continue; // filter
+      if (cls_conf < conf_threshold) continue;  // filter
       auto& point = stride_points.at(i);
-      const float cx = point.cx; // cx
-      const float cy = point.cy; // cy
+      const float cx = point.cx;  // cx
+      const float cy = point.cy;  // cy
       // bbox
       const float* offsets = bbox_ptr + i * 4;
-      float l = offsets[0]; // left
-      float t = offsets[1]; // top
-      float r = offsets[2]; // right
-      float b = offsets[3]; // bottom
+      float l = offsets[0];  // left
+      float t = offsets[1];  // top
+      float r = offsets[2];  // right
+      float b = offsets[3];  // bottom
 
       float x1 = ((cx - l) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_w)) /
-                 scale; // cx - l x1
+                 scale;  // cx - l x1
       float y1 = ((cy - t) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_h)) /
-                 scale; // cy - t y1
+                 scale;  // cy - t y1
       float x2 = ((cx + r) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_w)) /
-                 scale; // cx + r x2
+                 scale;  // cx + r x2
       float y2 = ((cy + b) * static_cast<float>(current_stride) -
                   static_cast<float>(pad_h)) /
-                 scale; // cy + b y2
+                 scale;  // cy + b y2
       result->boxes.emplace_back(std::array<float, 4>{x1, y1, x2, y2});
       result->scores.push_back(cls_conf);
       if (use_kps) {
@@ -275,14 +273,14 @@ bool SCRFD::Postprocess(
           float kps_t = kps_offsets[j + 1];
           float kps_x = ((cx + kps_l) * static_cast<float>(current_stride) -
                          static_cast<float>(pad_w)) /
-                        scale; // cx + l x
+                        scale;  // cx + l x
           float kps_y = ((cy + kps_t) * static_cast<float>(current_stride) -
                          static_cast<float>(pad_h)) /
-                        scale; // cy + t y
+                        scale;  // cy + t y
           result->landmarks.emplace_back(std::array<float, 2>{kps_x, kps_y});
         }
       }
-      count += 1; // limit boxes for nms.
+      count += 1;  // limit boxes for nms.
       if (count > max_nms) {
         break;
       }

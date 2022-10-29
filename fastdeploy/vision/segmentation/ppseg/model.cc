@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
-#include "fastdeploy/vision.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
