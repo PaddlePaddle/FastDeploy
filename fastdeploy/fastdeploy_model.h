@@ -35,6 +35,13 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid gpu backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
+
+
+  /** Model's valid npu backends. This member defined all the gpu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_npu_backends = {};
+
+
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
   /// Get number of outputs for this model
@@ -95,6 +102,8 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool InitRuntime();
   virtual bool CreateCpuBackend();
   virtual bool CreateGpuBackend();
+  virtual bool CreateNpuBackend();
+
   bool initialized = false;
   std::vector<Backend> valid_external_backends;
 
@@ -106,6 +115,7 @@ class FASTDEPLOY_DECL FastDeployModel {
 
   // record inference time for backend
   std::vector<double> time_of_runtime_;
+
 };
 
 }  // namespace fastdeploy

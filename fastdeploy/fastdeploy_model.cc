@@ -37,11 +37,19 @@ bool FastDeployModel::InitRuntime() {
 #ifndef WITH_GPU
     use_gpu = false;
 #endif
+    bool use_npu = (runtime_option.device == Device::NPU);
 
     // whether the model is supported by the setted backend
     bool is_supported = false;
     if (use_gpu) {
       for (auto& item : valid_gpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    } else if (use_npu) {
+      for (auto& item : valid_npu_backends) {
         if (item == runtime_option.backend) {
           is_supported = true;
           break;
@@ -67,12 +75,17 @@ bool FastDeployModel::InitRuntime() {
       FDWARNING << ModelName() << " is not supported with backend "
                 << Str(runtime_option.backend) << "." << std::endl;
       if (use_gpu) {
-        FDASSERT(valid_gpu_backends.size() > 0,
+        FDASSERT(!valid_gpu_backends.empty(),
                  "There's no valid gpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
                   << " for model inference." << std::endl;
+      }else if (use_npu) {
+        FDASSERT(!valid_npu_backends.empty(),
+                 "There's no valid npu backend for %s.", ModelName().c_str());
+        FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
+                  << " for model inference." << std::endl;
       } else {
-        FDASSERT(valid_cpu_backends.size() > 0,
+        FDASSERT(!valid_cpu_backends.empty(),
                  "There's no valid cpu backend for %s.", ModelName().c_str());
         FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
                   << " for model inference." << std::endl;
@@ -90,13 +103,15 @@ bool FastDeployModel::InitRuntime() {
             << std::endl;
     return false;
 #endif
+  } else if (runtime_option.device == Device::NPU) {
+    return CreateNpuBackend();
   }
-  FDERROR << "Only support CPU/GPU now." << std::endl;
+  FDERROR << "Only support CPU/GPU/NPU now." << std::endl;
   return false;
 }
 
 bool FastDeployModel::CreateCpuBackend() {
-  if (valid_cpu_backends.size() == 0) {
+  if (valid_cpu_backends.empty()) {
     FDERROR << "There's no valid cpu backends for model: " << ModelName()
             << std::endl;
     return false;
@@ -119,7 +134,7 @@ bool FastDeployModel::CreateCpuBackend() {
 }
 
 bool FastDeployModel::CreateGpuBackend() {
-  if (valid_gpu_backends.size() == 0) {
+  if (valid_gpu_backends.empty()) {
     FDERROR << "There's no valid gpu backends for model: " << ModelName()
             << std::endl;
     return false;
@@ -138,6 +153,30 @@ bool FastDeployModel::CreateGpuBackend() {
     return true;
   }
   FDERROR << "Cannot find an available gpu backend to load this model."
+          << std::endl;
+  return false;
+}
+
+bool FastDeployModel::CreateNpuBackend() {
+  if (valid_npu_backends.empty()) {
+    FDERROR << "There's no valid npu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_npu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_npu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_npu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Cannot find an available npu backend to load this model."
           << std::endl;
   return false;
 }
@@ -200,4 +239,6 @@ std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   statis_info_of_runtime_dict["iterations"] = time_of_runtime_.size();
   return statis_info_of_runtime_dict;
 }
-}  // namespace fastdeploy
+
+
+} // namespace fastdeploy
