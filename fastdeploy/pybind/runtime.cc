@@ -22,6 +22,7 @@ void BindRuntime(pybind11::module& m) {
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
+      .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
@@ -159,15 +160,32 @@ void BindRuntime(pybind11::module& m) {
       .value("TRT", Backend::TRT)
       .value("POROS", Backend::POROS)
       .value("PDINFER", Backend::PDINFER)
+      .value("RKNPU2", Backend::RKNPU2)
       .value("LITE", Backend::LITE);
   pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
                                "ModelFormat for inference.")
       .value("PADDLE", ModelFormat::PADDLE)
       .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
+      .value("RKNN", ModelFormat::RKNN)
       .value("ONNX", ModelFormat::ONNX);
+  pybind11::enum_<RKNPU2CoreMask>(m, "RKNPU2CoreMask", pybind11::arithmetic(),
+                               "RKNPU2CoreMask.")
+      .value("RKNN_NPU_CORE_AUTO", RKNPU2CoreMask::RKNN_NPU_CORE_AUTO)
+      .value("RKNN_NPU_CORE_0", RKNPU2CoreMask::RKNN_NPU_CORE_0)
+      .value("RKNN_NPU_CORE_1", RKNPU2CoreMask::RKNN_NPU_CORE_1)
+      .value("RKNN_NPU_CORE_0_1", RKNPU2CoreMask::RKNN_NPU_CORE_0_1)
+      .value("RKNN_NPU_CORE_0_1_2", RKNPU2CoreMask::RKNN_NPU_CORE_0_1_2)
+      .value("RKNN_NPU_CORE_UNDEFINED", RKNPU2CoreMask::RKNN_NPU_CORE_UNDEFINED)
+      .value("RKNN_NPU_CORE_2", RKNPU2CoreMask::RKNN_NPU_CORE_2);
+  pybind11::enum_<RKNPU2CpuName>(m, "RKNPU2CpuName", pybind11::arithmetic(),
+                                  "RKNPU2CpuName.")
+      .value("RK356X", RKNPU2CpuName::RK356X)
+      .value("RK3588", RKNPU2CpuName::RK3588)
+      .value("UNDEFINED", RKNPU2CpuName::UNDEFINED);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
+      .value("NPU", Device::NPU)
       .value("GPU", Device::GPU);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),

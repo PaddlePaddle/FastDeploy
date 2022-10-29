@@ -20,9 +20,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <vector>
-#include <algorithm>
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
@@ -34,23 +34,23 @@ namespace fastdeploy {
 
 /*! Inference backend supported in FastDeploy */
 enum Backend {
-  UNKNOWN,  ///< Unknown inference backend
-  ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
-  TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
-  PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
-  POROS,  ///< Poros, support TorchScript format model, CPU / Nvidia GPU
-  OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,  ///< Paddle Lite, support Paddle format model, ARM CPU only
-  RKNPU2,  ///< RKNPU2, support RKNN format model, Rockchip NPU only
+  UNKNOWN, ///< Unknown inference backend
+  ORT,     ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
+  TRT,     ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
+  PDINFER, ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
+  POROS,   ///< Poros, support TorchScript format model, CPU / Nvidia GPU
+  OPENVINO, ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
+  LITE,     ///< Paddle Lite, support Paddle format model, ARM CPU only
+  RKNPU2,   ///< RKNPU2, support RKNN format model, Rockchip NPU only
 };
 
 /*! Deep learning model format */
 enum ModelFormat {
-  AUTOREC,  ///< Auto recognize the model format by model file name
-  PADDLE,  ///< Model with paddlepaddle format
-  ONNX,  ///< Model with ONNX format
-  RKNN,  ///< Model with RKNN format
-  TORCHSCRIPT,  ///< Model with TorchScript format
+  AUTOREC,     ///< Auto recognize the model format by model file name
+  PADDLE,      ///< Model with paddlepaddle format
+  ONNX,        ///< Model with ONNX format
+  RKNN,        ///< Model with RKNN format
+  TORCHSCRIPT, ///< Model with TorchScript format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -60,35 +60,34 @@ FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
 
 /*! Paddle Lite power mode for mobile device. */
 enum LitePowerMode {
-  LITE_POWER_HIGH = 0,  ///< Use Lite Backend with high power mode
-  LITE_POWER_LOW = 1,  ///< Use Lite Backend with low power mode
-  LITE_POWER_FULL = 2,  ///< Use Lite Backend with full power mode
-  LITE_POWER_NO_BIND = 3,  ///< Use Lite Backend with no bind power mode
-  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
-  LITE_POWER_RAND_LOW = 5  ///< Use Lite Backend with rand low power mode
+  LITE_POWER_HIGH = 0,      ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,       ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,      ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,   ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4, ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5   ///< Use Lite Backend with rand low power mode
 };
 
 /*! RKNPU2 core mask for mobile device. */
 typedef enum _rknpu2_core_mask {
-    RKNN_NPU_CORE_AUTO = 0,  /* default, run on NPU core randomly. */
-    RKNN_NPU_CORE_0 = 1,  /* run on NPU core 0. */
-    RKNN_NPU_CORE_1 = 2,  /* run on NPU core 1. */
-    RKNN_NPU_CORE_2 = 4,  /* run on NPU core 2. */
-    /* run on NPU core 1 and core 2. */
-    RKNN_NPU_CORE_0_1 = RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1,
-    /* run on NPU core 1 and core 2 and core 3. */
-    RKNN_NPU_CORE_0_1_2 = RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2,
-    RKNN_NPU_CORE_UNDEFINED,
+  RKNN_NPU_CORE_AUTO = 0, ///< default, run on NPU core randomly.
+  RKNN_NPU_CORE_0 = 1,    ///< run on NPU core 0.
+  RKNN_NPU_CORE_1 = 2,    ///< run on NPU core 1.
+  RKNN_NPU_CORE_2 = 4,    ///< run on NPU core 2.
+  RKNN_NPU_CORE_0_1 =
+      RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1, ///< run on NPU core 1 and core 2.
+  RKNN_NPU_CORE_0_1_2 =
+      RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2, ///< run on NPU core 1 and core 2.
+  RKNN_NPU_CORE_UNDEFINED,
 } rknn_core_mask;
 typedef rknn_core_mask RKNPU2CoreMask;
 
 /*! RKNPU2 device name for mobile device. */
 typedef enum _rknpu2_cpu_name {
-    RK356X = 0,  /* run on RK356X. */
-    RK3588 = 1,  /* default,run on RK3588. */
-    UNDEFINED,
+  RK356X = 0, ///< run on RK3568 or RK3566.
+  RK3588 = 1, ///< default,run on RK3588.
+  UNDEFINED,
 } RKNPU2CpuName;
-
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
@@ -110,7 +109,7 @@ ModelFormat GuessModelFormat(const std::string& model_file);
 /*! @brief Option object used when create a new Runtime object
  */
 struct FASTDEPLOY_DECL RuntimeOption {
-   /** \brief Set path of model file and parameter file
+  /** \brief Set path of model file and parameter file
    *
    * \param[in] model_path Path of model file, e.g ResNet50/model.pdmodel for Paddle format model / ResNet50/model.onnx for ONNX format model
    * \param[in] params_path Path of parameter file, this only used when the model format is Paddle, e.g Resnet50/model.pdiparams
@@ -313,10 +312,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   RKNPU2CpuName rknpu2_cpu_name_ = RKNPU2CpuName::RK3588;
   RKNPU2CoreMask rknpu2_core_mask_ = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
 
-
-  std::string model_file = "";   // Path of model file
-  std::string params_file = "";  // Path of parameters file, can be empty
-  ModelFormat model_format = ModelFormat::AUTOREC;  // format of input model
+  std::string model_file = "";  // Path of model file
+  std::string params_file = ""; // Path of parameters file, can be empty
+  ModelFormat model_format = ModelFormat::AUTOREC; // format of input model
 
   // inside parameters, only for inside usage
   // remove multiclass_nms in Paddle2ONNX
@@ -380,4 +378,4 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateRKNPU2Backend();
   std::unique_ptr<BaseBackend> backend_;
 };
-}  // namespace fastdeploy
+} // namespace fastdeploy

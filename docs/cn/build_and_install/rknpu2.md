@@ -1,7 +1,7 @@
 # RK2代NPU部署库编译
 
 ## 写在前面
-FastDeploy已经初步支持RKNPU2的部署，目前暂时仅支持c++部署。使用的过程中，如果出现Bug请提Issues反馈。
+FastDeploy已经初步支持RKNPU2的部署。使用的过程中，如果出现Bug请提Issues反馈。
 
 ## 简介
 FastDeploy当前在RK平台上支持后端引擎如下:
@@ -75,6 +75,25 @@ cmake ..  -DENABLE_ORT_BACKEND=ON \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
 make -j8
 make install
+```
+
+### 编译Python SDK
+
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy
+cd python
+
+export ENABLE_ORT_BACKEND=ON
+export ENABLE_RKNPU2_BACKEND=ON
+export ENABLE_VISION=ON
+export TARGET_SOC=RK3588
+python3 setup.py build
+python3 setup.py bdist_wheel
+
+cd dist
+
+pip3 install fastdeploy_python-0.0.0-cp39-cp39-linux_aarch64.whl
 ```
 
 ## 部署模型

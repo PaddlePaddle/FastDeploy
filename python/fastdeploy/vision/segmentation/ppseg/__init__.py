@@ -35,7 +35,7 @@ class PaddleSegModel(FastDeployModel):
         """
         super(PaddleSegModel, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PaddleSeg only support model format of ModelFormat.Paddle now."
+        # assert model_format == ModelFormat.PADDLE, "PaddleSeg only support model format of ModelFormat.Paddle now."
         self._model = C.vision.segmentation.PaddleSegModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -48,6 +48,10 @@ class PaddleSegModel(FastDeployModel):
         :return: SegmentationResult
         """
         return self._model.predict(input_image)
+
+    def disable_normalize_and_permute(self):
+        print("disable_normalize_and_permute")
+        return self._model.disable_normalize_and_permute()
 
     @property
     def apply_softmax(self):
