@@ -33,8 +33,8 @@ InsightFaceRecognitionModel::InsightFaceRecognitionModel(
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT};
     valid_npu_backends = {Backend::RKNPU2};
-  } else{
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+  } else {
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
   runtime_option = custom_option;

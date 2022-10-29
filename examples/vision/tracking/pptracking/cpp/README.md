@@ -11,17 +11,16 @@
 
 ```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
-cd fastdeploy-linux-x64-gpu-0.3.0/examples/vision/tracking/pptracking/cpp/
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
+cd fastdeploy-linux-x64-gpu-0.4.0/examples/vision/tracking/pptracking/cpp/
 mkdir build && cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.3.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.4.0
 make -j
 
 # 下载PP-Tracking模型文件和测试视频
 wget https://bj.bcebos.com/paddlehub/fastdeploy/fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz
 tar -xvf fairmot_hrnetv2_w18_dlafpn_30e_576x320.tgz
-wget https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4
 wget https://bj.bcebos.com/paddlehub/fastdeploy/person.mp4
 
 

@@ -82,14 +82,16 @@ class FASTDEPLOY_DECL SCRFD : public FastDeployModel {
   */
   int landmarks_per_face;
   /*! @brief
-  Argument for image postprocessing step, the outputs of onnx file with key points features or not
+  Argument for image postprocessing step, the outputs of onnx file with key points features or not, default true
   */
   bool use_kps;
   /*! @brief
-  Argument for image postprocessing step, the upperbond number of boxes processed by nms
+  Argument for image postprocessing step, the upperbond number of boxes processed by nms, default 30000
   */
   int max_nms;
-  /// Argument for image postprocessing step, anchor number of each stride
+  /*! @brief
+  Argument for image postprocessing step, anchor number of each stride, default 2
+  */
   unsigned int num_anchors;
 
  private:
