@@ -329,7 +329,9 @@ fd.text.uie.UIEModel(model_file,
                      position_prob=0.5,
                      max_length=128,
                      schema=[],
-                     runtime_option=None,model_format=ModelFormat.PADDLE)
+                     runtime_option=None,
+                     model_format=ModelFormat.PADDLE,
+                     schema_language=SchemaLanguage.ZH)
 ```
 
 UIEModel模型加载和初始化，其中`model_file`, `params_file`为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)，`vocab_file`为词表文件，UIE模型的词表可在[UIE配置文件](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py)中下载相应的UIE模型的vocab_file。
@@ -344,6 +346,7 @@ UIEModel模型加载和初始化，其中`model_file`, `params_file`为训练模
 > * **schema**(list|dict): 抽取任务的目标信息。
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **schema_language**(SchemaLanguage): Schema语言。默认为ZH（中文），目前支持的语言种类包括：ZH（中文），EN（英文）。
 
 ### set_schema函数
 
