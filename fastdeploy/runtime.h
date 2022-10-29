@@ -80,14 +80,14 @@ typedef enum _rknpu2_core_mask {
     RKNN_NPU_CORE_0_1_2 = RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2,
     RKNN_NPU_CORE_UNDEFINED,
 } rknn_core_mask;
-typedef rknn_core_mask rknpu2_core_mask;
+typedef rknn_core_mask RKNPU2CoreMask;
 
 /*! RKNPU2 device name for mobile device. */
 typedef enum _rknpu2_cpu_name {
     RK356X = 0,  /* run on RK356X. */
     RK3588 = 1,  /* default,run on RK3588. */
     UNDEFINED,
-} rknpu2_cpu_name;
+} RKNPU2CpuName;
 
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
@@ -126,8 +126,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  void UseRKNPU2(rknpu2_cpu_name rknpu2_name = rknpu2_cpu_name::RK3588,
-    rknpu2_core_mask rknpu2_core = rknpu2_core_mask::RKNN_NPU_CORE_0);
+  void UseRKNPU2(RKNPU2CpuName rknpu2_name = RKNPU2CpuName::RK3588,
+                 RKNPU2CoreMask rknpu2_core = RKNPU2CoreMask::RKNN_NPU_CORE_0);
 
   /*
    * @brief Set number of cpu threads while inference on CPU, by default it will decided by the different backends
@@ -306,8 +306,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string poros_file = "";
 
   // ======Only for RKNPU2 Backend=======
-  rknpu2_cpu_name rknpu2_cpu_name_ = rknpu2_cpu_name::RK3588;
-  rknpu2_core_mask rknpu2_core_mask_ = rknpu2_core_mask::RKNN_NPU_CORE_AUTO;
+  RKNPU2CpuName rknpu2_cpu_name_ = RKNPU2CpuName::RK3588;
+  RKNPU2CoreMask rknpu2_core_mask_ = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
 
 
   std::string model_file = "";   // Path of model file

@@ -1,3 +1,16 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
 
 namespace fastdeploy {
@@ -73,7 +86,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
   this->BuildOption(option);
 
   // SetCoreMask if RK3588
-  if (this->option_.cpu_name == rknpu2_cpu_name::RK3588) {
+  if (this->option_.cpu_name == RKNPU2CpuName::RK3588) {
     if (!this->SetCoreMask(option_.core_mask)) {
       FDERROR << "set core mask failed" << std::endl;
       return false;
@@ -96,7 +109,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
  *  @return     bool
  *  @note       Only support RK3588
  ***************************************************************/
-bool RKNPU2Backend::SetCoreMask(rknpu2_core_mask& core_mask) const {
+bool RKNPU2Backend::SetCoreMask(RKNPU2CoreMask& core_mask) const {
   int ret = rknn_set_core_mask(ctx, core_mask);
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;

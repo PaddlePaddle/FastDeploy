@@ -1,3 +1,16 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #pragma once
 
 #include "fastdeploy/backends/backend.h"
@@ -12,21 +25,23 @@ typedef enum _rknpu2_cpu_name {
   RK356X = 0, /* run on RK356X. */
   RK3588 = 1, /* default,run on RK3588. */
   UNDEFINED,
-} rknpu2_cpu_name;
+} RKNPU2CpuName;
 
-typedef rknn_core_mask rknpu2_core_mask;
+typedef rknn_core_mask RKNPU2CoreMask;
 
 namespace fastdeploy {
 struct RKNPU2BackendOption {
-  rknpu2_cpu_name cpu_name = rknpu2_cpu_name::RK3588;
-  // rknn_context context:设置运行核的 rknn_context 对象。
-  // RKNN_NPU_CORE_AUTO:表示自动调度模型，自动运行在当前空闲的 NPU 核 上;
-  // RKNN_NPU_CORE_0:表示运行在 NPU0 核上
-  // RKNN_NPU_CORE_1:表示运行在 NPU1 核上
-  // RKNN_NPU_CORE_2:表示运行在 NPU2 核上
-  // RKNN_NPU_CORE_0_1:表示同时工作在 NPU0、NPU1 核上
-  // RKNN_NPU_CORE_0_1_2:表示同时工作在 NPU0、NPU1、NPU2 核上
-  rknpu2_core_mask core_mask = rknpu2_core_mask::RKNN_NPU_CORE_AUTO;
+  RKNPU2CpuName cpu_name = RKNPU2CpuName::RK3588;
+
+  //The specification of NPU core setting.It has the following choices :
+  // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
+  // select the idle core inside the NPU.
+  // RKNN_NPU_CORE_0 : Running on the NPU0 core
+  // RKNN_NPU_CORE_1: Runing on the NPU1 core
+  // RKNN_NPU_CORE_2: Runing on the NPU2 core
+  // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
+  // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
+  RKNPU2CoreMask core_mask = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
 };
 
 class RKNPU2Backend : public BaseBackend {
@@ -40,7 +55,7 @@ class RKNPU2Backend : public BaseBackend {
 
   bool GetSDKAndDeviceVersion();
 
-  bool SetCoreMask(rknpu2_core_mask& core_mask) const;
+  bool SetCoreMask(RKNPU2CoreMask& core_mask) const;
 
   bool GetModelInputOutputInfos();
 
@@ -66,14 +81,12 @@ class RKNPU2Backend : public BaseBackend {
   bool Infer(std::vector<FDTensor>& inputs,
              std::vector<FDTensor>* outputs) override;
 
-  // change dype
-
  private:
-  // ctx句柄，每读取一个新的模型，需要重新创建句柄
+  // The object of rknn context.
   rknn_context ctx{};
-  // sdk_ver用于保存sdk和version版本号
+  // The structure rknn_sdk_version is used to indicate the version information of the RKNN SDK.
   rknn_sdk_version sdk_ver{};
-  // io_num用于保存输入输出数目
+  // The structure rknn_input_output_num represents the number of input and output Tensor
   rknn_input_output_num io_num{};
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
