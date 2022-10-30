@@ -208,10 +208,10 @@ class RuntimeOption:
         """
         return self._option.use_cpu()
 
-    def use_rknpu2(self,rknpu2_name=RKNPU2CpuName.RK3588,rknpu2_core=RKNPU2CoreMask.RKNN_NPU_CORE_0):
-        """Inference with CPU
-        """
-        return self._option.use_rknpu2(rknpu2_name,rknpu2_core)
+    # def use_rknpu2(self,rknpu2_name=RKNPU2CpuName.RK3588,rknpu2_core=RKNPU2CoreMask.RKNN_NPU_CORE_0):
+    #     """Inference with CPU
+    #     """
+    #     return self._option.use_rknpu2(rknpu2_name,rknpu2_core)
 
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU

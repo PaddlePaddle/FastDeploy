@@ -16,7 +16,7 @@ import logging
 import os
 import sys
 
-from .c_lib_wrap import (ModelFormat, RKNPU2CoreMask, RKNPU2CpuName, Backend,
+from .c_lib_wrap import (ModelFormat, Backend,
                          FDDataType, TensorInfo, Device,
                          FDTensor, is_built_with_gpu, is_built_with_ort,
                          ModelFormat, is_built_with_paddle, is_built_with_trt,
