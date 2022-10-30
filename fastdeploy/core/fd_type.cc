@@ -56,6 +56,9 @@ std::string Str(const Device& d) {
     case Device::NPU:
       out = "Device::NPU";
       break;
+    case Device::IPU:
+      out = "Device::IPU";
+      break;
     default:
       out = "Device::UNKOWN";
   }

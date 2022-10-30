@@ -50,6 +50,8 @@ void BindRuntime(pybind11::module& m) {
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
       .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
+      .def("use_ipu", &RuntimeOption::UseIpu)
+      .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
@@ -75,7 +77,20 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
       .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
       .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
-      .def_readwrite("poros_file", &RuntimeOption::poros_file);
+      .def_readwrite("poros_file", &RuntimeOption::poros_file)
+      .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
+      .def_readwrite("ipu_micro_batch_size",
+                     &RuntimeOption::ipu_micro_batch_size)
+      .def_readwrite("ipu_enable_pipelining",
+                     &RuntimeOption::ipu_enable_pipelining)
+      .def_readwrite("ipu_batches_per_step",
+                     &RuntimeOption::ipu_batches_per_step)
+      .def_readwrite("ipu_enable_fp16", &RuntimeOption::ipu_enable_fp16)
+      .def_readwrite("ipu_replica_num", &RuntimeOption::ipu_replica_num)
+      .def_readwrite("ipu_available_memory_proportion",
+                     &RuntimeOption::ipu_available_memory_proportion)
+      .def_readwrite("ipu_enable_half_partial",
+                     &RuntimeOption::ipu_enable_half_partial);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -168,25 +183,12 @@ void BindRuntime(pybind11::module& m) {
       .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
       .value("RKNN", ModelFormat::RKNN)
       .value("ONNX", ModelFormat::ONNX);
-  pybind11::enum_<RKNPU2CoreMask>(m, "RKNPU2CoreMask", pybind11::arithmetic(),
-                               "RKNPU2CoreMask.")
-      .value("RKNN_NPU_CORE_AUTO", RKNPU2CoreMask::RKNN_NPU_CORE_AUTO)
-      .value("RKNN_NPU_CORE_0", RKNPU2CoreMask::RKNN_NPU_CORE_0)
-      .value("RKNN_NPU_CORE_1", RKNPU2CoreMask::RKNN_NPU_CORE_1)
-      .value("RKNN_NPU_CORE_0_1", RKNPU2CoreMask::RKNN_NPU_CORE_0_1)
-      .value("RKNN_NPU_CORE_0_1_2", RKNPU2CoreMask::RKNN_NPU_CORE_0_1_2)
-      .value("RKNN_NPU_CORE_UNDEFINED", RKNPU2CoreMask::RKNN_NPU_CORE_UNDEFINED)
-      .value("RKNN_NPU_CORE_2", RKNPU2CoreMask::RKNN_NPU_CORE_2);
-  pybind11::enum_<RKNPU2CpuName>(m, "RKNPU2CpuName", pybind11::arithmetic(),
-                                  "RKNPU2CpuName.")
-      .value("RK356X", RKNPU2CpuName::RK356X)
-      .value("RK3588", RKNPU2CpuName::RK3588)
-      .value("UNDEFINED", RKNPU2CpuName::UNDEFINED);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
+      .value("GPU", Device::GPU)
+      .value("IPU", Device::IPU);
       .value("NPU", Device::NPU)
-      .value("GPU", Device::GPU);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),
                               "Data type of FastDeploy.")
