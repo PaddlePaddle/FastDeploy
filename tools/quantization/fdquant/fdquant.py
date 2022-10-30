@@ -53,16 +53,33 @@ def argsparser():
     return parser
 
 
-def reader_wrapper(reader, input_list=None):
-    def gen():
-        for data_list in reader:
+def reader_wrapper(reader, input_list):
+
+    if isinstance(input_list, list) and len(input_list) == 1:
+        input_name = input_list[0]
+
+        def gen():
             in_dict = {}
-            for data in data_list:
-                for i, input_name in enumerate(input_list):
-                    in_dict[input_name] = data[i]
+            for i, data in enumerate(reader()):
+                imgs = np.array(data[0])
+                in_dict[input_name] = imgs
                 yield in_dict
 
-    return gen
+        return gen
+
+    if isinstance(input_list, list) and len(input_list) > 1:
+
+        def gen():
+            for idx, data in enumerate(reader()):
+                in_dict = {}
+                for i in range(len(input_list)):
+                    intput_name = input_list[i]
+                    feed_data = np.array(data[0][i])
+                    in_dict[intput_name] = feed_data
+
+                yield in_dict
+
+        return gen
 
 
 def main():
