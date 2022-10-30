@@ -8,7 +8,7 @@ set(FASTDEPLOY_INSTALL_DIR "thirdpartys/fastdeploy-0.0.3")
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeployConfig.cmake)
 include_directories(${FastDeploy_INCLUDE_DIRS})
-add_executable(rknpu_test main.cc infer_cpu_npu.cc infer_cpu_npu.h)
+add_executable(rknpu_test infer.cc)
 target_link_libraries(rknpu_test
         ${FastDeploy_LIBS}
         )

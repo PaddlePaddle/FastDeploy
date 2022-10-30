@@ -57,7 +57,6 @@ class RKNPU2Backend : public BaseBackend {
   void BuildOption(const RKNPU2BackendOption& option);
 
   bool InitFromRKNN(const std::string& model_file,
-                    const std::string& params_file,
                     const RKNPU2BackendOption& option = RKNPU2BackendOption());
 
   int NumInputs() const override {

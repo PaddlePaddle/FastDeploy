@@ -68,7 +68,6 @@ void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
  *  @note       None
  ***************************************************************/
 bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
-                                 const std::string& params_file,
                                  const RKNPU2BackendOption& option) {
   // LoadModel
   if (!this->LoadModel((char*)model_file.data())) {

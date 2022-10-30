@@ -712,8 +712,7 @@ void Runtime::CreateRKNPU2Backend() {
            "RKNPU2Backend only support model format of ModelFormat::RKNN");
   backend_ = utils::make_unique<RKNPU2Backend>();
   auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromRKNN(option.model_file, option.params_file,
-                                        lite_option),
+  FDASSERT(casted_backend->InitFromRKNN(option.model_file, lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false, "RKNPU2Backend is not available, please compiled with "

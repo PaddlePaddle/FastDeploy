@@ -55,5 +55,6 @@ RKNPU部署模型前需要将模型转换成RKNN模型，其过程一般可以�
 | Segmentation     | PP-HumanSegV2Lite | [human](https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz)                                | -   | True/True     | 496/256         |
 
 ## 详细部署文档
-
+- [RKNN总体部署教程](../../../../../docs/cn/faq/rknpu2.md)
 - [C++部署](cpp)
+- [Python部署](python)
