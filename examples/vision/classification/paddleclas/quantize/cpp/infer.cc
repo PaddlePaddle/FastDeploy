@@ -21,8 +21,8 @@ const char sep = '/';
 
 void InitAndInfer(const std::string& model_dir, const std::string& image_file,
                   const fastdeploy::RuntimeOption& option) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
-  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
 
   auto model = fastdeploy::vision::classification::PaddleClasModel(
