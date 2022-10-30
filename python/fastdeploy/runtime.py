@@ -345,6 +345,23 @@ class RuntimeOption:
     def disable_paddle_trt_collect_shape(self):
         return self._option.disable_paddle_trt_collect_shape()
 
+    def use_ipu(self,
+                device_num=1,
+                micro_batch_size=1,
+                enable_pipelining=False,
+                batches_per_step=1):
+        return self._option.use_ipu(device_num, micro_batch_size,
+                                    enable_pipelining, batches_per_step)
+
+    def set_ipu_config(self,
+                       enable_fp16=False,
+                       replica_num=1,
+                       available_memory_proportion=1.0,
+                       enable_half_partial=False):
+        return self._option.set_ipu_config(enable_fp16, replica_num,
+                                           available_memory_proportion,
+                                           enable_half_partial)
+
     def __repr__(self):
         attrs = dir(self._option)
         message = "RuntimeOption(\n"

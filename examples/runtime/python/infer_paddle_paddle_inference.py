@@ -33,6 +33,10 @@ option.set_cpu_thread_num(12)
 # 如需使用GPU，使用如下注释代码
 # option.use_gpu(0)
 
+# **** IPU 配置 ***
+# 如需使用IPU，使用如下注释代码
+# option.use_ipu()
+
 # 初始化构造runtime
 runtime = fd.Runtime(option)
 
