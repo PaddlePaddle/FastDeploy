@@ -86,7 +86,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
   this->BuildOption(option);
 
   // SetCoreMask if RK3588
-  if (this->option_.cpu_name == RKNPU2CpuName::RK3588) {
+  if (this->option_.cpu_name == RKNPU::CpuName::RK3588) {
     if (!this->SetCoreMask(option_.core_mask)) {
       FDERROR << "set core mask failed" << std::endl;
       return false;
@@ -109,8 +109,8 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
  *  @return     bool
  *  @note       Only support RK3588
  ***************************************************************/
-bool RKNPU2Backend::SetCoreMask(RKNPU2CoreMask& core_mask) const {
-  int ret = rknn_set_core_mask(ctx, core_mask);
+bool RKNPU2Backend::SetCoreMask(RKNPU::CoreMask& core_mask) const {
+  int ret = rknn_set_core_mask(ctx, static_cast<rknn_core_mask>(core_mask));
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn_set_core_mask fail! ret=" << ret << std::endl;
     return false;

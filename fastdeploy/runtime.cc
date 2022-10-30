@@ -242,8 +242,8 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
-void RuntimeOption::UseRKNPU2(RKNPU2CpuName rknpu2_name,
-                              RKNPU2CoreMask rknpu2_core) {
+void RuntimeOption::UseRKNPU2(fastdeploy::RKNPU::CpuName rknpu2_name,
+                              fastdeploy::RKNPU::CoreMask rknpu2_core) {
   rknpu2_cpu_name_ = rknpu2_name;
   rknpu2_core_mask_ = rknpu2_core;
   device = Device::NPU;

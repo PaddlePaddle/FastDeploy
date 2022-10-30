@@ -16,22 +16,16 @@
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/core/fd_tensor.h"
 #include "rknn_api.h" // NOLINT
+#include "rknpu2_config.h"
 #include <cstring>    // for memset
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-typedef enum _rknpu2_cpu_name {
-  RK356X = 0, /* run on RK356X. */
-  RK3588 = 1, /* default,run on RK3588. */
-  UNDEFINED,
-} RKNPU2CpuName;
-
-typedef rknn_core_mask RKNPU2CoreMask;
 
 namespace fastdeploy {
 struct RKNPU2BackendOption {
-  RKNPU2CpuName cpu_name = RKNPU2CpuName::RK3588;
+  RKNPU::CpuName cpu_name = RKNPU::CpuName::RK3588;
 
   //The specification of NPU core setting.It has the following choices :
   // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
@@ -41,7 +35,7 @@ struct RKNPU2BackendOption {
   // RKNN_NPU_CORE_2: Runing on the NPU2 core
   // RKNN_NPU_CORE_0_1: Running on both NPU0 and NPU1 core simultaneously.
   // RKNN_NPU_CORE_0_1_2: Running on both NPU0, NPU1 and NPU2 simultaneously.
-  RKNPU2CoreMask core_mask = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
+  RKNPU::CoreMask core_mask = RKNPU::CoreMask::RKNN_NPU_CORE_AUTO;
 };
 
 class RKNPU2Backend : public BaseBackend {
@@ -55,7 +49,7 @@ class RKNPU2Backend : public BaseBackend {
 
   bool GetSDKAndDeviceVersion();
 
-  bool SetCoreMask(RKNPU2CoreMask& core_mask) const;
+  bool SetCoreMask(RKNPU::CoreMask& core_mask) const;
 
   bool GetModelInputOutputInfos();
 

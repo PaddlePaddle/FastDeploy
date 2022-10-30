@@ -26,6 +26,7 @@
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
+#include "backends/rknpu/rknpu2/rknpu2_config.h"
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
 *
@@ -68,27 +69,6 @@ enum LitePowerMode {
   LITE_POWER_RAND_LOW = 5   ///< Use Lite Backend with rand low power mode
 };
 
-/*! RKNPU2 core mask for mobile device. */
-typedef enum _rknpu2_core_mask {
-  RKNN_NPU_CORE_AUTO = 0, ///< default, run on NPU core randomly.
-  RKNN_NPU_CORE_0 = 1,    ///< run on NPU core 0.
-  RKNN_NPU_CORE_1 = 2,    ///< run on NPU core 1.
-  RKNN_NPU_CORE_2 = 4,    ///< run on NPU core 2.
-  RKNN_NPU_CORE_0_1 =
-      RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1, ///< run on NPU core 1 and core 2.
-  RKNN_NPU_CORE_0_1_2 =
-      RKNN_NPU_CORE_0_1 | RKNN_NPU_CORE_2, ///< run on NPU core 1 and core 2.
-  RKNN_NPU_CORE_UNDEFINED,
-} rknn_core_mask;
-typedef rknn_core_mask RKNPU2CoreMask;
-
-/*! RKNPU2 device name for mobile device. */
-typedef enum _rknpu2_cpu_name {
-  RK356X = 0, ///< run on RK3568 or RK3566.
-  RK3588 = 1, ///< default,run on RK3588.
-  UNDEFINED,
-} RKNPU2CpuName;
-
 FASTDEPLOY_DECL std::string Str(const Backend& b);
 FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
 
@@ -125,8 +105,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  void UseRKNPU2(RKNPU2CpuName rknpu2_name = RKNPU2CpuName::RK3588,
-                 RKNPU2CoreMask rknpu2_core = RKNPU2CoreMask::RKNN_NPU_CORE_0);
+  void UseRKNPU2(fastdeploy::RKNPU::CpuName rknpu2_name = fastdeploy::RKNPU::CpuName::RK3588,
+                 fastdeploy::RKNPU::CoreMask rknpu2_core = fastdeploy::RKNPU::CoreMask::RKNN_NPU_CORE_0);
 
   void SetExternalStream(void* external_stream);
 
@@ -309,8 +289,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string poros_file = "";
 
   // ======Only for RKNPU2 Backend=======
-  RKNPU2CpuName rknpu2_cpu_name_ = RKNPU2CpuName::RK3588;
-  RKNPU2CoreMask rknpu2_core_mask_ = RKNPU2CoreMask::RKNN_NPU_CORE_AUTO;
+  fastdeploy::RKNPU::CpuName rknpu2_cpu_name_ = fastdeploy::RKNPU::CpuName::RK3588;
+  fastdeploy::RKNPU::CoreMask rknpu2_core_mask_ = fastdeploy::RKNPU::CoreMask::RKNN_NPU_CORE_AUTO;
 
   std::string model_file = "";  // Path of model file
   std::string params_file = ""; // Path of parameters file, can be empty

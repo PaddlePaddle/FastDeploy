@@ -32,11 +32,6 @@ mkdir model
 mkdir thirdpartys
 ```
 
-
-```bash
-
-```
-
 ## 转换模型
 
 RKNPU部署模型前需要将模型转换成RKNN模型，其过程一般可以简化为如下步骤:
@@ -105,7 +100,7 @@ cd ./build/install
 
 ## 运行结果展示
 运行后将在install文件夹下生成human_pp_humansegv2_lite_npu_result.jpg文件，如下图:
-![](./human_pp_humansegv2_lite_cpu_result.jpg)
+![](https://user-images.githubusercontent.com/58363586/198875853-72821ad1-d4f7-41e3-b616-bef43027de3c.jpg)
 
 ## PaddleSeg C++接口
 
