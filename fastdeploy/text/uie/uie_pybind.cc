@@ -28,26 +28,34 @@ void BindUIE(pybind11::module& m) {
       .def_readwrite("relations", &text::SchemaNode::relations_)
       .def_readwrite("children", &text::SchemaNode::children_);
 
-  py::class_<text::UIEModel>(m, "UIEModel")
+  py::enum_<text::SchemaLanguage>(m, "SchemaLanguage", py::arithmetic(),
+                                  "The language of schema.")
+      .value("ZH", text::SchemaLanguage::ZH)
+      .value("EN", text::SchemaLanguage::EN);
+
+  py::class_<text::UIEModel, FastDeployModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    std::vector<std::string>, RuntimeOption, ModelFormat>(),
+                    std::vector<std::string>, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
+           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
+           py::arg("schema_language") = text::SchemaLanguage::ZH)
       .def(
           py::init<std::string, std::string, std::string, float, size_t,
-                   std::vector<text::SchemaNode>, RuntimeOption, ModelFormat>(),
+                   std::vector<text::SchemaNode>, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
           py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
           py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
           py::arg("custom_option") = fastdeploy::RuntimeOption(),
-          py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
+          py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
+          py::arg("schema_language") = text::SchemaLanguage::ZH)
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    text::SchemaNode, RuntimeOption, ModelFormat>(),
+                    text::SchemaNode, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
-           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE)
+           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
+           py::arg("schema_language") = text::SchemaLanguage::ZH)
       .def("set_schema",
            static_cast<void (text::UIEModel::*)(
                const std::vector<std::string>&)>(&text::UIEModel::SetSchema),

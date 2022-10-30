@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import fastdeploy
-from fastdeploy.text import UIEModel
+from fastdeploy.text import UIEModel, SchemaLanguage
 import os
 from pprint import pprint
 
@@ -80,7 +80,8 @@ if __name__ == "__main__":
         position_prob=0.5,
         max_length=128,
         schema=schema,
-        runtime_option=runtime_option)
+        runtime_option=runtime_option,
+        schema_language=SchemaLanguage.ZH)
 
     print("1. Named Entity Recognition Task")
     print(f"The extraction schema: {schema}")
