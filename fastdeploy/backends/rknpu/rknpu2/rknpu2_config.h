@@ -14,7 +14,7 @@
 
 #ifndef RKNPU2_CONFIG_H
 #define RKNPU2_CONFIG_H
-#include "rknn_api.h" // NOLINT
+
 namespace fastdeploy {
 namespace RKNPU {
 typedef enum _rknpu2_cpu_name {
