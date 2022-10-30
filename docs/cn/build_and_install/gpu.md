@@ -14,7 +14,7 @@ FastDeploy当前在GPU环境支持Paddle Inference、ONNX Runtime和TensorRT，�
 
 ## C++ SDK编译安装
 
-### Linux 
+### Linux
 
 Linux上编译需满足
 - gcc/g++ >= 5.4(推荐8.2)
@@ -47,6 +47,8 @@ Windows编译需要满足条件
 - Visual Studio 2019
 - cuda >= 11.2
 - cudnn >= 8.2
+
+注意：安装CUDA时需要勾选`Visual Studio Integration`, 或者手动将`C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\extras\visual_studio_integration\MSBuildExtensions\`文件夹下的4个文件复制到`C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\VC\v160\BuildCustomizations\`文件夹。否则执行cmake命令时可能会遇到`No CUDA toolset found`报错。
 
 在Windows菜单中，找到`x64 Native Tools Command Prompt for VS 2019`打开，执行如下命令
 
@@ -116,14 +118,14 @@ python setup.py bdist_wheel
 ```bat
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export ENABLE_ORT_BACKEND=ON
-export ENABLE_PADDLE_BACKEND=ON
-export ENABLE_OPENVINO_BACKEND=ON
-export ENABLE_VISION=ON
-export ENABLE_TRT_BACKEND=ON
-export WITH_GPU=ON
-export TRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5"
-export CUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+set ENABLE_ORT_BACKEND=ON
+set ENABLE_PADDLE_BACKEND=ON
+set ENABLE_OPENVINO_BACKEND=ON
+set ENABLE_VISION=ON
+set ENABLE_TRT_BACKEND=ON
+set WITH_GPU=ON
+set TRT_DIRECTORY=D:\Paddle\TensorRT-8.4.1.5
+set CUDA_DIRECTORY=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
 
 python setup.py build
 python setup.py bdist_wheel

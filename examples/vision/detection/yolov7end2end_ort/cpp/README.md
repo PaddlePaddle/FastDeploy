@@ -12,9 +12,9 @@
 ```bash
 mkdir build
 cd build
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-0.3.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-gpu-0.3.0
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-0.4.0.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-gpu-0.4.0
 make -j
 # 如果预编译库还没有支持该模型，请从develop分支源码编译最新的SDK
 
