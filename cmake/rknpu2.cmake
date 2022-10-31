@@ -17,8 +17,8 @@ endif ()
 
 
 if (EXISTS ${RKNPU_RUNTIME_PATH})
-    set(RKNN_RT_LIB ${RKNPU_RUNTIME_PATH}/${TARGET_SOC}/lib/librknnrt.so)
-    include_directories(${RKNPU_RUNTIME_PATH}/${TARGET_SOC}/include)
+    set(RKNN_RT_LIB ${RKNPU_RUNTIME_PATH}/${RKNN2_TARGET_SOC}/lib/librknnrt.so)
+    include_directories(${RKNPU_RUNTIME_PATH}/${RKNN2_TARGET_SOC}/include)
 else ()
     message(FATAL_ERROR "[rknpu2.cmake] download_and_decompress rknpu2_runtime error")
 endif ()

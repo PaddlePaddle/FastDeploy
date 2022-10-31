@@ -67,11 +67,11 @@ mkdir build && cd build
 # 编译配置详情见README文件，这里只介绍关键的几个配置
 # -DENABLE_ORT_BACKEND:     是否开启ONNX模型，默认关闭
 # -DENABLE_RKNPU2_BACKEND:  是否开启RKNPU模型，默认关闭
-# -DTARGET_SOC:             编译SDK的板子型号，只能输入RK356X或者RK3588，注意区分大小写
+# -RKNN2_TARGET_SOC:             编译SDK的板子型号，只能输入RK356X或者RK3588，注意区分大小写
 cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
-	      -DTARGET_SOC=RK3588 \
+	      -DRKNN2_TARGET_SOC=RK3588 \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
 make -j8
 make install
@@ -87,7 +87,7 @@ cd python
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_RKNPU2_BACKEND=ON
 export ENABLE_VISION=ON
-export TARGET_SOC=RK3588
+export RKNN2_TARGET_SOC=RK3588
 python3 setup.py build
 python3 setup.py bdist_wheel
 
