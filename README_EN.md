@@ -54,9 +54,6 @@ English | [简体中文](README_CN.md)
   * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
   * [Supported Data Center and Cloud Model List](#fastdeploy-server-models)
 * **Mobile and Edge Device Deployment**
-  * [EasyEdge Edge-Side Deployment](#fastdeploy-edge-sdk-arm-linux)  
-  * [EasyEdge Deployment on Mobile Devices](#fastdeploy-edge-sdk-ios-android)  
-  * [EasyEdge Customised Model Deployment](#fastdeploy-edge-sdk-custom)  
   * [Paddle Lite NPU Deployment](#fastdeploy-edge-sdk-npu)
   * [Supported Mobile and Edge Model List](#fastdeploy-edge-sdk)
 * [Community](#fastdeploy-community)
@@ -234,29 +231,6 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 
 <div id="fastdeploy-edge-doc"></div>
 
-### EasyEdge Edge-Side Deployment
-
-<div id="fastdeploy-edge-sdk-arm-linux"></div>
-
-- ARM Linux System
-  - [C++ Inference Deployment（includes videostream）](./docs/arm_cpu/arm_linux_cpp_sdk_inference.md)
-  - [C++ Serving Deployment](./docs/arm_cpu/arm_linux_cpp_sdk_serving.md)
-  - [Python Inference Deployment](./docs/arm_cpu/arm_linux_python_sdk_inference.md)
-  - [Python Serving Deploymen](./docs/arm_cpu/arm_linux_python_sdk_serving.md)
-
-### EasyEdge Deployment on Mobile Devices
-
-<div id="fastdeploy-edge-sdk-ios-android"></div>
-
-- [iOS System Deployment](./docs/arm_cpu/ios_sdk.md)
-- [Android System Deployment](./docs/arm_cpu/android_sdk.md)  
-
-### EasyEdge Customized Deployment
-
-<div id="fastdeploy-edge-sdk-custom"></div>
-
-- [Replace Model With Another One](./docs/arm_cpu/replace_model_with_another_one.md)
-
 ### Paddle Lite NPU Deployment
 
 <div id="fastdeploy-edge-sdk-npu"></div>
@@ -315,7 +289,7 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
     - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/197434107-edebf88e-48d7-4448-9fce-4fd204b408df.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
 </div>
 
 

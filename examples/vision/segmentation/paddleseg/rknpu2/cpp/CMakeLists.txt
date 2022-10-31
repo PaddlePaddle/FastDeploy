@@ -18,7 +18,7 @@ set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build/install)
 install(TARGETS rknpu_test DESTINATION ./)
 
 install(DIRECTORY model DESTINATION ./)
-install(DIRECTORY image DESTINATION ./)
+install(DIRECTORY images DESTINATION ./)
 
 file(GLOB FASTDEPLOY_LIBS ${FASTDEPLOY_INSTALL_DIR}/lib/*)
 message("${FASTDEPLOY_LIBS}")

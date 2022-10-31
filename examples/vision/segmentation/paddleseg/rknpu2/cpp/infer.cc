@@ -57,7 +57,7 @@ void InferHumanPPHumansegv2Lite(const std::string& device) {
     return;
   }
   auto image_file =
-      "./image/test_portrait_pp_humansegv2_lite_256x144_pretrained.jpeg";
+      "./images/portrait_heng.jpg";
   auto im = cv::imread(image_file);
 
   if (device == "npu") {

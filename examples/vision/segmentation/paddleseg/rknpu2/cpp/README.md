@@ -27,7 +27,7 @@
 我们需要先生成目录结构
 ```bash
 mkdir build
-mkdir image
+mkdir images
 mkdir model
 mkdir thirdpartys
 ```
@@ -46,10 +46,14 @@ fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
 cd model
 wget https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
 tar xvf human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
+cp -r ./human_pp_humansegv2_lite_192x192_pretrained_3588 ./model
 ```
 
 ### 准备测试图片至image文件夹
-请下载测试图片至image文件夹
+```bash
+wget https://paddleseg.bj.bcebos.com/dygraph/pp_humanseg_v2/images.zip
+unzip -qo images.zip
+```
 
 ### 编译example
 

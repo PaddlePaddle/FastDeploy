@@ -10,17 +10,22 @@
 本目录下提供`infer.py`快速完成Unet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
-#下载部署示例代码
+# 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/segmentation/paddleseg/python
 
+# 下载模型
 wget https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
 tar xvf human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
+
+# 下载图片
+wget https://paddleseg.bj.bcebos.com/dygraph/pp_humanseg_v2/images.zip
+unzip images.zip
 
 # 推理
 python3 infer.py --model_file ./human_pp_humansegv2_lite_192x192_pretrained_3588/human_pp_humansegv2_lite_192x192_pretrained_3588.rknn \
                 --config_file ./human_pp_humansegv2_lite_192x192_pretrained_3588/deploy.yaml \
-                --image test_portrait_pp_humansegv2_lite_256x144_pretrained.jpeg
+                --image images/portrait_heng.jpg
 ```
 
 运行完成可视化结果如下图所示
