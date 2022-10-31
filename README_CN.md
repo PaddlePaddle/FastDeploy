@@ -52,9 +52,6 @@
     * [C++ SDK快速开始](#fastdeploy-quick-start-cpp)
     * [服务端模型支持列表](#fastdeploy-server-models)
 * **端侧部署**
-    * [EasyEdge边缘端部署](#fastdeploy-edge-sdk-arm-linux)  
-    * [EasyEdge移动端部署](#fastdeploy-edge-sdk-ios-android)  
-    * [EasyEdge自定义模型部署](#fastdeploy-edge-sdk-custom)  
     * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
     * [端侧模型支持列表](#fastdeploy-edge-sdk)
 * [社区交流](#fastdeploy-community)
@@ -226,29 +223,6 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-edge-doc"></div>
 
-### EasyEdge边缘端部署
-
-<div id="fastdeploy-edge-sdk-arm-linux"></div>
-
-- ARM Linux 系统
-  - [C++ Inference部署（含视频流）](./docs/arm_cpu/arm_linux_cpp_sdk_inference.md)
-  - [C++ 服务化部署](./docs/arm_cpu/arm_linux_cpp_sdk_serving.md)
-  - [Python Inference部署](./docs/arm_cpu/arm_linux_python_sdk_inference.md)
-  - [Python 服务化部署](./docs/arm_cpu/arm_linux_python_sdk_serving.md)
-
-### EasyEdge移动端部署
-
-<div id="fastdeploy-edge-sdk-ios-android"></div>
-
-- [iOS 系统部署](./docs/arm_cpu/ios_sdk.md)
-- [Android 系统部署](./docs/arm_cpu/android_sdk.md)  
-
-### EasyEdge自定义模型部署
-
-<div id="fastdeploy-edge-sdk-custom"></div>
-
-- [快速实现个性化模型替换](./docs/arm_cpu/replace_model_with_another_one.md)
-
 ### Paddle Lite NPU部署
 
 <div id="fastdeploy-edge-sdk-npu"></div>
@@ -304,7 +278,7 @@ int main(int argc, char* argv[]) {
 - **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/197434107-edebf88e-48d7-4448-9fce-4fd204b408df.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge
