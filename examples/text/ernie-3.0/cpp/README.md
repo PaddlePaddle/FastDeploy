@@ -7,8 +7,52 @@
 
 本目录下提供`seq_cls_infer.cc`快速完成在CPU/GPU的文本分类任务的示例。
 
-## 快速开始
-以Linux上ERNIE-3.0-me模型推理为例，在本目录执行如下命令即可完成编译测试。
+
+## 文本分类任务
+
+### 快速开始
+
+以下示例展示如何基于FastDeploy库完成ERNIE-3.0-medium模型在CLUE AFQMC数据集上进行的文本分类任务的C++预测部署。
 
 ```
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
+
+cd fastdeploy-linux-x64-gpu-0.4.0/examples/text/ernie-3.0/cpp
+mkdir build
+cd build
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
+make -j
+
+# 下载AFQMC数据集的微调后的ERNIE-3.0模型
+wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
+tar xvfz ernie-3.0-medium-zh-afqmc.tgz
+
+# CPU 推理
+./seq_cls_infer_demo --device cpu --model_dir ernie-3.0-medium-zh-afqmc
+
+# GPU 推理
+./seq_cls_infer_demo --device gpu --model_dir ernie-3.0-medium-zh-afqmc
+
+```
+
+运行完成后返回的结果如下：
+```bash
+
+```
+
+
+
+### 参数说明
+
+`seq_cls_infer_demo` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
+
+| 参数 |参数说明 |
+|----------|--------------|
+|--model_dir | 指定部署模型的目录， |
+|--batch_size |最大可测的 batch size，默认为 1|
+|--max_length |最大序列长度，默认为 128|
+|--device | 运行的设备，可选范围: ['cpu', 'gpu']，默认为'cpu' |
+|--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'onnx_runtime' |
+|--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |

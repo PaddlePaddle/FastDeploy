@@ -22,5 +22,5 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
-target_link_libraries(infer_demo ${FASTDEPLOY_LIBS} ${THIRD_LIBS})
+add_executable(seq_cls_infer_demo ${PROJECT_SOURCE_DIR}/seq_cls_infer.cc)
+target_link_libraries(seq_cls_infer_demo ${FASTDEPLOY_LIBS} ${THIRD_LIBS})
