@@ -24,10 +24,10 @@ namespace vision {
 
 /*! @brief Enable using FlyCV to process image while deploy vision models. Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will fallback to using OpenCV in other platform
  */
-void EnableFlyCV();
+FASTDEPLOY_DECL void EnableFlyCV();
 
 /// Disable using FlyCV to process image while deploy vision models.
-void DisableFlyCV();
+FASTDEPLOY_DECL void DisableFlyCV();
 
 class FASTDEPLOY_DECL Processor {
  public:
