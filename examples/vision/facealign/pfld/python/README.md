@@ -1,6 +1,6 @@
 # PFLD Python部署示例
 
-在部署前，需确认以下两个步骤
+在部署前，需确认以下两个步骤，保证 FastDeploy 版本 >= 0.5.0
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
@@ -22,7 +22,7 @@ python infer.py --model pfld-106-lite.onnx --image facealign_input.png --device 
 # GPU推理
 python infer.py --model pfld-106-lite.onnx --image facealign_input.png --device gpu
 # TRT推理
-python infer.py --model pfld-106-lite.onnx --image facealign_input.png --device gpu --use_trt True
+python infer.py --model pfld-106-lite.onnx --image facealign_input.png --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示

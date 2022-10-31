@@ -15,20 +15,33 @@ def parse_arguments():
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
     parser.add_argument(
-        "--use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
+        "--backend",
+        type=str,
+        default="ort",
+        help="inference backend, ort, ov, trt, paddle.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
-    if args.device.lower() == "gpu":
+    device = args.device
+    backend = args.backend
+    if device == "gpu":
         option.use_gpu()
-    if args.use_trt:
+
+    if backend == "trt":
+        assert device == "gpu", "the trt backend need device==gpu"
         option.use_trt_backend()
         option.set_trt_input_shape("input", [1, 3, 112, 112])
+    elif backend == "ov":
+        assert device == "cpu", "the openvino backend need device==cpu"
+        option.use_openvino_backend()
+    elif backend == "paddle":
+        option.use_paddle_backend()
+    elif backend == "ort":
+        option.use_ort_backend()
+    else:
+        print("%s is an unsupported backend" % backend)
 
     return option
 
