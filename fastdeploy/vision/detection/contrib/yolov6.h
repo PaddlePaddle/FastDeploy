@@ -114,8 +114,6 @@ class FASTDEPLOY_DECL YOLOv6 : public FastDeployModel {
   bool use_cuda_preprocessing_ = false;
   // CUDA stream
   void* cuda_stream_ = nullptr;
-  // Stores output tensors, to avoid reallocating output buffers
-  std::vector<FDTensor> output_tensors_;
 };
 
 }  // namespace detection

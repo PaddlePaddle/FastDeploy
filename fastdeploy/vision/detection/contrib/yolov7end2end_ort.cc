@@ -86,6 +86,7 @@ bool YOLOv7End2EndORT::Initialize() {
   is_no_pad = false;
   is_scale_up = false;
   stride = 32;
+  input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -214,7 +215,6 @@ bool YOLOv7End2EndORT::Postprocess(
 bool YOLOv7End2EndORT::Predict(cv::Mat* im, DetectionResult* result,
                                float conf_threshold) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
 
   std::map<std::string, std::array<float, 2>> im_info;
 
@@ -230,12 +230,12 @@ bool YOLOv7End2EndORT::Predict(cv::Mat* im, DetectionResult* result,
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-  if (!Infer(input_tensors, &output_tensors_)) {
+  if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(output_tensors_[0], result, im_info, conf_threshold)) {
+  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

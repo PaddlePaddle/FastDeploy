@@ -95,6 +95,7 @@ bool YOLOv6::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 4096.0f;
+  input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -292,7 +293,6 @@ bool YOLOv6::Postprocess(
 bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                      float nms_iou_threshold) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
 
   std::map<std::string, std::array<float, 2>> im_info;
 
@@ -315,12 +315,12 @@ bool YOLOv6::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-  if (!Infer(input_tensors, &output_tensors_)) {
+  if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(output_tensors_[0], result, im_info, conf_threshold,
+  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;

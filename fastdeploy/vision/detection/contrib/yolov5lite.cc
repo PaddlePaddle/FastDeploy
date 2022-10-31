@@ -123,6 +123,7 @@ bool YOLOv5Lite::Initialize() {
   anchor_config = {{10.0, 13.0, 16.0, 30.0, 33.0, 23.0},
                    {30.0, 61.0, 62.0, 45.0, 59.0, 119.0},
                    {116.0, 90.0, 156.0, 198.0, 373.0, 326.0}};
+  input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -415,7 +416,6 @@ bool YOLOv5Lite::Postprocess(
 bool YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
                          float conf_threshold, float nms_iou_threshold) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
 
   std::map<std::string, std::array<float, 2>> im_info;
 
@@ -438,19 +438,19 @@ bool YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
   }
 
   input_tensors[0].name = InputInfoOfRuntime(0).name;
-  if (!Infer(input_tensors, &output_tensors_)) {
+  if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
   if (is_decode_exported) {
-    if (!Postprocess(output_tensors_[0], result, im_info, conf_threshold,
+    if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
                      nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
   } else {
-    if (!PostprocessWithDecode(output_tensors_[0], result, im_info,
+    if (!PostprocessWithDecode(output_tensors[0], result, im_info,
                                conf_threshold, nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;

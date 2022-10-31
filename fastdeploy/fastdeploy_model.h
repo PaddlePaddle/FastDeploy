@@ -25,8 +25,12 @@ class FASTDEPLOY_DECL FastDeployModel {
 
   /** \brief Inference the model by the runtime. This interface is included in the `Predict()` function, so we don't call `Infer()` directly in most common situation
   */
-  virtual bool Infer(std::vector<FDTensor>& input_tensors,
-                     std::vector<FDTensor>* output_tensors);
+  virtual bool Infer(std::vector<FDTensor>& _input_tensors,
+                     std::vector<FDTensor>* _output_tensors);
+
+  /** \brief Inference the model by the runtime. This interface is using class member input_tensors to do inference and writing results to output_tensors
+  */
+  virtual bool Infer();
 
   RuntimeOption runtime_option;
   /** \brief Model's valid cpu backends. This member defined all the cpu backends have successfully tested for the model
@@ -90,6 +94,13 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
+
+  /** \brief Input tensors
+  */
+  std::vector<FDTensor> input_tensors;
+  /** \brief Output tensors
+  */
+  std::vector<FDTensor> output_tensors;
 
  protected:
   virtual bool InitRuntime();

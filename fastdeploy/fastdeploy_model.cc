@@ -142,13 +142,13 @@ bool FastDeployModel::CreateGpuBackend() {
   return false;
 }
 
-bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
-                            std::vector<FDTensor>* output_tensors) {
+bool FastDeployModel::Infer(std::vector<FDTensor>& _input_tensors,
+                            std::vector<FDTensor>* _output_tensors) {
   TimeCounter tc;
   if (enable_record_time_of_runtime_) {
     tc.Start();
   }
-  auto ret = runtime_->Infer(input_tensors, output_tensors);
+  auto ret = runtime_->Infer(_input_tensors, _output_tensors);
   if (enable_record_time_of_runtime_) {
     tc.End();
     if (time_of_runtime_.size() > 50000) {
@@ -160,6 +160,10 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
     time_of_runtime_.push_back(tc.Duration());
   }
   return ret;
+}
+
+bool FastDeployModel::Infer() {
+  return Infer(input_tensors, &output_tensors);
 }
 
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {

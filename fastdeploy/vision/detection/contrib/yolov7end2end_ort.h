@@ -81,8 +81,6 @@ class FASTDEPLOY_DECL YOLOv7End2EndORT : public FastDeployModel {
                  int stride = 32);
 
   bool is_dynamic_input_;
-  // Stores output tensors, to avoid reallocating output buffers
-  std::vector<FDTensor> output_tensors_;
 };
 }  // namespace detection
 }  // namespace vision
