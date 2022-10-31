@@ -20,14 +20,8 @@ from ... import c_lib_wrap as C
 
 
 class SchemaLanguage(object):
-    ZH = C.text.SchemaLanguage.ZH
-    EN = C.text.SchemaLanguage.EN
-
-    def __init__(self, int_value=0):
-        self.value = C.text.SchemaLanguage(int_value)
-
-    def get_value(self):
-        return self.value
+    ZH = 0
+    EN = 1
 
 
 class SchemaNode(object):
