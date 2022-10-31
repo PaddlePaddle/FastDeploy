@@ -13,97 +13,89 @@
 // limitations under the License.
 
 #include "fastdeploy/vision.h"
+#include "gflags/gflags.h"
 
-void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::facealign::PFLD(model_file);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
+DEFINE_string(model, "", "Directory of the inference model.");
+DEFINE_string(image, "", "Path of the image file.");
+DEFINE_string(device, "cpu",
+              "Type of inference device, support 'cpu' or 'gpu'.");
+DEFINE_string(backend, "ort",
+              "The inference runtime backend, support: ['ort', "
+              "'paddle', 'ov', 'trt', 'paddle_trt']");
+DEFINE_bool(use_fp16, false, "Wheter to use FP16 mode.");
 
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::FaceAlignmentResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  std::cout << res.Str() << std::endl;
-
-  auto vis_im = fastdeploy::vision::VisFaceAlignment(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+void PrintUsage() {
+  std::cout << "Usage: infer_demo --model model_path --device [cpu|gpu] --backend "
+               "[ort|paddle|ov|trt|paddle_trt] "
+               "--use_fp16 false"
+            << std::endl;
+  std::cout << "Default value of device: cpu" << std::endl;
+  std::cout << "Default value of backend: ort" << std::endl;
+  std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
-void GpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto option = fastdeploy::RuntimeOption();
-  option.UseGpu();
-  auto model = fastdeploy::vision::facealign::PFLD(model_file, "", option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
+bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
+  if (FLAGS_device == "gpu") {
+    option->UseGpu();
   }
 
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::FaceAlignmentResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
+  if (FLAGS_backend == "ort") {
+    option->UseOrtBackend();
+  } else if (FLAGS_backend == "paddle") {
+    option->UsePaddleBackend();
+  } else if (FLAGS_backend == "ov") {
+    if (FLAGS_device == "gpu") {
+      std::cerr << "The openvino backend need device==cpu" << std::endl;
+      return false;
+    }
+    option->UseOpenVINOBackend();
+  } else if (FLAGS_backend == "tensorrt" ||
+             FLAGS_backend == "paddle_tensorrt") {
+    if (FLAGS_device == "cpu") {
+      std::cerr << "The tensorrt backend need device==gpu" << std::endl;
+      return false;
+    }
+    option->UseTrtBackend();
+    if (FLAGS_backend == "paddle_tensorrt") {
+      option->EnablePaddleToTrt();
+    }
+    if (FLAGS_use_fp16) {
+      option->EnableTrtFP16();
+    }
+  } else {
+    std::cerr << FLAGS_backend << " is an unsupported backend" << std::endl;
+    return false;
   }
-  std::cout << res.Str() << std::endl;
-
-  auto vis_im = fastdeploy::vision::VisFaceAlignment(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-}
-
-void TrtInfer(const std::string& model_file, const std::string& image_file) {
-  auto option = fastdeploy::RuntimeOption();
-  option.UseGpu();
-  option.UseTrtBackend();
-  option.SetTrtInputShape("images", {1, 3, 112, 112});
-  auto model = fastdeploy::vision::facealign::PFLD(model_file, "", option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
-
-  fastdeploy::vision::FaceAlignmentResult res;
-  if (!model.Predict(&im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-  std::cout << res.Str() << std::endl;
-
-  auto vis_im = fastdeploy::vision::VisFaceAlignment(im_bak, res);
-  cv::imwrite("vis_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  return true;
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_model pfld-106-lite.onnx "
-                 "./test.jpeg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
-              << std::endl;
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  auto option = fastdeploy::RuntimeOption();
+  if (!CreateRuntimeOption(&option)) {
+    PrintUsage();
     return -1;
   }
 
-  if (std::atoi(argv[3]) == 0) {
-    CpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 1) {
-    GpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 2) {
-    TrtInfer(argv[1], argv[2]);
+  auto model = fastdeploy::vision::facealign::PFLD(FLAGS_model, "", option);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
   }
+
+  auto im = cv::imread(FLAGS_image);
+  auto im_bak = im.clone();
+
+  fastdeploy::vision::FaceAlignmentResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  std::cout << res.Str() << std::endl;
+
+  auto vis_im = fastdeploy::vision::VisFaceAlignment(im_bak, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+  
   return 0;
 }
