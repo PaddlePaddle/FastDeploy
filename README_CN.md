@@ -278,7 +278,7 @@ int main(int argc, char* argv[]) {
 - **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/197434107-edebf88e-48d7-4448-9fce-4fd204b408df.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge
