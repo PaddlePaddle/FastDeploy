@@ -14,9 +14,9 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/segmentation/ppseg/preprocessor.h"
+#include "fastdeploy/vision/segmentation/ppseg/postprocessor.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/common/pre_post_process_base.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -24,35 +24,6 @@ namespace vision {
  *
  */
 namespace segmentation {
-
-class FASTDEPLOY_DECL PaddleSegPreprocess : public BasePreprocess {
- public:
-  PaddleSegPreprocess() {}
-  explicit PaddleSegPreprocess(const std::string& config_file) {
-    config_file_ = config_file;
-  }
-  virtual bool BuildPreprocessPipelineFromConfig();
-  virtual bool Run(Mat* mat, FDTensor* outputs,
-                   bool is_vertical_screen = false);
-
-  static bool is_with_softmax_;
-  static bool is_with_argmax_;
-};
-
-class FASTDEPLOY_DECL PaddleSegPostprocess : public BasePostprocess {
- public:
-  PaddleSegPostprocess() {}
-  PaddleSegPostprocess(std::map<std::string, std::array<int, 2>> im_info,
-                      const bool& apply_softmax = false) {
-    im_info_ = im_info;
-
-    apply_softmax_ =  apply_softmax;
-  }
-
-  virtual bool Run(FDTensor* infer_result, SegmentationResult* result);
-
-  bool apply_softmax_ = false;
-};
 
 /*! @brief PaddleSeg serials model object used when to load a PaddleSeg model exported by PaddleSeg repository
  */
@@ -82,15 +53,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, SegmentationResult* result);
 
-  /** \brief Whether applying softmax operator in the postprocess, default value is false
-   */
-  bool apply_softmax = false;
+  PaddleSegPreprocessor preprocessor;
 
-  /** \brief For PP-HumanSeg model, set true if the input image is vertical image(height > width), default value is false
-   */
-  bool is_vertical_screen = false;
-
-  std::string config_file_;
+  PaddleSegPostprocessor postprocessor;
 
  private:
   bool Initialize();
