@@ -48,13 +48,13 @@ endif(WIN32)
 
 
 set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(PADDLEINFERENCE_VERSION "2.4-dev1")
+set(PADDLEINFERENCE_VERSION "2.4-dev3")
 if(WIN32)
   if (WITH_GPU)
-    set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-${PADDLEINFERENCE_VERSION}.zip")
+    set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
   else()
     set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-${PADDLEINFERENCE_VERSION}.zip")
-  endif()  
+  endif()
 elseif(APPLE)
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
     message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
@@ -71,6 +71,9 @@ else()
     if(WITH_GPU)
         set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.tgz")
     endif()
+    if (WITH_IPU)
+        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-${PADDLEINFERENCE_VERSION}.tgz")
+    endif()
   endif()
 endif()
 set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
@@ -85,7 +88,7 @@ ExternalProject_Add(
   BUILD_COMMAND ""
   UPDATE_COMMAND ""
   INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
+	${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
   BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
