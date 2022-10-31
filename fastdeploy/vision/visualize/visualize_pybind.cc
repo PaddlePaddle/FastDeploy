@@ -76,9 +76,9 @@ void BindVisualize(pybind11::module& m) {
              return TensorToPyArray(out);
            })
       .def("vis_mot",
-           [](pybind11::array& im_data, vision::MOTResult& result,float fps, int frame_id) {
+           [](pybind11::array& im_data, vision::MOTResult& result,float score_threshold, bool is_draw_trail) {
                auto im = PyArrayToCvMat(im_data);
-               auto vis_im = vision::VisMOT(im, result,fps,frame_id);
+               auto vis_im = vision::VisMOT(im, result, score_threshold, is_draw_trail);
                FDTensor out;
                vision::Mat(vis_im).ShareWithTensor(&out);
                return TensorToPyArray(out);

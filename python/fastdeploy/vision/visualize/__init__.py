@@ -15,6 +15,7 @@
 from __future__ import absolute_import
 import logging
 from ... import c_lib_wrap as C
+import cv2
 
 
 def vis_detection(im_data,
@@ -100,5 +101,33 @@ def vis_ppocr(im_data, det_result):
     return C.vision.vis_ppocr(im_data, det_result)
 
 
-def vis_mot(im_data, mot_result, fps, frame_id):
-    return C.vision.vis_mot(im_data, mot_result, fps, frame_id)
+def vis_mot(im_data, mot_result, score_threshold=0.0, is_draw_trail=False, trails: dict = None):
+    if is_draw_trail:
+        if trails is None:
+            print("[WARNING] <trails> must be a global dict, when <is_draw_trail> is True ,trails will be hidden!")
+        else:
+            draw_trail(im_data, mot_result, trails)
+    return C.vision.vis_mot(im_data, mot_result, score_threshold, False)
+
+
+def get_mot_box_color(idx: int):
+    idx = idx * 3
+    color = [(37 * idx) % 255, (17 * idx) % 255, (29 * idx) % 255]
+    return color
+
+
+def draw_trail(frame, mot_result, trails: dict):
+    n = len(mot_result.boxes)
+    for i in range(n):
+        id_ = mot_result.ids[i]
+        color = get_mot_box_color(id_)
+        x = int((mot_result.boxes[i][0] + mot_result.boxes[i][2]) / 2)
+        y = int((mot_result.boxes[i][1] + mot_result.boxes[i][3]) / 2)
+        if id_ in trails:
+            trails[id_].append((x, y))
+        else:
+            trails.update({id_:[(x, y)]})
+        if trails[id_] is None:
+            continue
+        for point in trails[id_]:
+            cv2.circle(frame, point, 2, color)

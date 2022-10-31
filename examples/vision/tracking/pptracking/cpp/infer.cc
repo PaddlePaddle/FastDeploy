@@ -34,10 +34,7 @@ void CpuInfer(const std::string& model_dir, const std::string& video_file) {
 
   fastdeploy::vision::MOTResult result;
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
         break;
@@ -47,10 +44,9 @@ void CpuInfer(const std::string& model_dir, const std::string& video_file) {
         return;
     }
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
   capture.release();
   cv::destroyAllWindows();
@@ -73,10 +69,7 @@ void GpuInfer(const std::string& model_dir, const std::string& video_file) {
 
   fastdeploy::vision::MOTResult result;
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
         break;
@@ -86,10 +79,9 @@ void GpuInfer(const std::string& model_dir, const std::string& video_file) {
         return;
     }
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
   capture.release();
   cv::destroyAllWindows();
@@ -113,10 +105,7 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
 
   fastdeploy::vision::MOTResult result;
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
         break;
@@ -126,10 +115,9 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
         return;
     }
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
   capture.release();
   cv::destroyAllWindows();

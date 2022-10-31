@@ -60,20 +60,18 @@ config_file = os.path.join(args.model, "infer_cfg.yml")
 model = fd.vision.tracking.PPTracking(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
+# 定义全局的轨迹记录变量{id:"对应id矩形框中心点序列(lit[tuple])"}
+trails = dict()
 # 预测图片分割结果
 cap = cv2.VideoCapture(args.video)
-frame_id = 0
 while True:
-    start_time = time.time()
-    frame_id = frame_id+1
     _, frame = cap.read()
     if frame is None:
         break
     result = model.predict(frame)
-    end_time = time.time()
-    fps = 1.0/(end_time-start_time)
-    img = fd.vision.vis_mot(frame, result, fps, frame_id)
+    img = fd.vision.vis_mot(frame, result, 0.0)
     cv2.imshow("video", img)
-    cv2.waitKey(30)
+    if cv2.waitKey(30) == ord("q"):
+        break
 cap.release()
 cv2.destroyAllWindows()

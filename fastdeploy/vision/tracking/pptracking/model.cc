@@ -162,9 +162,7 @@ bool PPTracking::Initialize() {
     return false;
   }
   // create JDETracker instance
-  std::unique_ptr<JDETracker> jdeTracker(new JDETracker);
-  jdeTracker_ = std::move(jdeTracker);
-
+  jdeTracker_ = std::unique_ptr<JDETracker>(new JDETracker);
   return true;
 }
 
@@ -246,7 +244,6 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
   cv::Mat dets(bbox_shape[0], 6, CV_32FC1, bbox_data);
   cv::Mat emb(bbox_shape[0], emb_shape[1], CV_32FC1, emb_data);
 
-
   result->Clear();
   std::vector<Track> tracks;
   std::vector<int> valid;
@@ -284,6 +281,19 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
           result->scores.push_back(titer->score);
         }
       }
+    }
+  }
+  int nums = result->boxes.size();
+  for (int i=0; i<nums; i++) {
+    float center_x = (result->boxes[i][0] + result->boxes[i][2]) / 2;
+    float center_y = (result->boxes[i][1] + result->boxes[i][3]) / 2;
+    int ids = result->ids[i];
+    auto iter = result->center_trail.find(ids);
+    if (iter != result->center_trail.end()) {
+        iter->second.push_back({int(center_x), int(center_y)});
+    } else {
+      result->center_trail.insert(
+                std::pair<int, std::vector<std::array<int, 2>>>(ids, {{int(center_x), int(center_y)}}));
     }
   }
   return true;
