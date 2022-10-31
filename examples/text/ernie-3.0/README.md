@@ -21,7 +21,7 @@
 
 为了方便开发者的测试，下面提供了在文本分类AFQMC数据集上微调的ERNIE-3.0-Medium模型，开发者可直接下载使用。
 
-- [ERNIE 3.0-Medium](https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz)
+- [ERNIE 3.0-Medium AFQMC](https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz)
 
 ## 详细部署文档
 
