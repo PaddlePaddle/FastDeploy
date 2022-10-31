@@ -60,6 +60,7 @@ setup_configs["ENABLE_FLYCV"] = os.getenv("ENABLE_FLYCV", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
+setup_configs["WITH_IPU"] = os.getenv("WITH_IPU", "OFF")
 setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
@@ -72,6 +73,8 @@ setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 if setup_configs["WITH_GPU"] == "ON" or setup_configs[
         "BUILD_ON_JETSON"] == "ON":
     wheel_name = "fastdeploy-gpu-python"
+elif setup_configs["WITH_IPU"] == "ON":
+    wheel_name = "fastdeploy-ipu-python"
 
 if os.getenv("CMAKE_CXX_COMPILER", None) is not None:
     setup_configs["CMAKE_CXX_COMPILER"] = os.getenv("CMAKE_CXX_COMPILER")
