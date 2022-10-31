@@ -31,6 +31,17 @@
 
 namespace fastdeploy {
 
+struct IpuOption {
+  int ipu_device_num;
+  int ipu_micro_batch_size;
+  bool ipu_enable_pipelining;
+  int ipu_batches_per_step;
+  bool ipu_enable_fp16;
+  int ipu_replica_num;
+  float ipu_available_memory_proportion;
+  bool ipu_enable_half_partial;
+};
+
 struct PaddleBackendOption {
 #ifdef WITH_GPU
   bool use_gpu = true;
@@ -45,6 +56,13 @@ struct PaddleBackendOption {
 #ifdef ENABLE_TRT_BACKEND
   TrtBackendOption trt_option;
   bool collect_shape = false;
+#endif
+
+#ifdef WITH_IPU
+  bool use_ipu = true;
+  IpuOption ipu_option;
+#else
+  bool use_ipu = false;
 #endif
 
   int mkldnn_cache_size = 1;
