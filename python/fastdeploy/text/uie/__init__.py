@@ -19,8 +19,9 @@ from ... import RuntimeOption, FastDeployModel, ModelFormat
 from ... import c_lib_wrap as C
 
 
-class SchemaLanguage(C.text.SchemaLanguage):
-    pass
+class SchemaLanguage(object):
+    ZH = 0
+    EN = 1
 
 
 class SchemaNode(object):
@@ -61,6 +62,7 @@ class UIEModel(FastDeployModel):
             schema = schema_tmp
         else:
             assert "The type of schema should be list or dict."
+        schema_language = C.text.SchemaLanguage(schema_language)
         self._model = C.text.UIEModel(
             model_file, params_file, vocab_file, position_prob, max_length,
             schema, runtime_option._option, model_format, schema_language)
