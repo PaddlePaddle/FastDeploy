@@ -41,7 +41,7 @@ bool FastDeployModel::InitRuntime() {
 #ifndef WITH_IPU
     use_ipu = false;
 #endif
-    bool use_npu = (runtime_option.device == Device::NPU);
+    bool use_npu = (runtime_option.device == Device::RKNPU);
 
     // whether the model is supported by the setted backend
     bool is_supported = false;
@@ -53,7 +53,7 @@ bool FastDeployModel::InitRuntime() {
         }
       }
     } else if (use_npu) {
-      for (auto& item : valid_npu_backends) {
+      for (auto& item : valid_hardware_backends) {
         if (item == runtime_option.backend) {
           is_supported = true;
           break;
@@ -109,7 +109,7 @@ bool FastDeployModel::InitRuntime() {
             << std::endl;
     return false;
 #endif
-  } else if (runtime_option.device == Device::NPU) {
+  } else if (runtime_option.device == Device::RKNPU) {
     return CreateNpuBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
@@ -172,17 +172,17 @@ bool FastDeployModel::CreateGpuBackend() {
 }
 
 bool FastDeployModel::CreateNpuBackend() {
-  if (valid_npu_backends.empty()) {
+  if (valid_hardware_backends.empty()) {
     FDERROR << "There's no valid npu backends for model: " << ModelName()
             << std::endl;
     return false;
   }
 
-  for (size_t i = 0; i < valid_npu_backends.size(); ++i) {
-    if (!IsBackendAvailable(valid_npu_backends[i])) {
+  for (size_t i = 0; i < valid_hardware_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_hardware_backends[i])) {
       continue;
     }
-    runtime_option.backend = valid_npu_backends[i];
+    runtime_option.backend = valid_hardware_backends[i];
     runtime_ = std::unique_ptr<Runtime>(new Runtime());
     if (!runtime_->Init(runtime_option)) {
       return false;

@@ -92,7 +92,9 @@ std::string Str(const Backend& b) {
     return "Backend::PDINFER";
   } else if (b == Backend::POROS) {
     return "Backend::POROS";
-  } else if (b == Backend::OPENVINO) {
+  } else if (b == Backend::RKNPU2) {
+    return "Backend::RKNPU2";
+  }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
     return "Backend::LITE";
@@ -105,6 +107,8 @@ std::string Str(const ModelFormat& f) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
+  }else if (f == ModelFormat::RKNN) {
+    return "ModelFormat::RKNN";
   } else if (f == ModelFormat::TORCHSCRIPT) {
     return "ModelFormat::TORCHSCRIPT";
   }
@@ -120,7 +124,9 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::PDINFER";
   } else if (backend == Backend::OPENVINO) {
     out << "Backend::OPENVINO";
-  } else if (backend == Backend::POROS) {
+  } else if (backend == Backend::RKNPU2) {
+    out << "Backend::RKNPU2";
+  }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::LITE";
@@ -134,6 +140,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::PADDLE";
   } else if (format == ModelFormat::ONNX) {
     out << "ModelFormat::ONNX";
+  } else if (format == ModelFormat::RKNN) {
+    out << "ModelFormat::RKNN";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
   }
@@ -246,7 +254,7 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
                               fastdeploy::rknpu2::CoreMask rknpu2_core) {
   rknpu2_cpu_name_ = rknpu2_name;
   rknpu2_core_mask_ = rknpu2_core;
-  device = Device::NPU;
+  device = Device::RKNPU;
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -534,8 +542,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
   } else if (option.backend == Backend::RKNPU2) {
-    FDASSERT(option.device == Device::NPU,
-             "Backend::RKNPU2 only supports Device::NPU");
+    FDASSERT(option.device == Device::RKNPU,
+             "Backend::RKNPU2 only supports Device::RKNPU2");
     CreateRKNPU2Backend();
 
     FDINFO << "Runtime initialized with Backend::RKNPU2 in "

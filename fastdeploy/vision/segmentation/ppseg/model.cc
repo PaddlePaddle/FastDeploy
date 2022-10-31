@@ -28,7 +28,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-  valid_npu_backends = {Backend::RKNPU2};
+  valid_rknpu_backends.push_back(Backend::RKNPU2);
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;

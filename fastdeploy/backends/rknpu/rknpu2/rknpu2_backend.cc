@@ -153,7 +153,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   input_attrs = (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
   memset(input_attrs, 0, io_num.n_input * sizeof(rknn_tensor_attr));
   inputs_desc_.resize(io_num.n_input);
-  // FDINFO << "========== RKNNInputTensorInfo ==========" << std::endl;
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     input_attrs[i].index = i;
     // query info
@@ -175,7 +174,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
             input_attrs[i].type);
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     inputs_desc_[i] = temp_input_info;
-    // DumpTensorAttr(input_attrs[i]);
   }
 
   // Get detailed output parameters
@@ -183,7 +181,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
   memset(output_attrs, 0, io_num.n_output * sizeof(rknn_tensor_attr));
   outputs_desc_.resize(io_num.n_output);
-  // FDINFO << "========== RKNNOutputTensorInfo ==========" << std::endl;
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     output_attrs[i].index = i;
     // query info
@@ -204,7 +201,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
             output_attrs[i].type);
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     outputs_desc_[i] = temp_input_info;
-    // DumpTensorAttr(output_attrs[i]);
   }
   return true;
 }

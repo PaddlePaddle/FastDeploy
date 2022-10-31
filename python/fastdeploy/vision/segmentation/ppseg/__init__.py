@@ -50,7 +50,6 @@ class PaddleSegModel(FastDeployModel):
         return self._model.predict(input_image)
 
     def disable_normalize_and_permute(self):
-        print("disable_normalize_and_permute")
         return self._model.disable_normalize_and_permute()
 
     @property
