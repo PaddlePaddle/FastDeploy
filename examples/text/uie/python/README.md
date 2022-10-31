@@ -2,8 +2,8 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/environment.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本目录下提供`infer.py`快速完成UIE模型在CPU/GPU，以及CPU上通过OpenVINO加速CPU端部署示例。执行如下脚本即可完成。
 
