@@ -77,9 +77,7 @@ def batchfy_text(texts, batch_size):
 
 class ErnieForSequenceClassificationPredictor(object):
     def __init__(self, args):
-        print('Initialize tokenizer.')
         self.tokenizer = self.create_tokenizer(args)
-        print('Initialize runtime.')
         self.runtime = self.create_fd_runtime(args)
         self.batch_size = args.batch_size
 

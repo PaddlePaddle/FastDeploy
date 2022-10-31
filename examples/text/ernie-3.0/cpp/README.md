@@ -1,11 +1,11 @@
-# ERNIE-3.0 模型Python部署示例
+# ERNIE-3.0 模型C++部署示例
 
 在部署前，需确认以下两个步骤
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`seq_cls_infer.cc`快速完成在CPU/GPU的文本分类任务的示例。
+本目录下提供`seq_cls_infer.cc`快速完成在CPU/GPU的文本分类任务的部署示例。
 
 
 ## 文本分类任务
@@ -14,7 +14,7 @@
 
 以下示例展示如何基于FastDeploy库完成ERNIE-3.0-medium模型在CLUE AFQMC数据集上进行的文本分类任务的C++预测部署。
 
-```
+```bash
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
@@ -25,7 +25,7 @@ cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
 make -j
 
-# 下载AFQMC数据集的微调后的ERNIE-3.0模型
+# 下载AFQMC数据集的微调后的ERNIE-3.0模型以及词表
 wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
 tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 
@@ -59,3 +59,9 @@ Batch id: 1, example id: 0, sentence 1: 花呗支持高铁票支付吗, sentence
 |--device | 运行的设备，可选范围: ['cpu', 'gpu']，默认为'cpu' |
 |--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'onnx_runtime' |
 |--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |
+
+### 相关文档
+
+[ERNIE-3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE-3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE-3.0模型Python部署方法](../python/README.md)
