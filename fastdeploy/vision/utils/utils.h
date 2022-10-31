@@ -26,7 +26,6 @@
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/function/transpose.h"
 #include "fastdeploy/vision/common/processors/mat.h"
-#include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
 namespace vision {
