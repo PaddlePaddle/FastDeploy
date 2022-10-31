@@ -20,7 +20,7 @@ RKNPU部署模型前需要将模型转换成RKNN模型，其过程一般可以�
 *   Paddle动态图模型 -> ONNX模型 -> RKNN模型。
     *   Paddle动态图模型 转换为 ONNX模型的过程请参考([PaddleSeg模型导出说明](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/contrib/PP-HumanSeg))。
     *   对于ONNX模型 转换 RKNN模型的过程，请参考[转换文档](../../../../../docs/cn/faq/rknpu2/export.md)进行转换。
-        以PPHumanSeg为例，在获取到ONNX模型后，其转换步骤如下:
+        以PPHumanSeg为例，在获取到ONNX模型后，其转换为RK3588步骤如下:
         * 编写config.yaml文件
         ```yaml
         model_path: ./portrait_pp_humansegv2_lite_256x144_pretrained.onnx

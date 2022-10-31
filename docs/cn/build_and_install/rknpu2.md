@@ -24,7 +24,8 @@ RKNPU2仅支持linux下进行编译,以下教程均在linux环境下完成。
 **方法1: 通过脚本安装**
 ```bash
 # 下载解压rknpu2_device_install_1.4.0
-链接:https://pan.baidu.com/s/1yNww64gQnvwiCfNhELtkwQ?pwd=easy 提取码:easy 复制这段内容后打开百度网盘手机App，操作更方便哦
+wget https://bj.bcebos.com/fastdeploy/third_libs/rknpu2_device_install_1.4.0.zip
+unzip rknpu2_device_install_1.4.0.zip
 
 cd rknpu2_device_install_1.4.0
 # RK3588运行以下代码
