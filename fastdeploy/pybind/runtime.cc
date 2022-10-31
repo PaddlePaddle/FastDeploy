@@ -22,6 +22,7 @@ void BindRuntime(pybind11::module& m) {
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
+      .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
@@ -48,10 +49,13 @@ void BindRuntime(pybind11::module& m) {
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
       .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
+      .def("use_ipu", &RuntimeOption::UseIpu)
+      .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
       .def_readwrite("backend", &RuntimeOption::backend)
+      .def_readwrite("backend", &RuntimeOption::external_stream_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
@@ -72,7 +76,20 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
       .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
       .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
-      .def_readwrite("poros_file", &RuntimeOption::poros_file);
+      .def_readwrite("poros_file", &RuntimeOption::poros_file)
+      .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
+      .def_readwrite("ipu_micro_batch_size",
+                     &RuntimeOption::ipu_micro_batch_size)
+      .def_readwrite("ipu_enable_pipelining",
+                     &RuntimeOption::ipu_enable_pipelining)
+      .def_readwrite("ipu_batches_per_step",
+                     &RuntimeOption::ipu_batches_per_step)
+      .def_readwrite("ipu_enable_fp16", &RuntimeOption::ipu_enable_fp16)
+      .def_readwrite("ipu_replica_num", &RuntimeOption::ipu_replica_num)
+      .def_readwrite("ipu_available_memory_proportion",
+                     &RuntimeOption::ipu_available_memory_proportion)
+      .def_readwrite("ipu_enable_half_partial",
+                     &RuntimeOption::ipu_enable_half_partial);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -166,7 +183,8 @@ void BindRuntime(pybind11::module& m) {
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
-      .value("GPU", Device::GPU);
+      .value("GPU", Device::GPU)
+      .value("IPU", Device::IPU);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),
                               "Data type of FastDeploy.")

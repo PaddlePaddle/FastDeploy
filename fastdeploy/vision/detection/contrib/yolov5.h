@@ -77,25 +77,28 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
       float conf_threshold, float nms_iou_threshold, bool multi_label,
       float max_wh = 7680.0);
 
-  /// tuple of (width, height)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {640, 640}
+  */
   std::vector<int> size_;
-  /// padding value, size should be the same as channels
+  // padding value, size should be the same as channels
+
   std::vector<float> padding_value_;
-  /// only pad to the minimum rectange which height and width is times of stride
+  // only pad to the minimum rectange which height and width is times of stride
   bool is_mini_pad_;
-  /*! @brief
-  while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
-  */
+  // while is_mini_pad = false and is_no_pad = true,
+  // will resize the image to the set size
   bool is_no_pad_;
-  /*! @brief
-  if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
-  */
+  // if is_scale_up is false, the input image only can be zoom out,
+  // the maximum resize scale cannot exceed 1.0
   bool is_scale_up_;
-  /// padding stride, for is_mini_pad
+  // padding stride, for is_mini_pad
   int stride_;
-  /// for offseting the boxes by classes when using NMS
+  // for offseting the boxes by classes when using NMS
   float max_wh_;
-  /// for different strategies to get boxes when postprocessing
+  /*! @brief
+  Argument for image preprocessing step, for different strategies to get boxes when postprocessing, default true
+  */
   bool multi_label_;
 
  private:
