@@ -25,7 +25,8 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DENABLE_PADDLE_BACKEND=ON \
          -DENABLE_OPENVINO_BACKEND=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DENABLE_TEXT=ON
 make -j12
 make install
 ```
@@ -48,6 +49,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 ^
          -DENABLE_PADDLE_BACKEND=ON ^
          -DENABLE_OPENVINO_BACKEND=ON ^
          -DENABLE_VISION=ON ^
+         -DENABLE_TEXT=ON ^
          -DCMAKE_INSTALL_PREFIX="D:\Paddle\compiled_fastdeploy" ^
 msbuild fastdeploy.sln /m /p:Configuration=Release /p:Platform=x64
 msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
@@ -75,6 +77,7 @@ export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_OPENVINO_BACKEND=ON
 export ENABLE_VISION=ON
+export ENABLE_TEXT=ON
 
 python setup.py build
 python setup.py bdist_wheel
@@ -96,6 +99,7 @@ set ENABLE_ORT_BACKEND=ON
 set ENABLE_PADDLE_BACKEND=ON
 set ENABLE_OPENVINO_BACKEND=ON
 set ENABLE_VISION=ON
+set ENABLE_TEXT=ON
 
 python setup.py build
 python setup.py bdist_wheel
