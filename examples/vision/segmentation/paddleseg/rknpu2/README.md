@@ -33,8 +33,7 @@ RKNPU部署模型前需要将模型转换成RKNN模型，其过程一般可以�
         ```
         * 执行转换代码
         ```bash
-        # 请在fastdeploy根目录下执行代码
-        python tools/rknpu2/export.py  --config_path=tools/rknpu2/config/ppseg_config.yaml
+        python /path/to/fastDeploy/toosl/export.py --config_path=/path/to/fastdeploy/tools/rknpu2/config/ppset_config.yaml
         ```
         
 ## 下载预训练模型

@@ -59,7 +59,7 @@ unzip -qo images.zip
 
 ```bash
 cd build
-cmake -DTARGET_SOC=RK3588 ..
+cmake ..
 make -j8
 make install
 ```

@@ -348,8 +348,16 @@ void RuntimeOption::EnableLiteFP16() {
   lite_enable_fp16 = true;
 }
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+void RuntimeOption::DisableLiteFP16() {
+  lite_enable_fp16 = false;
+}
+void RuntimeOption::EnableLiteInt8() {
+  lite_enable_int8 = true;
+}
 
+void RuntimeOption::DisableLiteInt8() {
+  lite_enable_int8 = false;
+}
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
 }
@@ -423,7 +431,7 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
            "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
-}  
+}
 
 void RuntimeOption::EnablePaddleTrtCollectShape() {
   pd_collect_shape = true;
@@ -728,6 +736,7 @@ void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
+  lite_option.enable_int8 = option.lite_enable_int8;
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;

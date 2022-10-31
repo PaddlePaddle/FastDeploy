@@ -31,7 +31,7 @@ RKNPU2Backend::~RKNPU2Backend() {
  ***************************************************************/
 bool RKNPU2Backend::GetSDKAndDeviceVersion() {
   int ret;
-  // 获取sdk 和 驱动的版本
+  // get sdk and device version
   ret = rknn_query(ctx, RKNN_QUERY_SDK_VERSION, &sdk_ver, sizeof(sdk_ver));
   if (ret != RKNN_SUCC) {
     printf("rknn_query fail! ret=%d\n", ret);
@@ -50,11 +50,10 @@ bool RKNPU2Backend::GetSDKAndDeviceVersion() {
  ***************************************************************/
 void RKNPU2Backend::BuildOption(const RKNPU2BackendOption& option) {
   this->option_ = option;
-  // 保存cpu参数，部分函数只使用于指定cpu
-  // cpu默认设置为RK3588
+  // save cpu_name
   this->option_.cpu_name = option.cpu_name;
 
-  // 保存context参数
+  // save context
   this->option_.core_mask = option.core_mask;
 }
 
@@ -103,7 +102,7 @@ bool RKNPU2Backend::InitFromRKNN(const std::string& model_file,
 
 /***************************************************************
  *  @name       SetCoreMask
- *  @brief      设置运行的 NPU 核心
+ *  @brief      set NPU core for model
  *  @param      core_mask: The specification of NPU core setting.
  *  @return     bool
  *  @note       Only support RK3588
