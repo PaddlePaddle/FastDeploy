@@ -34,7 +34,8 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DTRT_DIRECTORY=/Paddle/TensorRT-8.4.1.5 \
          -DCUDA_DIRECTORY=/usr/local/cuda \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DENABLE_TEXT=ON
 make -j12
 make install
 ```
@@ -62,6 +63,7 @@ cmake .. -G "Visual Studio 16 2019" -A x64 ^
          -DENABLE_OPENVINO_BACKEND=ON ^
          -DENABLE_TRT_BACKEND=ON ^
          -DENABLE_VISION=ON ^
+         -DENABLE_TEXT=ON ^
          -DWITH_GPU=ON ^
          -DTRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5" ^
          -DCUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2" ^
@@ -95,6 +97,7 @@ export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_OPENVINO_BACKEND=ON
 export ENABLE_VISION=ON
+export ENABLE_TEXT=ON
 export ENABLE_TRT_BACKEND=ON
 export WITH_GPU=ON
 export TRT_DIRECTORY=/Paddle/TensorRT-8.4.1.5
@@ -122,6 +125,7 @@ set ENABLE_ORT_BACKEND=ON
 set ENABLE_PADDLE_BACKEND=ON
 set ENABLE_OPENVINO_BACKEND=ON
 set ENABLE_VISION=ON
+set ENABLE_TEXT=ON
 set ENABLE_TRT_BACKEND=ON
 set WITH_GPU=ON
 set TRT_DIRECTORY=D:\Paddle\TensorRT-8.4.1.5
