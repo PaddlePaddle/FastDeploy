@@ -1,6 +1,6 @@
-# FastDeploy 一键模型量化
-FastDeploy基于PaddleSlim, 给用户提供了一键模型量化的工具, 支持离线量化和量化蒸馏训练.
-本文档以Yolov5s为例, 供用户参考如何安装并执行FastDeploy的一键模型量化.
+# FastDeploy 一键模型自动化压缩
+FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具.
+本文档以Yolov5s为例, 供用户参考如何安装并执行FastDeploy的一键模型自动化压缩.
 
 ## 1.安装
 
@@ -17,7 +17,7 @@ git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
 python setup.py install
 ```
 
-### FastDeploy-Quantization 安装方式
+### fastdeploy-auto-compression 一键模型自动化压缩工具安装方式
 用户在当前目录下，运行如下命令:
 ```
 python setup.py install
@@ -25,7 +25,8 @@ python setup.py install
 
 ## 2.使用方式
 
-### 一键量化示例
+### 一键模型压缩示例
+FastDeploy模型一键自动压缩可包含多种策略, 目前主要采用离线量化和量化蒸馏训练, 下面将从离线量化和量化蒸馏两个策略来介绍如何使用一键模型自动化压缩.
 
 #### 离线量化
 
@@ -42,10 +43,10 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2.使用fastdeploy_quant命令，执行一键模型量化:
+##### 2.使用fastdeploy_auto_compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
-fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
 【说明】离线量化（训练后量化）：post-training quantization，缩写是PTQ
 
@@ -55,8 +56,8 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README.md)                        |
-| --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
+| --config_path          | 一键压缩所需要的量化配置文件.[详解](./configs/README.md)                        |
+| --method               | 压缩方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
 
@@ -64,8 +65,8 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 #### 量化蒸馏训练
 
 ##### 1.准备待量化模型和训练数据集
-FastDeploy目前的量化蒸馏训练，只支持无标注图片训练，训练过程中不支持评估模型精度.
-数据集为真实预测场景下的图片，图片数量依据数据集大小来定，尽量覆盖所有部署场景. 此例中，我们为用户准备了COCO2017验证集中的前320张图片.
+FastDeploy一键模型自动化压缩目前的量化蒸馏训练，只支持无标注图片训练，训练过程中不支持评估模型精度.
+数据集为真实预测场景下的图片，图片数量依据数据集大小来定，尽量覆盖所有部署场景. 此例中，我们为用户准备了COCO2017训练集中的前320张图片.
 注: 如果用户想通过量化蒸馏训练的方法,获得精度更高的量化模型, 可以自行准备更多的数据, 以及训练更多的轮数.
 
 ```shell
@@ -73,16 +74,16 @@ FastDeploy目前的量化蒸馏训练，只支持无标注图片训练，训练�
 wget https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx
 
 # 下载数据集, 此Calibration数据集为COCO2017验证集中的前320张图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
-tar -xvf COCO_val_320.tar.gz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_train_320.tar
+tar -xvf COCO_train_320.tar
 ```
 
-##### 2.使用fastdeploy_quant命令，执行一键模型量化:
+##### 2.使用fastdeploy_auto_compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
 # 执行命令默认为单卡训练，训练前请指定单卡GPU, 否则在训练过程中可能会卡住.
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.参数说明
@@ -91,8 +92,8 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 
 | 参数                 | 作用                                                         |
 | -------------------- | ------------------------------------------------------------ |
-| --config_path          | 一键量化所需要的量化配置文件.[详解](./configs/README.md)|
-| --method               | 量化方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
+| --config_path          | 一键自动化压缩所需要的量化配置文件.[详解](./configs/README.md)|
+| --method               | 压缩方式选择, 离线量化选PTQ，量化蒸馏训练选QAT     |
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
 
@@ -106,3 +107,7 @@ fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='
 - [YOLOv7 量化模型部署](../../examples/vision/detection/yolov7/quantize/)
 
 - [PadddleClas 量化模型部署](../../examples/vision/classification/paddleclas/quantize/)
+
+- [PadddleDetection 量化模型部署](../../examples/vision/detection/paddledetection/quantize/)
+
+- [PadddleSegmentation 量化模型部署](../../examples/vision/segmentation/paddleseg/quantize/)

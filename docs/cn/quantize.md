@@ -2,7 +2,7 @@
 
 # 量化加速
 量化是一种流行的模型压缩方法，量化后的模型拥有更小的体积和更快的推理速度.
-FastDeploy基于PaddleSlim, 集成了一键模型量化的工具, 同时, FastDeploy支持推理部署量化后的模型, 帮助用户实现推理加速.
+FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具. FastDeploy一键模型自动压缩可包含多种策略, 目前主要采用离线量化和量化蒸馏训练.同时, FastDeploy支持部署压缩后的模型, 帮助用户实现推理加速. 本文主要描述量化模型在FastDeploy上的部署.
 
 
 ## FastDeploy 多个引擎和硬件支持量化模型部署
@@ -17,7 +17,7 @@ FastDeploy基于PaddleSlim, 集成了一键模型量化的工具, 同时, FastDe
 ## 模型量化
 
 ### 量化方法
-基于PaddleSlim，目前FastDeploy提供的的量化方法有量化蒸馏训练和离线量化，量化蒸馏训练通过模型训练来获得量化模型，离线量化不需要模型训练即可完成模型的量化。 FastDeploy 对两种方式产出的量化模型均能部署。
+基于PaddleSlim，目前FastDeploy一键模型自动压缩提供的的量化方法有量化蒸馏训练和离线量化，量化蒸馏训练通过模型训练来获得量化模型，离线量化不需要模型训练即可完成模型的量化。 FastDeploy 对两种方式产出的量化模型均能部署。
 
 两种方法的主要对比如下表所示:
 | 量化方法 | 量化过程耗时 | 量化模型精度 | 模型体积 | 推理速度 |
@@ -25,15 +25,15 @@ FastDeploy基于PaddleSlim, 集成了一键模型量化的工具, 同时, FastDe
 |   离线量化      |  无需训练，耗时短 |  比量化蒸馏训练稍低       | 两者一致   | 两者一致   |  
 |   量化蒸馏训练      |  需要训练，耗时稍高 |  较未量化模型有少量损失 | 两者一致   |两者一致   |  
 
-### 使用FastDeploy一键模型量化工具来量化模型
-Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请参考如下文档进行模型量化。
-- [FastDeploy 一键模型量化](../../tools/quantization/)
-当用户获得产出的量化模型之后，即可以使用FastDeploy来部署量化模型。
+### 使用FastDeploy一键模型自动化压缩工具来量化模型
+FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具，请参考如下文档进行一键模型自动化压缩。
+- [FastDeploy 一键模型自动化压缩](../../tools/auto_compression/)
+当用户获得产出的压缩模型之后，即可以使用FastDeploy来部署压缩模型。
 
 
-## 量化 Benchmark
+## 量化模型 Benchmark
 
-目前, FastDeploy支持的一键量化并完成部署测试的模型Benchmark如下.
+目前, FastDeploy支持自动化压缩,并完成部署测试的模型的Runtime Benchmark和端到端Benchmark如下所示.
 
 Benchmark表格说明:
 - Rtuntime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
