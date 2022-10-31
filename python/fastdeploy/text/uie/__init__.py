@@ -19,8 +19,15 @@ from ... import RuntimeOption, FastDeployModel, ModelFormat
 from ... import c_lib_wrap as C
 
 
-class SchemaLanguage(C.text.SchemaLanguage):
-    pass
+class SchemaLanguage(object):
+    ZH = C.text.SchemaLanguage.ZH
+    EN = C.text.SchemaLanguage.EN
+
+    def __init__(self, int_value=0):
+        self.value = C.text.SchemaLanguage(int_value)
+
+    def get_value(self):
+        return self.value
 
 
 class SchemaNode(object):
