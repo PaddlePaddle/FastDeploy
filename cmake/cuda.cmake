@@ -2,6 +2,10 @@ if(NOT WITH_GPU)
   return()
 endif()
 
+# This is to eliminate the CMP0104 warnings from cmake 3.18+.
+# Instead of setting CUDA_ARCHITECTURES, we will set CMAKE_CUDA_FLAGS.
+set(CMAKE_CUDA_ARCHITECTURES OFF)
+
 if(BUILD_ON_JETSON)
   set(fd_known_gpu_archs "53 62 72")
   set(fd_known_gpu_archs10 "53 62 72")
@@ -232,10 +236,6 @@ elseif(${CMAKE_CUDA_COMPILER_VERSION} LESS 12.0) # CUDA 11.2+
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -D__STRICT_ANSI__")
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
 endif()
-
-add_definitions("-DCUDA_VERSION_MAJOR=\"${CUDA_VERSION_MAJOR}\"")
-add_definitions("-DCUDA_VERSION_MINOR=\"${CUDA_VERSION_MINOR}\"")
-add_definitions("-DCUDA_TOOLKIT_ROOT_DIR=\"${CUDA_TOOLKIT_ROOT_DIR}\"")
 
 # setting nvcc arch flags
 select_nvcc_arch_flags(NVCC_FLAGS_EXTRA)
