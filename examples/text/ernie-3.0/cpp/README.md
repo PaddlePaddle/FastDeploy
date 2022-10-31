@@ -39,7 +39,10 @@ tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 
 运行完成后返回的结果如下：
 ```bash
-
+[INFO] /paddle/FastDeploy/examples/text/ernie-3.0/cpp/seq_cls_infer.cc(93)::CreateRuntimeOption	model_path = ernie-3.0-medium-zh-afqmc/infer.pdmodel, param_path = ernie-3.0-medium-zh-afqmc/infer.pdiparams
+[INFO] fastdeploy/runtime.cc(469)::Init	Runtime initialized with Backend::ORT in Device::CPU.
+Batch id: 0, example id: 0, sentence 1: 花呗收款额度限制, sentence 2: 收钱码，对花呗支付的金额有限制吗, label: 1, confidence:  0.581852
+Batch id: 1, example id: 0, sentence 1: 花呗支持高铁票支付吗, sentence 2: 为什么友付宝不支持花呗付款, label: 0, confidence:  0.997921
 ```
 
 

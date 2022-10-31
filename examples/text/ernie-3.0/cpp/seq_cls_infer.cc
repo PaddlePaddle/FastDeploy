@@ -41,23 +41,28 @@ DEFINE_int32(max_length, 128, "The batch size of data.");
 DEFINE_bool(use_fp16, false, "Wheter to use FP16 mode.");
 
 void PrintUsage() {
-  std::cout << "Usage: seq_cls_infer_demo --model_dir dir --device [cpu|gpu] --backend "
-               "[onnx_runtime|paddle|openvino|tensorrt|paddle_tensorrt] "
-               "--batch_size size --max_length len --use_fp16 false"
-            << std::endl;
-  std::cout << "Default value of device: cpu" << std::endl;
-  std::cout << "Default value of backend: onnx_runtime" << std::endl;
-  std::cout << "Default value of batch_size: 1" << std::endl;
-  std::cout << "Default value of max_length: 128" << std::endl;
-  std::cout << "Default value of use_fp16: false" << std::endl;
+  fastdeploy::FDINFO
+      << "Usage: seq_cls_infer_demo --model_dir dir --device [cpu|gpu] "
+         "--backend "
+         "[onnx_runtime|paddle|openvino|tensorrt|paddle_tensorrt] "
+         "--batch_size size --max_length len --use_fp16 false"
+      << std::endl;
+  fastdeploy::FDINFO << "Default value of device: cpu" << std::endl;
+  fastdeploy::FDINFO << "Default value of backend: onnx_runtime" << std::endl;
+  fastdeploy::FDINFO << "Default value of batch_size: 1" << std::endl;
+  fastdeploy::FDINFO << "Default value of max_length: 128" << std::endl;
+  fastdeploy::FDINFO << "Default value of use_fp16: false" << std::endl;
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   if (FLAGS_device == "gpu") {
     option->UseGpu();
-  } else if (FLAGS_device == "gpu") {
+  } else if (FLAGS_device == "cpu") {
     option->UseCpu();
   } else {
+    fastdeploy::FDERROR << "The avilable device should be one of the list "
+                           "['cpu', 'gpu']. But receive '"
+                        << FLAGS_device << "'" << std::endl;
     return false;
   }
 
@@ -86,11 +91,16 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
       trt_file = trt_file + ".fp16";
     }
   } else {
+    fastdeploy::FDERROR << "The avilable backend should be one of the list "
+                           "['paddle', 'openvino', 'tensorrt', "
+                           "'paddle_tensorrt']. But receive '"
+                        << FLAGS_backend << "'" << std::endl;
     return false;
   }
   std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
   std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
-  fastdeploy::FDINFO << "model_path = " << model_path << ", param_path = " << param_path << std::endl;
+  fastdeploy::FDINFO << "model_path = " << model_path
+                     << ", param_path = " << param_path << std::endl;
   option->SetModelPath(model_path, param_path);
   return true;
 }
@@ -226,7 +236,8 @@ int main(int argc, char* argv[]) {
   if (!fastdeploy::CheckFileExists(vocab_path)) {
     vocab_path = fastdeploy::PathJoin(FLAGS_model_dir, "vocab.txt");
     if (!fastdeploy::CheckFileExists(vocab_path)) {
-      fastdeploy::FDERROR << "The path of vocab " << vocab_path << " doesn't exist" << std::endl;
+      fastdeploy::FDERROR << "The path of vocab " << vocab_path
+                          << " doesn't exist" << std::endl;
       PrintUsage();
       return -1;
     }
