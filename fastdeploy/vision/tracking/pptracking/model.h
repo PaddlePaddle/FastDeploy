@@ -18,7 +18,7 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/tracking/pptracking/tracker.h"
-#include "fastdeploy/vision/tracking/pptracking/letter_box.h"
+//#include "fastdeploy/vision/tracking/pptracking/letter_box.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -56,8 +56,8 @@ public:
 private:
 
   bool BuildPreprocessPipelineFromConfig();
+
   bool Initialize();
-  void GetNmsInfo();
 
   bool Preprocess(Mat* img, std::vector<FDTensor>* outputs);
 
@@ -69,18 +69,7 @@ private:
   float conf_thresh_;
   float tracked_thresh_;
   float min_box_area_;
-  bool is_scale_ = true;
   std::unique_ptr<JDETracker> jdeTracker_;
-
-  // configuration for nms
-  int64_t background_label = -1;
-  int64_t keep_top_k = 300;
-  float nms_eta = 1.0;
-  float nms_threshold = 0.7;
-  float score_threshold = 0.01;
-  int64_t nms_top_k = 10000;
-  bool normalized = true;
-  bool has_nms_ = true;
 
 };
 

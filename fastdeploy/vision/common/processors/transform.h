@@ -31,3 +31,4 @@
 #include "fastdeploy/vision/common/processors/resize_by_short.h"
 #include "fastdeploy/vision/common/processors/stride_pad.h"
 #include "fastdeploy/vision/common/processors/warp_affine.h"
+#include "fastdeploy/vision/common/processors/letter_box.h"
