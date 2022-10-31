@@ -51,7 +51,7 @@ class FASTDEPLOY_DECL YOLOv5Face : public FastDeployModel {
                        float nms_iou_threshold = 0.5);
 
   /*! @brief
-  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {640, 640}
   */
   std::vector<int> size;
   // padding value, size should be the same as channels
@@ -72,7 +72,7 @@ class FASTDEPLOY_DECL YOLOv5Face : public FastDeployModel {
   /*! @brief
     Argument for image postprocessing step, setup the number of landmarks for per face (if have), default 5 in
     official yolov5face note that, the outupt tensor's shape must be:
-    (1,n,4+1+2*landmarks_per_face+1=box+obj+landmarks+cls)
+    (1,n,4+1+2*landmarks_per_face+1=box+obj+landmarks+cls), default 5
   */
   int landmarks_per_face;
 

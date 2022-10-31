@@ -173,6 +173,16 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void DisableLiteFP16();
 
+   /**
+   * @brief enable int8 precision while use paddle lite backend
+   */
+  void EnableLiteInt8();
+
+  /**
+   * @brief disable int8 precision, change to full precision(float32)
+   */
+  void DisableLiteInt8();
+
   /**
    * @brief Set power mode while using Paddle Lite as inference backend, mode(0: LITE_POWER_HIGH; 1: LITE_POWER_LOW; 2: LITE_POWER_FULL; 3: LITE_POWER_NO_BIND, 4: LITE_POWER_RAND_HIGH; 5: LITE_POWER_RAND_LOW, refer [paddle lite](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html#set-power-mode) for more details)
    */
@@ -231,6 +241,27 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetOpenVINOStreams(int num_streams);
 
+  /** \Use Graphcore IPU to inference.
+   *
+   * \param[in] device_num the number of IPUs.
+   * \param[in] micro_batch_size the batch size in the graph, only work when graph has no batch shape info.
+   * \param[in] enable_pipelining enable pipelining.
+   * \param[in] batches_per_step the number of batches per run in pipelining.
+   */
+  void UseIpu(int device_num = 1, int micro_batch_size = 1,
+              bool enable_pipelining = false, int batches_per_step = 1);
+
+  /** \brief Set IPU config.
+   *
+   * \param[in] enable_fp16 enable fp16.
+   * \param[in] replica_num the number of graph replication.
+   * \param[in] available_memory_proportion the available memory proportion for matmul/conv.
+   * \param[in] enable_half_partial enable fp16 partial for matmul, only work with fp16.
+   */
+  void SetIpuConfig(bool enable_fp16 = false, int replica_num = 1,
+                    float available_memory_proportion = 1.0,
+                    bool enable_half_partial = false);
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   // default will let the backend choose their own default value
@@ -260,11 +291,23 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int pd_mkldnn_cache_size = 1;
   std::vector<std::string> pd_delete_pass_names;
 
+  // ======Only for Paddle IPU Backend =======
+  int ipu_device_num = 1;
+  int ipu_micro_batch_size = 1;
+  bool ipu_enable_pipelining = false;
+  int ipu_batches_per_step = 1;
+  bool ipu_enable_fp16 = false;
+  int ipu_replica_num = 1;
+  float ipu_available_memory_proportion = 1.0;
+  bool ipu_enable_half_partial = false;
+
   // ======Only for Paddle-Lite Backend=====
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
   LitePowerMode lite_power_mode = LitePowerMode::LITE_POWER_NO_BIND;
+  // enable int8 or not
+  bool lite_enable_int8 = false;
   // enable fp16 or not
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig

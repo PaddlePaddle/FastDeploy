@@ -321,7 +321,17 @@ void RuntimeOption::EnableLiteFP16() {
   lite_enable_fp16 = true;
 }
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+void RuntimeOption::DisableLiteFP16() { 
+  lite_enable_fp16 = false; 
+}
+
+void RuntimeOption::EnableLiteInt8() {
+  lite_enable_int8 = true;
+}
+
+void RuntimeOption::DisableLiteInt8() { 
+  lite_enable_int8 = false; 
+}
 
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
@@ -410,6 +420,30 @@ void RuntimeOption::DisablePaddleTrtCollectShape() {
   pd_collect_shape = false;
 }
 
+void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
+                           bool enable_pipelining, int batches_per_step) {
+#ifdef WITH_IPU
+  device = Device::IPU;
+  ipu_device_num = device_num;
+  ipu_micro_batch_size = micro_batch_size;
+  ipu_enable_pipelining = enable_pipelining;
+  ipu_batches_per_step = batches_per_step;
+#else
+  FDWARNING << "The FastDeploy didn't compile with IPU, will force to use CPU."
+            << std::endl;
+  device = Device::CPU;
+#endif
+}
+
+void RuntimeOption::SetIpuConfig(bool enable_fp16, int replica_num,
+                                 float available_memory_proportion,
+                                 bool enable_half_partial) {
+  ipu_enable_fp16 = enable_fp16;
+  ipu_replica_num = replica_num;
+  ipu_available_memory_proportion = available_memory_proportion;
+  ipu_enable_half_partial = enable_half_partial;
+}
+
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
   if (option.model_format == ModelFormat::AUTOREC) {
@@ -445,8 +479,10 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::TRT in " << Str(option.device)
            << "." << std::endl;
   } else if (option.backend == Backend::PDINFER) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
-             "Backend::TRT only supports Device::CPU/Device::GPU.");
+    FDASSERT(
+        option.device == Device::CPU || option.device == Device::GPU ||
+            option.device == Device::IPU,
+        "Backend::PDINFER only supports Device::CPU/Device::GPU/Device::IPU.");
     FDASSERT(
         option.model_format == ModelFormat::PADDLE,
         "Backend::PDINFER only supports model format of ModelFormat::PADDLE.");
@@ -512,6 +548,7 @@ void Runtime::CreatePaddleBackend() {
   pd_option.enable_log_info = option.pd_enable_log_info;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
   pd_option.use_gpu = (option.device == Device::GPU) ? true : false;
+  pd_option.use_ipu = (option.device == Device::IPU) ? true : false;
   pd_option.gpu_id = option.device_id;
   pd_option.delete_pass_names = option.pd_delete_pass_names;
   pd_option.cpu_thread_num = option.cpu_thread_num;
@@ -532,6 +569,21 @@ void Runtime::CreatePaddleBackend() {
     trt_option.serialize_file = option.trt_serialize_file;
     trt_option.enable_pinned_memory = option.enable_pinned_memory;
     pd_option.trt_option = trt_option;
+  }
+#endif
+#ifdef WITH_IPU
+  if (pd_option.use_ipu) {
+    auto ipu_option = IpuOption();
+    ipu_option.ipu_device_num = option.ipu_device_num;
+    ipu_option.ipu_micro_batch_size = option.ipu_micro_batch_size;
+    ipu_option.ipu_enable_pipelining = option.ipu_enable_pipelining;
+    ipu_option.ipu_batches_per_step = option.ipu_batches_per_step;
+    ipu_option.ipu_enable_fp16 = option.ipu_enable_fp16;
+    ipu_option.ipu_replica_num = option.ipu_replica_num;
+    ipu_option.ipu_available_memory_proportion =
+        option.ipu_available_memory_proportion;
+    ipu_option.ipu_enable_half_partial = option.ipu_enable_half_partial;
+    pd_option.ipu_option = ipu_option;
   }
 #endif
   FDASSERT(option.model_format == ModelFormat::PADDLE,
@@ -655,6 +707,7 @@ void Runtime::CreateLiteBackend() {
 #ifdef ENABLE_LITE_BACKEND
   auto lite_option = LiteBackendOption();
   lite_option.threads = option.cpu_thread_num;
+  lite_option.enable_int8 = option.lite_enable_int8;
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
