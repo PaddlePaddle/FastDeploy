@@ -105,8 +105,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  void UseRKNPU2(fastdeploy::RKNPU::CpuName rknpu2_name = fastdeploy::RKNPU::CpuName::RK3588,
-                 fastdeploy::RKNPU::CoreMask rknpu2_core = fastdeploy::RKNPU::CoreMask::RKNN_NPU_CORE_0);
+  void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name = fastdeploy::rknpu2::CpuName::RK3588,
+                 fastdeploy::rknpu2::CoreMask rknpu2_core = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
 
   void SetExternalStream(void* external_stream);
 
@@ -320,8 +320,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string poros_file = "";
 
   // ======Only for RKNPU2 Backend=======
-  fastdeploy::RKNPU::CpuName rknpu2_cpu_name_ = fastdeploy::RKNPU::CpuName::RK3588;
-  fastdeploy::RKNPU::CoreMask rknpu2_core_mask_ = fastdeploy::RKNPU::CoreMask::RKNN_NPU_CORE_AUTO;
+  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ = fastdeploy::rknpu2::CpuName::RK3588;
+  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
   std::string model_file = "";  // Path of model file
   std::string params_file = ""; // Path of parameters file, can be empty

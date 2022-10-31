@@ -164,6 +164,11 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       m.def_submodule("text", "Text module of FastDeploy.");
   BindText(text_module);
 #endif
+#ifdef ENABLE_RKNPU2_BACKEND
+  auto rknpu2_module =
+      m.def_submodule("rknpu2", "RKNPU2 config module of FastDeploy.");
+  BindRKNPU2Config(rknpu2_module);
+#endif
 }
 
 }  // namespace fastdeploy

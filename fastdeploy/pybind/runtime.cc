@@ -187,8 +187,8 @@ void BindRuntime(pybind11::module& m) {
                           "Device for inference.")
       .value("CPU", Device::CPU)
       .value("GPU", Device::GPU)
-      .value("IPU", Device::IPU);
-      .value("NPU", Device::NPU)
+      .value("IPU", Device::IPU)
+      .value("NPU", Device::NPU);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),
                               "Data type of FastDeploy.")

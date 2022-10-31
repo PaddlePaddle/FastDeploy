@@ -16,7 +16,7 @@
 #define RKNPU2_CONFIG_H
 
 namespace fastdeploy {
-namespace RKNPU {
+namespace rknpu2 {
 typedef enum _rknpu2_cpu_name {
   RK356X = 0, /* run on RK356X. */
   RK3588 = 1, /* default,run on RK3588. */
