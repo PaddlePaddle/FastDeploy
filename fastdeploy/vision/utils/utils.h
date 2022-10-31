@@ -96,11 +96,6 @@ bool CropImageByBox(const Mat& src_im, Mat* dst_im,
 void DarkParse(const std::vector<float>& heatmap, const std::vector<int>& dim,
                std::vector<float>* coords, const int px, const int py,
                const int index, const int ch);
-
-
-bool ChangeValidBackends(const std::string& config_file,
-                         std::vector<Backend>* valid_cpu_backends,
-                         std::vector<Backend>* valid_gpu_backends);
 }  // namespace utils
 }  // namespace vision
 }  // namespace fastdeploy
