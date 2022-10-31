@@ -53,6 +53,9 @@ std::string Str(const Device& d) {
     case Device::GPU:
       out = "Device::GPU";
       break;
+    case Device::IPU:
+      out = "Device::IPU";
+      break;
     default:
       out = "Device::UNKOWN";
   }
