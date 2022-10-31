@@ -17,7 +17,8 @@ mkdir build && cd build
 cmake .. -DENABLE_PADDLE_BACKEND=ON \
          -DWITH_IPU=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DENABLE_TEXT=ON
 make -j8
 make install
 ```
@@ -39,6 +40,7 @@ Linux编译过程同样需要满足
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export ENABLE_VISION=ON
+export ENABLE_TEXT=ON
 export ENABLE_PADDLE_BACKEND=ON
 export WITH_IPU=ON
 
