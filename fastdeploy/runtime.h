@@ -226,6 +226,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void DisablePaddleTrtCollectShape();
 
+  /*
+   * @brief Set number of streams by the OpenVINO backends
+   */
+  void SetOpenVINOStreams(int num_streams);
+
   Backend backend = Backend::UNKNOWN;
   // for cpu inference and preprocess
   // default will let the backend choose their own default value
@@ -282,6 +287,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int unconst_ops_thres = -1;
   std::string poros_file = "";
 
+  // ======Only for OpenVINO Backend=======
+  int ov_num_streams = 1;
+
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   ModelFormat model_format = ModelFormat::AUTOREC;  // format of input model
@@ -336,6 +344,13 @@ struct FASTDEPLOY_DECL Runtime {
   /** \brief Get all the output information
    */
   std::vector<TensorInfo> GetOutputInfos();
+
+  /** \brief Clone new Runtime when multiple instances of the same model are created
+   *
+   * \param[in] stream CUDA Stream, defualt param is nullptr
+   * \return new Runtime* by this clone
+   */
+  Runtime* Clone(void* stream = nullptr);
 
   RuntimeOption option;
 

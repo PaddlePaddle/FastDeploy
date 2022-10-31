@@ -63,6 +63,10 @@ class BaseBackend {
   virtual std::vector<TensorInfo> GetOutputInfos() = 0;
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs) = 0;
+  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr) {
+    FDERROR << "Clone no support" << std::endl;
+    return nullptr;
+  }
 };
 
 }  // namespace fastdeploy

@@ -368,6 +368,10 @@ void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
 }
 
+void RuntimeOption::SetOpenVINOStreams(int num_streams) {
+  ov_num_streams = num_streams;
+}
+
 bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
                       const RuntimeOption& _option) {
 #ifdef ENABLE_POROS_BACKEND
@@ -548,6 +552,7 @@ void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
+  ov_option.ov_num_streams = option.ov_num_streams;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
@@ -665,6 +670,17 @@ void Runtime::CreateLiteBackend() {
            "LiteBackend is not available, please compiled with "
            "ENABLE_LITE_BACKEND=ON.");
 #endif
+}
+
+Runtime* Runtime::Clone(void* stream) {
+  Runtime* runtime = new Runtime();
+  if (option.backend != Backend::OPENVINO && option.backend != Backend::PDINFER) {
+    runtime->Init(option);
+    return runtime;
+  }
+  runtime->option = option;
+  runtime->backend_ = backend_->Clone(stream);
+  return runtime;
 }
 
 }  // namespace fastdeploy

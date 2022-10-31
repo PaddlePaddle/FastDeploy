@@ -24,6 +24,7 @@
 #include "paddle2onnx/converter.h"
 #endif
 #include "paddle_inference_api.h"  // NOLINT
+#include "fastdeploy/utils/unique_ptr.h"
 
 #ifdef ENABLE_TRT_BACKEND
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
@@ -91,6 +92,8 @@ class PaddleBackend : public BaseBackend {
   int NumInputs() const override { return inputs_desc_.size(); }
 
   int NumOutputs() const override { return outputs_desc_.size(); }
+
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr) override;
 
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;

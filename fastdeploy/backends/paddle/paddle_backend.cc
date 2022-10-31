@@ -201,6 +201,15 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<PaddleBackend>();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->predictor_ = std::move(predictor_->Clone(stream));
+  return new_backend;
+}
+
 #ifdef ENABLE_TRT_BACKEND
 void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option) {
     std::map<std::string, std::vector<int>> max_shape;

@@ -74,6 +74,8 @@ ov::element::Type FDDataTypeToOV(const FDDataType& type) {
   return ov::element::f32;
 }
 
+ov::Core OpenVINOBackend::core_;
+
 void OpenVINOBackend::InitTensorInfo(
     const std::vector<ov::Output<ov::Node>>& ov_outputs,
     std::map<std::string, TensorInfo>* tensor_infos) {
@@ -96,10 +98,6 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   option_ = option;
-  ov::AnyMap properties;
-  if (option_.cpu_thread_num > 0) {
-    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
-  }
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file, params_file);
 
@@ -149,7 +147,19 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     output_infos_.push_back(iter->second);
   }
 
+  ov::AnyMap properties;
+  if (option_.cpu_thread_num > 0) {
+    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+  }
+  if (option_.ov_num_streams ==  -1) {
+    properties["NUM_STREAMS"] = ov::streams::AUTO;
+  } else if (option_.ov_num_streams ==  -2) {
+    properties["NUM_STREAMS"] = ov::streams::NUMA;
+  } else if (option_.ov_num_streams > 0) {
+    properties["NUM_STREAMS"] = option_.ov_num_streams;
+  }
   compiled_model_ = core_.compile_model(model, "CPU", properties);
+
   request_ = compiled_model_.create_infer_request();
   initialized_ = true;
   return true;
@@ -185,10 +195,6 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
     return false;
   }
   option_ = option;
-  ov::AnyMap properties;
-  if (option_.cpu_thread_num > 0) {
-    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
-  }
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file);
 
@@ -238,8 +244,21 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
     output_infos_.push_back(iter->second);
   }
 
+  ov::AnyMap properties;
+  if (option_.cpu_thread_num > 0) {
+    properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
+  }
+  if (option_.ov_num_streams ==  -1) {
+    properties["NUM_STREAMS"] = ov::streams::AUTO;
+  } else if (option_.ov_num_streams ==  -2) {
+    properties["NUM_STREAMS"] = ov::streams::NUMA;
+  } else if (option_.ov_num_streams > 0) {
+    properties["NUM_STREAMS"] = option_.ov_num_streams;
+  }
   compiled_model_ = core_.compile_model(model, "CPU", properties);
+
   request_ = compiled_model_.create_infer_request();
+  
   initialized_ = true;
   return true;
 }
@@ -279,6 +298,16 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
            (*outputs)[i].Nbytes());
   }
   return true;
+}
+
+std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void *stream) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<OpenVINOBackend>();
+  auto casted_backend = dynamic_cast<OpenVINOBackend*>(new_backend.get());
+  casted_backend->option_ = option_;
+  casted_backend->request_ = compiled_model_.create_infer_request();
+  casted_backend->input_infos_.assign(input_infos_.begin(), input_infos_.end());
+  casted_backend->output_infos_.assign(output_infos_.begin(), output_infos_.end());
+  return new_backend;
 }
 
 }  // namespace fastdeploy
