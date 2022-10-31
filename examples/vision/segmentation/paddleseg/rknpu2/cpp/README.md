@@ -7,7 +7,7 @@
 1. 软硬件环境满足要求
 2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../docs/cn/build_and_install/rknpu2.md)实现
+以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
 
 ## 生成基本目录文件
 
@@ -24,7 +24,7 @@
 └── thirdpartys  # 存放sdk的文件夹
 ```
 
-我们需要先生成目录结构
+首先需要先生成目录结构
 ```bash
 mkdir build
 mkdir images
@@ -36,12 +36,12 @@ mkdir thirdpartys
 
 ### 编译并拷贝SDK到thirdpartys文件夹
 
-请参考[RK2代NPU部署库编译](../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
+请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
 fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
 在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model，我这里提供了转换好的文件，输入以下命令下载使用(模型文件为RK3588，RK3568需要重新转换模型)。
+转换为RKNN后的模型文件也需要拷贝至model，这里提供了转换好的文件，输入以下命令下载使用(模型文件为RK3588，RK3568需要重新[转换PPSeg RKNN模型](../README.md))。
 ```bash
 cd model
 wget https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
@@ -75,62 +75,10 @@ cd ./build/install
 运行后将在install文件夹下生成human_pp_humansegv2_lite_npu_result.jpg文件，如下图:
 ![](https://user-images.githubusercontent.com/58363586/198875853-72821ad1-d4f7-41e3-b616-bef43027de3c.jpg)
 
-## PaddleSeg C++接口
-
-### PaddleSeg类
-
-```c++
-fastdeploy::vision::segmentation::PaddleSegModel(
-        const string& model_file,
-        const string& params_file = "",
-        const string& config_file,
-        const RuntimeOption& runtime_option = RuntimeOption(),
-        const ModelFormat& model_format = ModelFormat::PADDLE)
-```
-
-**参数**
-
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 推理部署配置文件
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，要使用NPU进行推理这里需要配置为ModelFormat::RKNN
-
-### Predict函数
-
-> ```c++
-> PaddleSegModel::Predict(cv::Mat* im, DetectionResult* result)
-> ```
->
-> 模型预测接口，输入图像直接输出检测结果。
->
-> **参数**
->
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 分割结果，包括分割预测的标签以及标签对应的概率值, SegmentationResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-
-### DisableNormalizeAndPermute函数
-
-> ```c++
-> PaddleSegModel::DisableNormalizeAndPermute()
-> ```
->
-> 关闭模型normalize和nhwc操作。
-> **参数**
-> 
-> 无具体参数
-
-
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
-
-> > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
-
-#### 后处理参数
-> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+## 注意事项
+RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
+需要先调用DisableNormalizePermute(C++)或`disable_normalize_permute(Python)，在预处理阶段禁用归一化以及数据格式的转换。
 
 - [模型介绍](../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [转换PPSeg RKNN模型文档](../README.md)

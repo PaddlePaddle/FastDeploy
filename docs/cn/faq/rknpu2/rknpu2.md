@@ -1,8 +1,7 @@
 # RKNPU2模型部署
 
 ## ONNX模型转换为RKNN模型
-
-RKNPU2不支持直接使用ONNX模型进行推导，因此我们首先需要把ONNX模型转换为RKNN模型。为了简化流程了，我新建了一个仓库负责这部分的抓换，详情请查看[LuFeng](https://github.com/Zheng-Bicheng/LuFeng)
+ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型转换为RKNN模型，具体流程请查看[转换文档](./export.md)
 
 ## RKNPU2已经支持的模型列表
 
@@ -57,4 +56,9 @@ int infer_scrfd_npu() {
 }
 ```
 
+
+## 其他关联文档
+- [rknpu2板端环境安装配置](../../build_and_install/rknpu2.md)
+- [rknn_toolkit2安装文档](./install_rknn_toolkit2.md)
+- [onnx转换rknn文档](./export.md)
 

@@ -33,7 +33,7 @@ sudo rknn_install_rk3588.sh
 sudo rknn_install_rk356X.sh
 ```
 
-**方法2: 通过gittee安装**
+**方法2: 通过gitee安装**
 ```bash
 # 安装必备的包
 sudo apt update -y
@@ -98,4 +98,4 @@ pip3 install fastdeploy_python-0.0.0-cp39-cp39-linux_aarch64.whl
 
 ## 部署模型
 
-请查看[RKNPU2部署模型教程](~/examples/rknpu2/README.md)
+请查看[RKNPU2部署模型教程](../faq/rknpu2/rknpu2.md)
