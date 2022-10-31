@@ -53,27 +53,3 @@
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"
-
-namespace fastdeploy {
-namespace vision {
-/*! @brief Enable using FlyCV to process image while deploy vision models. Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will fallback to using OpenCV in other platform
- */
-inline void EnableFlyCV() {
-#ifdef ENABLE_FLYCV
-  Processor::default_lib = ProcLib::FLYCV;
-  FDINFO << "Will change to use image processing library "
-         << Processor::default_lib << std::endl;
-#else
-  FDWARNING << "FastDeploy didn't compile with FlyCV, "
-                "will fallback to use OpenCV instead."
-            << std::endl;
-#endif
-}
-
-/// Disable using FlyCV to process image while deploy vision models.
-inline void DisableFlyCV() {
-  Processor::default_lib = ProcLib::OPENCV;
-}
-
-}  // namespace vision
-}  // namespace fastdeploy
