@@ -33,7 +33,7 @@ Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请�
 
 ## 量化 Benchmark
 
-目前, FastDeploy支持的一键量化并完成部署测试的模型在Runtime推理的Benchmark如下.
+目前, FastDeploy支持的一键量化并完成部署测试的模型Benchmark如下.
 
 Benchmark表格说明:
 - Rtuntime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
