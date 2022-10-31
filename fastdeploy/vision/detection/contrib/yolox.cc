@@ -96,7 +96,7 @@ bool YOLOX::Initialize() {
   downsample_strides = {8, 16, 32};
   max_wh = 4096.0f;
   is_decode_exported = false;
-  input_tensors.resize(1);
+  reused_input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -290,25 +290,25 @@ bool YOLOX::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
 
-  if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+  if (!Preprocess(&mat, &reused_input_tensors[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
+  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
   if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
   if (is_decode_exported) {
-    if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+    if (!Postprocess(reused_output_tensors[0], result, im_info, conf_threshold,
                      nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
   } else {
-    if (!PostprocessWithDecode(output_tensors[0], result, im_info,
+    if (!PostprocessWithDecode(reused_output_tensors[0], result, im_info,
                                conf_threshold, nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;

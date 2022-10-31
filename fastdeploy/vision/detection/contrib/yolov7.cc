@@ -93,7 +93,7 @@ bool YOLOv7::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 7680.0;
-  input_tensors.resize(1);
+  reused_input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -305,24 +305,24 @@ bool YOLOv7::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                              static_cast<float>(mat.Width())};
 
   if (use_cuda_preprocessing_) {
-    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!CudaPreprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   } else {
-    if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!Preprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
+  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
   if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(reused_output_tensors[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;

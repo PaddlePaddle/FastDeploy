@@ -123,7 +123,7 @@ bool YOLOv5Lite::Initialize() {
   anchor_config = {{10.0, 13.0, 16.0, 30.0, 33.0, 23.0},
                    {30.0, 61.0, 62.0, 45.0, 59.0, 119.0},
                    {116.0, 90.0, 156.0, 198.0, 373.0, 326.0}};
-  input_tensors.resize(1);
+  reused_input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -426,31 +426,31 @@ bool YOLOv5Lite::Predict(cv::Mat* im, DetectionResult* result,
                              static_cast<float>(mat.Width())};
 
   if (use_cuda_preprocessing_) {
-    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!CudaPreprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   } else {
-    if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!Preprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
+  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
   if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
   if (is_decode_exported) {
-    if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+    if (!Postprocess(reused_output_tensors[0], result, im_info, conf_threshold,
                      nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;
     }
   } else {
-    if (!PostprocessWithDecode(output_tensors[0], result, im_info,
+    if (!PostprocessWithDecode(reused_output_tensors[0], result, im_info,
                                conf_threshold, nms_iou_threshold)) {
       FDERROR << "Failed to post process." << std::endl;
       return false;

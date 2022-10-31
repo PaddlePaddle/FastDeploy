@@ -25,10 +25,10 @@ class FASTDEPLOY_DECL FastDeployModel {
 
   /** \brief Inference the model by the runtime. This interface is included in the `Predict()` function, so we don't call `Infer()` directly in most common situation
   */
-  virtual bool Infer(std::vector<FDTensor>& _input_tensors,
-                     std::vector<FDTensor>* _output_tensors);
+  virtual bool Infer(std::vector<FDTensor>& input_tensors,
+                     std::vector<FDTensor>* output_tensors);
 
-  /** \brief Inference the model by the runtime. This interface is using class member input_tensors to do inference and writing results to output_tensors
+  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors to do inference and writing results to reused_output_tensors
   */
   virtual bool Infer();
 
@@ -98,12 +98,19 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
-  /** \brief Input tensors
+  /** \brief Release reused input/output buffers
   */
-  std::vector<FDTensor> input_tensors;
-  /** \brief Output tensors
+  virtual void ReleaseReusedBuffer() {
+    reused_input_tensors.clear();
+    reused_output_tensors.clear();
+  }
+
+  /** \brief Reused input tensors
   */
-  std::vector<FDTensor> output_tensors;
+  std::vector<FDTensor> reused_input_tensors;
+  /** \brief Reused output tensors
+  */
+  std::vector<FDTensor> reused_output_tensors;
 
  protected:
   virtual bool InitRuntime();
