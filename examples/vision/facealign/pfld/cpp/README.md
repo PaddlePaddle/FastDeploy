@@ -22,11 +22,11 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-lite.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png
 
 # CPU推理
-./infer_demo pfld-106-lite.onnx facealign_input.png 0
+./infer_demo --model pfld-106-lite.onnx --image facealign_input.png --device cpu
 # GPU推理
-./infer_demo pfld-106-lite.onnx facealign_input.png 1
+./infer_demo --model pfld-106-lite.onnx --image facealign_input.png --device gpu
 # GPU上TensorRT推理
-./infer_demo pfld-106-lite.onnx facealign_input.png 2
+./infer_demo --model pfld-106-lite.onnx --image facealign_input.png --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示

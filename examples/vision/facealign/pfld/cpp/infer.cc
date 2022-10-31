@@ -25,7 +25,7 @@ DEFINE_string(backend, "ort",
 DEFINE_bool(use_fp16, false, "Wheter to use FP16 mode.");
 
 void PrintUsage() {
-  std::cout << "Usage: infer_demo --model model_path --device [cpu|gpu] --backend "
+  std::cout << "Usage: infer_demo --model model_path --image img_path --device [cpu|gpu] --backend "
                "[ort|paddle|ov|trt|paddle_trt] "
                "--use_fp16 false"
             << std::endl;
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
   auto model = fastdeploy::vision::facealign::PFLD(FLAGS_model, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
-    return;
+    return -1;
   }
 
   auto im = cv::imread(FLAGS_image);
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
   fastdeploy::vision::FaceAlignmentResult res;
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
-    return;
+    return -1;
   }
   std::cout << res.Str() << std::endl;
 
