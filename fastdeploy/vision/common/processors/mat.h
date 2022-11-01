@@ -15,11 +15,14 @@
 #include "fastdeploy/core/fd_tensor.h"
 #include "opencv2/core/core.hpp"
 #include "fastdeploy/vision/common/processors/utils.h"
+#ifdef ENABLE_OPENCV_CUDA
+#include "opencv2/cudawarping.hpp"
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
-enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV};
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, OPENCVCUDA, FLYCV };
 enum Layout { HWC, CHW };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
@@ -54,6 +57,19 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
+#ifdef ENABLE_OPENCV_CUDA
+  void SetMat(const cv::cuda::GpuMat& mat) {
+    gpu_mat = mat;
+    mat_type = ProcLib::OPENCVCUDA;
+  }
+
+  inline cv::cuda::GpuMat* GetOpenCVCudaMat() {
+    FDASSERT(mat_type == ProcLib::OPENCVCUDA,
+             "Met non cv::cuda::GpuMat data strucure.");
+    return &gpu_mat;
+  }
+#endif
+
 #ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
@@ -73,6 +89,10 @@ struct FASTDEPLOY_DECL Mat {
   int height;
   int width;
   cv::Mat cpu_mat;
+
+#ifdef ENABLE_OPENCV_CUDA
+  cv::cuda::GpuMat gpu_mat;
+#endif
 
 #ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;

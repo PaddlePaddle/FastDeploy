@@ -41,6 +41,17 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #else
     FDASSERT(false, "FastDeploy didn't compile with FalconCV.");
 #endif
+  } else if (target == ProcLib::OPENCVCUDA) {
+#ifdef ENABLE_OPENCV_CUDA
+    if (mat->mat_type != ProcLib::OPENCVCUDA) {
+      cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type());
+      gpu_mat.upload(*(mat->GetOpenCVMat()));
+      mat->SetMat(gpu_mat);
+    }
+    return ImplByOpenCVCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with OpenCV_CUDA.");
+#endif
   }
   return ImplByOpenCV(mat);
 }
