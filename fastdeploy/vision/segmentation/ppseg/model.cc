@@ -76,14 +76,6 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   return true;
 }
 
-void PaddleSegModel::DisableNormalizeAndPermute(){
-  this->disable_normalize_and_permute = true;
-  // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
-  if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
-  }
-}
-
 }  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy
