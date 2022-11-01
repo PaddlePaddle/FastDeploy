@@ -45,6 +45,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   if (option_.enable_int8) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+    FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
+           << "inferenence with int8 precision!" << std::endl;    
   }
   if (option_.enable_fp16) {
     paddle::lite_api::MobileConfig check_fp16_config;
@@ -55,6 +57,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     if (supported_fp16_) {
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+      FDINFO << "Your device is supported fp16 ! Lite::Backend will "
+             << "inferenence with fp16 precision!" << std::endl;    
     } else {
       FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
@@ -89,7 +93,8 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
   if (option_.optimized_model_dir != "") {
     FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
            << option_.optimized_model_dir << std::endl;
-    predictor_->SaveOptimizedModel(option_.optimized_model_dir);
+    predictor_->SaveOptimizedModel(option_.optimized_model_dir,
+                                   paddle::lite_api::LiteModelType::kNaiveBuffer);
   }
 
   inputs_desc_.clear();
