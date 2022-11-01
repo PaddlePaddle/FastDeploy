@@ -41,6 +41,10 @@
 #include "fastdeploy/backends/lite/lite_backend.h"
 #endif
 
+#ifdef ENABLE_RKNPU2_BACKEND
+#include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -62,6 +66,9 @@ std::vector<Backend> GetAvailableBackends() {
 #endif
 #ifdef ENABLE_LITE_BACKEND
   backends.push_back(Backend::LITE);
+#endif
+#ifdef ENABLE_RKNPU2_BACKEND
+  backends.push_back(Backend::RKNPU2);
 #endif
   return backends;
 }
@@ -85,7 +92,9 @@ std::string Str(const Backend& b) {
     return "Backend::PDINFER";
   } else if (b == Backend::POROS) {
     return "Backend::POROS";
-  } else if (b == Backend::OPENVINO) {
+  } else if (b == Backend::RKNPU2) {
+    return "Backend::RKNPU2";
+  }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
     return "Backend::LITE";
@@ -98,6 +107,8 @@ std::string Str(const ModelFormat& f) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
+  }else if (f == ModelFormat::RKNN) {
+    return "ModelFormat::RKNN";
   } else if (f == ModelFormat::TORCHSCRIPT) {
     return "ModelFormat::TORCHSCRIPT";
   }
@@ -113,7 +124,9 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::PDINFER";
   } else if (backend == Backend::OPENVINO) {
     out << "Backend::OPENVINO";
-  } else if (backend == Backend::POROS) {
+  } else if (backend == Backend::RKNPU2) {
+    out << "Backend::RKNPU2";
+  }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::LITE";
@@ -127,6 +140,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::PADDLE";
   } else if (format == ModelFormat::ONNX) {
     out << "ModelFormat::ONNX";
+  } else if (format == ModelFormat::RKNN) {
+    out << "ModelFormat::RKNN";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
   }
@@ -152,6 +167,14 @@ bool CheckModelFormat(const std::string& model_file,
               << model_file << std::endl;
       return false;
     }
+  } else if (model_format == ModelFormat::RKNN) {
+    if (model_file.size() < 5 ||
+        model_file.substr(model_file.size() - 5, 5) != ".rknn") {
+      FDERROR << "With model format of ModelFormat::RKNN, the model file "
+                 "should ends with `.rknn`, but now it's "
+              << model_file << std::endl;
+      return false;
+    }
   } else if (model_format == ModelFormat::TORCHSCRIPT) {
     if (model_file.size() < 3 ||
         model_file.substr(model_file.size() - 3, 3) != ".pt") {
@@ -162,7 +185,7 @@ bool CheckModelFormat(const std::string& model_file,
     }
   } else {
     FDERROR << "Only support model format with frontend ModelFormat::PADDLE / "
-               "ModelFormat::ONNX / ModelFormat::TORCHSCRIPT."
+               "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
             << std::endl;
     return false;
   }
@@ -182,6 +205,10 @@ ModelFormat GuessModelFormat(const std::string& model_file) {
              model_file.substr(model_file.size() - 3, 3) == ".pt") {
     FDINFO << "Model Format: Torchscript." << std::endl;
     return ModelFormat::TORCHSCRIPT;
+  } else if (model_file.size() > 5 &&
+             model_file.substr(model_file.size() - 5, 5) == ".rknn") {
+    FDINFO << "Model Format: RKNN." << std::endl;
+    return ModelFormat::RKNN;
   }
 
   FDERROR << "Cannot guess which model format you are using, please set "
@@ -223,6 +250,13 @@ void RuntimeOption::UseGpu(int gpu_id) {
 
 void RuntimeOption::UseCpu() { device = Device::CPU; }
 
+void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
+                              fastdeploy::rknpu2::CoreMask rknpu2_core) {
+  rknpu2_cpu_name_ = rknpu2_name;
+  rknpu2_core_mask_ = rknpu2_core;
+  device = Device::RKNPU;
+}
+
 void RuntimeOption::SetExternalStream(void* external_stream) {
   external_stream_ = external_stream;
 }
@@ -234,7 +268,8 @@ void RuntimeOption::SetCpuThreadNum(int thread_num) {
 
 void RuntimeOption::SetOrtGraphOptLevel(int level) {
   std::vector<int> supported_level{-1, 0, 1, 2};
-  auto valid_level = std::find(supported_level.begin(), supported_level.end(), level) != supported_level.end();
+  auto valid_level = std::find(supported_level.begin(), supported_level.end(),
+                               level) != supported_level.end();
   FDASSERT(valid_level, "The level must be -1, 0, 1, 2.");
   ort_graph_opt_level = level;
 }
@@ -321,18 +356,16 @@ void RuntimeOption::EnableLiteFP16() {
   lite_enable_fp16 = true;
 }
 
-void RuntimeOption::DisableLiteFP16() { 
-  lite_enable_fp16 = false; 
+void RuntimeOption::DisableLiteFP16() {
+  lite_enable_fp16 = false;
 }
-
 void RuntimeOption::EnableLiteInt8() {
   lite_enable_int8 = true;
 }
 
-void RuntimeOption::DisableLiteInt8() { 
-  lite_enable_int8 = false; 
+void RuntimeOption::DisableLiteInt8() {
+  lite_enable_int8 = false;
 }
-
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
 }
@@ -410,7 +443,7 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
            "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
-}  
+}
 
 void RuntimeOption::EnablePaddleTrtCollectShape() {
   pd_collect_shape = true;
@@ -458,6 +491,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::POROS;
     } else if (IsBackendAvailable(Backend::OPENVINO)) {
       option.backend = Backend::OPENVINO;
+    } else if (IsBackendAvailable(Backend::RKNPU2)) {
+      option.backend = Backend::RKNPU2;
     } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
@@ -510,6 +545,13 @@ bool Runtime::Init(const RuntimeOption& _option) {
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
+  } else if (option.backend == Backend::RKNPU2) {
+    FDASSERT(option.device == Device::RKNPU,
+             "Backend::RKNPU2 only supports Device::RKNPU2");
+    CreateRKNPU2Backend();
+
+    FDINFO << "Runtime initialized with Backend::RKNPU2 in "
+           << Str(option.device) << "." << std::endl;
   } else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
@@ -722,6 +764,23 @@ void Runtime::CreateLiteBackend() {
   FDASSERT(false,
            "LiteBackend is not available, please compiled with "
            "ENABLE_LITE_BACKEND=ON.");
+#endif
+}
+
+void Runtime::CreateRKNPU2Backend() {
+#ifdef ENABLE_RKNPU2_BACKEND
+  auto rknpu2_option = RKNPU2BackendOption();
+  rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
+  rknpu2_option.core_mask = option.rknpu2_core_mask_;
+  FDASSERT(option.model_format == ModelFormat::RKNN,
+           "RKNPU2Backend only support model format of ModelFormat::RKNN");
+  backend_ = utils::make_unique<RKNPU2Backend>();
+  auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
+  FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
+           "Load model from nb file failed while initializing LiteBackend.");
+#else
+  FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
+                  "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
 }
 
