@@ -25,7 +25,13 @@ void* Mat::Data() {
 #else
     FDASSERT(false, "FastDeploy didn't compile with FalconCV, but met data type with fcv::Mat.");
 #endif
-  }
+  } else if (mat_type == ProcLib::OPENCVCUDA) {
+#ifdef ENABLE_OPENCV_CUDA
+    return gpu_mat.ptr();
+#else
+    FDASSERT(false, "FastDeploy didn't compile with OpenCV_CUDA, but met data type with cv::cuda::GpuMat.");
+#endif
+  } 
   return cpu_mat.ptr();
 }
 

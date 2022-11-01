@@ -36,6 +36,27 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_OPENCV_CUDA
+bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
+  cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  int origin_w = im->cols;
+  int origin_h = im->rows;
+  double scale = GenerateScale(origin_w, origin_h);
+  if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
+    cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
+  } else {
+    int width = static_cast<int>(round(scale * im->cols));
+    int height = static_cast<int>(round(scale * im->rows));
+    if (width != origin_w || height != origin_h) {
+      cv::cuda::resize(*im, *im, cv::Size(width, height), 0, 0, interp_);
+    }
+  }
+  mat->SetWidth(im->cols);
+  mat->SetHeight(im->rows);
+  return true;
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 bool ResizeByShort::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();
