@@ -18,7 +18,6 @@ import time
 import json
 import uuid
 import yaml
-from easydict import EasyDict
 
 import fastdeploy.utils.hub_env as hubenv
 
@@ -45,8 +44,8 @@ class HubConfig:
 
     def _initialize(self):
         # Set default configuration values.
-        self.data = EasyDict()
-        self.data.server = 'http://paddlepaddle.org.cn/paddlehub'
+        self.data = {}
+        self.data['server'] = 'http://paddlepaddle.org.cn/paddlehub'
 
     def reset(self):
         '''Reset configuration to default.'''
@@ -56,17 +55,16 @@ class HubConfig:
     @property
     def server(self):
         '''Model server url.'''
-        return self.data.server
+        return self.data['server']
 
     @server.setter
     def server(self, url: str):
-        self.data.server = url
+        self.data['server'] = url
         self.flush()
 
     def flush(self):
         '''Flush the current configuration into the configuration file.'''
         with open(self.file, 'w') as file:
-            # convert EasyDict to dict
             cfg = json.loads(json.dumps(self.data))
             yaml.dump(cfg, file)
 
