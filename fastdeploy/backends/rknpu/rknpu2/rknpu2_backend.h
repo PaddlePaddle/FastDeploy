@@ -15,9 +15,9 @@
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/core/fd_tensor.h"
-#include "rknn_api.h" // NOLINT
-#include "rknpu2_config.h"
-#include <cstring>    // for memset
+#include "rknn_api.h"  // NOLINT
+#include "fastdeploy/backends/rknpu/rknpu2/rknpu2_config.h"
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -27,7 +27,7 @@ namespace fastdeploy {
 struct RKNPU2BackendOption {
   rknpu2::CpuName cpu_name = rknpu2::CpuName::RK3588;
 
-  //The specification of NPU core setting.It has the following choices :
+  // The specification of NPU core setting.It has the following choices :
   // RKNN_NPU_CORE_AUTO : Referring to automatic mode, meaning that it will
   // select the idle core inside the NPU.
   // RKNN_NPU_CORE_0 : Running on the NPU0 core
@@ -77,9 +77,11 @@ class RKNPU2Backend : public BaseBackend {
  private:
   // The object of rknn context.
   rknn_context ctx{};
-  // The structure rknn_sdk_version is used to indicate the version information of the RKNN SDK.
+  // The structure rknn_sdk_version is used to indicate the version
+  // information of the RKNN SDK.
   rknn_sdk_version sdk_ver{};
-  // The structure rknn_input_output_num represents the number of input and output Tensor
+  // The structure rknn_input_output_num represents
+  // the number of input and output Tensor
   rknn_input_output_num io_num{};
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
@@ -93,4 +95,4 @@ class RKNPU2Backend : public BaseBackend {
   static FDDataType RknnTensorTypeToFDDataType(rknn_tensor_type type);
   static rknn_tensor_type FDDataTypeToRknnTensorType(FDDataType type);
 };
-} // namespace fastdeploy
+}  // namespace fastdeploy

@@ -94,7 +94,7 @@ std::string Str(const Backend& b) {
     return "Backend::POROS";
   } else if (b == Backend::RKNPU2) {
     return "Backend::RKNPU2";
-  }else if (b == Backend::OPENVINO) {
+  } else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
     return "Backend::LITE";
@@ -107,7 +107,7 @@ std::string Str(const ModelFormat& f) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
-  }else if (f == ModelFormat::RKNN) {
+  } else if (f == ModelFormat::RKNN) {
     return "ModelFormat::RKNN";
   } else if (f == ModelFormat::TORCHSCRIPT) {
     return "ModelFormat::TORCHSCRIPT";
@@ -126,7 +126,7 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::OPENVINO";
   } else if (backend == Backend::RKNPU2) {
     out << "Backend::RKNPU2";
-  }else if (backend == Backend::POROS) {
+  } else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::LITE";
@@ -178,15 +178,17 @@ bool CheckModelFormat(const std::string& model_file,
   } else if (model_format == ModelFormat::TORCHSCRIPT) {
     if (model_file.size() < 3 ||
         model_file.substr(model_file.size() - 3, 3) != ".pt") {
-      FDERROR << "With model format of ModelFormat::TORCHSCRIPT, the model file "
-                 "should ends with `.pt`, but now it's "
-              << model_file << std::endl;
+      FDERROR
+          << "With model format of ModelFormat::TORCHSCRIPT, the model file "
+             "should ends with `.pt`, but now it's "
+          << model_file << std::endl;
       return false;
     }
   } else {
-    FDERROR << "Only support model format with frontend ModelFormat::PADDLE / "
-               "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
-            << std::endl;
+    FDERROR
+        << "Only support model format with frontend ModelFormat::PADDLE / "
+           "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
+        << std::endl;
     return false;
   }
   return true;
@@ -231,9 +233,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = ModelFormat::TORCHSCRIPT;
   } else {
-    FDASSERT(
-        false,
-        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
+    FDASSERT(false,
+             "The model format only can be "
+             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
   }
 }
 
@@ -337,13 +339,18 @@ void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
 
 void RuntimeOption::EnablePaddleToTrt() {
-  FDASSERT(backend == Backend::TRT, "Should call UseTrtBackend() before call EnablePaddleToTrt().");
+  FDASSERT(backend == Backend::TRT,
+           "Should call UseTrtBackend() before call EnablePaddleToTrt().");
 #ifdef ENABLE_PADDLE_BACKEND
-  FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will change to use Paddle Inference Backend." << std::endl;
+  FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will "
+            "change to use Paddle Inference Backend."
+         << std::endl;
   backend = Backend::PDINFER;
   pd_enable_trt = true;
 #else
-  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the FastDeploy is compiled with Paddle Inference Backend, please rebuild your FastDeploy.");
+  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the "
+                  "FastDeploy is compiled with Paddle Inference Backend, "
+                  "please rebuild your FastDeploy.");
 #endif
 }
 
@@ -352,20 +359,12 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
-void RuntimeOption::EnableLiteFP16() {
-  lite_enable_fp16 = true;
-}
+void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
 
-void RuntimeOption::DisableLiteFP16() {
-  lite_enable_fp16 = false;
-}
-void RuntimeOption::EnableLiteInt8() {
-  lite_enable_int8 = true;
-}
+void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
+void RuntimeOption::EnableLiteInt8() { lite_enable_int8 = true; }
 
-void RuntimeOption::DisableLiteInt8() {
-  lite_enable_int8 = false;
-}
+void RuntimeOption::DisableLiteInt8() { lite_enable_int8 = false; }
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
 }
@@ -426,28 +425,24 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
   poros_option.max_workspace_size = option.trt_max_workspace_size;
-  FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
-           "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
+  FDASSERT(
+      option.model_format == ModelFormat::TORCHSCRIPT,
+      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(
       casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
       "Load model from Torchscript failed while initliazing PorosBackend.");
 #else
-  FDASSERT(false,
-           "PorosBackend is not available, please compiled with "
-           "ENABLE_POROS_BACKEND=ON.");
+  FDASSERT(false, "PorosBackend is not available, please compiled with "
+                  "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
 }
 
-void RuntimeOption::EnablePaddleTrtCollectShape() {
-  pd_collect_shape = true;
-}
+void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }
 
-void RuntimeOption::DisablePaddleTrtCollectShape() {
-  pd_collect_shape = false;
-}
+void RuntimeOption::DisablePaddleTrtCollectShape() { pd_collect_shape = false; }
 
 void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
                            bool enable_pipelining, int batches_per_step) {
@@ -523,9 +518,9 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::POROS) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::POROS only supports Device::CPU/Device::GPU.");
-    FDASSERT(
-        option.model_format == ModelFormat::TORCHSCRIPT,
-        "Backend::POROS only supports model format of ModelFormat::TORCHSCRIPT.");
+    FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
+             "Backend::POROS only supports model format of "
+             "ModelFormat::TORCHSCRIPT.");
     FDINFO << "Runtime initialized with Backend::POROS in "
            << Str(option.device) << "." << std::endl;
     return true;
@@ -632,9 +627,8 @@ void Runtime::CreatePaddleBackend() {
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
-  FDASSERT(false,
-           "PaddleBackend is not available, please compiled with "
-           "ENABLE_PADDLE_BACKEND=ON.");
+  FDASSERT(false, "PaddleBackend is not available, please compiled with "
+                  "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 
@@ -658,9 +652,8 @@ void Runtime::CreateOpenVINOBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "OpenVINOBackend is not available, please compiled with "
-           "ENABLE_OPENVINO_BACKEND=ON.");
+  FDASSERT(false, "OpenVINOBackend is not available, please compiled with "
+                  "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 
@@ -694,9 +687,8 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "OrtBackend is not available, please compiled with "
-           "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false, "OrtBackend is not available, please compiled with "
+                  "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -734,9 +726,8 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false,
-           "TrtBackend is not available, please compiled with "
-           "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false, "TrtBackend is not available, please compiled with "
+                  "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
 
@@ -756,9 +747,8 @@ void Runtime::CreateLiteBackend() {
                                           lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false,
-           "LiteBackend is not available, please compiled with "
-           "ENABLE_LITE_BACKEND=ON.");
+  FDASSERT(false, "LiteBackend is not available, please compiled with "
+                  "ENABLE_LITE_BACKEND=ON.");
 #endif
 }
 
@@ -779,4 +769,4 @@ void Runtime::CreateRKNPU2Backend() {
 #endif
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy
