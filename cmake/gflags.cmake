@@ -71,13 +71,6 @@ ExternalProject_Add(
 ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
 SET_PROPERTY(TARGET gflags PROPERTY IMPORTED_LOCATION ${GFLAGS_LIBRARIES})
 ADD_DEPENDENCIES(gflags extern_gflags)
-# For example cmake
-if(THIRD_LIBS)
-  LIST(APPEND THIRD_LIBS gflags)
-  if(UNIX)
-    LIST(APPEND THIRD_LIBS pthread)
-  endif()
-endif()
 
 # On Windows (including MinGW), the Shlwapi library is used by gflags if available.
 if (WIN32)
