@@ -1,5 +1,5 @@
 Global:
-  model_dir: ./ppyoloe_crn_l_300e_coco
+  model_dir: ./ppyoloe_crn_s_300e_coco
   format: paddle
   model_filename: model.pdmodel
   params_filename: model.pdiparams
