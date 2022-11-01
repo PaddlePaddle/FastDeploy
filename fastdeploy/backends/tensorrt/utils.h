@@ -55,6 +55,8 @@ FDDataType GetFDDataType(const nvinfer1::DataType& dtype);
 
 nvinfer1::DataType ReaderDtypeToTrtDtype(int reader_dtype);
 
+FDDataType ReaderDtypeToFDDtype(int reader_dtype);
+
 std::vector<int> ToVec(const nvinfer1::Dims& dim);
 
 template <typename T>
@@ -152,6 +154,11 @@ class FDGenericBuffer {
   //! \brief Returns the size (in bytes) of the buffer.
   //!
   size_t nbBytes() const { return this->size() * TrtDataTypeSize(mType); }
+
+  //!
+  //! \brief Returns the dtype of the buffer.
+  //!
+  nvinfer1::DataType dtype() const { return mType; }
 
   //!
   //! \brief Set user memory buffer for TRT Buffer
