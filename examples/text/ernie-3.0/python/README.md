@@ -44,8 +44,8 @@ python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
 ```bash
 [INFO] fastdeploy/runtime.cc(469)::Init	Runtime initialized with Backend::ORT in Device::CPU.
-Batch id:   0, example id:   0, sentence1: 花呗收款额度限制, sentence2: 收钱码，对花呗支付的金额有限制吗, label: 1, similarity: 0.5819
-Batch id:   1, example id:   0, sentence1: 花呗支持高铁票支付吗, sentence2: 为什么友付宝不支持花呗付款, label: 0, similarity: 0.9979
+Batch id:0, example id:0, sentence1:花呗收款额度限制, sentence2:收钱码，对花呗支付的金额有限制吗, label:1, similarity:0.5819
+Batch id:1, example id:0, sentence1:花呗支持高铁票支付吗, sentence2:为什么友付宝不支持花呗付款, label:0, similarity:0.9979
 ```
 
 ### 参数说明
