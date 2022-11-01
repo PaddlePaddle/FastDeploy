@@ -14,8 +14,17 @@
 
 INCLUDE(ExternalProject)
 
-SET(GFLAGS_PREFIX_DIR  ${THIRD_PARTY_PATH}/gflags)
-SET(GFLAGS_INSTALL_DIR ${THIRD_PARTY_PATH}/install/gflags)
+if(NOT GIT_URL)
+  SET(GIT_URL "https://github.com")
+endif()
+if(THIRD_PARTY_PATH)
+  SET(GFLAGS_PREFIX_DIR  ${THIRD_PARTY_PATH}/gflags)
+  SET(GFLAGS_INSTALL_DIR ${THIRD_PARTY_PATH}/install/gflags)
+else()
+  # For example cmake
+  SET(GFLAGS_PREFIX_DIR  ${FASTDEPLOY_INSTALL_DIR}/installed_fastdeploy/cmake)
+  SET(GFLAGS_INSTALL_DIR ${FASTDEPLOY_INSTALL_DIR}/installed_fastdeploy/cmake/gflags)
+endif()
 SET(GFLAGS_INCLUDE_DIR "${GFLAGS_INSTALL_DIR}/include" CACHE PATH "gflags include directory." FORCE)
 set(GFLAGS_REPOSITORY ${GIT_URL}/gflags/gflags.git)
 set(GFLAGS_TAG "v2.2.2")
@@ -62,6 +71,13 @@ ExternalProject_Add(
 ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
 SET_PROPERTY(TARGET gflags PROPERTY IMPORTED_LOCATION ${GFLAGS_LIBRARIES})
 ADD_DEPENDENCIES(gflags extern_gflags)
+# For example cmake
+if(THIRD_LIBS)
+  LIST(APPEND THIRD_LIBS gflags)
+  if(UNIX)
+    LIST(APPEND THIRD_LIBS pthread)
+  endif()
+endif()
 
 # On Windows (including MinGW), the Shlwapi library is used by gflags if available.
 if (WIN32)
