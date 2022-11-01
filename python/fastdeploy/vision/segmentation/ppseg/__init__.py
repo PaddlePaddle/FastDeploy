@@ -50,7 +50,7 @@ class PaddleSegModel(FastDeployModel):
         return self._model.predict(input_image)
 
     def disable_normalize_and_permute(self):
-        return self._model.disable_normalize_and_permute()
+        return self._model.preprocessor.disable_normalize_and_permute()
 
     @property
     def apply_softmax(self):
@@ -58,7 +58,7 @@ class PaddleSegModel(FastDeployModel):
 
         :return: value of apply_softmax(bool)
         """
-        return self._model.apply_softmax
+        return self._model.postprocessor.apply_softmax
 
     @apply_softmax.setter
     def apply_softmax(self, value):
@@ -69,7 +69,7 @@ class PaddleSegModel(FastDeployModel):
         assert isinstance(
             value,
             bool), "The value to set `apply_softmax` must be type of bool."
-        self._model.apply_softmax = value
+        self._model.postprocessor.apply_softmax = value
 
     @property
     def is_vertical_screen(self):
@@ -77,7 +77,7 @@ class PaddleSegModel(FastDeployModel):
 
         :return: value of is_vertical_screen(bool)
         """
-        return self._model.is_vertical_screen
+        return self._model.preprocessor.is_vertical_screen
 
     @is_vertical_screen.setter
     def is_vertical_screen(self, value):
@@ -88,4 +88,106 @@ class PaddleSegModel(FastDeployModel):
         assert isinstance(
             value,
             bool), "The value to set `is_vertical_screen` must be type of bool."
-        self._model.is_vertical_screen = value
+        self._model.preprocessor.is_vertical_screen = value
+
+
+class PaddleSegPreprocessor:
+    def __init__(self, config_file):
+        self._preprocessor = C.vision.segmentation.PaddleSegPreprocessor(
+            config_file)
+
+    def run(self, input_image):
+        return self._preprocessor.run(input_image)
+
+    def disable_normalize_and_permute(self):
+        return self._preprocessor.disable_normalize_and_permute()
+
+    @property
+    def is_vertical_screen(self):
+        """Atrribute of PP-HumanSeg model. Stating Whether the input image is vertical image(height > width), default value is False
+
+        :return: value of is_vertical_screen(bool)
+        """
+        return self._preprocessor.is_vertical_screen
+
+    @is_vertical_screen.setter
+    def is_vertical_screen(self, value):
+        """Set attribute is_vertical_screen of PP-HumanSeg model.
+
+        :param value: (bool)The value to set is_vertical_screen
+        """
+        assert isinstance(
+            value,
+            bool), "The value to set `is_vertical_screen` must be type of bool."
+        self._preprocessor.is_vertical_screen = value
+
+    @property
+    def is_with_softmax(self):
+        return self.preprocessor.is_with_softmax
+
+    @is_with_softmax.setter
+    def is_with_softmax(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_with_softmax` must be type of bool."
+        self._preprocessor.is_with_softmax = value
+
+    @property
+    def is_with_argmax(self):
+        return self._preprocessor.is_with_argmax
+
+    @is_with_argmax.setter
+    def is_with_argmax(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_with_argmax` must be type of bool."
+        self._preprocessor.is_with_argmax = value
+
+
+class PaddleSegPostprocessor:
+    def __init__(self):
+        self._postprocessor = C.vision.segmentation.PaddleSegPostprocessor()
+
+    def run(self, seg_result, im_info):
+        return self._postprocessor.run(seg_result, im_info)
+
+    @property
+    def apply_softmax(self):
+        """Atrribute of PaddleSeg model. Stating Whether applying softmax operator in the postprocess, default value is False
+
+        :return: value of apply_softmax(bool)
+        """
+        return self._postprocessor.apply_softmax
+
+    @apply_softmax.setter
+    def apply_softmax(self, value):
+        """Set attribute apply_softmax of PaddleSeg model.
+
+        :param value: (bool)The value to set apply_softmax
+        """
+        assert isinstance(
+            value,
+            bool), "The value to set `apply_softmax` must be type of bool."
+        self._postprocessor.apply_softmax = value
+
+    @property
+    def is_with_softmax(self):
+        return self._postprocessor.is_with_softmax
+
+    @is_with_softmax.setter
+    def is_with_softmax(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_with_softmax` must be type of bool."
+        self._postprocessor.is_with_softmax = value
+
+    @property
+    def is_with_argmax(self):
+        return self._postprocessor.is_with_argmax
+
+    @is_with_argmax.setter
+    def is_with_argmax(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_with_argmax` must be type of bool."
+        self._postprocessor.is_with_argmax = value

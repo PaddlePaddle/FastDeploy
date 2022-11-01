@@ -45,6 +45,9 @@ void BindPPSegPreprocessor(pybind11::module& m) {
              self.Run(&fd_mat, &output);
              return make_pair(TensorToPyArray(output), im_info);;
            })
+      .def("disable_normalize_and_permute",
+                     &vision::segmentation::PaddleSegPreprocessor::DisableNormalizeAndPermute)
+                     
       .def_readwrite("is_vertical_screen",
                      &vision::segmentation::PaddleSegPreprocessor::is_vertical_screen)
       
@@ -69,7 +72,6 @@ void BindPPSegPostprocessor(pybind11::module& m) {
              self.Run(fd_infer_result, res, im_info);
              return res;
            })
-      .def("disable_normalize_and_permute",&vision::segmentation::PaddleSegModel::DisableNormalizeAndPermute)
       .def_readwrite("apply_softmax",
                     &vision::segmentation::PaddleSegPostprocessor::apply_softmax)
 
