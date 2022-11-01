@@ -124,46 +124,22 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   option_ = option;
 
 #ifdef ENABLE_PADDLE_FRONTEND
-  std::vector<paddle2onnx::CustomOp> custom_ops;
-  for (auto& item : option_.custom_op_info_) {
-    paddle2onnx::CustomOp op;
-    std::strcpy(op.op_name, item.first.c_str());
-    std::strcpy(op.export_op_name, item.second.c_str());
-    custom_ops.emplace_back(op);
-  }
+  paddle2onnx::CustomOp op;
+  strcpy(op.op_name, "multiclass_nms3");
+  strcpy(op.export_op_name, "MultiClassNMS");
+
   char* model_content_ptr;
   int model_content_size = 0;
   char* calibration_cache_ptr;
   int calibration_cache_size = 0;
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size(), "tensorrt",
+                           verbose, true, true, true, &op,
+                           1, "tensorrt",
                            &calibration_cache_ptr, &calibration_cache_size)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
-  }
-
-  if (option_.remove_multiclass_nms_) {
-    char* new_model = nullptr;
-    int new_model_size = 0;
-    if (!paddle2onnx::RemoveMultiClassNMS(model_content_ptr, model_content_size,
-                                          &new_model, &new_model_size)) {
-      FDERROR << "Try to remove MultiClassNMS failed." << std::endl;
-      return false;
-    }
-    delete[] model_content_ptr;
-    std::string onnx_model_proto(new_model, new_model + new_model_size);
-    delete[] new_model;
-    if (calibration_cache_size) {
-      std::string calibration_str(
-          calibration_cache_ptr,
-          calibration_cache_ptr + calibration_cache_size);
-      calibration_str_ = calibration_str;
-      delete[] calibration_cache_ptr;
-    }
-    return InitFromOnnx(onnx_model_proto, option, true);
   }
 
   std::string onnx_model_proto(model_content_ptr,
