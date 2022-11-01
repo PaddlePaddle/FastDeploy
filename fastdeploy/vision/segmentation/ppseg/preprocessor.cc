@@ -17,22 +17,23 @@
 namespace fastdeploy {
 namespace vision {
 namespace segmentation {
-  
+
 PaddleSegPreprocessor::PaddleSegPreprocessor(const std::string& config_file) {
-  if (!BuildPreprocessPipelineFromConfig(config_file)) {
+  this->config_file_ = config_file;
+  if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
   }
 }
 
-bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig(const std::string& config_file) {
+bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   processors_.push_back(std::make_shared<BGR2RGB>());
   try {
-    cfg = YAML::LoadFile(config_file);
+    cfg = YAML::LoadFile(config_file_);
   } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file
+    FDERROR << "Failed to load yaml file " << config_file_
             << ", maybe you should check this file." << std::endl;
     return false;
   }   
@@ -44,16 +45,17 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
       if (op["type"].as<std::string>() == "Normalize") {
-        std::vector<float> mean = {0.5, 0.5, 0.5};
-        std::vector<float> std = {0.5, 0.5, 0.5};
-        if (op["mean"]) {
-          mean = op["mean"].as<std::vector<float>>();
+        if(!(this->disable_normalize_and_permute)){
+          std::vector<float> mean = {0.5, 0.5, 0.5};
+          std::vector<float> std = {0.5, 0.5, 0.5};
+          if (op["mean"]) {
+            mean = op["mean"].as<std::vector<float>>();
+          }
+          if (op["std"]) {
+            std = op["std"].as<std::vector<float>>();
+          }
+          processors_.push_back(std::make_shared<Normalize>(mean, std));
         }
-        if (op["std"]) {
-          std = op["std"].as<std::vector<float>>();
-        }
-        processors_.push_back(std::make_shared<Normalize>(mean, std));
-
       } else if (op["type"].as<std::string>() == "Resize") {
         yml_contain_resize_op = true;
         const auto& target_size = op["target_size"];
@@ -106,7 +108,9 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
               << "." << std::endl;
     }
   }
-  processors_.push_back(std::make_shared<HWC2CHW>());
+  if(!(this->disable_normalize_and_permute)){
+    processors_.push_back(std::make_shared<HWC2CHW>());
+  }
   return true;
 }
 
@@ -135,6 +139,15 @@ bool PaddleSegPreprocessor::Run(Mat* mat, FDTensor* output) {
   output->shape.insert(output->shape.begin(), 1);
   return true;
 }
+
+void PaddleSegPreprocessor::DisableNormalizeAndPermute(){
+  this->disable_normalize_and_permute = true;
+  // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
+
 }  // namespace segmentation
 }  // namespace vision
 }  // namespace fastdeploy

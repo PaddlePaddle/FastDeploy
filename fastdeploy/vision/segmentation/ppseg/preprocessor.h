@@ -25,12 +25,9 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
   PaddleSegPreprocessor() {}
   explicit PaddleSegPreprocessor(const std::string& config_file);
 
-  virtual bool BuildPreprocessPipelineFromConfig(
-                                 const std::string& config_file);
+  virtual bool BuildPreprocessPipelineFromConfig();
 
   virtual bool Run(Mat* mat, FDTensor* outputs);
-
-  std::vector<std::shared_ptr<Processor>> processors_;
 
   /** \brief For PP-HumanSeg model, set true if the input image is vertical image(height > width), default value is false
    */
@@ -42,6 +39,17 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
 
   // Paddle2ONNX temporarily don't support dynamic input
   bool is_change_backends_ = false;
+
+  // This function will disable normalize and hwc2chw in preprocessing step.
+  void DisableNormalizeAndPermute();
+
+ private:
+  std::string config_file_;
+
+  std::vector<std::shared_ptr<Processor>> processors_;
+
+  // for recording the switch of normalize and hwc2chw
+  bool disable_normalize_and_permute = false;
 };
 
 }  // namespace segmentation
