@@ -33,7 +33,7 @@ ENV PATH=/home/cmake-3.18.6-Linux-x86_64/bin:$PATH
 ENV TAG=r21.10
 RUN git clone https://github.com/triton-inference-server/server.git -b $TAG && \
     cd server && \
-    mkdir -p mybuild/tritonserver/install && \
+    mkdir -p build/tritonserver/install && \
     python3 build.py \
       --build-dir `pwd`/build \
       --no-container-build \
