@@ -23,6 +23,9 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
  public:
   CenterCrop(int width, int height) : height_(height), width_(width) {}
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool ImplByOpenCVCuda(Mat* mat);
+#endif
 #ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif

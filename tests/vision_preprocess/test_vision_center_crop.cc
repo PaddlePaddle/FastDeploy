@@ -21,6 +21,37 @@
 
 namespace fastdeploy {
 
+#ifdef ENABLE_OPENCV_CUDA
+TEST(fastdeploy, opencv_cuda_center_crop2) {
+  CheckShape check_shape;
+  CheckData check_data;
+  CheckType check_type;
+
+  cv::Mat mat(64, 64, CV_8UC3);
+  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
+  cv::Mat mat1 = mat.clone();
+
+  vision::Mat mat_opencv(mat);
+  vision::Mat mat_opencv_cuda(mat1);
+  vision::CenterCrop::Run(&mat_opencv, 20, 20, vision::ProcLib::OPENCV);
+  vision::CenterCrop::Run(&mat_opencv_cuda, 20, 20, vision::ProcLib::OPENCVCUDA);
+
+  FDTensor opencv;
+  FDTensor opencv_cuda;
+
+  mat_opencv.ShareWithTensor(&opencv);
+  mat_opencv_cuda.ShareWithTensor(&opencv_cuda);
+
+  check_shape(opencv.shape, opencv_cuda.shape);
+  check_type(opencv.dtype, opencv_cuda.dtype);
+
+  cv::Mat opencv_cuda_cpu(mat_opencv_cuda.GetOpenCVCudaMat()->size(), mat_opencv_cuda.GetOpenCVCudaMat()->type());
+  mat_opencv_cuda.GetOpenCVCudaMat()->download(opencv_cuda_cpu);
+
+  check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(opencv_cuda_cpu.ptr()), opencv.Numel());
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 TEST(fastdeploy, flycv_center_crop1) {
   CheckShape check_shape;
