@@ -100,16 +100,16 @@ fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --
 ## 3. FastDeploy 一键模型自动化压缩 Config文件参考
 FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文件, 用户可以直接下载使用.
 
-| 参数                 | 备注                                                       |
-| -------------------- | ------------------------------------------------------------ |
-| [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      |            |
-| [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |            |
-| [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |            |
-| [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |            |
-| [yolov7_quant](./configs/detection/yolov7_quant.yaml)        |            |
-| [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要保留NMS  |
-| [ppyoloe_withoutNMS_quant](./configs/detection/ppyoloe_withoutNMS_quant.yaml)       | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要设置不保留NMS |
-| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |            |
+| Config文件                | 待压缩的FP32模型 | 备注                                                       |
+| -------------------- | ------------------------------------------------------------ |----------------------------------------- |
+| [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      | [mobilenetv1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_ssld_infer.tgz)           |           |
+| [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |   [resnet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz)          |     |
+| [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |   [yolov5s](https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx)         |     |
+| [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |  [yolov6s](https://paddle-slim-models.bj.bcebos.com/act/yolov6s.onnx)          |     |
+| [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
+| [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要保留NMS  |
+| [ppyoloe_withoutNMS_quant](./configs/detection/ppyoloe_withoutNMS_quant.yaml)  |  [ppyoloe_s](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_s_300e_coco.tar)  | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要设置不保留NMS |
+| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |       |
 
 
 
