@@ -64,6 +64,20 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_OPENCV_CUDA
+bool Normalize::ImplByOpenCVCuda(Mat* mat) {
+  cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+
+  std::vector<cv::cuda::GpuMat> split_im;
+  cv::cuda::split(*im, split_im);
+  for (int c = 0; c < im->channels(); c++) {
+    split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
+  }
+  cv::cuda::merge(split_im, *im);
+  return true;
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 bool Normalize::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();

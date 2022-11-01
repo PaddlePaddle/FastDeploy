@@ -21,6 +21,42 @@
 
 namespace fastdeploy {
 
+#ifdef ENABLE_OPENCV_CUDA
+TEST(fastdeploy, opencv_cuda_norm1) {
+  CheckShape check_shape;
+  CheckData check_data;
+  CheckType check_type;
+
+  cv::Mat mat(64, 64, CV_8UC3);
+  cv::randu(mat, cv::Scalar::all(0), cv::Scalar::all(255));
+  cv::Mat mat1 = mat.clone();
+
+  vision::Mat mat_opencv(mat);
+  vision::Mat mat_opencv_cuda(mat1);
+
+  std::vector<float> mean({0.25, 0.35, 0.45});
+  std::vector<float> std({0.33, 0.22, 0.54});
+  std::vector<float> min;
+  std::vector<float> max;
+  vision::Normalize::Run(&mat_opencv, mean, std, true, min, max, vision::ProcLib::OPENCV);
+  vision::Normalize::Run(&mat_opencv_cuda, mean, std, true, min, max, vision::ProcLib::OPENCVCUDA);
+
+  FDTensor opencv;
+  FDTensor opencv_cuda;
+
+  mat_opencv.ShareWithTensor(&opencv);
+  mat_opencv_cuda.ShareWithTensor(&opencv_cuda);
+
+  check_shape(opencv.shape, opencv_cuda.shape);
+  check_type(opencv.dtype, opencv_cuda.dtype);
+
+  cv::Mat opencv_cuda_cpu(mat_opencv_cuda.GetOpenCVCudaMat()->size(), mat_opencv_cuda.GetOpenCVCudaMat()->type());
+  mat_opencv_cuda.GetOpenCVCudaMat()->download(opencv_cuda_cpu);
+
+  check_data(reinterpret_cast<const float*>(opencv.Data()), reinterpret_cast<const float*>(opencv_cuda_cpu.ptr()), opencv.Numel());
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 TEST(fastdeploy, flycv_norm1) {
   CheckShape check_shape;

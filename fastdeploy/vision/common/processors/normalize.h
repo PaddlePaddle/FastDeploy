@@ -25,6 +25,9 @@ class FASTDEPLOY_DECL Normalize : public Processor {
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool ImplByOpenCVCuda(Mat* mat);
+#endif
 #ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif

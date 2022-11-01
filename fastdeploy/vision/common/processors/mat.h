@@ -17,6 +17,7 @@
 #include "fastdeploy/vision/common/processors/utils.h"
 #ifdef ENABLE_OPENCV_CUDA
 #include "opencv2/cudawarping.hpp"
+#include "opencv2/cudaarithm.hpp"
 #endif
 
 namespace fastdeploy {
