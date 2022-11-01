@@ -73,7 +73,7 @@ FastDeploy一键模型自动化压缩目前的量化蒸馏训练，只支持无�
 # 下载yolov5.onnx
 wget https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx
 
-# 下载数据集, 此Calibration数据集为COCO2017验证集中的前320张图片
+# 下载数据集, 此Calibration数据集为COCO2017训练集中的前320张图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_train_320.tar
 tar -xvf COCO_train_320.tar
 ```
