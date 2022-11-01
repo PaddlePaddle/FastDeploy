@@ -563,6 +563,11 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
+install(
+  FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/utils
+)
+
 if(NOT WIN32)
   install(
     FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.sh

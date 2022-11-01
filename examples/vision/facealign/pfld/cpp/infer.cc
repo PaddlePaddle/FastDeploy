@@ -19,18 +19,18 @@ DEFINE_string(model, "", "Directory of the inference model.");
 DEFINE_string(image, "", "Path of the image file.");
 DEFINE_string(device, "cpu",
               "Type of inference device, support 'cpu' or 'gpu'.");
-DEFINE_string(backend, "ort",
-              "The inference runtime backend, support: ['ort', "
+DEFINE_string(backend, "default",
+              "The inference runtime backend, support: ['default', 'ort', "
               "'paddle', 'ov', 'trt', 'paddle_trt']");
-DEFINE_bool(use_fp16, false, "Wheter to use FP16 mode.");
+DEFINE_bool(use_fp16, false, "Whether to use FP16 mode, only support 'trt' and 'paddle_trt' backend");
 
 void PrintUsage() {
   std::cout << "Usage: infer_demo --model model_path --image img_path --device [cpu|gpu] --backend "
-               "[ort|paddle|ov|trt|paddle_trt] "
+               "[default|ort|paddle|ov|trt|paddle_trt] "
                "--use_fp16 false"
             << std::endl;
   std::cout << "Default value of device: cpu" << std::endl;
-  std::cout << "Default value of backend: ort" << std::endl;
+  std::cout << "Default value of backend: default" << std::endl;
   std::cout << "Default value of use_fp16: false" << std::endl;
 }
 
@@ -62,6 +62,8 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     if (FLAGS_use_fp16) {
       option->EnableTrtFP16();
     }
+  } else if (FLAGS_backend == "default") {
+    return true;
   } else {
     std::cerr << FLAGS_backend << " is an unsupported backend" << std::endl;
     return false;
