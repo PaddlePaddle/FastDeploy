@@ -42,8 +42,7 @@ class FASTDEPLOY_DECL FastDeployModel {
 
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
-  std::vector<Backend> valid_hardware_backends = {};
-  std::vector<Backend> &valid_rknpu_backends = valid_hardware_backends;
+  std::vector<Backend> valid_rknpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -106,7 +105,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool CreateCpuBackend();
   virtual bool CreateGpuBackend();
   virtual bool CreateIpuBackend();
-  virtual bool CreateNpuBackend();
+  virtual bool CreateRKNPUBackend();
 
   bool initialized = false;
   std::vector<Backend> valid_external_backends;
