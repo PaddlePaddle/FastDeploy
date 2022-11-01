@@ -17,10 +17,14 @@
 namespace fastdeploy {
 
 void BindPPSeg(pybind11::module& m);
+void BindPPSegPreprocessor(pybind11::module& m);
+void BindPPSegPostprocessor(pybind11::module& m);
 
 void BindSegmentation(pybind11::module& m) {
   auto segmentation_module =
       m.def_submodule("segmentation", "Image semantic segmentation models.");
   BindPPSeg(segmentation_module);
+  BindPPSegPreprocessor(segmentation_module);
+  BindPPSegPostprocessor(segmentation_module);
 }
 }  // namespace fastdeploy

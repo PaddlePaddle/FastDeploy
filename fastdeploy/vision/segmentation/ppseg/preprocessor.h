@@ -34,14 +34,14 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
 
   /** \brief For PP-HumanSeg model, set true if the input image is vertical image(height > width), default value is false
    */
-  bool is_vertical_screen_ = false;
+  bool is_vertical_screen = false;
 
-  bool is_with_softmax_ = false;
+  bool is_with_softmax = false;
 
-  bool is_with_argmax_ = true;
+  bool is_with_argmax = true;
 
   // Paddle2ONNX temporarily don't support dynamic input
-  bool is_change_backends = false;
+  bool is_change_backends_ = false;
 };
 
 }  // namespace segmentation

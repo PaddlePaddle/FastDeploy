@@ -17,6 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace segmentation {
+  
 PaddleSegPreprocessor::PaddleSegPreprocessor(const std::string& config_file) {
   if (!BuildPreprocessPipelineFromConfig(config_file)) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
@@ -82,7 +83,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
                 << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
                 << " to export model with fixed input shape."
                 << std::endl;
-      is_change_backends = true;
+      is_change_backends_ = true;
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
       processors_.push_back(
@@ -92,14 +93,14 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
   if (cfg["Deploy"]["output_op"]) {
     std::string output_op = cfg["Deploy"]["output_op"].as<std::string>();
     if (output_op == "softmax") {
-      is_with_softmax_ = true;
-      is_with_argmax_ = false;
+      is_with_softmax = true;
+      is_with_argmax = false;
     } else if (output_op == "argmax") {
-      is_with_softmax_ = false;
-      is_with_argmax_ = true;
+      is_with_softmax = false;
+      is_with_argmax = true;
     } else if (output_op == "none") {
-      is_with_softmax_ = false;
-      is_with_argmax_ = false;
+      is_with_softmax = false;
+      is_with_argmax = false;
     } else {
       FDERROR << "Unexcepted output_op operator in deploy.yml: " << output_op
               << "." << std::endl;
@@ -116,7 +117,7 @@ bool PaddleSegPreprocessor::Run(Mat* mat, FDTensor* output) {
       int resize_width = -1;
       int resize_height = -1;
       std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
-      if (is_vertical_screen_ && (resize_width > resize_height)) {
+      if (is_vertical_screen && (resize_width > resize_height)) {
         if (!(processor->SetWidthAndHeight(resize_height, resize_width))) {
           FDERROR << "Failed to set width and height of "
                   << processors_[i]->Name() << " processor." << std::endl;

@@ -55,19 +55,19 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
             << ModelName() << "." << std::endl;
     return false;
   }
-  if (preprocessor.is_change_backends) {
+  if (preprocessor.is_change_backends_) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
   }
-  std::vector<FDTensor> infer_result(1);
+  std::vector<FDTensor> infer_result;
   if (!Infer(processed_data, &infer_result)) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
-  postprocessor.is_with_argmax_ = preprocessor.is_with_argmax_;
-  postprocessor.is_with_softmax_ = preprocessor.is_with_softmax_;
-  if (!postprocessor.Run(&infer_result[0], result, im_info)) {
+  postprocessor.is_with_argmax = preprocessor.is_with_argmax;
+  postprocessor.is_with_softmax = preprocessor.is_with_softmax;
+  if (!postprocessor.Run(infer_result, result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

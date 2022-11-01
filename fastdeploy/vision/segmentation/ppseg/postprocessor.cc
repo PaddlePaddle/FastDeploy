@@ -19,7 +19,7 @@ namespace vision {
 namespace segmentation {
 
 bool PaddleSegPostprocessor::Run(
-    FDTensor* infer_result, SegmentationResult* result,
+    std::vector<FDTensor> infer_result, SegmentationResult* result,
     const std::map<std::string, std::array<int, 2>>& im_info) {
   // PaddleSeg has three types of inference output:
   //     1. output with argmax and without softmax. 3-D matrix N(C)HW, Channel
@@ -35,28 +35,30 @@ bool PaddleSegPostprocessor::Run(
   //     1. label_map
   //     2. score_map(optional)
   //     3. shape: 2-D HW
-  FDASSERT(infer_result->dtype == FDDataType::INT64 ||
-               infer_result->dtype == FDDataType::FP32 ||
-               infer_result->dtype == FDDataType::INT32,
+  FDASSERT(infer_result[0].shape[0] == 1, "Only support batch size = 1.");
+  FDTensor* infer_result_ptr = &(infer_result[0]);
+  FDASSERT(infer_result_ptr->dtype == FDDataType::INT64 ||
+           infer_result_ptr->dtype == FDDataType::FP32 ||
+           infer_result_ptr->dtype == FDDataType::INT32,
            "Require the data type of output is int64, fp32 or int32, but now "
            "it's %s.",
-           Str(infer_result->dtype).c_str());
+           Str(infer_result_ptr->dtype).c_str());
   result->Clear();
-  FDASSERT(infer_result->shape[0] == 1, "Only support batch size = 1.");
+  
 
-  int64_t infer_batch = infer_result->shape[0];
+  int64_t infer_batch = infer_result_ptr->shape[0];
   int64_t infer_channel = 0;
   int64_t infer_height = 0;
   int64_t infer_width = 0;
 
-  if (is_with_argmax_) {
+  if (is_with_argmax) {
     infer_channel = 1;
-    infer_height = infer_result->shape[1];
-    infer_width = infer_result->shape[2];
+    infer_height = infer_result_ptr->shape[1];
+    infer_width = infer_result_ptr->shape[2];
   } else {
-    infer_channel = infer_result->shape[1];
-    infer_height = infer_result->shape[2];
-    infer_width = infer_result->shape[3];
+    infer_channel = infer_result_ptr->shape[1];
+    infer_height = infer_result_ptr->shape[2];
+    infer_width = infer_result_ptr->shape[3];
   }
   int64_t infer_chw = infer_channel * infer_height * infer_width;
 
@@ -69,56 +71,56 @@ bool PaddleSegPostprocessor::Run(
     is_resized = true;
   }
 
-  if (!is_with_softmax_ && apply_softmax_) {
-    Softmax(*infer_result, infer_result, 1);
+  if (!is_with_softmax && apply_softmax) {
+    Softmax(*infer_result_ptr, infer_result_ptr, 1);
   }
 
-  if (!is_with_argmax_) {
+  if (!is_with_argmax) {
     // output without argmax
     result->contain_score_map = true;
 
     std::vector<int64_t> dim{0, 2, 3, 1};
-    Transpose(*infer_result, infer_result, dim);
+    Transpose(*infer_result_ptr, infer_result_ptr, dim);
   }
   // batch always 1, so ignore
-  infer_result->shape = {infer_height, infer_width, infer_channel};
+  infer_result_ptr->shape = {infer_height, infer_width, infer_channel};
 
   // for resize mat below
   FDTensor new_infer_result;
   Mat* mat = nullptr;
   std::vector<float_t>* fp32_result_buffer = nullptr;
   if (is_resized) {
-    if (infer_result->dtype == FDDataType::INT64 ||
-        infer_result->dtype == FDDataType::INT32) {
-      if (infer_result->dtype == FDDataType::INT64) {
+    if (infer_result_ptr->dtype == FDDataType::INT64 ||
+        infer_result_ptr->dtype == FDDataType::INT32) {
+      if (infer_result_ptr->dtype == FDDataType::INT64) {
         int64_t* infer_result_buffer =
-            static_cast<int64_t*>(infer_result->Data());
+            static_cast<int64_t*>(infer_result_ptr->Data());
         // cv::resize don't support `CV_8S` or `CV_32S`
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
         fp32_result_buffer = new std::vector<float_t>(
             infer_result_buffer, infer_result_buffer + infer_chw);
       }
-      if (infer_result->dtype == FDDataType::INT32) {
+      if (infer_result_ptr->dtype == FDDataType::INT32) {
         int32_t* infer_result_buffer =
-            static_cast<int32_t*>(infer_result->Data());
+            static_cast<int32_t*>(infer_result_ptr->Data());
         // cv::resize don't support `CV_8S` or `CV_32S`
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
         fp32_result_buffer = new std::vector<float_t>(
             infer_result_buffer, infer_result_buffer + infer_chw);
       }
-      infer_result->Resize(infer_result->shape, FDDataType::FP32);
-      infer_result->SetExternalData(
-          infer_result->shape, FDDataType::FP32,
+      infer_result_ptr->Resize(infer_result_ptr->shape, FDDataType::FP32);
+      infer_result_ptr->SetExternalData(
+          infer_result_ptr->shape, FDDataType::FP32,
           static_cast<void*>(fp32_result_buffer->data()));
     }
-    mat = new Mat(CreateFromTensor(*infer_result));
+    mat = new Mat(CreateFromTensor(*infer_result_ptr));
     Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
     mat->ShareWithTensor(&new_infer_result);
     result->shape = new_infer_result.shape;
   } else {
-    result->shape = infer_result->shape;
+    result->shape = infer_result_ptr->shape;
   }
   // output shape is 2-D HW layout, so out_num = H * W
   int out_num =
@@ -137,8 +139,8 @@ bool PaddleSegPostprocessor::Run(
       ArgMax(new_infer_result, &argmax_infer_result, -1, FDDataType::INT32);
       Max(new_infer_result, &max_score_result, reduce_dim);
     } else {
-      ArgMax(*infer_result, &argmax_infer_result, -1, FDDataType::INT32);
-      Max(*infer_result, &max_score_result, reduce_dim);
+      ArgMax(*infer_result_ptr, &argmax_infer_result, -1, FDDataType::INT32);
+      Max(*infer_result_ptr, &max_score_result, reduce_dim);
     }
     argmax_infer_result_buffer =
         static_cast<int32_t*>(argmax_infer_result.Data());
@@ -159,17 +161,17 @@ bool PaddleSegPostprocessor::Run(
         result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
       }
     } else {
-      if (infer_result->dtype == FDDataType::INT64) {
+      if (infer_result_ptr->dtype == FDDataType::INT64) {
         const int64_t* infer_result_buffer =
-            static_cast<const int64_t*>(infer_result->Data());
+            static_cast<const int64_t*>(infer_result_ptr->Data());
         for (int i = 0; i < out_num; i++) {
           result->label_map[i] =
               static_cast<uint8_t>(*(infer_result_buffer + i));
         }
       }
-      if (infer_result->dtype == FDDataType::INT32) {
+      if (infer_result_ptr->dtype == FDDataType::INT32) {
         const int32_t* infer_result_buffer =
-            static_cast<const int32_t*>(infer_result->Data());
+            static_cast<const int32_t*>(infer_result_ptr->Data());
         for (int i = 0; i < out_num; i++) {
           result->label_map[i] =
               static_cast<uint8_t>(*(infer_result_buffer + i));

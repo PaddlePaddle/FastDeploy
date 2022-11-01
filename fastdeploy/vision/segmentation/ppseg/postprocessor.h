@@ -25,17 +25,17 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
  public:
   PaddleSegPostprocessor() {}
 
-  virtual bool Run(FDTensor* infer_result,
+  virtual bool Run(std::vector<FDTensor> infer_result,
                    SegmentationResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
 
   /** \brief Whether applying softmax operator in the postprocess, default value is false
    */
-  bool apply_softmax_ = false;
+  bool apply_softmax = false;
 
-  bool is_with_softmax_ = false;
+  bool is_with_softmax = false;
 
-  bool is_with_argmax_ = true;
+  bool is_with_argmax = true;
 };
 
 }  // namespace segmentation
