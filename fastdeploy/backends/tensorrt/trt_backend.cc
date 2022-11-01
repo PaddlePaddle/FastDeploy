@@ -124,18 +124,14 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   option_ = option;
 
 #ifdef ENABLE_PADDLE_FRONTEND
-  paddle2onnx::CustomOp op;
-  strcpy(op.op_name, "multiclass_nms3");
-  strcpy(op.export_op_name, "MultiClassNMS");
-
   char* model_content_ptr;
   int model_content_size = 0;
   char* calibration_cache_ptr;
   int calibration_cache_size = 0;
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, &op,
-                           1, "tensorrt",
+                           verbose, true, true, true, nullptr,
+                           0, "tensorrt",
                            &calibration_cache_ptr, &calibration_cache_size)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
