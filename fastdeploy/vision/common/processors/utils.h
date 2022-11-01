@@ -15,7 +15,12 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
+#include "opencv2/core/core.hpp"
 #include "fastdeploy/core/fd_tensor.h"
+
+#ifdef ENABLE_FLYCV
+#include "flycv.h" // NOLINT
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -23,12 +28,14 @@ namespace vision {
 // Convert data type of opencv to FDDataType
 FDDataType OpenCVDataTypeToFD(int type);
 
-#ifdef ENABLE_FALCONCV
-// Convert data type of falconcv to FDDataType
+#ifdef ENABLE_FLYCV
+// Convert data type of flycv to FDDataType
 FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type);
-// Create data type of falconcv by FDDataType
+// Create data type of flycv by FDDataType
 fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel = 1);
+// Convert cv::Mat to fcv::Mat
+fcv::Mat ConvertOpenCVMatToFalconCV(cv::Mat& im);
 #endif
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

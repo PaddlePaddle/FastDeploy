@@ -50,4 +50,15 @@ if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference
 	echo "MKLML Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/third_party/install/mklml/lib"
 fi
 
+if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv ]; then
+	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv/lib:${LD_LIBRARY_PATH}
+	echo "Fly Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv/lib"
+fi
+
+if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite ]; then
+	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib:${LD_LIBRARY_PATH}
+	echo "Paddle Lite Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib"
+fi
+
+
 cd ${CURRENT_EXE_DIR}
