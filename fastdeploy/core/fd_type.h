@@ -22,7 +22,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device { CPU, GPU };
+enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU};
 
 FASTDEPLOY_DECL std::string Str(const Device& d);
 
@@ -51,9 +51,10 @@ enum FASTDEPLOY_DECL FDDataType {
   INT8
 };
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,const Device& d);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,const FDDataType& fdt);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
+                                         const FDDataType& fdt);
 
 FASTDEPLOY_DECL std::string Str(const FDDataType& fdt);
 

@@ -381,6 +381,7 @@ TRITONSERVER_Error* ModelState::LoadModel(
   if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     runtime_options_->UseGpu(instance_group_device_id);
+    runtime_options_->SetExternalStream((void*)stream);
   } else {
     runtime_options_->UseCpu();
   }
@@ -1006,9 +1007,7 @@ TRITONSERVER_Error* ModelInstanceState::Run(
   runtime_->Infer(input_tensors_, &output_tensors_);
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    // TODO: stream controll
-    cudaDeviceSynchronize();
-    // cudaStreamSynchronize(CudaStream());
+    cudaStreamSynchronize(CudaStream());
   }
 #endif
   return nullptr;
