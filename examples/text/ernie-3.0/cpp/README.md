@@ -1,4 +1,4 @@
-# ERNIE-3.0 模型C++部署示例
+# ERNIE 3.0 模型C++部署示例
 
 在部署前，需确认以下两个步骤
 
@@ -26,7 +26,7 @@ cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
 make -j
 
-# 下载AFQMC数据集的微调后的ERNIE-3.0模型以及词表
+# 下载AFQMC数据集的微调后的ERNIE 3.0模型以及词表
 wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
 tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 
@@ -63,8 +63,8 @@ Batch id: 1, example id: 0, sentence 1: 花呗支持高铁票支付吗, sentence
 
 ## 相关文档
 
-[ERNIE-3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE 3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
-[ERNIE-3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE 3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
-[ERNIE-3.0模型Python部署方法](../python/README.md)
+[ERNIE 3.0模型Python部署方法](../python/README.md)
