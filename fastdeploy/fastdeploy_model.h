@@ -101,8 +101,8 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
-    reused_input_tensors.clear();
-    reused_output_tensors.clear();
+    std::vector<FDTensor>().swap(reused_input_tensors);
+    std::vector<FDTensor>().swap(reused_output_tensors);
   }
 
   /** \brief Reused input tensors
