@@ -22,6 +22,9 @@ namespace vision {
 class FASTDEPLOY_DECL HWC2CHW : public Processor {
  public:
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_OPENCV_CUDA
+  bool ImplByOpenCVCuda(Mat* mat);
+#endif
 #ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif

@@ -44,7 +44,9 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   } else if (target == ProcLib::OPENCVCUDA) {
 #ifdef ENABLE_OPENCV_CUDA
     if (mat->mat_type != ProcLib::OPENCVCUDA) {
-      cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type());
+      cv::cuda::GpuMat gpu_mat;
+      cv::cuda::createContinuous(mat->GetOpenCVMat()->rows, mat->GetOpenCVMat()->cols,
+                                 mat->GetOpenCVMat()->type(), gpu_mat);
       gpu_mat.upload(*(mat->GetOpenCVMat()));
       mat->SetMat(gpu_mat);
     }

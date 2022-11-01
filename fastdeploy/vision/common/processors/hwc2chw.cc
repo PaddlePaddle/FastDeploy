@@ -40,6 +40,27 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_OPENCV_CUDA
+bool HWC2CHW::ImplByOpenCVCuda(Mat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "HWC2CHW: The input data is not Layout::HWC format!"
+            << std::endl;
+    return false;
+  }
+  cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  std::vector<cv::cuda::GpuMat> split_im;
+  cv::cuda::split(*im, split_im);
+  int hw_data_size = im->rows * im->cols * FDDataTypeSize(mat->Type());
+
+  for (int c = 0; c < im->channels(); c++) {
+    cv::cuda::GpuMat tmp(split_im[c].size(), split_im[c].type(), im->ptr<uint8_t>() + c * hw_data_size);
+    split_im[c].copyTo(tmp);
+  }
+  mat->layout = Layout::CHW;
+  return true;
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 bool HWC2CHW::ImplByFalconCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
