@@ -47,10 +47,15 @@ bool CenterCrop::ImplByOpenCVCuda(Mat* mat) {
   int offset_x = static_cast<int>((width - width_) / 2);
   int offset_y = static_cast<int>((height - height_) / 2);
   cv::Rect crop_roi(offset_x, offset_y, width_, height_);
-  cv::cuda::GpuMat new_im = (*im)(crop_roi).clone();
+
+  cv::cuda::GpuMat new_im;
+  cv::cuda::createContinuous(height_, width_, im->type(), new_im);
+  (*im)(crop_roi).copyTo(new_im);
+
   mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
+  FDINFO << new_im.isContinuous() << std::endl;
   return true;
 }
 #endif

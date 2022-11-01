@@ -73,7 +73,12 @@ bool Normalize::ImplByOpenCVCuda(Mat* mat) {
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
-  cv::cuda::merge(split_im, *im);
+
+  cv::cuda::GpuMat new_im;
+  cv::cuda::createContinuous(im->rows, im->cols, CV_MAKETYPE(CV_32F, im->channels()), new_im);
+  cv::cuda::merge(split_im, new_im);
+  mat->SetMat(new_im);
+  FDINFO << new_im.isContinuous() << std::endl;
   return true;
 }
 #endif

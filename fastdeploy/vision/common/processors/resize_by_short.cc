@@ -42,17 +42,24 @@ bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
+
+  int width = static_cast<int>(round(scale * origin_w));
+  int height = static_cast<int>(round(scale * origin_h));
+
+  cv::cuda::GpuMat new_im;
+  cv::cuda::createContinuous(im->rows, im->cols, im->type(), new_im);
+
   if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
-    cv::cuda::resize(*im, *im, cv::Size(), scale, scale, interp_);
+    cv::cuda::resize(*im, new_im, cv::Size(), scale, scale, interp_);
   } else {
-    int width = static_cast<int>(round(scale * im->cols));
-    int height = static_cast<int>(round(scale * im->rows));
     if (width != origin_w || height != origin_h) {
-      cv::cuda::resize(*im, *im, cv::Size(width, height), 0, 0, interp_);
+      cv::cuda::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_);
     }
   }
-  mat->SetWidth(im->cols);
-  mat->SetHeight(im->rows);
+  FDINFO << new_im.isContinuous() << " " << scale << "" << std::endl;
+  mat->SetMat(new_im);
+  mat->SetWidth(new_im.cols);
+  mat->SetHeight(new_im.rows);
   return true;
 }
 #endif

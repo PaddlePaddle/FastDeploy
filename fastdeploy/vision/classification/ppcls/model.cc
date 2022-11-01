@@ -68,9 +68,9 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
     if (op_name == "ResizeImage") {
       int target_size = op.begin()->second["resize_short"].as<int>();
       bool use_scale = false;
-      int interp = 1;
+      int interp = cv::INTER_NEAREST;
       processors_.push_back(
-          std::make_shared<ResizeByShort>(target_size, 1, use_scale));
+          std::make_shared<ResizeByShort>(target_size, interp, use_scale));
     } else if (op_name == "CropImage") {
       int width = op.begin()->second["size"].as<int>();
       int height = op.begin()->second["size"].as<int>();
@@ -112,6 +112,24 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   return true;
 }
 
+bool PaddleClasModel::CudaPreprocess(Mat* mat, FDTensor* output) {
+  for (size_t i = 0; i < processors_.size(); ++i) {
+    if (!(*(processors_[i].get()))(mat, ProcLib::OPENCVCUDA)) {
+      FDERROR << "Failed to process image data in " << processors_[i]->Name()
+              << "." << std::endl;
+      return false;
+    }
+  }
+
+  int channel = mat->Channels();
+  int width = mat->Width();
+  int height = mat->Height();
+  output->name = InputInfoOfRuntime(0).name;
+  output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
+                          mat->GetOpenCVCudaMat()->ptr(), Device::GPU);
+  return true;
+}
+
 bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
                                   ClassifyResult* result, int topk) {
   int num_classes = infer_result.shape[1];
@@ -130,10 +148,19 @@ bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
 bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
-  if (!Preprocess(&mat, &(processed_data[0]))) {
-    FDERROR << "Failed to preprocess input data while using model:"
-            << ModelName() << "." << std::endl;
-    return false;
+
+  if (true) {
+    if (!CudaPreprocess(&mat, &(processed_data[0]))) {
+      FDERROR << "Failed to preprocess input data while using model:"
+              << ModelName() << "." << std::endl;
+      return false;
+    }
+  } else {
+    if (!Preprocess(&mat, &(processed_data[0]))) {
+      FDERROR << "Failed to preprocess input data while using model:"
+              << ModelName() << "." << std::endl;
+      return false;
+    }
   }
 
   std::vector<FDTensor> infer_result(1);

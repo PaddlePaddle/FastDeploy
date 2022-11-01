@@ -24,6 +24,18 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_OPENCV_CUDA
+bool BGR2RGB::ImplByOpenCVCuda(Mat* mat) {
+  cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  cv::cuda::GpuMat new_im;
+  cv::cuda::createContinuous(im->rows, im->cols, im->type(), new_im);
+  cv::cuda::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
+  mat->SetMat(new_im);
+  FDINFO << new_im.isContinuous() << std::endl;
+  return true;
+}
+#endif
+
 #ifdef ENABLE_FLYCV
 bool BGR2RGB::ImplByFalconCV(Mat* mat) {
   fcv::Mat* im = mat->GetFalconCVMat();

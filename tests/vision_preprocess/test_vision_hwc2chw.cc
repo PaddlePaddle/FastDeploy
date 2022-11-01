@@ -48,9 +48,6 @@ TEST(fastdeploy, opencv_cuda_hwc2chw1) {
   cv::Mat opencv_cuda_cpu(mat_opencv_cuda.GetOpenCVCudaMat()->size(), mat_opencv_cuda.GetOpenCVCudaMat()->type());
   mat_opencv_cuda.GetOpenCVCudaMat()->download(opencv_cuda_cpu);
 
-  cv::imwrite("cv.jpg", *(mat_opencv.GetOpenCVMat()));
-  cv::imwrite("cuda.jpg", opencv_cuda_cpu);
-
   check_data(reinterpret_cast<const uint8_t*>(opencv.Data()), reinterpret_cast<const uint8_t*>(opencv_cuda_cpu.ptr()), opencv.Numel());
 }
 #endif

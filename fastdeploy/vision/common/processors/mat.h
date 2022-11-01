@@ -18,6 +18,7 @@
 #ifdef ENABLE_OPENCV_CUDA
 #include "opencv2/cudawarping.hpp"
 #include "opencv2/cudaarithm.hpp"
+#include "opencv2/cudaimgproc.hpp"
 #endif
 
 namespace fastdeploy {

@@ -60,6 +60,8 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
 
   bool Preprocess(Mat* mat, FDTensor* outputs);
 
+  bool CudaPreprocess(Mat* mat, FDTensor* outputs);
+
   bool Postprocess(const FDTensor& infer_result, ClassifyResult* result,
                    int topk = 1);
 
