@@ -764,14 +764,14 @@ void Runtime::CreateLiteBackend() {
 
 void Runtime::CreateRKNPU2Backend() {
 #ifdef ENABLE_RKNPU2_BACKEND
-  auto lite_option = RKNPU2BackendOption();
-  lite_option.cpu_name = option.rknpu2_cpu_name_;
-  lite_option.core_mask = option.rknpu2_core_mask_;
+  auto rknpu2_option = RKNPU2BackendOption();
+  rknpu2_option.cpu_name = option.rknpu2_cpu_name_;
+  rknpu2_option.core_mask = option.rknpu2_core_mask_;
   FDASSERT(option.model_format == ModelFormat::RKNN,
            "RKNPU2Backend only support model format of ModelFormat::RKNN");
   backend_ = utils::make_unique<RKNPU2Backend>();
   auto casted_backend = dynamic_cast<RKNPU2Backend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromRKNN(option.model_file, lite_option),
+  FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
   FDASSERT(false, "RKNPU2Backend is not available, please compiled with "

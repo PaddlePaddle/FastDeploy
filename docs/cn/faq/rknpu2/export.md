@@ -2,7 +2,7 @@
 
 ## 简介
 
-fastdeploy已经简单的集成了onnx->rknn的转换过程。本教程使用tools/export.py文件导出模型，在导出之前需要编写yaml配置文件。
+Fastdeploy已经简单的集成了onnx->rknn的转换过程。本教程使用tools/export.py文件导出模型，在导出之前需要编写yaml配置文件。
 在进行转换前请根据[rknn_toolkit2安装文档](./install_rknn_toolkit2.md)检查环境是否已经安装成功。
 
 
