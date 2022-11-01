@@ -53,12 +53,17 @@ def parse_arguments():
         "--backend",
         type=str,
         default="ort",
-        help="inference backend, ort, ov, trt, paddle.")
+        help="inference backend, ort, ov, trt, paddle, paddle_trt.")
     parser.add_argument(
         "--enable_trt_fp16",
         type=bool,
         default=False,
         help="whether enable fp16 in trt backend")
+    parser.add_argument(
+        "--enable_collect_memory_info",
+        type=bool,
+        default=False,
+        help="whether enable collect memory info")
     args = parser.parse_args()
     return args
 
@@ -71,9 +76,11 @@ def build_option(args):
     if device == "gpu":
         option.use_gpu(args.device_id)
 
-    if backend == "trt":
+    if backend == "trt" or backend == "paddle_trt":
         assert device == "gpu", "the trt backend need device==gpu"
         option.use_trt_backend()
+        if backend == "paddle_trt":
+            option.enable_paddle_to_trt()
         if args.enable_trt_fp16:
             option.enable_trt_fp16()
     elif backend == "ov":
@@ -129,7 +136,7 @@ if __name__ == '__main__':
         else:
             file_path = args.model + "_model_" + args.backend + "_" + args.device + ".txt"
     f = open(file_path, "w")
-    f.writelines("===={}====: \n".format(file_path.split("/")[1][:-4]))
+    f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     try:
         if "yolox" in model_file:
@@ -148,40 +155,44 @@ if __name__ == '__main__':
             raise Exception("model {} not support now in yolo series".format(
                 args.model))
         model.enable_record_time_of_runtime()
-
+        im_ori = cv2.imread(args.image)
         for i in range(args.iter_num):
-            im = cv2.imread(args.image)
+            im = im_ori
             start = time.time()
             result = model.predict(im)
             end2end_statis.append(time.time() - start)
-            gpu_util.append(get_current_gputil(gpu_id))
-            cm, gm = get_current_memory_mb(gpu_id)
-            cpu_mem.append(cm)
-            gpu_mem.append(gm)
+            if args.enable_collect_memory_info:
+                gpu_util.append(get_current_gputil(gpu_id))
+                cm, gm = get_current_memory_mb(gpu_id)
+                cpu_mem.append(cm)
+                gpu_mem.append(gm)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
         warmup_iter = args.iter_num // 5
-        repeat_iter = args.iter_num - warmup_iter
         end2end_statis_repeat = end2end_statis[warmup_iter:]
-        cpu_mem_repeat = cpu_mem[warmup_iter:]
-        gpu_mem_repeat = gpu_mem[warmup_iter:]
-        gpu_util_repeat = gpu_util[warmup_iter:]
+        if args.enable_collect_memory_info:
+            cpu_mem_repeat = cpu_mem[warmup_iter:]
+            gpu_mem_repeat = gpu_mem[warmup_iter:]
+            gpu_util_repeat = gpu_util[warmup_iter:]
 
         dump_result = dict()
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
-        dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
-        dump_result["gpu_rss_mb"] = np.mean(gpu_mem_repeat)
-        dump_result["gpu_util"] = np.mean(gpu_util_repeat)
+        if args.enable_collect_memory_info:
+            dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
+            dump_result["gpu_rss_mb"] = np.mean(gpu_mem_repeat)
+            dump_result["gpu_util"] = np.mean(gpu_util_repeat)
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
-        f.writelines("cpu_rss_mb: {} \n".format(
-            str(dump_result["cpu_rss_mb"])))
-        f.writelines("gpu_rss_mb: {} \n".format(
-            str(dump_result["gpu_rss_mb"])))
-        f.writelines("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
+        if args.enable_collect_memory_info:
+            f.writelines("cpu_rss_mb: {} \n".format(
+                str(dump_result["cpu_rss_mb"])))
+            f.writelines("gpu_rss_mb: {} \n".format(
+                str(dump_result["gpu_rss_mb"])))
+            f.writelines("gpu_util: {} \n".format(
+                str(dump_result["gpu_util"])))
     except:
         f.writelines("!!!!!Infer Failed\n")
 

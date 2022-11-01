@@ -2,5 +2,3 @@ numpy
 pynvml
 psutil
 GPUtil
-time
-numpy
