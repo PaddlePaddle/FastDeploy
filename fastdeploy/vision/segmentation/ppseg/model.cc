@@ -25,6 +25,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const ModelFormat& model_format) {
   valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+  valid_rknpu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -73,6 +74,14 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
     return false;
   }
   return true;
+}
+
+void PaddleSegModel::DisableNormalizeAndPermute(){
+  this->disable_normalize_and_permute = true;
+  // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
 }
 
 }  // namespace segmentation

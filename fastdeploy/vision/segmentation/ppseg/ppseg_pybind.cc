@@ -69,6 +69,7 @@ void BindPPSegPostprocessor(pybind11::module& m) {
              self.Run(fd_infer_result, res, im_info);
              return res;
            })
+      .def("disable_normalize_and_permute",&vision::segmentation::PaddleSegModel::DisableNormalizeAndPermute)
       .def_readwrite("apply_softmax",
                     &vision::segmentation::PaddleSegPostprocessor::apply_softmax)
 
