@@ -20,8 +20,8 @@ PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.co
 
 **注意**
 - PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
-- aarch64平台（如：Jetson）暂时只支持`onnxruntime`和`tensorrt`作为后端推理（**不支持**非固定shape的图片输入即动态输入），因此请**指定**`--input_shape`导出具有固定输入的PaddleSeg模型（FastDeploy会在预处理阶段，对原图进行resize操作）
-- 在使用其他平台（如：Windows、Mac、Linux），在导出PaddleSeg模型模型时，可指定`--input_shape`参数，若输入的预测图片尺寸并不固定，建议使用默认值即**不指定**该参数
+- aarch64平台（如：Jetson）暂时只支持`onnxruntime`和`tensorrt`作为后端推理（**不支持**非固定shape的图片输入即动态输入）。因此，**必须指定**`--input_shape`导出具有固定输入的PaddleSeg模型（FastDeploy会在预处理阶段，对原图进行resize操作）
+- 在使用其他平台（如：Windows、Mac、Linux），在导出PaddleSeg模型模型时，可指定`--input_shape`参数（当想采用`onnxruntime`或`tensorrt`作为后端进行推理）。但是，若输入的预测图片尺寸并不固定，建议使用默认值即**不指定**该参数（同时采用Paddle Inference或者OpenVino作为后端进行推理）
 
 ## 下载预训练模型
 
@@ -30,7 +30,7 @@ PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.co
 | 模型                                                               | 参数文件大小    |输入Shape |  mIoU | mIoU (flip) | mIoU (ms+flip) |
 |:---------------------------------------------------------------- |:----- |:----- | :----- | :----- | :----- |
 | [Unet-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz) | 52MB | 1024x512 | 65.00% | 66.02% | 66.89% |
-| [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)  | 31MB  | 1024x512 |73.10% | 73.89% | - |
+| [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)  | 31MB  | 1024x512 |77.04% | 77.73% | 77.46% |
 | [PP-HumanSegV1-Lite(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV1_Lite_infer.tgz) |  543KB | 192x192 | 86.2% | - | - |
 | [PP-HumanSegV2-Lite(通用人像分割模型)](https://bj.bcebos.com/paddle2onnx/libs/PP_HumanSegV2_Lite_192x192_infer.tgz) |  12MB | 192x192 | 92.52% | - | - |
 | [PP-HumanSegV2-Mobile(通用人像分割模型)](https://bj.bcebos.com/paddlehub/fastdeploy/PP_HumanSegV2_Mobile_192x192_infer.tgz) |  29MB | 192x192 | 93.13% | - | - |

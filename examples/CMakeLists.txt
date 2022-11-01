@@ -37,6 +37,12 @@ function(config_fastdeploy_executable_link_flags TARGET_NAME)
   endif()
 endfunction()
 
+# Usage: add_fastdeploy_executable_cc_files(xxx_var vision detection)
+function(add_fastdeploy_executable_cc_files CC_FILES_VAR FIELD SUB_FIELD)
+  file(GLOB_RECURSE _EXAMPLE_SRCS ${PROJECT_SOURCE_DIR}/examples/${FIELD}/${SUB_FIELD}/*/cpp/*.cc)
+  set(${CC_FILES_VAR} ${_EXAMPLE_SRCS} PARENT_SCOPE)
+endfunction()
+
 set(EXAMPLES_NUM 0)
 function(add_fastdeploy_executable FIELD CC_FILE)
   # temp target name/file var in function scope
@@ -66,15 +72,25 @@ endfunction()
 
 # vision examples
 if(BUILD_EXAMPLES AND ENABLE_VISION)
-  if(NOT ENABLE_VISION_VISUALIZE)
-    message(FATAL_ERROR "ENABLE_VISION_VISUALIZE must be ON while BUILD_EXAMPLES and ENABLE_VISION both ON.")
-  endif()
   if(EXISTS ${PROJECT_SOURCE_DIR}/examples/vision)
     message(STATUS "")
     message(STATUS "*************FastDeploy Vision Examples Summary**********")
-    file(GLOB_RECURSE ALL_VISION_EXAMPLE_SRCS ${PROJECT_SOURCE_DIR}/examples/vision/*/*/cpp/*.cc)
-    foreach(_CC_FILE ${ALL_VISION_EXAMPLE_SRCS})
-      add_fastdeploy_executable(vision ${_CC_FILE})
+    set(ALL_VISION_SUD_FIELDS classification
+                              detection
+                              facedet
+                              faceid
+                              keypointdetection
+                              matting
+                              ocr
+                              segmentation)
+    if(NOT ANDROID)
+      list(APPEND ALL_VISION_SUD_FIELDS tracking)
+    endif()
+    foreach(_SUB_FIELD ${ALL_VISION_SUD_FIELDS})
+      add_fastdeploy_executable_cc_files(_SUB_CC_FILES vision ${_SUB_FIELD})
+      foreach(_CC_FILE ${_SUB_CC_FILES})
+        add_fastdeploy_executable(vision ${_CC_FILE})
+      endforeach()
     endforeach()
     message(STATUS "  [FastDeploy Executable Path]        : ${EXECUTABLE_OUTPUT_PATH}")
   endif()

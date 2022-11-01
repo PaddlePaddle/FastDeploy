@@ -24,8 +24,10 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
-      model_file, params_file, config_file);
+      model_file, params_file, config_file, option);
 
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -41,7 +43,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -70,7 +72,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -100,7 +102,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

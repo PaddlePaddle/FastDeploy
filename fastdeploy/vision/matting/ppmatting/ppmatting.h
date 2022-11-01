@@ -61,6 +61,7 @@ class FASTDEPLOY_DECL PPMatting : public FastDeployModel {
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
+  bool is_fixed_input_shape_;
 };
 
 }  // namespace matting
