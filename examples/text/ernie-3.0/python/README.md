@@ -64,5 +64,7 @@ Batch id:   1, example id:   0, sentence1: 花呗支持高铁票支付吗, sente
 ## 相关文档
 
 [ERNIE-3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+
 [ERNIE-3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+
 [ERNIE-3.0模型C++部署方法](../cpp/README.md)
