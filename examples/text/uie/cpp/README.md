@@ -4,21 +4,21 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/environment.md)
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/quick_start)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ## 快速开始
 以Linux上uie-base模型推理为例，在本目录执行如下命令即可完成编译测试。
 
 ```
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.3.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
 
-cd fastdeploy-linux-x64-gpu-0.3.0/examples/text/uie/cpp
+cd fastdeploy-linux-x64-gpu-0.4.0/examples/text/uie/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.3.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
 make -j
 
 # 下载uie-base模型以及词表
@@ -411,20 +411,24 @@ UIEModel(
     const std::vector<std::string>& schema,
     const fastdeploy::RuntimeOption& custom_option =
         fastdeploy::RuntimeOption(),
-    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
+    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE,
+    SchemaLanguage schema_language = SchemaLanguage::ZH);
 UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
     const SchemaNode& schema, const fastdeploy::RuntimeOption& custom_option =
                                   fastdeploy::RuntimeOption(),
-    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
+    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE,
+    SchemaLanguage schema_language = SchemaLanguage::ZH);
 UIEModel(
     const std::string& model_file, const std::string& params_file,
     const std::string& vocab_file, float position_prob, size_t max_length,
     const std::vector<SchemaNode>& schema,
     const fastdeploy::RuntimeOption& custom_option =
         fastdeploy::RuntimeOption(),
-    const fastdeploy::ModelFormat& model_format = fastdeploy::ModelFormat::PADDLE);
+    const fastdeploy::ModelFormat& model_format =
+        fastdeploy::ModelFormat::PADDLE,
+    SchemaLanguage schema_language = SchemaLanguage::ZH);
 ```
 
 UIE模型加载和初始化，其中model_file, params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)。
@@ -439,6 +443,7 @@ UIE模型加载和初始化，其中model_file, params_file为训练模型导出
 > * **schema**(list(SchemaNode) | SchemaNode | list(str)): 抽取任务的目标模式。
 > * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
 > * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **schema_language** (SchemaLanguage): Schema 语言，默认为ZH（中文），目前支持的语言种类包括：ZH（中文），EN（英文）。
 
 #### SetSchema函数
 

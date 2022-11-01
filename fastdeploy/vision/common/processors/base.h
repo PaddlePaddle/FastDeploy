@@ -22,7 +22,14 @@
 namespace fastdeploy {
 namespace vision {
 
-class Processor {
+/*! @brief Enable using FlyCV to process image while deploy vision models. Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will fallback to using OpenCV in other platform
+ */
+FASTDEPLOY_DECL void EnableFlyCV();
+
+/// Disable using FlyCV to process image while deploy vision models.
+FASTDEPLOY_DECL void DisableFlyCV();
+
+class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority
   // all the function in `processor` will force to use

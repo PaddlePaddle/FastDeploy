@@ -23,6 +23,12 @@ bool LimitByStride::ImplByOpenCV(Mat* mat) {
   int origin_h = im->rows;
   int rw = origin_w - origin_w % stride_;
   int rh = origin_h - origin_h % stride_;
+  if (rw == 0) {
+    rw = stride_;
+  }
+  if (rh == 0) {
+    rh = stride_;
+  }
   if (rw != origin_w || rh != origin_w) {
     cv::resize(*im, *im, cv::Size(rw, rh), 0, 0, interp_);
     mat->SetWidth(im->cols);
@@ -30,6 +36,46 @@ bool LimitByStride::ImplByOpenCV(Mat* mat) {
   }
   return true;
 }
+
+#ifdef ENABLE_FLYCV
+bool LimitByStride::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int origin_w = im->width();
+  int origin_h = im->height();
+  int rw = origin_w - origin_w % stride_;
+  int rh = origin_h - origin_h % stride_;
+  if (rw == 0) {
+    rw = stride_;
+  }
+  if (rh == 0) {
+    rh = stride_;
+  }
+  if (rw != origin_w || rh != origin_h) {
+    auto interp_method = fcv::InterpolationType::INTER_LINEAR;
+    if (interp_ == 0) {
+      interp_method = fcv::InterpolationType::INTER_NEAREST;
+    } else if (interp_ == 1) {
+      interp_method = fcv::InterpolationType::INTER_LINEAR;
+    } else if (interp_ == 2) {
+      interp_method = fcv::InterpolationType::INTER_CUBIC;
+    } else {
+      FDERROR << "LimitByStride: Only support interp_ be 0/1/2 with FalconCV, but "
+                 "now it's "
+              << interp_ << "." << std::endl;
+      return false;
+    }
+
+    fcv::Mat new_im;
+    FDERROR << "Before " << im->width() << " " << im->height() << std::endl;
+    fcv::resize(*im, new_im, fcv::Size(rw, rh), 0, 0, interp_method);
+    FDERROR << "After " << new_im.width() << " " << new_im.height() << std::endl;
+    mat->SetMat(new_im);
+    mat->SetWidth(new_im.width());
+    mat->SetHeight(new_im.height());
+  }
+  return true;
+}
+#endif
 
 bool LimitByStride::Run(Mat* mat, int stride, int interp, ProcLib lib) {
   auto r = LimitByStride(stride, interp);

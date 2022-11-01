@@ -7,6 +7,7 @@
 - [预编译库下载安装](cn/build_and_install/download_prebuilt_libraries.md)
 - [GPU部署环境编译安装](cn/build_and_install/gpu.md)
 - [CPU部署环境编译安装](cn/build_and_install/cpu.md)
+- [IPU部署环境编译安装](cn/build_and_install/ipu.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
 - [Android平台部署环境编译安装](cn/build_and_install/android.md)
 
