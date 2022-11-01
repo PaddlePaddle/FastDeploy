@@ -1,6 +1,6 @@
 # ERNIE-3.0 模型部署
 
-## 模型版本说明
+## 模型详细说明
 - [PaddleNLP ERNIE-3.0模型说明](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
 ## 支持的模型列表
@@ -19,7 +19,7 @@
 
 ## 下载基于AFQMC数据集的微调模型
 
-为了方便开发者的测试，下面提供了在文本分类AFQMC数据集上微调的ERNIE-3.0-Medium模型，开发者可直接下载使用。
+为了方便开发者的测试，下面提供了在文本分类AFQMC数据集上微调的ERNIE-3.0-Medium模型，开发者可直接下载体验。
 
 - [ERNIE 3.0-Medium AFQMC](https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz)
 

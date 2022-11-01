@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 ### 快速开始
 
-以下示例展示如何基于FastDeploy库完成ERNIE-3.0-medium模型在CLUEAFQMC数据集上进行的文本分类任务的Python预测部署。
+以下示例展示如何基于FastDeploy库完成ERNIE-3.0-medium模型在CLUE Benchmark 的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的Python预测部署。
 
 ```bash
 
@@ -48,7 +48,7 @@ Batch id:   0, example id:   0, sentence1: 花呗收款额度限制, sentence2: 
 Batch id:   1, example id:   0, sentence1: 花呗支持高铁票支付吗, sentence2: 为什么友付宝不支持花呗付款, label: 0, similarity: 0.9979
 ```
 
-# 参数说明
+### 参数说明
 
 `seq_cls_infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
 
@@ -61,7 +61,7 @@ Batch id:   1, example id:   0, sentence1: 花呗支持高铁票支付吗, sente
 |--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'onnx_runtime' |
 |--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |
 
-### 相关文档
+## 相关文档
 
 [ERNIE-3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 [ERNIE-3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
