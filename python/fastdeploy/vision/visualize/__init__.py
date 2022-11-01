@@ -64,12 +64,14 @@ def swap_background_matting(im_data,
         "DEPRECATED: fastdeploy.vision.swap_background_matting is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
     assert isinstance(
-        result, C.vision.MattingResult), "The result must be MattingResult type"
+        result,
+        C.vision.MattingResult), "The result must be MattingResult type"
     return C.vision.Visualize.swap_background_matting(
         im_data, background, result, remove_small_connected_area)
 
 
-def swap_background_segmentation(im_data, background, background_label, result):
+def swap_background_segmentation(im_data, background, background_label,
+                                 result):
     logging.warning(
         "DEPRECATED: fastdeploy.vision.swap_background_segmentation is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
@@ -101,33 +103,5 @@ def vis_ppocr(im_data, det_result):
     return C.vision.vis_ppocr(im_data, det_result)
 
 
-def vis_mot(im_data, mot_result, score_threshold=0.0, is_draw_trail=False, trails: dict = None):
-    if is_draw_trail:
-        if trails is None:
-            print("[WARNING] <trails> must be a global dict, when <is_draw_trail> is True ,trails will be hidden!")
-        else:
-            draw_trail(im_data, mot_result, trails)
-    return C.vision.vis_mot(im_data, mot_result, score_threshold, False)
-
-
-def get_mot_box_color(idx: int):
-    idx = idx * 3
-    color = [(37 * idx) % 255, (17 * idx) % 255, (29 * idx) % 255]
-    return color
-
-
-def draw_trail(frame, mot_result, trails: dict):
-    n = len(mot_result.boxes)
-    for i in range(n):
-        id_ = mot_result.ids[i]
-        color = get_mot_box_color(id_)
-        x = int((mot_result.boxes[i][0] + mot_result.boxes[i][2]) / 2)
-        y = int((mot_result.boxes[i][1] + mot_result.boxes[i][3]) / 2)
-        if id_ in trails:
-            trails[id_].append((x, y))
-        else:
-            trails.update({id_:[(x, y)]})
-        if trails[id_] is None:
-            continue
-        for point in trails[id_]:
-            cv2.circle(frame, point, 2, color)
+def vis_mot(im_data, mot_result, score_threshold=0.0, records=None):
+    return C.vision.vis_mot(im_data, mot_result, score_threshold, records)

@@ -15,6 +15,11 @@
 
 namespace fastdeploy {
 void BindPPTracking(pybind11::module &m) {
+
+  pybind11::class_<vision::tracking::TrailRecorder>(m, "TrailRecorder")
+    .def(pybind11::init<>())
+    .def_readwrite("records", &vision::tracking::TrailRecorder::records)
+    .def("add", &vision::tracking::TrailRecorder::Add);
   pybind11::class_<vision::tracking::PPTracking, FastDeployModel>(
     m, "PPTracking")
     .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
@@ -26,6 +31,8 @@ void BindPPTracking(pybind11::module &m) {
              vision::MOTResult *res = new vision::MOTResult();
              self.Predict(&mat, res);
              return res;
-         });
+         })
+    .def("bind_trail_recorders", &vision::tracking::PPTracking::BindRecorder)
+    .def("unbind_trail_recorders", &vision::tracking::PPTracking::UnBindRecorder);
 }
 }  // namespace fastdeploy

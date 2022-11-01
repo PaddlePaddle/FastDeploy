@@ -283,20 +283,41 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
       }
     }
   }
+  if (!is_record_trail_) return true;
   int nums = result->boxes.size();
   for (int i=0; i<nums; i++) {
     float center_x = (result->boxes[i][0] + result->boxes[i][2]) / 2;
     float center_y = (result->boxes[i][1] + result->boxes[i][3]) / 2;
-    int ids = result->ids[i];
-    auto iter = result->center_trail.find(ids);
-    if (iter != result->center_trail.end()) {
-        iter->second.push_back({int(center_x), int(center_y)});
+    int id = result->ids[i];
+    auto iter = recorder_->records.find(id);
+    if (iter != recorder_->records.end()) {
+      auto trail = recorder_->records[id];
+      trail.push_back({int(center_x), int(center_y)});
+      recorder_->Add(id, trail);
     } else {
-      result->center_trail.insert(
-                std::pair<int, std::vector<std::array<int, 2>>>(ids, {{int(center_x), int(center_y)}}));
+      recorder_->Add(id, {{int(center_x), int(center_y)}});
     }
   }
   return true;
+}
+
+void PPTracking::BindRecorder(TrailRecorder* recorder){
+
+    recorder_ = recorder;
+    is_record_trail_ = true;
+}
+
+void PPTracking::UnBindRecorder(){
+
+    is_record_trail_ = false;
+    std::map<int, std::vector<std::array<int, 2>>>::iterator iter;
+    for(iter=recorder_->records.begin();iter!=recorder_->records.end();iter++){
+      iter->second.clear();
+      iter->second.shrink_to_fit();
+    }
+    recorder_->records.clear();
+    std::map<int, std::vector<std::array<int, 2>>>().swap(recorder_->records);
+    recorder_ = nullptr;
 }
 
 } // namespace tracking

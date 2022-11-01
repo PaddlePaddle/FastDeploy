@@ -70,7 +70,6 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("ids", &vision::MOTResult::ids)
       .def_readwrite("scores", &vision::MOTResult::scores)
       .def_readwrite("class_ids", &vision::MOTResult::class_ids)
-      .def_readwrite("center_trail", &vision::MOTResult::center_trail)
       .def("__repr__", &vision::MOTResult::Str)
       .def("__str__", &vision::MOTResult::Str);
 

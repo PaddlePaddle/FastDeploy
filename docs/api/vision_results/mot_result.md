@@ -15,7 +15,6 @@ struct MOTResult{
   std::vector<int> ids;
   std::vector<float> scores;
   std::vector<int> class_ids;
-  std::map<int, std::vector<std::array<int, 2>>> center_trail
   void Clear();
   std::string Str();
 };
@@ -25,7 +24,6 @@ struct MOTResult{
 - **ids**: 成员变量，表示单帧画面中所有目标的id，其元素个数与`boxes.size()`一致
 - **scores**: 成员变量，表示单帧画面检测出来的所有目标置信度，其元素个数与`boxes.size()`一致
 - **class_ids**: 成员变量，表示单帧画面出来的所有目标类别，其元素个数与`boxes.size()`一致
-- **center_trail**: 成员变量，表示单帧画面中每个对象的中心点轨迹
 - **Clear()**: 成员函数，用于清除结构体中存储的结果
 - **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
@@ -39,4 +37,3 @@ fastdeploy.vision.MOTResult
 - **ids**(list of list(float)):成员变量，表示单帧画面中所有目标的id，其元素个数与`boxes`一致
 - **scores**(list of float): 成员变量，表示单帧画面检测出来的所有目标置信度
 - **class_ids**(list of int): 成员变量，表示单帧画面出来的所有目标类别
-- **center_trail**(dict[int, list[int]]): 成员变量，表示单帧画面中每个对象的中心点轨迹

@@ -60,15 +60,22 @@ config_file = os.path.join(args.model, "infer_cfg.yml")
 model = fd.vision.tracking.PPTracking(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
-# 定义全局的轨迹记录变量{id:"对应id矩形框中心点序列(lit[tuple])"}
-trails = dict()
+# 初始化轨迹记录器
+trail_recorder = fd.vision.tracking.TrailRecorder()
+# 绑定记录器 注意：每次预测时，往trail_recorder里面插入数据，随着预测次数的增加，内存会不断地增长，
+# 可以通过unbind_trail_recorders()方法来解除绑定
+model.bind_trail_recorders(trail_recorder)
 # 预测图片分割结果
 cap = cv2.VideoCapture(args.video)
+# count = 0
 while True:
     _, frame = cap.read()
     if frame is None:
         break
     result = model.predict(frame)
+    # count += 1
+    # if count == 10:
+    #     model.unbind_trail_recorders()
     img = fd.vision.vis_mot(frame, result, 0.0)
     cv2.imshow("video", img)
     if cv2.waitKey(30) == ord("q"):

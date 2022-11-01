@@ -17,6 +17,11 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class TrailRecorder(C.vision.tracking.TrailRecorder):
+    def __init__(self):
+        super(TrailRecorder, self).__init__()
+
+
 class PPTracking(FastDeployModel):
     def __init__(self,
                  model_file,
@@ -48,3 +53,9 @@ class PPTracking(FastDeployModel):
         """
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
+
+    def bind_trail_recorders(self, val):
+        self._model.bind_trail_recorders(val)
+
+    def unbind_trail_recorders(self):
+        self._model.unbind_trail_recorders()

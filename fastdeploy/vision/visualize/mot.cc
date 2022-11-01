@@ -26,7 +26,7 @@ cv::Scalar GetMOTBoxColor(int idx) {
 }
 
 cv::Mat VisMOT(const cv::Mat &img, const MOTResult &results,
-               float score_threshold, bool is_draw_trail) {
+               float score_threshold, tracking::TrailRecorder* recorder) {
   cv::Mat vis_img = img.clone();
   int im_h = img.rows;
   int im_w = img.cols;
@@ -40,10 +40,10 @@ cv::Mat VisMOT(const cv::Mat &img, const MOTResult &results,
     const int obj_id = results.ids[i];
     const float score = results.scores[i];
     cv::Scalar color = GetMOTBoxColor(obj_id);
-    if (is_draw_trail){
+    if (recorder != nullptr){
       int id = results.ids[i];
-      auto iter = results.center_trail.find(id);
-      if (iter != results.center_trail.end()) {
+      auto iter = recorder->records.find(id);
+      if (iter != recorder->records.end()) {
         for (int j = 0; j < iter->second.size(); j++) {
             cv::Point center(iter->second[j][0], iter->second[j][1]);
             cv::circle(vis_img, center, text_thickness, color);

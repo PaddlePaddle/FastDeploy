@@ -171,9 +171,6 @@ struct FASTDEPLOY_DECL MOTResult : public BaseResult {
   /** \brief The classify label id for all the tracking object
    */
   std::vector<int> class_ids;
-  /** \brief The tail for tracking object
-   */
-  std::map<int, std::vector<std::array<int, 2>>> center_trail;
 
   ResultType type = ResultType::MOT;
   /// Clear MOT result
