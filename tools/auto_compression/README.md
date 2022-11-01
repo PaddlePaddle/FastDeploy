@@ -97,7 +97,23 @@ fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --
 | --save_dir             | 产出的量化后模型路径, 该模型可直接在FastDeploy部署     |
 
 
-## 3. FastDeploy 部署量化模型
+## 3. FastDeploy 一键模型自动化压缩 Config文件参考
+FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文件, 用户可以直接下载使用.
+
+| 参数                 | 备注                                                       |
+| -------------------- | ------------------------------------------------------------ |
+| [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      |            |
+| [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |            |
+| [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |            |
+| [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |            |
+| [yolov7_quant](./configs/detection/yolov7_quant.yaml)        |            |
+| [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要保留NMS  |
+| [ppyoloe_withoutNMS_quant](./configs/detection/ppyoloe_withoutNMS_quant.yaml)       | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要设置不保留NMS |
+| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |            |
+
+
+
+## 4. FastDeploy 部署量化模型
 用户在获得量化模型之后，即可以使用FastDeploy进行部署, 部署文档请参考:
 具体请用户参考示例文档:
 - [YOLOv5 量化模型部署](../../examples/vision/detection/yolov5/quantize/)

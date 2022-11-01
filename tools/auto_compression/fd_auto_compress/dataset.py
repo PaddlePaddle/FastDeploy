@@ -138,7 +138,7 @@ def hwc_to_chw(img):
     return img
 
 
-def ppdet_image_preprocess(img):
+def ppdet_withNMS_image_preprocess(img):
 
     img, scale_factor = ppdet_resize_no_keepratio(img, target_shape=[640, 640])
 
@@ -150,6 +150,20 @@ def ppdet_image_preprocess(img):
     img /= img_std
 
     return img.astype(np.float32), scale_factor
+
+
+def ppdet_withoutNMS_image_preprocess(img):
+
+    img, scale_factor = ppdet_resize_no_keepratio(img, target_shape=[640, 640])
+
+    img = np.transpose(img / 255, [2, 0, 1])
+
+    img_mean = np.array([0.485, 0.456, 0.406]).reshape((3, 1, 1))
+    img_std = np.array([0.229, 0.224, 0.225]).reshape((3, 1, 1))
+    img -= img_mean
+    img /= img_std
+
+    return img.astype(np.float32)
 
 
 def ppseg_cityscapes_ptq_preprocess(img):

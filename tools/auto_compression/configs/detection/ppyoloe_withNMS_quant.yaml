@@ -1,15 +1,16 @@
 Global:
-  model_dir: ./yolov7-tiny.onnx
-  format: 'onnx'
+  model_dir: ./ppyoloe_crn_l_300e_coco
+  format: paddle
   model_filename: model.pdmodel
   params_filename: model.pdiparams
   qat_image_path: ./COCO_train_320
   ptq_image_path: ./COCO_val_320
-  arch: YOLOv5
-  input_list: ['x2paddle_images']
-  qat_preprocess: yolo_image_preprocess
-  ptq_preprocess: yolo_image_preprocess
-  qat_batch_size: 1
+  arch: PPYOLOE
+  input_list: ['image','scale_factor']
+  qat_preprocess: ppdet_withNMS_image_preprocess
+  ptq_preprocess: ppdet_withNMS_image_preprocess
+  qat_batch_size: 4
+
 Distillation:
   alpha: 1.0
   loss: soft_label
@@ -28,10 +29,12 @@ PTQ:
   skip_tensor_list: None
 
 TrainConfig:
-  train_iter: 3000
-  learning_rate: 0.00001
+  train_iter: 5000
+  learning_rate:
+    type: CosineAnnealingDecay
+    learning_rate: 0.00003
+    T_max: 6000
   optimizer_builder:
     optimizer:
       type: SGD
     weight_decay: 4.0e-05
-  target_metric: 0.365
