@@ -29,9 +29,11 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
     use_scale_ = use_scale;
   }
   bool ImplByOpenCV(Mat* mat);
+
 #ifdef ENABLE_OPENCV_CUDA
   bool ImplByOpenCVCuda(Mat* mat);
 #endif
+
 #ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif

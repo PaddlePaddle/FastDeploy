@@ -56,5 +56,23 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
+void EnableFlyCV() {
+#ifdef ENABLE_FLYCV
+  Processor::default_lib = ProcLib::FLYCV;
+  FDINFO << "Will change to use image processing library "
+         << Processor::default_lib << std::endl;
+#else
+  FDWARNING << "FastDeploy didn't compile with FlyCV, "
+                "will fallback to use OpenCV instead."
+            << std::endl;
+#endif
+}
+
+void DisableFlyCV() {
+  Processor::default_lib = ProcLib::OPENCV;
+  FDINFO << "Will change to use image processing library "
+         << Processor::default_lib << std::endl;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy
