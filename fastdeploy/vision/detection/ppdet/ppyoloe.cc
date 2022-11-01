@@ -160,6 +160,9 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
 
+  // Fusion will improve performance
+  FuseTransforms(&processors_);
+
   return true;
 }
 
@@ -259,6 +262,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
 
 bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   Mat mat(*im);
+
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
     FDERROR << "Failed to preprocess input data while using model:"

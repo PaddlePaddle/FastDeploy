@@ -29,11 +29,34 @@ bool Crop::ImplByOpenCV(Mat* mat) {
     return false;
   }
   cv::Rect crop_roi(offset_w_, offset_h_, width_, height_);
-  *im = (*im)(crop_roi);
+  cv::Mat new_im = (*im)(crop_roi).clone();
+  mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   return true;
 }
+
+#ifdef ENABLE_FLYCV
+bool Crop::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int height = static_cast<int>(im->height());
+  int width = static_cast<int>(im->width());
+  if (height < height_ + offset_h_ || width < width_ + offset_w_) {
+    FDERROR << "[Crop] Cannot crop [" << height_ << ", " << width_
+            << "] from the input image [" << height << ", " << width
+            << "], with offset [" << offset_h_ << ", " << offset_w_ << "]."
+            << std::endl;
+    return false;
+  }
+  fcv::Rect crop_roi(offset_w_, offset_h_, width_, height_);
+  fcv::Mat new_im;
+  fcv::crop(*im, new_im, crop_roi);
+  mat->SetMat(new_im);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  return true;
+}
+#endif
 
 bool Crop::Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                ProcLib lib) {

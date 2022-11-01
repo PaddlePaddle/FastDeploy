@@ -18,9 +18,10 @@
 
 namespace fastdeploy {
 namespace vision {
-class FASTDEPLOY_DECL Normalize : public Processor {
+class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
  public:
-  Normalize(const std::vector<float>& mean, const std::vector<float>& std,
+  NormalizeAndPermute(const std::vector<float>& mean,
+            const std::vector<float>& std,
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
@@ -28,7 +29,7 @@ class FASTDEPLOY_DECL Normalize : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFalconCV(Mat* mat);
 #endif
-  std::string Name() { return "Normalize"; }
+  std::string Name() { return "NormalizeAndPermute"; }
 
   // While use normalize, it is more recommend not use this function
   // this function will need to compute result = ((mat / 255) - mean) / std
@@ -46,11 +47,16 @@ class FASTDEPLOY_DECL Normalize : public Processor {
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV);
 
-  std::vector<float> GetAlpha() const {
-    return alpha_;
+  void SetAlpha(const std::vector<float>& alpha) {
+    alpha_.clear();
+    std::vector<float>().swap(alpha_);
+    alpha_.assign(alpha.begin(), alpha.end());
   }
-  std::vector<float> GetBeta() const {
-    return beta_;
+
+  void SetBeta(const std::vector<float>& beta) {
+    beta_.clear();
+    std::vector<float>().swap(beta_);
+    beta_.assign(beta.begin(), beta.end());
   }
 
  private:

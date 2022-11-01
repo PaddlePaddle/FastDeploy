@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class ResizeByShort : public Processor {
+class FASTDEPLOY_DECL ResizeByShort : public Processor {
  public:
   ResizeByShort(int target_size, int interp = 1, bool use_scale = true,
                 const std::vector<int>& max_hw = std::vector<int>()) {
@@ -29,6 +29,9 @@ class ResizeByShort : public Processor {
     use_scale_ = use_scale;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "ResizeByShort"; }
 
   static bool Run(Mat* mat, int target_size, int interp = 1,

@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "yaml-cpp/yaml.h"
-#include "paddle2onnx/converter.h"
 
 namespace fastdeploy {
 namespace vision {

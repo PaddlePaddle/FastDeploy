@@ -19,20 +19,26 @@
 namespace fastdeploy {
 namespace vision {
 
-class BGR2RGB : public Processor {
+class FASTDEPLOY_DECL BGR2RGB : public Processor {
  public:
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   virtual std::string Name() { return "BGR2RGB"; }
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
 };
 
-class RGB2BGR : public Processor {
+class FASTDEPLOY_DECL RGB2BGR : public Processor {
  public:
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "RGB2BGR"; }
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

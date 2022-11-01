@@ -49,8 +49,8 @@
 #cmakedefine ENABLE_VISION
 #endif
 
-#ifndef ENABLE_FALCONCV
-#cmakedefine ENABLE_FALCONCV
+#ifndef ENABLE_FLYCV
+#cmakedefine ENABLE_FLYCV
 #endif
 
 #ifndef ENABLE_TEXT
@@ -61,8 +61,10 @@
 #cmakedefine ENABLE_OPENCV_CUDA
 #endif
 
+#ifdef ENABLE_VISION
 #ifndef ENABLE_VISION_VISUALIZE
-#cmakedefine ENABLE_VISION_VISUALIZE
+#define ENABLE_VISION_VISUALIZE
+#endif
 #endif
 
 #ifndef ENABLE_FDTENSOR_FUNC

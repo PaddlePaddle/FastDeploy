@@ -23,9 +23,15 @@ set(PADDLELITE_INSTALL_DIR ${THIRD_PARTY_PATH}/install/${PADDLELITE_FILENAME})
 set(PADDLELITE_INC_DIR
     "${PADDLELITE_INSTALL_DIR}/include"
     CACHE PATH "paddlelite include directory." FORCE)
-set(PADDLELITE_LIB_DIR
-    "${PADDLELITE_INSTALL_DIR}/lib/${ANDROID_ABI}"
-    CACHE PATH "paddlelite lib directory." FORCE)
+if(ANDROID)    
+  set(PADDLELITE_LIB_DIR
+      "${PADDLELITE_INSTALL_DIR}/lib/${ANDROID_ABI}"
+      CACHE PATH "paddlelite lib directory." FORCE)
+else()
+  set(PADDLELITE_LIB_DIR
+  "${PADDLELITE_INSTALL_DIR}/lib/"
+  CACHE PATH "paddlelite lib directory." FORCE)
+endif()    
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" "${PADDLELITE_LIB_DIR}")
 
 set(PADDLELITE_URL_PREFIX "https://bj.bcebos.com/fastdeploy/third_libs")

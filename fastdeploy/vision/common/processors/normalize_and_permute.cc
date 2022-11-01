@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/normalize.h"
+#include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 
 namespace fastdeploy {
 namespace vision {
-Normalize::Normalize(const std::vector<float>& mean,
+
+
+NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
                      const std::vector<float>& std, bool is_scale,
                      const std::vector<float>& min,
                      const std::vector<float>& max) {
@@ -52,45 +54,56 @@ Normalize::Normalize(const std::vector<float>& mean,
   }
 }
 
-bool Normalize::ImplByOpenCV(Mat* mat) {
+bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
-
+  int origin_w = im->cols;
+  int origin_h = im->rows;
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
-  cv::merge(split_im, *im);
+  cv::Mat res(origin_h, origin_w, CV_32FC(im->channels()));
+  for (int i = 0; i < im->channels(); ++i) {
+    cv::extractChannel(split_im[i], cv::Mat(origin_h, origin_w, CV_32FC1, res.ptr() + i * origin_h * origin_w * 4), 0);
+  }
+
+  mat->SetMat(res);
+  mat->layout = Layout::CHW;
   return true;
 }
 
 #ifdef ENABLE_FLYCV
-bool Normalize::ImplByFalconCV(Mat* mat) {
+bool NormalizeAndPermute::ImplByFalconCV(Mat* mat) {
+  if (mat->layout != Layout::HWC) {
+    FDERROR << "Only supports input with HWC layout." << std::endl;
+    return false;
+  }
   fcv::Mat* im = mat->GetFalconCVMat();
   if (im->channels() != 3) {
     FDERROR << "Only supports 3-channels image in FalconCV, but now it's " << im->channels() << "." << std::endl;
     return false;
   }
-
   std::vector<float> mean(3, 0);
   std::vector<float> std(3, 0);
   for (size_t i = 0; i < 3; ++i) {
     std[i]  = 1.0 / alpha_[i];
     mean[i] = -1 * beta_[i] * std[i];
   }
-  fcv::Mat new_im(im->width(), im->height(), fcv::FCVImageType::PACKAGE_BGR_F32);
-  fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(), new_im, true);
+  fcv::Mat new_im;
+  fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(), new_im, false);
   mat->SetMat(new_im);
+  mat->layout = Layout::CHW;
   return true;
 }
 #endif
 
 
-bool Normalize::Run(Mat* mat, const std::vector<float>& mean,
+bool NormalizeAndPermute::Run(Mat* mat, const std::vector<float>& mean,
                     const std::vector<float>& std, bool is_scale,
                     const std::vector<float>& min,
                     const std::vector<float>& max, ProcLib lib) {
-  auto n = Normalize(mean, std, is_scale, min, max);
+  auto n = NormalizeAndPermute(mean, std, is_scale, min, max);
   return n(mat, lib);
 }
 

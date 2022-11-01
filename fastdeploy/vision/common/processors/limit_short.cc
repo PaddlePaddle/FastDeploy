@@ -32,13 +32,54 @@ bool LimitShort::ImplByOpenCV(Mat* mat) {
   if (target != im_size_min) {
     scale = static_cast<double>(target) / static_cast<double>(im_size_min);
   }
-  if (scale > 0) {
+  if (fabs(scale - 1.0) > 1e-06) {
     cv::resize(*im, *im, cv::Size(), scale, scale, interp_);
     mat->SetWidth(im->cols);
     mat->SetHeight(im->rows);
   }
   return true;
 }
+
+#ifdef ENABLE_FLYCV
+bool LimitShort::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int origin_w = im->width();
+  int origin_h = im->height();
+  int im_size_min = std::min(origin_w, origin_h);
+  int target = im_size_min;
+  if (max_short_ > 0 && im_size_min > max_short_) {
+    target = max_short_;
+  } else if (min_short_ > 0 && im_size_min < min_short_) {
+    target = min_short_;
+  }
+  double scale = -1.f;
+  if (target != im_size_min) {
+    scale = static_cast<double>(target) / static_cast<double>(im_size_min);
+  }
+  if (fabs(scale - 1.0) > 1e-06) {
+    auto interp_method = fcv::InterpolationType::INTER_LINEAR;
+    if (interp_ == 0) {
+      interp_method = fcv::InterpolationType::INTER_NEAREST;
+    } else if (interp_ == 1) {
+      interp_method = fcv::InterpolationType::INTER_LINEAR;
+    } else if (interp_ == 2) {
+      interp_method = fcv::InterpolationType::INTER_CUBIC;
+    } else {
+      FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+                 "now it's "
+              << interp_ << "." << std::endl;
+      return false;
+    }
+
+    fcv::Mat new_im;
+    fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
+    mat->SetMat(new_im);
+    mat->SetWidth(new_im.width());
+    mat->SetHeight(new_im.height());
+  }
+  return true;
+}
+#endif
 
 bool LimitShort::Run(Mat* mat, int max_short, int min_short, int interp, ProcLib lib) {
   auto l = LimitShort(max_short, min_short, interp);
