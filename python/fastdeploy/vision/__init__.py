@@ -26,3 +26,12 @@ from . import ocr
 from . import evaluation
 from .utils import fd_result_to_json
 from .visualize import *
+from .. import C
+
+
+def enable_flycv():
+    return C.vision.enable_flycv()
+
+
+def disable_flycv():
+    return C.vision.disable_flycv()

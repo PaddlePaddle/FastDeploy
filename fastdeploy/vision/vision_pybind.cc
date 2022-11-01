@@ -122,6 +122,9 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::KeyPointDetectionResult::Str)
       .def("__str__", &vision::KeyPointDetectionResult::Str);
 
+  m.def("enable_flycv", &vision::EnableFlyCV, "Enable image preprocessing by FlyCV.");
+  m.def("disable_flycv", &vision::DisableFlyCV, "Disable image preprocessing by FlyCV, change to use OpenCV.");
+
   BindDetection(m);
   BindClassification(m);
   BindSegmentation(m);
