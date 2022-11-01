@@ -149,7 +149,8 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     output_infos_.push_back(iter->second);
   }
 
-  compiled_model_ = core_.compile_model(model, "AUTO", properties);
+  compiled_model_ = core_.compile_model(model, "GPU", properties);
+  FDERROR << "The model is compiled with device GPU!" << std::endl;
   request_ = compiled_model_.create_infer_request();
   initialized_ = true;
   return true;
@@ -238,7 +239,8 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
     output_infos_.push_back(iter->second);
   }
 
-  compiled_model_ = core_.compile_model(model, "AUTO", properties);
+  compiled_model_ = core_.compile_model(model, "GPU", properties);
+  FDERROR << "The model is compiled with device GPU!" << std::endl;
   request_ = compiled_model_.create_infer_request();
   initialized_ = true;
   return true;
