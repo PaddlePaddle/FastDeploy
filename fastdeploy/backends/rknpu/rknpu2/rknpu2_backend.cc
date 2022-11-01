@@ -15,10 +15,10 @@
 
 namespace fastdeploy {
 RKNPU2Backend::~RKNPU2Backend() {
-  if(input_attrs != nullptr){
+  if (input_attrs != nullptr) {
     free(input_attrs);
   }
-  if(output_attrs != nullptr){
+  if (output_attrs != nullptr) {
     free(output_attrs);
   }
 }
@@ -150,7 +150,8 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   }
 
   // Get detailed input parameters
-  input_attrs = (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
+  input_attrs =
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_input);
   memset(input_attrs, 0, io_num.n_input * sizeof(rknn_tensor_attr));
   inputs_desc_.resize(io_num.n_input);
   for (uint32_t i = 0; i < io_num.n_input; i++) {
@@ -348,7 +349,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    memcpy((*outputs)[i].MutableData(), (float*)output_mems[i]->virt_addr, (*outputs)[i].Nbytes());
+    memcpy((*outputs)[i].MutableData(), (float*)output_mems[i]->virt_addr,
+           (*outputs)[i].Nbytes());
     rknn_destroy_mem(ctx, output_mems[i]);
   }
 
