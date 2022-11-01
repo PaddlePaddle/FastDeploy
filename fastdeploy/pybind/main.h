@@ -39,6 +39,7 @@ void BindBackend(pybind11::module&);
 void BindVision(pybind11::module&);
 void BindText(pybind11::module& m);
 void BindPipeline(pybind11::module& m);
+void BindRKNPU2Config(pybind11::module&);
 
 pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype);
 
