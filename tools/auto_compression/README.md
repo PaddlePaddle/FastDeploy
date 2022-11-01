@@ -107,7 +107,7 @@ FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文�
 | [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |   [yolov5s](https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx)         |     |
 | [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |  [yolov6s](https://paddle-slim-models.bj.bcebos.com/act/yolov6s.onnx)          |     |
 | [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
-| [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | 支持PPYOLOE的s,m,l系列模型, 从PaddleDetection倒出模型时需要保留NMS  |
+| [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | 支持PPYOLOE的s,m,l,x系列模型, 从PaddleDetection倒出模型时需要保留NMS  |
 | [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |       |
 
 
