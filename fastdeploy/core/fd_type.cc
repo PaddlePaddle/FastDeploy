@@ -53,9 +53,6 @@ std::string Str(const Device& d) {
     case Device::GPU:
       out = "Device::GPU";
       break;
-    case Device::RKNPU:
-      out = "Device::RKNPU";
-      break;
     case Device::IPU:
       out = "Device::IPU";
       break;
@@ -72,9 +69,6 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
     break;
   case Device::GPU:
     out << "Device::GPU";
-    break;
-  case Device::RKNPU:
-    out << "Device::RKNPU";
     break;
   default:
     out << "Device::UNKOWN";
