@@ -5,10 +5,9 @@ Global:
   params_filename: model.pdiparams
   qat_image_path: ./COCO_train_320
   ptq_image_path: ./COCO_val_320
-  arch: PPYOLOE
   input_list: ['image','scale_factor']
-  qat_preprocess: ppdet_withNMS_image_preprocess
-  ptq_preprocess: ppdet_withNMS_image_preprocess
+  qat_preprocess: ppyoloe_withNMS_image_preprocess
+  ptq_preprocess: ppyoloe_withNMS_image_preprocess
   qat_batch_size: 4
 
 Distillation:

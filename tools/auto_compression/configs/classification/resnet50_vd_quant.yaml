@@ -4,7 +4,6 @@ Global:
   model_filename: inference.pdmodel
   params_filename: inference.pdiparams
   image_path: ./ImageNet_val_640
-  arch: ResNet50
   input_list: ['input']
   qat_preprocess: cls_image_preprocess
   ptq_preprocess: cls_image_preprocess

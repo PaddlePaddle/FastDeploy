@@ -5,7 +5,6 @@ Global:
   params_filename: model.pdiparams
   qat_image_path: ./COCO_train_320
   ptq_image_path: ./COCO_val_320
-  arch: YOLOv6
   input_list: ['x2paddle_image_arrays']
   qat_preprocess: yolo_image_preprocess
   ptq_preprocess: yolo_image_preprocess

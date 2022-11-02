@@ -5,7 +5,6 @@ Global:
   params_filename: inference.pdiparams
   qat_image_path: ./ImageNet_val_640
   ptq_image_path: ./ImageNet_val_640
-  arch: MobileNetV1
   input_list: ['input']
   qat_preprocess: cls_image_preprocess
   ptq_preprocess: cls_image_preprocess

@@ -5,7 +5,6 @@ Global:
   params_filename: model.pdiparams
   qat_image_path: ./train_stuttgart
   ptq_image_path: ./val_munster
-  arch: PP_LiteSeg
   input_list: ['x']
   qat_preprocess: ppseg_cityscapes_qat_preprocess
   ptq_preprocess: ppseg_cityscapes_ptq_preprocess

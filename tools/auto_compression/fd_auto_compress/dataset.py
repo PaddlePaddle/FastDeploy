@@ -18,6 +18,9 @@ import numpy as np
 import random
 from PIL import Image, ImageEnhance
 import paddle
+"""
+Preprocess for Yolov5/v6/v7 Series
+"""
 
 
 def generate_scale(im, target_shape):
@@ -56,6 +59,11 @@ def yolo_image_preprocess(img, target_shape=[640, 640]):
     img = np.transpose(img / 255, [2, 0, 1])
 
     return img.astype(np.float32)
+
+
+"""
+Preprocess for PaddleClas model
+"""
 
 
 def cls_resize_short(img, target_size):
@@ -103,6 +111,11 @@ def cls_image_preprocess(img):
     return img.astype(np.float32)
 
 
+"""
+Preprocess for PPYOLOE
+"""
+
+
 def ppdet_resize_no_keepratio(img, target_shape=[640, 640]):
     im_shape = img.shape
 
@@ -116,29 +129,7 @@ def ppdet_resize_no_keepratio(img, target_shape=[640, 640]):
         interpolation=2), scale_factor
 
 
-def ppdet_normliaze(img, is_scale=True):
-
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
-    img = img.astype(np.float32, copy=False)
-
-    if is_scale:
-        scale = 1.0 / 255.0
-        img *= scale
-
-    mean = np.array(mean)[np.newaxis, np.newaxis, :]
-    std = np.array(std)[np.newaxis, np.newaxis, :]
-    img -= mean
-    img /= std
-    return img
-
-
-def hwc_to_chw(img):
-    img = img.transpose((2, 0, 1))
-    return img
-
-
-def ppdet_withNMS_image_preprocess(img):
+def ppyoloe_withNMS_image_preprocess(img):
 
     img, scale_factor = ppdet_resize_no_keepratio(img, target_shape=[640, 640])
 
@@ -152,18 +143,19 @@ def ppdet_withNMS_image_preprocess(img):
     return img.astype(np.float32), scale_factor
 
 
-def ppdet_withoutNMS_image_preprocess(img):
+def ppyoloe_plus_withNMS_image_preprocess(img):
 
     img, scale_factor = ppdet_resize_no_keepratio(img, target_shape=[640, 640])
 
     img = np.transpose(img / 255, [2, 0, 1])
 
-    img_mean = np.array([0.485, 0.456, 0.406]).reshape((3, 1, 1))
-    img_std = np.array([0.229, 0.224, 0.225]).reshape((3, 1, 1))
-    img -= img_mean
-    img /= img_std
+    return img.astype(np.float32), scale_factor
 
-    return img.astype(np.float32)
+
+"""
+Preprocess for PP_LiteSeg
+
+"""
 
 
 def ppseg_cityscapes_ptq_preprocess(img):

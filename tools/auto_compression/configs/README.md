@@ -1,20 +1,23 @@
-# FastDeploy 量化配置文件说明
-FastDeploy 量化配置文件中，包含了全局配置，量化蒸馏训练配置，离线量化配置和训练配置.
-用户除了直接使用FastDeploy提供在本目录的配置文件外，可以按需求自行修改相关配置文件
+# FastDeploy 一键自动化压缩配置文件说明
+FastDeploy 一键自动化压缩配置文件中，包含了全局配置，量化蒸馏训练配置，离线量化配置和训练配置.
+用户除了直接使用FastDeploy提供在本目录的配置文件外，可以按照以下示例,自行修改相关配置文件, 来尝试压缩自己的模型.
 
 ## 实例解读
 
 ```
 # 全局配置
 Global:
-  model_dir: ./yolov5s.onnx                   #输入模型的路径
-  format: 'onnx'                              #输入模型的格式, paddle模型请选择'paddle'
+  model_dir: ./ppyoloe_plus_crn_s_80e_coco    #输入模型的路径, 用户若需量化自己的模型，替换此处即可
+  format: paddle                              #输入模型的格式, paddle模型请选择'paddle', onnx模型选择'onnx'
   model_filename: model.pdmodel               #量化后转为paddle格式模型的模型名字
   params_filename: model.pdiparams            #量化后转为paddle格式模型的参数名字
-  image_path: ./COCO_val_320                  #离线量化或者量化蒸馏训练使用的数据集路径
-  arch: YOLOv5                                #模型结构
-  input_list: ['x2paddle_images']             #待量化的模型的输入名字
-  preprocess: yolo_image_preprocess           #模型量化时,对数据做的预处理函数, 用户可以在 ../fdquant/dataset.py 中修改或自行编写新的预处理函数
+  qat_image_path: ./COCO_train_320            #量化蒸馏训练使用的数据集,此例为少量无标签数据, 选自COCO2017训练集中的前320张图片, 做少量数据训练
+  ptq_image_path: ./COCO_val_320              #离线训练使用的Carlibration数据集, 选自COCO2017验证集中的前320张图片.
+  input_list: ['image','scale_factor']        #待量化的模型的输入名字
+  qat_preprocess: ppyoloe_plus_withNMS_image_preprocess #模型量化蒸馏训练时,对数据做的预处理函数, 用户可以在 ../fdquant/dataset.py 中修改或自行编写新的预处理函数, 来支自定义模型的量化
+  ptq_preprocess: ppyoloe_plus_withNMS_image_preprocess #模型离线量化时,对数据做的预处理函数, 用户可以在 ../fdquant/dataset.py 中修改或自行编写新的预处理函数, 来支自定义模型的量化
+  qat_batch_size: 4                           #量化蒸馏训练时的batch_size, 若为onnx格式的模型,此处只能为1
+
 
 #量化蒸馏训练配置
 Distillation:
@@ -47,5 +50,5 @@ TrainConfig:
 ```
 ## 更多详细配置方法
 
-FastDeploy一键量化功能由PaddeSlim助力, 更详细的量化配置方法请参考:
+FastDeploy一键压缩功能由PaddeSlim助力, 更详细的量化配置方法请参考:
 [自动化压缩超参详细教程](https://github.com/PaddlePaddle/PaddleSlim/blob/develop/example/auto_compression/hyperparameter_tutorial.md)
