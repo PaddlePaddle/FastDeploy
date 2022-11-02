@@ -16,11 +16,6 @@ from __future__ import absolute_import
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
-try:
-    TrailRecorder = C.vision.tracking.TrailRecorder
-except:
-    pass
-
 
 class PPTracking(FastDeployModel):
     def __init__(self,
