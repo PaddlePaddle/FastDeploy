@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 ### 快速开始
 
-以下示例展示如何基于FastDeploy库完成ERNIE-3.0-medium模型在CLUE Benchmark 的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的Python预测部署。
+以下示例展示如何基于FastDeploy库完成ERNIE 3.0 Medium模型在CLUE Benchmark 的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的Python预测部署。
 
 ```bash
 
