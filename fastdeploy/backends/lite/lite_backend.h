@@ -43,6 +43,7 @@ struct LiteBackendOption {
   std::string optimized_model_dir = "";
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
+  std::string nnadapter_subgraph_partition_config_path="";
 };
 
 // Convert data type from paddle lite to fastdeploy
@@ -77,5 +78,8 @@ class LiteBackend : public BaseBackend {
   std::map<std::string, int> inputs_order_;
   LiteBackendOption option_;
   bool supported_fp16_ = false;
+  bool ReadFile(const std::string &filename,
+               std::vector<char> *contents,
+               const bool& binary = true);
 };
 }  // namespace fastdeploy

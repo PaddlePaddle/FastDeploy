@@ -375,6 +375,11 @@ void RuntimeOption::SetLiteOptimizedModelDir(
   lite_optimized_model_dir = optimized_model_dir;
 }
 
+void RuntimeOption::SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path) {
+  lite_nnadapter_subgraph_partition_config_path = nnadapter_subgraph_partition_config_path;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -748,6 +753,7 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

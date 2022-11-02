@@ -59,6 +59,15 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
   }
+  if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
+    std::vector<char> nnadapter_subgraph_partition_config_buffer;
+    if (ReadFile(option_.nnadapter_subgraph_partition_config_path, &nnadapter_subgraph_partition_config_buffer, false)) {
+      if (!nnadapter_subgraph_partition_config_buffer.empty()) {
+        std::string nnadapter_subgraph_partition_config_string(nnadapter_subgraph_partition_config_buffer.data(), nnadapter_subgraph_partition_config_buffer.size());
+        config_.set_nnadapter_subgraph_partition_config_buffer(nnadapter_subgraph_partition_config_string);
+      }
+    }
+  }
 #ifdef TIMVX
   config_.set_nnadapter_device_names({"verisilicon_timvx"});
   valid_places.push_back(
@@ -78,6 +87,27 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     config_.set_power_mode(
         static_cast<paddle::lite_api::PowerMode>(option_.power_mode));
   }
+}
+
+bool LiteBackend::ReadFile(const std::string &filename,
+               std::vector<char> *contents,
+               const bool& binary) {
+  FILE *fp = fopen(filename.c_str(), binary ? "rb" : "r");
+  if (!fp) return false;
+  fseek(fp, 0, SEEK_END);
+  size_t size = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+  contents->clear();
+  contents->resize(size);
+  size_t offset = 0;
+  char *ptr = reinterpret_cast<char *>(&(contents->at(0)));
+  while (offset < size) {
+    size_t already_read = fread(ptr, 1, size - offset, fp);
+    offset += already_read;
+    ptr += already_read;
+  }
+  fclose(fp);
+  return true;
 }
 
 bool LiteBackend::InitFromPaddle(const std::string& model_file,

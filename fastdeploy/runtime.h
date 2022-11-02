@@ -170,6 +170,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   /**
+   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path);
+
+  /**
    * @brief enable half precision while use paddle lite backend
    */
   void EnableLiteFP16();
@@ -313,6 +319,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
+  std::string lite_nnadapter_subgraph_partition_config_path = "";
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
