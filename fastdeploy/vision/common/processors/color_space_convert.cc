@@ -27,8 +27,12 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
 #ifdef ENABLE_OPENCV_CUDA
 bool BGR2RGB::ImplByOpenCVCuda(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
-  cv::cuda::GpuMat new_im;
-  cv::cuda::createContinuous(im->rows, im->cols, im->type(), new_im);
+
+  std::string buf_name = Name() + "_cuda";
+  std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_im(im->size(), im->type(), buffer);
+
   cv::cuda::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
   mat->SetMat(new_im);
   FDINFO << new_im.isContinuous() << std::endl;

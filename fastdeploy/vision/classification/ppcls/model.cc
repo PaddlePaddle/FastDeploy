@@ -94,13 +94,30 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
   return true;
 }
 
+void PaddleClasModel::UseCudaPreprocessing() {
+#ifdef ENABLE_OPENCV_CUDA
+  use_cuda_preprocessing_ = true;
+#else
+  FDWARNING << "The FastDeploy didn't compile with ENABLE_OPENCV_CUDA=ON."
+            << std::endl;
+  use_cuda_preprocessing_ = false;
+#endif
+}
+
 bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   for (size_t i = 0; i < processors_.size(); ++i) {
+
+    fastdeploy::TimeCounter tc;
+    tc.Start();
+  
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
+
+    tc.End();
+    std::cout << processors_[i]->Name() << "---- " << tc.Duration() * 1000 << std::endl;
   }
 
   int channel = mat->Channels();
@@ -114,11 +131,18 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
 
 bool PaddleClasModel::CudaPreprocess(Mat* mat, FDTensor* output) {
   for (size_t i = 0; i < processors_.size(); ++i) {
+
+    fastdeploy::TimeCounter tc;
+    tc.Start();
+  
     if (!(*(processors_[i].get()))(mat, ProcLib::OPENCVCUDA)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
+
+    tc.End();
+    std::cout << processors_[i]->Name() << "---- " << tc.Duration() * 1000 << std::endl;
   }
 
   int channel = mat->Channels();
@@ -149,7 +173,7 @@ bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
   std::vector<FDTensor> processed_data(1);
 
-  if (true) {
+  if (use_cuda_preprocessing_) {
     if (!CudaPreprocess(&mat, &(processed_data[0]))) {
       FDERROR << "Failed to preprocess input data while using model:"
               << ModelName() << "." << std::endl;

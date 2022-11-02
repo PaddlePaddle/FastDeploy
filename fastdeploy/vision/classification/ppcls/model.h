@@ -53,6 +53,9 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
   // TODO(jiangjiajun) Batch is on the way
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
+  /// Use CUDA preprocessing
+  virtual void UseCudaPreprocessing();
+
  protected:
   bool Initialize();
 
@@ -67,6 +70,10 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
+
+ private:
+  // Whether to use CUDA preprocessing
+  bool use_cuda_preprocessing_ = false;
 };
 
 typedef PaddleClasModel PPLCNet;

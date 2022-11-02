@@ -44,9 +44,11 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   } else if (target == ProcLib::OPENCVCUDA) {
 #ifdef ENABLE_OPENCV_CUDA
     if (mat->mat_type != ProcLib::OPENCVCUDA) {
-      cv::cuda::GpuMat gpu_mat;
-      cv::cuda::createContinuous(mat->GetOpenCVMat()->rows, mat->GetOpenCVMat()->cols,
-                                 mat->GetOpenCVMat()->type(), gpu_mat);
+      std::string buf_name = Name() + "_upload";
+      std::vector<int64_t> shape = {mat->GetOpenCVMat()->rows, mat->GetOpenCVMat()->cols, mat->GetOpenCVMat()->channels()};
+      void* buffer = UpdateAndGetReusedBuffer(shape, mat->GetOpenCVMat()->type(), buf_name, Device::GPU);
+
+      cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type(), buffer);
       gpu_mat.upload(*(mat->GetOpenCVMat()));
       mat->SetMat(gpu_mat);
     }
@@ -56,6 +58,19 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #endif
   }
   return ImplByOpenCV(mat);
+}
+
+void* Processor::UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
+                                          const int& opencv_dtype,
+                                          const std::string& buffer_name,
+                                          const Device& new_device) {
+  if (reused_buffers_.count(buffer_name) == 0) {
+    reused_buffers_[buffer_name] = FDTensor();
+  }
+
+  reused_buffers_[buffer_name].Resize(new_shape, OpenCVDataTypeToFD(opencv_dtype),
+                                      buffer_name, new_device);
+  return reused_buffers_[buffer_name].Data();
 }
 
 void EnableFlyCV() {

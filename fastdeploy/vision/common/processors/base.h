@@ -18,6 +18,7 @@
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <map>
 
 namespace fastdeploy {
 namespace vision {
@@ -58,6 +59,15 @@ class FASTDEPLOY_DECL Processor {
 
   virtual bool operator()(Mat* mat,
                           ProcLib lib = ProcLib::OPENCV);
+
+ protected:
+  void* UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
+                                 const int& opencv_dtype,
+                                 const std::string& buffer_name,
+                                 const Device& new_device = Device::CPU);
+
+ private:
+  std::map<std::string, FDTensor> reused_buffers_;
 };
 
 }  // namespace vision

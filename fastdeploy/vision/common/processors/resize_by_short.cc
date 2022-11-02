@@ -46,8 +46,10 @@ bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
   int width = static_cast<int>(round(scale * origin_w));
   int height = static_cast<int>(round(scale * origin_h));
 
-  cv::cuda::GpuMat new_im;
-  cv::cuda::createContinuous(im->rows, im->cols, im->type(), new_im);
+  std::string buf_name = Name() + "_cuda";
+  std::vector<int64_t> shape = {height, width, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_im(cv::Size(width, height), im->type(), buffer);
 
   if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
     cv::cuda::resize(*im, new_im, cv::Size(), scale, scale, interp_);

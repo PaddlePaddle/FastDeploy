@@ -48,8 +48,11 @@ bool CenterCrop::ImplByOpenCVCuda(Mat* mat) {
   int offset_y = static_cast<int>((height - height_) / 2);
   cv::Rect crop_roi(offset_x, offset_y, width_, height_);
 
-  cv::cuda::GpuMat new_im;
-  cv::cuda::createContinuous(height_, width_, im->type(), new_im);
+  std::string buf_name = Name() + "_cuda";
+  std::vector<int64_t> shape = {height_, width_, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_im(cv::Size(width_, height_), im->type(), buffer);
+
   (*im)(crop_roi).copyTo(new_im);
 
   mat->SetMat(new_im);

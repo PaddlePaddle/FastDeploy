@@ -71,11 +71,19 @@ bool Normalize::ImplByOpenCVCuda(Mat* mat) {
   std::vector<cv::cuda::GpuMat> split_im;
   cv::cuda::split(*im, split_im);
   for (int c = 0; c < im->channels(); c++) {
-    split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
+    std::string buf_name = Name() + "_cuda_ch" + std::to_string(c);
+    std::vector<int64_t> shape = {split_im[c].rows, split_im[c].cols, 1};
+    void* buffer = UpdateAndGetReusedBuffer(shape, CV_32FC1, buf_name, Device::GPU);
+    cv::cuda::GpuMat new_im(split_im[c].size(), CV_32FC1, buffer);
+    split_im[c].convertTo(new_im, CV_32FC1, alpha_[c], beta_[c]);
+    split_im[c] = new_im;
   }
 
-  cv::cuda::GpuMat new_im;
-  cv::cuda::createContinuous(im->rows, im->cols, CV_MAKETYPE(CV_32F, im->channels()), new_im);
+  std::string buf_name = Name() + "_cuda";
+  std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, CV_MAKETYPE(CV_32F, im->channels()), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_im(im->size(), CV_MAKETYPE(CV_32F, im->channels()), buffer);
+
   cv::cuda::merge(split_im, new_im);
   mat->SetMat(new_im);
   FDINFO << new_im.isContinuous() << std::endl;
