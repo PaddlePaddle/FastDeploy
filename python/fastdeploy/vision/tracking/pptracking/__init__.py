@@ -15,7 +15,6 @@
 from __future__ import absolute_import
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
-import logging
 
 try:
     TrailRecorder = C.vision.tracking.TrailRecorder
