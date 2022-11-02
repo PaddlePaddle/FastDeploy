@@ -487,13 +487,16 @@ if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   if(NOT EXECUTABLE_OUTPUT_PATH STREQUAL ${CMAKE_CURRENT_BINARY_DIR}/bin)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
   endif()
+  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
   add_subdirectory(examples)
 endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
   include(${PROJECT_SOURCE_DIR}/cmake/gtest.cmake)
-  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  if(NOT BUILD_EXAMPLES)
+    include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  endif()
   include(${PROJECT_SOURCE_DIR}/cmake/glog.cmake)
   add_subdirectory(tests)
 endif()
@@ -559,6 +562,11 @@ install(
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/utils
 )
 
 if(NOT WIN32)
