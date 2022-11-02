@@ -236,7 +236,9 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
             } else if (param_key == "is_clone") {
                 THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &is_clone_));
-            } 
+            } else if (param_key == "use_ipu") {
+              runtime_options_->UseIpu();
+            }
           }
         }
       }
@@ -381,7 +383,10 @@ TRITONSERVER_Error* ModelState::LoadModel(
       runtime_options_->UseCpu();
     }
   #else
-    runtime_options_->UseCpu();
+    if (runtime_options_->device != fastdeploy::Device::IPU) {
+      // If Device is set to IPU, just skip CPU setting.
+      runtime_options_->UseCpu();
+    }
   #endif  // TRITON_ENABLE_GPU
 
     *runtime = main_runtime_ = new fastdeploy::Runtime();
