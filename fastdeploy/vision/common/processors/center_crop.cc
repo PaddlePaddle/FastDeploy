@@ -53,7 +53,8 @@ bool CenterCrop::ImplByOpenCVCuda(Mat* mat) {
   void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
   cv::cuda::GpuMat new_im(cv::Size(width_, height_), im->type(), buffer);
 
-  (*im)(crop_roi).copyTo(new_im);
+  auto stream = GetCudaStream();
+  (*im)(crop_roi).copyTo(new_im, stream);
 
   mat->SetMat(new_im);
   mat->SetWidth(width_);

@@ -33,6 +33,14 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
+#ifdef ENABLE_OPENCV_CUDA
+  cudaSetDevice(runtime_option.device_id);
+  cudaStream_t stream;
+  FDASSERT(cudaStreamCreate(&stream) == cudaSuccess,
+           "Error occurs while creating cuda stream.");
+  cuda_stream_ = reinterpret_cast<void*>(stream);
+  runtime_option.SetExternalStream(cuda_stream_);
+#endif
   initialized = Initialize();
 }
 
@@ -49,6 +57,15 @@ bool PaddleClasModel::Initialize() {
   return true;
 }
 
+PaddleClasModel::~PaddleClasModel() {
+#ifdef ENABLE_OPENCV_CUDA
+  if (use_cuda_preprocessing_) {
+    FDASSERT(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)) == cudaSuccess,
+             "Error occurs while destroying cuda stream.");
+  }
+#endif
+}
+
 bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
@@ -60,7 +77,7 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
     return false;
   }
   auto preprocess_cfg = cfg["PreProcess"]["transform_ops"];
-  processors_.push_back(std::make_shared<BGR2RGB>());
+  // processors_.push_back(std::make_shared<BGR2RGB>());
   for (const auto& op : preprocess_cfg) {
     FDASSERT(op.IsMap(),
              "Require the transform information in yaml be Map type.");
@@ -82,7 +99,9 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       FDASSERT((scale - 0.00392157) < 1e-06 && (scale - 0.00392157) > -1e-06,
                "Only support scale in Normalize be 0.00392157, means the pixel "
                "is in range of [0, 255].");
-      processors_.push_back(std::make_shared<Normalize>(mean, std));
+      processors_.push_back(std::make_shared<Normalize>(mean, std, true,
+                                                        std::vector<float>(), std::vector<float>(),
+                                                        true));
     } else if (op_name == "ToCHWImage") {
       processors_.push_back(std::make_shared<HWC2CHW>());
     } else {
@@ -97,6 +116,10 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
 void PaddleClasModel::UseCudaPreprocessing() {
 #ifdef ENABLE_OPENCV_CUDA
   use_cuda_preprocessing_ = true;
+  for (size_t i = 0; i < processors_.size(); ++i) {
+    FDINFO << std::hex << cuda_stream_ << std::endl;
+    processors_[i]->SetCudaStream(cuda_stream_);
+  }
 #else
   FDWARNING << "The FastDeploy didn't compile with ENABLE_OPENCV_CUDA=ON."
             << std::endl;

@@ -49,7 +49,8 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
       void* buffer = UpdateAndGetReusedBuffer(shape, mat->GetOpenCVMat()->type(), buf_name, Device::GPU);
 
       cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type(), buffer);
-      gpu_mat.upload(*(mat->GetOpenCVMat()));
+      auto stream = GetCudaStream();
+      gpu_mat.upload(*(mat->GetOpenCVMat()), stream);
       mat->SetMat(gpu_mat);
     }
     return ImplByOpenCVCuda(mat);

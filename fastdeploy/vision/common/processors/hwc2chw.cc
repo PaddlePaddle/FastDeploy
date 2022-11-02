@@ -48,15 +48,17 @@ bool HWC2CHW::ImplByOpenCVCuda(Mat* mat) {
     return false;
   }
   cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  auto stream = GetCudaStream();
   std::vector<cv::cuda::GpuMat> split_im;
-  cv::cuda::split(*im, split_im);
+  cv::cuda::split(*im, split_im, stream);
   int hw_data_size = im->rows * im->cols * FDDataTypeSize(mat->Type());
 
   for (int c = 0; c < im->channels(); c++) {
     cv::cuda::GpuMat tmp(split_im[c].size(), split_im[c].type(), im->ptr<uint8_t>() + c * hw_data_size);
-    split_im[c].copyTo(tmp);
+    split_im[c].copyTo(tmp, stream);
   }
   mat->layout = Layout::CHW;
+  FDINFO << im->isContinuous() << " " << std::hex << cv::cuda::StreamAccessor::getStream(stream) << std::endl;
   return true;
 }
 #endif

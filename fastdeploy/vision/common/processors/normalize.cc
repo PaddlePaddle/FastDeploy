@@ -13,13 +13,14 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/normalize.h"
+#include "fastdeploy/utils/perf.h"
 
 namespace fastdeploy {
 namespace vision {
 Normalize::Normalize(const std::vector<float>& mean,
                      const std::vector<float>& std, bool is_scale,
                      const std::vector<float>& min,
-                     const std::vector<float>& max) {
+                     const std::vector<float>& max, bool swap_rb) {
   FDASSERT(mean.size() == std.size(),
            "Normalize: requires the size of mean equal to the size of std.");
   std::vector<double> mean_(mean.begin(), mean.end());
@@ -50,6 +51,7 @@ Normalize::Normalize(const std::vector<float>& mean,
     alpha_.push_back(alpha);
     beta_.push_back(beta);
   }
+  swap_rb_ = swap_rb;
 }
 
 bool Normalize::ImplByOpenCV(Mat* mat) {
@@ -57,6 +59,7 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
 
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
+  if (swap_rb_) std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -67,26 +70,41 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
 #ifdef ENABLE_OPENCV_CUDA
 bool Normalize::ImplByOpenCVCuda(Mat* mat) {
   cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  auto stream = GetCudaStream();
+
+  fastdeploy::TimeCounter tc;
+  tc.Start();
 
   std::vector<cv::cuda::GpuMat> split_im;
-  cv::cuda::split(*im, split_im);
+  cv::cuda::split(*im, split_im, stream);
+  if (swap_rb_) std::swap(split_im[0], split_im[2]);
+
+  tc.End();
+  FDINFO << "split---- " << tc.Duration() * 1000 << std::endl;
   for (int c = 0; c < im->channels(); c++) {
     std::string buf_name = Name() + "_cuda_ch" + std::to_string(c);
     std::vector<int64_t> shape = {split_im[c].rows, split_im[c].cols, 1};
     void* buffer = UpdateAndGetReusedBuffer(shape, CV_32FC1, buf_name, Device::GPU);
     cv::cuda::GpuMat new_im(split_im[c].size(), CV_32FC1, buffer);
-    split_im[c].convertTo(new_im, CV_32FC1, alpha_[c], beta_[c]);
+    tc.Start();
+    split_im[c].convertTo(new_im, CV_32FC1, alpha_[c], beta_[c], stream);
     split_im[c] = new_im;
+    tc.End();
+    FDINFO << "convertTo---- " << tc.Duration() * 1000 << std::endl;
   }
+
+  tc.Start();
 
   std::string buf_name = Name() + "_cuda";
   std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
   void* buffer = UpdateAndGetReusedBuffer(shape, CV_MAKETYPE(CV_32F, im->channels()), buf_name, Device::GPU);
   cv::cuda::GpuMat new_im(im->size(), CV_MAKETYPE(CV_32F, im->channels()), buffer);
 
-  cv::cuda::merge(split_im, new_im);
+  cv::cuda::merge(split_im, new_im, stream);
   mat->SetMat(new_im);
   FDINFO << new_im.isContinuous() << std::endl;
+  tc.End();
+  FDINFO << "merge---- " << tc.Duration() * 1000 << std::endl;
   return true;
 }
 #endif

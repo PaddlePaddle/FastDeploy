@@ -40,6 +40,8 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
                   const RuntimeOption& custom_option = RuntimeOption(),
                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  ~PaddleClasModel();
+
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
@@ -74,6 +76,8 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
  private:
   // Whether to use CUDA preprocessing
   bool use_cuda_preprocessing_ = false;
+  // CUDA stream
+  void* cuda_stream_ = nullptr;
 };
 
 typedef PaddleClasModel PPLCNet;

@@ -60,6 +60,15 @@ class FASTDEPLOY_DECL Processor {
   virtual bool operator()(Mat* mat,
                           ProcLib lib = ProcLib::OPENCV);
 
+  void SetCudaStream(void* stream) {
+    cuda_stream_ = stream;
+  }
+
+  cv::cuda::Stream GetCudaStream() {
+    cudaStream_t stream = reinterpret_cast<cudaStream_t>(cuda_stream_);
+    return cv::cuda::StreamAccessor::wrapStream(stream);
+  }
+
  protected:
   void* UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
                                  const int& opencv_dtype,
@@ -68,6 +77,7 @@ class FASTDEPLOY_DECL Processor {
 
  private:
   std::map<std::string, FDTensor> reused_buffers_;
+  void* cuda_stream_ = nullptr;
 };
 
 }  // namespace vision

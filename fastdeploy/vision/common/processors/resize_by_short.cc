@@ -51,11 +51,12 @@ bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
   void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
   cv::cuda::GpuMat new_im(cv::Size(width, height), im->type(), buffer);
 
+  auto stream = GetCudaStream();
   if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
-    cv::cuda::resize(*im, new_im, cv::Size(), scale, scale, interp_);
+    cv::cuda::resize(*im, new_im, cv::Size(), scale, scale, interp_, stream);
   } else {
     if (width != origin_w || height != origin_h) {
-      cv::cuda::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_);
+      cv::cuda::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_, stream);
     }
   }
   FDINFO << new_im.isContinuous() << " " << scale << "" << std::endl;

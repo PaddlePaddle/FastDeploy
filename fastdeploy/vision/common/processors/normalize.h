@@ -23,7 +23,8 @@ class FASTDEPLOY_DECL Normalize : public Processor {
   Normalize(const std::vector<float>& mean, const std::vector<float>& std,
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
-            const std::vector<float>& max = std::vector<float>());
+            const std::vector<float>& max = std::vector<float>(),
+            bool swap_rb = false);
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_OPENCV_CUDA
   bool ImplByOpenCVCuda(Mat* mat);
@@ -59,6 +60,7 @@ class FASTDEPLOY_DECL Normalize : public Processor {
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
+  bool swap_rb_;
 };
 }  // namespace vision
 }  // namespace fastdeploy

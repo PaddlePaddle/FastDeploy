@@ -33,9 +33,10 @@ bool BGR2RGB::ImplByOpenCVCuda(Mat* mat) {
   void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
   cv::cuda::GpuMat new_im(im->size(), im->type(), buffer);
 
-  cv::cuda::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
+  auto stream = GetCudaStream();
+  cv::cuda::cvtColor(*im, new_im, cv::COLOR_BGR2RGB, 0, stream);
   mat->SetMat(new_im);
-  FDINFO << new_im.isContinuous() << std::endl;
+  // FDINFO << new_im.isContinuous() << std::endl;
   return true;
 }
 #endif
