@@ -166,7 +166,7 @@ bool Recognizer::Postprocess(FDTensor& infer_result,
   }
   score /= count;
   if (std::isnan(score)) {
-    continue;
+    score = 0.f;
   }
   std::get<0>(*rec_result) = str_res;
   std::get<1>(*rec_result) = score;
