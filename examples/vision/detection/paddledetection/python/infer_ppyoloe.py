@@ -1,6 +1,7 @@
-import fastdeploy as fd
 import cv2
 import os
+
+import fastdeploy as fd
 
 
 def parse_arguments():
@@ -9,8 +10,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        required=True,
+        default=None,
         help="Path of PaddleDetection model directory")
+    parser.add_argument(
+        "--model_hub",
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
@@ -34,14 +40,23 @@ def build_option(args):
 
     if args.use_trt:
         option.use_trt_backend()
+        option.set_trt_input_shape("image", [1, 3, 640, 640])
+        option.set_trt_input_shape("scale_factor", [1, 2])
     return option
 
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model_dir, "model.pdmodel")
-params_file = os.path.join(args.model_dir, "model.pdiparams")
-config_file = os.path.join(args.model_dir, "infer_cfg.yml")
+if args.model_dir is None and args.model_hub is None:
+    model_dir = fd.download_model(name='ppyoloe_crn_l_300e_coco')
+elif args.model_dir is not None:
+    model_dir = args.model_dir
+else:
+    model_dir = fd.download_model(name=args.model_hub)
+
+model_file = os.path.join(model_dir, "model.pdmodel")
+params_file = os.path.join(model_dir, "model.pdiparams")
+config_file = os.path.join(model_dir, "infer_cfg.yml")
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
