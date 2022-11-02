@@ -17,12 +17,14 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/slim/yolov6/python
 
 #下载FastDeloy提供的yolov6s量化模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_quant.tar
-tar -xvf yolov6s_quant.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_qat_model.tar
+tar -xvf yolov6s_qat_model.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # 在CPU上使用Paddle-Inference推理量化模型
-python infer.py --model yolov6s_quant --image 000000014439.jpg --device cpu --backend paddle
+python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device cpu --backend paddle
 # 在GPU上使用TensorRT推理量化模型
-python infer.py --model yolov6s_quant --image 000000014439.jpg --device gpu --backend trt
+python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device gpu --backend trt
+# 在GPU上使用Paddle-TensorRT推理量化模型
+python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device gpu --backend pptrt
 ```

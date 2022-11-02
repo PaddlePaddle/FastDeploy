@@ -48,6 +48,11 @@ def build_option(args):
         ) == "gpu", "TensorRT backend require inferences on device GPU."
         option.use_trt_backend()
         option.set_trt_input_shape("inputs", min_shape=[1, 3, 224, 224])
+    elif args.backend.lower() == "pptrt":
+        assert args.device.lower(
+        ) == "gpu", "TensorRT backend require inference on device GPU."
+        option.use_trt_backend()
+        option.enable_paddle_to_trt()
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":

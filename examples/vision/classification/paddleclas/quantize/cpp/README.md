@@ -30,4 +30,6 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg 0
 # 在GPU上使用TensorRT推理量化模型
 ./infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg 1
+# 在GPU上使用Paddle-TensorRT推理量化模型
+./infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg 2
 ```

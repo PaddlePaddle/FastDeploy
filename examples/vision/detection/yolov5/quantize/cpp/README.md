@@ -31,4 +31,6 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_demo yolov5s_quant 000000014439.jpg 0
 # 在GPU上使用TensorRT推理量化模型
 ./infer_demo yolov5s_quant 000000014439.jpg 1
+# 在GPU上使用Paddle-TensorRT推理量化模型
+./infer_demo yolov5s_quant 000000014439.jpg 2
 ```

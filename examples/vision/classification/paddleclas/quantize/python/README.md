@@ -26,4 +26,6 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device cpu --backend ort
 # 在GPU上使用TensorRT推理量化模型
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device gpu --backend trt
+# 在GPU上使用Paddle-TensorRT推理量化模型
+python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device gpu --backend pptrt
 ```

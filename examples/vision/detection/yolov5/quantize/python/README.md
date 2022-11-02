@@ -26,4 +26,6 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer.py --model yolov5s_quant --image 000000014439.jpg --device cpu --backend paddle
 # 在GPU上使用TensorRT推理量化模型
 python infer.py --model yolov5s_quant --image 000000014439.jpg --device gpu --backend trt
+# 在GPU上使用Paddle-TensorRT推理量化模型
+python infer.py --model yolov5s_quant --image 000000014439.jpg --device gpu --backend pptrt
 ```

@@ -67,7 +67,11 @@ int main(int argc, char* argv[]) {
     option.UseGpu();
     option.UseTrtBackend();
     option.SetTrtInputShape("inputs",{1, 3, 224, 224});
-  }
+  } else if (flag == 2) {
+    option.UseGpu();
+    option.UseTrtBackend();
+    option.EnablePaddleToTrt();
+    }
 
   std::string model_dir = argv[1];
   std::string test_image = argv[2];
