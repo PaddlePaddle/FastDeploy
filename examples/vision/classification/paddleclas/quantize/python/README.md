@@ -8,7 +8,7 @@
 
 ### 量化模型准备
 - 1. 用户可以直接使用由FastDeploy提供的量化模型进行部署.
-- 2. 用户可以使用FastDeploy提供的[一键模型量化工具](../../../../../../tools/quantization/),自行进行模型量化, 并使用产出的量化模型进行部署.(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可.)
+- 2. 用户可以使用FastDeploy提供的[一键模型自动化压缩工具](../../tools/auto_compression/),自行进行模型量化, 并使用产出的量化模型进行部署.(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可.)
 
 
 ## 以量化后的ResNet50_Vd模型为例, 进行部署
@@ -22,8 +22,10 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar
 tar -xvf resnet50_vd_ptq.tar
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# 在CPU上使用Paddle-Inference推理量化模型
+# 在CPU上使用ONNX Runtime推理量化模型
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device cpu --backend ort
 # 在GPU上使用TensorRT推理量化模型
 python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device gpu --backend trt
+# 在GPU上使用Paddle-TensorRT推理量化模型
+python infer.py --model resnet50_vd_ptq --image ILSVRC2012_val_00000010.jpeg --device gpu --backend pptrt
 ```

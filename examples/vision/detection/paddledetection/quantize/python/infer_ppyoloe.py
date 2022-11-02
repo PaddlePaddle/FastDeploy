@@ -49,6 +49,11 @@ def build_option(args):
         option.set_trt_cache_file(os.path.join(args.model, "model.trt"))
         option.set_trt_input_shape("image", min_shape=[1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", min_shape=[1, 2])
+    elif args.backend.lower() == "pptrt":
+        assert args.device.lower(
+        ) == "gpu", "TensorRT backend require inference on device GPU."
+        option.use_trt_backend()
+        option.enable_paddle_to_trt()
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":

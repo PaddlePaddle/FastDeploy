@@ -1,12 +1,13 @@
 Global:
-  model_dir: ./MobileNetV1_ssld_infer/
+  model_dir: ./ResNet50_vd_infer/
   format: 'paddle'
   model_filename: inference.pdmodel
   params_filename: inference.pdiparams
   image_path: ./ImageNet_val_640
-  arch: MobileNetV1
   input_list: ['input']
-  preprocess: cls_image_preprocess
+  qat_preprocess: cls_image_preprocess
+  ptq_preprocess: cls_image_preprocess
+  qat_batch_size: 32
 
 
 Distillation:
@@ -14,7 +15,6 @@ Distillation:
   loss: l2
   node:
   - softmax_0.tmp_0
-
 
 Quantization:
   use_pact: true
@@ -30,7 +30,6 @@ Quantization:
   - depthwise_conv2d
   weight_bits: 8
 
-
 TrainConfig:
   train_iter: 5000
   learning_rate:
@@ -41,7 +40,7 @@ TrainConfig:
     optimizer:
       type: Momentum
     weight_decay: 0.00002
-  origin_metric: 0.70898
+  origin_metric: 0.7912
 
 
 PTQ:
