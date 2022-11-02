@@ -22,9 +22,19 @@ import GPUtil
 import time
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() == 'true':
+        return True
+    elif v.lower() == 'false':
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def parse_arguments():
     import argparse
-    import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model", required=True, help="Path of PaddleSeg model.")
@@ -50,16 +60,16 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default="ort",
-        help="inference backend, ort, ov, trt, paddle, paddle_trt.")
+        default="default",
+        help="inference backend, default, ort, ov, trt, paddle, paddle_trt.")
     parser.add_argument(
         "--enable_trt_fp16",
-        type=bool,
+        type=str2bool,
         default=False,
         help="whether enable fp16 in trt backend")
     parser.add_argument(
         "--enable_collect_memory_info",
-        type=bool,
+        type=str2bool,
         default=False,
         help="whether enable collect memory info")
     args = parser.parse_args()
@@ -70,26 +80,43 @@ def build_option(args):
     option = fd.RuntimeOption()
     device = args.device
     backend = args.backend
+    enable_trt_fp16 = args.enable_trt_fp16
     option.set_cpu_thread_num(args.cpu_num_thread)
     if device == "gpu":
-        option.use_gpu(args.device_id)
-
-    if backend == "trt" or backend == "paddle_trt":
-        assert device == "gpu", "the trt backend need device==gpu"
-        option.use_trt_backend()
-        if backend == "paddle_trt":
-            option.enable_paddle_to_trt()
-        if args.enable_trt_fp16:
-            option.enable_trt_fp16()
-    elif backend == "ov":
-        assert device == "cpu", "the openvino backend need device==cpu"
-        option.use_openvino_backend()
-    elif backend == "paddle":
-        option.use_paddle_backend()
-    elif backend == "ort":
-        option.use_ort_backend()
+        option.use_gpu()
+        if backend == "ort":
+            option.use_ort_backend()
+        elif backend == "paddle":
+            option.use_paddle_backend()
+        elif backend in ["trt", "paddle_trt"]:
+            option.use_trt_backend()
+            if backend == "paddle_trt":
+                option.enable_paddle_to_trt()
+            if enable_trt_fp16:
+                option.enable_trt_fp16()
+        elif backend == "default":
+            return option
+        else:
+            raise Exception(
+                "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, {} is not supported.".
+                format(backend))
+    elif device == "cpu":
+        if backend == "ort":
+            option.use_ort_backend()
+        elif backend == "ov":
+            option.use_openvino_backend()
+        elif backend == "paddle":
+            option.use_paddle_backend()
+        elif backend == "default":
+            return option
+        else:
+            raise Exception(
+                "While inference with CPU, only support default/ort/ov/paddle now, {} is not supported.".
+                format(backend))
     else:
-        print("%s is an unsupported backend" % backend)
+        raise Exception(
+            "Only support device CPU/GPU now, {} is not supported.".format(
+                device))
 
     return option
 
@@ -123,6 +150,7 @@ if __name__ == '__main__':
     config_file = os.path.join(args.model, "deploy.yaml")
 
     gpu_id = args.device_id
+    enable_collect_memory_info = args.enable_collect_memory_info
     end2end_statis = list()
     cpu_mem = list()
     gpu_mem = list()
@@ -148,7 +176,7 @@ if __name__ == '__main__':
             start = time.time()
             result = model.predict(im)
             end2end_statis.append(time.time() - start)
-            if args.enable_collect_memory_info:
+            if enable_collect_memory_info:
                 gpu_util.append(get_current_gputil(gpu_id))
                 cm, gm = get_current_memory_mb(gpu_id)
                 cpu_mem.append(cm)
@@ -158,7 +186,7 @@ if __name__ == '__main__':
 
         warmup_iter = args.iter_num // 5
         end2end_statis_repeat = end2end_statis[warmup_iter:]
-        if args.enable_collect_memory_info:
+        if enable_collect_memory_info:
             cpu_mem_repeat = cpu_mem[warmup_iter:]
             gpu_mem_repeat = gpu_mem[warmup_iter:]
             gpu_util_repeat = gpu_util[warmup_iter:]
@@ -166,14 +194,14 @@ if __name__ == '__main__':
         dump_result = dict()
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
-        if args.enable_collect_memory_info:
+        if enable_collect_memory_info:
             dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
             dump_result["gpu_rss_mb"] = np.mean(gpu_mem_repeat)
             dump_result["gpu_util"] = np.mean(gpu_util_repeat)
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
-        if args.enable_collect_memory_info:
+        if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))
             f.writelines("gpu_rss_mb: {} \n".format(
