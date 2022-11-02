@@ -6,7 +6,7 @@ English | [简体中文](WebDemo.md)
 - [1. Quick Start](#1)
 - [2. npm package call](#2)
 - [3. Model Replacement](#3)
-- [4. Customize pre- and post-processing parameters](#4)
+- [4. custom hyperparameters](#4)
 - [5. Other](#5)
 
 <a name="0"></a>
@@ -113,7 +113,7 @@ npm run dev
 ````
 
 <a name="4"></a>
-## 4. Customize pre- and post-processing parameters
+## 4. custom hyperparameters
 
 **Custom preprocessing parameters**
 

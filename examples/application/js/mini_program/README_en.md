@@ -104,23 +104,22 @@ wx.canvasGetImageData({
 
 - 4.1 An error occurs `Invalid context type [webgl2] for Canvas#getContext`
 
-You can leave it alone, it will not affect the normal code operation and demo function
+    **A:** You can leave it alone, it will not affect the normal code operation and demo function
 
 - 4.2 Preview can't see the result
 
-It is recommended to try real machine debugging
+    **A:** It is recommended to try real machine debugging
 
 - 4.3 A black screen appears in the WeChat developer tool, and then there are too many errors
 
-Restart WeChat Developer Tools
+    **A:** Restart WeChat Developer Tools
 
 - 4.4 The debugging results of the simulation and the real machine are inconsistent; the simulation cannot detect the text, etc.
 
-The real machine can prevail;
-
-If the simulation cannot detect the text, etc., you can try to change the code at will (add, delete, newline, etc.) and then click to compile
+    **A:** The real machine can prevail;
+    If the simulation cannot detect the text, etc., you can try to change the code at will (add, delete, newline, etc.) and then click to compile
 
 
 - 4.5 Prompts such as no response for a long time appear when the phone is debugged or running
 
-Please continue to wait, model inference will take some time
+    **A:** Please continue to wait, model inference will take some time

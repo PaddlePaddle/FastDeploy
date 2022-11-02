@@ -13,7 +13,7 @@ Finally, we can launch AI functions in front-end application scenarios such as b
 
 ## Web Demo
 
-Run the official demo reference [documentation](./WebDemo_en.md) directly in the browser
+Refer to this [document](./WebDemo_en.md) for steps to run computer vision demo in the browser.
 
 |demo|web demo directory|visualization|
 |-|-|-|
