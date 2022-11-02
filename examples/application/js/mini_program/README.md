@@ -1,3 +1,4 @@
+[English](README_en.md) | 简体中文
 
 # Paddle.js微信小程序Demo
 
