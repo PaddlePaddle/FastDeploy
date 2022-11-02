@@ -42,7 +42,13 @@ FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype) {
 void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
-  if (option.enable_fp16) {
+  if (option_.enable_int8) {
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+    FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
+           << "inference with int8 precision!" << std::endl;    
+  }
+  if (option_.enable_fp16) {
     paddle::lite_api::MobileConfig check_fp16_config;
     // Determine whether the device supports the FP16
     // instruction set (or whether it is an arm device
@@ -51,6 +57,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     if (supported_fp16_) {
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+      FDINFO << "Your device is supported fp16 ! Lite::Backend will "
+             << "inference with fp16 precision!" << std::endl;    
     } else {
       FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
@@ -58,12 +66,12 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
-  if (option.threads > 0) {
-    config_.set_threads(option.threads);
+  if (option_.threads > 0) {
+    config_.set_threads(option_.threads);
   }
-  if (option.power_mode > 0) {
+  if (option_.power_mode > 0) {
     config_.set_power_mode(
-        static_cast<paddle::lite_api::PowerMode>(option.power_mode));
+        static_cast<paddle::lite_api::PowerMode>(option_.power_mode));
   }
 }
 
@@ -85,7 +93,8 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
   if (option_.optimized_model_dir != "") {
     FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
            << option_.optimized_model_dir << std::endl;
-    predictor_->SaveOptimizedModel(option_.optimized_model_dir);
+    predictor_->SaveOptimizedModel(option_.optimized_model_dir,
+                                   paddle::lite_api::LiteModelType::kNaiveBuffer);
   }
 
   inputs_desc_.clear();
@@ -136,14 +145,13 @@ TensorInfo LiteBackend::GetOutputInfo(int index) {
 std::vector<TensorInfo> LiteBackend::GetOutputInfos() { return outputs_desc_; }
 
 bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
-                        std::vector<FDTensor>* outputs) {
+                        std::vector<FDTensor>* outputs) {                                                
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
             << inputs_desc_.size() << ")." << std::endl;
     return false;
   }
-
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
@@ -152,12 +160,29 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
     auto tensor = predictor_->GetInput(iter->second);
-    tensor->Resize(inputs[i].shape);
-    tensor->ShareExternalMemory(const_cast<void*>(inputs[i].CpuData()),
-                                inputs[i].Nbytes(),
-                                paddle::lite_api::TargetType::kARM);
+    // Adjust dims only, allocate lazy. 
+    tensor->Resize(inputs[i].shape); 
+    if (inputs[i].dtype == FDDataType::FP32) {
+      tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const float*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT32) {
+      tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT8) {
+      tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int8_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::UINT8) {
+      tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const uint8_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else {
+      FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
+    }
   }
-
+  
   predictor_->Run();
 
   outputs->resize(outputs_desc_.size());

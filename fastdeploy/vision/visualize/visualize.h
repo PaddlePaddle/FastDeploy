@@ -70,6 +70,9 @@ FASTDEPLOY_DECL cv::Mat VisFaceDetection(const cv::Mat& im,
                                          const FaceDetectionResult& result,
                                          int line_size = 1,
                                          float font_size = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisFaceAlignment(const cv::Mat& im,
+                                         const FaceAlignmentResult& result,
+                                         int line_size = 1);
 FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
                                         const SegmentationResult& result,
                                         float weight = 0.5);
@@ -77,6 +80,9 @@ FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
                                    bool remove_small_connected_area = false);
 FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
+
+FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img,const MOTResult& results, float fps=0.0, int frame_id=0);
+
 FASTDEPLOY_DECL cv::Mat SwapBackground(
     const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
     bool remove_small_connected_area = false);

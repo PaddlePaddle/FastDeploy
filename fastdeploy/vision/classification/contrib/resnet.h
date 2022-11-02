@@ -25,7 +25,7 @@ namespace vision {
  *
  */
 namespace classification {
-/*! @brief ResNet series model
+/*! @brief Torchvision ResNet series model
  */
 class FASTDEPLOY_DECL ResNet : public FastDeployModel {
  public:
@@ -44,17 +44,22 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   virtual std::string ModelName() const { return "ResNet"; }
    /** \brief Predict for the input "im", the result will be saved in "result".
    *
-   * \param[in] im Input image for inference.
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result Saving the inference result.
    * \param[in] topk The length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
    */
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
-
-  /// Tuple of (width, height)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default size = {224, 224}
+  */
   std::vector<int> size;
-  /// Mean parameters for normalize
+  /*! @brief
+  Mean parameters for normalize, size should be the the same as channels, default mean_vals = {0.485f, 0.456f, 0.406f}
+  */
   std::vector<float> mean_vals;
-  /// Std parameters for normalize
+  /*! @brief
+  Std parameters for normalize, size should be the the same as channels, default std_vals = {0.229f, 0.224f, 0.225f}
+  */
   std::vector<float> std_vals;
 
 

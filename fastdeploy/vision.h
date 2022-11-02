@@ -33,6 +33,7 @@
 #include "fastdeploy/vision/facedet/contrib/scrfd.h"
 #include "fastdeploy/vision/facedet/contrib/ultraface.h"
 #include "fastdeploy/vision/facedet/contrib/yolov5face.h"
+#include "fastdeploy/vision/facealign/contrib/pfld.h"
 #include "fastdeploy/vision/faceid/contrib/adaface.h"
 #include "fastdeploy/vision/faceid/contrib/arcface.h"
 #include "fastdeploy/vision/faceid/contrib/cosface.h"
@@ -41,6 +42,7 @@
 #include "fastdeploy/vision/faceid/contrib/vpl.h"
 #include "fastdeploy/vision/keypointdet/pptinypose/pptinypose.h"
 #include "fastdeploy/vision/matting/contrib/modnet.h"
+#include "fastdeploy/vision/matting/contrib/rvm.h"
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
@@ -48,6 +50,7 @@
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
+#include "fastdeploy/vision/tracking/pptracking/model.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

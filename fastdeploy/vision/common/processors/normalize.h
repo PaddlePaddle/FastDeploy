@@ -18,13 +18,16 @@
 
 namespace fastdeploy {
 namespace vision {
-class Normalize : public Processor {
+class FASTDEPLOY_DECL Normalize : public Processor {
  public:
   Normalize(const std::vector<float>& mean, const std::vector<float>& std,
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
             const std::vector<float>& max = std::vector<float>());
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "Normalize"; }
 
   // While use normalize, it is more recommend not use this function
@@ -42,9 +45,17 @@ class Normalize : public Processor {
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
                   ProcLib lib = ProcLib::OPENCV);
+
+  std::vector<float> GetAlpha() const {
+    return alpha_;
+  }
+  std::vector<float> GetBeta() const {
+    return beta_;
+  }
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

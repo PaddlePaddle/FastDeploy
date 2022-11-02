@@ -38,8 +38,52 @@ bool LimitLong::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-bool LimitLong::Run(Mat* mat, int max_long, int min_long, ProcLib lib) {
-  auto l = LimitLong(max_long, min_long);
+#ifdef ENABLE_FLYCV
+bool LimitLong::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  int origin_w = im->width();
+  int origin_h = im->height();
+  int im_size_max = std::max(origin_w, origin_h);
+  int target = im_size_max;
+  if (max_long_ > 0 && im_size_max > max_long_) {
+    target = max_long_;
+  } else if (min_long_ > 0 && im_size_max < min_long_) {
+    target = min_long_;
+  }
+  if (target != im_size_max) {
+    double scale =
+        static_cast<double>(target) / static_cast<double>(im_size_max);
+    if (fabs(scale - 1.0) < 1e-06) {
+      return true;
+    }
+    auto interp_method = fcv::InterpolationType::INTER_LINEAR;
+    if (interp_ == 0) {
+      interp_method = fcv::InterpolationType::INTER_NEAREST;
+    } else if (interp_ == 1) {
+      interp_method = fcv::InterpolationType::INTER_LINEAR;
+    } else if (interp_ == 2) {
+      interp_method = fcv::InterpolationType::INTER_CUBIC;
+    } else {
+      FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+                 "now it's "
+              << interp_ << "." << std::endl;
+      return false;
+    }
+    fcv::Mat new_im;
+    FDERROR << "origin " << im->width() << " " << im->height() << std::endl;
+    FDERROR << "scale " << scale << std::endl;
+    fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
+    FDERROR << "after " << new_im.width() << " " << new_im.height() << std::endl;
+    mat->SetMat(new_im);
+    mat->SetWidth(new_im.width());
+    mat->SetHeight(new_im.height());
+  }
+  return true;
+}
+#endif
+
+bool LimitLong::Run(Mat* mat, int max_long, int min_long, int interp, ProcLib lib) {
+  auto l = LimitLong(max_long, min_long, interp);
   return l(mat, lib);
 }
 }  // namespace vision

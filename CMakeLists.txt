@@ -52,15 +52,17 @@ endif()
 ############################# Basic Options for FastDeploy ################################
 option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
+option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
 option(ENABLE_TRT_BACKEND "Whether to enable tensorrt backend." OFF)
 option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_POROS_BACKEND "Whether to enable poros backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
+option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
 option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
-option(ENABLE_VISION_VISUALIZE "Whether to enable visualize vision model result toolbox." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
+option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -90,16 +92,6 @@ if(BUILD_ON_JETSON)
   set(WITH_GPU ON)
   set(ENABLE_TRT_BACKEND ON)
   set(ENABLE_ORT_BACKEND ON)
-endif()
-
-# Whether to build CUDA source files in fastdeploy
-# CUDA source files include CUDA preprocessing, TRT plugins, etc.
-if(WITH_GPU AND UNIX)
-  set(BUILD_CUDA_SRC ON)
-  enable_language(CUDA)
-  set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
-else()
-  set(BUILD_CUDA_SRC OFF)
 endif()
 
 # config GIT_URL with github mirrors to speed up dependent repos clone
@@ -145,16 +137,6 @@ set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
-  if(ENABLE_VISION)
-    # ENABLE_VISION_VISUALIZE must be ON if enable vision examples.
-    message(STATUS "Found BUILD_EXAMPLES and ENABLE_VISION ON, so, force ENABLE_VISION_VISUALIZE ON")
-    set(ENABLE_VISION_VISUALIZE ON CACHE BOOL "force to enable visualize vision model result toolbox" FORCE)
-  else()
-    message(WARNING "BUILD_EXAMPLES is ON, but found ENABLE_VISION OFF, will skip vision examples.")
-  endif()
-endif()
-
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)
     message(FATAL_ERROR "Not support ONNXRuntime backend for Andorid/IOS now. Please set ENABLE_ORT_BACKEND=OFF.")
@@ -177,18 +159,20 @@ configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
 file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
+file(GLOB_RECURSE FDTENSOR_FUNC_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cu)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/*.cc)
 file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
 file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/openvino/*.cc)
+file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/rknpu/rknpu2/*.cc)
 file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cu)
 file(GLOB_RECURSE DEPLOY_TEXT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/text/*.cc)
 file(GLOB_RECURSE DEPLOY_PYBIND_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*_pybind.cc)
-list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS})
+list(REMOVE_ITEM ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS} ${DEPLOY_PADDLE_SRCS} ${DEPLOY_POROS_SRCS} ${DEPLOY_TRT_SRCS} ${DEPLOY_OPENVINO_SRCS} ${DEPLOY_LITE_SRCS} ${DEPLOY_VISION_SRCS} ${DEPLOY_TEXT_SRCS} ${DEPLOY_PIPELINE_SRCS} ${DEPLOY_RKNPU2_SRCS})
 
 set(DEPEND_LIBS "")
 
@@ -243,6 +227,13 @@ if(ENABLE_OPENVINO_BACKEND)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
+endif()
+
+if(ENABLE_RKNPU2_BACKEND)
+  add_definitions(-DENABLE_RKNPU2_BACKEND)
+  list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_RKNPU2_SRCS})
+  include(${PROJECT_SOURCE_DIR}/cmake/rknpu2.cmake)
+  list(APPEND DEPEND_LIBS ${RKNN_RT_LIB})
 endif()
 
 if(ENABLE_POROS_BACKEND)
@@ -320,6 +311,23 @@ if(WITH_GPU)
   endif()
 endif()
 
+# Whether to build CUDA source files in fastdeploy
+# CUDA source files include CUDA preprocessing, TRT plugins, etc.
+if(WITH_GPU)
+  set(BUILD_CUDA_SRC ON)
+  enable_language(CUDA)
+  message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}, version: "
+                 "${CMAKE_CUDA_COMPILER_ID} ${CMAKE_CUDA_COMPILER_VERSION}")
+  include(${PROJECT_SOURCE_DIR}/cmake/cuda.cmake)
+  list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_CUDA_SRCS})
+else()
+  set(BUILD_CUDA_SRC OFF)
+endif()
+
+if(WITH_IPU)
+  add_definitions(-DWITH_IPU)
+endif()
+
 if(ENABLE_TRT_BACKEND)
   if(APPLE OR ANDROID OR IOS)
     message(FATAL_ERROR "Cannot enable tensorrt backend in mac/ios/android os, please set -DENABLE_TRT_BACKEND=OFF.")
@@ -374,6 +382,8 @@ endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
+#  set(ENABLE_VISION_VISUALIZE ON)
+  add_definitions(-DENABLE_VISION_VISUALIZE)
   if(ENABLE_OPENCV_CUDA)
     if(NOT WITH_GPU)
       message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
@@ -394,13 +404,10 @@ if(ENABLE_VISION)
   include_directories(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include)
   include(${PROJECT_SOURCE_DIR}/cmake/opencv.cmake)
 
-  if(ENABLE_VISION_VISUALIZE)
-    add_definitions(-DENABLE_VISION_VISUALIZE)
-  endif()
-else()
-  if(ENABLE_VISION_VISUALIZE)
-    message("While ENABLE_VISION=OFF, will force ENABLE_VISION_VISUALIZE=OFF.")
-    set(ENABLE_VISION_VISUALIZE OFF)
+  if(ENABLE_FLYCV)
+    add_definitions(-DENABLE_FLYCV)
+    include(${PROJECT_SOURCE_DIR}/cmake/flycv.cmake)
+    list(APPEND DEPEND_LIBS external_flycv)
   endif()
 endif()
 
@@ -463,7 +470,7 @@ endif()
 set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 if(MSVC)
   # disable warnings for dll export
-  target_compile_options(${LIBRARY_NAME} PRIVATE /wd4251)
+  target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
 endif()
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
@@ -480,13 +487,16 @@ if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   if(NOT EXECUTABLE_OUTPUT_PATH STREQUAL ${CMAKE_CURRENT_BINARY_DIR}/bin)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
   endif()
+  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
   add_subdirectory(examples)
 endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
   include(${PROJECT_SOURCE_DIR}/cmake/gtest.cmake)
-  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  if(NOT BUILD_EXAMPLES)
+    include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  endif()
   include(${PROJECT_SOURCE_DIR}/cmake/glog.cmake)
   add_subdirectory(tests)
 endif()
@@ -552,6 +562,11 @@ install(
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/utils
 )
 
 if(NOT WIN32)

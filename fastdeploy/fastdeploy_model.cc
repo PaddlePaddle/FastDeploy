@@ -34,14 +34,33 @@ bool FastDeployModel::InitRuntime() {
     }
 
     bool use_gpu = (runtime_option.device == Device::GPU);
+    bool use_ipu = (runtime_option.device == Device::IPU);
 #ifndef WITH_GPU
     use_gpu = false;
 #endif
+#ifndef WITH_IPU
+    use_ipu = false;
+#endif
+    bool use_rknpu = (runtime_option.device == Device::RKNPU);
 
     // whether the model is supported by the setted backend
     bool is_supported = false;
     if (use_gpu) {
       for (auto& item : valid_gpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    } else if (use_rknpu) {
+      for (auto& item : valid_rknpu_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    } else if(use_ipu) {
+      for (auto& item : valid_ipu_backends) {
         if (item == runtime_option.backend) {
           is_supported = true;
           break;
@@ -90,8 +109,18 @@ bool FastDeployModel::InitRuntime() {
             << std::endl;
     return false;
 #endif
+  } else if (runtime_option.device == Device::RKNPU) {
+    return CreateRKNPUBackend();
+  } else if (runtime_option.device == Device::IPU) {
+#ifdef WITH_IPU
+    return CreateIpuBackend();
+#else
+    FDERROR << "The compiled FastDeploy library doesn't support IPU now."
+            << std::endl;
+    return false;
+#endif
   }
-  FDERROR << "Only support CPU/GPU now." << std::endl;
+  FDERROR << "Only support CPU/GPU/NPU now." << std::endl;
   return false;
 }
 
@@ -119,7 +148,7 @@ bool FastDeployModel::CreateCpuBackend() {
 }
 
 bool FastDeployModel::CreateGpuBackend() {
-  if (valid_gpu_backends.size() == 0) {
+  if (valid_gpu_backends.empty()) {
     FDERROR << "There's no valid gpu backends for model: " << ModelName()
             << std::endl;
     return false;
@@ -142,6 +171,53 @@ bool FastDeployModel::CreateGpuBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateRKNPUBackend() {
+  if (valid_rknpu_backends.empty()) {
+    FDERROR << "There's no valid npu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_rknpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_rknpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_rknpu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Cannot find an available npu backend to load this model."
+          << std::endl;
+  return false;
+}
+
+bool FastDeployModel::CreateIpuBackend() {
+  if (valid_ipu_backends.size() == 0) {
+    FDERROR << "There's no valid ipu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_ipu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_ipu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_ipu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
 bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
                             std::vector<FDTensor>* output_tensors) {
   TimeCounter tc;
@@ -160,6 +236,10 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
     time_of_runtime_.push_back(tc.Duration());
   }
   return ret;
+}
+
+bool FastDeployModel::Infer() {
+  return Infer(reused_input_tensors, &reused_output_tensors);
 }
 
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {

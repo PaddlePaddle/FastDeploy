@@ -238,6 +238,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
             } else if (param_key == "use_paddle_log") {
                 runtime_options_->EnablePaddleLogInfo();
+            } else if (param_key == "use_ipu") {
+              runtime_options_->UseIpu();
             }
           }
         }
@@ -379,11 +381,15 @@ TRITONSERVER_Error* ModelState::LoadModel(
   if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     runtime_options_->UseGpu(instance_group_device_id);
+    runtime_options_->SetExternalStream((void*)stream);
   } else {
     runtime_options_->UseCpu();
   }
 #else
-  runtime_options_->UseCpu();
+  if (runtime_options_->device != fastdeploy::Device::IPU) {
+    // If Device is set to IPU, just skip CPU setting.
+    runtime_options_->UseCpu();
+  }
 #endif  // TRITON_ENABLE_GPU
 
   *runtime = new fastdeploy::Runtime();
@@ -1001,9 +1007,7 @@ TRITONSERVER_Error* ModelInstanceState::Run(
   runtime_->Infer(input_tensors_, &output_tensors_);
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    // TODO: stream controll
-    cudaDeviceSynchronize();
-    // cudaStreamSynchronize(CudaStream());
+    cudaStreamSynchronize(CudaStream());
   }
 #endif
   return nullptr;

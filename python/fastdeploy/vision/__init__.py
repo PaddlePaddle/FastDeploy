@@ -16,12 +16,22 @@ from __future__ import absolute_import
 from . import detection
 from . import classification
 from . import segmentation
+from . import tracking
 from . import keypointdetection
-
 from . import matting
 from . import facedet
+from . import facealign
 from . import faceid
 from . import ocr
 from . import evaluation
 from .utils import fd_result_to_json
 from .visualize import *
+from .. import C
+
+
+def enable_flycv():
+    return C.vision.enable_flycv()
+
+
+def disable_flycv():
+    return C.vision.disable_flycv()
