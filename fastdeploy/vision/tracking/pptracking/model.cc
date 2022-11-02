@@ -261,7 +261,6 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
     result->boxes.push_back(box);
     result->ids.push_back(1);
     result->scores.push_back(*dets.ptr<float>(0, 4));
-
   } else {
     std::vector<Track>::iterator titer;
     for (titer = tracks.begin(); titer != tracks.end(); ++titer) {
@@ -288,14 +287,7 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
     float center_x = (result->boxes[i][0] + result->boxes[i][2]) / 2;
     float center_y = (result->boxes[i][1] + result->boxes[i][3]) / 2;
     int id = result->ids[i];
-    auto iter = recorder_->records.find(id);
-    if (iter != recorder_->records.end()) {
-      auto trail = recorder_->records[id];
-      trail.push_back({int(center_x), int(center_y)});
-      recorder_->Add(id, trail);
-    } else {
-      recorder_->Add(id, {{int(center_x), int(center_y)}});
-    }
+    recorder_->Add(id,{int(center_x), int(center_y)});
   }
   return true;
 }
@@ -306,11 +298,11 @@ void PPTracking::BindRecorder(TrailRecorder* recorder){
     is_record_trail_ = true;
 }
 
-void PPTracking::UnBindRecorder(){
+void PPTracking::UnbindRecorder(){
 
     is_record_trail_ = false;
     std::map<int, std::vector<std::array<int, 2>>>::iterator iter;
-    for(iter=recorder_->records.begin();iter!=recorder_->records.end();iter++){
+    for(iter = recorder_->records.begin(); iter != recorder_->records.end(); iter++){
       iter->second.clear();
       iter->second.shrink_to_fit();
     }

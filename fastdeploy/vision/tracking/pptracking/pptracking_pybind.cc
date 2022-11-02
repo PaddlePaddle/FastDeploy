@@ -32,7 +32,7 @@ void BindPPTracking(pybind11::module &m) {
              self.Predict(&mat, res);
              return res;
          })
-    .def("bind_trail_recorders", &vision::tracking::PPTracking::BindRecorder)
-    .def("unbind_trail_recorders", &vision::tracking::PPTracking::UnBindRecorder);
+    .def("bind_recorder", &vision::tracking::PPTracking::BindRecorder)
+    .def("unbind_recorder", &vision::tracking::PPTracking::UnbindRecorder);
 }
 }  // namespace fastdeploy

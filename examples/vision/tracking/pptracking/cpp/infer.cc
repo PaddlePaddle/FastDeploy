@@ -34,27 +34,28 @@ void CpuInfer(const std::string& model_dir, const std::string& video_file) {
 
   fastdeploy::vision::MOTResult result;
   fastdeploy::vision::tracking::TrailRecorder recorder;
-  //during each prediction, data is inserted into the recorder. As the number of predictions increases,
-  //the memory will continue to grow. You can cancel the insertion through 'UnBindRecorder'.
-  int count = 0; // unbind condition
+  // during each prediction, data is inserted into the recorder. As the number of predictions increases,
+  // the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
   model.BindRecorder(&recorder);
   cv::Mat frame;
   cv::VideoCapture capture(video_file);
   while (capture.read(frame)) {
     if (frame.empty()) {
-        break;
+      break;
     }
     if (!model.Predict(&frame, &result)) {
-        std::cerr << "Failed to predict." << std::endl;
-        return;
+      std::cerr << "Failed to predict." << std::endl;
+      return;
     }
     // such as adding this code can cancel trail datat bind
-    if(count++ == 10) model.UnBindRecorder();
+    // if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
     cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }
@@ -76,27 +77,28 @@ void GpuInfer(const std::string& model_dir, const std::string& video_file) {
 
   fastdeploy::vision::MOTResult result;
   fastdeploy::vision::tracking::TrailRecorder trail_recorder;
-  //during each prediction, data is inserted into the recorder. As the number of predictions increases,
-  //the memory will continue to grow. You can cancel the insertion through 'UnBindRecorder'.
-  int count = 0; // unbind condition
+  // during each prediction, data is inserted into the recorder. As the number of predictions increases,
+  // the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
   model.BindRecorder(&trail_recorder);
   cv::Mat frame;
   cv::VideoCapture capture(video_file);
   while (capture.read(frame)) {
-      if (frame.empty()) {
-          break;
-      }
-      if (!model.Predict(&frame, &result)) {
-          std::cerr << "Failed to predict." << std::endl;
-          return;
-      }
-      // such as adding this code can cancel trail datat bind
-      if(count++ == 10) model.UnBindRecorder();
-      // std::cout << result.Str() << std::endl;
-      cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &trail_recorder);
-      cv::imshow("mot",out_img);
-      cv::waitKey(30);
+    if (frame.empty()) {
+      break;
+    }
+    if (!model.Predict(&frame, &result)) {
+      std::cerr << "Failed to predict." << std::endl;
+      return;
+    }
+    // such as adding this code can cancel trail datat bind
+    //if(count++ == 10) model.UnbindRecorder();
+    // std::cout << result.Str() << std::endl;
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &trail_recorder);
+    cv::imshow("mot",out_img);
+    cv::waitKey(30);
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }
@@ -120,26 +122,27 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
   fastdeploy::vision::MOTResult result;
   fastdeploy::vision::tracking::TrailRecorder recorder;
   //during each prediction, data is inserted into the recorder. As the number of predictions increases,
-  //the memory will continue to grow. You can cancel the insertion through 'UnBindRecorder'.
-  int count = 0; // unbind condition
+  //the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
   model.BindRecorder(&recorder);
   cv::Mat frame;
   cv::VideoCapture capture(video_file);
   while (capture.read(frame)) {
-      if (frame.empty()) {
-          break;
-      }
-      if (!model.Predict(&frame, &result)) {
-          std::cerr << "Failed to predict." << std::endl;
-          return;
-      }
-      // such as adding this code can cancel trail datat bind
-      if(count++ == 10) model.UnBindRecorder();
-      // std::cout << result.Str() << std::endl;
-      cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
-      cv::imshow("mot",out_img);
-      cv::waitKey(30);
+    if (frame.empty()) {
+        break;
+    }
+    if (!model.Predict(&frame, &result)) {
+        std::cerr << "Failed to predict." << std::endl;
+        return;
+    }
+    // such as adding this code can cancel trail datat bind
+    // if(count++ == 10) model.UnbindRecorder();
+    // std::cout << result.Str() << std::endl;
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
+    cv::imshow("mot",out_img);
+    cv::waitKey(30);
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }

@@ -25,12 +25,18 @@ namespace vision {
 namespace tracking {
 struct TrailRecorder{
   std::map<int, std::vector<std::array<int, 2>>> records;
-  void Add(int id, const std::vector<std::array<int, 2>>& record);
+  void Add(int id, const std::array<int, 2>& record);
 };
 
-inline void TrailRecorder::Add(int id, const
-                               std::vector<std::array<int, 2>> &record) {
-  records[id] = record;
+inline void TrailRecorder::Add(int id, const std::array<int, 2>& record) {
+  auto iter = records.find(id);
+  if (iter != records.end()) {
+    auto trail = records[id];
+    trail.push_back(record);
+    records[id] = trail;
+  } else {
+    records[id] = {record};
+  }
 }
 
 class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
@@ -66,7 +72,7 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
   void BindRecorder(TrailRecorder* recorder);
   /** \brief cancel binding and clear trail information
    */
-  void UnBindRecorder();
+  void UnbindRecorder();
 
 
  private:

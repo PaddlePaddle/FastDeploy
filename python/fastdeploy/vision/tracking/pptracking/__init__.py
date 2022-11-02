@@ -15,11 +15,13 @@
 from __future__ import absolute_import
 from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
+import logging
 
-
-class TrailRecorder(C.vision.tracking.TrailRecorder):
-    def __init__(self):
-        super(TrailRecorder, self).__init__()
+try:
+    TrailRecorder = C.vision.tracking.TrailRecorder
+except Exception as e:
+    logging.warning("something was wrong, detail:" + str(e) +
+                    "so 'TrailRecorder' can not be loaded")
 
 
 class PPTracking(FastDeployModel):
@@ -54,8 +56,17 @@ class PPTracking(FastDeployModel):
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
 
-    def bind_trail_recorders(self, val):
-        self._model.bind_trail_recorders(val)
+    def bind_recorder(self, val):
+        """ Binding tracking trail
 
-    def unbind_trail_recorders(self):
-        self._model.unbind_trail_recorders()
+        :param val: (TrailRecorder) trail recorder, which is contained object's id and center point sequence
+        :return: None
+        """
+        self._model.bind_recorder(val)
+
+    def unbind_recorder(self):
+        """ cancel binding of tracking trail
+
+        :return:
+        """
+        self._model.unbind_recorder()
