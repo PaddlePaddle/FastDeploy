@@ -124,8 +124,8 @@ def postprocess(logits):
     return out_dict
 
 
-def get_table(tokenizer_time_costs, runtime_time_costs,
-              postprocess_time_costs):
+def get_statistics_table(tokenizer_time_costs, runtime_time_costs,
+                         postprocess_time_costs):
     x = PrettyTable()
     x.field_names = [
         "Stage", "Mean latency", "P50 latency", "P90 latency", "P95 latency"
@@ -204,9 +204,10 @@ if __name__ == "__main__":
                 print(
                     f"Step {i + 1: 6d}. Acc =  {correct_num/total_num*100:.2f}."
                 )
-                x = get_table(tokenizer_time_costs, runtime_time_costs,
-                              postprocess_time_costs)
-                print(x)
+                print(
+                    get_statistics_table(tokenizer_time_costs,
+                                         runtime_time_costs,
+                                         postprocess_time_costs))
 
         return tokenizer_time_costs, runtime_time_costs, postprocess_time_costs, correct_num, total_num
 
@@ -215,5 +216,5 @@ if __name__ == "__main__":
     tokenizer_time_costs, runtime_time_costs, postprocess_time_costs, correct_num, total_num = run_inference(
     )
     print(
-        get_table(tokenizer_time_costs, runtime_time_costs,
-                  postprocess_time_costs))
+        get_statistics_table(tokenizer_time_costs, runtime_time_costs,
+                             postprocess_time_costs))
