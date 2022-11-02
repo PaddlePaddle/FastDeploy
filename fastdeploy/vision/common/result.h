@@ -26,6 +26,7 @@ enum FASTDEPLOY_DECL ResultType {
   DETECTION,
   SEGMENTATION,
   OCR,
+  MOT,
   FACE_DETECTION,
   FACE_RECOGNITION,
   MATTING,
@@ -154,90 +155,144 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief MOT(Multi-Object Tracking) result structure for all the MOT models
+ */
+struct FASTDEPLOY_DECL MOTResult : public BaseResult {
+  /** \brief All the tracking object boxes for an input image, the size of `boxes` is the number of tracking objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
+   */
+  std::vector<std::array<int, 4>> boxes;
+  /** \brief All the tracking object ids
+   */
+  std::vector<int> ids;
+  /** \brief The confidence for all the tracking objects
+   */
+  std::vector<float> scores;
+  /** \brief The classify label id for all the tracking object
+   */
+  std::vector<int> class_ids;
+  ResultType type = ResultType::MOT;
+  /// Clear MOT result
+  void Clear();
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
+
+
+/*! @brief Face detection result structure for all the face detection models
+ */
 struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
-  // box: xmin, ymin, xmax, ymax
+  /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
+   */
   std::vector<std::array<float, 4>> boxes;
-  // landmark: x, y, landmarks may empty if the
-  // model don't detect face with landmarks.
-  // Note, one face might have multiple landmarks,
-  // such as 5/19/21/68/98/..., etc.
+  /** \brief
+   * If the model detect face with landmarks, every detected object box correspoing to a landmark, which is a array of 2 float values, means location [x,y]
+  */
   std::vector<std::array<float, 2>> landmarks;
+  /** \brief
+   * Indicates the confidence of all targets detected from a single image, and the number of elements is consistent with boxes.size()
+   */
   std::vector<float> scores;
   ResultType type = ResultType::FACE_DETECTION;
-  // set landmarks_per_face manually in your post processes.
+  /** \brief
+   * `landmarks_per_face` indicates the number of face landmarks for each detected face
+   * if the model's output contains face landmarks (such as YOLOv5Face, SCRFD, ...)
+  */
   int landmarks_per_face;
 
   FaceDetectionResult() { landmarks_per_face = 0; }
   FaceDetectionResult(const FaceDetectionResult& res);
-
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
-
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
+/*! @brief Segmentation result structure for all the segmentation models
+ */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
-  // mask
+  /** \brief
+   * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
+  */
   std::vector<uint8_t> label_map;
+  /** \brief
+   * `score_map` stores the probability of the predicted label for each pixel of input image.
+  */
   std::vector<float> score_map;
+  /// The output shape, means [H, W]
   std::vector<int64_t> shape;
   bool contain_score_map = false;
 
   ResultType type = ResultType::SEGMENTATION;
-
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
-
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
+/*! @brief Face recognition result structure for all the Face recognition models
+ */
 struct FASTDEPLOY_DECL FaceRecognitionResult : public BaseResult {
-  // face embedding vector with 128/256/512 ... dim
+  /** \brief The feature embedding that represents the final extraction of the face recognition model can be used to calculate the feature similarity between faces.
+   */
   std::vector<float> embedding;
 
   ResultType type = ResultType::FACE_RECOGNITION;
 
   FaceRecognitionResult() {}
   FaceRecognitionResult(const FaceRecognitionResult& res);
-
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
-
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
+/*! @brief Matting result structure for all the Matting models
+ */
 struct FASTDEPLOY_DECL MattingResult : public BaseResult {
-  // alpha matte and fgr (predicted foreground: HWC/BGR float32)
+  /** \brief
+  `alpha` is a one-dimensional vector, which is the predicted alpha transparency value. The range of values is [0., 1.], and the length is hxw. h, w are the height and width of the input image
+  */
   std::vector<float> alpha;       // h x w
+  /** \brief
+  If the model can predict foreground, `foreground` save the predicted foreground image, the shape is [hight,width,channel] generally.
+  */
   std::vector<float> foreground;  // h x w x c (c=3 default)
-  // height, width, channel for foreground and alpha
-  // must be (h,w,c) and setup before Reserve and Resize
-  // c is only for foreground if contain_foreground is true.
+  /** \brief
+   * The shape of output result, when contain_foreground == false, shape only contains (h, w), when contain_foreground == true, shape contains (h, w, c), and c is generally 3
+   */
   std::vector<int64_t> shape;
+  /** \brief
+  If the model can predict alpha matte and foreground, contain_foreground = true, default false
+  */
   bool contain_foreground = false;
 
   ResultType type = ResultType::MATTING;
 
   MattingResult() {}
   MattingResult(const MattingResult& res);
-
+  /// Clear detection result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
-
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
+
 
 }  // namespace vision
 }  // namespace fastdeploy

@@ -38,8 +38,8 @@ bool LimitLong::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-bool LimitLong::Run(Mat* mat, int max_long, int min_long, ProcLib lib) {
-  auto l = LimitLong(max_long, min_long);
+bool LimitLong::Run(Mat* mat, int max_long, int min_long, int interp, ProcLib lib) {
+  auto l = LimitLong(max_long, min_long, interp);
   return l(mat, lib);
 }
 }  // namespace vision

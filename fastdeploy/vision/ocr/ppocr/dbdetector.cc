@@ -30,7 +30,7 @@ DBDetector::DBDetector(const std::string& model_file,
                           Backend::OPENVINO};  
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
 
