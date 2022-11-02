@@ -127,6 +127,8 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   float* input_tensor_cuda_buffer_device_ = nullptr;
   // Whether to use CUDA preprocessing
   bool use_cuda_preprocessing_ = false;
+  // CUDA stream
+  void* cuda_stream_ = nullptr;
 };
 
 }  // namespace detection
