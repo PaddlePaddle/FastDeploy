@@ -18,15 +18,13 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/tracking/pptracking/tracker.h"
-//#include "fastdeploy/vision/tracking/pptracking/letter_box.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
 
 class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
-
-public:
+ public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g pptracking/model.pdmodel
@@ -52,9 +50,7 @@ public:
    */
   virtual bool Predict(cv::Mat* img, MOTResult* result);
 
-
-private:
-
+ private:
   bool BuildPreprocessPipelineFromConfig();
 
   bool Initialize();
@@ -70,10 +66,7 @@ private:
   float tracked_thresh_;
   float min_box_area_;
   std::unique_ptr<JDETracker> jdeTracker_;
-
 };
-
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
-
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

@@ -23,6 +23,9 @@ import hashlib
 import tqdm
 import logging
 
+from fastdeploy.utils.hub_model_server import model_server
+import fastdeploy.utils.hub_env as hubenv
+
 DOWNLOAD_RETRY_LIMIT = 3
 
 
@@ -137,25 +140,29 @@ def decompress(fname):
 
     if fname.find('.tar') >= 0 or fname.find('.tgz') >= 0:
         with tarfile.open(fname) as tf:
+
             def is_within_directory(directory, target):
-                
+
                 abs_directory = os.path.abspath(directory)
                 abs_target = os.path.abspath(target)
-            
+
                 prefix = os.path.commonprefix([abs_directory, abs_target])
-                
+
                 return prefix == abs_directory
-            
-            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
-            
+
+            def safe_extract(tar,
+                             path=".",
+                             members=None,
+                             *,
+                             numeric_owner=False):
+
                 for member in tar.getmembers():
                     member_path = os.path.join(path, member.name)
                     if not is_within_directory(path, member_path):
                         raise Exception("Attempted Path Traversal in Tar File")
-            
-                tar.extractall(path, members, numeric_owner=numeric_owner) 
-                
-            
+
+                tar.extractall(path, members, numeric_owner=numeric_owner)
+
             safe_extract(tf, path=fpath_tmp)
     elif fname.find('.zip') >= 0:
         with zipfile.ZipFile(fname) as zf:
@@ -204,3 +211,39 @@ def download_and_decompress(url, path='.', rename=None):
                 while os.path.exists(lock_path):
                     time.sleep(1)
     return
+
+
+def download_model(name: str,
+                   path: str=None,
+                   format: str=None,
+                   version: str=None):
+    '''
+    Download pre-trained model for FastDeploy inference engine.
+    Args:
+        name: model name
+        path(str): local path for saving model. If not set, default is hubenv.MODEL_HOME
+        format(str): FastDeploy model format
+        version(str) : FastDeploy model version
+    '''
+    result = model_server.search_model(name, format, version)
+    if path is None:
+        path = hubenv.MODEL_HOME
+    if result:
+        url = result[0]['url']
+        format = result[0]['format']
+        version = result[0]['version']
+        fullpath = download(url, path, show_progress=True)
+        model_server.stat_model(name, format, version)
+        if format == 'paddle':
+            if url.count(".tgz") > 0 or url.count(".tar") > 0 or url.count(
+                    "zip") > 0:
+                fullpath = decompress(fullpath)
+                try:
+                    os.rename(fullpath,
+                              os.path.join(os.path.dirname(fullpath), name))
+                    fullpath = os.path.join(os.path.dirname(fullpath), name)
+                except FileExistsError:
+                    pass
+        print('Successfully download model at path: {}'.format(fullpath))
+    else:
+        print('ERROR: Could not find a model named {}'.format(name))

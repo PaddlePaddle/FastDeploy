@@ -21,7 +21,8 @@ namespace vision {
 
 class LetterBoxResize : public Processor {
  public:
-  LetterBoxResize(const std::vector<int>& target_size, const std::vector<float>& color) {
+  LetterBoxResize(const std::vector<int>& target_size,
+                  const std::vector<float>& color) {
       target_size_ = target_size;
       color_ = color;
   }
@@ -30,12 +31,13 @@ class LetterBoxResize : public Processor {
 
   std::string Name() { return "LetterBoxResize"; }
 
-  static bool Run(Mat* mat,const std::vector<int>& target_size, const std::vector<float>& color,
+  static bool Run(Mat* mat, const std::vector<int>& target_size,
+                  const std::vector<float>& color,
                   ProcLib lib = ProcLib::OPENCV);
 
  private:
-   std::vector<int> target_size_;
-   std::vector<float> color_;
+  std::vector<int> target_size_;
+  std::vector<float> color_;
 };
 }  // namespace vision
 }  // namespace fastdeploy
