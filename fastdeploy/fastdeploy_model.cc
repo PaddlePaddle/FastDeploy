@@ -238,6 +238,10 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
   return ret;
 }
 
+bool FastDeployModel::Infer() {
+  return Infer(reused_input_tensors, &reused_output_tensors);
+}
+
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
   std::map<std::string, float> statis_info_of_runtime_dict;
 
