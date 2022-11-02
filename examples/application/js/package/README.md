@@ -1,5 +1,3 @@
-[English](README_en.md) | 简体中文
-
 # Paddle.js Model Module介绍
 
 该部分是基于 Paddle.js 进行开发的模型库，主要提供 Web 端可直接引入使用模型的能力。
