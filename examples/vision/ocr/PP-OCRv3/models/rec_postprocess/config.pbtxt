@@ -1,0 +1,25 @@
+name: "rec_postprocess"
+backend: "python"
+max_batch_size: 1
+input [
+  {
+    name: "POST_INPUT_0"
+    data_type: TYPE_FP32
+    dims: [ -1, 6625 ]
+  }
+]
+
+output [
+  {
+    name: "POST_OUTPUT"
+    data_type: TYPE_STRING
+    dims: [ 2 ]
+  }
+]
+
+instance_group [
+  {
+      count: 1
+      kind: KIND_CPU
+  }
+]
