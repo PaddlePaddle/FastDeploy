@@ -1,7 +1,6 @@
 import fastdeploy as fd
 import cv2
 import os
-from fastdeploy import ModelFormat
 
 
 def parse_arguments():
@@ -9,7 +8,7 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of yolov5 onnx model.")
+        "--model", required=True, help="Path of PaddleSeg model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
@@ -45,13 +44,11 @@ def build_option(args):
 
     if args.backend.lower() == "trt":
         assert args.device.lower(
-        ) == "gpu", "TensorRT backend require inference on device GPU."
+        ) == "gpu", "TensorRT backend require inferences on device GPU."
         option.use_trt_backend()
-    elif args.backend.lower() == "pptrt":
-        assert args.device.lower(
-        ) == "gpu", "TensorRT backend require inference on device GPU."
-        option.use_trt_backend()
-        option.enable_paddle_to_trt()
+        option.set_trt_cache_file(os.path.join(args.model, "model.trt"))
+        option.set_trt_input_shape("x", [1, 3, 256, 256], [1, 3, 1024, 1024],
+                                   [1, 3, 2048, 2048])
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
@@ -65,22 +62,15 @@ def build_option(args):
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model, "model.pdmodel")
-params_file = os.path.join(args.model, "model.pdiparams")
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.YOLOv5(
-    model_file,
-    params_file,
-    runtime_option=runtime_option,
-    model_format=ModelFormat.PADDLE)
+model_file = os.path.join(args.model, "model.pdmodel")
+params_file = os.path.join(args.model, "model.pdiparams")
+config_file = os.path.join(args.model, "deploy.yaml")
+model = fd.vision.segmentation.PaddleSegModel(
+    model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
 result = model.predict(im.copy())
 print(result)
-
-# 预测结果可视化
-vis_im = fd.vision.vis_detection(im, result)
-cv2.imwrite("visualized_result.jpg", vis_im)
-print("Visualized result save in ./visualized_result.jpg")
