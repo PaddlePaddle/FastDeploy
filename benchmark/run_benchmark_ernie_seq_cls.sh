@@ -1,7 +1,10 @@
 # Download and decompress the ERNIE 3.0 Medium model finetuned on AFQMC
 # wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
+# tar xvfz ernie-3.0-medium-zh-afqmc.tgz
+
 # Download and decompress the quantization model of ERNIE 3.0 Medium model
 # wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc-new-quant.tgz
+# tar xvfz ernie-3.0-medium-zh-afqmc-new-quant.tgz
 
 # PP-TRT
 python benchmark_ernie_seq_cls.py --batch_size 40 --model_dir ernie-3.0-medium-zh-afqmc --backend pp-trt
