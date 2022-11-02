@@ -22,6 +22,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+    if(option_.external_stream_) {
+      config_.SetExecStream(option_.external_stream_);
+    }
     if (option.enable_trt) {
 #ifdef ENABLE_TRT_BACKEND
       auto precision = paddle_infer::PrecisionType::kFloat32;
@@ -39,6 +42,21 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
 #endif
     }
+  } else if (option.use_ipu) {
+#ifdef WITH_IPU
+    config_.EnableIpu(option.ipu_option.ipu_device_num,
+                      option.ipu_option.ipu_micro_batch_size,
+                      option.ipu_option.ipu_enable_pipelining,
+                      option.ipu_option.ipu_batches_per_step);
+    config_.SetIpuConfig(option.ipu_option.ipu_enable_fp16,
+                         option.ipu_option.ipu_replica_num,
+                         option.ipu_option.ipu_available_memory_proportion,
+                         option.ipu_option.ipu_enable_half_partial);
+#else
+    FDWARNING << "The FastDeploy is not compiled with IPU backend, so will "
+                 "fallback to CPU with Paddle Inference Backend."
+              << std::endl;
+#endif
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
@@ -72,6 +90,7 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
   config_.SetModel(model_file, params_file);
+  config_.EnableMemoryOptim();
   BuildOption(option);
 
   // The input/output information get from predictor is not right, use PaddleReader instead now

@@ -24,6 +24,20 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
+#ifdef ENABLE_FLYCV
+bool BGR2RGB::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (im->channels() != 3) {
+    FDERROR << "[BGR2RGB] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    return false;
+  }
+  fcv::Mat new_im;
+  fcv::cvt_color(*im, new_im, fcv::ColorConvertType::CVT_PA_BGR2PA_RGB);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
+
 bool RGB2BGR::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im;
@@ -31,6 +45,20 @@ bool RGB2BGR::ImplByOpenCV(Mat* mat) {
   mat->SetMat(new_im);
   return true;
 }
+
+#ifdef ENABLE_FLYCV
+bool RGB2BGR::ImplByFalconCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (im->channels() != 3) {
+    FDERROR << "[RGB2BGR] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    return false;
+  }
+  fcv::Mat new_im;
+  fcv::cvt_color(*im, new_im, fcv::ColorConvertType::CVT_PA_RGB2PA_BGR);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
 
 bool BGR2RGB::Run(Mat* mat, ProcLib lib) {
   auto b = BGR2RGB();

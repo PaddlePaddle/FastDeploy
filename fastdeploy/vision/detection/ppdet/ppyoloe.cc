@@ -14,7 +14,7 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const RuntimeOption& custom_option,
                  const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -160,6 +160,9 @@ bool PPYOLOE::BuildPreprocessPipelineFromConfig() {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
 
+  // Fusion will improve performance
+  FuseTransforms(&processors_);
+
   return true;
 }
 
@@ -259,6 +262,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
 
 bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   Mat mat(*im);
+
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
     FDERROR << "Failed to preprocess input data while using model:"

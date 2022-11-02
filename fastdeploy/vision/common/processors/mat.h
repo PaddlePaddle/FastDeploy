@@ -14,23 +14,15 @@
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
 #include "opencv2/core/core.hpp"
-
-#ifdef ENABLE_OPENCV_CUDA
-#include "opencv2/core/cuda.hpp"
-#include "opencv2/cudaarithm.hpp"
-#include "opencv2/cudaimgproc.hpp"
-#include "opencv2/cudawarping.hpp"
-#endif
-
-namespace fcv {
-class Mat;
-}  // namespace fcv
+#include "fastdeploy/vision/common/processors/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 
-enum ProcLib { DEFAULT, OPENCV, FALCONCV};
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV};
 enum Layout { HWC, CHW };
+
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(cv::Mat& mat) {
@@ -56,19 +48,20 @@ struct FASTDEPLOY_DECL Mat {
     return &cpu_mat;
   }
 
+
   inline const cv::Mat* GetOpenCVMat() const {
     FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
     return &cpu_mat;
   }
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
-    mat_type = Proclib::FALCONCV;
+    mat_type = ProcLib::FLYCV;
   }
 
   inline fcv::Mat* GetFalconCVMat() {
-    FDASSERT(mat_type == ProcLib::FALCONCV, "Met non fcv::Mat data strucure.");
+    FDASSERT(mat_type == ProcLib::FLYCV, "Met non fcv::Mat data strucure.");
     return &fcv_mat;
   }
 #endif
@@ -81,7 +74,7 @@ struct FASTDEPLOY_DECL Mat {
   int width;
   cv::Mat cpu_mat;
 
-#ifdef ENABLE_FALCONCV
+#ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
 
