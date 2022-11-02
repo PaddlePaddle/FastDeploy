@@ -35,39 +35,46 @@ void PrintUsage() {
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAGS_device == "gpu") {
+  if (FLAG_device == "gpu") {
     option->UseGpu();
-  }
-
-  if (FLAGS_backend == "ort") {
-    option->UseOrtBackend();
-  } else if (FLAGS_backend == "paddle") {
-    option->UsePaddleBackend();
-  } else if (FLAGS_backend == "ov") {
-    if (FLAGS_device == "gpu") {
-      std::cerr << "The openvino backend need device==cpu" << std::endl;
+    if (FLAG_backend == "ort") {
+      option->UseOrtBackend();
+    } else if (FLAGS_backend == "paddle") {
+      option->UsePaddleBackend();
+    } else if (FLAGS_backend == "trt" || 
+               FLAGS_backend == "paddle_trt") {
+      option->UseTrtBackend();
+      option->SetTrtInputShape("input", {1, 3, 112, 112});
+      if (FLAGS_backend == "paddle_trt") {
+        option->EnablePaddleToTrt();
+      }
+      if (FLAGS_use_fp16) {
+        option->EnableTrtFP16();
+      }
+    } else if (FLAGS_backend == "default") {
+      return true;
+    } else {
+      std::cout << "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, " << FLAG_backend << " is not supported." << std::endl;
       return false;
     }
-    option->UseOpenVINOBackend();
-  } else if (FLAGS_backend == "tensorrt" ||
-             FLAGS_backend == "paddle_tensorrt") {
-    if (FLAGS_device == "cpu") {
-      std::cerr << "The tensorrt backend need device==gpu" << std::endl;
+  } else if (FLAG_device == "cpu") {
+    if (FLAGS_backend == "ort") {
+      option->UseOrtBackend();
+    } else if (FLAGS_backend == "ov") {
+      option->UseOpenVINOBackend();
+    } else if (FLAGS_backend == "paddle") {
+      option->UsePaddleBackend();
+    } else if (FLAGS_backend = "default") {
+      return true;
+    } else {
+      std::cout << "While inference with CPU, only support default/ort/ov/paddle now, " << FLAG_backend << " is not supported." << std::endl;
       return false;
     }
-    option->UseTrtBackend();
-    if (FLAGS_backend == "paddle_tensorrt") {
-      option->EnablePaddleToTrt();
-    }
-    if (FLAGS_use_fp16) {
-      option->EnableTrtFP16();
-    }
-  } else if (FLAGS_backend == "default") {
-    return true;
   } else {
-    std::cerr << FLAGS_backend << " is an unsupported backend" << std::endl;
+    std::cerr << "Only support device CPU/GPU now, "  << FLAG_device << " is not supported." << std::endl;
     return false;
   }
+
   return true;
 }
 
