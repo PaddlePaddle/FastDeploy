@@ -215,6 +215,7 @@ if __name__ == "__main__":
     run_inference(10)
     tokenizer_time_costs, runtime_time_costs, postprocess_time_costs, correct_num, total_num = run_inference(
     )
+    print(f"Final statistics: ")
     print(
         get_statistics_table(tokenizer_time_costs, runtime_time_costs,
                              postprocess_time_costs))
