@@ -22,7 +22,7 @@ import paddle
 from paddleslim.common import load_config, load_onnx_model
 from paddleslim.auto_compression import AutoCompression
 from paddleslim.quant import quant_post_static
-from fdquant.dataset import *
+from fd_auto_compress.dataset import *
 
 
 def argsparser():
@@ -53,16 +53,33 @@ def argsparser():
     return parser
 
 
-def reader_wrapper(reader, input_list=None):
-    def gen():
-        for data_list in reader:
+def reader_wrapper(reader, input_list):
+
+    if isinstance(input_list, list) and len(input_list) == 1:
+        input_name = input_list[0]
+
+        def gen():
             in_dict = {}
-            for data in data_list:
-                for i, input_name in enumerate(input_list):
-                    in_dict[input_name] = data[i]
+            for i, data in enumerate(reader()):
+                imgs = np.array(data[0])
+                in_dict[input_name] = imgs
                 yield in_dict
 
-    return gen
+        return gen
+
+    if isinstance(input_list, list) and len(input_list) > 1:
+
+        def gen():
+            for idx, data in enumerate(reader()):
+                in_dict = {}
+                for i in range(len(input_list)):
+                    intput_name = input_list[i]
+                    feed_data = np.array(data[0][i])
+                    in_dict[intput_name] = feed_data
+
+                yield in_dict
+
+        return gen
 
 
 def main():
@@ -75,31 +92,32 @@ def main():
 
     assert FLAGS.devices in ['cpu', 'gpu', 'xpu', 'npu']
     paddle.set_device(FLAGS.devices)
-
     global global_config
-    all_config = load_config(FLAGS.config_path)
-    assert "Global" in all_config, f"Key 'Global' not found in config file. \n{all_config}"
-    global_config = all_config["Global"]
-    input_list = global_config['input_list']
 
-    assert os.path.exists(global_config[
-        'image_path']), "image_path does not exist!"
-    paddle.vision.image.set_image_backend('cv2')
-    # transform could be customized.
-    train_dataset = paddle.vision.datasets.ImageFolder(
-        global_config['image_path'],
-        transform=eval(global_config['preprocess']))
-    train_loader = paddle.io.DataLoader(
-        train_dataset,
-        batch_size=1,
-        shuffle=True,
-        drop_last=True,
-        num_workers=0)
-    train_loader = reader_wrapper(train_loader, input_list=input_list)
-    eval_func = None
-
-    # ACT compression
     if FLAGS.method == 'QAT':
+
+        all_config = load_config(FLAGS.config_path)
+        assert "Global" in all_config, f"Key 'Global' not found in config file. \n{all_config}"
+        global_config = all_config["Global"]
+        input_list = global_config['input_list']
+
+        assert os.path.exists(global_config[
+            'qat_image_path']), "image_path does not exist!"
+        paddle.vision.image.set_image_backend('cv2')
+        # transform could be customized.
+        train_dataset = paddle.vision.datasets.ImageFolder(
+            global_config['qat_image_path'],
+            transform=eval(global_config['qat_preprocess']))
+        train_loader = paddle.io.DataLoader(
+            train_dataset,
+            batch_size=global_config['qat_batch_size'],
+            shuffle=True,
+            drop_last=True,
+            num_workers=0)
+        train_loader = reader_wrapper(train_loader, input_list=input_list)
+        eval_func = None
+
+        # ACT compression
         ac = AutoCompression(
             model_dir=global_config['model_dir'],
             model_filename=global_config['model_filename'],
@@ -112,6 +130,28 @@ def main():
 
     # PTQ compression
     if FLAGS.method == 'PTQ':
+
+        # Read Global config and prepare dataset
+        all_config = load_config(FLAGS.config_path)
+        assert "Global" in all_config, f"Key 'Global' not found in config file. \n{all_config}"
+        global_config = all_config["Global"]
+        input_list = global_config['input_list']
+
+        assert os.path.exists(global_config[
+            'ptq_image_path']), "image_path does not exist!"
+
+        paddle.vision.image.set_image_backend('cv2')
+        # transform could be customized.
+        val_dataset = paddle.vision.datasets.ImageFolder(
+            global_config['ptq_image_path'],
+            transform=eval(global_config['ptq_preprocess']))
+        val_loader = paddle.io.DataLoader(
+            val_dataset,
+            batch_size=1,
+            shuffle=True,
+            drop_last=True,
+            num_workers=0)
+        val_loader = reader_wrapper(val_loader, input_list=input_list)
 
         # Read PTQ config
         assert "PTQ" in all_config, f"Key 'PTQ' not found in config file. \n{all_config}"
@@ -134,7 +174,7 @@ def main():
             executor=exe,
             model_dir=inference_model_path,
             quantize_model_path=FLAGS.save_dir,
-            data_loader=train_loader,
+            data_loader=val_loader,
             model_filename=global_config["model_filename"],
             params_filename=global_config["params_filename"],
             batch_size=32,
