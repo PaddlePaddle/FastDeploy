@@ -235,6 +235,30 @@ std::string FaceDetectionResult::Str() {
   return out;
 }
 
+void FaceAlignmentResult::Clear() {
+  std::vector<std::array<float, 2>>().swap(landmarks);
+}
+
+void FaceAlignmentResult::Reserve(int size) {
+  landmarks.resize(size);
+}
+
+void FaceAlignmentResult::Resize(int size) {
+  landmarks.resize(size);
+}
+
+std::string FaceAlignmentResult::Str() {
+  std::string out;
+
+  out = "FaceAlignmentResult: [x, y]\n";
+  for (size_t i = 0; i < landmarks.size(); ++i) {
+    out = out + std::to_string(landmarks[i][0]) + "," +
+          std::to_string(landmarks[i][1]) + "\n";
+  }
+  out += "num_landmarks:" + std::to_string(landmarks.size()) + "\n";
+  return out;
+}
+
 void SegmentationResult::Clear() {
   std::vector<uint8_t>().swap(label_map);
   std::vector<float>().swap(score_map);

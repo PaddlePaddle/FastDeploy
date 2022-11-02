@@ -28,6 +28,7 @@ enum FASTDEPLOY_DECL ResultType {
   OCR,
   MOT,
   FACE_DETECTION,
+  FACE_ALIGNMENT,
   FACE_RECOGNITION,
   MATTING,
   MASK,
@@ -156,16 +157,25 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief MOT(Multi-Object Tracking) result structure for all the MOT models
+ */
 struct FASTDEPLOY_DECL MOTResult : public BaseResult {
-  // left top right bottom
+  /** \brief All the tracking object boxes for an input image, the size of `boxes` is the number of tracking objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
+   */
   std::vector<std::array<int, 4>> boxes;
+  /** \brief All the tracking object ids
+   */
   std::vector<int> ids;
+  /** \brief The confidence for all the tracking objects
+   */
   std::vector<float> scores;
+  /** \brief The classify label id for all the tracking object
+   */
   std::vector<int> class_ids;
   ResultType type = ResultType::MOT;
-
+  /// Clear MOT result
   void Clear();
-
+  /// Debug function, convert the result to string to print
   std::string Str();
 };
 
@@ -204,6 +214,25 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief Face Alignment result structure for all the face alignment models
+ */
+struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
+  /** \brief All the coordinates of detected landmarks for an input image, and the element of `landmarks` is a array of 2 float values, means [x, y]
+   */
+  std::vector<std::array<float, 2>> landmarks;
+
+  ResultType type = ResultType::FACE_ALIGNMENT;
+  /// Clear facealignment result
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
 /*! @brief Segmentation result structure for all the segmentation models
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
@@ -226,6 +255,7 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   void Reserve(int size);
 
   void Resize(int size);
+
   /// Debug function, convert the result to string to print
   std::string Str();
 };

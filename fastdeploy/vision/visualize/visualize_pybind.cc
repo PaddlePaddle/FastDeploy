@@ -36,6 +36,16 @@ void BindVisualize(pybind11::module& m) {
              vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);
            })
+      .def("vis_face_alignment",
+           [](pybind11::array& im_data, vision::FaceAlignmentResult& result,
+              int line_size) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im =
+                 vision::VisFaceAlignment(im, result, line_size);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
+           })
       .def("vis_segmentation",
            [](pybind11::array& im_data, vision::SegmentationResult& result,
               float weight) {
