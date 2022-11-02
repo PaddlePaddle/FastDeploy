@@ -1,12 +1,13 @@
 import paddlenlp
 import numpy as np
-import fastdeploy as fd
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.datasets import load_dataset
+import fastdeploy as fd
 import os
 import time
 import distutils.util
 import sys
+from prettytable import PrettyTable
 
 
 def parse_arguments():
@@ -51,6 +52,11 @@ def parse_arguments():
         type=distutils.util.strtobool,
         default=False,
         help="Use FP16 mode")
+    parser.add_argument(
+        "--use_fast",
+        type=distutils.util.strtobool,
+        default=True,
+        help="Whether to use fast_tokenizer to accelarate the tokenization.")
     return parser.parse_args()
 
 
@@ -107,10 +113,49 @@ def convert_examples_to_data(dataset, batch_size):
     return texts, text_pairs, labels
 
 
+def postprocess(logits):
+    max_value = np.max(logits, axis=1, keepdims=True)
+    exp_data = np.exp(logits - max_value)
+    probs = exp_data / np.sum(exp_data, axis=1, keepdims=True)
+    out_dict = {
+        "label": probs.argmax(axis=-1),
+        "confidence": probs.max(axis=-1)
+    }
+    return out_dict
+
+
+def get_table(tokenizer_time_costs, runtime_time_costs,
+              postprocess_time_costs):
+    x = PrettyTable()
+    x.field_names = [
+        "Stage", "Mean latency", "P50 latency", "P90 latency", "P95 latency"
+    ]
+    x.add_row([
+        "Tokenization", f"{np.mean(tokenizer_time_costs):.4f}",
+        f"{np.percentile(tokenizer_time_costs, 50):.4f}",
+        f"{np.percentile(tokenizer_time_costs, 90):.4f}",
+        f"{np.percentile(tokenizer_time_costs, 95):.4f}"
+    ])
+    x.add_row([
+        "Runtime", f"{np.mean(runtime_time_costs):.4f}",
+        f"{np.percentile(runtime_time_costs, 50):.4f}",
+        f"{np.percentile(runtime_time_costs, 90):.4f}",
+        f"{np.percentile(runtime_time_costs, 95):.4f}"
+    ])
+    x.add_row([
+        "Postprocessing", f"{np.mean(postprocess_time_costs):.4f}",
+        f"{np.percentile(postprocess_time_costs, 50):.4f}",
+        f"{np.percentile(postprocess_time_costs, 90):.4f}",
+        f"{np.percentile(postprocess_time_costs, 95):.4f}"
+    ])
+    return x
+
+
 if __name__ == "__main__":
     args = parse_arguments()
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(
+        "ernie-3.0-medium-zh", use_faster=args.use_fast)
     runtime = create_fd_runtime(args)
     input_ids_name = runtime.get_input_info(0).name
     token_type_ids_name = runtime.get_input_info(1).name
@@ -121,11 +166,14 @@ if __name__ == "__main__":
                                                          args.batch_size)
 
     def run_inference(warmup_steps=None):
-        time_costs = []
+        tokenizer_time_costs = []
+        runtime_time_costs = []
+        postprocess_time_costs = []
         total_num = 0
         correct_num = 0
         for i, (text, text_pair,
                 label) in enumerate(zip(texts, text_pairs, labels)):
+            start = time.time()
             encoded_inputs = tokenizer(
                 text=text,
                 text_pair=text_pair,
@@ -133,33 +181,40 @@ if __name__ == "__main__":
                 padding='max_length',
                 truncation=True,
                 return_tensors='np')
-            input_ids = encoded_inputs["input_ids"]
-            token_type_ids = encoded_inputs["token_type_ids"]
+            tokenizer_time_costs += [(time.time() - start) * 1000]
+
             start = time.time()
-            results = runtime.infer({
-                input_ids_name: input_ids.astype('int64'),
-                token_type_ids_name: token_type_ids.astype('int64'),
-            })
-            time_costs += [(time.time() - start) * 1000]
+            input_map = {
+                input_ids_name: encoded_inputs["input_ids"].astype('int64'),
+                token_type_ids_name:
+                encoded_inputs["token_type_ids"].astype('int64'),
+            }
+            results = runtime.infer(input_map)
+            runtime_time_costs += [(time.time() - start) * 1000]
 
             total_num += len(label)
-            logits = results[0]
-            argmax_idx = np.argmax(logits, 1)
-            correct_num += (label == argmax_idx).sum()
+
+            start = time.time()
+            output = postprocess(results[0])
+            postprocess_time_costs += [(time.time() - start) * 1000]
+
+            correct_num += (label == output["label"]).sum()
             if warmup_steps is not None and i >= warmup_steps:
                 break
             if (i + 1) % args.log_interval == 0:
                 print(
-                    f"Step {i + 1: 6d}. Mean latency: {np.mean(time_costs):.4f} ms, p50 latency: {np.percentile(time_costs, 50):.4f} ms, "
-                    f"p90 latency: {np.percentile(time_costs, 90):.4f} ms, p95 latency: {np.percentile(time_costs, 95):.4f} ms, "
-                    f"acc = {correct_num/total_num*100:.2f}.")
+                    f"Step {i + 1: 6d}. Acc =  {correct_num/total_num*100:.2f}."
+                )
+                x = get_table(tokenizer_time_costs, runtime_time_costs,
+                              postprocess_time_costs)
+                print(x)
 
-        return time_costs, correct_num, total_num
+        return tokenizer_time_costs, runtime_time_costs, postprocess_time_costs, correct_num, total_num
 
     # Warm up
     run_inference(10)
-    time_costs, correct_num, total_num = run_inference()
+    tokenizer_time_costs, runtime_time_costs, postprocess_time_costs, correct_num, total_num = run_inference(
+    )
     print(
-        f"Mean latency: {np.mean(time_costs):.4f} ms, p50 latency: {np.percentile(time_costs, 50):.4f} ms, "
-        f"p90 latency: {np.percentile(time_costs, 90):.4f} ms, p95 latency: {np.percentile(time_costs, 95):.4f} ms, "
-        f"acc = {correct_num/total_num*100:.2f}.")
+        get_table(tokenizer_time_costs, runtime_time_costs,
+                  postprocess_time_costs))
