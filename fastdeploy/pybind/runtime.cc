@@ -33,6 +33,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
+      .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
       .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",

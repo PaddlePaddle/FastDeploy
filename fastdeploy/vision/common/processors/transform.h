@@ -55,7 +55,6 @@ inline void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processor
     return;
   }
 
-  std::cout << dynamic_cast<Cast*>((*processors)[cast_index].get())->GetDtype() << "-----" << std::endl;
   if (dynamic_cast<Cast*>((*processors)[cast_index].get())->GetDtype() != "float") {
     return;
   }

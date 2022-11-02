@@ -257,6 +257,11 @@ class RuntimeOption:
         """
         return self._option.set_paddle_mkldnn(use_mkldnn)
 
+    def set_openvino_device(self, name="CPU"):
+        """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+        """
+        return self._option.set_openvino_device(name)
+
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
         """

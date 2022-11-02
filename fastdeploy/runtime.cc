@@ -352,6 +352,10 @@ void RuntimeOption::SetPaddleMKLDNNCacheSize(int size) {
   pd_mkldnn_cache_size = size;
 }
 
+void RuntimeOption::SetOpenVINODevice(const std::string& name) {
+  openvino_device = name;
+}
+
 void RuntimeOption::EnableLiteFP16() {
   lite_enable_fp16 = true;
 }
@@ -642,6 +646,7 @@ void Runtime::CreateOpenVINOBackend() {
 #ifdef ENABLE_OPENVINO_BACKEND
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
+  ov_option.device = option.openvino_device;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
