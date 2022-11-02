@@ -12,32 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#ifdef ENABLE_VISION_VISUALIZE
 
-#include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/vision/visualize/visualize.h"
+#include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
+
 namespace vision {
 
-class LetterBoxResize : public Processor {
- public:
-  LetterBoxResize(const std::vector<int>& target_size,
-                  const std::vector<float>& color) {
-      target_size_ = target_size;
-      color_ = color;
+cv::Mat VisFaceAlignment(const cv::Mat& im, const FaceAlignmentResult& result,
+                         int line_size) {
+  auto vis_im = im.clone();
+  // vis landmarks
+  cv::Scalar landmark_color = cv::Scalar(0, 255, 0);
+  for (size_t i = 0; i < result.landmarks.size(); ++i) {
+    cv::Point landmark;
+    landmark.x = static_cast<int>(
+        result.landmarks[i][0]);
+    landmark.y = static_cast<int>(
+        result.landmarks[i][1]);
+    cv::circle(vis_im, landmark, line_size, landmark_color, -1);
   }
+  return vis_im;
+}
 
-  bool ImplByOpenCV(Mat* mat);
-
-  std::string Name() { return "LetterBoxResize"; }
-
-  static bool Run(Mat* mat, const std::vector<int>& target_size,
-                  const std::vector<float>& color,
-                  ProcLib lib = ProcLib::OPENCV);
-
- private:
-  std::vector<int> target_size_;
-  std::vector<float> color_;
-};
 }  // namespace vision
 }  // namespace fastdeploy
+
+#endif
