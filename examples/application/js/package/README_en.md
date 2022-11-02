@@ -5,14 +5,14 @@ English | [简体中文](README.md)
 This part is a model library developed based on Paddle.js, which mainly provides the ability to directly introduce and use models on the web side.
 
 | demo name | source directory | npm package |
-| ---------------- | -------------------------------- ---------------------- | --------------------------------------- --------------------------------- |
-| face detection | [facedetect](./packages/paddlejs-models/facedetect) | [@paddle-js-models/facedetect](https://www.npmjs.com/package/@paddle-js-models/ facedetect) |
+| - | - | - |
+| face detection | [facedetect](./packages/paddlejs-models/facedetect) | [@paddle-js-models/facedetect](https://www.npmjs.com/package/@paddle-js-models/facedetect) |
 | Screw detection | [detect](./packages/paddlejs-models/detect) | [@paddle-js-models/detect](https://www.npmjs.com/package/@paddle-js-models/detect ) |
-| Portrait segmentation background replacement | [humanseg](./packages/paddlejs-models/humanseg) | [@paddle-js-models/humanseg](https://www.npmjs.com/package/@paddle-js-models /humanseg) |
-| Gesture Recognition AI Guessing Shell | [gesture](./packages/paddlejs-models/gesture) | [@paddle-js-models/gesture](https://www.npmjs.com/package/@paddle-js -models/gesture) |
-| 1000 Item Recognition | [mobilenet](./packages/paddlejs-models/mobilenet) | [@paddle-js-models/mobilenet](https://www.npmjs.com/package/@paddle-js-models /mobilenet) |
+| Portrait segmentation background replacement | [humanseg](./packages/paddlejs-models/humanseg) | [@paddle-js-models/humanseg](https://www.npmjs.com/package/@paddle-js-models/humanseg) |
+| Gesture Recognition AI Guessing Shell | [gesture](./packages/paddlejs-models/gesture) | [@paddle-js-models/gesture](https://www.npmjs.com/package/@paddle-js-models/gesture) |
+| 1000 Item Recognition | [mobilenet](./packages/paddlejs-models/mobilenet) | [@paddle-js-models/mobilenet](https://www.npmjs.com/package/@paddle-js-models/mobilenet) |
 | Text Detection | [ocrdetection](./packages/paddlejs-models/ocrdetection) | [@paddle-js-models/ocrdet](https://www.npmjs.com/package/@paddle-js-models/ocrdet ) |
-| Text Recognition | [ocr](./packages/paddlejs-models/ocr) | [@paddle-js-models/ocr](https://www.npmjs.com/package/@paddle-js-models/ocr ) |
+| Text Recognition | [ocr](./packages/paddlejs-models/ocr) | [@paddle-js-models/ocr](https://www.npmjs.com/package/@paddle-js-models/ocr) |
 
 ## Usage
 

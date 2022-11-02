@@ -2,7 +2,7 @@ English | [中文](README.md)
 
 # Paddle.js WeChat mini-program Demo
 
-- [1. Introduction] (#1)
+- [1. Introduction](#1)
 - [2. Project Start](#2)
   * [2.1 Preparations](#21)
   * [2.2 Startup steps](#22)
@@ -14,7 +14,7 @@ English | [中文](README.md)
 ## 1 Introduction
 
 
-This directory contains the text detection, text recognition mini-program demo, by using [Paddle.js](https://github.com/PaddlePaddle/Paddle.js) and [Paddle.js WeChat mini-program plugin](https:// mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx7138a7bb793608c3&token=956931339&lang=zh_CN) to complete the text detection frame selection effect on the mini-program using the computing power of the user terminal.
+This directory contains the text detection, text recognition mini-program demo, by using [Paddle.js](https://github.com/PaddlePaddle/Paddle.js) and [Paddle.js WeChat mini-program plugin](https://mp.weixin.qq.com/wxopen/plugindevdoc?appid=wx7138a7bb793608c3&token=956931339&lang=zh_CN) to complete the text detection frame selection effect on the mini-program using the computing power of the user terminal.
 
 <a name="2"></a>
 ## 2. Project start
@@ -26,7 +26,7 @@ This directory contains the text detection, text recognition mini-program demo, 
 * Front-end development environment preparation: node, npm
 * Configure the server domain name in the mini-program management background, or open the developer tool [do not verify the legal domain name]
 
-For details, please refer to: https://mp.weixin.qq.com/wxamp/devprofile/get_profile?token=1132303404&lang=zh_CN)
+For details, please refer to [document.](https://mp.weixin.qq.com/wxamp/devprofile/get_profile?token=1132303404&lang=zh_CN)
 
 <a name="22"></a>
 ### 2.2 Startup steps
@@ -101,25 +101,26 @@ wx.canvasGetImageData({
 
 <a name="4"></a>
 ## 4. FAQ
-### 4.1 An error occurs `Invalid context type [webgl2] for Canvas#getContext`
+
+- 4.1 An error occurs `Invalid context type [webgl2] for Canvas#getContext`
 
 You can leave it alone, it will not affect the normal code operation and demo function
 
-### 4.2 Preview can't see the result
+- 4.2 Preview can't see the result
 
 It is recommended to try real machine debugging
 
-### 4.3 A black screen appears in the WeChat developer tool, and then there are too many errors
+- 4.3 A black screen appears in the WeChat developer tool, and then there are too many errors
 
 Restart WeChat Developer Tools
 
-### 4.4 The debugging results of the simulation and the real machine are inconsistent; the simulation cannot detect the text, etc.
+- 4.4 The debugging results of the simulation and the real machine are inconsistent; the simulation cannot detect the text, etc.
 
 The real machine can prevail;
 
 If the simulation cannot detect the text, etc., you can try to change the code at will (add, delete, newline, etc.) and then click to compile
 
 
-### 4.5 Prompts such as no response for a long time appear when the phone is debugged or running
+- 4.5 Prompts such as no response for a long time appear when the phone is debugged or running
 
 Please continue to wait, model inference will take some time

@@ -18,12 +18,12 @@ Based on [Paddle.js](https://github.com/PaddlePaddle/Paddle.js), this project im
 |demo name|web demo component|source directory|npm package|
 |-|-|-|-|
 |Face Detection|[FaceDetection](./web_demo/src/pages/cv/detection/FaceDetection/)| [facedetect](./package/packages/paddlejs-models/facedetect)|[@paddle-js-models/ facedetect](https://www.npmjs.com/package/@paddle-js-models/facedetect)|
-|Screw Detection|[ScrewDetection](./web_demo/src/pages/cv/detection/ScrewDetection)| [detect](./package/packages/paddlejs-models/detect)|[@paddle-js-models/detect] (https://www.npmjs.com/package/@paddle-js-models/detect)|
+|Screw Detection|[ScrewDetection](./web_demo/src/pages/cv/detection/ScrewDetection)| [detect](./package/packages/paddlejs-models/detect)|[@paddle-js-models/detect](https://www.npmjs.com/package/@paddle-js-models/detect)|
 |Portrait segmentation background replacement|[HumanSeg](./web_demo/src/pages/cv/segmentation/HumanSeg)|[humanseg](./package/packages/paddlejs-models/humanseg)|[@paddle-js-models/ humanseg](https://www.npmjs.com/package/@paddle-js-models/humanseg)|
 |Gesture Recognition AI Guessing Shell|[GestureRecognition](./web_demo/src/pages/cv/recognition/GestureRecognition)|[gesture](./package/packages/paddlejs-models/gesture)|[@paddle-js- models/gesture](https://www.npmjs.com/package/@paddle-js-models/gesture)|
 |1000 Item Identification|[ItemIdentification](./web_demo/src/pages/cv/recognition/ItemIdentification)|[mobilenet](./package/packages/paddlejs-models/mobilenet)|[@paddle-js-models/ mobilenet](https://www.npmjs.com/package/@paddle-js-models/mobilenet)|
-|Text Detection|[TextDetection](./web_demo/src/pages/cv/ocr/TextDetection)|[ocrdetection](./package/packages/paddlejs-models/ocrdetection)|[@paddle-js-models/ocrdet] (https://www.npmjs.com/package/@paddle-js-models/ocrdet)|
-|Text Recognition|[TextRecognition](./web_demo/src/pages/cv/ocr/TextRecognition)|[ocr](./package/packages/paddlejs-models/ocr)|[@paddle-js-models/ocr] (https://www.npmjs.com/package/@paddle-js-models/ocr)|
+|Text Detection|[TextDetection](./web_demo/src/pages/cv/ocr/TextDetection)|[ocrdetection](./package/packages/paddlejs-models/ocrdetection)|[@paddle-js-models/ocrdet](https://www.npmjs.com/package/@paddle-js-models/ocrdet)|
+|Text Recognition|[TextRecognition](./web_demo/src/pages/cv/ocr/TextRecognition)|[ocr](./package/packages/paddlejs-models/ocr)|[@paddle-js-models/ocr](https://www.npmjs.com/package/@paddle-js-models/ocr)|
 
 
 <a name="1"></a>
@@ -82,7 +82,7 @@ Due to the limitations of the front-end environment and computing resources, whe
 
 In practical applications, models are often customized according to vertical scenarios, and the official demo supports modifying incoming parameters to replace models.
 
-Take the OCR demo as an example, [ocr.init() function](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/package/packages/paddlejs-models/ocr/src/index .ts#L52), contains the default initialization model link, if you want to replace the model, please refer to the following steps.
+Take the OCR demo as an example, [ocr.init()function](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/package/packages/paddlejs-models/ocr/src/index.ts#L52), contains the default initialization model link, if you want to replace the model, please refer to the following steps.
 
 Step 1: Convert the model to js format:
 ````
@@ -95,11 +95,11 @@ paddlejsconverter --modelPath=./inference.pdmodel --paramPath=./inference.pdipar
 
 After the export is successful, files such as `model.json chunk_1.dat` will appear in the local directory, which are the network structure and model parameter binary files corresponding to the js model.
 
-Step 2: Upload the exported js model to a server that supports cross-domain access. For the CORS configuration of the server, refer to the following figure:
+Step 2: Upload the exported js model to a server that supports cross-domain access. For the CORS configuration of the server, refer to the following image:
 ![image](https://user-images.githubusercontent.com/26592129/196612669-5233137a-969c-49eb-b8c7-71bef5088686.png)
 
 
-Step 3: Modify the code to replace the default model. Take the OCR demo as an example, modify the [model initialization code] in the OCR web demo (https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/web_demo/src/pages/cv/ocr/TextRecognition /TextRecognition.vue#L64), i.e.
+Step 3: Modify the code to replace the default model. Take the OCR demo as an example, modify the [model initialization code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/js/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L64) in the OCR web demo , i.e.
 
 ````
 await ocr.init();
@@ -149,7 +149,7 @@ const postConfig = {thresh: 0.5};
 await model.predict(Config);
 ````
 
-Take the OCR text detection demo as an example, modify the parameters of the text detection post-processing to achieve the effect of expanding the text detection frame, and modify the OCR web demo to execute the [model prediction code](https://github.com/PaddlePaddle/FastDeploy/tree/develop /examples/application/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99), ie:
+Take the OCR text detection demo as an example, modify the parameters of the text detection post-processing to achieve the effect of expanding the text detection frame, and modify the OCR web demo to execute the [model prediction code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/application/web_demo/src/pages/cv/ocr/TextRecognition/TextRecognition.vue#L99), ie:
 
 ````
 const res = await ocr.recognize(img, { canvas: canvas.value });
