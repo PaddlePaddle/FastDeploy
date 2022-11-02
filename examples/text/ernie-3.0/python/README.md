@@ -9,7 +9,7 @@
 
 ## 依赖安装
 
-本项目提供的Python版本的预测器Predictor基于PaddleNLP提供的faster_tokenizer库，执行以下命令进行安装。
+本项目提供的Python版本的预测器Predictor基于PaddleNLP提供的AutoTokenizer进行分词，并利用fast_tokenizer加速分词, 执行以下命令进行安装。
 
 ```bash
 pip install -r requirements.txt
@@ -28,7 +28,7 @@ pip install -r requirements.txt
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/examples/text/ernie-3.0/python
 
-# 下载AFQMC数据集的微调后的ERNIE 3.0模型以及词表
+# 下载AFQMC数据集的微调后的ERNIE 3.0模型
 wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
 tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 
@@ -60,6 +60,7 @@ Batch id:1, example id:0, sentence1:花呗支持高铁票支付吗, sentence2:�
 |--device | 运行的设备，可选范围: ['cpu', 'gpu']，默认为'cpu' |
 |--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'onnx_runtime' |
 |--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |
+|--use_fast| 是否使用FastTokenizer加速分词阶段。默认为True|
 
 ## 相关文档
 

@@ -15,8 +15,9 @@ import os
 import distutils.util
 
 import numpy as np
-import fastdeploy as fd
 import faster_tokenizer
+from paddlenlp.transformers import AutoTokenizer
+import fastdeploy as fd
 
 
 def parse_arguments():
@@ -61,6 +62,11 @@ def parse_arguments():
         type=distutils.util.strtobool,
         default=False,
         help="Wheter to use FP16 mode")
+    parser.add_argument(
+        "--use_fast",
+        type=distutils.util.strtobool,
+        default=False,
+        help="Whether to use fast_tokenizer to accelarate the tokenization.")
     return parser.parse_args()
 
 
@@ -77,9 +83,11 @@ def batchfy_text(texts, batch_size):
 
 class ErnieForSequenceClassificationPredictor(object):
     def __init__(self, args):
-        self.tokenizer = self.create_tokenizer(args)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            'ernie-3.0-medium-zh', use_faster=args.use_fast)
         self.runtime = self.create_fd_runtime(args)
         self.batch_size = args.batch_size
+        self.max_length = args.max_length
 
     def create_fd_runtime(self, args):
         option = fd.RuntimeOption()
@@ -118,34 +126,25 @@ class ErnieForSequenceClassificationPredictor(object):
             option.set_trt_cache_file(trt_file)
         return fd.Runtime(option)
 
-    def create_tokenizer(self, args):
-        vocab_file = args.vocab_path
-        if not os.path.exists(vocab_file):
-            vocab_file = os.path.join(args.model_dir, "vocab.txt")
-        vocab = faster_tokenizer.models.WordPiece.read_file(vocab_file)
-        tokenizer = faster_tokenizer.ErnieFasterTokenizer(vocab)
-        tokenizer.enable_padding(length=args.max_length)
-        tokenizer.enable_truncation(max_length=args.max_length)
-        return tokenizer
-
     def preprocess(self, texts, texts_pair):
-        data = texts
-        if texts_pair is not None:
-            data = [(t1, t2) for t1, t2 in zip(texts, texts_pair)]
-        encoded_inputs = self.tokenizer.encode_batch(data)
-        input_ids = [encoded.ids for encoded in encoded_inputs]
-        token_type_ids = [encoded.type_ids for encoded in encoded_inputs]
-        return input_ids, token_type_ids
-
-    def infer(self, input_ids, token_type_ids):
+        data = self.tokenizer(
+            texts,
+            texts_pair,
+            max_length=self.max_length,
+            padding=True,
+            truncation=True)
         input_ids_name = self.runtime.get_input_info(0).name
         token_type_ids_name = self.runtime.get_input_info(1).name
-        results = self.runtime.infer({
+        input_map = {
             input_ids_name: np.array(
-                input_ids, dtype="int64"),
+                data["input_ids"], dtype="int64"),
             token_type_ids_name: np.array(
-                token_type_ids, dtype="int64")
-        })
+                data["token_type_ids"], dtype="int64")
+        }
+        return input_map
+
+    def infer(self, input_map):
+        results = self.runtime.infer(input_map)
         return results
 
     def postprocess(self, infer_data):
@@ -160,8 +159,8 @@ class ErnieForSequenceClassificationPredictor(object):
         return out_dict
 
     def predict(self, texts, texts_pair=None):
-        input_ids, token_type_ids = self.preprocess(texts, texts_pair)
-        infer_result = self.infer(input_ids, token_type_ids)
+        input_map = self.preprocess(texts, texts_pair)
+        infer_result = self.infer(input_map)
         output = self.postprocess(infer_result)
         return output
 
