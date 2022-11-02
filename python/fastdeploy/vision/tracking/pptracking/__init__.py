@@ -19,9 +19,8 @@ import logging
 
 try:
     TrailRecorder = C.vision.tracking.TrailRecorder
-except Exception as e:
-    logging.warning("something was wrong, detail:" + str(e) +
-                    "so 'TrailRecorder' can not be loaded")
+except:
+    pass
 
 
 class PPTracking(FastDeployModel):

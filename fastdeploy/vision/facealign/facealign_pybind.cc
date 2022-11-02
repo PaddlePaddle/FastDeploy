@@ -12,32 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-namespace vision {
 
-class LetterBoxResize : public Processor {
- public:
-  LetterBoxResize(const std::vector<int>& target_size,
-                  const std::vector<float>& color) {
-      target_size_ = target_size;
-      color_ = color;
-  }
+void BindPFLD(pybind11::module& m);
 
-  bool ImplByOpenCV(Mat* mat);
-
-  std::string Name() { return "LetterBoxResize"; }
-
-  static bool Run(Mat* mat, const std::vector<int>& target_size,
-                  const std::vector<float>& color,
-                  ProcLib lib = ProcLib::OPENCV);
-
- private:
-  std::vector<int> target_size_;
-  std::vector<float> color_;
-};
-}  // namespace vision
+void BindFaceAlign(pybind11::module& m) {
+  auto facedet_module = m.def_submodule("facealign", "Face alignment models.");
+  BindPFLD(facedet_module);
+}
 }  // namespace fastdeploy

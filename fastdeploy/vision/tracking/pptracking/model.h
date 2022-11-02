@@ -74,7 +74,6 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
    */
   void UnbindRecorder();
 
-
  private:
   bool BuildPreprocessPipelineFromConfig();
 

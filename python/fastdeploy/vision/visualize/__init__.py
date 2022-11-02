@@ -37,6 +37,10 @@ def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
                                        font_size)
 
 
+def vis_face_alignment(im_data, face_align_result, line_size=1):
+    return C.vision.vis_face_alignment(im_data, face_align_result, line_size)
+
+
 def vis_segmentation(im_data, seg_result, weight=0.5):
     return C.vision.vis_segmentation(im_data, seg_result, weight)
 
