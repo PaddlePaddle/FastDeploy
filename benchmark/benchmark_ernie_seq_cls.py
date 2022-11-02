@@ -160,7 +160,6 @@ if __name__ == "__main__":
     input_ids_name = runtime.get_input_info(0).name
     token_type_ids_name = runtime.get_input_info(1).name
 
-    #test_ds = load_dataset("clue", "afqmc", splits=['test'])
     test_ds = load_dataset("clue", "afqmc", splits=['dev'])
     texts, text_pairs, labels = convert_examples_to_data(test_ds,
                                                          args.batch_size)
