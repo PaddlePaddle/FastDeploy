@@ -228,6 +228,8 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 | <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2>Text Classification | <font size=2> [PaddleNLP/Ernie-3.0](./examples/text/ernie-3.0) | <font size=2> Python/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2> Text-to-Speech| <font size=2> [PaddleSpeech/PP-TTS](./examples/audio/pp-tts) | <font size=2> [Python](./examples/audio/pp-tts/python)/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 
 ## Edge-Side Deployment
 
