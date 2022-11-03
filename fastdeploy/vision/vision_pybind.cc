@@ -124,7 +124,7 @@ void BindVision(pybind11::module& m) {
 
   pybind11::class_<vision::HeadPoseResult>(m, "HeadPoseResult")
       .def(pybind11::init())
-      .def_readwrite("eulerangles", &vision::HeadPoseResult::eulerangles)
+      .def_readwrite("euler_angles", &vision::HeadPoseResult::euler_angles)
       .def("__repr__", &vision::HeadPoseResult::Str)
       .def("__str__", &vision::HeadPoseResult::Str);
 

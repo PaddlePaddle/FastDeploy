@@ -7,24 +7,25 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，保证 FastDeploy 版本0.6.0以上(x.x.x >= 0.6.0)支持FSANet模型
 
 ```bash
 mkdir build
 cd build
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-0.3.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
+
 #下载官方转换好的 FSANet 模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/fsanet-var.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/headpose_input.png
 # CPU推理
-./infer_demo fsanet-var.onnx headpose_input.png 0
+./infer_demo --model fsanet-var.onnx --image headpose_input.png --device cpu
 # GPU推理
-./infer_demo fsanet-var.onnx headpose_input.png 1
+./infer_demo --model fsanet-var.onnx --image headpose_input.png --device gpu
 # GPU上TensorRT推理
-./infer_demo fsanet-var.onnx headpose_input.png 2
+./infer_demo --model fsanet-var.onnx --image headpose_input.png --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示

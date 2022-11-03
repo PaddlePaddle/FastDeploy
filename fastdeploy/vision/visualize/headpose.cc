@@ -29,9 +29,9 @@ cv::Mat VisHeadPose(const cv::Mat& im, const HeadPoseResult& result,
   int h = im.rows;
   int w = im.cols;
   // vis headpose
-  float pitch = result.eulerangles[0] * PI / 180.f;
-  float yaw = -result.eulerangles[1] * PI / 180.f;
-  float roll = result.eulerangles[2] * PI / 180.f;
+  float pitch = result.euler_angles[0] * PI / 180.f;
+  float yaw = -result.euler_angles[1] * PI / 180.f;
+  float roll = result.euler_angles[2] * PI / 180.f;
 
   int tdx = w / 2;
   int tdy = h / 2;

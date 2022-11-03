@@ -68,8 +68,8 @@ bool FSANet::Preprocess(Mat* mat, FDTensor* output,
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {mat->Height(), mat->Width()};
 
-  HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
+  HWC2CHW::Run(mat);
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
@@ -92,7 +92,7 @@ bool FSANet::Postprocess(FDTensor& infer_result, HeadPoseResult* result,
   result->Clear();
   float* data = static_cast<float*>(infer_result.Data());
   for (size_t i = 0; i < 3; ++i) {
-    result->eulerangles.emplace_back(data[i]);
+    result->euler_angles.emplace_back(data[i]);
   }
 
   return true;

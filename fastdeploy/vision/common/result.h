@@ -318,9 +318,9 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 /*! @brief HeadPose result structure for all the headpose models
  */
 struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
-  /** \brief EulerAngles for an input image, and the element of `eulerangles` is a vector, contains {yaw, pitch, roll}
+  /** \brief EulerAngles for an input image, and the element of `euler_angles` is a vector, contains {yaw, pitch, roll}
    */
-  std::vector<float> eulerangles;
+  std::vector<float> euler_angles;
 
   ResultType type = ResultType::HEADPOSE;
   /// Clear headpose result

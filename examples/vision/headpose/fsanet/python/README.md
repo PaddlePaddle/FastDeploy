@@ -5,12 +5,13 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成FSANet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+本目录下提供`infer.py`快速完成FSANet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例，保证 FastDeploy 版本 >= 0.6.0 支持FSANet模型。执行如下脚本即可完成
 
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/headpose/fsanet/python
+
 # 下载FSANet模型文件和测试图片
 ## 原版ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/fsanet-var.onnx
@@ -20,7 +21,7 @@ python infer.py --model fsanet-var.onnx --image headpose_input.png --device cpu
 # GPU推理
 python infer.py --model fsanet-var.onnx --image headpose_input.png --device gpu
 # TRT推理
-python infer.py --model fsanet-var.onnx --image headpose_input.png --device gpu --use_trt True
+python infer.py --model fsanet-var.onnx --image headpose_input.png --device gpu --backend trt
 ```
 
 运行完成可视化结果如下图所示
