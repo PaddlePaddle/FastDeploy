@@ -1,4 +1,3 @@
-
 # Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,12 +68,11 @@ class TritonPythonModel:
         """
         pre_outputs = []
         for i_batch in input_data:
-            pre_output = fd.vision.ocr.Recognizer.preprocess(
-                i_batch)
+            pre_output = fd.vision.ocr.Recognizer.preprocess(i_batch)
             pre_outputs.append(pre_output)
-        print('original shape = ', np.array(pre_outputs).shape)
+        #print('original shape = ', np.array(pre_outputs).shape)
         pre_outputs = np.concatenate(pre_outputs, axis=0)
-        print('concate shape = ', pre_outputs.shape)
+        #print('concate shape = ', pre_outputs.shape)
         return [pre_outputs]
 
     def execute(self, requests):
@@ -105,8 +103,6 @@ class TritonPythonModel:
             outputs = self.preprocess(data)
             output_tensors = []
             for idx, output in enumerate(outputs):
-                print('idx = ',idx, 'name = ',self.output_names[idx])
-                print('output = ', output, 'shape = ', output.shape)
                 output_tensors.append(
                     pb_utils.Tensor(self.output_names[idx], output))
             inference_response = pb_utils.InferenceResponse(

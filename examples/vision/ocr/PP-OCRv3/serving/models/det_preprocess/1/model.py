@@ -1,4 +1,3 @@
-
 # Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,12 +69,9 @@ class TritonPythonModel:
         im_infos = []
         pre_outputs = []
         for i_batch in input_data:
-            pre_output, im_info = fd.vision.ocr.DBDetector.preprocess(
-                i_batch)
+            pre_output, im_info = fd.vision.ocr.DBDetector.preprocess(i_batch)
             pre_outputs.append(pre_output)
             im_infos.append([im_info])
-
-        print('original shape = ', np.array(pre_outputs).shape)
         im_infos = np.array(im_infos, dtype=np.object)
         pre_outputs = np.concatenate(pre_outputs, axis=0)
         return pre_outputs, im_infos
@@ -108,8 +104,6 @@ class TritonPythonModel:
             outputs = self.preprocess(data)
             output_tensors = []
             for idx, output in enumerate(outputs):
-                print('idx = ',idx, 'name = ',self.output_names[idx])
-                print('output = ', output, 'shape = ', output.shape)
                 output_tensors.append(
                     pb_utils.Tensor(self.output_names[idx], output))
             inference_response = pb_utils.InferenceResponse(

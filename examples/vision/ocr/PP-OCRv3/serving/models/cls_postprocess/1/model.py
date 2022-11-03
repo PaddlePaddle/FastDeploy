@@ -81,9 +81,7 @@ class TritonPythonModel:
             #new_im_info = im_infos[i_batch][0].decode('utf-8').replace("'", '"')
             #new_im_info = json.loads(new_im_info)
 
-            result = fd.vision.ocr.Classifier.postprocess(
-                [new_infer_output])
-            print('result',type(result),result)
+            result = fd.vision.ocr.Classifier.postprocess([new_infer_output])
             #r_str = fd.vision.utils.fd_result_to_json(result)
             results.append(result)
         return np.array(results, dtype=np.float)

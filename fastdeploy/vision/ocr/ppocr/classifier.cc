@@ -78,15 +78,15 @@ void OcrClassifierResizeImage(Mat* mat,
   }
 }
 
-bool Classifier::Preprocess(Mat* mat, FDTensor* output , const std::vector<int>& cls_image_shape) {
+bool Classifier::Preprocess(Mat* mat, FDTensor* output,
+			    const std::vector<int>& cls_image_shape,
+			    const std::vector<float>& mean,
+			    const std::vector<float>& scale,
+			    bool is_scale) {
   // 1. cls resizes
   // 2. normalize
   // 3. batch_permute
   OcrClassifierResizeImage(mat, cls_image_shape);
-
-  std::vector<float> mean = {0.5f, 0.5f, 0.5f};
-  std::vector<float>  scale = {0.5f, 0.5f, 0.5f};
-  bool is_scale = true;
   Normalize::Run(mat, mean, scale, is_scale);
 
   HWC2CHW::Run(mat);

@@ -26,6 +26,7 @@ import fastdeploy as fd
 # and converting Triton input/output types to numpy types.
 import triton_python_backend_utils as pb_utils
 
+
 def load_dict():
     dir_name = os.path.dirname(os.path.realpath(__file__)) + "/"
     file_name = dir_name + "ppocr_keys_v1.txt"
@@ -34,6 +35,7 @@ def load_dict():
         lines.insert(0, "#")
         lines.append(" ")
         return lines
+
 
 class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
@@ -74,7 +76,6 @@ class TritonPythonModel:
             self.output_dtype.append(dtype)
         print("postprocess output names:", self.output_names)
         self.label_list = load_dict()
-        print(self.label_list)
 
     def postprocess(self, infer_outputs):
         """
@@ -95,9 +96,9 @@ class TritonPythonModel:
             #new_im_info = im_infos[i_batch][0].decode('utf-8').replace("'", '"')
             #new_im_info = json.loads(new_im_info)
 
-            result = fd.vision.ocr.Recognizer.postprocess(
-                [new_infer_output], self.label_list)
-            print('result',type(result),result)
+            result = fd.vision.ocr.Recognizer.postprocess([new_infer_output],
+                                                          self.label_list)
+            #print('result',type(result),result)
             #r_str = fd.vision.utils.fd_result_to_json(result)
             results.append(result)
         return np.array(results, dtype=np.object)

@@ -25,6 +25,7 @@ import fastdeploy as fd
 # and converting Triton input/output types to numpy types.
 import triton_python_backend_utils as pb_utils
 
+
 def get_rotate_crop_image(img, box):
     '''
     img_height, img_width = img.shape[0:2]
@@ -38,10 +39,9 @@ def get_rotate_crop_image(img, box):
     '''
     points = []
     for i in range(4):
-        points.append([box[2*i], box[2*i+1]])
+        points.append([box[2 * i], box[2 * i + 1]])
     points = np.array(points, dtype=np.float32)
     img = img.astype(np.float32)
-    print(img.dtype)
     assert len(points) == 4, "shape of points must be 4*2"
     img_crop_width = int(
         max(
@@ -64,6 +64,7 @@ def get_rotate_crop_image(img, box):
     if dst_img_height * 1.0 / dst_img_width >= 1.5:
         dst_img = np.rot90(dst_img)
     return dst_img
+
 
 class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
@@ -117,16 +118,14 @@ class TritonPythonModel:
         results = []
         for i_batch in range(len(im_infos)):
             new_infer_output = infer_outputs[i_batch:i_batch + 1]
-            print(im_infos[i_batch])
-            new_im_info = im_infos[i_batch][0].decode('utf-8').replace("'", '"')
+            new_im_info = im_infos[i_batch][0].decode('utf-8').replace("'",
+                                                                       '"')
             new_im_info = json.loads(new_im_info)
 
             result = fd.vision.ocr.DBDetector.postprocess(
                 [new_infer_output, ], new_im_info)
-            print('result',type(result),result)
-            #r_str = fd.vision.utils.fd_result_to_json(result)
             results.append(result)
-            print('results box = ', results)
+            #print('results box = ', results)
         return results
 
     def execute(self, requests):
@@ -155,8 +154,8 @@ class TritonPythonModel:
                 request, self.input_names[0])
             im_infos = pb_utils.get_input_tensor_by_name(request,
                                                          self.input_names[1])
-            ori_imgs = pb_utils.get_input_tensor_by_name(
-                request, self.input_names[2])
+            ori_imgs = pb_utils.get_input_tensor_by_name(request,
+                                                         self.input_names[2])
 
             infer_outputs = infer_outputs.as_numpy()
             im_infos = im_infos.as_numpy()
@@ -172,15 +171,16 @@ class TritonPythonModel:
                     image_list.append(ori_imgs[i_batch])
                 else:
                     for box in box_list:
-                        print('box = ', box)
-                        crop_img = get_rotate_crop_image(ori_imgs[i_batch], box)
+                        #print('box = ', box)
+                        crop_img = get_rotate_crop_image(ori_imgs[i_batch],
+                                                         box)
                         image_list.append(crop_img)
                 one_batch_rec_results = []
                 for img in image_list:
                     cls_result = []
                     rec_result = []
-                    print('img=',img, type(img),img.shape)
-                    img = np.expand_dims(img, axis = 0).astype(np.uint8)
+                    #print('img=',img, type(img),img.shape)
+                    img = np.expand_dims(img, axis=0).astype(np.uint8)
                     input_tensor = pb_utils.Tensor("INPUT", img)
                     inference_request = pb_utils.InferenceRequest(
                         model_name='cls_pp',
@@ -188,16 +188,18 @@ class TritonPythonModel:
                         inputs=[input_tensor])
                     inference_response = inference_request.exec()
                     if inference_response.has_error():
-                        raise pb_utils.TritonModelException(inference_response.error().message())
+                        raise pb_utils.TritonModelException(
+                            inference_response.error().message())
                     else:
                         # Extract the output tensors from the inference response.
-                        cls_result = pb_utils.get_output_tensor_by_name(inference_response, 'result')
+                        cls_result = pb_utils.get_output_tensor_by_name(
+                            inference_response, 'result')
                         cls_result = cls_result.as_numpy()
                         cls_result = cls_result[0]
-                        print("cls_result",cls_result)
-                    if int(round(cls_result[0]))==1 and cls_result[1]>0.9:
+                        #print("cls_result",cls_result)
+                    if int(round(cls_result[0])) == 1 and cls_result[1] > 0.9:
                         img = cv2.rotate(img[0].astype(np.float32), 1)
-                        img = np.expand_dims(img, axis = 0).astype(np.uint8)
+                        img = np.expand_dims(img, axis=0).astype(np.uint8)
                     input_tensor = pb_utils.Tensor("INPUT", img)
                     inference_request = pb_utils.InferenceRequest(
                         model_name='rec_pp',
@@ -205,18 +207,22 @@ class TritonPythonModel:
                         inputs=[input_tensor])
                     inference_response = inference_request.exec()
                     if inference_response.has_error():
-                        raise pb_utils.TritonModelException(inference_response.error().message())
+                        raise pb_utils.TritonModelException(
+                            inference_response.error().message())
                     else:
                         # Extract the output tensors from the inference response.
-                        rec_result = pb_utils.get_output_tensor_by_name(inference_response, 'result')
+                        rec_result = pb_utils.get_output_tensor_by_name(
+                            inference_response, 'result')
                         rec_result = rec_result.as_numpy()
                         rec_result = rec_result[0]
-                        print("rec_result",rec_result)
+                        #print("rec_result",rec_result)
                         one_batch_rec_results.append(rec_result)
                 final_rec_results.append(one_batch_rec_results)
 
-
-            out_tensor = pb_utils.Tensor(self.output_names[0], np.array(final_rec_results, dtype=np.object))
+            out_tensor = pb_utils.Tensor(
+                self.output_names[0],
+                np.array(
+                    final_rec_results, dtype=np.object))
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])
             responses.append(inference_response)

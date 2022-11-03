@@ -53,7 +53,6 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
 
   /// Preprocess the input data, and set the preprocessed results to `outputs`
-  // 所有预处理参数，包含完
   static bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<float, 2>>* im_info,
                   const std::vector<float>& mean = {0.485f, 0.456f, 0.406f},

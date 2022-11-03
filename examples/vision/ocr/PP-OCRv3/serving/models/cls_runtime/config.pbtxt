@@ -1,6 +1,6 @@
 # optional, If name is specified it must match the name of the model repository directory containing the model.
 name: "cls_runtime"
-backend: "onnxruntime"
+backend: "fastdeploy"
 max_batch_size: 16
 
 # Input configuration of the model
@@ -30,8 +30,8 @@ instance_group [
     # The number of instances is 1
     count: 1
     # Use GPU, CPU inference option is:KIND_CPU
-    kind: KIND_CPU
+    kind: KIND_GPU
     # The instance is deployed on the 0th GPU card
-    #gpus: [0]
+    gpus: [0]
   }
 ]

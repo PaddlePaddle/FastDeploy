@@ -51,7 +51,10 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
 
   /// Preprocess the input data, and set the preprocessed results to `outputs`
   static bool Preprocess(Mat* img, FDTensor* output,
-                        const std::vector<int>& cls_image_shape = {3, 48, 192});
+                        const std::vector<int>& cls_image_shape = {3, 48, 192},
+                        const std::vector<float>& mean = {0.5f, 0.5f, 0.5f},
+                        const std::vector<float>& scale = {0.5f, 0.5f, 0.5f},
+                        bool is_scale = true);
   /// Postprocess the inferenced results, and set the final result to `result`
   static bool Postprocess(std::vector<FDTensor>& infer_results,
                         std::tuple<int, float>* result);
