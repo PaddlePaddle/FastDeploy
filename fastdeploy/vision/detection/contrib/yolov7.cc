@@ -75,6 +75,13 @@ YOLOv7::YOLOv7(const std::string& model_file, const std::string& params_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
+#ifdef ENABLE_CUDA_PREPROCESS
+  cudaSetDevice(runtime_option.device_id);
+  cudaStream_t stream;
+  CUDA_CHECK(cudaStreamCreate(&stream));
+  cuda_stream_ = reinterpret_cast<void*>(stream);
+  runtime_option.SetExternalStream(cuda_stream_);
+#endif  // ENABLE_CUDA_PREPROCESS
   initialized = Initialize();
 }
 
@@ -87,6 +94,7 @@ bool YOLOv7::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 7680.0;
+  reused_input_tensors.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -116,6 +124,7 @@ YOLOv7::~YOLOv7() {
     CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
     CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
     CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
+    CUDA_CHECK(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)));
   }
 #endif  // ENABLE_CUDA_PREPROCESS
 }
@@ -197,8 +206,7 @@ bool YOLOv7::CudaPreprocess(
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
 
-  cudaStream_t stream;
-  CUDA_CHECK(cudaStreamCreate(&stream));
+  cudaStream_t stream = reinterpret_cast<cudaStream_t>(cuda_stream_);
   int src_img_buf_size = mat->Height() * mat->Width() * mat->Channels();
   memcpy(input_img_cuda_buffer_host_, mat->Data(), src_img_buf_size);
   CUDA_CHECK(cudaMemcpyAsync(input_img_cuda_buffer_device_,
@@ -207,8 +215,6 @@ bool YOLOv7::CudaPreprocess(
   utils::CudaYoloPreprocess(input_img_cuda_buffer_device_, mat->Width(),
                             mat->Height(), input_tensor_cuda_buffer_device_,
                             size[0], size[1], padding_value, stream);
-  cudaStreamSynchronize(stream);
-  cudaStreamDestroy(stream);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(size[0]),
@@ -297,7 +303,6 @@ bool YOLOv7::Postprocess(
 bool YOLOv7::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                      float nms_iou_threshold) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
 
   std::map<std::string, std::array<float, 2>> im_info;
 
@@ -308,25 +313,24 @@ bool YOLOv7::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold,
                              static_cast<float>(mat.Width())};
 
   if (use_cuda_preprocessing_) {
-    if (!CudaPreprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!CudaPreprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   } else {
-    if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+    if (!Preprocess(&mat, &reused_input_tensors[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
-  std::vector<FDTensor> output_tensors;
-  if (!Infer(input_tensors, &output_tensors)) {
+  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
+  if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(reused_output_tensors[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
