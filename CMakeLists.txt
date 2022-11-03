@@ -75,7 +75,7 @@ option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
-option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" ON)
+option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
 
 ######################### Paths to user's custom libraries directory #####################
 set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")
