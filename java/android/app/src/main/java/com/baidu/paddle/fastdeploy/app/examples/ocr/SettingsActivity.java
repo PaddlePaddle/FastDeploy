@@ -11,7 +11,7 @@ import android.support.v7.app.ActionBar;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.app.ui.AppCompatPreferenceActivity;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
 
 import java.util.ArrayList;
 import java.util.List;

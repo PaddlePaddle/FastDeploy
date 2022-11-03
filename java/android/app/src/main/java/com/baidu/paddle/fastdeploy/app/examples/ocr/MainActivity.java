@@ -26,7 +26,7 @@ import android.widget.Toast;
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
 import com.baidu.paddle.fastdeploy.vision.OCRResult;
 import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
