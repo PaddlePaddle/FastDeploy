@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="160dp"
+    android:layout_height="200dp"
+    android:layout_gravity="right"
+    android:layout_marginTop="80px"
+    android:layout_marginRight="80px">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/bk_blue"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.6"
+            style="@style/list_result_popview_tablehead_style"
+            android:text="@string/result_table_header_name" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.4"
+            android:gravity="right"
+            android:layout_marginRight="30px"
+            style="@style/list_result_popview_tablehead_style"
+            android:text="@string/result_table_header_confidence" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <com.baidu.paddle.fastdeploy.app.ui.view.ResultListView
+            android:id="@+id/result_list_popview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"></com.baidu.paddle.fastdeploy.app.ui.view.ResultListView>.
+    </ScrollView>
+</LinearLayout>

@@ -15,6 +15,8 @@ import android.opengl.Matrix;
 import android.util.AttributeSet;
 import android.util.Log;
 
+import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
