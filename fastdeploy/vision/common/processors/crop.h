@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class Crop : public Processor {
+class FASTDEPLOY_DECL Crop : public Processor {
  public:
   Crop(int offset_w, int offset_h, int width, int height) {
     offset_w_ = offset_w;
@@ -29,6 +29,10 @@ class Crop : public Processor {
   }
 
   bool ImplByOpenCV(Mat* mat);
+
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
   std::string Name() { return "Crop"; }
 
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,

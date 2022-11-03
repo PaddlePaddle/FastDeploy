@@ -197,6 +197,7 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 | <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❌ | ❌ | ❌ | ❌ |❔|❔|
+| <font size=2> Detection | <font size=2> [PaddleDetection/PP-Tracking](./examples/vision/tracking/pptracking) | <font size=2> [Python](./examples/vision/tracking/pptracking/python)/[C++](./examples/vision/tracking/pptracking/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox) | <font size=2> [Python](./examples/vision/detection/yolox/python)/[C++](./examples/vision/detection/yolox/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7) | <font size=2> [Python](./examples/vision/detection/yolov7/python)/[C++](./examples/vision/detection/yolov7/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [meituan/YOLOv6](./examples/vision/detection/yolov6) | <font size=2> [Python](./examples/vision/detection/yolov6/python)/[C++](./examples/vision/detection/yolov6/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
@@ -222,10 +223,13 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 | <font size=2> Face Recognition | <font size=2> [insightface/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Face Recognition | <font size=2> [insightface/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2> Matting | <font size=2> [eterL1n/RobustVideoMatting](./examples/vision/matting/rvm) | <font size=2> [Python](./examples/vision/matting/rvm/python)/[C++](./examples/vision/matting/rvm/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2>Text Classification | <font size=2> [PaddleNLP/Ernie-3.0](./examples/text/ernie-3.0) | <font size=2> Python/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2> Text-to-Speech| <font size=2> [PaddleSpeech/PP-TTS](./examples/audio/pp-tts) | <font size=2> [Python](./examples/audio/pp-tts/python)/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 
 ## Edge-Side Deployment
 
@@ -289,7 +293,7 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
     - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/197434107-edebf88e-48d7-4448-9fce-4fd204b408df.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
 </div>
 
 

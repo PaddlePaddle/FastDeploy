@@ -168,8 +168,10 @@ bool Recognizer::Postprocess(std::vector<FDTensor>& infer_results,
     }
     last_index = argmax_idx;
   }
-  score /= count;
-
+  score /= (count + 1e-6);
+  if (count == 0 || std::isnan(score)) {
+    score = 0.f;
+  }
   std::get<0>(*rec_result) = str_res;
   std::get<1>(*rec_result) = score;
 
