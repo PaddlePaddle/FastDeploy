@@ -27,14 +27,14 @@ namespace vision {
 
 // Convert data type of opencv to FDDataType
 FDDataType OpenCVDataTypeToFD(int type);
+// Create data type of opencv by FDDataType
+int CreateOpenCVDataType(FDDataType type, int channel = 1);
 
 #ifdef ENABLE_FLYCV
 // Convert data type of flycv to FDDataType
 FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type);
 // Create data type of flycv by FDDataType
 fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel = 1);
-// Create data type of opencv by FDDataType
-int CreateOpenCVDataType(FDDataType type, int channel = 1);
 // Convert cv::Mat to fcv::Mat
 fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im);
 // Convert fcv::Mat to fcv::mat

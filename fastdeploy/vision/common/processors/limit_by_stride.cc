@@ -66,10 +66,7 @@ bool LimitByStride::ImplByFlyCV(Mat* mat) {
     }
 
     fcv::Mat new_im;
-    FDERROR << "Before " << im->width() << " " << im->height() << std::endl;
     fcv::resize(*im, new_im, fcv::Size(rw, rh), 0, 0, interp_method);
-    FDERROR << "After " << new_im.width() << " " << new_im.height()
-            << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

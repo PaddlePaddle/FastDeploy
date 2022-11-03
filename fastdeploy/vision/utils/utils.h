@@ -76,18 +76,22 @@ FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-bool CropImageByBox(const Mat& src_im, Mat* dst_im,
+bool CropImageByBox(Mat& src_im, Mat* dst_im,
                     const std::vector<float>& box, std::vector<float>* center,
                     std::vector<float>* scale, const float expandratio = 0.3);
 
 /**
  * Function: for keypoint detection model, fine positioning of keypoints in
- * postprocess Parameters: heatmap: model inference results for keypoint
- * detection models dim: shape information of the inference result coords:
- * coordinates after refined positioning px: px = int(coords[ch * 2] + 0.5) ,
- * refer to API detection::GetFinalPredictions py: px = int(coords[ch * 2 + 1] +
- * 0.5), refer to API detection::GetFinalPredictions index: index information of
- * heatmap pixels ch: channel Paper reference: DARK postpocessing, Zhang et al.
+ * postprocess
+ * Parameters:
+ * heatmap: model inference results for keypoint detection models
+ * dim: shape information of the inference result
+ * coords: coordinates after refined positioning
+ * px: px = int(coords[ch * 2] + 0.5) , refer to API detection::GetFinalPredictions
+ * py: px = int(coords[ch * 2 + 1] + 0.5), refer to API detection::GetFinalPredictions
+ * index: index information of heatmap pixels
+ * ch: channel
+ * Paper reference: DARK postpocessing, Zhang et al.
  * Distribution-Aware Coordinate Representation for Human Pose Estimation (CVPR
  * 2020).
  */

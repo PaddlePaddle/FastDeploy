@@ -55,7 +55,7 @@ void DisableFlyCV() {
          << Processor::default_lib << std::endl;
 }
 
-Mat CreateFDMatFromTensor(const FDTensor& tensor) {
+cv::Mat CreateOpenCVMatFromTensor(const FDTensor& tensor) {
   FDDataType type = tensor.dtype;
   FDASSERT(tensor.shape.size() == 3,
            "When create FD Mat from tensor, tensor shape should be 3-Dim, HWC "
@@ -63,63 +63,32 @@ Mat CreateFDMatFromTensor(const FDTensor& tensor) {
   int64_t height = tensor.shape[0];
   int64_t width = tensor.shape[1];
   int64_t channel = tensor.shape[2];
-
-  if (Processor::default_lib == ProcLib::FLYCV) {
-#ifdef ENABLE_FLYCV
-    fcv::Mat temp_fcv_mat;
-    auto fcv_type = CreateFlyCVDataType(type, static_cast<int>(channel));
-    switch (type) {
-      case FDDataType::UINT8:
-        temp_fcv_mat =
-            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
-        break;
-      case FDDataType::FP32:
-        temp_fcv_mat =
-            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
-        break;
-      case FDDataType::FP64:
-        temp_fcv_mat =
-            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
-        break;
-      default:
-        FDASSERT(false,
-                 "Tensor type %d is not supported While calling "
-                 "CreateFDMatFromTensor.",
-                 type);
-        break;
-    }
-    Mat mat = Mat(temp_fcv_mat);
-    return mat;
-#else
-    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
-#endif
-  }
-  cv::Mat temp_mat;
+  cv::Mat ocv_mat;
   // reference to outside FDTensor, zero copy
   switch (type) {
     case FDDataType::UINT8:
-      temp_mat = cv::Mat(height, width, CV_8UC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_8UC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     case FDDataType::INT8:
-      temp_mat = cv::Mat(height, width, CV_8SC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_8SC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     case FDDataType::INT16:
-      temp_mat = cv::Mat(height, width, CV_16SC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_16SC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     case FDDataType::INT32:
-      temp_mat = cv::Mat(height, width, CV_32SC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_32SC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     case FDDataType::FP32:
-      temp_mat = cv::Mat(height, width, CV_32FC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_32FC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     case FDDataType::FP64:
-      temp_mat = cv::Mat(height, width, CV_64FC(channel),
-                         const_cast<void*>(tensor.Data()));
+      ocv_mat = cv::Mat(height, width, CV_64FC(channel),
+                        const_cast<void*>(tensor.Data()));
       break;
     default:
       FDASSERT(false,
@@ -128,7 +97,56 @@ Mat CreateFDMatFromTensor(const FDTensor& tensor) {
                type);
       break;
   }
-  Mat mat = Mat(temp_mat);
+  return ocv_mat;
+}
+
+#ifdef ENABLE_FLYCV
+fcv::Mat CreateFlyCVMatFromTensor(const FDTensor& tensor) {
+  FDDataType type = tensor.dtype;
+  FDASSERT(tensor.shape.size() == 3,
+           "When create FD Mat from tensor, tensor shape should be 3-Dim, HWC "
+           "layout");
+  int64_t height = tensor.shape[0];
+  int64_t width = tensor.shape[1];
+  int64_t channel = tensor.shape[2];
+  fcv::Mat fcv_mat;
+  auto fcv_type = CreateFlyCVDataType(type, static_cast<int>(channel));
+  switch (type) {
+    case FDDataType::UINT8:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::FP32:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::FP64:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+    break;
+    default:
+      FDASSERT(false,
+              "Tensor type %d is not supported While calling "
+              "CreateFDMatFromTensor.",
+               type);
+    break;
+  }
+  return fcv_mat;
+}
+#endif
+
+Mat CreateFDMatFromTensor(const FDTensor& tensor) {
+  if (Processor::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat fcv_mat = CreateFlyCVMatFromTensor(tensor);
+    Mat mat = Mat(fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  cv::Mat ocv_mat = CreateOpenCVMatFromTensor(tensor);
+  Mat mat = Mat(ocv_mat);
   return mat;
 }
 

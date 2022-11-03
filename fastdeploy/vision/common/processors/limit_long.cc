@@ -70,11 +70,7 @@ bool LimitLong::ImplByFlyCV(Mat* mat) {
       return false;
     }
     fcv::Mat new_im;
-    FDERROR << "origin " << im->width() << " " << im->height() << std::endl;
-    FDERROR << "scale " << scale << std::endl;
     fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
-    FDERROR << "after " << new_im.width() << " " << new_im.height()
-            << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

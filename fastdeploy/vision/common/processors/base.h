@@ -50,6 +50,11 @@ class FASTDEPLOY_DECL Processor {
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
+// Create OpenCV/FlyCV/FD Mat from FD Tensor
+cv::Mat CreateOpenCVMatFromTensor(const FDTensor& tensor);
+#ifdef ENABLE_FLYCV
+fcv::Mat CreateFlyCVMatFromTensor(const FDTensor& tensor);
+#endif
 Mat CreateFDMatFromTensor(const FDTensor& tensor);
 
 }  // namespace vision

@@ -25,7 +25,7 @@ enum Layout { HWC, CHW };
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
 struct FASTDEPLOY_DECL Mat {
-  explicit Mat(cv::Mat& mat) {
+  explicit Mat(const cv::Mat& mat) {
     cpu_mat = mat;
     layout = Layout::HWC;
     height = cpu_mat.rows;
@@ -35,7 +35,7 @@ struct FASTDEPLOY_DECL Mat {
   }
 
 #ifdef ENABLE_FLYCV
-  explicit Mat(fcv::Mat& mat) {
+  explicit Mat(const fcv::Mat& mat) {
     fcv_mat = mat;
     layout = Layout::HWC;
     height = fcv_mat.height();
@@ -73,18 +73,6 @@ struct FASTDEPLOY_DECL Mat {
     }
   }
 
-  const cv::Mat* GetOpenCVMat() const {
-    if (mat_type == ProcLib::OPENCV) {
-      return &cpu_mat;
-    } else if (mat_type == ProcLib::FLYCV) {
-      FDASSERT(
-          false,
-          "Can not get OpenCV mat from const Mat if the ProcLib is FLYCV!");
-    } else {
-      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
-
 #ifdef ENABLE_FLYCV
   void SetMat(const fcv::Mat& mat) {
     fcv_mat = mat;
@@ -103,19 +91,6 @@ struct FASTDEPLOY_DECL Mat {
       return &fcv_mat;
     } else {
       FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
-    }
-  }
-
-  const fcv::Mat* GetFlyCVMat() const {
-    if (mat_type == ProcLib::FLYCV) {
-      return &fcv_mat;
-    } else if (mat_type == ProcLib::OPENCV) {
-      FDASSERT(
-          false,
-          "Can not get FlyCV mat from const Mat if the ProcLib is OPENCV!");
-    } else {
-      FDASSERT(false,
-               "The mat_type of custom Mat can not be ProcLib::DEFAULT ");
     }
   }
 #endif

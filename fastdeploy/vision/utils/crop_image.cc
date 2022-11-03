@@ -18,7 +18,7 @@ namespace fastdeploy {
 namespace vision {
 namespace utils {
 
-bool CropImageByBox(const Mat& src_im, Mat* dst_im,
+bool CropImageByBox(Mat& src_im, Mat* dst_im,
                     const std::vector<float>& box, std::vector<float>* center,
                     std::vector<float>* scale, const float expandratio) {
   const cv::Mat* img = src_im.GetOpenCVMat();
