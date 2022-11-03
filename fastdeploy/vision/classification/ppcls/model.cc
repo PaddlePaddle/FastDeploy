@@ -65,10 +65,8 @@ bool PaddleClasModel::Initialize() {
 
 PaddleClasModel::~PaddleClasModel() {
 #ifdef ENABLE_OPENCV_CUDA
-  if (use_cuda_preprocessing_) {
-    FDASSERT(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)) == cudaSuccess,
-             "Error occurs while destroying cuda stream.");
-  }
+  FDASSERT(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)) == cudaSuccess,
+           "Error occurs while destroying cuda stream.");
 #endif
 }
 
@@ -115,20 +113,12 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
     }
   }
   FuseTransforms(&processors_);
-  return true;
-}
-
-void PaddleClasModel::UseCudaPreprocessing() {
 #ifdef ENABLE_OPENCV_CUDA
-  use_cuda_preprocessing_ = true;
   for (size_t i = 0; i < processors_.size(); ++i) {
     processors_[i]->SetCudaStream(cuda_stream_);
   }
-#else
-  FDWARNING << "The FastDeploy didn't compile with ENABLE_OPENCV_CUDA=ON."
-            << std::endl;
-  use_cuda_preprocessing_ = false;
 #endif
+  return true;
 }
 
 bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
@@ -145,32 +135,8 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   int height = mat->Height();
   output->name = InputInfoOfRuntime(0).name;
   output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
-                          mat->GetOpenCVMat()->ptr());
+                          mat->Data(), mat->GetDevice());
   return true;
-}
-
-bool PaddleClasModel::CudaPreprocess(Mat* mat, FDTensor* output) {
-#ifdef ENABLE_OPENCV_CUDA
-  for (size_t i = 0; i < processors_.size(); ++i) {
-    if (!(*(processors_[i].get()))(mat, ProcLib::OPENCVCUDA)) {
-      FDERROR << "Failed to process image data in " << processors_[i]->Name()
-              << "." << std::endl;
-      return false;
-    }
-  }
-
-  int channel = mat->Channels();
-  int width = mat->Width();
-  int height = mat->Height();
-  output->name = InputInfoOfRuntime(0).name;
-  output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
-                          mat->GetOpenCVCudaMat()->ptr(), Device::GPU);
-  return true;
-#else
-  FDERROR << "The FastDeploy didn't compile with ENABLE_OPENCV_CUDA=ON."
-          << std::endl;
-  return false;
-#endif
 }
 
 bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
@@ -190,13 +156,8 @@ bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
 
 bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
-  bool ret;
-  if (use_cuda_preprocessing_) {
-    ret = CudaPreprocess(&mat, &(reused_input_tensors[0]));
-  } else {
-    ret = Preprocess(&mat, &(reused_input_tensors[0]));
-  }
-  if (!ret) {
+
+  if (!Preprocess(&mat, &(reused_input_tensors[0]))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;

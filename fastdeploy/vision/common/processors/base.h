@@ -30,6 +30,13 @@ FASTDEPLOY_DECL void EnableFlyCV();
 /// Disable using FlyCV to process image while deploy vision models.
 FASTDEPLOY_DECL void DisableFlyCV();
 
+/*! @brief Enable OpenCV_CUDA
+ */
+FASTDEPLOY_DECL void EnableOpenCVCuda();
+
+/// Disable OpenCV_CUDA
+FASTDEPLOY_DECL void DisableOpenCVCuda();
+
 class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority

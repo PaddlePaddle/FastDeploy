@@ -35,6 +35,17 @@ void* Mat::Data() {
   return cpu_mat.ptr();
 }
 
+Device Mat::GetDevice() {
+  if (mat_type == ProcLib::OPENCVCUDA) {
+#ifdef ENABLE_OPENCV_CUDA
+    return Device::GPU;
+#else
+    FDASSERT(false, "FastDeploy didn't compile with OpenCV_CUDA.");
+#endif
+  } 
+  return Device::CPU;
+}
+
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(),
                           Data());
@@ -165,6 +176,9 @@ std::ostream& operator<<(std::ostream& out,const ProcLib& p) {
     break;
   case ProcLib::OPENCV:
     out << "ProcLib::OPENCV";
+    break;
+  case ProcLib::OPENCVCUDA:
+    out << "ProcLib::OPENCVCUDA";
     break;
   case ProcLib::FLYCV:
     out << "ProcLib::FLYCV";

@@ -107,5 +107,23 @@ void DisableFlyCV() {
          << Processor::default_lib << std::endl;
 }
 
+void EnableOpenCVCuda() {
+#ifdef ENABLE_OPENCV_CUDA
+  Processor::default_lib = ProcLib::OPENCVCUDA;
+  FDINFO << "Will change to use image processing library "
+         << Processor::default_lib << std::endl;
+#else
+  FDWARNING << "FastDeploy didn't compile with OpenCVCuda, "
+                "will fallback to use OpenCV instead."
+            << std::endl;
+#endif
+}
+
+void DisableOpenCVCuda() {
+  Processor::default_lib = ProcLib::OPENCV;
+  FDINFO << "Will change to use image processing library "
+         << Processor::default_lib << std::endl;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

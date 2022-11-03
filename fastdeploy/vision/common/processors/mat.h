@@ -85,6 +85,7 @@ struct FASTDEPLOY_DECL Mat {
 #endif
 
   void* Data();
+  Device GetDevice();
 
  private:
   int channels;
