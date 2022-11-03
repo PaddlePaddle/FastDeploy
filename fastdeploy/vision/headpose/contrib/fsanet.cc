@@ -68,8 +68,9 @@ bool FSANet::Preprocess(Mat* mat, FDTensor* output,
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {mat->Height(), mat->Width()};
 
-  Cast::Run(mat, "float");
   HWC2CHW::Run(mat);
+  Cast::Run(mat, "float");
+
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
