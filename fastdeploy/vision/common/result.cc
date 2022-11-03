@@ -251,7 +251,10 @@ std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  for (size_t i = 0; i < landmarks.size(); ++i) {
+  FDASSERT((landmarks.size() >= 10),
+           "Predict error: the size of landmarks are less than 10.");
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  for (size_t i = 0; i < 10; ++i) {
     out = out + std::to_string(landmarks[i][0]) + "," +
           std::to_string(landmarks[i][1]) + "\n";
   }

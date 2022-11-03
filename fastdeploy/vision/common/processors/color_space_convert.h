@@ -40,5 +40,29 @@ class FASTDEPLOY_DECL RGB2BGR : public Processor {
 
   static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
 };
+
+class FASTDEPLOY_DECL BGR2GRAY : public Processor {
+ public:
+  bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
+  virtual std::string Name() { return "BGR2GRAY"; }
+
+  static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
+};
+
+class FASTDEPLOY_DECL RGB2GRAY : public Processor {
+ public:
+  bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFalconCV(Mat* mat);
+#endif
+  std::string Name() { return "RGB2GRAY"; }
+
+  static bool Run(Mat* mat, ProcLib lib = ProcLib::OPENCV);
+};
+
+
 }  // namespace vision
 }  // namespace fastdeploy
