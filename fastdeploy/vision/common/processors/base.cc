@@ -14,6 +14,9 @@
 
 #include "fastdeploy/vision/common/processors/base.h"
 #include "fastdeploy/utils/utils.h"
+#ifdef ENABLE_OPENCV_CUDA
+#include "opencv2/core/cuda_stream_accessor.hpp"
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -44,14 +47,18 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   } else if (target == ProcLib::OPENCVCUDA) {
 #ifdef ENABLE_OPENCV_CUDA
     if (mat->mat_type != ProcLib::OPENCVCUDA) {
-      std::string buf_name = Name() + "_upload";
-      std::vector<int64_t> shape = {mat->GetOpenCVMat()->rows, mat->GetOpenCVMat()->cols, mat->GetOpenCVMat()->channels()};
-      void* buffer = UpdateAndGetReusedBuffer(shape, mat->GetOpenCVMat()->type(), buf_name, Device::GPU);
+      if (Name().find("Resize") != 0) {
+        std::string buf_name = Name() + "_upload";
+        std::vector<int64_t> shape = {mat->GetOpenCVMat()->rows,
+                                      mat->GetOpenCVMat()->cols,
+                                      mat->GetOpenCVMat()->channels()};
+        void* buffer = UpdateAndGetReusedBuffer(shape, mat->GetOpenCVMat()->type(), buf_name, Device::GPU);
 
-      cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type(), buffer);
-      auto stream = GetCudaStream();
-      gpu_mat.upload(*(mat->GetOpenCVMat()), stream);
-      mat->SetMat(gpu_mat);
+        cv::cuda::GpuMat gpu_mat(mat->GetOpenCVMat()->size(), mat->GetOpenCVMat()->type(), buffer);
+        auto stream = GetCudaStream();
+        gpu_mat.upload(*(mat->GetOpenCVMat()), stream);
+        mat->SetMat(gpu_mat);
+      }
     }
     return ImplByOpenCVCuda(mat);
 #else
@@ -64,15 +71,23 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 void* Processor::UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
                                           const int& opencv_dtype,
                                           const std::string& buffer_name,
-                                          const Device& new_device) {
+                                          const Device& new_device,
+                                          const bool& use_pinned_memory) {
   if (reused_buffers_.count(buffer_name) == 0) {
     reused_buffers_[buffer_name] = FDTensor();
   }
-
+  reused_buffers_[buffer_name].is_pinned_memory = use_pinned_memory;
   reused_buffers_[buffer_name].Resize(new_shape, OpenCVDataTypeToFD(opencv_dtype),
                                       buffer_name, new_device);
   return reused_buffers_[buffer_name].Data();
 }
+
+#ifdef ENABLE_OPENCV_CUDA
+cv::cuda::Stream Processor::GetCudaStream() {
+  cudaStream_t stream = reinterpret_cast<cudaStream_t>(cuda_stream_);
+  return cv::cuda::StreamAccessor::wrapStream(stream);
+}
+#endif
 
 void EnableFlyCV() {
 #ifdef ENABLE_FLYCV

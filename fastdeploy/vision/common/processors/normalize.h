@@ -48,13 +48,22 @@ class FASTDEPLOY_DECL Normalize : public Processor {
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::OPENCV,
+                  bool swap_rb = false);
 
   std::vector<float> GetAlpha() const {
     return alpha_;
   }
   std::vector<float> GetBeta() const {
     return beta_;
+  }
+
+  bool GetSwapRB() {
+    return swap_rb_;
+  }
+
+  void SetSwapRB(bool swap_rb) {
+    swap_rb_ = swap_rb;
   }
 
  private:

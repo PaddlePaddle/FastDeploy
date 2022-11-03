@@ -15,6 +15,9 @@
 #include "fastdeploy/vision/classification/ppcls/model.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
+#ifdef ENABLE_OPENCV_CUDA
+#include <cuda_runtime.h>
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -45,6 +48,9 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
 }
 
 bool PaddleClasModel::Initialize() {
+  reused_input_tensors.resize(1);
+  reused_output_tensors.resize(1);
+
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -77,7 +83,7 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
     return false;
   }
   auto preprocess_cfg = cfg["PreProcess"]["transform_ops"];
-  // processors_.push_back(std::make_shared<BGR2RGB>());
+  processors_.push_back(std::make_shared<BGR2RGB>());
   for (const auto& op : preprocess_cfg) {
     FDASSERT(op.IsMap(),
              "Require the transform information in yaml be Map type.");
@@ -85,7 +91,8 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
     if (op_name == "ResizeImage") {
       int target_size = op.begin()->second["resize_short"].as<int>();
       bool use_scale = false;
-      int interp = cv::INTER_NEAREST;
+      int interp = cv::INTER_LINEAR;
+      // int interp = cv::INTER_NEAREST;
       processors_.push_back(
           std::make_shared<ResizeByShort>(target_size, interp, use_scale));
     } else if (op_name == "CropImage") {
@@ -99,9 +106,7 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       FDASSERT((scale - 0.00392157) < 1e-06 && (scale - 0.00392157) > -1e-06,
                "Only support scale in Normalize be 0.00392157, means the pixel "
                "is in range of [0, 255].");
-      processors_.push_back(std::make_shared<Normalize>(mean, std, true,
-                                                        std::vector<float>(), std::vector<float>(),
-                                                        true));
+      processors_.push_back(std::make_shared<Normalize>(mean, std));
     } else if (op_name == "ToCHWImage") {
       processors_.push_back(std::make_shared<HWC2CHW>());
     } else {
@@ -110,6 +115,7 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       return false;
     }
   }
+  FuseTransforms(&processors_);
   return true;
 }
 
@@ -129,18 +135,11 @@ void PaddleClasModel::UseCudaPreprocessing() {
 
 bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   for (size_t i = 0; i < processors_.size(); ++i) {
-
-    fastdeploy::TimeCounter tc;
-    tc.Start();
-  
     if (!(*(processors_[i].get()))(mat)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-
-    tc.End();
-    std::cout << processors_[i]->Name() << "---- " << tc.Duration() * 1000 << std::endl;
   }
 
   int channel = mat->Channels();
@@ -153,19 +152,13 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
 }
 
 bool PaddleClasModel::CudaPreprocess(Mat* mat, FDTensor* output) {
+#ifdef ENABLE_OPENCV_CUDA
   for (size_t i = 0; i < processors_.size(); ++i) {
-
-    fastdeploy::TimeCounter tc;
-    tc.Start();
-  
     if (!(*(processors_[i].get()))(mat, ProcLib::OPENCVCUDA)) {
       FDERROR << "Failed to process image data in " << processors_[i]->Name()
               << "." << std::endl;
       return false;
     }
-
-    tc.End();
-    std::cout << processors_[i]->Name() << "---- " << tc.Duration() * 1000 << std::endl;
   }
 
   int channel = mat->Channels();
@@ -175,6 +168,11 @@ bool PaddleClasModel::CudaPreprocess(Mat* mat, FDTensor* output) {
   output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
                           mat->GetOpenCVCudaMat()->ptr(), Device::GPU);
   return true;
+#else
+  FDERROR << "The FastDeploy didn't compile with ENABLE_OPENCV_CUDA=ON."
+          << std::endl;
+  return false;
+#endif
 }
 
 bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
@@ -194,30 +192,25 @@ bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
 
 bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
-  std::vector<FDTensor> processed_data(1);
-
+  bool ret;
   if (use_cuda_preprocessing_) {
-    if (!CudaPreprocess(&mat, &(processed_data[0]))) {
-      FDERROR << "Failed to preprocess input data while using model:"
-              << ModelName() << "." << std::endl;
-      return false;
-    }
+    ret = CudaPreprocess(&mat, &(reused_input_tensors[0]));
   } else {
-    if (!Preprocess(&mat, &(processed_data[0]))) {
-      FDERROR << "Failed to preprocess input data while using model:"
-              << ModelName() << "." << std::endl;
-      return false;
-    }
+    ret = Preprocess(&mat, &(reused_input_tensors[0]));
+  }
+  if (!ret) {
+    FDERROR << "Failed to preprocess input data while using model:"
+            << ModelName() << "." << std::endl;
+    return false;
   }
 
-  std::vector<FDTensor> infer_result(1);
-  if (!Infer(processed_data, &infer_result)) {
+  if (!Infer()) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
 
-  if (!Postprocess(infer_result[0], result, topk)) {
+  if (!Postprocess(reused_output_tensors[0], result, topk)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

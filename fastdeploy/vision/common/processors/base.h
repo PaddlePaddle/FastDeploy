@@ -64,16 +64,16 @@ class FASTDEPLOY_DECL Processor {
     cuda_stream_ = stream;
   }
 
-  cv::cuda::Stream GetCudaStream() {
-    cudaStream_t stream = reinterpret_cast<cudaStream_t>(cuda_stream_);
-    return cv::cuda::StreamAccessor::wrapStream(stream);
-  }
+#ifdef ENABLE_OPENCV_CUDA
+  cv::cuda::Stream GetCudaStream();
+#endif
 
  protected:
   void* UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
                                  const int& opencv_dtype,
                                  const std::string& buffer_name,
-                                 const Device& new_device = Device::CPU);
+                                 const Device& new_device = Device::CPU,
+                                 const bool& use_pinned_memory = false);
 
  private:
   std::map<std::string, FDTensor> reused_buffers_;

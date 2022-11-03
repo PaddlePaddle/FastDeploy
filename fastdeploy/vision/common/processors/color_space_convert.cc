@@ -36,7 +36,6 @@ bool BGR2RGB::ImplByOpenCVCuda(Mat* mat) {
   auto stream = GetCudaStream();
   cv::cuda::cvtColor(*im, new_im, cv::COLOR_BGR2RGB, 0, stream);
   mat->SetMat(new_im);
-  // FDINFO << new_im.isContinuous() << std::endl;
   return true;
 }
 #endif

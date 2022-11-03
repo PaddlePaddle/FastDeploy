@@ -32,6 +32,7 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
 
 #ifdef ENABLE_OPENCV_CUDA
   bool ImplByOpenCVCuda(Mat* mat);
+  bool ImplByOpenCVCudaHost(Mat* mat);
 #endif
 
 #ifdef ENABLE_FLYCV

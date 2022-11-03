@@ -21,7 +21,7 @@ namespace vision {
 NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
                      const std::vector<float>& std, bool is_scale,
                      const std::vector<float>& min,
-                     const std::vector<float>& max) {
+                     const std::vector<float>& max, bool swap_rb) {
   FDASSERT(mean.size() == std.size(),
            "Normalize: requires the size of mean equal to the size of std.");
   std::vector<double> mean_(mean.begin(), mean.end());
@@ -52,6 +52,7 @@ NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
     alpha_.push_back(alpha);
     beta_.push_back(beta);
   }
+  swap_rb_ = swap_rb;
 }
 
 bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
@@ -60,6 +61,7 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   int origin_h = im->rows;
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
+  if (swap_rb_) std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -72,6 +74,33 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   mat->layout = Layout::CHW;
   return true;
 }
+
+#ifdef ENABLE_OPENCV_CUDA
+bool NormalizeAndPermute::ImplByOpenCVCuda(Mat* mat) {
+  cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
+  auto stream = GetCudaStream();
+
+  std::vector<cv::cuda::GpuMat> split_im;
+  cv::cuda::split(*im, split_im, stream);
+  if (swap_rb_) std::swap(split_im[0], split_im[2]);
+
+  std::string buf_name = Name() + "_cuda";
+  std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, CV_32FC(im->channels()), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_im(im->size(), CV_32FC(im->channels()), buffer);
+  int hw_data_size = im->rows * im->cols * sizeof(float);
+
+  for (int c = 0; c < im->channels(); c++) {
+    cv::cuda::GpuMat tmp(split_im[c].size(), CV_32FC1, new_im.ptr<uint8_t>() + c * hw_data_size);
+    split_im[c].convertTo(tmp, CV_32FC1, alpha_[c], beta_[c], stream);
+    split_im[c] = tmp;
+  }
+
+  mat->SetMat(new_im);
+  mat->layout = Layout::CHW;
+  return true;
+}
+#endif
 
 #ifdef ENABLE_FLYCV
 bool NormalizeAndPermute::ImplByFalconCV(Mat* mat) {
@@ -102,8 +131,9 @@ bool NormalizeAndPermute::ImplByFalconCV(Mat* mat) {
 bool NormalizeAndPermute::Run(Mat* mat, const std::vector<float>& mean,
                     const std::vector<float>& std, bool is_scale,
                     const std::vector<float>& min,
-                    const std::vector<float>& max, ProcLib lib) {
-  auto n = NormalizeAndPermute(mean, std, is_scale, min, max);
+                    const std::vector<float>& max,
+                    ProcLib lib, bool swap_rb) {
+  auto n = NormalizeAndPermute(mean, std, is_scale, min, max, swap_rb);
   return n(mat, lib);
 }
 

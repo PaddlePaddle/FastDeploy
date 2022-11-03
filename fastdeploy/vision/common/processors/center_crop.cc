@@ -59,7 +59,6 @@ bool CenterCrop::ImplByOpenCVCuda(Mat* mat) {
   mat->SetMat(new_im);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
-  FDINFO << new_im.isContinuous() << std::endl;
   return true;
 }
 #endif

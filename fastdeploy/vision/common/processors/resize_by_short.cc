@@ -38,11 +38,13 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
 
 #ifdef ENABLE_OPENCV_CUDA
 bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
+  if (mat->mat_type != ProcLib::OPENCVCUDA) {
+    return ImplByOpenCVCudaHost(mat);
+  }
   cv::cuda::GpuMat* im = mat->GetOpenCVCudaMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
   double scale = GenerateScale(origin_w, origin_h);
-
   int width = static_cast<int>(round(scale * origin_w));
   int height = static_cast<int>(round(scale * origin_h));
 
@@ -57,12 +59,44 @@ bool ResizeByShort::ImplByOpenCVCuda(Mat* mat) {
   } else {
     if (width != origin_w || height != origin_h) {
       cv::cuda::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_, stream);
+    } else {
+      new_im = *im;
     }
   }
-  FDINFO << new_im.isContinuous() << " " << scale << "" << std::endl;
   mat->SetMat(new_im);
   mat->SetWidth(new_im.cols);
   mat->SetHeight(new_im.rows);
+  return true;
+}
+
+bool ResizeByShort::ImplByOpenCVCudaHost(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
+  int origin_w = im->cols;
+  int origin_h = im->rows;
+  double scale = GenerateScale(origin_w, origin_h);
+  int width = static_cast<int>(round(scale * origin_w));
+  int height = static_cast<int>(round(scale * origin_h));
+
+  std::string buf_name = Name() + "_cuda_host";
+  std::vector<int64_t> shape = {height, width, im->channels()};
+  void* buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::CPU, true);
+  cv::Mat new_im(cv::Size(width, height), im->type(), buffer);
+
+  if (use_scale_ && fabs(scale - 1.0) >= 1e-06) {
+    cv::resize(*im, new_im, cv::Size(), scale, scale, interp_);
+  } else {
+    cv::resize(*im, new_im, cv::Size(width, height), 0, 0, interp_);
+  }
+
+  buf_name = Name() + "_cuda";
+  buffer = UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
+  cv::cuda::GpuMat new_gpu_im(cv::Size(width, height), im->type(), buffer);
+  auto stream = GetCudaStream();
+  new_gpu_im.upload(new_im, stream);
+
+  mat->SetMat(new_gpu_im);
+  mat->SetWidth(new_gpu_im.cols);
+  mat->SetHeight(new_gpu_im.rows);
   return true;
 }
 #endif

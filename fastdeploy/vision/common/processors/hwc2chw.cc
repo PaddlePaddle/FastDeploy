@@ -58,7 +58,6 @@ bool HWC2CHW::ImplByOpenCVCuda(Mat* mat) {
     split_im[c].copyTo(tmp, stream);
   }
   mat->layout = Layout::CHW;
-  FDINFO << im->isContinuous() << " " << std::hex << cv::cuda::StreamAccessor::getStream(stream) << std::endl;
   return true;
 }
 #endif
