@@ -74,8 +74,8 @@ class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
   virtual void update(Trajectory *traj,
                       int timestamp,
                       bool update_embedding = true);
-  virtual void activate(int& cnt, int timestamp);
-  virtual void reactivate(Trajectory *traj, int & cnt,int timestamp, bool newid = false);
+  virtual void activate(int &cnt, int timestamp);
+  virtual void reactivate(Trajectory *traj, int &cnt, int timestamp, bool newid = false);
   virtual void mark_lost(void);
   virtual void mark_removed(void);
 

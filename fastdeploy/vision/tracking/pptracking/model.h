@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <map>
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/result.h"
@@ -22,6 +23,21 @@
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
+struct TrailRecorder{
+  std::map<int, std::vector<std::array<int, 2>>> records;
+  void Add(int id, const std::array<int, 2>& record);
+};
+
+inline void TrailRecorder::Add(int id, const std::array<int, 2>& record) {
+  auto iter = records.find(id);
+  if (iter != records.end()) {
+    auto trail = records[id];
+    trail.push_back(record);
+    records[id] = trail;
+  } else {
+    records[id] = {record};
+  }
+}
 
 class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
  public:
@@ -49,6 +65,14 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
    * \return true if the prediction successed, otherwise false
    */
   virtual bool Predict(cv::Mat* img, MOTResult* result);
+  /** \brief bind tracking trail struct
+   *
+   * \param[in] recorder The MOT trail will record the trail of object
+   */
+  void BindRecorder(TrailRecorder* recorder);
+  /** \brief cancel binding and clear trail information
+   */
+  void UnbindRecorder();
 
  private:
   bool BuildPreprocessPipelineFromConfig();
@@ -65,8 +89,11 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
   float conf_thresh_;
   float tracked_thresh_;
   float min_box_area_;
+  bool is_record_trail_ = false;
   std::unique_ptr<JDETracker> jdeTracker_;
+  TrailRecorder *recorder_ = nullptr;
 };
+
 }  // namespace tracking
 }  // namespace vision
 }  // namespace fastdeploy

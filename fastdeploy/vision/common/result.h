@@ -14,6 +14,7 @@
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
 #include "opencv2/core/core.hpp"
+#include <set>
 
 namespace fastdeploy {
 /** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
@@ -171,6 +172,7 @@ struct FASTDEPLOY_DECL MOTResult : public BaseResult {
   /** \brief The classify label id for all the tracking object
    */
   std::vector<int> class_ids;
+
   ResultType type = ResultType::MOT;
   /// Clear MOT result
   void Clear();

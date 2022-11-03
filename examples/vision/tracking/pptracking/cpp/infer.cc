@@ -33,25 +33,29 @@ void CpuInfer(const std::string& model_dir, const std::string& video_file) {
   }
 
   fastdeploy::vision::MOTResult result;
+  fastdeploy::vision::tracking::TrailRecorder recorder;
+  // during each prediction, data is inserted into the recorder. As the number of predictions increases,
+  // the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
+  model.BindRecorder(&recorder);
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
-        break;
+      break;
     }
     if (!model.Predict(&frame, &result)) {
-        std::cerr << "Failed to predict." << std::endl;
-        return;
+      std::cerr << "Failed to predict." << std::endl;
+      return;
     }
+    // such as adding this code can cancel trail datat bind
+    // if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }
@@ -72,25 +76,29 @@ void GpuInfer(const std::string& model_dir, const std::string& video_file) {
   }
 
   fastdeploy::vision::MOTResult result;
+  fastdeploy::vision::tracking::TrailRecorder trail_recorder;
+  // during each prediction, data is inserted into the recorder. As the number of predictions increases,
+  // the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
+  model.BindRecorder(&trail_recorder);
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
-        break;
+      break;
     }
     if (!model.Predict(&frame, &result)) {
-        std::cerr << "Failed to predict." << std::endl;
-        return;
+      std::cerr << "Failed to predict." << std::endl;
+      return;
     }
+    // such as adding this code can cancel trail datat bind
+    //if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &trail_recorder);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }
@@ -112,11 +120,13 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
   }
 
   fastdeploy::vision::MOTResult result;
+  fastdeploy::vision::tracking::TrailRecorder recorder;
+  //during each prediction, data is inserted into the recorder. As the number of predictions increases,
+  //the memory will continue to grow. You can cancel the insertion through 'UnbindRecorder'.
+  // int count = 0; // unbind condition
+  model.BindRecorder(&recorder);
   cv::Mat frame;
-  int frame_id=0;
   cv::VideoCapture capture(video_file);
-  // according to the time of prediction to calculate fps
-  float fps= 0.0f;
   while (capture.read(frame)) {
     if (frame.empty()) {
         break;
@@ -125,12 +135,14 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
         std::cerr << "Failed to predict." << std::endl;
         return;
     }
+    // such as adding this code can cancel trail datat bind
+    // if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
-    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, fps , frame_id);
+    cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
     cv::imshow("mot",out_img);
     cv::waitKey(30);
-    frame_id++;
   }
+  model.UnbindRecorder();
   capture.release();
   cv::destroyAllWindows();
 }
