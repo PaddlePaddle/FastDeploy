@@ -54,7 +54,7 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
-  inline cv::Mat* GetOpenCVMat() {
+  cv::Mat* GetOpenCVMat() {
     if (mat_type == ProcLib::OPENCV) {
       return &cpu_mat;
     } else if (mat_type == ProcLib::FLYCV) {
@@ -73,7 +73,7 @@ struct FASTDEPLOY_DECL Mat {
     }
   }
 
-  inline const cv::Mat* GetOpenCVMat() const {
+  const cv::Mat* GetOpenCVMat() const {
     if (mat_type == ProcLib::OPENCV) {
       return &cpu_mat;
     } else if (mat_type == ProcLib::FLYCV) {
@@ -91,7 +91,7 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::FLYCV;
   }
 
-  inline fcv::Mat* GetFlyCVMat() {
+  fcv::Mat* GetFlyCVMat() {
     if (mat_type == ProcLib::FLYCV) {
       return &fcv_mat;
     } else if (mat_type == ProcLib::OPENCV) {
@@ -106,7 +106,7 @@ struct FASTDEPLOY_DECL Mat {
     }
   }
 
-  inline const fcv::Mat* GetFlyCVMat() const {
+  const fcv::Mat* GetFlyCVMat() const {
     if (mat_type == ProcLib::FLYCV) {
       return &fcv_mat;
     } else if (mat_type == ProcLib::OPENCV) {
@@ -154,38 +154,6 @@ struct FASTDEPLOY_DECL Mat {
 
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
-
-  template <typename T>
-  T* GetMat() {
-    FDASSERT(false, "Not support this type for GetMat.");
-  }
-
-  template <typename T>
-  const T* GetMat() const {
-    FDASSERT(false, "Not support this type for GetMat.");
-  }
-
-  template <>
-  cv::Mat* GetMat() {
-    return GetOpenCVMat();
-  }
-
-  template <>
-  const cv::Mat* GetMat() const {
-    return GetOpenCVMat();
-  }
-
-#ifdef ENABLE_FLYCV
-  template <>
-  fcv::Mat* GetMat() {
-    return GetFlyCVMat();
-  }
-
-  template <>
-  const fcv::Mat* GetMat() const {
-    return GetFlyCVMat();
-  }
-#endif
 };
 
 }  // namespace vision
