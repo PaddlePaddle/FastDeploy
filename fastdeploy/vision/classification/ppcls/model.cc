@@ -92,7 +92,6 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       int target_size = op.begin()->second["resize_short"].as<int>();
       bool use_scale = false;
       int interp = cv::INTER_LINEAR;
-      // int interp = cv::INTER_NEAREST;
       processors_.push_back(
           std::make_shared<ResizeByShort>(target_size, interp, use_scale));
     } else if (op_name == "CropImage") {
@@ -123,7 +122,6 @@ void PaddleClasModel::UseCudaPreprocessing() {
 #ifdef ENABLE_OPENCV_CUDA
   use_cuda_preprocessing_ = true;
   for (size_t i = 0; i < processors_.size(); ++i) {
-    FDINFO << std::hex << cuda_stream_ << std::endl;
     processors_[i]->SetCudaStream(cuda_stream_);
   }
 #else
