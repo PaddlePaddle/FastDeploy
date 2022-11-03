@@ -17,14 +17,13 @@
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/imgproc/imgproc.hpp"
 
-#define PI 3.1415926535
-
 namespace fastdeploy {
 
 namespace vision {
 
 cv::Mat VisHeadPose(const cv::Mat& im, const HeadPoseResult& result,
                     int size, int line_size) {
+  const float PI = 3.1415926535;
   auto vis_im = im.clone();
   int h = im.rows;
   int w = im.cols;
