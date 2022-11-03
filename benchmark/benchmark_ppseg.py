@@ -22,19 +22,9 @@ import GPUtil
 import time
 
 
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() == 'true':
-        return True
-    elif v.lower() == 'false':
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
 def parse_arguments():
     import argparse
+    import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model", required=True, help="Path of PaddleSeg model.")
@@ -64,12 +54,12 @@ def parse_arguments():
         help="inference backend, default, ort, ov, trt, paddle, paddle_trt.")
     parser.add_argument(
         "--enable_trt_fp16",
-        type=str2bool,
+        type=ast.literal_eval,
         default=False,
         help="whether enable fp16 in trt backend")
     parser.add_argument(
         "--enable_collect_memory_info",
-        type=str2bool,
+        type=ast.literal_eval,
         default=False,
         help="whether enable collect memory info")
     args = parser.parse_args()
