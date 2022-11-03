@@ -18,6 +18,42 @@ namespace fastdeploy {
 namespace vision {
 namespace segmentation {
 
+PaddleSegPostprocessor::PaddleSegPostprocessor(const std::string& config_file) {
+  this->config_file_ = config_file;
+  if (!ReadFromConfig()) {
+    FDERROR << "Failed to read postprocess configuration from config file."
+            << std::endl;
+  }
+}
+
+bool PaddleSegPostprocessor::ReadFromConfig() {
+  YAML::Node cfg;
+  try {
+    cfg = YAML::LoadFile(config_file_);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file_
+            << ", maybe you should check this file." << std::endl;
+    return false;
+  }   
+
+  if (cfg["Deploy"]["output_op"]) {
+    std::string output_op = cfg["Deploy"]["output_op"].as<std::string>();
+    if (output_op == "softmax") {
+      is_with_softmax_ = true;
+      is_with_argmax_ = false;
+    } else if (output_op == "argmax") {
+      is_with_softmax_ = false;
+      is_with_argmax_ = true;
+    } else if (output_op == "none") {
+      is_with_softmax_ = false;
+      is_with_argmax_ = false;
+    } else {
+      FDERROR << "Unexcepted output_op operator in deploy.yml: " << output_op
+              << "." << std::endl;
+    }
+  }
+}
+
 bool PaddleSegPostprocessor::Run(
     std::vector<FDTensor> infer_result, SegmentationResult* result,
     const std::map<std::string, std::array<int, 2>>& im_info) {
@@ -51,7 +87,7 @@ bool PaddleSegPostprocessor::Run(
   int64_t infer_height = 0;
   int64_t infer_width = 0;
 
-  if (is_with_argmax) {
+  if (is_with_argmax_) {
     infer_channel = 1;
     infer_height = infer_result_ptr->shape[1];
     infer_width = infer_result_ptr->shape[2];
@@ -71,11 +107,11 @@ bool PaddleSegPostprocessor::Run(
     is_resized = true;
   }
 
-  if (!is_with_softmax && apply_softmax) {
+  if (!is_with_softmax_ && apply_softmax_) {
     Softmax(*infer_result_ptr, infer_result_ptr, 1);
   }
 
-  if (!is_with_argmax) {
+  if (!is_with_argmax_) {
     // output without argmax
     result->contain_score_map = true;
 

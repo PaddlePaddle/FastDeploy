@@ -31,11 +31,7 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
 
   /** \brief For PP-HumanSeg model, set true if the input image is vertical image(height > width), default value is false
    */
-  bool is_vertical_screen = false;
-
-  bool is_with_softmax = false;
-
-  bool is_with_argmax = true;
+  bool is_vertical_screen_ = false;
 
   // Paddle2ONNX temporarily don't support dynamic input
   bool is_change_backends_ = false;
@@ -49,7 +45,7 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
   std::vector<std::shared_ptr<Processor>> processors_;
 
   // for recording the switch of normalize and hwc2chw
-  bool disable_normalize_and_permute = false;
+  bool disable_normalize_and_permute_ = false;
 };
 
 }  // namespace segmentation

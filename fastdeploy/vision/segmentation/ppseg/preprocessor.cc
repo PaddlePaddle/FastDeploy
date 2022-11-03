@@ -45,7 +45,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
       if (op["type"].as<std::string>() == "Normalize") {
-        if(!(this->disable_normalize_and_permute)){
+        if(!(this->disable_normalize_and_permute_)){
           std::vector<float> mean = {0.5, 0.5, 0.5};
           std::vector<float> std = {0.5, 0.5, 0.5};
           if (op["mean"]) {
@@ -92,23 +92,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
           std::make_shared<Resize>(input_width, input_height));
     }
   }
-  if (cfg["Deploy"]["output_op"]) {
-    std::string output_op = cfg["Deploy"]["output_op"].as<std::string>();
-    if (output_op == "softmax") {
-      is_with_softmax = true;
-      is_with_argmax = false;
-    } else if (output_op == "argmax") {
-      is_with_softmax = false;
-      is_with_argmax = true;
-    } else if (output_op == "none") {
-      is_with_softmax = false;
-      is_with_argmax = false;
-    } else {
-      FDERROR << "Unexcepted output_op operator in deploy.yml: " << output_op
-              << "." << std::endl;
-    }
-  }
-  if(!(this->disable_normalize_and_permute)){
+  if(!(this->disable_normalize_and_permute_)){
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
   return true;
@@ -121,7 +105,7 @@ bool PaddleSegPreprocessor::Run(Mat* mat, FDTensor* output) {
       int resize_width = -1;
       int resize_height = -1;
       std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
-      if (is_vertical_screen && (resize_width > resize_height)) {
+      if (is_vertical_screen_ && (resize_width > resize_height)) {
         if (!(processor->SetWidthAndHeight(resize_height, resize_width))) {
           FDERROR << "Failed to set width and height of "
                   << processors_[i]->Name() << " processor." << std::endl;
@@ -141,7 +125,7 @@ bool PaddleSegPreprocessor::Run(Mat* mat, FDTensor* output) {
 }
 
 void PaddleSegPreprocessor::DisableNormalizeAndPermute(){
-  this->disable_normalize_and_permute = true;
+  this->disable_normalize_and_permute_ = true;
   // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;

@@ -24,6 +24,9 @@ namespace segmentation {
 class FASTDEPLOY_DECL PaddleSegPostprocessor {
  public:
   PaddleSegPostprocessor() {}
+  explicit PaddleSegPostprocessor(const std::string& config_file);
+
+  virtual bool ReadFromConfig();
 
   virtual bool Run(std::vector<FDTensor> infer_result,
                    SegmentationResult* result,
@@ -31,11 +34,14 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
 
   /** \brief Whether applying softmax operator in the postprocess, default value is false
    */
-  bool apply_softmax = false;
+  bool apply_softmax_ = false;
 
-  bool is_with_softmax = false;
+ private:
+  std::string config_file_;
 
-  bool is_with_argmax = true;
+  bool is_with_softmax_ = false;
+
+  bool is_with_argmax_ = true;
 };
 
 }  // namespace segmentation

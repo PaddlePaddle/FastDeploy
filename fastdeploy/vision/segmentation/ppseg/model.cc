@@ -32,6 +32,7 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
   runtime_option.params_file = params_file;
   initialized = Initialize();
   preprocessor = PaddleSegPreprocessor(config_file);
+  postprocessor = PaddleSegPostprocessor(config_file);
 }
 
 bool PaddleSegModel::Initialize() {
@@ -66,8 +67,6 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
             << std::endl;
     return false;
   }
-  postprocessor.is_with_argmax = preprocessor.is_with_argmax;
-  postprocessor.is_with_softmax = preprocessor.is_with_softmax;
   if (!postprocessor.Run(infer_result, result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;

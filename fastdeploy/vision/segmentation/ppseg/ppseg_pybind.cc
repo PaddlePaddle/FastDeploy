@@ -49,13 +49,7 @@ void BindPPSegPreprocessor(pybind11::module& m) {
                      &vision::segmentation::PaddleSegPreprocessor::DisableNormalizeAndPermute)
                      
       .def_readwrite("is_vertical_screen",
-                     &vision::segmentation::PaddleSegPreprocessor::is_vertical_screen)
-      
-      .def_readwrite("is_with_softmax",
-                     &vision::segmentation::PaddleSegPreprocessor::is_with_softmax)
-      
-      .def_readwrite("is_with_argmax",
-                     &vision::segmentation::PaddleSegPreprocessor::is_with_argmax);
+                     &vision::segmentation::PaddleSegPreprocessor::is_vertical_screen_);
 }
 
 void BindPPSegPostprocessor(pybind11::module& m) {
@@ -73,12 +67,6 @@ void BindPPSegPostprocessor(pybind11::module& m) {
              return res;
            })
       .def_readwrite("apply_softmax",
-                    &vision::segmentation::PaddleSegPostprocessor::apply_softmax)
-
-      .def_readwrite("is_with_softmax",
-                     &vision::segmentation::PaddleSegPostprocessor::is_with_softmax)
-      
-      .def_readwrite("is_with_argmax",
-                     &vision::segmentation::PaddleSegPostprocessor::is_with_argmax);
+                    &vision::segmentation::PaddleSegPostprocessor::apply_softmax_);
 }
 }  // namespace fastdeploy
