@@ -313,6 +313,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     BuildTrtEngine();
   }
 
+  cudaSetDevice(option_.gpu_id);
   SetInputs(inputs);
   AllocateOutputsBuffer(outputs);
 
@@ -384,13 +385,17 @@ void TrtBackend::GetInputOutputInfo() {
       outputs_device_buffer_[name] = FDDeviceBuffer(dtype);
       casted_output_tensors_[name] = FDTensor();
     }
+    io_name_index_[name] = i;
   }
   bindings_.resize(num_binds);
 }
 
 void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
   for (const auto& item : inputs) {
-    auto idx = engine_->getBindingIndex(item.name.c_str());
+    // auto idx = engine_->getBindingIndex(item.name.c_str());
+    auto iter = io_name_index_.find(item.name);
+    FDASSERT(iter != io_name_index_.end(), "TRTBackend SetInputs not find name:%s", item.name.c_str());
+    auto idx = iter->second; 
     std::vector<int> shape(item.shape.begin(), item.shape.end());
     auto dims = ToDims(shape);
     context_->setBindingDimensions(idx, dims);
@@ -438,7 +443,10 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
     outputs->resize(outputs_desc_.size());
   }
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    auto idx = engine_->getBindingIndex(outputs_desc_[i].name.c_str());
+    // auto idx = engine_->getBindingIndex(outputs_desc_[i].name.c_str());
+    auto idx_iter = io_name_index_.find(outputs_desc_[i].name);
+    FDASSERT(idx_iter != io_name_index_.end(), "TRTBackend Outputs not find name:%s", outputs_desc_[i].name.c_str());
+    auto idx = idx_iter->second; 
     auto output_dims = context_->getBindingDimensions(idx);
 
     // find the original index of output
@@ -699,6 +707,40 @@ std::vector<TensorInfo> TrtBackend::GetOutputInfos() {
     infos.emplace_back(GetOutputInfo(i));
   }
   return infos;
+}
+
+std::unique_ptr<BaseBackend> TrtBackend::Clone(void *stream, int device_id) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<TrtBackend>();
+  auto casted_backend = dynamic_cast<TrtBackend*>(new_backend.get());
+  if(device_id > 0 && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    if (option_.model_format == ModelFormat::ONNX) {
+      FDASSERT(casted_backend->InitFromOnnx(option_.model_file, clone_option),
+              "Clone model from ONNX failed while initliazing TrtBackend.");
+    } else {
+      FDASSERT(casted_backend->InitFromPaddle(option_.model_file,
+                                              option_.params_file, clone_option),
+              "Clone model from Paddle failed while initliazing TrtBackend.");
+    }
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file,
+                                   clone_option);
+    return new_backend;
+  }
+  cudaSetDevice(option_.gpu_id);
+  casted_backend->option_.gpu_id = option_.gpu_id;
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->outputs_order_.insert(outputs_order_.begin(), outputs_order_.end());
+  casted_backend->shape_range_info_.insert(shape_range_info_.begin(), shape_range_info_.end());
+  casted_backend->engine_ = engine_;
+  casted_backend->context_ = std::shared_ptr<nvinfer1::IExecutionContext>(
+      casted_backend->engine_->createExecutionContext());
+  casted_backend->GetInputOutputInfo();
+  FDINFO << "TRTBackend clone finish." << std::endl;
+  return new_backend;
 }
 
 }  // namespace fastdeploy

@@ -216,9 +216,18 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream) {
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
+  if(device_id > 0 && option_.use_gpu == true && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file,
+                                   clone_option);
+    return new_backend;
+  }
   casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
   casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
   casted_backend->predictor_ = std::move(predictor_->Clone(stream));

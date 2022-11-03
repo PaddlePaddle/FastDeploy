@@ -237,7 +237,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 THROW_IF_BACKEND_MODEL_ERROR(
                   ParseBoolValue(value_string, &is_clone_));
             } else if (param_key == "use_ipu") {
-              runtime_options_->UseIpu();
+              // runtime_options_->UseIpu();
             }
           }
         }
@@ -330,12 +330,19 @@ TRITONSERVER_Error* ModelState::LoadModel(
     const int32_t instance_group_device_id, std::string* model_path,
     std::string* params_path, fastdeploy::Runtime** runtime,
     cudaStream_t stream) {
+  
+  // FastDeploy Runtime creation is not thread-safe, so multiple creations
+  // are serialized with a global lock.
+  // The Clone interface can be invoked only when the main_runtime_ is created.
+  static std::mutex global_context_mu;
+  std::lock_guard<std::mutex> glock(global_context_mu);
+
   if(model_load_ && is_clone_) {
     if(main_runtime_ == nullptr) {
       return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
                                   std::string("main_runtime is nullptr").c_str());
     }
-    *runtime = main_runtime_->Clone((void*)stream);
+    *runtime = main_runtime_->Clone((void*)stream, instance_group_device_id);
   } else {
     auto dir_path = JoinPath({RepositoryPath(), std::to_string(Version())});
     {
@@ -383,10 +390,10 @@ TRITONSERVER_Error* ModelState::LoadModel(
       runtime_options_->UseCpu();
     }
   #else
-    if (runtime_options_->device != fastdeploy::Device::IPU) {
+    // if (runtime_options_->device != fastdeploy::Device::IPU) {
       // If Device is set to IPU, just skip CPU setting.
       runtime_options_->UseCpu();
-    }
+    // }
   #endif  // TRITON_ENABLE_GPU
 
     *runtime = main_runtime_ = new fastdeploy::Runtime();

@@ -102,19 +102,6 @@ std::string Str(const Backend& b) {
   return "UNKNOWN-Backend";
 }
 
-std::string Str(const ModelFormat& f) {
-  if (f == ModelFormat::PADDLE) {
-    return "ModelFormat::PADDLE";
-  } else if (f == ModelFormat::ONNX) {
-    return "ModelFormat::ONNX";
-  }else if (f == ModelFormat::RKNN) {
-    return "ModelFormat::RKNN";
-  } else if (f == ModelFormat::TORCHSCRIPT) {
-    return "ModelFormat::TORCHSCRIPT";
-  }
-  return "UNKNOWN-ModelFormat";
-}
-
 std::ostream& operator<<(std::ostream& out, const Backend& backend) {
   if (backend == Backend::ORT) {
     out << "Backend::ORT";
@@ -132,20 +119,6 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::LITE";
   }
   out << "UNKNOWN-Backend";
-  return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
-  if (format == ModelFormat::PADDLE) {
-    out << "ModelFormat::PADDLE";
-  } else if (format == ModelFormat::ONNX) {
-    out << "ModelFormat::ONNX";
-  } else if (format == ModelFormat::RKNN) {
-    out << "ModelFormat::RKNN";
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    out << "ModelFormat::TORCHSCRIPT";
-  }
-  out << "UNKNOWN-ModelFormat";
   return out;
 }
 
@@ -586,6 +559,8 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
+  pd_option.model_file = option.model_file;
+  pd_option.params_file = option.params_file;
   pd_option.enable_mkldnn = option.pd_enable_mkldnn;
   pd_option.enable_log_info = option.pd_enable_log_info;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
@@ -708,6 +683,9 @@ void Runtime::CreateOrtBackend() {
 void Runtime::CreateTrtBackend() {
 #ifdef ENABLE_TRT_BACKEND
   auto trt_option = TrtBackendOption();
+  trt_option.model_file = option.model_file;
+  trt_option.params_file = option.params_file;
+  trt_option.model_format = option.model_format;
   trt_option.gpu_id = option.device_id;
   trt_option.enable_fp16 = option.trt_enable_fp16;
   trt_option.enable_int8 = option.trt_enable_int8;
@@ -784,14 +762,19 @@ void Runtime::CreateRKNPU2Backend() {
 #endif
 }
 
-Runtime* Runtime::Clone(void* stream) {
+Runtime* Runtime::Clone(void* stream, int device_id) {
   Runtime* runtime = new Runtime();
-  if (option.backend != Backend::OPENVINO && option.backend != Backend::PDINFER) {
+  if (option.backend != Backend::OPENVINO
+      && option.backend != Backend::PDINFER
+      && option.backend != Backend::TRT
+      ) {
     runtime->Init(option);
     return runtime;
   }
+  FDINFO << "Runtime Clone with Backend:: " << Str(option.backend) << " in " << Str(option.device)
+         << "." << std::endl;
   runtime->option = option;
-  runtime->backend_ = backend_->Clone(stream);
+  runtime->backend_ = backend_->Clone(stream, device_id);
   return runtime;
 }
 

@@ -300,7 +300,7 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void *stream) {
+std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void *stream, int device_id) {
   std::unique_ptr<BaseBackend> new_backend = utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(new_backend.get());
   casted_backend->option_ = option_;

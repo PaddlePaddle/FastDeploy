@@ -25,6 +25,7 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
  public:
@@ -45,7 +46,7 @@ class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 
   void writeCalibrationCache(const void* cache,
                              size_t length) noexcept override {
-    std::cout << "NOT IMPLEMENT." << std::endl;
+    FDERROR << "NOT IMPLEMENT." << std::endl;
   }
 
  private:
@@ -62,6 +63,11 @@ struct TrtValueInfo {
 };
 
 struct TrtBackendOption {
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+  // format of input model
+  ModelFormat model_format = ModelFormat::AUTOREC;
+
   int gpu_id = 0;
   bool enable_fp16 = false;
   bool enable_int8 = false;
@@ -103,6 +109,8 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
   ~TrtBackend() {
     if (parser_) {
@@ -123,6 +131,7 @@ class TrtBackend : public BaseBackend {
   std::vector<TrtValueInfo> outputs_desc_;
   std::map<std::string, FDDeviceBuffer> inputs_device_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_device_buffer_;
+  std::map<std::string, int> io_name_index_;
 
   std::string calibration_str_;
 

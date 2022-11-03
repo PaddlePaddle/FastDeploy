@@ -57,7 +57,8 @@ class OpenVINOBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
-  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr) override;
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
