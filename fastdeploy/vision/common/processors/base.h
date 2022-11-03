@@ -44,7 +44,6 @@ class FASTDEPLOY_DECL Processor {
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
   virtual bool ImplByFlyCV(Mat* mat) {
-    FDWARNING << Name() << " Fallback to impl by ProcLib::OPENCV" << std::endl;
     return ImplByOpenCV(mat);
   }
 
