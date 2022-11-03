@@ -8,7 +8,13 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of PaddleClas model.")
+        "--model", type=str, default=None, help="Path of PaddleClas model.")
+    parser.add_argument(
+        "--model_hub",
+        type=str,
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
     parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
@@ -42,8 +48,15 @@ args = parse_arguments()
 # 配置runtime，加载模型
 runtime_option = build_option(args)
 
+assert args.model is None and args.model_hub is None, "Please set the model or model hub parameter."
+
+if args.model is not None:
+    model = args.model
+else:
+    model = fd.download_model(name=args.model_hub)
+
 model = fd.vision.classification.ResNet(
-    args.model, runtime_option=runtime_option)
+    model, runtime_option=runtime_option)
 # 预测图片分类结果
 im = cv2.imread(args.image)
 result = model.predict(im.copy(), args.topk)
