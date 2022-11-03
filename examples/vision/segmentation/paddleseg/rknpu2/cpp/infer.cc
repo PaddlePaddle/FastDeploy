@@ -40,11 +40,11 @@ std::string GetModelPath(std::string& model_path, const std::string& device) {
 
 void InferHumanPPHumansegv2Lite(const std::string& device) {
   std::string model_file =
-      "./model/human_pp_humansegv2_lite_192x192_pretrained_3588/"
-      "human_pp_humansegv2_lite_192x192_pretrained_3588.";
+      "./model/Portrait_PP_HumanSegV2_Lite_256x144_infer/"
+      "Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.";
   std::string params_file;
   std::string config_file =
-      "./model/human_pp_humansegv2_lite_192x192_pretrained_3588/deploy.yaml";
+      "./model/Portrait_PP_HumanSegV2_Lite_256x144_infer/deploy.yaml";
 
   fastdeploy::RuntimeOption option = GetOption(device);
   fastdeploy::ModelFormat format = GetFormat(device);
