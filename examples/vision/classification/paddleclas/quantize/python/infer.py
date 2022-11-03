@@ -9,9 +9,15 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of paddleclas model.")
+        "--model", type=str, default=None, help="Path of paddleclas model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--model_hub",
+        type=str,
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
+    parser.add_argument(
+        "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -69,9 +75,16 @@ args = parse_arguments()
 # 配置runtime，加载模型
 runtime_option = build_option(args)
 
-model_file = os.path.join(args.model, "inference.pdmodel")
-params_file = os.path.join(args.model, "inference.pdiparams")
-config_file = os.path.join(args.model, "inference_cls.yaml")
+assert args.model is None and args.model_hub is None, "Please set the model or model hub parameter."
+
+if args.model is not None:
+    model = args.model
+else:
+    model = fd.download_model(name=args.model_hub)
+
+model_file = os.path.join(model, "inference.pdmodel")
+params_file = os.path.join(model, "inference.pdiparams")
+config_file = os.path.join(model, "inference_cls.yaml")
 
 model = fd.vision.classification.PaddleClasModel(
     model_file, params_file, config_file, runtime_option=runtime_option)

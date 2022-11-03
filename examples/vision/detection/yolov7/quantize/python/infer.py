@@ -9,9 +9,15 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of yolov7 onnx model.")
+        "--model", type=str, default=None, help="Path of yolov7 onnx model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--model_hub",
+        type=str,
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
+    parser.add_argument(
+        "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -65,8 +71,17 @@ def build_option(args):
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model, "model.pdmodel")
-params_file = os.path.join(args.model, "model.pdiparams")
+
+assert args.model is None and args.model_hub is None, "Please set the model or model hub parameter."
+
+if args.model is not None:
+    model = args.model
+else:
+    model = fd.download_model(name=args.model_hub)
+
+model_file = os.path.join(model, "model.pdmodel")
+params_file = os.path.join(model, "model.pdiparams")
+
 # 配置runtime，加载模型
 runtime_option = build_option(args)
 model = fd.vision.detection.YOLOv7(

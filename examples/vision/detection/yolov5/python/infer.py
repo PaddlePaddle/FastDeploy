@@ -7,9 +7,15 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of yolov5 onnx model.")
+        "--model", type=str, default=None, help="Path of yolov5 onnx model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--model_hub",
+        type=str,
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
+    parser.add_argument(
+        "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -39,7 +45,15 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.YOLOv5(args.model, runtime_option=runtime_option)
+
+assert args.model is None and args.model_hub is None, "Please set the model or model hub parameter."
+
+if args.model is not None:
+    model = args.model
+else:
+    model = fd.download_model(name=args.model_hub)
+
+model = fd.vision.detection.YOLOv5(model, runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)

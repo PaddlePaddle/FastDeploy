@@ -8,9 +8,15 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of PPYOLOE model.")
+        "--model", type=str, default=None, help="Path of PPYOLOE model.")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--model_hub",
+        type=str,
+        default=None,
+        help="Model name in model hub, the model will be downloaded automatically."
+    )
+    parser.add_argument(
+        "--image", type=str, required=True, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -46,7 +52,7 @@ def build_option(args):
         assert args.device.lower(
         ) == "gpu", "TensorRT backend require inferences on device GPU."
         option.use_trt_backend()
-        option.set_trt_cache_file(os.path.join(args.model, "model.trt"))
+        option.set_trt_cache_file(os.path.join(model, "model.trt"))
         option.set_trt_input_shape("image", min_shape=[1, 3, 640, 640])
         option.set_trt_input_shape("scale_factor", min_shape=[1, 2])
     elif args.backend.lower() == "pptrt":
@@ -67,9 +73,17 @@ def build_option(args):
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model, "model.pdmodel")
-params_file = os.path.join(args.model, "model.pdiparams")
-config_file = os.path.join(args.model, "infer_cfg.yml")
+assert args.model is None and args.model_hub is None, "Please set the model or model hub parameter."
+
+if args.model is not None:
+    model = args.model
+else:
+    model = fd.download_model(name=args.model_hub)
+
+args.model = model
+model_file = os.path.join(model, "model.pdmodel")
+params_file = os.path.join(model, "model.pdiparams")
+config_file = os.path.join(model, "infer_cfg.yml")
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
