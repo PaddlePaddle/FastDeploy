@@ -11,6 +11,7 @@ import pynvml
 import psutil
 import GPUtil
 from prettytable import PrettyTable
+import multiprocessing
 
 
 def parse_arguments():
@@ -176,6 +177,12 @@ def get_current_gputil(gpu_id):
     return gpu_load
 
 
+def sample_gpuutil(gpu_id, gpu_utilization=[]):
+    while True:
+        gpu_utilization.append(get_current_gputil(gpu_id))
+        time.sleep(0.01)
+
+
 def show_statistics(tokenizer_time_costs,
                     runtime_time_costs,
                     postprocess_time_costs,
@@ -188,7 +195,7 @@ def show_statistics(tokenizer_time_costs,
     print(
         f"{prefix}Acc =  {correct_num/total_num*100:.2f} ({correct_num} /{total_num})."
         f" CPU memory: {np.mean(cpu_mem):.2f} MB, GPU memory: {np.mean(gpu_mem):.2f} MB,"
-        f" GPU utilization {np.mean(gpu_util):.2f}%.")
+        f" GPU utilization {np.max(gpu_util) * 100:.2f}%.")
     print(
         get_statistics_table(tokenizer_time_costs, runtime_time_costs,
                              postprocess_time_costs))
@@ -214,12 +221,18 @@ if __name__ == "__main__":
         postprocess_time_costs = []
         cpu_mem = []
         gpu_mem = []
-        gpu_util = []
 
         total_num = 0
         correct_num = 0
+
+        manager = multiprocessing.Manager()
+        gpu_util = manager.list()
+        p = multiprocessing.Process(
+            target=sample_gpuutil, args=(gpu_id, gpu_util))
+        p.start()
         for i, (text, text_pair,
                 label) in enumerate(zip(texts, text_pairs, labels)):
+            # Start the process to sample gpu utilization
             start = time.time()
             encoded_inputs = tokenizer(
                 text=text,
@@ -243,7 +256,6 @@ if __name__ == "__main__":
             output = postprocess(results[0])
             postprocess_time_costs += [(time.time() - start) * 1000]
 
-            gpu_util.append(get_current_gputil(gpu_id))
             cm, gm = get_current_memory_mb(gpu_id)
             cpu_mem.append(cm)
             gpu_mem.append(gm)
@@ -260,6 +272,7 @@ if __name__ == "__main__":
         show_statistics(tokenizer_time_costs, runtime_time_costs,
                         postprocess_time_costs, correct_num, total_num,
                         cpu_mem, gpu_mem, gpu_util, f"Final statistics: ")
+        p.terminate()
 
     # Warm up
     print("Warm up")
