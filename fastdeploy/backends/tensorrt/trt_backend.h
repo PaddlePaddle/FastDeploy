@@ -46,7 +46,7 @@ class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 
   void writeCalibrationCache(const void* cache,
                              size_t length) noexcept override {
-    FDERROR << "NOT IMPLEMENT." << std::endl;
+    fastdeploy::FDERROR << "NOT IMPLEMENT." << std::endl;
   }
 
  private:

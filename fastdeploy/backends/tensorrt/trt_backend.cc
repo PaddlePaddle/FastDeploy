@@ -731,6 +731,7 @@ std::unique_ptr<BaseBackend> TrtBackend::Clone(void *stream, int device_id) {
   }
   cudaSetDevice(option_.gpu_id);
   casted_backend->option_.gpu_id = option_.gpu_id;
+  casted_backend->option_.external_stream_ = stream;
   casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
   casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
   casted_backend->outputs_order_.insert(outputs_order_.begin(), outputs_order_.end());
