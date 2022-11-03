@@ -13,7 +13,7 @@
 | FaceRecognition | 人脸识别，输入图像，返回可用于相似度计算的人脸特征的embedding            | [FaceRecognitionResult](../../docs/api/vision_results/face_recognition_result.md)   |
 | Matting | 抠图，输入图像，返回图片的前景每个像素点的Alpha值            | [MattingResult](../../docs/api/vision_results/matting_result.md)   |
 | OCR | 文本框检测，分类，文本框内容识别，输入图像，返回文本框坐标，文本框的方向类别以及框内的文本内容            | [OCRResult](../../docs/api/vision_results/ocr_result.md)   |
-| MOT | 多目标跟踪，输入图像，检测图像中物体位置，并返回检测框坐标及类别和置信度          | [MOTResult](../../docs/api/vision_results/mot_result.md)   |
+| MOT | 多目标跟踪，输入图像，检测图像中物体位置，并返回检测框坐标，对象id及类别置信度        | [MOTResult](../../docs/api/vision_results/mot_result.md)   |
 | HeadPose | 头部姿态估计，返回头部欧拉角            | [HeadPoseResult](../../docs/api/vision_results/headpose_result.md)   |
 
 ## FastDeploy API设计
