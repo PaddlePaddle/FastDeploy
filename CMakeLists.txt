@@ -50,7 +50,7 @@ if(ANDROID)
 endif()
 
 ############################# Basic Options for FastDeploy ################################
-option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
+option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." OFF)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
@@ -59,23 +59,23 @@ option(ENABLE_PADDLE_BACKEND "Whether to enable paddle backend." OFF)
 option(ENABLE_POROS_BACKEND "Whether to enable poros backend." OFF)
 option(ENABLE_OPENVINO_BACKEND "Whether to enable openvino backend." OFF)
 option(ENABLE_RKNPU2_BACKEND "Whether to enable RKNPU2 backend." OFF)
-option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
-option(ENABLE_VISION "Whether to enable vision models usage." OFF)
+option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." ON)
+option(ENABLE_VISION "Whether to enable vision models usage." ON)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
-option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
+option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." ON)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
-option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
+option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." ON)
 option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
-option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
+option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." ON)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
 # option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
-option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
+option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" ON)
 
 ######################### Paths to user's custom libraries directory #####################
 set(CUDA_DIRECTORY "" CACHE PATH "If build tensorrt backend, need to define path of cuda library.")

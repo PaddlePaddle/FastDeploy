@@ -13,13 +13,13 @@
 // limitations under the License.
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
-#include "opencv2/core/core.hpp"
 #include "fastdeploy/vision/common/processors/utils.h"
+#include "opencv2/core/core.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
-enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV};
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV };
 enum Layout { HWC, CHW };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
@@ -34,7 +34,18 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::OPENCV;
   }
 
-  // careful if you use this interface
+#ifdef ENABLE_FLYCV
+  explicit Mat(fcv::Mat& mat) {
+    fcv_mat = mat;
+    layout = Layout::HWC;
+    height = fcv_mat.height();
+    width = fcv_mat.width();
+    channels = fcv_mat.channels();
+    mat_type = ProcLib::FLYCV;
+  }
+#endif
+
+  // Careful if you use this interface
   // this only used if you don't want to write
   // the original data, and write to a new cv::Mat
   // then replace the old cv::Mat of this structure
@@ -44,14 +55,34 @@ struct FASTDEPLOY_DECL Mat {
   }
 
   inline cv::Mat* GetOpenCVMat() {
-    FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
-    return &cpu_mat;
+    if (mat_type == ProcLib::OPENCV) {
+      return &cpu_mat;
+    } else if (mat_type == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+      // Just a reference to fcv_mat, zero copy. After you
+      // call this method, cpu_mat and fcv_mat will point
+      // to the same memory buffer.
+      cpu_mat = ConvertFlyCVMatToOpenCV(fcv_mat);
+      mat_type = ProcLib::OPENCV;
+      return &cpu_mat;
+#else
+      FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+    } else {
+      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+    }
   }
 
-
   inline const cv::Mat* GetOpenCVMat() const {
-    FDASSERT(mat_type == ProcLib::OPENCV, "Met non cv::Mat data structure.");
-    return &cpu_mat;
+    if (mat_type == ProcLib::OPENCV) {
+      return &cpu_mat;
+    } else if (mat_type == ProcLib::FLYCV) {
+      FDASSERT(
+          false,
+          "Can not get OpenCV mat from const Mat if the ProcLib is FLYCV!");
+    } else {
+      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+    }
   }
 
 #ifdef ENABLE_FLYCV
@@ -60,9 +91,32 @@ struct FASTDEPLOY_DECL Mat {
     mat_type = ProcLib::FLYCV;
   }
 
-  inline fcv::Mat* GetFalconCVMat() {
-    FDASSERT(mat_type == ProcLib::FLYCV, "Met non fcv::Mat data strucure.");
-    return &fcv_mat;
+  inline fcv::Mat* GetFlyCVMat() {
+    if (mat_type == ProcLib::FLYCV) {
+      return &fcv_mat;
+    } else if (mat_type == ProcLib::OPENCV) {
+      // Just a reference to cpu_mat, zero copy. After you
+      // call this method, fcv_mat and cpu_mat will point
+      // to the same memory buffer.
+      fcv_mat = ConvertOpenCVMatToFlyCV(cpu_mat);
+      mat_type = ProcLib::FLYCV;
+      return &fcv_mat;
+    } else {
+      FDASSERT(false, "The mat_type of custom Mat can not be ProcLib::DEFAULT");
+    }
+  }
+
+  inline const fcv::Mat* GetFlyCVMat() const {
+    if (mat_type == ProcLib::FLYCV) {
+      return &fcv_mat;
+    } else if (mat_type == ProcLib::OPENCV) {
+      FDASSERT(
+          false,
+          "Can not get FlyCV mat from const Mat if the ProcLib is OPENCV!");
+    } else {
+      FDASSERT(false,
+               "The mat_type of custom Mat can not be ProcLib::DEFAULT ");
+    }
   }
 #endif
 
@@ -73,17 +127,11 @@ struct FASTDEPLOY_DECL Mat {
   int height;
   int width;
   cv::Mat cpu_mat;
-
 #ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
 
  public:
-  template<typename T>
-  T* GetMat() {
-    return &cpu_mat;
-  }
-
   FDDataType Type();
   int Channels() const { return channels; }
   int Width() const { return width; }
@@ -97,18 +145,48 @@ struct FASTDEPLOY_DECL Mat {
   // Only support copy to cpu tensor now
   bool CopyToTensor(FDTensor* tensor);
 
-  // debug functions
-  // TODO(jiangjiajun) Develop a right process pipeline with c++ is not a easy
-  // things
-  // Will add more debug function here to help debug processed image
-  // This function will print shape / mean of each channels of the Mat
+  // Debug functions
+  // TODO(jiangjiajun) Develop a right process pipeline with c++
+  // is not a easy things, Will add more debug function here to
+  // help debug processed image. This function will print shape
+  // and mean of each channels of the Mat
   void PrintInfo(const std::string& flag);
 
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
-};
 
-Mat CreateFromTensor(const FDTensor& tensor);
+  template <typename T>
+  T* GetMat() {
+    FDASSERT(false, "Not support this type for GetMat.");
+  }
+
+  template <typename T>
+  const T* GetMat() const {
+    FDASSERT(false, "Not support this type for GetMat.");
+  }
+
+  template <>
+  cv::Mat* GetMat() {
+    return GetOpenCVMat();
+  }
+
+  template <>
+  const cv::Mat* GetMat() const {
+    return GetOpenCVMat();
+  }
+
+#ifdef ENABLE_FLYCV
+  template <>
+  fcv::Mat* GetMat() {
+    return GetFlyCVMat();
+  }
+
+  template <>
+  const fcv::Mat* GetMat() const {
+    return GetFlyCVMat();
+  }
+#endif
+};
 
 }  // namespace vision
 }  // namespace fastdeploy

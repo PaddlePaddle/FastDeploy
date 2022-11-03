@@ -22,7 +22,9 @@
 namespace fastdeploy {
 namespace vision {
 
-/*! @brief Enable using FlyCV to process image while deploy vision models. Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will fallback to using OpenCV in other platform
+/*! @brief Enable using FlyCV to process image while deploy vision models.
+ * Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will
+ * fallback to using OpenCV in other platform
  */
 FASTDEPLOY_DECL void EnableFlyCV();
 
@@ -41,16 +43,15 @@ class FASTDEPLOY_DECL Processor {
 
   virtual bool ImplByOpenCV(Mat* mat) = 0;
 
-  virtual bool ImplByFalconCV(Mat* mat) {
-    FDASSERT(false,
-             "%s is not implemented with FalconCV, please use OpenCV instead.",
-             Name().c_str());
-    return false;
+  virtual bool ImplByFlyCV(Mat* mat) {
+    FDWARNING << Name() << " Fallback to impl by ProcLib::OPENCV" << std::endl;
+    return ImplByOpenCV(mat);
   }
 
-  virtual bool operator()(Mat* mat,
-                          ProcLib lib = ProcLib::OPENCV);
+  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
+
+Mat CreateFDMatFromTensor(const FDTensor& tensor);
 
 }  // namespace vision
 }  // namespace fastdeploy

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
+
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
@@ -21,27 +22,18 @@ namespace vision {
 ProcLib Processor::default_lib = ProcLib::DEFAULT;
 
 bool Processor::operator()(Mat* mat, ProcLib lib) {
-  // if default_lib is set
-  // then use default_lib
   ProcLib target = lib;
-  if (default_lib != ProcLib::DEFAULT) {
+  if (lib == ProcLib::DEFAULT) {
     target = default_lib;
   }
-
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
-    if (mat->mat_type != ProcLib::FLYCV) {
-      if (mat->layout != Layout::HWC) {
-        FDERROR << "Cannot convert cv::Mat to fcv::Mat while layout is not HWC." << std::endl;
-      }
-      fcv::Mat fcv_mat = ConvertOpenCVMatToFalconCV(*(mat->GetOpenCVMat()));
-      mat->SetMat(fcv_mat);
-    }
-    return ImplByFalconCV(mat);
+    return ImplByFlyCV(mat);
 #else
-    FDASSERT(false, "FastDeploy didn't compile with FalconCV.");
+    FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
 #endif
   }
+  // DEFAULT & OPENCV
   return ImplByOpenCV(mat);
 }
 
@@ -52,7 +44,7 @@ void EnableFlyCV() {
          << Processor::default_lib << std::endl;
 #else
   FDWARNING << "FastDeploy didn't compile with FlyCV, "
-                "will fallback to use OpenCV instead."
+               "will fallback to use OpenCV instead."
             << std::endl;
 #endif
 }
@@ -61,6 +53,83 @@ void DisableFlyCV() {
   Processor::default_lib = ProcLib::OPENCV;
   FDINFO << "Will change to use image processing library "
          << Processor::default_lib << std::endl;
+}
+
+Mat CreateFDMatFromTensor(const FDTensor& tensor) {
+  FDDataType type = tensor.dtype;
+  FDASSERT(tensor.shape.size() == 3,
+           "When create FD Mat from tensor, tensor shape should be 3-Dim, HWC "
+           "layout");
+  int64_t height = tensor.shape[0];
+  int64_t width = tensor.shape[1];
+  int64_t channel = tensor.shape[2];
+
+  if (Processor::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat temp_fcv_mat;
+    auto fcv_type = CreateFlyCVDataType(type, static_cast<int>(channel));
+    switch (type) {
+      case FDDataType::UINT8:
+        temp_fcv_mat =
+            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+        break;
+      case FDDataType::FP32:
+        temp_fcv_mat =
+            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+        break;
+      case FDDataType::FP64:
+        temp_fcv_mat =
+            fcv::Mat(width, height, fcv_type, const_cast<void*>(tensor.Data()));
+        break;
+      default:
+        FDASSERT(false,
+                 "Tensor type %d is not supported While calling "
+                 "CreateFDMatFromTensor.",
+                 type);
+        break;
+    }
+    Mat mat = Mat(temp_fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  cv::Mat temp_mat;
+  // reference to outside FDTensor, zero copy
+  switch (type) {
+    case FDDataType::UINT8:
+      temp_mat = cv::Mat(height, width, CV_8UC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::INT8:
+      temp_mat = cv::Mat(height, width, CV_8SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::INT16:
+      temp_mat = cv::Mat(height, width, CV_16SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::INT32:
+      temp_mat = cv::Mat(height, width, CV_32SC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::FP32:
+      temp_mat = cv::Mat(height, width, CV_32FC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    case FDDataType::FP64:
+      temp_mat = cv::Mat(height, width, CV_64FC(channel),
+                         const_cast<void*>(tensor.Data()));
+      break;
+    default:
+      FDASSERT(false,
+               "Tensor type %d is not supported While calling "
+               "CreateFDMatFromTensor.",
+               type);
+      break;
+  }
+  Mat mat = Mat(temp_mat);
+  return mat;
 }
 
 }  // namespace vision

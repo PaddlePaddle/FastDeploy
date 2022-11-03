@@ -19,8 +19,8 @@ namespace vision {
 namespace utils {
 
 bool CropImageByBox(const Mat& src_im, Mat* dst_im,
-               const std::vector<float>& box, std::vector<float>* center,
-               std::vector<float>* scale, const float expandratio) {
+                    const std::vector<float>& box, std::vector<float>* center,
+                    std::vector<float>* scale, const float expandratio) {
   const cv::Mat* img = src_im.GetOpenCVMat();
   cv::Mat* crop_img = dst_im->GetOpenCVMat();
   int xmin = static_cast<int>(box[0]);
@@ -34,12 +34,12 @@ bool CropImageByBox(const Mat& src_im, Mat* dst_im,
   // adjust h or w to keep image ratio, expand the shorter edge
   if (half_h * 3 > half_w * 4) {
     half_w = half_h * 0.75;
-  } 
-  int crop_xmin =std::max(0, static_cast<int>(centerx - half_w));
-  int crop_ymin =std::max(0, static_cast<int>(centery - half_h));
+  }
+  int crop_xmin = std::max(0, static_cast<int>(centerx - half_w));
+  int crop_ymin = std::max(0, static_cast<int>(centery - half_h));
   int crop_xmax = std::min(img->cols - 1, static_cast<int>(centerx + half_w));
   int crop_ymax = std::min(img->rows - 1, static_cast<int>(centery + half_h));
-  
+
   crop_img->create(crop_ymax - crop_ymin, crop_xmax - crop_xmin, img->type());
   *crop_img =
       (*img)(cv::Range(crop_ymin, crop_ymax), cv::Range(crop_xmin, crop_xmax));
