@@ -718,20 +718,28 @@ std::unique_ptr<BaseBackend> TrtBackend::Clone(void *stream, int device_id) {
     clone_option.external_stream_ = stream;
     if (option_.model_format == ModelFormat::ONNX) {
       FDASSERT(casted_backend->InitFromOnnx(option_.model_file, clone_option),
-              "Clone model from ONNX failed while initliazing TrtBackend.");
+              "Clone model from ONNX failed while initialize TrtBackend.");
     } else {
       FDASSERT(casted_backend->InitFromPaddle(option_.model_file,
                                               option_.params_file, clone_option),
-              "Clone model from Paddle failed while initliazing TrtBackend.");
+              "Clone model from Paddle failed while initialize TrtBackend.");
     }
-    casted_backend->InitFromPaddle(clone_option.model_file,
-                                   clone_option.params_file,
-                                   clone_option);
+    FDWARNING << "The target device id:" 
+          << device_id
+          << " is different from current device id:"
+          << option_.gpu_id
+          << ", cannot share memory with current engine."
+          << std::endl;
     return new_backend;
   }
   cudaSetDevice(option_.gpu_id);
   casted_backend->option_.gpu_id = option_.gpu_id;
-  casted_backend->option_.external_stream_ = stream;
+  if (stream) {
+    casted_backend->stream_ = reinterpret_cast<cudaStream_t>(stream);
+  } else {
+    FDASSERT(cudaStreamCreate(&casted_backend->stream_) == 0,
+           "[ERROR] Error occurs while clone calling cudaStreamCreate().");
+  }
   casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
   casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
   casted_backend->outputs_order_.insert(outputs_order_.begin(), outputs_order_.end());

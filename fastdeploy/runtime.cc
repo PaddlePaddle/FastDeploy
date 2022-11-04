@@ -769,6 +769,12 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
       && option.backend != Backend::TRT
       ) {
     runtime->Init(option);
+    FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
+                  clone engine to  reduce CPU/GPU memory usage now. For "
+              << option.backend
+              << ", FastDeploy will create a new engine which \
+                  will not share memory  with the current runtime."
+              << std::endl;
     return runtime;
   }
   FDINFO << "Runtime Clone with Backend:: " << Str(option.backend) << " in " << Str(option.device)

@@ -226,6 +226,12 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream, int device_id) {
     casted_backend->InitFromPaddle(clone_option.model_file,
                                    clone_option.params_file,
                                    clone_option);
+    FDWARNING << "The target device id:" 
+             << device_id
+             << " is different from current device id:"
+             << option_.gpu_id
+             << ", cannot share memory with current engine."
+             << std::endl;
     return new_backend;
   }
   casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
