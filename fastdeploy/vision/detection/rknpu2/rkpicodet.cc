@@ -53,7 +53,7 @@ RKPicoDet::RKPicoDet(const std::string& model_file, const std::string& params_fi
   config_file_ = config_file;
   valid_cpu_backends = {Backend::ORT, Backend::LITE};
   valid_rknpu_backends = {Backend::RKNPU2};
-  if (model_format == ModelFormat::RKNN or model_format == ModelFormat::ONNX) {
+  if ((model_format == ModelFormat::RKNN) or (model_format == ModelFormat::ONNX)) {
     has_nms_ = false;
   }
   runtime_option = custom_option;
