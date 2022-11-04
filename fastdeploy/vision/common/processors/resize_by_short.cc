@@ -37,8 +37,8 @@ bool ResizeByShort::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool ResizeByShort::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool ResizeByShort::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
   double scale = GenerateScale(origin_w, origin_h);
@@ -51,7 +51,7 @@ bool ResizeByShort::ImplByFalconCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else {
-    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FlyCV, but "
                "now it's "
             << interp_ << "." << std::endl;
     return false;

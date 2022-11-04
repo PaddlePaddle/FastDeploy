@@ -91,6 +91,9 @@ class ModelState : public BackendModel {
 
   // Runtime options used when creating a FastDeploy Runtime.
   std::unique_ptr<fastdeploy::RuntimeOption> runtime_options_;
+  bool model_load_;
+  fastdeploy::Runtime* main_runtime_;
+  bool is_clone_ = true;
 
   // model_outputs is a map that contains unique outputs that the model must
   // provide. In the model configuration, the output in the state configuration
@@ -165,7 +168,7 @@ TRITONSERVER_Error* ModelState::Create(TRITONBACKEND_Model* triton_model,
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model) {
+    : BackendModel(triton_model), model_load_(false), main_runtime_(nullptr), is_clone_(true) {
   // Create runtime options that will be cloned and used for each
   // instance when creating that instance's runtime.
   runtime_options_.reset(new fastdeploy::RuntimeOption());
@@ -218,19 +221,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               THROW_IF_BACKEND_MODEL_ERROR(
                   ParseIntValue(value_string, &cpu_thread_num));
               runtime_options_->SetCpuThreadNum(cpu_thread_num);
-              // } else if (param_key == "graph_level") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string, &runtime_options_->ort_graph_opt_level));
-              // } else if (param_key == "inter_op_num_threads") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string,
-              //       &runtime_options_->ort_inter_op_num_threads));
-              // } else if (param_key == "execution_mode") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string, &runtime_options_->ort_execution_mode));
-              // } else if (param_key == "capacity") {
-              //     THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //     value_string, &runtime_options_->pd_mkldnn_cache_size));
             } else if (param_key == "use_mkldnn") {
               bool pd_enable_mkldnn;
               THROW_IF_BACKEND_MODEL_ERROR(
@@ -238,8 +228,16 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               runtime_options_->SetPaddleMKLDNN(pd_enable_mkldnn);
             } else if (param_key == "use_paddle_log") {
                 runtime_options_->EnablePaddleLogInfo();
+            } else if (param_key == "num_streams") {
+                int num_streams;
+                THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseIntValue(value_string, &num_streams));
+                runtime_options_->SetOpenVINOStreams(num_streams);
+            } else if (param_key == "is_clone") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseBoolValue(value_string, &is_clone_));
             } else if (param_key == "use_ipu") {
-              runtime_options_->UseIpu();
+              // runtime_options_->UseIpu();
             }
           }
         }
@@ -290,17 +288,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
               std::string value_string;
               THROW_IF_BACKEND_MODEL_ERROR(
                   params.MemberAsString(param_key.c_str(), &value_string));
-              // if (param_key == "graph_level") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string, &runtime_options_->ort_graph_opt_level));
-              // } else if (param_key == "inter_op_num_threads") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string,
-              //       &runtime_options_->ort_inter_op_num_threads));
-              // } else if (param_key == "execution_mode") {
-              //   THROW_IF_BACKEND_MODEL_ERROR(ParseIntValue(
-              //       value_string, &runtime_options_->ort_execution_mode));
-              // }
               if (param_key == "precision") {
                 std::transform(value_string.begin(), value_string.end(),
                                value_string.begin(), ::tolower);
@@ -325,7 +312,10 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
                 runtime_options_->EnablePaddleToTrt();
               } else if (param_key == "use_paddle_log") {
                 runtime_options_->EnablePaddleLogInfo();
-              }
+              } else if (param_key == "is_clone") {
+                THROW_IF_BACKEND_MODEL_ERROR(
+                  ParseBoolValue(value_string, &is_clone_));
+              } 
             }
           }
         }
@@ -340,64 +330,79 @@ TRITONSERVER_Error* ModelState::LoadModel(
     const int32_t instance_group_device_id, std::string* model_path,
     std::string* params_path, fastdeploy::Runtime** runtime,
     cudaStream_t stream) {
-  auto dir_path = JoinPath({RepositoryPath(), std::to_string(Version())});
-  {
-    // ONNX Format
-    bool exists;
-    *model_path = JoinPath({dir_path, "model.onnx"});
-    RETURN_IF_ERROR(FileExists(*model_path, &exists));
+  
+  // FastDeploy Runtime creation is not thread-safe, so multiple creations
+  // are serialized with a global lock.
+  // The Clone interface can be invoked only when the main_runtime_ is created.
+  static std::mutex global_context_mu;
+  std::lock_guard<std::mutex> glock(global_context_mu);
 
-    // Paddle Formax
-    if (not exists) {
-      *model_path = JoinPath({dir_path, "model.pdmodel"});
-      RETURN_IF_ERROR(FileExists(*model_path, &exists));
-      if (not exists) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_NOT_FOUND,
-            std::string(
-                "Model should be named as 'model.onnx' or 'model.pdmodel'")
-                .c_str());
-      }
-      *params_path = JoinPath({dir_path, "model.pdiparams"});
-      RETURN_IF_ERROR(FileExists(*params_path, &exists));
-      if (not exists) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_NOT_FOUND,
-            std::string("Paddle params should be named as 'model.pdiparams' or "
-                        "not provided.'")
-                .c_str());
-      }
-      runtime_options_->model_format = fastdeploy::ModelFormat::PADDLE;
-      runtime_options_->model_file = *model_path;
-      runtime_options_->params_file = *params_path;
-    } else {
-      runtime_options_->model_format = fastdeploy::ModelFormat::ONNX;
-      runtime_options_->model_file = *model_path;
+  if(model_load_ && is_clone_) {
+    if(main_runtime_ == nullptr) {
+      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
+                                  std::string("main_runtime is nullptr").c_str());
     }
-  }
-
-  // GPU
-#ifdef TRITON_ENABLE_GPU
-  if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
-      (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
-    runtime_options_->UseGpu(instance_group_device_id);
-    runtime_options_->SetExternalStream((void*)stream);
+    *runtime = main_runtime_->Clone((void*)stream, instance_group_device_id);
   } else {
-    runtime_options_->UseCpu();
-  }
-#else
-  if (runtime_options_->device != fastdeploy::Device::IPU) {
-    // If Device is set to IPU, just skip CPU setting.
-    runtime_options_->UseCpu();
-  }
-#endif  // TRITON_ENABLE_GPU
+    auto dir_path = JoinPath({RepositoryPath(), std::to_string(Version())});
+    {
+      // ONNX Format
+      bool exists;
+      *model_path = JoinPath({dir_path, "model.onnx"});
+      RETURN_IF_ERROR(FileExists(*model_path, &exists));
 
-  *runtime = new fastdeploy::Runtime();
-  if (!(*runtime)->Init(*runtime_options_)) {
-    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
-                                 std::string("Runtime init error").c_str());
-  }
+      // Paddle Formax
+      if (not exists) {
+        *model_path = JoinPath({dir_path, "model.pdmodel"});
+        RETURN_IF_ERROR(FileExists(*model_path, &exists));
+        if (not exists) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_NOT_FOUND,
+              std::string(
+                  "Model should be named as 'model.onnx' or 'model.pdmodel'")
+                  .c_str());
+        }
+        *params_path = JoinPath({dir_path, "model.pdiparams"});
+        RETURN_IF_ERROR(FileExists(*params_path, &exists));
+        if (not exists) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_NOT_FOUND,
+              std::string("Paddle params should be named as 'model.pdiparams' or "
+                          "not provided.'")
+                  .c_str());
+        }
+        runtime_options_->model_format = fastdeploy::ModelFormat::PADDLE;
+        runtime_options_->model_file = *model_path;
+        runtime_options_->params_file = *params_path;
+      } else {
+        runtime_options_->model_format = fastdeploy::ModelFormat::ONNX;
+        runtime_options_->model_file = *model_path;
+      }
+    }
 
+    // GPU
+  #ifdef TRITON_ENABLE_GPU
+    if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
+        (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+      runtime_options_->UseGpu(instance_group_device_id);
+      runtime_options_->SetExternalStream((void*)stream);
+    } else if (runtime_options_->device != fastdeploy::Device::IPU) {
+      runtime_options_->UseCpu();
+    }
+  #else
+    if (runtime_options_->device != fastdeploy::Device::IPU) {
+      // If Device is set to IPU, just skip CPU setting.
+      runtime_options_->UseCpu();
+    }
+  #endif  // TRITON_ENABLE_GPU
+
+    *runtime = main_runtime_ = new fastdeploy::Runtime();
+    if (!(*runtime)->Init(*runtime_options_)) {
+      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_NOT_FOUND,
+                                  std::string("Runtime init error").c_str());
+    }
+    model_load_ = true;
+  }
   return nullptr;  // success
 }
 

@@ -68,7 +68,11 @@ int main(int argc, char* argv[]) {
   } else if (flag == 1) {
     option.UseGpu();
     option.UseTrtBackend();
-  }
+  } else if (flag == 2) {
+    option.UseGpu();
+    option.UseTrtBackend();
+    option.EnablePaddleToTrt();
+    }
 
   std::string model_dir = argv[1];
   std::string test_image = argv[2];

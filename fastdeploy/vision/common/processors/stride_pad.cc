@@ -64,7 +64,7 @@ bool StridePad::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool StridePad::ImplByFalconCV(Mat* mat) {
+bool StridePad::ImplByFlyCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "StridePad: The input data must be Layout::HWC format!"
             << std::endl;
@@ -92,7 +92,7 @@ bool StridePad::ImplByFalconCV(Mat* mat) {
   if (pad_h == 0 && pad_w == 0) {
     return true;
   }
-  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat* im = mat->GetFlyCVMat();
   fcv::Scalar value;
   if (value_.size() == 1) {
     value = fcv::Scalar(value_[0]);
@@ -105,7 +105,8 @@ bool StridePad::ImplByFalconCV(Mat* mat) {
   }
   fcv::Mat new_im;
   // top, bottom, left, right
-  fcv::copy_make_border(*im, new_im, 0, pad_h, 0, pad_w, fcv::BorderTypes::BORDER_CONSTANT, value);
+  fcv::copy_make_border(*im, new_im, 0, pad_h, 0, pad_w,
+                        fcv::BorderTypes::BORDER_CONSTANT, value);
   mat->SetMat(new_im);
   mat->SetHeight(new_im.height());
   mat->SetWidth(new_im.width());

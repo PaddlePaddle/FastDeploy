@@ -35,9 +35,9 @@ void PrintUsage() {
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAG_device == "gpu") {
+  if (FLAGS_device == "gpu") {
     option->UseGpu();
-    if (FLAG_backend == "ort") {
+    if (FLAGS_backend == "ort") {
       option->UseOrtBackend();
     } else if (FLAGS_backend == "paddle") {
       option->UsePaddleBackend();
@@ -54,24 +54,24 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "default") {
       return true;
     } else {
-      std::cout << "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, " << FLAG_backend << " is not supported." << std::endl;
+      std::cout << "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, " << FLAGS_backend << " is not supported." << std::endl;
       return false;
     }
-  } else if (FLAG_device == "cpu") {
+  } else if (FLAGS_device == "cpu") {
     if (FLAGS_backend == "ort") {
       option->UseOrtBackend();
     } else if (FLAGS_backend == "ov") {
       option->UseOpenVINOBackend();
     } else if (FLAGS_backend == "paddle") {
       option->UsePaddleBackend();
-    } else if (FLAGS_backend = "default") {
+    } else if (FLAGS_backend == "default") {
       return true;
     } else {
-      std::cout << "While inference with CPU, only support default/ort/ov/paddle now, " << FLAG_backend << " is not supported." << std::endl;
+      std::cout << "While inference with CPU, only support default/ort/ov/paddle now, " << FLAGS_backend << " is not supported." << std::endl;
       return false;
     }
   } else {
-    std::cerr << "Only support device CPU/GPU now, "  << FLAG_device << " is not supported." << std::endl;
+    std::cerr << "Only support device CPU/GPU now, "  << FLAGS_device << " is not supported." << std::endl;
     return false;
   }
 

@@ -14,7 +14,6 @@
 
 import fastdeploy as fd
 import cv2
-import time
 import os
 
 
@@ -60,20 +59,26 @@ config_file = os.path.join(args.model, "infer_cfg.yml")
 model = fd.vision.tracking.PPTracking(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
+# 初始化轨迹记录器
+recorder = fd.vision.tracking.TrailRecorder()
+# 绑定记录器 注意：每次预测时，往trail_recorder里面插入数据，随着预测次数的增加，内存会不断地增长，
+# 可以通过unbind_recorder()方法来解除绑定
+model.bind_recorder(recorder)
 # 预测图片分割结果
 cap = cv2.VideoCapture(args.video)
-frame_id = 0
+# count = 0
 while True:
-    start_time = time.time()
-    frame_id = frame_id+1
     _, frame = cap.read()
     if frame is None:
         break
     result = model.predict(frame)
-    end_time = time.time()
-    fps = 1.0/(end_time-start_time)
-    img = fd.vision.vis_mot(frame, result, fps, frame_id)
+    # count += 1
+    # if count == 10:
+    #     model.unbind_recorder()
+    img = fd.vision.vis_mot(frame, result, 0.0, recorder)
     cv2.imshow("video", img)
-    cv2.waitKey(30)
+    if cv2.waitKey(30) == ord("q"):
+        break
+model.unbind_recorder()
 cap.release()
 cv2.destroyAllWindows()

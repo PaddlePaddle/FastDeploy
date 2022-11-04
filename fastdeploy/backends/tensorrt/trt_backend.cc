@@ -124,46 +124,18 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   option_ = option;
 
 #ifdef ENABLE_PADDLE_FRONTEND
-  std::vector<paddle2onnx::CustomOp> custom_ops;
-  for (auto& item : option_.custom_op_info_) {
-    paddle2onnx::CustomOp op;
-    std::strcpy(op.op_name, item.first.c_str());
-    std::strcpy(op.export_op_name, item.second.c_str());
-    custom_ops.emplace_back(op);
-  }
   char* model_content_ptr;
   int model_content_size = 0;
   char* calibration_cache_ptr;
   int calibration_cache_size = 0;
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size(), "tensorrt",
+                           verbose, true, true, true, nullptr,
+                           0, "tensorrt",
                            &calibration_cache_ptr, &calibration_cache_size)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
-  }
-
-  if (option_.remove_multiclass_nms_) {
-    char* new_model = nullptr;
-    int new_model_size = 0;
-    if (!paddle2onnx::RemoveMultiClassNMS(model_content_ptr, model_content_size,
-                                          &new_model, &new_model_size)) {
-      FDERROR << "Try to remove MultiClassNMS failed." << std::endl;
-      return false;
-    }
-    delete[] model_content_ptr;
-    std::string onnx_model_proto(new_model, new_model + new_model_size);
-    delete[] new_model;
-    if (calibration_cache_size) {
-      std::string calibration_str(
-          calibration_cache_ptr,
-          calibration_cache_ptr + calibration_cache_size);
-      calibration_str_ = calibration_str;
-      delete[] calibration_cache_ptr;
-    }
-    return InitFromOnnx(onnx_model_proto, option, true);
   }
 
   std::string onnx_model_proto(model_content_ptr,
@@ -313,6 +285,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
     BuildTrtEngine();
   }
 
+  cudaSetDevice(option_.gpu_id);
   SetInputs(inputs);
   AllocateOutputsBuffer(outputs);
 
@@ -384,13 +357,17 @@ void TrtBackend::GetInputOutputInfo() {
       outputs_device_buffer_[name] = FDDeviceBuffer(dtype);
       casted_output_tensors_[name] = FDTensor();
     }
+    io_name_index_[name] = i;
   }
   bindings_.resize(num_binds);
 }
 
 void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
   for (const auto& item : inputs) {
-    auto idx = engine_->getBindingIndex(item.name.c_str());
+    // auto idx = engine_->getBindingIndex(item.name.c_str());
+    auto iter = io_name_index_.find(item.name);
+    FDASSERT(iter != io_name_index_.end(), "TRTBackend SetInputs not find name:%s", item.name.c_str());
+    auto idx = iter->second; 
     std::vector<int> shape(item.shape.begin(), item.shape.end());
     auto dims = ToDims(shape);
     context_->setBindingDimensions(idx, dims);
@@ -438,7 +415,10 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
     outputs->resize(outputs_desc_.size());
   }
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
-    auto idx = engine_->getBindingIndex(outputs_desc_[i].name.c_str());
+    // auto idx = engine_->getBindingIndex(outputs_desc_[i].name.c_str());
+    auto idx_iter = io_name_index_.find(outputs_desc_[i].name);
+    FDASSERT(idx_iter != io_name_index_.end(), "TRTBackend Outputs not find name:%s", outputs_desc_[i].name.c_str());
+    auto idx = idx_iter->second; 
     auto output_dims = context_->getBindingDimensions(idx);
 
     // find the original index of output
@@ -699,6 +679,49 @@ std::vector<TensorInfo> TrtBackend::GetOutputInfos() {
     infos.emplace_back(GetOutputInfo(i));
   }
   return infos;
+}
+
+std::unique_ptr<BaseBackend> TrtBackend::Clone(void *stream, int device_id) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<TrtBackend>();
+  auto casted_backend = dynamic_cast<TrtBackend*>(new_backend.get());
+  if(device_id > 0 && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    if (option_.model_format == ModelFormat::ONNX) {
+      FDASSERT(casted_backend->InitFromOnnx(option_.model_file, clone_option),
+              "Clone model from ONNX failed while initialize TrtBackend.");
+    } else {
+      FDASSERT(casted_backend->InitFromPaddle(option_.model_file,
+                                              option_.params_file, clone_option),
+              "Clone model from Paddle failed while initialize TrtBackend.");
+    }
+    FDWARNING << "The target device id:" 
+          << device_id
+          << " is different from current device id:"
+          << option_.gpu_id
+          << ", cannot share memory with current engine."
+          << std::endl;
+    return new_backend;
+  }
+  cudaSetDevice(option_.gpu_id);
+  casted_backend->option_.gpu_id = option_.gpu_id;
+  if (stream) {
+    casted_backend->stream_ = reinterpret_cast<cudaStream_t>(stream);
+  } else {
+    FDASSERT(cudaStreamCreate(&casted_backend->stream_) == 0,
+           "[ERROR] Error occurs while clone calling cudaStreamCreate().");
+  }
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->outputs_order_.insert(outputs_order_.begin(), outputs_order_.end());
+  casted_backend->shape_range_info_.insert(shape_range_info_.begin(), shape_range_info_.end());
+  casted_backend->engine_ = engine_;
+  casted_backend->context_ = std::shared_ptr<nvinfer1::IExecutionContext>(
+      casted_backend->engine_->createExecutionContext());
+  casted_backend->GetInputOutputInfo();
+  FDINFO << "TRTBackend clone finish." << std::endl;
+  return new_backend;
 }
 
 }  // namespace fastdeploy

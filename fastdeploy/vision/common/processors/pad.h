@@ -31,13 +31,13 @@ class FASTDEPLOY_DECL Pad : public Processor {
   }
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Pad"; }
 
   static bool Run(Mat* mat, const int& top, const int& bottom, const int& left,
                   const int& right, const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int top_;

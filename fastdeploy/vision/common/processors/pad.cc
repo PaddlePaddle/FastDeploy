@@ -53,7 +53,7 @@ bool Pad::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool Pad::ImplByFalconCV(Mat* mat) {
+bool Pad::ImplByFlyCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;
     return false;
@@ -70,7 +70,7 @@ bool Pad::ImplByFalconCV(Mat* mat) {
             << std::endl;
     return false;
   }
-  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat* im = mat->GetFlyCVMat();
   fcv::Scalar value;
   if (value_.size() == 1) {
     value = fcv::Scalar(value_[0]);
@@ -83,7 +83,7 @@ bool Pad::ImplByFalconCV(Mat* mat) {
   }
   fcv::Mat new_im;
   fcv::copy_make_border(*im, new_im, top_, bottom_, left_, right_,
-                    fcv::BorderTypes::BORDER_CONSTANT, value);
+                        fcv::BorderTypes::BORDER_CONSTANT, value);
   mat->SetMat(new_im);
   mat->SetHeight(new_im.height());
   mat->SetWidth(new_im.width());
@@ -92,11 +92,10 @@ bool Pad::ImplByFalconCV(Mat* mat) {
 #endif
 
 bool Pad::Run(Mat* mat, const int& top, const int& bottom, const int& left,
-              const int& right, const std::vector<float>& value,
-              ProcLib lib) {
+              const int& right, const std::vector<float>& value, ProcLib lib) {
   auto p = Pad(top, bottom, left, right, value);
   return p(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

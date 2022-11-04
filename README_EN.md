@@ -30,22 +30,22 @@ English | [简体中文](README_CN.md)
 
 ## 📣 Recent Updates
 
-- 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.3.0)** <br>
+- 🔥 **2022.10.31：Release FastDeploy [release v0.5.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.5.0)** <br>
+    -  **New deployment upgrade: Support support more backend, support more cv models**
+        -  Support Paddle Inference TensorRT, and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Lite、Paddle Inference；
+        -  Support Graphcore IPU through paddle Inference;
+        -  Support tracking model [PP-Tracking](./examples/vision/tracking/pptracking) and [RobustVideoMatting](./examples/vision/matting) model
+
+- 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)** <br>
   - **New server-side deployment upgrade: support more CV model and NLP model**
-       - Integrate OpenVINO and provide a seamless deployment experience with other inference engines include TensorRT、ONNX Runtime、Paddle Inference；
-       - Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
+       - Integrate Paddle Lite and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Inference；
+       - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out
+       - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;<br>
+       - Web deployment and Mini Program deployment New [OCR and other CV models](examples/application/js) capability；
+       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet+TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment；
        - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
        - New information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie).
 
-- 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
-  - **New server-side deployment upgrade: faster inference performance, support more CV model**
-    - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
-    - Integrate Paddle Inference, ONNX Runtime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [end-to-end deployment demos](examples/vision/detection/)
-    - Support over 40 key models and [demo examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
-    - Support deployment in both Python and C++
-  - **Supports Rockchip, Amlogic, NXP and other NPU chip deployment capabilities on edge device deployment**
-    - Release Lightweight Object Detection [Picodet-NPU deployment demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
 
 ## Contents
 
@@ -197,6 +197,7 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 | <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❌ | ❌ | ❌ | ❌ |❔|❔|
+| <font size=2> Detection | <font size=2> [PaddleDetection/PP-Tracking](./examples/vision/tracking/pptracking) | <font size=2> [Python](./examples/vision/tracking/pptracking/python)/[C++](./examples/vision/tracking/pptracking/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❌ | ❌ | ❌ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox) | <font size=2> [Python](./examples/vision/detection/yolox/python)/[C++](./examples/vision/detection/yolox/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7) | <font size=2> [Python](./examples/vision/detection/yolov7/python)/[C++](./examples/vision/detection/yolov7/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Detection | <font size=2> [meituan/YOLOv6](./examples/vision/detection/yolov6) | <font size=2> [Python](./examples/vision/detection/yolov6/python)/[C++](./examples/vision/detection/yolov6/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
@@ -222,10 +223,13 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 | <font size=2> Face Recognition | <font size=2> [insightface/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Face Recognition | <font size=2> [insightface/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2> Matting | <font size=2> [eterL1n/RobustVideoMatting](./examples/vision/matting/rvm) | <font size=2> [Python](./examples/vision/matting/rvm/python)/[C++](./examples/vision/matting/rvm/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 | <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2>Text Classification | <font size=2> [PaddleNLP/Ernie-3.0](./examples/text/ernie-3.0) | <font size=2> Python/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+| <font size=2> Text-to-Speech| <font size=2> [PaddleSpeech/PP-TTS](./examples/audio/pp-tts) | <font size=2> [Python](./examples/audio/pp-tts/python)/C++ |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
 
 ## Edge-Side Deployment
 

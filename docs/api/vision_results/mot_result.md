@@ -37,4 +37,3 @@ fastdeploy.vision.MOTResult
 - **ids**(list of list(float)):成员变量，表示单帧画面中所有目标的id，其元素个数与`boxes`一致
 - **scores**(list of float): 成员变量，表示单帧画面检测出来的所有目标置信度
 - **class_ids**(list of int): 成员变量，表示单帧画面出来的所有目标类别
-

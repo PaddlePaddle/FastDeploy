@@ -25,10 +25,11 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool BGR2RGB::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool BGR2RGB::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   if (im->channels() != 3) {
-    FDERROR << "[BGR2RGB] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    FDERROR << "[BGR2RGB] The channel of input image must be 3, but not it's "
+            << im->channels() << "." << std::endl;
     return false;
   }
   fcv::Mat new_im;
@@ -47,10 +48,11 @@ bool RGB2BGR::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool RGB2BGR::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool RGB2BGR::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   if (im->channels() != 3) {
-    FDERROR << "[RGB2BGR] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    FDERROR << "[RGB2BGR] The channel of input image must be 3, but not it's "
+            << im->channels() << "." << std::endl;
     return false;
   }
   fcv::Mat new_im;

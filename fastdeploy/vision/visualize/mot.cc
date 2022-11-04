@@ -25,73 +25,63 @@ cv::Scalar GetMOTBoxColor(int idx) {
   return color;
 }
 
-
-cv::Mat VisMOT(const cv::Mat &img, const MOTResult &results, float fps, int frame_id) {
-
+cv::Mat VisMOT(const cv::Mat &img, const MOTResult &results,
+               float score_threshold, tracking::TrailRecorder* recorder) {
   cv::Mat vis_img = img.clone();
   int im_h = img.rows;
   int im_w = img.cols;
   float text_scale = std::max(1, static_cast<int>(im_w / 1600.));
   float text_thickness = 2.;
   float line_thickness = std::max(1, static_cast<int>(im_w / 500.));
-
-  std::ostringstream oss;
-  oss << std::setiosflags(std::ios::fixed) << std::setprecision(4);
-  oss << "frame: " << frame_id << " ";
-  oss << "fps: " << fps << " ";
-  oss << "num: " << results.boxes.size();
-  std::string text = oss.str();
-
-  cv::Point origin;
-  origin.x = 0;
-  origin.y = static_cast<int>(15 * text_scale);
-  cv::putText(vis_img,
-              text,
-              origin,
-              cv::FONT_HERSHEY_PLAIN,
-              text_scale,
-              cv::Scalar(0, 0, 255),
-              text_thickness);
-
   for (int i = 0; i < results.boxes.size(); ++i) {
-      const int obj_id = results.ids[i];
-      const float score = results.scores[i];
+    if (results.scores[i] < score_threshold) {
+        continue;
+    }
+    const int obj_id = results.ids[i];
+    const float score = results.scores[i];
+    cv::Scalar color = GetMOTBoxColor(obj_id);
+    if (recorder != nullptr){
+      int id = results.ids[i];
+      auto iter = recorder->records.find(id);
+      if (iter != recorder->records.end()) {
+        for (int j = 0; j < iter->second.size(); j++) {
+            cv::Point center(iter->second[j][0], iter->second[j][1]);
+            cv::circle(vis_img, center, text_thickness, color);
+        }
+      }
+    }
+    cv::Point pt1 = cv::Point(results.boxes[i][0], results.boxes[i][1]);
+    cv::Point pt2 = cv::Point(results.boxes[i][2], results.boxes[i][3]);
+    cv::Point id_pt =
+            cv::Point(results.boxes[i][0], results.boxes[i][1] + 10);
+    cv::Point score_pt =
+            cv::Point(results.boxes[i][0], results.boxes[i][1] - 10);
+    cv::rectangle(vis_img, pt1, pt2, color, line_thickness);
+    std::ostringstream idoss;
+    idoss << std::setiosflags(std::ios::fixed) << std::setprecision(4);
+    idoss << obj_id;
+    std::string id_text = idoss.str();
 
-      cv::Scalar color = GetMOTBoxColor(obj_id);
+    cv::putText(vis_img,
+                id_text,
+                id_pt,
+                cv::FONT_HERSHEY_PLAIN,
+                text_scale,
+                color,
+                text_thickness);
 
-      cv::Point pt1 = cv::Point(results.boxes[i][0], results.boxes[i][1]);
-      cv::Point pt2 = cv::Point(results.boxes[i][2], results.boxes[i][3]);
-      cv::Point id_pt =
-              cv::Point(results.boxes[i][0], results.boxes[i][1] + 10);
-      cv::Point score_pt =
-              cv::Point(results.boxes[i][0], results.boxes[i][1] - 10);
-      cv::rectangle(vis_img, pt1, pt2, color, line_thickness);
+    std::ostringstream soss;
+    soss << std::setiosflags(std::ios::fixed) << std::setprecision(2);
+    soss << score;
+    std::string score_text = soss.str();
 
-      std::ostringstream idoss;
-      idoss << std::setiosflags(std::ios::fixed) << std::setprecision(4);
-      idoss << obj_id;
-      std::string id_text = idoss.str();
-
-      cv::putText(vis_img,
-                  id_text,
-                  id_pt,
-                  cv::FONT_HERSHEY_PLAIN,
-                  text_scale,
-                  cv::Scalar(0, 255, 255),
-                  text_thickness);
-
-      std::ostringstream soss;
-      soss << std::setiosflags(std::ios::fixed) << std::setprecision(2);
-      soss << score;
-      std::string score_text = soss.str();
-
-      cv::putText(vis_img,
-                  score_text,
-                  score_pt,
-                  cv::FONT_HERSHEY_PLAIN,
-                  text_scale,
-                  cv::Scalar(0, 255, 255),
-                  text_thickness);
+    cv::putText(vis_img,
+                score_text,
+                score_pt,
+                cv::FONT_HERSHEY_PLAIN,
+                text_scale,
+                color,
+                text_thickness);
   }
   return vis_img;
 }

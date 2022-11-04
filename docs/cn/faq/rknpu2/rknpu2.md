@@ -1,5 +1,8 @@
 # RKNPU2模型部署
 
+## 安装环境
+RKNPU2模型导出只支持在x86Linux平台上进行导出，安装流程请参考[RKNPU2模型导出环境配置文档](./install_rknn_toolkit2.md)
+
 ## ONNX模型转换为RKNN模型
 ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型转换为RKNN模型，具体流程请查看[转换文档](./export.md)
 
@@ -61,4 +64,3 @@ int infer_scrfd_npu() {
 - [rknpu2板端环境安装配置](../../build_and_install/rknpu2.md)
 - [rknn_toolkit2安装文档](./install_rknn_toolkit2.md)
 - [onnx转换rknn文档](./export.md)
-

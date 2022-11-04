@@ -26,7 +26,7 @@ class FASTDEPLOY_DECL Normalize : public Processor {
             const std::vector<float>& max = std::vector<float>());
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Normalize"; }
 
@@ -44,14 +44,10 @@ class FASTDEPLOY_DECL Normalize : public Processor {
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
-  std::vector<float> GetAlpha() const {
-    return alpha_;
-  }
-  std::vector<float> GetBeta() const {
-    return beta_;
-  }
+  std::vector<float> GetAlpha() const { return alpha_; }
+  std::vector<float> GetBeta() const { return beta_; }
 
  private:
   std::vector<float> alpha_;

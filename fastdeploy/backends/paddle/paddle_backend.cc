@@ -216,6 +216,30 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream, int device_id) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<PaddleBackend>();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
+  if(device_id > 0 && option_.use_gpu == true && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file,
+                                   clone_option);
+    FDWARNING << "The target device id:" 
+             << device_id
+             << " is different from current device id:"
+             << option_.gpu_id
+             << ", cannot share memory with current engine."
+             << std::endl;
+    return new_backend;
+  }
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->predictor_ = std::move(predictor_->Clone(stream));
+  return new_backend;
+}
+
 #ifdef ENABLE_TRT_BACKEND
 void PaddleBackend::SetTRTDynamicShapeToConfig(const PaddleBackendOption& option) {
     std::map<std::string, std::vector<int>> max_shape;

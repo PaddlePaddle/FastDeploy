@@ -33,7 +33,7 @@ class ResizeByLong : public Processor {
 
   static bool Run(Mat* mat, int target_size, int interp = 1,
                   bool use_scale = true, int max_size = -1,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   double GenerateScale(const int origin_w, const int origin_h);

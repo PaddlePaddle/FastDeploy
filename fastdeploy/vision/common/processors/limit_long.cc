@@ -39,8 +39,8 @@ bool LimitLong::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool LimitLong::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool LimitLong::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
   int im_size_max = std::max(origin_w, origin_h);
@@ -64,16 +64,13 @@ bool LimitLong::ImplByFalconCV(Mat* mat) {
     } else if (interp_ == 2) {
       interp_method = fcv::InterpolationType::INTER_CUBIC;
     } else {
-      FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+      FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FlyCV, but "
                  "now it's "
               << interp_ << "." << std::endl;
       return false;
     }
     fcv::Mat new_im;
-    FDERROR << "origin " << im->width() << " " << im->height() << std::endl;
-    FDERROR << "scale " << scale << std::endl;
     fcv::resize(*im, new_im, fcv::Size(), scale, scale, interp_method);
-    FDERROR << "after " << new_im.width() << " " << new_im.height() << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());
@@ -82,7 +79,8 @@ bool LimitLong::ImplByFalconCV(Mat* mat) {
 }
 #endif
 
-bool LimitLong::Run(Mat* mat, int max_long, int min_long, int interp, ProcLib lib) {
+bool LimitLong::Run(Mat* mat, int max_long, int min_long, int interp,
+                    ProcLib lib) {
   auto l = LimitLong(max_long, min_long, interp);
   return l(mat, lib);
 }
