@@ -16,7 +16,7 @@ import os
 import paddle
 import paddlenlp
 
-from diffusers_paddle import UNet2DConditionModel, AutoencoderKL
+from ppdiffusers import UNet2DConditionModel, AutoencoderKL
 from paddlenlp.transformers import CLIPTextModel
 
 

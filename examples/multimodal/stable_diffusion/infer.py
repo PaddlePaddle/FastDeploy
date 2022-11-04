@@ -70,13 +70,15 @@ def parse_arguments():
         "--image_path",
         default="fd_astronaut_rides_horse.png",
         help="The model directory of diffusion_model.")
+    parser.add_argument(
+        "--device_id", type=int, default=0, help="The selected gpu id.")
     return parser.parse_args()
 
 
-def create_ort_runtime(model_dir, model_prefix, model_format):
+def create_ort_runtime(model_dir, model_prefix, model_format, device_id=0):
     option = fd.RuntimeOption()
     option.use_ort_backend()
-    option.use_gpu()
+    option.use_gpu(device_id)
     if model_format == "paddle":
         model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
         params_file = os.path.join(model_dir, model_prefix,
@@ -91,7 +93,8 @@ def create_ort_runtime(model_dir, model_prefix, model_format):
 def create_paddle_inference_runtime(model_dir,
                                     model_prefix,
                                     use_trt=False,
-                                    dynamic_shape=None):
+                                    dynamic_shape=None,
+                                    device_id=0):
     option = fd.RuntimeOption()
     option.use_paddle_backend()
     if use_trt:
@@ -106,7 +109,7 @@ def create_paddle_inference_runtime(model_dir,
                     min_shape=shape_dict["min_shape"],
                     opt_shape=shape_dict.get("opt_shape", None),
                     max_shape=shape_dict.get("max_shape", None))
-    option.use_gpu()
+    option.use_gpu(device_id)
     model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
     params_file = os.path.join(model_dir, model_prefix, "inference.pdiparams")
     option.set_model_path(model_file, params_file)
@@ -117,10 +120,11 @@ def create_trt_runtime(model_dir,
                        model_prefix,
                        model_format,
                        workspace=(1 << 31),
-                       dynamic_shape=None):
+                       dynamic_shape=None,
+                       device_id=0):
     option = fd.RuntimeOption()
     option.use_trt_backend()
-    option.use_gpu()
+    option.use_gpu(device_id)
     option.enable_trt_fp16()
     option.set_trt_max_workspace_size(workspace)
     if dynamic_shape is not None:
@@ -181,23 +185,41 @@ if __name__ == "__main__":
     # 4. Init runtime
     if args.backend == "ort":
         text_encoder_runtime = create_ort_runtime(
-            args.model_dir, args.text_encoder_model_prefix, args.model_format)
+            args.model_dir,
+            args.text_encoder_model_prefix,
+            args.model_format,
+            device_id=args.device_id)
         vae_decoder_runtime = create_ort_runtime(
-            args.model_dir, args.vae_model_prefix, args.model_format)
+            args.model_dir,
+            args.vae_model_prefix,
+            args.model_format,
+            device_id=args.device_id)
         start = time.time()
         unet_runtime = create_ort_runtime(
-            args.model_dir, args.unet_model_prefix, args.model_format)
+            args.model_dir,
+            args.unet_model_prefix,
+            args.model_format,
+            device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "pp" or args.backend == "pp-trt":
         use_trt = True if args.backend == "pp-trt" else False
         text_encoder_runtime = create_paddle_inference_runtime(
-            args.model_dir, args.text_encoder_model_prefix)
+            args.model_dir,
+            args.text_encoder_model_prefix,
+            device_id=args.device_id)
         vae_decoder_runtime = create_paddle_inference_runtime(
-            args.model_dir, args.vae_model_prefix, use_trt, vae_dynamic_shape)
+            args.model_dir,
+            args.vae_model_prefix,
+            use_trt,
+            vae_dynamic_shape,
+            device_id=args.device_id)
         start = time.time()
         unet_runtime = create_paddle_inference_runtime(
-            args.model_dir, args.unet_model_prefix, use_trt,
-            unet_dynamic_shape)
+            args.model_dir,
+            args.unet_model_prefix,
+            use_trt,
+            unet_dynamic_shape,
+            device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "trt":
         text_encoder_runtime = create_ort_runtime(
@@ -207,13 +229,15 @@ if __name__ == "__main__":
             args.vae_model_prefix,
             args.model_format,
             workspace=(1 << 30),
-            dynamic_shape=vae_dynamic_shape)
+            dynamic_shape=vae_dynamic_shape,
+            device_id=args.device_id)
         start = time.time()
         unet_runtime = create_trt_runtime(
             args.model_dir,
             args.unet_model_prefix,
             args.model_format,
-            dynamic_shape=unet_dynamic_shape)
+            dynamic_shape=unet_dynamic_shape,
+            device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(
         vae_decoder_runtime=vae_decoder_runtime,
