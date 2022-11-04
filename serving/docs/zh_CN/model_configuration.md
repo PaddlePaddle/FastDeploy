@@ -142,8 +142,10 @@ optimization {
     cpu_execution_accelerator : [
       {
         name : "openvino"
-        # 设置推理并行计算线程数为4
+        # 设置推理并行计算线程数为4（所有实例总共线程数）
         parameters { key: "cpu_threads" value: "4" }
+        # 设置OpenVINO的num_streams（一般设置为跟实例数一致）
+        parameters { key: "num_streams" value: "1" }
       }
     ]
   }
