@@ -138,7 +138,8 @@ bool RobustVideoMatting::Postprocess(
 
   result->Clear();
   result->contain_foreground = true;
-  result->shape = {static_cast<int64_t>(in_h), static_cast<int64_t>(in_w)};
+  // if contain_foreground == true, shape must set to (h, w, c)
+  result->shape = {static_cast<int64_t>(in_h), static_cast<int64_t>(in_w), 3};
   int numel = in_h * in_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);

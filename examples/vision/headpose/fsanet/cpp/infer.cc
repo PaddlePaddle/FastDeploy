@@ -44,7 +44,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "trt" || 
                FLAGS_backend == "paddle_trt") {
       option->UseTrtBackend();
-      option.SetTrtInputShape("images", {1, 3, 64, 64});
+      option->SetTrtInputShape("images", {1, 3, 64, 64});
       if (FLAGS_backend == "paddle_trt") {
         option->EnablePaddleToTrt();
       }
@@ -54,7 +54,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "default") {
       return true;
     } else {
-      std::cout << "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, " << FLAG_backend << " is not supported." << std::endl;
+      std::cout << "While inference with GPU, only support default/ort/paddle/trt/paddle_trt now, " << FLAGS_backend << " is not supported." << std::endl;
       return false;
     }
   } else if (FLAGS_device == "cpu") {
@@ -67,7 +67,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "default") {
       return true;
     } else {
-      std::cout << "While inference with CPU, only support default/ort/ov/paddle now, " << FLAG_backend << " is not supported." << std::endl;
+      std::cout << "While inference with CPU, only support default/ort/ov/paddle now, " << FLAGS_backend << " is not supported." << std::endl;
       return false;
     }
   } else {
