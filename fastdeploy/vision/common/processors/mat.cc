@@ -118,5 +118,78 @@ std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
   return out;
 }
 
+Mat Mat::Create(const FDTensor& tensor) {
+  if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat fcv_mat = CreateZeroCopyFlyCVMatFromTensor(tensor);
+    Mat mat = Mat(fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  cv::Mat ocv_mat = CreateZeroCopyOpenCVMatFromTensor(tensor);
+  Mat mat = Mat(ocv_mat);
+  return mat;
+}
+
+Mat Mat::Create(const FDTensor& tensor, ProcLib lib) {
+  if (lib == ProcLib::DEFAULT) {
+    return Create(tensor);
+  }
+  if (lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat fcv_mat = CreateZeroCopyFlyCVMatFromTensor(tensor);
+    Mat mat = Mat(fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } 
+  cv::Mat ocv_mat = CreateZeroCopyOpenCVMatFromTensor(tensor);
+  Mat mat = Mat(ocv_mat);
+  return mat;
+}
+
+Mat Mat::Create(int height, int width, int channels,
+                FDDataType type, void* data) {
+  if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
+      height, width, channels, type, data);
+    Mat mat = Mat(fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  cv::Mat ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
+      height, width, channels, type, data);
+  Mat mat = Mat(ocv_mat);
+  return mat;    
+}
+
+Mat Mat::Create(int height, int width, int channels,
+                FDDataType type, void* data,
+                ProcLib lib) {
+  if (lib == ProcLib::DEFAULT) {
+    return Create(height, width, channels, type, data);
+  }                  
+  if (lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
+      height, width, channels, type, data);
+    Mat mat = Mat(fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } 
+  cv::Mat ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
+      height, width, channels, type, data);
+  Mat mat = Mat(ocv_mat);
+  return mat;    
+}
+
 }  // namespace vision
 }  // namespace fastdeploy
