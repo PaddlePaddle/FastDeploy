@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/utils/utils.h"
+
 #include "fastdeploy/vision/common/processors/utils.h"
 
 namespace fastdeploy {
@@ -37,12 +38,15 @@ FDDataType OpenCVDataTypeToFD(int type) {
   } else if (type == 6) {
     return FDDataType::FP64;
   } else {
-    FDASSERT(false, "While calling OpenCVDataTypeToFD(), get type = %d, which is not expected.", type);
+    FDASSERT(false,
+             "While calling OpenCVDataTypeToFD(), get type = %d, which is not "
+             "expected.",
+             type);
   }
 }
 
 #ifdef ENABLE_FLYCV
-FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type) {
+FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type) {
   if (type == fcv::FCVImageType::GRAY_U8) {
     return FDDataType::UINT8;
   } else if (type == fcv::FCVImageType::PACKAGE_BGR_U8) {
@@ -104,13 +108,14 @@ FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type) {
   } else if (type == fcv::FCVImageType::GRAY_F64) {
     return FDDataType::FP64;
   }
-  FDASSERT(false, "While calling FalconDataTypeToFD(), get unexpected type:%d.", int(type));
+  FDASSERT(false, "While calling FlyCVDataTypeToFD(), get unexpected type:%d.",
+           int(type));
   return FDDataType::UNKNOWN1;
 }
 
-fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel) {
+fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel) {
   FDASSERT(channel == 1 || channel == 3 || channel == 4,
-           "Only support channel be 1/3/4 in Falcon.");
+           "Only support channel be 1/3/4 in FlyCV.");
   if (type == FDDataType::UINT8) {
     if (channel == 1) {
       return fcv::FCVImageType::GRAY_U8;
@@ -132,18 +137,54 @@ fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel) {
   return fcv::FCVImageType::PACKAGE_BGR_F32;
 }
 
-fcv::Mat ConvertOpenCVMatToFalconCV(cv::Mat& im) {
+int CreateOpenCVDataType(FDDataType type, int channel) {
+  FDASSERT(channel == 1 || channel == 3 || channel == 4,
+           "Only support channel be 1/3/4 in OpenCV.");
+  if (type == FDDataType::UINT8) {
+    if (channel == 1) {
+      return CV_8UC1;
+    } else if (channel == 3) {
+      return CV_8UC3;
+    } else {
+      return CV_8UC4;
+    }
+  } else if (type == FDDataType::FP32) {
+    if (channel == 1) {
+      return CV_32FC1;
+    } else if (channel == 3) {
+      return CV_32FC3;
+    } else {
+      return CV_32FC4;
+    }
+  }
+  FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
+  return CV_32FC3;
+}
+
+fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im) {
   int type = im.type() % 8;
   // 0: uint8; 5: float32; 6: float64
   if (type != 0 && type != 5 && type != 6) {
-    FDASSERT(false, "Only support type of uint8/float/double, but now it's %d.", im.type());
+    FDASSERT(false, "Only support type of uint8/float/double, but now it's %d.",
+             im.type());
   }
-  auto fcv_type = CreateFalconCVDataType(OpenCVDataTypeToFD(im.type()), im.channels());
-  return fcv::Mat(im.cols, im.rows, fcv_type, im.ptr());
+  auto fcv_type =
+      CreateFlyCVDataType(OpenCVDataTypeToFD(im.type()), im.channels());
+  return fcv::Mat(im.cols, im.rows, fcv_type, im.ptr());  // reference only
+}
+
+cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim) {
+  auto fd_dtype = FlyCVDataTypeToFD(fim.type());
+  if (fd_dtype != FDDataType::UINT8 && fd_dtype != FDDataType::FP32 &&
+      fd_dtype != FDDataType::FP64) {
+    FDASSERT(false, "Only support type of uint8/float/double, but now it's %s.",
+             Str(fd_dtype).c_str());
+  }
+  auto ocv_type = CreateOpenCVDataType(fd_dtype, fim.channels());
+  return cv::Mat(fim.height(), fim.width(), ocv_type,
+                 fim.data());  // reference only
 }
 #endif
 
-
-
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
