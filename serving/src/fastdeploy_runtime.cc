@@ -386,14 +386,14 @@ TRITONSERVER_Error* ModelState::LoadModel(
         (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
       runtime_options_->UseGpu(instance_group_device_id);
       runtime_options_->SetExternalStream((void*)stream);
-    } else {
+    } else if (runtime_options_->device != fastdeploy::Device::IPU) {
       runtime_options_->UseCpu();
     }
   #else
-    // if (runtime_options_->device != fastdeploy::Device::IPU) {
+    if (runtime_options_->device != fastdeploy::Device::IPU) {
       // If Device is set to IPU, just skip CPU setting.
       runtime_options_->UseCpu();
-    // }
+    }
   #endif  // TRITON_ENABLE_GPU
 
     *runtime = main_runtime_ = new fastdeploy::Runtime();
