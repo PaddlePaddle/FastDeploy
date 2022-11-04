@@ -1,0 +1,5 @@
+model_path: ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx
+output_folder: ./picodet_s_416_coco_lcnet
+target_platform: RK3588
+normalize: None
+outputs: None
