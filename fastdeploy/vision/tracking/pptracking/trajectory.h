@@ -75,7 +75,8 @@ class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
                       int timestamp,
                       bool update_embedding = true);
   virtual void activate(int &cnt, int timestamp);
-  virtual void reactivate(Trajectory *traj, int &cnt, int timestamp, bool newid = false);
+  virtual void reactivate(Trajectory *traj, int &cnt,
+                          int timestamp, bool newid = false);
   virtual void mark_lost(void);
   virtual void mark_removed(void);
 
@@ -229,6 +230,6 @@ inline void Trajectory::mark_lost(void) { state = Lost; }
 
 inline void Trajectory::mark_removed(void) { state = Removed; }
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy
