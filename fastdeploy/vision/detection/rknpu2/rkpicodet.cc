@@ -82,6 +82,7 @@ bool RKPicoDet::Initialize() {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
+  num_class_ = static_cast<int>((OutputInfoOfRuntime(0).shape.at(OutputInfoOfRuntime(0).shape.size()-1)));
   return true;
 }
 
@@ -98,28 +99,15 @@ bool RKPicoDet::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
 
   Cast::Run(mat, "float");
 
-  if (this->has_nms_) {
-    outputs->resize(2);
-    (*outputs)[0].name = InputInfoOfRuntime(0).name;
-    mat->ShareWithTensor(&((*outputs)[0]));
-    // reshape to [1, c, h, w]
-    (*outputs)[0].shape.insert((*outputs)[0].shape.begin(), 1);
-    (*outputs)[1].Allocate({1, 2}, FDDataType::FP32,
-                           InputInfoOfRuntime(1).name);
-    float* ptr = static_cast<float*>((*outputs)[1].MutableData());
-    ptr[0] = mat->Height() * 1.0 / origin_h;
-    ptr[1] = mat->Width() * 1.0 / origin_w;
-  } else {
-    ptr.resize(2);
-    ptr[0] = mat->Height() * 1.0 / origin_h;
-    ptr[1] = mat->Width() * 1.0 / origin_w;
+  ptr.resize(2);
+  ptr[0] = mat->Height() * 1.0 / origin_h;
+  ptr[1] = mat->Width() * 1.0 / origin_w;
 
-    outputs->resize(1);
-    (*outputs)[0].name = InputInfoOfRuntime(0).name;
-    mat->ShareWithTensor(&((*outputs)[0]));
-    // reshape to [1, c, h, w]
-    (*outputs)[0].shape.insert((*outputs)[0].shape.begin(), 1);
-  }
+  outputs->resize(1);
+  (*outputs)[0].name = InputInfoOfRuntime(0).name;
+  mat->ShareWithTensor(&((*outputs)[0]));
+  // reshape to [1, c, h, w]
+  (*outputs)[0].shape.insert((*outputs)[0].shape.begin(), 1);
   return true;
 }
 

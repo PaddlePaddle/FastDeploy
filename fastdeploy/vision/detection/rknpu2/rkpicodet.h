@@ -56,7 +56,7 @@ class FASTDEPLOY_DECL RKPicoDet : public PPYOLOE {
   BoxInfo DisPred2Bbox(const float*& dfl_det, int label, float score, int x,
                        int y, int stride);
   static void PicodetNms(std::vector<BoxInfo>& result, float nms_threshold);
-  int input_size_ = 0;
+  int input_size_ = 416;
   int num_class_ = 80;
   int reg_max_ = 7;
   // for recording the switch of normalize and hwc2chw
