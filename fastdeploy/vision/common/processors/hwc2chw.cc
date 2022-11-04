@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/hwc2chw.h"
+
 #include "fastdeploy/function/transpose.h"
 
 namespace fastdeploy {
@@ -41,18 +42,21 @@ bool HWC2CHW::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool HWC2CHW::ImplByFalconCV(Mat* mat) {
+bool HWC2CHW::ImplByFlyCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
-    FDERROR << "HWC2CHW: The input data is not Layout::HWC format!" << std::endl;
+    FDERROR << "HWC2CHW: The input data is not Layout::HWC format!"
+            << std::endl;
     return false;
   }
   if (mat->Type() != FDDataType::FP32) {
-    FDERROR << "HWC2CHW: Only support float data while use FalconCV, but now it's " << mat->Type() << "." << std::endl;
+    FDERROR << "HWC2CHW: Only support float data while use FlyCV, but now it's "
+            << mat->Type() << "." << std::endl;
     return false;
   }
-  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat* im = mat->GetFlyCVMat();
   fcv::Mat new_im;
-  fcv::normalize_to_submean_to_reorder(*im, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}, std::vector<uint32_t>(), new_im, false);
+  fcv::normalize_to_submean_to_reorder(*im, {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0},
+                                       std::vector<uint32_t>(), new_im, false);
   mat->SetMat(new_im);
   mat->layout = Layout::CHW;
   return true;
@@ -64,5 +68,5 @@ bool HWC2CHW::Run(Mat* mat, ProcLib lib) {
   return h(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy
