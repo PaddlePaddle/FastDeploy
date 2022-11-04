@@ -52,9 +52,9 @@ std::string GetModelPath(std::string& model_path, const std::string& device) {
 }
 
 void InferPicodet(const std::string &device) {
-  std::string model_file = "./model/picodet_s_416_coco_npu_3588/picodet_s_416_coco_npu_3588.";
+  std::string model_file = "./model/picodet_s_416_coco_npu/picodet_s_416_coco_npu_rk3588.";
   std::string params_file;
-  std::string config_file = "./model/picodet_s_416_coco_npu_3588/infer_cfg.yml";
+  std::string config_file = "./model/picodet_s_416_coco_npu/infer_cfg.yml";
 
   fastdeploy::RuntimeOption option = GetOption(device);
   fastdeploy::ModelFormat format = GetFormat(device);

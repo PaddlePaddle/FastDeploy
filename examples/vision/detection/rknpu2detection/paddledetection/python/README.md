@@ -18,15 +18,10 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 cp -r ./picodet_s_416_coco_npu /path/to/FastDeploy/examples/vision/detection/rknpu2detection/paddledetection/python
 
 # 推理
-python3 infer.py --model_file ./picodet_s_416_coco_npu_3588/picodet_s_416_coco_npu_3588.rknn  \
-                  --config_file ./picodet_s_416_coco_npu_3588/infer_cfg.yml \
+python3 infer.py --model_file ./picodet_s_416_coco_npu/picodet_s_416_coco_npu_3588.rknn  \
+                  --config_file ./picodet_s_416_coco_npu/infer_cfg.yml \
                   --image 000000014439.jpg
 ```
-
-运行完成可视化结果如下图所示
-<div  align="center">  
-<img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
-</div>
 
 
 ## 注意事项
