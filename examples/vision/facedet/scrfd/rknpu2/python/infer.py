@@ -23,8 +23,6 @@ def parse_arguments():
     parser.add_argument(
         "--model_file", required=True, help="Path of PaddleSeg model.")
     parser.add_argument(
-        "--config_file", required=True, help="Path of PaddleSeg config.")
-    parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     return parser.parse_args()
 
@@ -41,7 +39,6 @@ args = parse_arguments()
 runtime_option = build_option(args)
 model_file = args.model_file
 params_file = ""
-config_file = args.config_file
 model = fd.vision.facedet.SCRFD(
     model_file,
     params_file,

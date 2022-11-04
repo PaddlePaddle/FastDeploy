@@ -11,22 +11,15 @@
 ```bash
 # 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/segmentation/paddleseg/python
+cd FastDeploy/examples/vision/facedet/scrfd/rknpu2/python
 
 # 下载图片
-wget https://paddleseg.bj.bcebos.com/dygraph/pp_humanseg_v2/images.zip
-unzip images.zip
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 
 # 推理
-python3 infer.py --model_file ./Portrait_PP_HumanSegV2_Lite_256x144_infer/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn \
-                --config_file ./Portrait_PP_HumanSegV2_Lite_256x144_infer/deploy.yaml \
-                --image images/portrait_heng.jpg
+python3 infer.py --model_file ./scrfd_500m_bnkps_shape640x640_rk3588.rknn \
+                 --image test_lite_face_detector_3.jpg
 ```
-
-运行完成可视化结果如下图所示
-<div  align="center">  
-<img src="https://user-images.githubusercontent.com/16222477/191712880-91ae128d-247a-43e0-b1e3-cafae78431e0.jpg", width=512px, height=256px />
-</div>
 
 
 ## 注意事项
