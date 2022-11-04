@@ -79,10 +79,6 @@ struct TrtBackendOption {
   std::string serialize_file = "";
   bool enable_pinned_memory = false;
   void* external_stream_ = nullptr;
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);
