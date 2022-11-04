@@ -52,6 +52,7 @@
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
+#include "fastdeploy/vision/headpose/contrib/fsanet.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"
