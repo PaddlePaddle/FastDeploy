@@ -675,10 +675,6 @@ void Runtime::CreateOrtBackend() {
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
 
-  // TODO(jiangjiajun): inside usage, maybe remove this later
-  ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
-  ort_option.custom_op_info_ = option.custom_op_info_;
-
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OrtBackend only support model format of ModelFormat::PADDLE / "
@@ -714,10 +710,6 @@ void Runtime::CreateTrtBackend() {
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
   trt_option.external_stream_ = option.external_stream_;
-
-  // TODO(jiangjiajun): inside usage, maybe remove this later
-  trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
-  trt_option.custom_op_info_ = option.custom_op_info_;
 
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
