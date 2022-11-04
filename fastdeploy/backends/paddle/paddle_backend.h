@@ -24,6 +24,7 @@
 #include "paddle2onnx/converter.h"
 #endif
 #include "paddle_inference_api.h"  // NOLINT
+#include "fastdeploy/utils/unique_ptr.h"
 
 #ifdef ENABLE_TRT_BACKEND
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
@@ -43,6 +44,9 @@ struct IpuOption {
 };
 
 struct PaddleBackendOption {
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+
 #ifdef WITH_GPU
   bool use_gpu = true;
 #else
@@ -109,6 +113,9 @@ class PaddleBackend : public BaseBackend {
   int NumInputs() const override { return inputs_desc_.size(); }
 
   int NumOutputs() const override { return outputs_desc_.size(); }
+
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;
