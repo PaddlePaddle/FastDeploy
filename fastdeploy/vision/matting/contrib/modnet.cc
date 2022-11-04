@@ -104,11 +104,11 @@ bool MODNet::Postprocess(
   int ipt_w = iter_ipt->second[1];
 
   float* alpha_ptr = static_cast<float*>(alpha_tensor.Data());
-  cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
-  Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
+  // cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
+  // Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
+  Mat alpha_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
+                                  alpha_ptr); // ref-only, zero copy.
   if ((out_h != ipt_h) || (out_w != ipt_w)) {
-    // already allocated a new continuous memory after resize.
-    // cv::resize(alpha_resized, alpha_resized, cv::Size(ipt_w, ipt_h));
     Resize::Run(&alpha_resized, ipt_w, ipt_h, -1, -1);
   }
 

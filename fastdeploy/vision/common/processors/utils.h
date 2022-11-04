@@ -29,7 +29,6 @@ namespace vision {
 FDDataType OpenCVDataTypeToFD(int type);
 // Create data type of opencv by FDDataType
 int CreateOpenCVDataType(FDDataType type, int channel = 1);
-
 #ifdef ENABLE_FLYCV
 // Convert data type of flycv to FDDataType
 FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type);
@@ -41,5 +40,14 @@ fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im);
 cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim);
 #endif
 
+// Create zero copy OpenCV/FlyCV Mat from FD Tensor / Buffer
+cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width,
+  int channels, FDDataType type, void* data);
+cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor);
+#ifdef ENABLE_FLYCV
+fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width,
+  int channels, FDDataType type, void* data);
+fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor);
+#endif
 }  // namespace vision
 }  // namespace fastdeploy

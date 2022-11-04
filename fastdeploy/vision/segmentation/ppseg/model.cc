@@ -263,7 +263,7 @@ bool PaddleSegModel::Postprocess(
           infer_result->shape, FDDataType::FP32,
           static_cast<void*>(fp32_result_buffer->data()));
     }
-    mat = new Mat(CreateFDMatFromTensor(*infer_result));
+    mat = new Mat(Mat::Create(*infer_result));
     Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
     mat->ShareWithTensor(&new_infer_result);
     result->shape = new_infer_result.shape;

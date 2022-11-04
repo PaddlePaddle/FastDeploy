@@ -172,7 +172,7 @@ bool PPMatting::Postprocess(
   std::vector<int64_t> dim{0, 2, 3, 1};
   Transpose(alpha_tensor, &alpha_tensor, dim);
   alpha_tensor.Squeeze(0);
-  Mat mat = CreateFDMatFromTensor(alpha_tensor);
+  Mat mat = Mat::Create(alpha_tensor);
 
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
