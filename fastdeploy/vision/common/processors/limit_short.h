@@ -34,12 +34,12 @@ class LimitShort : public Processor {
   // to min_short_, while scale the long edge proportionally.
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "LimitShort"; }
 
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
-                  int interp = 1, ProcLib lib = ProcLib::OPENCV);
+                  int interp = 1, ProcLib lib = ProcLib::DEFAULT);
   int GetMaxShort() const { return max_short_; }
 
  private:

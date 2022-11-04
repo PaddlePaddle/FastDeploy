@@ -17,6 +17,8 @@
 
 #include "fastdeploy/vision/common/result.h"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "fastdeploy/vision/tracking/pptracking/model.h"
+
 namespace fastdeploy {
 namespace vision {
 
@@ -81,8 +83,9 @@ FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    bool remove_small_connected_area = false);
 FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
 
-FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img,const MOTResult& results, float fps=0.0, int frame_id=0);
-
+FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
+                               float score_threshold = 0.0f,
+                               tracking::TrailRecorder* recorder = nullptr);
 FASTDEPLOY_DECL cv::Mat SwapBackground(
     const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
     bool remove_small_connected_area = false);
@@ -91,8 +94,12 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const SegmentationResult& result,
                                        int background_label);
 FASTDEPLOY_DECL cv::Mat VisKeypointDetection(const cv::Mat& im,
-                                      const KeyPointDetectionResult& results,
-                                      float conf_threshold = 0.5f);
+                        const KeyPointDetectionResult& results,
+                        float conf_threshold = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisHeadPose(const cv::Mat& im,
+                                    const HeadPoseResult& result,
+                                    int size = 50,
+                                    int line_size = 1);
 
 }  // namespace vision
 }  // namespace fastdeploy

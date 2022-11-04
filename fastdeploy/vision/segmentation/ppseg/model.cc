@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
+
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
@@ -26,7 +27,8 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                                const RuntimeOption& custom_option,
                                const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
+  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT,
+                        Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   valid_rknpu_backends = {Backend::RKNPU2};
   runtime_option = custom_option;
@@ -68,7 +70,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
       FDASSERT(op.IsMap(),
                "Require the transform information in yaml be Map type.");
       if (op["type"].as<std::string>() == "Normalize") {
-        if(!(this->disable_normalize_and_permute)){
+        if (!(this->disable_normalize_and_permute)) {
           std::vector<float> mean = {0.5, 0.5, 0.5};
           std::vector<float> std = {0.5, 0.5, 0.5};
           if (op["mean"]) {
@@ -102,12 +104,13 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     int input_width = input_shape[3].as<int>();
     if (input_height == -1 || input_width == -1) {
       FDWARNING << "The exported PaddleSeg model is with dynamic shape input, "
-	        << "which is not supported by ONNX Runtime and Tensorrt. "
-		<< "Only OpenVINO and Paddle Inference are available now. "
-	        << "For using ONNX Runtime or Tensorrt, "
-	        << "Please refer to https://github.com/PaddlePaddle/PaddleSeg/blob/develop/docs/model_export.md"
-	        << " to export model with fixed input shape."
-	        << std::endl;
+                << "which is not supported by ONNX Runtime and Tensorrt. "
+                << "Only OpenVINO and Paddle Inference are available now. "
+                << "For using ONNX Runtime or Tensorrt, "
+                << "Please refer to "
+                   "https://github.com/PaddlePaddle/PaddleSeg/blob/develop/"
+                   "docs/model_export.md"
+                << " to export model with fixed input shape." << std::endl;
       valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER};
     }
@@ -132,7 +135,7 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
               << "." << std::endl;
     }
   }
-  if(!(this->disable_normalize_and_permute)){
+  if (!(this->disable_normalize_and_permute)) {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
   return true;
@@ -260,7 +263,7 @@ bool PaddleSegModel::Postprocess(
           infer_result->shape, FDDataType::FP32,
           static_cast<void*>(fp32_result_buffer->data()));
     }
-    mat = new Mat(CreateFromTensor(*infer_result));
+    mat = new Mat(Mat::Create(*infer_result));
     Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
     mat->ShareWithTensor(&new_infer_result);
     result->shape = new_infer_result.shape;
@@ -361,11 +364,13 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   return true;
 }
 
-void PaddleSegModel::DisableNormalizeAndPermute(){
+void PaddleSegModel::DisableNormalizeAndPermute() {
   this->disable_normalize_and_permute = true;
-  // the DisableNormalizeAndPermute function will be invalid if the configuration file is loaded during preprocessing
+  // the DisableNormalizeAndPermute function will be invalid if the
+  // configuration file is loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
-    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+    FDERROR << "Failed to build preprocess pipeline from configuration file."
+            << std::endl;
   }
 }
 
