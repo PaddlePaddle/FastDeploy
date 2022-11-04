@@ -109,3 +109,7 @@ def vis_ppocr(im_data, det_result):
 
 def vis_mot(im_data, mot_result, score_threshold=0.0, records=None):
     return C.vision.vis_mot(im_data, mot_result, score_threshold, records)
+
+
+def vis_headpose(im_data, headpose_result, size=50, line_size=1):
+    return C.vision.vis_headpose(im_data, headpose_result, size, line_size)

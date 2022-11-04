@@ -94,8 +94,12 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const SegmentationResult& result,
                                        int background_label);
 FASTDEPLOY_DECL cv::Mat VisKeypointDetection(const cv::Mat& im,
-                                      const KeyPointDetectionResult& results,
-                                      float conf_threshold = 0.5f);
+                        const KeyPointDetectionResult& results,
+                        float conf_threshold = 0.5f);
+FASTDEPLOY_DECL cv::Mat VisHeadPose(const cv::Mat& im,
+                                    const HeadPoseResult& result,
+                                    int size = 50,
+                                    int line_size = 1);
 
 }  // namespace vision
 }  // namespace fastdeploy

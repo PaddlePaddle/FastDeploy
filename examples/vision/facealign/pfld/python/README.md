@@ -16,7 +16,6 @@ cd FastDeploy/examples/vision/facealign/pfld/python
 ## 原版ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-lite.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png
-
 # CPU推理
 python infer.py --model pfld-106-lite.onnx --image facealign_input.png --device cpu
 # GPU推理
