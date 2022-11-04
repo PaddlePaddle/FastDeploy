@@ -1,0 +1,7 @@
+model_path: ./Portrait_PP_HumanSegV2_Lite_256x144_infer/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx
+output_folder: ./Portrait_PP_HumanSegV2_Lite_256x144_infer
+target_platform: RK3568
+normalize:
+  mean: [[0.5,0.5,0.5]]
+  std: [[0.5,0.5,0.5]]
+outputs: None
