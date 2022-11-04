@@ -29,13 +29,13 @@ class FASTDEPLOY_DECL PadToSize : public Processor {
   }
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "PadToSize"; }
 
   static bool Run(Mat* mat, int width, int height,
                   const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int width_;

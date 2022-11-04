@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/matting/contrib/rvm.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -22,12 +23,13 @@ namespace vision {
 
 namespace matting {
 
-RobustVideoMatting::RobustVideoMatting(const std::string& model_file, const std::string& params_file,
-               const RuntimeOption& custom_option,
-               const ModelFormat& model_format) {
+RobustVideoMatting::RobustVideoMatting(const std::string& model_file,
+                                       const std::string& params_file,
+                                       const RuntimeOption& custom_option,
+                                       const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -52,8 +54,9 @@ bool RobustVideoMatting::Initialize() {
   return true;
 }
 
-bool RobustVideoMatting::Preprocess(Mat* mat, FDTensor* output,
-                        std::map<std::string, std::array<int, 2>>* im_info) {
+bool RobustVideoMatting::Preprocess(
+    Mat* mat, FDTensor* output,
+    std::map<std::string, std::array<int, 2>>* im_info) {
   // Resize
   int resize_w = size[0];
   int resize_h = size[1];
@@ -61,7 +64,7 @@ bool RobustVideoMatting::Preprocess(Mat* mat, FDTensor* output,
     Resize::Run(mat, resize_w, resize_h);
   }
   BGR2RGB::Run(mat);
-  
+
   // Normalize
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
@@ -83,7 +86,7 @@ bool RobustVideoMatting::Postprocess(
   FDASSERT((infer_result.size() == 6),
            "The default number of output tensor must be 6 according to "
            "RobustVideoMatting.");
-  FDTensor& fgr = infer_result.at(0); // fgr (1, 3, h, w) 0.~1.
+  FDTensor& fgr = infer_result.at(0);    // fgr (1, 3, h, w) 0.~1.
   FDTensor& alpha = infer_result.at(1);  // alpha (1, 1, h, w) 0.~1.
   FDASSERT((fgr.shape[0] == 1), "Only support batch = 1 now.");
   FDASSERT((alpha.shape[0] == 1), "Only support batch = 1 now.");
@@ -98,11 +101,11 @@ bool RobustVideoMatting::Postprocess(
   // update context
   if (video_mode) {
     for (size_t i = 0; i < 4; ++i) {
-      FDTensor& rki = infer_result.at(i+2);
+      FDTensor& rki = infer_result.at(i + 2);
       dynamic_inputs_dims_[i] = rki.shape;
       dynamic_inputs_datas_[i].resize(rki.Numel());
       memcpy(dynamic_inputs_datas_[i].data(), rki.Data(),
-              rki.Numel() * FDDataTypeSize(rki.dtype));
+             rki.Numel() * FDDataTypeSize(rki.dtype));
     }
   }
 
@@ -139,8 +142,8 @@ bool RobustVideoMatting::Postprocess(
   int numel = in_h * in_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
-  memcpy(result->foreground.data(), fgr_resized.GetOpenCVMat()->data, nbytes);
+  memcpy(result->alpha.data(), alpha_resized.Data(), nbytes);
+  memcpy(result->foreground.data(), fgr_resized.Data(), nbytes);
   return true;
 }
 
@@ -154,7 +157,9 @@ bool RobustVideoMatting::Predict(cv::Mat* im, MattingResult* result) {
   im_info["output_shape"] = {mat.Height(), mat.Width()};
   // convert vector to FDTensor
   for (size_t i = 1; i < inputs_nums; ++i) {
-    input_tensors[i].SetExternalData(dynamic_inputs_dims_[i-1], FDDataType::FP32, dynamic_inputs_datas_[i-1].data());
+    input_tensors[i].SetExternalData(dynamic_inputs_dims_[i - 1],
+                                     FDDataType::FP32,
+                                     dynamic_inputs_datas_[i - 1].data());
     input_tensors[i].device = Device::CPU;
   }
   if (!Preprocess(&mat, &input_tensors[0], &im_info)) {

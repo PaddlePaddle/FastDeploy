@@ -24,12 +24,12 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
   CenterCrop(int width, int height) : height_(height), width_(width) {}
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "CenterCrop"; }
 
   static bool Run(Mat* mat, const int& width, const int& height,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int height_;

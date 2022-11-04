@@ -34,12 +34,12 @@ class FASTDEPLOY_DECL LimitLong : public Processor {
   // to min_long_, while scale the short edge proportionally.
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "LimitLong"; }
 
   static bool Run(Mat* mat, int max_long = -1, int min_long = -1,
-                  int interp = 1, ProcLib lib = ProcLib::OPENCV);
+                  int interp = 1, ProcLib lib = ProcLib::DEFAULT);
   int GetMaxLong() const { return max_long_; }
 
  private:

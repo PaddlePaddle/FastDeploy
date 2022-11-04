@@ -21,9 +21,7 @@ namespace vision {
 
 class WarpAffine : public Processor {
  public:
-  WarpAffine(const cv::Mat& trans_matrix,
-             int width, int height,
-             int interp = 1,
+  WarpAffine(const cv::Mat& trans_matrix, int width, int height, int interp = 1,
              int border_mode = 0,
              const cv::Scalar& borderValue = cv::Scalar()) {
     trans_matrix_ = trans_matrix;
@@ -37,7 +35,7 @@ class WarpAffine : public Processor {
   bool ImplByOpenCV(Mat* mat);
   std::string Name() { return "WarpAffine"; }
 
-  bool SetTransformMatrix(const cv::Mat &trans_matrix) {
+  bool SetTransformMatrix(const cv::Mat& trans_matrix) {
     trans_matrix_ = trans_matrix;
     return true;
   }
@@ -46,13 +44,10 @@ class WarpAffine : public Processor {
     return std::make_tuple(width_, height_);
   }
 
-  static bool Run(Mat* mat,
-                  const cv::Mat& trans_matrix,
-                  int width, int height,
-                  int interp = 1,
-                  int border_mode = 0,
+  static bool Run(Mat* mat, const cv::Mat& trans_matrix, int width, int height,
+                  int interp = 1, int border_mode = 0,
                   const cv::Scalar& borderValue = cv::Scalar(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   cv::Mat trans_matrix_;

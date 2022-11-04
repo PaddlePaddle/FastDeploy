@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/classification/ppcls/model.h"
+
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
@@ -108,7 +109,7 @@ bool PaddleClasModel::Preprocess(Mat* mat, FDTensor* output) {
   int height = mat->Height();
   output->name = InputInfoOfRuntime(0).name;
   output->SetExternalData({1, channel, height, width}, FDDataType::FP32,
-                          mat->GetOpenCVMat()->ptr());
+                          mat->Data());
   return true;
 }
 

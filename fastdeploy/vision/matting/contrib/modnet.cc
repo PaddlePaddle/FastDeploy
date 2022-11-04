@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/matting/contrib/modnet.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -26,8 +27,8 @@ MODNet::MODNet(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
+    valid_cpu_backends = {Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -118,7 +119,7 @@ bool MODNet::Postprocess(
   int numel = ipt_h * ipt_w;
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  std::memcpy(result->alpha.data(), alpha_resized.GetOpenCVMat()->data, nbytes);
+  std::memcpy(result->alpha.data(), alpha_resized.Data(), nbytes);
   return true;
 }
 

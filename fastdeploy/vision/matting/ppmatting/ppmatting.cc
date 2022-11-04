@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
+
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
 
@@ -171,15 +172,15 @@ bool PPMatting::Postprocess(
   std::vector<int64_t> dim{0, 2, 3, 1};
   Transpose(alpha_tensor, &alpha_tensor, dim);
   alpha_tensor.Squeeze(0);
-  Mat mat = CreateFromTensor(alpha_tensor);
+  Mat mat = CreateFDMatFromTensor(alpha_tensor);
 
   auto iter_ipt = im_info.find("input_shape");
   auto iter_out = im_info.find("output_shape");
-  if (is_fixed_input_shape_){
+  if (is_fixed_input_shape_) {
     double scale_h = static_cast<double>(iter_out->second[0]) /
-                    static_cast<double>(iter_ipt->second[0]);
+                     static_cast<double>(iter_ipt->second[0]);
     double scale_w = static_cast<double>(iter_out->second[1]) /
-                    static_cast<double>(iter_ipt->second[1]);
+                     static_cast<double>(iter_ipt->second[1]);
     double actual_scale = std::min(scale_h, scale_w);
 
     int size_before_pad_h = round(actual_scale * iter_ipt->second[0]);
@@ -188,7 +189,8 @@ bool PPMatting::Postprocess(
     Crop::Run(&mat, 0, 0, size_before_pad_w, size_before_pad_h);
   }
 
-  Resize::Run(&mat, iter_ipt->second[1], iter_ipt->second[0]);
+  Resize::Run(&mat, iter_ipt->second[1], iter_ipt->second[0], -1.0f, -1.0f, 1,
+              false, ProcLib::OPENCV);
 
   result->Clear();
   // note: must be setup shape before Resize
@@ -197,7 +199,7 @@ bool PPMatting::Postprocess(
   int numel = iter_ipt->second[0] * iter_ipt->second[1];
   int nbytes = numel * sizeof(float);
   result->Resize(numel);
-  std::memcpy(result->alpha.data(), mat.GetOpenCVMat()->data, nbytes);
+  std::memcpy(result->alpha.data(), mat.Data(), nbytes);
   return true;
 }
 
