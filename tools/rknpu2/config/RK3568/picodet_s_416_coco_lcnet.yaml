@@ -1,5 +1,7 @@
 model_path: ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx
 output_folder: ./picodet_s_416_coco_lcnet
 target_platform: RK3568
-normalize: None
+normalize:
+  mean: [[0.485,0.456,0.406]]
+  std: [[0.229,0.224,0.225]]
 outputs: None
