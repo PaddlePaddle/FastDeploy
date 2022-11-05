@@ -22,11 +22,10 @@ import runtime_config as rc
 def test_matting_rvm_cpu():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/rvm.tgz"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4"
-    fd.download_and_decompress(model_url, ".")
-    fd.download(input_url, ".")
-    model_path = "rvm/rvm_mobilenetv3_fp32.onnx"
+    fd.download_and_decompress(model_url, "resources")
+    fd.download(input_url, "resources")
+    model_path = "resources/rvm/rvm_mobilenetv3_fp32.onnx"
     # use ORT
-    runtime_option.use_ort_backend()
     model = fd.vision.matting.RobustVideoMatting(
         model_path, runtime_option=rc.test_option)
 
@@ -39,7 +38,7 @@ def test_matting_rvm_cpu():
             break
         result = model.predict(frame)
         # compare diff
-        expect_alpha = np.load("rvm/result_alpha_" + str(frame_id) + ".npy")
+        expect_alpha = np.load("resources/rvm/result_alpha_" + str(frame_id) + ".npy")
         result_alpha = np.array(result.alpha).reshape(1920, 1080)
         diff = np.fabs(expect_alpha - result_alpha)
         thres = 1e-05
