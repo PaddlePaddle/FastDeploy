@@ -29,7 +29,7 @@ RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作�
 需要先调用DisableNormalizePermute(C++)或`disable_normalize_permute(Python)，在预处理阶段禁用归一化以及数据格式的转换。
 ## 其它文档
 
-- [PaddleSeg 模型介绍](..)
-- [PaddleSeg C++部署](../cpp)
+- [PaddleDetection 模型介绍](..)
+- [PaddleDetection C++部署](../cpp)
 - [模型预测结果说明](../../../../../../docs/api/vision_results/)
-- [转换PPSeg RKNN模型文档](../README.md)
+- [转换PaddleDetection RKNN模型文档](../README.md)

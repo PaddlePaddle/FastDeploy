@@ -39,7 +39,7 @@ class FASTDEPLOY_DECL RKPicoDet : public PPYOLOE {
                            DetectionResult* result);
   virtual bool Initialize();
  private:
-  std::vector<float> scale_factor{1, 1};
+  std::vector<float> scale_factor{1.0, 1.0};
 };
 }  // namespace detection
 }  // namespace vision

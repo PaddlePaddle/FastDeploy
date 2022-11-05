@@ -5,7 +5,7 @@
 目前FastDeploy支持如下模型的部署
 - [PicoDet系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/picodet)
 
-## 准备PaddleSeg部署模型以及转换模型
+## 准备PaddleDetection部署模型以及转换模型
 RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如下:
 * Paddle动态图模型转换为ONNX模型，请参考[PaddleDetection导出模型](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/EXPORT_MODEL.md)
   ,注意在转换时请设置**export.nms=True**.
@@ -13,7 +13,7 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 
 
 ## 模型转换example
-下面以Picodet-npu为例子,教大家如何转换PPSeg模型到RKNN模型。
+下面以Picodet-npu为例子,教大家如何转换PaddleDetection模型到RKNN模型。
 ```bash
 ## 下载Paddle静态图模型并解压
 wget https://bj.bcebos.com/fastdeploy/models/rknn2/picodet_s_416_coco_npu.zip
