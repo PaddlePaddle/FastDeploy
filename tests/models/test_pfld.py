@@ -22,19 +22,20 @@ def test_facealignment_pfld():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/pfld-106-lite.onnx"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png"
     output_url = "https://bj.bcebos.com/paddlehub/fastdeploy/result_landmarks.npy"
-    fd.download(model_url, ".")
-    fd.download(input_url, ".")
-    fd.download(output_url, ".")
-    model_path = "pfld-106-lite.onnx"
+    fd.download(model_url, "resources")
+    fd.download(input_url, "resources")
+    fd.download(output_url, "resources")
+    model_path = "resources/pfld-106-lite.onnx"
     # use ORT
     model = fd.vision.facealign.PFLD(model_path, runtime_option=rc.test_option)
 
     # compare diff
-    im = cv2.imread("./facealign_input.png")
-    result = model.predict(im.copy())
-    expect = np.load("./result_landmarks.npy")
-
-    diff = np.fabs(np.array(result.landmarks) - expect)
-    thres = 1e-04
-    assert diff.max() < thres, "The diff is %f, which is bigger than %f" % (
-        diff.max(), thres)
+    im = cv2.imread("resources/facealign_input.png")
+    for i in range(2):
+        result = model.predict(im)
+        expect = np.load("resources/result_landmarks.npy")
+    
+        diff = np.fabs(np.array(result.landmarks) - expect)
+        thres = 1e-04
+        assert diff.max() < thres, "The diff is %f, which is bigger than %f" % (
+            diff.max(), thres)
