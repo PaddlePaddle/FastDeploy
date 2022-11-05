@@ -35,7 +35,6 @@ bool PaddleClasPostprocessor::Run(const std::vector<FDTensor>& infer_result, std
   const float* infer_result_data = reinterpret_cast<const float*>(infer_result[0].Data());
  
   results->resize(batch);
-  FDERROR << batch << std::endl;
 
   int topk = std::min(num_classes, topk_);
   for (int i = 0; i < batch; ++i) {
