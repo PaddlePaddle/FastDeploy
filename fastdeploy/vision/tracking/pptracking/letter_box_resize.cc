@@ -20,10 +20,10 @@ namespace vision{
 
 bool LetterBoxResize::operator()(Mat* mat, ProcLib lib) {
   if (mat->Channels() != color_.size()) {
-    FDERROR << "Pad: Require input channels equals to size of padding value, "
+    FDERROR << "LetterBoxResize: Require input channels equals to size of color value, "
                "but now channels = "
             << mat->Channels()
-            << ", the size of padding values = " << color_.size() << "."
+            << ", the size of color values = " << color_.size() << "."
             << std::endl;
     return false;
   }
