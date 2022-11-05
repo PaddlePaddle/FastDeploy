@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/tracking/pptracking/model.h"
+#include "fastdeploy/vision/tracking/pptracking/letter_box_resize.h"
 #include "yaml-cpp/yaml.h"
 
 namespace fastdeploy {
