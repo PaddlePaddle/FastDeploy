@@ -14,8 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/processors/transform.h"
-#include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/classification/ppcls/preprocessor.h"
+#include "fastdeploy/vision/classification/ppcls/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -43,28 +43,37 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
-  /** \brief Predict the classification result for an input image
+  /** \brief DEPRECATED Predict the classification result for an input image
    *
    * \param[in] im The input image data, comes from cv::imread()
    * \param[in] result The output classification result will be writen to this structure
-   * \param[in] topk (int)The topk result by the classify confidence score, default 1
    * \return true if the prediction successed, otherwise false
    */
-  // TODO(jiangjiajun) Batch is on the way
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
+
+  /** \brief DEPRECATED Predict the classification result for an input image
+   *
+   * \param[in] imgs The input image list, all the elements are come from cv::imread()
+   * \param[in] results The output classification result list, it's length equals to the length of input image list
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool Predict(const std::vector<cv::Mat>& imgs,
+                       std::vector<ClassifyResult>* results);
+
+  /// Get preprocessor reference of PaddleClasModel
+  virtual PaddleClasPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of PaddleClasModel
+  virtual PaddleClasPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  protected:
   bool Initialize();
-
-  bool BuildPreprocessPipelineFromConfig();
-
-  bool Preprocess(Mat* mat, FDTensor* outputs);
-
-  bool Postprocess(const FDTensor& infer_result, ClassifyResult* result,
-                   int topk = 1);
-
-  std::vector<std::shared_ptr<Processor>> processors_;
-  std::string config_file_;
+  PaddleClasPreprocessor preprocessor_;
+  PaddleClasPostprocessor postprocessor_;
 };
 
 typedef PaddleClasModel PPLCNet;

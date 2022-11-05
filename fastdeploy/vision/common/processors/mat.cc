@@ -191,5 +191,18 @@ Mat Mat::Create(int height, int width, int channels,
   return mat;    
 }
 
+FDMat WrapMat(const cv::Mat& image) {
+  FDMat mat(image);
+  return mat;
+}
+
+std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
+  std::vector<FDMat> mats;
+  for (size_t i = 0; i < images.size(); ++i) {
+    mats.emplace_back(FDMat(images[i]));
+  }
+  return mats;
+}
+
 }  // namespace vision
 }  // namespace fastdeploy

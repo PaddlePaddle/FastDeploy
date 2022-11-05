@@ -148,5 +148,15 @@ struct FASTDEPLOY_DECL Mat {
                     FDDataType type, void* data, ProcLib lib);
 };
 
+typedef Mat FDMat;
+/*
+ * @brief Wrap a cv::Mat to FDMat, there's no memory copy, memory buffer is managed by user
+ */
+FASTDEPLOY_DECL FDMat WrapMat(const cv::Mat& image);
+/*
+ * Warp a vector<cv::Mat> to vector<FDMat>, there's no memory copy, memory buffer is managed by user
+ */
+FASTDEPLOY_DECL std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images);
+
 }  // namespace vision
 }  // namespace fastdeploy
