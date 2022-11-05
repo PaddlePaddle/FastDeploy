@@ -14,14 +14,6 @@
 
 #pragma once
 #include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
-typedef struct BoxInfo {
-  float x1;
-  float y1;
-  float x2;
-  float y2;
-  float score;
-  int label;
-} BoxInfo;
 
 namespace fastdeploy {
 namespace vision {
@@ -46,21 +38,8 @@ class FASTDEPLOY_DECL RKPicoDet : public PPYOLOE {
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result);
   virtual bool Initialize();
-
  private:
-  std::vector<int> strides = {8, 16, 32, 64};
-  std::vector<double> ptr{};
-  void DecodeInfer(const float*& cls_pred, const float*& dis_pred, int stride,
-                    float threshold,
-                    std::vector<std::vector<BoxInfo>>& results);
-  BoxInfo DisPred2Bbox(const float*& dfl_det, int label, float score, int x,
-                       int y, int stride);
-  static void PicodetNms(std::vector<BoxInfo>& result, float nms_threshold);
-  int input_size_ = 416;
-  int num_class_ = 80;
-  int reg_max_ = 7;
-  // for recording the switch of normalize and hwc2chw
-  bool switch_of_nor_and_per = true;
+  std::vector<float> scale_factor{1, 1};
 };
 }  // namespace detection
 }  // namespace vision

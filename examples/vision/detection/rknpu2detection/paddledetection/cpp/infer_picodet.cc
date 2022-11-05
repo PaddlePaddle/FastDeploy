@@ -76,7 +76,7 @@ void InferPicodet(const std::string &device) {
     return;
   }
   clock_t end = clock();
-  auto dur = (double) (end - start);
+  auto dur = static_cast<double>(end - start);
   printf("picodet_npu use time:%f\n", (dur / CLOCKS_PER_SEC));
 
   std::cout << res.Str() << std::endl;

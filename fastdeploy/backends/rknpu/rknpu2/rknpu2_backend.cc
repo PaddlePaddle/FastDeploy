@@ -189,6 +189,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
         (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)){
       FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED" << std::endl;
     }
+    DumpTensorAttr(input_attrs_[i]);
 
     // copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
@@ -234,6 +235,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
                 << std::endl;
     }
 
+    DumpTensorAttr(output_attrs_[i]);
     // copy output_attrs_ to output tensor
     std::string temp_name = output_attrs_[i].name;
     std::vector<int> temp_shape{};
