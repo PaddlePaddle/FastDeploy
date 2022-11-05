@@ -27,13 +27,13 @@ class LetterBoxResize : public Processor {
     color_ = color;
   }
 
-  bool ImplByOpenCV(Mat* mat);
-
   std::string Name() { return "LetterBoxResize"; }
 
+  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+
   static bool Run(Mat* mat, const std::vector<int>& target_size,
-                  const std::vector<float>& color,
-                  ProcLib lib = ProcLib::DEFAULT);
+                const std::vector<float>& color,
+                ProcLib lib = ProcLib::DEFAULT);
 
  private:
   std::vector<int> target_size_;

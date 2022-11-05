@@ -20,7 +20,6 @@
 #include "fastdeploy/vision/common/processors/convert.h"
 #include "fastdeploy/vision/common/processors/crop.h"
 #include "fastdeploy/vision/common/processors/hwc2chw.h"
-#include "fastdeploy/vision/common/processors/letter_box.h"
 #include "fastdeploy/vision/common/processors/limit_by_stride.h"
 #include "fastdeploy/vision/common/processors/limit_long.h"
 #include "fastdeploy/vision/common/processors/limit_short.h"
