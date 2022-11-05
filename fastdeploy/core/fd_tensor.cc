@@ -130,6 +130,7 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
   dtype = data_type;

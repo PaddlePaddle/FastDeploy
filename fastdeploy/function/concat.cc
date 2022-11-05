@@ -60,8 +60,6 @@ void Concat(const std::vector<FDTensor>& inputs, FDTensor* out, int axis) {
     }
   }
 
-  out->external_data_ptr = nullptr;
-  out->device = Device::CPU;
   out->Resize(out_shape, inputs[0].Dtype());
   int index = 0;
   char* data_ptr = reinterpret_cast<char*>(out->MutableData());
