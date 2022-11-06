@@ -50,8 +50,8 @@ std::vector<int64_t> ComputeAndCheckConcatOutputShape(
             input[0].shape[j] == input[i].shape[j],
             "The %d-th dimension of input[0] and input[%d] is expected to be "
             "equal."
-            "But received input[0]'s shape = [%s], input[%d]'s shape = [%s].",
-            j, i, Str(input[0].shape), Str(input[i].shape));
+            "But received input[0]'s shape = %s, input[%d]'s shape = %s.",
+            j, i, Str(input[0].shape).c_str(), i, Str(input[i].shape).c_str());
       }
     }
   }
