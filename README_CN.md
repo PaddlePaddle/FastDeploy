@@ -100,8 +100,9 @@
 
 ## 🖥️ 服务端部署
 
-### Python SDK快速开始
 <div id="fastdeploy-quick-start-python"></div>
+
+<details open> <summary><style="font-size:100px"><b>Python SDK快速开始（点击可收缩）</b></font></summary>
 
 #### 快速安装
 
@@ -150,6 +151,8 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
+
+</details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
