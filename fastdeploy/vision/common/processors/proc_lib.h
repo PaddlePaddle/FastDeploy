@@ -20,6 +20,8 @@ namespace vision {
 
 enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV };
 
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
+
 struct FASTDEPLOY_DECL DefaultProcLib {
   // default_lib has the highest priority
   // all the function in `processor` will force to use
