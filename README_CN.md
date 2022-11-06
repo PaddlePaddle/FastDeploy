@@ -199,12 +199,16 @@ int main(int argc, char* argv[]) {
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
-### 服务端模型支持列表 🔥🔥🔥🔥🔥
-
 <div id="fastdeploy-server-models"></div>
+
+### 服务端模型支持列表 🔥🔥🔥🔥🔥
 
 符号说明: (1)  ✅: 已经支持; (2) ❔: 正在进行中; (3) N/A: 暂不支持; <br>
 链接说明：「模型列」会跳转到模型推理Demo代码
+
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198619323-c9b1cbce-1c1c-4f92-9737-4805c7c0ff2f.png" />
+</div>
 
 | 任务场景                   | 模型                                                                                           | API                                                                                                                                       | Linux   | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux         | Linux         | Linux   |
 |:----------------------:|:--------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------:|:-------:|:----------:|:-------:|:----------:|:-------:|:-------:|:-----------:|:-------------:|:-------------:|:-------:|
@@ -273,19 +277,24 @@ int main(int argc, char* argv[]) {
 | Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | [Python](examples/audio/pp-tts/python)/C++                                                                                                | ❔       | ❔          | ❔       | ❔          | ❔       | ❔       | ❔           | ❔             | --            | ✅       |
 
 
-## 📲 移动端和端侧部署 🔥🔥🔥🔥
-
 <div id="fastdeploy-edge-doc"></div>
 
-### Paddle Lite NPU部署
+## 📲 移动端和端侧部署 🔥🔥🔥🔥
+
 
 <div id="fastdeploy-edge-sdk-npu"></div>
 
+### Paddle Lite NPU部署
+
 - [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
+
+<div id="fastdeploy-edge-models"></div>
 
 ### 📲 端侧模型支持列表
 
-<div id="fastdeploy-edge-models"></div>
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198619323-c9b1cbce-1c1c-4f92-9737-4805c7c0ff2f.png" />
+</div>
 
 | 任务场景               | 模型                                                                                        | 大小(MB)   | Linux   | Android | iOS     | Linux                      | Linux                                | Linux                             | Linux                    | 更新中...  |
 |:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------: |:------------------:|:------------------------------------:|:---------------------------------:|:------------------------:|:-------:|
@@ -341,9 +350,9 @@ int main(int argc, char* argv[]) {
 | Object Recognition | [ItemIdentification](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
  
-## 社区交流
-
 <div id="fastdeploy-community"></div>
+
+## 社区交流
 
 - **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
@@ -351,9 +360,10 @@ int main(int argc, char* argv[]) {
 <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
 </div>
 
-## Acknowledge
 
 <div id="fastdeploy-acknowledge"></div>
+
+## Acknowledge
 
 本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，在此表示感谢。
 
