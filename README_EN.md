@@ -219,7 +219,10 @@ For more deployment models, please refer to [Vision Model Deployment Examples](e
 
 Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
 
-
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+</div>
+  
 
 | Task                          | Model                                                                                   | API                                                                                                                               | Linux                 | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux                       | Linux                       |  Linux        |
 |:-----------------------------:|:---------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:|:---------------------------:|:--------------------------:|:---------------------------:|
@@ -303,7 +306,9 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
     
 ### Supported Edge-Side Model List
 
-
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+</div>
 
 |  Task              | Model                        | Size (MB) | Linux   | Android | iOS     | Linux  |Linux                 | Linux                                   | Linux                    | TBD...  |
 |:------------------:|:----------------------------:|:---------:|:-------:|:-------:|:-------:|:-----------------------------------------:|:---------------------------------------:|:------------------------:|:-------:|:-------:|
