@@ -203,7 +203,7 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-server-models"></div>
 
-符号说明: (1)  ✅: 已经支持; (2) ❔: 正在进行中; (3) N/A: 暂不支持; (4) --: 暂不考虑;<br>
+符号说明: (1)  ✅: 已经支持; (2) ❔: 正在进行中; (3) N/A: 暂不支持; <br>
 链接说明：「模型列」会跳转到模型推理Demo代码
 
 | 任务场景                   | 模型                                                                                           | API                                                                                                                                       | Linux   | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux         | Linux         | Linux   |
