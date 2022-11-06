@@ -52,7 +52,7 @@ English | [简体中文](README_CN.md)
        - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;
        - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/);
        - Support information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie);
-       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet+TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
+       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet and TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
     -  **📲 Mobile and Edge Device Deployment: support new backend，support more CV model**
        - Integrate Paddle Lite and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Inference；
        - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out.
