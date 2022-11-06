@@ -9,7 +9,7 @@
 ```bash
 # 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/rknpu2detection/paddledetection/python
+cd FastDeploy/examples/vision/detection/paddledetection/rknpu2/python
 
 # 下载图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg

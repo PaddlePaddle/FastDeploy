@@ -13,4 +13,4 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/detection/rknpu2/rkpicodet.h"
+#include "fastdeploy/vision/detection/contrib/rknpu2/rkpicodet.h"

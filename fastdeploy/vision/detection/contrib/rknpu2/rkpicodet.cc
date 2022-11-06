@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/rknpu2/rkpicodet.h"
+#include "fastdeploy/vision/detection/contrib/rknpu2/rkpicodet.h"
 #include "yaml-cpp/yaml.h"
 namespace fastdeploy {
 namespace vision {
