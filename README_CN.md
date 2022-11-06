@@ -28,6 +28,13 @@
 
 ## 近期更新
 
+- 🔥 **2022.11.09 20:30～21:30，【直播分享】《覆盖云边端全场景，150+热门模型快速部署》。扫码报名**
+- 🔥 **2022.11.10 20:30～21:30，【直播分享】《瑞芯微、晶晨、恩智浦等10+AI硬件部署，直达产业落地》。扫码报名**
+- 🔥 **2022.11.10 19:00～20:00，【直播分享】《10+热门模型在RK3588、RK3568部署实战》。扫码报名**
+- <div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "225" height = "225" />
+  </div>
+  
 - 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.3.0)** <br>
   - **New server-side deployment upgrade:更快的推理性能，一键量化，更多的视觉和NLP模型**
        - 集成 OpenVINO 推理引擎，并且保证了使用 OpenVINO 与 使用 TensorRT、ONNX Runtime、 Paddle Inference一致的开发体验；
@@ -278,7 +285,7 @@ int main(int argc, char* argv[]) {
 - **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
 </div>
 
 ## Acknowledge
