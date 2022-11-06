@@ -51,7 +51,7 @@
        - 集成 Paddle Lite，并保证其使用与服务端常用推理引擎 Paddle Inference、TensorRT、OpenVINO、ONNX Runtime 等一致的开发体验；
        - 新增 [轻量化目标检测模型](examples/vision/detection/paddledetection/android)和[分类模型](examples/vision/classification/paddleclas/android)的安卓端部署能力；
     -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署：新增Web端部署能力**
-       - 集成 Paddle.js部署能力，新增 OCR、目标检测、人像分割背景替换、物体识别等Web端部署能力和Demo(examples/application/js)；
+       - 集成 Paddle.js部署能力，新增 OCR、目标检测、人像分割背景替换、物体识别等Web端部署能力和[Demo](examples/application/js)；
 
 ## 目录
 
@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
 
 ### 📲 端侧模型支持列表
 
-<div id="fastdeploy-edge-sdk"></div>
+<div id="fastdeploy-edge-models"></div>
 
 | 任务场景               | 模型                                                                                        | 大小(MB)   | Linux   | Android | iOS     | Linux                      | Linux                                | Linux                             | Linux                    | 更新中...  |
 |:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------: |:------------------:|:------------------------------------:|:---------------------------------:|:------------------------:|:-------:|
