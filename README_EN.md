@@ -172,8 +172,6 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 <details>
 <summary><style="font-size:100px"><b>A Quick Start for C++ SDK（click to expand）</b></font></summary>
-    
-<div id="fastdeploy-quick-start-cpp"></div>
 
 #### Installation
 
@@ -215,10 +213,9 @@ int main(int argc, char* argv[]) {
 For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
 
+<div id="fastdeploy-server-models"></div>
 
 ### Supported Data Center and Web Model List🔥🔥🔥🔥🔥
-
-<div id="fastdeploy-server-models"></div>
 
 Notes: ✅: already supported; ❔: to be supported in the future; N/A: not supported now;
 
@@ -291,19 +288,22 @@ Notes: ✅: already supported; ❔: to be supported in the future; N/A: not supp
 | Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | [Python](examples/audio/pp-tts/python)/C++                                                                                                | ❔       | ❔          | ❔       | ❔          | ❔       | ❔       | ❔           | ❔             | --            | ✅       |
     
 
+<div id="fastdeploy-edge-doc"></div>
+    
 ## 📲 Mobile and Edge Device Deployment 🔥🔥🔥🔥
 
-<div id="fastdeploy-edge-doc"></div>
-
-### Paddle Lite NPU Deployment
 
 <div id="fastdeploy-edge-sdk-npu"></div>
+    
+### Paddle Lite NPU Deployment
 
-- [Rexchip-NPU / Amlogic-NPU / NXP-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
-
-### Supported Edge-Side Model List
+- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
 
 <div id="fastdeploy-edge-models"></div>
+    
+### Supported Edge-Side Model List
+
+
 
 |  Task              | Model                        | Size (MB) | Linux   | Android | iOS     | Linux  |Linux                 | Linux                                   | Linux                    | TBD...  |
 |:------------------:|:----------------------------:|:---------:|:-------:|:-------:|:-------:|:-----------------------------------------:|:---------------------------------------:|:------------------------:|:-------:|:-------:|
