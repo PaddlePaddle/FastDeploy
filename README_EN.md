@@ -107,9 +107,11 @@ English | [简体中文](README_CN.md)
 
 ## 🖥️ Data Center and Web Deployment
 
-### A Quick Start for Python SDK
-
 <div id="fastdeploy-quick-start-python"></div>
+
+<details open>
+<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to shrink）</b></font></summary>
+
 
 #### Installation
 
@@ -164,7 +166,8 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-
+</details>
+         
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
