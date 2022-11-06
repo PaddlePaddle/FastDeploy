@@ -48,3 +48,7 @@ def test_classification_mobilenetv2():
         assert diff_label.max() < 1e-06, "There's difference in classify label."
         assert diff_scores.max(
         ) < 1e-05, "There's difference in classify score."
+
+
+if __name__ == "__main__":
+    test_classification_mobilenetv2()
