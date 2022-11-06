@@ -42,22 +42,22 @@ English | [简体中文](README_CN.md)
 
 - 🔥 **2022.10.31：Release FastDeploy [release v0.5.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.5.0)** <br>
     -  **🖥️ Data Center and Cloud Deployment: Support more backend, Support more CV models**
-        -  Support Paddle Inference TensorRT, and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Lite、Paddle Inference；
+        -  Support Paddle Inference TensorRT, and provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime；
         -  Support Graphcore IPU through paddle Inference;
         -  Support tracking model [PP-Tracking](./examples/vision/tracking/pptracking) and [RobustVideoMatting](./examples/vision/matting) model；
         -  Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
 
 - 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)** <br>
     -  **🖥️ Data Center and Cloud Deployment: end-to-end optimization, Support more CV and NLP model**
-       - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;<br>
+       - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;
        - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
        - Support information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie);
-       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet+TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment；
+       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet+TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
     -  **📲 Mobile and Edge Device Deployment: support new backend，support more CV model**
        - Integrate Paddle Lite and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Inference；
-       - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out;
+       - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out.
     -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web-Side Deployment: support more CV model**  
-       - Web deployment and Mini Program deployment New [OCR and other CV models](examples/application/js) capability；
+       - Web deployment and Mini Program deployment New [OCR and other CV models](examples/application/js) capability.
       
 
 ## Contents
