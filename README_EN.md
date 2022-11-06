@@ -50,7 +50,7 @@ English | [简体中文](README_CN.md)
 - 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)** <br>
     -  **🖥️ Data Center and Cloud Deployment: end-to-end optimization, Support more CV and NLP model**
        - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;
-       - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
+       - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/);
        - Support information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie);
        - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet+TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
     -  **📲 Mobile and Edge Device Deployment: support new backend，support more CV model**
