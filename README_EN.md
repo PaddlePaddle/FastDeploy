@@ -217,7 +217,7 @@ For more deployment models, please refer to [Vision Model Deployment Examples](e
 
 ### Supported Data Center and Web Model List🔥🔥🔥🔥🔥
 
-Notes: ✅: already supported; ❔: to be supported in the future; N/A: not supported now;
+Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
 
 
 
