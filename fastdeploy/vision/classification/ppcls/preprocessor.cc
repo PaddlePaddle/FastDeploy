@@ -93,14 +93,6 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   }
 
   outputs->resize(1);
-  // If only 1 image, just share memory with the input image
-  if (images->size() == 1) {
-    (*images)[0].ShareWithTensor(&((*outputs)[0]));
-    // Reshape to [1, -1, -1, -1]
-    (*outputs)[0].ExpandDim(0);
-    return true;
-  }
-
   // Concat all the preprocessed data to a batch tensor
   std::vector<FDTensor> tensors(images->size()); 
   for (size_t i = 0; i < images->size(); ++i) {

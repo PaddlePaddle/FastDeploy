@@ -18,6 +18,42 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class PaddleClasPreprocessor:
+    def __init__(self, config_file):
+        """Create a preprocessor for PaddleClasModel from configuration file
+
+        :param config_file: (str)Path of configuration file, e.g resnet50/inference_cls.yaml
+        """
+        self._preprocessor = C.vision.classification.PaddleClasPreprocessor(
+            config_file)
+
+    def run(self, input_ims):
+        """Preprocess input images for PaddleClasModel
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+
+class PaddleClasPostprocessor:
+    def __init__(self, topk=1):
+        """Create a postprocessor for PaddleClasModel
+
+        :param topk: (int)Filter the top k classify label
+        """
+        self._postprocessor = C.vision.classification.PaddleClasPostprocessor(
+            topk)
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for PaddleClasModel
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
+
+
 class PaddleClasModel(FastDeployModel):
     def __init__(self,
                  model_file,
@@ -42,12 +78,36 @@ class PaddleClasModel(FastDeployModel):
             model_format)
         assert self.initialized, "PaddleClas model initialize failed."
 
-    def predict(self, im, topk=1):
+    def predict(self, im):
         """Classify an input image
 
-        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param topk: (int)The topk result by the classify confidence score, default 1
+        :param im: (numpy.ndarray) The input image data, a 3-D array with layout HWC, BGR format
         :return: ClassifyResult
         """
 
-        return self._model.predict(im, topk)
+        return self._model.predict(im)
+
+    def batch_predict(self, images):
+        """Classify a batch of input image
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of ClassifyResult
+        """
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get PaddleClasPreprocessor object of the loaded model
+
+        :return PaddleClasPreprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get PaddleClasPostprocessor object of the loaded model
+
+        :return PaddleClasPostprocessor
+        """
+        return self._model.postprocessor

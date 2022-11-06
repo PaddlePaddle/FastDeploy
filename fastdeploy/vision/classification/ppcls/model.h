@@ -43,7 +43,7 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 
-  /** \brief DEPRECATED Predict the classification result for an input image
+  /** \brief DEPRECATED Predict the classification result for an input image, remove at 1.0 version
    *
    * \param[in] im The input image data, comes from cv::imread()
    * \param[in] result The output classification result will be writen to this structure
@@ -51,14 +51,23 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
-  /** \brief DEPRECATED Predict the classification result for an input image
+
+  /** \brief Predict the classification result for an input image
    *
-   * \param[in] imgs The input image list, all the elements are come from cv::imread()
-   * \param[in] results The output classification result list, it's length equals to the length of input image list
+   * \param[in] img The input image data, comes from cv::imread()
+   * \param[in] result The output classification result
    * \return true if the prediction successed, otherwise false
    */
-  virtual bool Predict(const std::vector<cv::Mat>& imgs,
-                       std::vector<ClassifyResult>* results);
+  virtual bool Predict(const cv::Mat& img, ClassifyResult* result);
+
+  /** \brief Predict the classification results for a batch of input images
+   *
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] results The output classification result list
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
+                            std::vector<ClassifyResult>* results);
 
   /// Get preprocessor reference of PaddleClasModel
   virtual PaddleClasPreprocessor& GetPreprocessor() {
