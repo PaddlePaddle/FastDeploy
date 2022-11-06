@@ -62,7 +62,7 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default='ort',
+        default='pp',
         choices=['ort', 'trt', 'pp', 'pp-trt'],
         help="The inference runtime backend of unet model and text encoder model."
     )
