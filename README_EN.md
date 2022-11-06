@@ -100,7 +100,7 @@ English | [简体中文](README_CN.md)
   * [Paddle Lite NPU Deployment](#fastdeploy-edge-sdk-npu)
   * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
 * **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web and Mini_Program Deployment** 
-  * [Supported Web and Mini_Program Model List](#fastdeploy-web-models)
+  * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 * [**Community**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
 * [**License**](#fastdeploy-license)
