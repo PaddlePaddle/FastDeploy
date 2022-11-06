@@ -21,6 +21,7 @@
 
 #include "fastdeploy/backends/common/multiclass_nms.h"
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
 
@@ -63,6 +64,11 @@ class BaseBackend {
   virtual std::vector<TensorInfo> GetOutputInfos() = 0;
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs) = 0;
+  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                             int device_id = -1) {
+    FDERROR << "Clone no support" << std::endl;
+    return nullptr;
+  }
 };
 
 }  // namespace fastdeploy

@@ -485,5 +485,28 @@ std::string OCRResult::Str() {
   return no_result;
 }
 
+void HeadPoseResult::Clear() {
+  std::vector<float>().swap(euler_angles);
+}
+
+void HeadPoseResult::Reserve(int size) {
+  euler_angles.resize(size);
+}
+
+void HeadPoseResult::Resize(int size) {
+  euler_angles.resize(size);
+}
+
+std::string HeadPoseResult::Str() {
+  std::string out;
+
+  out = "HeadPoseResult: [yaw, pitch, roll]\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  return out;
+}
+
+
 }  // namespace vision
 }  // namespace fastdeploy
