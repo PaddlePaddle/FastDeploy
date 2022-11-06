@@ -73,61 +73,61 @@ int CreateOpenCVDataType(FDDataType type, int channel) {
 FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type) {
   if (type == fcv::FCVImageType::GRAY_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_U8) {
+  } else if (type == fcv::FCVImageType::PKG_BGR_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_U8) {
+  } else if (type == fcv::FCVImageType::PKG_RGB_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_U8) {
+  } else if (type == fcv::FCVImageType::PKG_BGR_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_U8) {
+  } else if (type == fcv::FCVImageType::PKG_RGB_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGR_U8) {
+  } else if (type == fcv::FCVImageType::PLA_BGR_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_RGB_U8) {
+  } else if (type == fcv::FCVImageType::PLA_RGB_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGRA_U8) {
+  } else if (type == fcv::FCVImageType::PLA_BGRA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_RGBA_U8) {
+  } else if (type == fcv::FCVImageType::PLA_RGBA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGR_F32) {
+  } else if (type == fcv::FCVImageType::PLA_BGR_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_RGB_F32) {
+  } else if (type == fcv::FCVImageType::PLA_RGB_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_BGRA_F32) {
+  } else if (type == fcv::FCVImageType::PLA_BGRA_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_RGBA_F32) {
+  } else if (type == fcv::FCVImageType::PLA_RGBA_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_U8) {
+  } else if (type == fcv::FCVImageType::PKG_BGRA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_U8) {
+  } else if (type == fcv::FCVImageType::PKG_RGBA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_U8) {
+  } else if (type == fcv::FCVImageType::PKG_BGRA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_U8) {
+  } else if (type == fcv::FCVImageType::PKG_RGBA_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR565_U8) {
+  } else if (type == fcv::FCVImageType::PKG_BGR565_U8) {
     return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB565_U8) {
+  } else if (type == fcv::FCVImageType::PKG_RGB565_U8) {
     return FDDataType::UINT8;
   } else if (type == fcv::FCVImageType::GRAY_S32) {
     return FDDataType::INT32;
   } else if (type == fcv::FCVImageType::GRAY_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_F32) {
+  } else if (type == fcv::FCVImageType::PKG_BGR_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_F32) {
+  } else if (type == fcv::FCVImageType::PKG_RGB_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_F32) {
+  } else if (type == fcv::FCVImageType::PKG_BGR_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_F32) {
+  } else if (type == fcv::FCVImageType::PKG_RGB_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_F32) {
+  } else if (type == fcv::FCVImageType::PKG_BGRA_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_F32) {
+  } else if (type == fcv::FCVImageType::PKG_RGBA_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_F32) {
+  } else if (type == fcv::FCVImageType::PKG_BGRA_F32) {
     return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_F32) {
+  } else if (type == fcv::FCVImageType::PKG_RGBA_F32) {
     return FDDataType::FP32;
   } else if (type == fcv::FCVImageType::GRAY_F64) {
     return FDDataType::FP64;
@@ -144,21 +144,21 @@ fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel) {
     if (channel == 1) {
       return fcv::FCVImageType::GRAY_U8;
     } else if (channel == 3) {
-      return fcv::FCVImageType::PACKAGE_BGR_U8;
+      return fcv::FCVImageType::PKG_BGR_U8;
     } else {
-      return fcv::FCVImageType::PACKAGE_BGRA_U8;
+      return fcv::FCVImageType::PKG_BGRA_U8;
     }
   } else if (type == FDDataType::FP32) {
     if (channel == 1) {
       return fcv::FCVImageType::GRAY_F32;
     } else if (channel == 3) {
-      return fcv::FCVImageType::PACKAGE_BGR_F32;
+      return fcv::FCVImageType::PKG_BGR_F32;
     } else {
-      return fcv::FCVImageType::PACKAGE_BGRA_F32;
+      return fcv::FCVImageType::PKG_BGRA_F32;
     }
   }
   FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
-  return fcv::FCVImageType::PACKAGE_BGR_F32;
+  return fcv::FCVImageType::PKG_BGR_F32;
 }
 
 fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im) {

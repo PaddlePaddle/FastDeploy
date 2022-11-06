@@ -22,7 +22,6 @@ namespace vision {
 
 enum Layout { HWC, CHW };
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(const cv::Mat& mat) {

@@ -120,19 +120,21 @@ bool RobustVideoMatting::Postprocess(
 
   // for alpha
   float* alpha_ptr = static_cast<float*>(alpha.Data());
-  cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
-  Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
+  // cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
+  // Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
+  Mat alpha_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
+                                  alpha_ptr); // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
-    // already allocated a new continuous memory after resize.
     Resize::Run(&alpha_resized, in_w, in_h, -1, -1);
   }
 
   // for foreground
   float* fgr_ptr = static_cast<float*>(fgr.Data());
-  cv::Mat fgr_zero_copy_ref(out_h, out_w, CV_32FC1, fgr_ptr);
-  Mat fgr_resized(fgr_zero_copy_ref);  // ref-only, zero copy.
+  // cv::Mat fgr_zero_copy_ref(out_h, out_w, CV_32FC1, fgr_ptr);
+  // Mat fgr_resized(fgr_zero_copy_ref);  // ref-only, zero copy.
+  Mat fgr_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
+                                fgr_ptr); // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
-    // already allocated a new continuous memory after resize.
     Resize::Run(&fgr_resized, in_w, in_h, -1, -1);
   }
 
