@@ -31,6 +31,7 @@
 #include "fastdeploy/vision/common/processors/resize_by_short.h"
 #include "fastdeploy/vision/common/processors/stride_pad.h"
 #include "fastdeploy/vision/common/processors/warp_affine.h"
+#include <unordered_set>
 
 namespace fastdeploy {
 namespace vision {
@@ -41,6 +42,9 @@ void FuseTransforms(std::vector<std::shared_ptr<Processor>>* processors);
 void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processors);
 // Fuse Normalize + HWC2CHW to NormalizeAndPermute
 void FuseNormalizeHWC2CHW(std::vector<std::shared_ptr<Processor>>* processors);
+// Fuse Normalize + Color Convert
+void FuseNormalizeColorConvert(
+    std::vector<std::shared_ptr<Processor>>* processors);
 
 }  // namespace vision
 }  // namespace fastdeploy
