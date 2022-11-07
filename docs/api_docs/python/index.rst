@@ -20,4 +20,6 @@ FastDeploy
     matting.md
     face_recognition.md
     face_detection.md
+    face_alignment.md
+    headpose.md
     vision_results_en.md
