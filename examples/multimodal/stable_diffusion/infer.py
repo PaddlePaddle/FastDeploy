@@ -26,6 +26,7 @@ except ImportError:
 import fastdeploy as fd
 from fastdeploy import ModelFormat
 import numpy as np
+import distutils.util
 
 
 def parse_arguments():
@@ -75,6 +76,11 @@ def parse_arguments():
         default="fd_astronaut_rides_horse.png",
         help="The model directory of diffusion_model.")
     parser.add_argument(
+        "--use_fp16",
+        type=distutils.util.strtobool,
+        default=False,
+        help="Wheter to use FP16 mode")
+    parser.add_argument(
         "--device_id",
         type=int,
         default=0,
@@ -101,15 +107,20 @@ def create_paddle_inference_runtime(model_dir,
                                     model_prefix,
                                     use_trt=False,
                                     dynamic_shape=None,
+                                    use_fp16=False,
                                     device_id=0):
     option = fd.RuntimeOption()
     option.use_paddle_backend()
     if use_trt:
         option.use_trt_backend()
         option.enable_paddle_to_trt()
+        if use_fp16:
+            option.enable_trt_fp16()
+        cache_file = os.path.join(model_dir, model_prefix, "inference.trt")
+        option.set_trt_cache_file(cache_file)
         # Need to enable collect shape for ernie
-        option.enable_paddle_trt_collect_shape()
         if dynamic_shape is not None:
+            option.enable_paddle_trt_collect_shape()
             for key, shape_dict in dynamic_shape.items():
                 option.set_trt_input_shape(
                     key,
@@ -229,6 +240,7 @@ if __name__ == "__main__":
             args.vae_model_prefix,
             use_trt,
             vae_dynamic_shape,
+            use_fp16=args.use_fp16,
             device_id=args.device_id)
         start = time.time()
         unet_runtime = create_paddle_inference_runtime(
@@ -236,6 +248,7 @@ if __name__ == "__main__":
             args.unet_model_prefix,
             use_trt,
             unet_dynamic_shape,
+            use_fp16=args.use_fp16,
             device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "tensorrt":

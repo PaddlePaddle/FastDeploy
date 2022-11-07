@@ -79,6 +79,7 @@ python infer.py --model_dir paddle_diffusion_model/ --backend paddle
 | --inference_steps | UNet模型运行的次数，默认为100。 |
 | --image_path | 生成图片的路径。默认为`fd_astronaut_rides_horse.png`。  |
 | --device_id | gpu设备的id。若`device_id`为-1，视为使用cpu推理。 |
+| --use_fp16 | 是否使用fp16精度。默认为`False`。使用tensorrt或者paddle-tensorrt后端时可以设为`True`开启。 |
 
 ## Diffusers 模型部署
 
@@ -158,3 +159,4 @@ python infer.py --model_dir torch_diffusion_model/ --backend onnx_runtime --mode
 | --inference_steps | UNet模型运行的次数，默认为100。 |
 | --image_path | 生成图片的路径。默认为`fd_astronaut_rides_horse.png`。  |
 | --device_id | gpu设备的id。若`device_id`为-1，视为使用cpu推理。 |
+| --use_fp16 | 是否使用fp16精度。默认为`False`。使用tensorrt或者paddle-tensorrt后端时可以设为`True`开启。 |
