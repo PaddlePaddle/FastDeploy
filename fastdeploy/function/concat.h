@@ -18,12 +18,13 @@
 
 namespace fastdeploy {
 
-/** Excute the concatenate operation for input FDTensor list along given dims.
-    @param inputs The input tensor list.
+/** Excute the concatenate operation for input FDTensor along given axis.
+    @param x The input tensor.
     @param out The output tensor which stores the result.
-    @param axis The axis which will be reduced.
+    @param axisi Axis which will be concatenated.
 */
 
-FASTDEPLOY_DECL void Concat(const std::vector<FDTensor>& inputs,
-                            FDTensor* out, int axis);
+FASTDEPLOY_DECL void Concat(const std::vector<FDTensor>& x, FDTensor* out,
+                            int axis = 0);
+
 }  // namespace fastdeploy

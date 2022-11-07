@@ -12,61 +12,113 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/function/reduce.h"
+#include "fastdeploy/function/concat.h"
 
+#include <cstring>
 #include <limits>
 #include <set>
-
-#include "fastdeploy/function/eigen.h"
-#include "fastdeploy/function/reduce_functor.h"
-#include "fastdeploy/function/transpose.h"
+#include <sstream>
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
-template <typename T>
-std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
-  out << "[";
-  for (size_t i = 0; i < vec.size(); ++i) {
-    if (i != vec.size() - 1) {
-      out << vec[i] << ", ";
-    } else {
-      out << vec[i] << "]";
-    }
+std::string Str(const std::vector<int64_t>& shape) {
+  std::ostringstream oss;
+  oss << "[ " << shape[0];
+  for (int i = 1; i < shape.size(); ++i) {
+    oss << " ," << shape[i];
   }
-  return out;
+  oss << " ]";
+  return oss.str();
 }
 
-
-void Concat(const std::vector<FDTensor>& inputs, FDTensor* out, int axis) {
-  FDASSERT(inputs.size() > 0, "The length of inputs is 0.");
-  auto first_shape = inputs[0].Shape();
-  std::vector<int64_t> out_shape(first_shape.begin(), first_shape.end());
-
-  if (axis < 0) {
-    axis += first_shape.size();
-  }
-
-  for (size_t i = 1; i < inputs.size(); ++i) {
-    auto shape = inputs[i].Shape();
-    FDASSERT(shape.size() == first_shape.size(), "Require all the rank of input tensors be same, but the first tensors' rank is %zu while the rank of tensor(index=%zu) is %zu.", first_shape.size(), i, shape.size());
-    FDASSERT(inputs[i].Dtype() == inputs[0].Dtype(), "Require all the data type of input tensors be same.");
-    for (size_t dim = 0; dim < shape.size(); ++dim) {
-      if (dim == axis) {
-        out_shape[dim] += shape[axis];
-        continue;
+std::vector<int64_t> ComputeAndCheckConcatOutputShape(
+    const std::vector<FDTensor>& input, int axis) {
+  const size_t n = input.size();
+  auto out_dims = input[0].shape;
+  size_t in_zero_dims_size = out_dims.size();
+  for (size_t i = 1; i < n; ++i) {
+    FDASSERT(input[i].shape.size() == out_dims.size(),
+             "The shape of input[0] and input[%d] is expected to be equal. But "
+             "received input[0]'s shape = %s, input[%d]'s shape = %s.",
+             i, Str(out_dims).c_str(), i, Str(input[i].shape).c_str());
+    for (size_t j = 0; j < in_zero_dims_size; j++) {
+      if (j == axis) {
+        out_dims[axis] += input[i].shape[axis];
+      } else {
+        FDASSERT(
+            input[0].shape[j] == input[i].shape[j],
+            "The %d-th dimension of input[0] and input[%d] is expected to be "
+            "equal."
+            "But received input[0]'s shape = %s, input[%d]'s shape = %s.",
+            j, i, Str(input[0].shape).c_str(), i, Str(input[i].shape).c_str());
       }
-      FDASSERT(shape[dim] == first_shape[dim], "Require all the input tensors' shape be same exclude the concatenate axis.");
     }
   }
+  return out_dims;
+}
 
-  out->Resize(out_shape, inputs[0].Dtype());
-  int index = 0;
-  char* data_ptr = reinterpret_cast<char*>(out->MutableData());
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    memcpy(data_ptr + index, inputs[i].CpuData(), inputs[i].Nbytes());
-    index += inputs[i].Nbytes();
+template <typename T>
+struct ConcatFunctor {
+  void operator()(const std::vector<FDTensor>& input, int axis,
+                  FDTensor* output) {
+    size_t num = input.size();
+
+    int64_t rows = 1;
+    auto dim_0 = input[0].shape;
+    for (int i = 0; i < axis; ++i) {
+      rows *= dim_0[i];
+    }
+    int64_t out_rows = rows, out_cols = 0;
+
+    std::vector<int64_t> input_cols(num);
+    for (size_t i = 0; i < num; ++i) {
+      int64_t t_cols = input[i].Numel() / rows;
+      out_cols += t_cols;
+      input_cols[i] = t_cols;
+    }
+
+    // computation
+    T* output_data = reinterpret_cast<T*>(output->Data());
+    int64_t col_idx = 0;
+    for (size_t j = 0; j < num; ++j) {
+      int64_t col_len = input_cols[j];
+      const T* input_data = reinterpret_cast<const T*>(input[j].Data());
+      for (int64_t k = 0; k < out_rows; ++k) {
+        std::memcpy(output_data + k * out_cols + col_idx,
+                    input_data + k * col_len, sizeof(T) * col_len);
+      }
+      col_idx += col_len;
+    }
   }
+};
+
+template <typename T>
+void ConcatKernel(const std::vector<FDTensor>& input, FDTensor* output,
+                  int axis) {
+  auto output_shape = ComputeAndCheckConcatOutputShape(input, axis);
+  output->Allocate(output_shape, TypeToDataType<T>::dtype);
+
+  ConcatFunctor<T> functor;
+  functor(input, axis, output);
+}
+
+void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {
+  FDASSERT(x.size() > 0,
+           "The number of FDTensor array should be larger than 0, but the size "
+           "of input is %d",
+           x.size());
+  int64_t rank = x[0].shape.size();
+  FDASSERT(axis >= -rank && axis < rank,
+           "The axis is expected to be in range of [%d, %d), but got %d", -rank,
+           rank, axis);
+  if (axis < 0) {
+    axis += rank;
+  }
+  FDTensor out_temp;
+  FD_VISIT_ALL_TYPES(x[0].dtype, "Concat",
+                     ([&] { ConcatKernel<data_t>(x, &out_temp, axis); }));
+  *out = std::move(out_temp);
 }
 
 }  // namespace fastdeploy
