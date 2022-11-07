@@ -1,0 +1,5 @@
+model_path: ./picodet_s_416_coco_npu/picodet_s_416_coco_npu.onnx
+output_folder: ./picodet_s_416_coco_npu
+target_platform: RK3588
+normalize: None
+outputs: ['tmp_16','p2o.Concat.17']

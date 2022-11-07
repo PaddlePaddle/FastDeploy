@@ -13,44 +13,21 @@
 // limitations under the License.
 
 #pragma once
-
 #include "fastdeploy/utils/utils.h"
-#include "fastdeploy/vision/common/processors/mat.h"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
-/*! @brief Enable using FlyCV to process image while deploy vision models.
- * Currently, FlyCV in only available on ARM(Linux aarch64/Android), so will
- * fallback to using OpenCV in other platform
- */
-FASTDEPLOY_DECL void EnableFlyCV();
+enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV };
 
-/// Disable using FlyCV to process image while deploy vision models.
-FASTDEPLOY_DECL void DisableFlyCV();
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
-class FASTDEPLOY_DECL Processor {
- public:
+struct FASTDEPLOY_DECL DefaultProcLib {
   // default_lib has the highest priority
   // all the function in `processor` will force to use
   // default_lib if this flag is set.
   // DEFAULT means this flag is not set
-  // static ProcLib default_lib;
-
-  virtual std::string Name() = 0;
-
-  virtual bool ImplByOpenCV(Mat* mat) {
-    FDERROR << Name() << " Not Implement Yet." << std::endl;
-    return false;
-  }
-
-  virtual bool ImplByFlyCV(Mat* mat) {
-    return ImplByOpenCV(mat);
-  }
-
-  virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+  static ProcLib default_lib;
 };
 
 }  // namespace vision

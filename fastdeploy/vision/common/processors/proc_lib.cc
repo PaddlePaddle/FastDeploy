@@ -12,32 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 namespace fastdeploy {
 namespace vision {
 
-class LetterBoxResize : public Processor {
- public:
-  LetterBoxResize(const std::vector<int>& target_size,
-                  const std::vector<float>& color) {
-    target_size_ = target_size;
-    color_ = color;
+ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
+
+std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
+  switch (p) {
+    case ProcLib::DEFAULT:
+      out << "ProcLib::DEFAULT";
+      break;
+    case ProcLib::OPENCV:
+      out << "ProcLib::OPENCV";
+      break;
+    case ProcLib::FLYCV:
+      out << "ProcLib::FLYCV";
+      break;
+    default:
+      FDASSERT(false, "Unknow type of ProcLib.");
   }
+  return out;
+}
 
-  bool ImplByOpenCV(Mat* mat);
-
-  std::string Name() { return "LetterBoxResize"; }
-
-  static bool Run(Mat* mat, const std::vector<int>& target_size,
-                  const std::vector<float>& color,
-                  ProcLib lib = ProcLib::DEFAULT);
-
- private:
-  std::vector<int> target_size_;
-  std::vector<float> color_;
-};
 }  // namespace vision
 }  // namespace fastdeploy
