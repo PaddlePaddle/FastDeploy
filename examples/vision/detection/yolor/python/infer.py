@@ -16,7 +16,7 @@ def parse_arguments():
         help="Model name in model hub, the model will be downloaded automatically."
     )
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--image", default=None, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
