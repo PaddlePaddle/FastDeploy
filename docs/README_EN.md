@@ -13,8 +13,8 @@
 
 ## A Quick Start - Demos
 
-- [PP-YOLOE Python Deployment Demo](en/quick_start/models/python.md)
-- [PP-YOLOE C++ Deployment Demo](en/quick_start/models/cpp.md)
+- [Python Deployment Demo](en/quick_start/models/python.md)
+- [C++ Deployment Demo](en/quick_start/models/cpp.md)
 - [A Quick Start on Runtime Python](en/quick_start/runtime/python.md)
 - [A Quick Start on Runtime C++](en/quick_start/runtime/cpp.md)
 
