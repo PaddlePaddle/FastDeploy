@@ -27,6 +27,7 @@ option.set_model_path("mobilenetv2/inference.pdmodel",
 # **** GPU 配置 ***
 option.use_gpu(0)
 option.use_trt_backend()
+option.enable_paddle_to_trt()
 
 # 初始化构造runtime
 runtime = fd.Runtime(option)
