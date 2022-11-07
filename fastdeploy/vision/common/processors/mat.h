@@ -22,7 +22,6 @@ namespace vision {
 
 enum Layout { HWC, CHW };
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(const cv::Mat& mat) {
@@ -147,6 +146,16 @@ struct FASTDEPLOY_DECL Mat {
   static Mat Create(int height, int width, int channels,
                     FDDataType type, void* data, ProcLib lib);
 };
+
+typedef Mat FDMat;
+/*
+ * @brief Wrap a cv::Mat to FDMat, there's no memory copy, memory buffer is managed by user
+ */
+FASTDEPLOY_DECL FDMat WrapMat(const cv::Mat& image);
+/*
+ * Warp a vector<cv::Mat> to vector<FDMat>, there's no memory copy, memory buffer is managed by user
+ */
+FASTDEPLOY_DECL std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images);
 
 }  // namespace vision
 }  // namespace fastdeploy

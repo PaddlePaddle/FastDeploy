@@ -12,29 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/proc_lib.h"
+#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-namespace vision {
 
-ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
-
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
+void BindFDTensor(pybind11::module& m) {
+  pybind11::class_<FDTensor>(m, "FDTensor")
+      .def(pybind11::init<>(), "Default Constructor")
+      .def_readwrite("name", &FDTensor::name)
+      .def_readonly("shape", &FDTensor::shape)
+      .def_readonly("dtype", &FDTensor::dtype)
+      .def_readonly("device", &FDTensor::device)
+      .def("numpy", [](FDTensor& self) {
+        return TensorToPyArray(self);
+      })
+      .def("from_numpy", [](FDTensor& self, pybind11::array& pyarray, bool share_buffer = false) {
+        PyArrayToTensor(pyarray, &self, share_buffer);
+      });
 }
 
-}  // namespace vision
 }  // namespace fastdeploy
