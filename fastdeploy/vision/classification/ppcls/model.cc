@@ -38,6 +38,9 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
 }
 
 bool PaddleClasModel::Initialize() {
+  reused_input_tensors.resize(1);
+  reused_output_tensors.resize(1);
+
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -92,6 +95,10 @@ bool PaddleClasModel::BuildPreprocessPipelineFromConfig() {
       return false;
     }
   }
+
+  // Fusion will improve performance
+  FuseTransforms(&processors_);
+
   return true;
 }
 
@@ -130,21 +137,19 @@ bool PaddleClasModel::Postprocess(const FDTensor& infer_result,
 
 bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   Mat mat(*im);
-  std::vector<FDTensor> processed_data(1);
-  if (!Preprocess(&mat, &(processed_data[0]))) {
+  if (!Preprocess(&mat, &(reused_input_tensors[0]))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
   }
 
-  std::vector<FDTensor> infer_result(1);
-  if (!Infer(processed_data, &infer_result)) {
+  if (!Infer()) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
 
-  if (!Postprocess(infer_result[0], result, topk)) {
+  if (!Postprocess(reused_output_tensors[0], result, topk)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;
