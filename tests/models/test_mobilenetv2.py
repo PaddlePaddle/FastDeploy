@@ -48,12 +48,10 @@ def test_classification_mobilenetv2():
     im1 = cv2.imread("./resources/ILSVRC2012_val_00000010.jpeg")
     im2 = cv2.imread("./resources/ILSVRC2012_val_00030010.jpeg")
 
-    #    for i in range(3000000):
-    while True:
+    for i in range(3):
         # test single predict
-        model.postprocessor.topk = 6
-        result1 = model.predict(im1)
-        result2 = model.predict(im2)
+        result1 = model.predict(im1, 6)
+        result2 = model.predict(im2, 6)
 
         diff_label_1 = np.fabs(
             np.array(result1.label_ids) - np.array(expected_label_ids_1))
