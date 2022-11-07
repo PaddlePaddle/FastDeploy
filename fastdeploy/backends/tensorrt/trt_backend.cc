@@ -132,7 +132,7 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, nullptr,
                            0, "tensorrt",
-                           &calibration_cache_ptr, &calibration_cache_size)) {
+                           &calibration_cache_ptr, &calibration_cache_size, "", &save_external_)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -147,6 +147,13 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
                                 calibration_cache_ptr + calibration_cache_size);
     calibration_str_ = calibration_str;
     delete[] calibration_cache_ptr;
+  }
+  if(save_external_){
+    model_file_name_ = "model.onnx";
+    std::fstream f(model_file_name_, std::ios::out);
+    f << onnx_model_proto;
+    f.close();
+    return InitFromOnnx(model_file_name_, option, false);
   }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
@@ -242,6 +249,10 @@ bool TrtBackend::InitFromOnnx(const std::string& model_file,
            "[ERROR] Error occurs while calling cudaStreamCreate().");
   }
 
+  if(save_external_){
+    onnx_content.clear();
+    onnx_content = model_file_name_;
+  }
   if (!CreateTrtEngineFromOnnx(onnx_content)) {
     FDERROR << "Failed to create tensorrt engine." << std::endl;
     return false;
@@ -593,7 +604,13 @@ bool TrtBackend::CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer) {
     FDERROR << "Failed to call createParser()." << std::endl;
     return false;
   }
-  if (!parser_->parse(onnx_model_buffer.data(), onnx_model_buffer.size())) {
+  bool model_parser;
+  if(save_external_){
+    model_parser=!parser_->parseFromFile(onnx_model_buffer.c_str(), 0);
+  }else{
+    model_parser = !parser_->parse(onnx_model_buffer.data(), onnx_model_buffer.size());
+  }
+  if (model_parser) {
     FDERROR << "Failed to parse ONNX model by TensorRT." << std::endl;
     return false;
   }

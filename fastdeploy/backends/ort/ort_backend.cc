@@ -82,7 +82,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   }
   char* model_content_ptr;
   int model_content_size = 0;
-
+  bool save_external = false;
 #ifdef ENABLE_PADDLE_FRONTEND
   paddle2onnx::CustomOp op;
   strcpy(op.op_name, "multiclass_nms3");
@@ -91,7 +91,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
                            verbose, true, true, true, &op,
-                           1)) {
+                           1, "onnxruntime", nullptr, 0, "", &save_external)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -101,6 +101,13 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
+  if(save_external){
+    std::string model_file_name = "model.onnx";
+    std::fstream f(model_file_name, std::ios::out);
+    f << onnx_model_proto;
+    f.close();
+    return InitFromOnnx(model_file_name, option, false);
+  }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
   FDERROR << "Didn't compile with PaddlePaddle Frontend, you can try to "
