@@ -185,6 +185,11 @@ if __name__ == "__main__":
             "max_shape": [2, 4, 64, 64],
             "opt_shape": [2, 4, 64, 64],
         },
+        "timestep": {
+            "min_shape": [1],
+            "max_shape": [1],
+            "opt_shape": [1],
+        },
         "encoder_embedding": {
             "min_shape": [1, 77, 768],
             "max_shape": [2, 77, 768],
