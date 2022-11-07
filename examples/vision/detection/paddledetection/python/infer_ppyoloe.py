@@ -1,7 +1,9 @@
 import cv2
 import os
+import tempfile
 
 import fastdeploy as fd
+from fastdeploy.utils.example_resouce import get_detection_test_image
 
 
 def parse_arguments():
@@ -18,7 +20,7 @@ def parse_arguments():
         help="Model name in model hub, the model will be downloaded automatically."
     )
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--image", default=None, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -64,7 +66,11 @@ model = fd.vision.detection.PPYOLOE(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片检测结果
-im = cv2.imread(args.image)
+if args.image is None:
+    image = get_detection_test_image()
+else:
+    image = args.image
+im = cv2.imread(image)
 result = model.predict(im.copy())
 print(result)
 
