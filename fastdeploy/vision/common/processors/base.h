@@ -41,7 +41,10 @@ class FASTDEPLOY_DECL Processor {
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(Mat* mat) = 0;
+  virtual bool ImplByOpenCV(Mat* mat) {
+    FDERROR << Name() << " Not Implement Yet." << std::endl;
+    return false;
+  }
 
   virtual bool ImplByFlyCV(Mat* mat) {
     return ImplByOpenCV(mat);

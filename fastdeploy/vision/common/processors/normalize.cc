@@ -80,7 +80,7 @@ bool Normalize::ImplByFlyCV(Mat* mat) {
     mean[i] = -1 * beta_[i] * std[i];
   }
   fcv::Mat new_im(im->width(), im->height(),
-                  fcv::FCVImageType::PACKAGE_BGR_F32);
+                  fcv::FCVImageType::PKG_BGR_F32);
   fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(),
                                        new_im, true);
   mat->SetMat(new_im);
