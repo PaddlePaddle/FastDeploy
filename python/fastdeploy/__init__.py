@@ -16,11 +16,19 @@ import logging
 import os
 import sys
 
-from .c_lib_wrap import (ModelFormat, Backend, rknpu2,
-                         FDDataType, TensorInfo, Device,
-                         FDTensor, is_built_with_gpu, is_built_with_ort,
-                         ModelFormat, is_built_with_paddle, is_built_with_trt,
-                         get_default_cuda_directory, )
+from .c_lib_wrap import (
+    ModelFormat,
+    Backend,
+    rknpu2,
+    FDDataType,
+    TensorInfo,
+    Device,
+    is_built_with_gpu,
+    is_built_with_ort,
+    ModelFormat,
+    is_built_with_paddle,
+    is_built_with_trt,
+    get_default_cuda_directory, )
 
 from .runtime import Runtime, RuntimeOption
 from .model import FastDeployModel

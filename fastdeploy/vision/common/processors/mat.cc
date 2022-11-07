@@ -101,23 +101,6 @@ FDDataType Mat::Type() {
   return OpenCVDataTypeToFD(cpu_mat.type());
 }
 
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
-}
-
 Mat Mat::Create(const FDTensor& tensor) {
   if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
@@ -189,6 +172,19 @@ Mat Mat::Create(int height, int width, int channels,
       height, width, channels, type, data);
   Mat mat = Mat(tmp_ocv_mat);
   return mat;    
+}
+
+FDMat WrapMat(const cv::Mat& image) {
+  FDMat mat(image);
+  return mat;
+}
+
+std::vector<FDMat> WrapMat(const std::vector<cv::Mat>& images) {
+  std::vector<FDMat> mats;
+  for (size_t i = 0; i < images.size(); ++i) {
+    mats.emplace_back(FDMat(images[i]));
+  }
+  return mats;
 }
 
 }  // namespace vision
