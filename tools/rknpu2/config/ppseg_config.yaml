@@ -1,7 +1,0 @@
-model_path: ./portrait_pp_humansegv2_lite_256x144_pretrained.onnx
-output_folder: ./
-target_platform: RK3588
-normalize:
-  mean: [0.5,0.5,0.5]
-  std: [0.5,0.5,0.5]
-outputs: None
