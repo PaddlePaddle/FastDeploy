@@ -66,8 +66,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default='pp',
-        choices=['ort', 'trt', 'pp', 'pp-trt'],
+        default='paddle',
+        choices=['onnx_runtime', 'tensorrt', 'paddle', 'paddle-tensorrt'],
         help="The inference runtime backend of unet model and text encoder model."
     )
     parser.add_argument(
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     }
 
     # 4. Init runtime
-    if args.backend == "ort":
+    if args.backend == "onnx_runtime":
         text_encoder_runtime = create_ort_runtime(
             args.model_dir,
             args.text_encoder_model_prefix,
@@ -211,8 +211,8 @@ if __name__ == "__main__":
             args.model_format,
             device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
-    elif args.backend == "pp" or args.backend == "pp-trt":
-        use_trt = True if args.backend == "pp-trt" else False
+    elif args.backend == "paddle" or args.backend == "paddle-tensorrt":
+        use_trt = True if args.backend == "paddle-tensorrt" else False
         # Note(zhoushunjie): Will change to paddle runtime later
         text_encoder_runtime = create_ort_runtime(
             args.model_dir,
@@ -233,7 +233,7 @@ if __name__ == "__main__":
             unet_dynamic_shape,
             device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
-    elif args.backend == "trt":
+    elif args.backend == "tensorrt":
         text_encoder_runtime = create_ort_runtime(
             args.model_dir, args.text_encoder_model_prefix, args.model_format)
         vae_decoder_runtime = create_trt_runtime(
