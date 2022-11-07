@@ -10,15 +10,15 @@ import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.AppCompatPreferenceActivity;
-import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.AppCompatPreferenceActivity;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class SettingsActivity extends AppCompatPreferenceActivity implements
+public class OcrSettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String TAG = SettingsActivity.class.getSimpleName();
+    private static final String TAG = OcrSettingsActivity.class.getSimpleName();
 
     static public int selectedModelIdx = -1;
     static public String modelDir = "";

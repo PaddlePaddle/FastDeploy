@@ -16,9 +16,9 @@ import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SettingsActivity extends AppCompatPreferenceActivity implements
+public class DetectionSettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String TAG = SettingsActivity.class.getSimpleName();
+    private static final String TAG = DetectionSettingsActivity.class.getSimpleName();
 
     static public int selectedModelIdx = -1;
     static public String modelDir = "";
