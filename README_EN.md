@@ -99,13 +99,13 @@ English | [简体中文](README_CN.md)
 * **📲 Mobile and Edge Device Deployment**
   * [Paddle Lite NPU Deployment](#fastdeploy-edge-sdk-npu)
   * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
-* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web and Mini_Program Deployment** 
+* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web and Mini Program Deployment** 
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 * [**Community**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
 * [**License**](#fastdeploy-license)
 
-## 🖥️ Data Center and Web Deployment
+## 🖥️ Data Center and Cloud Deployment
 
 <div id="fastdeploy-quick-start-python"></div>
 
@@ -293,7 +293,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 <div id="fastdeploy-edge-doc"></div>
     
-## 📲 Mobile and Edge Device Deployment 🔥🔥🔥🔥
+## 📲 Mobile and Edge Device Deployment 
 
 
 <div id="fastdeploy-edge-sdk-npu"></div>
@@ -304,7 +304,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 <div id="fastdeploy-edge-models"></div>
     
-### Supported Edge-Side Model List
+### Supported Mobile and Edge Model List 🔥🔥🔥🔥
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
