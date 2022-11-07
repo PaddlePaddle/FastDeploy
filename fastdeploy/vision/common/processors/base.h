@@ -31,6 +31,11 @@ FASTDEPLOY_DECL void EnableFlyCV();
 /// Disable using FlyCV to process image while deploy vision models.
 FASTDEPLOY_DECL void DisableFlyCV();
 
+/*! @brief Set the cpu num threads of ProcLib. The cpu num threads
+ *  of FlyCV and OpenCV is 2 by default.
+ */
+FASTDEPLOY_DECL void SetProcLibCpuNumThreads(int threads);
+
 class FASTDEPLOY_DECL Processor {
  public:
   // default_lib has the highest priority
