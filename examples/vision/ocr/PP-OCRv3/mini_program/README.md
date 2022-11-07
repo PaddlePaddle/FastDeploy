@@ -16,7 +16,7 @@ import * as ocr from "@paddle-js-models/ocr";
 await ocr.init(detConfig, recConfig);
 const res = await ocr.recognize(img, option, postConfig);
 ```
-ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转换方式参考[文档](../../../../application/web_demo/README.md)
+ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转换方式参考[文档](../../../../application/js/web_demo/README.md)
 
 **init函数参数**
 
@@ -37,5 +37,4 @@ ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转
 - [PP-OCRv3 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
-- [PP-OCRv3模型web demo文档](../../../../application/web_demo/README.md)
-
+- [PP-OCRv3模型web demo文档](../../../../application/js/web_demo/README.md)
