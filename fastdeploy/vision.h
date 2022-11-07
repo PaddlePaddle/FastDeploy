@@ -29,6 +29,7 @@
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_trt.h"
 #include "fastdeploy/vision/detection/contrib/yolox.h"
 #include "fastdeploy/vision/detection/ppdet/model.h"
+#include "fastdeploy/vision/detection/contrib/rknpu2/model.h"
 #include "fastdeploy/vision/facedet/contrib/retinaface.h"
 #include "fastdeploy/vision/facedet/contrib/scrfd.h"
 #include "fastdeploy/vision/facedet/contrib/ultraface.h"
@@ -51,6 +52,7 @@
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
+#include "fastdeploy/vision/headpose/contrib/fsanet.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"
