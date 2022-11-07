@@ -78,24 +78,24 @@ class PaddleClasModel(FastDeployModel):
             model_format)
         assert self.initialized, "PaddleClas model initialize failed."
 
-    def predict(self, im):
+    def predict(self, im, topk=1):
         """Classify an input image
 
         :param im: (numpy.ndarray) The input image data, a 3-D array with layout HWC, BGR format
+        :param topk: (int) Filter the topk classify result, default 1
         :return: ClassifyResult
         """
 
+        self.postprocessor.topk = topk
         return self._model.predict(im)
 
-    def batch_predict(self, images, topk=1):
+    def batch_predict(self, images):
         """Classify a batch of input image
 
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
-        :param topk: (int) Filter the topk classify result, default 1
         :return list of ClassifyResult
         """
 
-        self.postprocessor.topk = topk
         return self._model.batch_predict(images)
 
     @property
