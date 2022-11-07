@@ -64,7 +64,7 @@ else()
 endif(WIN32)
 
 set(FLYCV_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(FLYCV_VERSION "1.0.1025")
+set(FLYCV_VERSION "1.3")
 if(WIN32)
   message(FATAL_ERROR "FlyCV is not supported on Windows now.")
   set(FLYCV_FILE "flycv-win-x64-${FLYCV_VERSION}.zip")

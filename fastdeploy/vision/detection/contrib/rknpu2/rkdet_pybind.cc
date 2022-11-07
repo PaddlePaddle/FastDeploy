@@ -11,30 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#include "fastdeploy/vision/common/processors/proc_lib.h"
+#include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-namespace vision {
-
-ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
-
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
+void BindRKDet(pybind11::module& m) {
+  pybind11::class_<vision::detection::RKPicoDet, FastDeployModel>(m, "RKPicoDet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::detection::RKPicoDet& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::DetectionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           });
 }
-
-}  // namespace vision
 }  // namespace fastdeploy

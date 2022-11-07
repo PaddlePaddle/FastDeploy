@@ -14,30 +14,17 @@
 
 #pragma once
 
-#include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
-namespace vision {
 
-class LetterBoxResize : public Processor {
- public:
-  LetterBoxResize(const std::vector<int>& target_size,
-                  const std::vector<float>& color) {
-    target_size_ = target_size;
-    color_ = color;
-  }
+/** Excute the concatenate operation for input FDTensor along given axis.
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+    @param axisi Axis which will be concatenated.
+*/
 
-  bool ImplByOpenCV(Mat* mat);
+FASTDEPLOY_DECL void Concat(const std::vector<FDTensor>& x, FDTensor* out,
+                            int axis = 0);
 
-  std::string Name() { return "LetterBoxResize"; }
-
-  static bool Run(Mat* mat, const std::vector<int>& target_size,
-                  const std::vector<float>& color,
-                  ProcLib lib = ProcLib::DEFAULT);
-
- private:
-  std::vector<int> target_size_;
-  std::vector<float> color_;
-};
-}  // namespace vision
 }  // namespace fastdeploy

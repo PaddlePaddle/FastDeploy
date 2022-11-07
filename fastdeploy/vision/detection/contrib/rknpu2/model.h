@@ -12,29 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/proc_lib.h"
-
-namespace fastdeploy {
-namespace vision {
-
-ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
-
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
-  }
-  return out;
-}
-
-}  // namespace vision
-}  // namespace fastdeploy
+#pragma once
+#include "fastdeploy/vision/detection/contrib/rknpu2/rkpicodet.h"

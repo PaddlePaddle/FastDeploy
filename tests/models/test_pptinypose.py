@@ -16,12 +16,12 @@ import fastdeploy as fd
 import cv2
 import os
 import numpy as np
-
+import runtime_config as rc
 
 def test_keypointdetection_pptinypose():
     pp_tinypose_model_url = "https://bj.bcebos.com/fastdeploy/tests/PP_TinyPose_256x192_test.tgz"
-    fd.download_and_decompress(pp_tinypose_model_url, ".")
-    model_path = "./PP_TinyPose_256x192_test"
+    fd.download_and_decompress(pp_tinypose_model_url, "resources")
+    model_path = "./resources/PP_TinyPose_256x192_test"
     # 配置runtime，加载模型
     runtime_option = fd.RuntimeOption()
     model_file = os.path.join(model_path, "model.pdmodel")
@@ -30,7 +30,7 @@ def test_keypointdetection_pptinypose():
     image_file = os.path.join(model_path, "hrnet_demo.jpg")
     baseline_file = os.path.join(model_path, "baseline.npy")
     model = fd.vision.keypointdetection.PPTinyPose(
-        model_file, params_file, config_file, runtime_option=runtime_option)
+        model_file, params_file, config_file, runtime_option=rc.test_option)
 
     # 预测图片关键点
     im = cv2.imread(image_file)
@@ -48,8 +48,8 @@ def test_keypointdetection_pptinypose():
 
 def test_keypointdetection_det_keypoint_unite():
     det_keypoint_unite_model_url = "https://bj.bcebos.com/fastdeploy/tests/PicoDet_320x320_TinyPose_256x192_test.tgz"
-    fd.download_and_decompress(det_keypoint_unite_model_url, ".")
-    model_path = "./PicoDet_320x320_TinyPose_256x192_test"
+    fd.download_and_decompress(det_keypoint_unite_model_url, "resources")
+    model_path = "./resources/PicoDet_320x320_TinyPose_256x192_test"
     # 配置runtime，加载模型
     runtime_option = fd.RuntimeOption()
     tinypose_model_file = os.path.join(
@@ -79,7 +79,7 @@ def test_keypointdetection_det_keypoint_unite():
         picodet_model_file,
         picodet_params_file,
         picodet_config_file,
-        runtime_option=runtime_option)
+        runtime_option=rc.test_option)
 
     # 预测图片关键点
     im = cv2.imread(image_file)
@@ -91,7 +91,7 @@ def test_keypointdetection_det_keypoint_unite():
         (np.array(result.keypoints), np.array(result.scores)[:, np.newaxis]),
         axis=1)
     print(result)
-    np.save("baseline.npy", result)
+    np.save("resources/baseline.npy", result)
     baseline = np.load(baseline_file)
     diff = np.fabs(result - np.array(baseline))
     thres = 1e-05

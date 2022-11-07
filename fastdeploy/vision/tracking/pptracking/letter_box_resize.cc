@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/letter_box.h"
+#include "fastdeploy/vision/tracking/pptracking/letter_box_resize.h"
+#include "fastdeploy/vision/common/processors/transform.h"
 
 namespace fastdeploy{
 namespace vision{
-bool LetterBoxResize::ImplByOpenCV(Mat* mat) {
 
+bool LetterBoxResize::operator()(Mat* mat, ProcLib lib) {
   if (mat->Channels() != color_.size()) {
-    FDERROR << "Pad: Require input channels equals to size of padding value, "
+    FDERROR << "LetterBoxResize: Require input channels equals to size of color value, "
                "but now channels = "
             << mat->Channels()
-            << ", the size of padding values = " << color_.size() << "."
+            << ", the size of color values = " << color_.size() << "."
             << std::endl;
     return false;
   }
@@ -36,8 +37,8 @@ bool LetterBoxResize::ImplByOpenCV(Mat* mat) {
   float ratio_w = static_cast<float>(target_w) / static_cast<float>(origin_w);
   float resize_scale = std::min(ratio_h, ratio_w);
   // get_resized_shape
-  int new_shape_w = std::round(im->cols * resize_scale);
-  int new_shape_h = std::round(im->rows * resize_scale);
+  int new_shape_w = std::round(origin_w * resize_scale);
+  int new_shape_h = std::round(origin_h * resize_scale);
   // calculate pad
   float padw = (target_size_[1] - new_shape_w) / 2.;
   float padh = (target_size_[0] - new_shape_h) / 2.;
@@ -45,20 +46,8 @@ bool LetterBoxResize::ImplByOpenCV(Mat* mat) {
   int bottom = std::round(padh + 0.1);
   int left = std::round(padw - 0.1);
   int right = std::round(padw + 0.1);
-  cv::resize(*im, *im, cv::Size(new_shape_w, new_shape_h), 0, 0, cv::INTER_AREA);
-  cv::Scalar color;
-  if (color_.size() == 1) {
-      color = cv::Scalar(color_[0]);
-  } else if (color_.size() == 2) {
-      color = cv::Scalar(color_[0], color_[1]);
-  } else if (color_.size() == 3) {
-      color = cv::Scalar(color_[0], color_[1], color_[2]);
-  } else {
-      color = cv::Scalar(color_[0], color_[1], color_[2], color_[3]);
-  }
-  cv::copyMakeBorder(*im, *im, top, bottom, left, right, cv::BORDER_CONSTANT, color);
-  mat->SetWidth(im->cols);
-  mat->SetHeight(im->rows);
+  Resize::Run(mat, new_shape_w, new_shape_h, -1.0, -1.0, 3, false, lib);
+  Pad::Run(mat, top, bottom, left, right, color_, lib);
   return true;
 }
 
