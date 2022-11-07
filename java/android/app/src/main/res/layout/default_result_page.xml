@@ -46,10 +46,6 @@
                 android:layout_height="match_parent"
                 android:background="@color/bk_result_image_padding" />
 
-            <com.baidu.paddle.fastdeploy.app.ui.view.ResultMaskView
-                android:id="@+id/result_mask"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
         </FrameLayout>
 
         <TextView

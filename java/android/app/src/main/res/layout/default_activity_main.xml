@@ -4,11 +4,11 @@
     android:layout_height="match_parent">
 
     <include
-        layout="@layout/camera_page"
+        layout="@layout/default_camera_page"
         android:id="@+id/camera_page"></include>
 
     <include
-        layout="@layout/result_page"
+        layout="@layout/default_result_page"
         android:id="@+id/result_page"
         android:visibility="gone"></include>
 </FrameLayout>
