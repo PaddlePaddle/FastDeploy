@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 Two steps before deployment:
 
 - 1. The hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs/en/quick_start/)
+- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 
 This doc provides a quick `infer.py` demo of YOLOv7 deployment on CPU/GPU, and accelerated GPU deployment by TensorRT. Run the following command:
