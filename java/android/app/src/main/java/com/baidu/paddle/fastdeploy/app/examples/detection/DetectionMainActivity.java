@@ -44,8 +44,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = MainActivity.class.getSimpleName();
+public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = DetectionMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -90,7 +90,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.default_activity_main);
+        setContentView(R.layout.detection_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -121,7 +121,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
                 resultImage.setImageBitmap(shutterBitmap);
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+                startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -216,11 +216,11 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888,true);
         boolean modified = false;
         DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, savedImagePath, SettingsActivity.scoreThreshold);
+                ARGB8888ImageBitmap, savedImagePath, DetectionSettingsActivity.scoreThreshold);
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
-                MainActivity.this.savedImagePath = "result.jpg";
+                DetectionMainActivity.this.savedImagePath = "result.jpg";
             }
         }
         lastFrameIndex++;
@@ -325,7 +325,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         results.add(new BaseResultModel(1, "cup", 0.4f));
         results.add(new BaseResultModel(2, "pen", 0.6f));
         results.add(new BaseResultModel(3, "tang", 1.0f));
-        final DetectResultAdapter adapter = new DetectResultAdapter(this, R.layout.default_result_page_item, results);
+        final DetectResultAdapter adapter = new DetectResultAdapter(this, R.layout.detection_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
@@ -375,25 +375,25 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        SettingsActivity.resetSettings();
+        DetectionSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (SettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + SettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, SettingsActivity.modelDir, realModelDir);
-            String realLabelPath = getCacheDir() + "/" + SettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, SettingsActivity.labelPath, realLabelPath);
+        if (DetectionSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + DetectionSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, DetectionSettingsActivity.modelDir, realModelDir);
+            String realLabelPath = getCacheDir() + "/" + DetectionSettingsActivity.labelPath;
+            Utils.copyFileFromAssets(this, DetectionSettingsActivity.labelPath, realLabelPath);
 
             String modelFile = realModelDir + "/" + "model.pdmodel";
             String paramsFile = realModelDir + "/" + "model.pdiparams";
             String configFile = realModelDir + "/" + "infer_cfg.yml";
             String labelFile = realLabelPath;
             RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(SettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
             option.enableRecordTimeOfRuntime();
-            if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
+            if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
             predictor.init(modelFile, paramsFile, configFile, labelFile, option);
@@ -405,7 +405,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(MainActivity.this)
+            new AlertDialog.Builder(DetectionMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -413,7 +413,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            MainActivity.this.finish();
+                            DetectionMainActivity.this.finish();
                         }
                     }).show();
         }

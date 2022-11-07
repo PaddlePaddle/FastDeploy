@@ -54,5 +54,12 @@ void DisableFlyCV() {
          << DefaultProcLib::default_lib << std::endl;
 }
 
+void SetProcLibCpuNumThreads(int threads) {
+  cv::setNumThreads(threads);
+#ifdef ENABLE_FLYCV
+  fcv::set_thread_num(threads);
+#endif
+}
+
 }  // namespace vision
 }  // namespace fastdeploy
