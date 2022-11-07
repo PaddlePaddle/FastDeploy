@@ -167,7 +167,8 @@ void BindRuntime(pybind11::module& m) {
         inputs.reserve(data.size());
         for (auto iter = data.begin(); iter != data.end(); ++iter) {
           FDTensor tensor;
-          tensor.SetExternalData(iter->second.Shape(), iter->second.Dtype(), iter->second.Data(), iter->second.device, iter->first);
+          tensor.SetExternalData(iter->second.Shape(), iter->second.Dtype(), iter->second.Data(), iter->second.device);
+          tensor.name = iter->first;
           inputs.push_back(tensor);
         }
         std::vector<FDTensor> outputs;
