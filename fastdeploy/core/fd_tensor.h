@@ -69,8 +69,7 @@ struct FASTDEPLOY_DECL FDTensor {
   // So take care with the user buffer
   void SetExternalData(const std::vector<int64_t>& new_shape,
                        const FDDataType& data_type, void* data_buffer,
-                       const Device& new_device = Device::CPU,
-                       const std::string& tensor_name = "");
+                       const Device& new_device = Device::CPU);
 
   // Expand the shape of a Tensor. Insert a new axis that will appear
   // at the `axis` position in the expanded Tensor shape.
