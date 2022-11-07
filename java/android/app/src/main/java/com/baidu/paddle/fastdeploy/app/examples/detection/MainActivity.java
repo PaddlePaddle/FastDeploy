@@ -31,9 +31,9 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.DetectResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
@@ -90,7 +90,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.default_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -325,7 +325,7 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         results.add(new BaseResultModel(1, "cup", 0.4f));
         results.add(new BaseResultModel(2, "pen", 0.6f));
         results.add(new BaseResultModel(3, "tang", 1.0f));
-        final DetectResultAdapter adapter = new DetectResultAdapter(this, R.layout.result_detect_item, results);
+        final DetectResultAdapter adapter = new DetectResultAdapter(this, R.layout.default_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
