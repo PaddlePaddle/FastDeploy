@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.ui;
+package com.baidu.paddle.fastdeploy.app.ui.view;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -15,7 +15,7 @@ import android.opengl.Matrix;
 import android.util.AttributeSet;
 import android.util.Log;
 
-import com.baidu.paddle.fastdeploy.app.ui.view.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

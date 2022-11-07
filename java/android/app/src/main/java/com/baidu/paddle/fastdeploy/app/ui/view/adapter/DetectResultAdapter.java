@@ -10,9 +10,9 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.util.StringUtil;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 
+import java.text.DecimalFormat;
 import java.util.List;
 
 /**
@@ -41,7 +41,12 @@ public class DetectResultAdapter extends ArrayAdapter<BaseResultModel> {
         TextView confidenceText = (TextView) view.findViewById(R.id.confidence);
         indexText.setText(String.valueOf(model.getIndex()));
         nameText.setText(String.valueOf(model.getName()));
-        confidenceText.setText(StringUtil.formatFloatString(model.getConfidence()));
+        confidenceText.setText(formatFloatString(model.getConfidence()));
         return view;
+    }
+
+    public static String formatFloatString(float number) {
+        DecimalFormat df = new DecimalFormat("0.00");
+        return df.format(number);
     }
 }
