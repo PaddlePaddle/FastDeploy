@@ -4,8 +4,8 @@ English | [简体中文](README.md)
 
 Two steps before deployment:
 
-- 1. The hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/docs_en/environment.md)
-- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs/docs_en/quick_start)
+- 1. The hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 2. Install FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../../docs/en/quick_start/)
 
 
 This doc provides a quick `infer.py` demo of YOLOv7 deployment on CPU/GPU, and accelerated GPU deployment by TensorRT. Run the following command:
@@ -21,7 +21,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 # CPU Inference
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device cpu
-# GPU 
+# GPU
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu
 # GPU上使用TensorRT推理
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu --use_trt True
@@ -51,18 +51,18 @@ YOLOv7 model loading and initialisation, with model_file being the exported ONNX
 > ```python
 > YOLOv7.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
-> 
+>
 > Model prediction interface with direct output of detection results from the image input.
-> 
+>
 > **Parameters**
-> 
+>
 > > * **image_data**(np.ndarray): Input image. Images need to be in HWC or BGR format
 > > * **conf_threshold**(float): Filter threshold for detection box confidence
 > > * **nms_iou_threshold**(float): iou thresholds during NMS processing
 
 > **Return**
-> 
-> > Return to`fastdeploy.vision.DetectionResult`Struct. For more details, please refer to [Vision Model Results](../../../../../docs/docs_en/api/vision_results/)
+>
+> > Return to`fastdeploy.vision.DetectionResult`Struct. For more details, please refer to [Vision Model Results](../../../../../docs/api/vision_results/)
 
 ### Class Member Variables
 
@@ -80,5 +80,5 @@ Users can modify the following pre-processing parameters for their needs. This w
 
 - [YOLOv7 Model Introduction](..)
 - [YOLOv7 C++ Deployment](../cpp)
-- [Vision Model Results](../../../../../docs/docs_en/api/vision_results/)
-- [how to change inference backend](../../../../../docs/docs_en/runtime/how_to_change_inference_backend.md)
+- [Vision Model Results](../../../../../docs/api/vision_results/)
+- [how to change inference backend](../../../../../docs/en/faq/how_to_change_backend.md)
