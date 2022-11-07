@@ -45,98 +45,6 @@ FDDataType OpenCVDataTypeToFD(int type) {
   }
 }
 
-#ifdef ENABLE_FLYCV
-FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type) {
-  if (type == fcv::FCVImageType::GRAY_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGR_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_RGB_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGRA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_RGBA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PLANAR_BGR_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_RGB_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_BGRA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PLANAR_RGBA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR565_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB565_U8) {
-    return FDDataType::UINT8;
-  } else if (type == fcv::FCVImageType::GRAY_S32) {
-    return FDDataType::INT32;
-  } else if (type == fcv::FCVImageType::GRAY_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGR_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGB_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_BGRA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::PACKAGE_RGBA_F32) {
-    return FDDataType::FP32;
-  } else if (type == fcv::FCVImageType::GRAY_F64) {
-    return FDDataType::FP64;
-  }
-  FDASSERT(false, "While calling FlyCVDataTypeToFD(), get unexpected type:%d.",
-           int(type));
-  return FDDataType::UNKNOWN1;
-}
-
-fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel) {
-  FDASSERT(channel == 1 || channel == 3 || channel == 4,
-           "Only support channel be 1/3/4 in FlyCV.");
-  if (type == FDDataType::UINT8) {
-    if (channel == 1) {
-      return fcv::FCVImageType::GRAY_U8;
-    } else if (channel == 3) {
-      return fcv::FCVImageType::PACKAGE_BGR_U8;
-    } else {
-      return fcv::FCVImageType::PACKAGE_BGRA_U8;
-    }
-  } else if (type == FDDataType::FP32) {
-    if (channel == 1) {
-      return fcv::FCVImageType::GRAY_F32;
-    } else if (channel == 3) {
-      return fcv::FCVImageType::PACKAGE_BGR_F32;
-    } else {
-      return fcv::FCVImageType::PACKAGE_BGRA_F32;
-    }
-  }
-  FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
-  return fcv::FCVImageType::PACKAGE_BGR_F32;
-}
-
 int CreateOpenCVDataType(FDDataType type, int channel) {
   FDASSERT(channel == 1 || channel == 3 || channel == 4,
            "Only support channel be 1/3/4 in OpenCV.");
@@ -161,6 +69,98 @@ int CreateOpenCVDataType(FDDataType type, int channel) {
   return CV_32FC3;
 }
 
+#ifdef ENABLE_FLYCV
+FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type) {
+  if (type == fcv::FCVImageType::GRAY_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_BGR_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_RGB_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_BGR_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_RGB_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PLA_BGR_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PLA_RGB_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PLA_BGRA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PLA_RGBA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PLA_BGR_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PLA_RGB_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PLA_BGRA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PLA_RGBA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_BGRA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_RGBA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_BGRA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_RGBA_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_BGR565_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::PKG_RGB565_U8) {
+    return FDDataType::UINT8;
+  } else if (type == fcv::FCVImageType::GRAY_S32) {
+    return FDDataType::INT32;
+  } else if (type == fcv::FCVImageType::GRAY_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_BGR_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_RGB_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_BGR_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_RGB_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_BGRA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_RGBA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_BGRA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::PKG_RGBA_F32) {
+    return FDDataType::FP32;
+  } else if (type == fcv::FCVImageType::GRAY_F64) {
+    return FDDataType::FP64;
+  }
+  FDASSERT(false, "While calling FlyCVDataTypeToFD(), get unexpected type:%d.",
+           int(type));
+  return FDDataType::UNKNOWN1;
+}
+
+fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel) {
+  FDASSERT(channel == 1 || channel == 3 || channel == 4,
+           "Only support channel be 1/3/4 in FlyCV.");
+  if (type == FDDataType::UINT8) {
+    if (channel == 1) {
+      return fcv::FCVImageType::GRAY_U8;
+    } else if (channel == 3) {
+      return fcv::FCVImageType::PKG_BGR_U8;
+    } else {
+      return fcv::FCVImageType::PKG_BGRA_U8;
+    }
+  } else if (type == FDDataType::FP32) {
+    if (channel == 1) {
+      return fcv::FCVImageType::GRAY_F32;
+    } else if (channel == 3) {
+      return fcv::FCVImageType::PKG_BGR_F32;
+    } else {
+      return fcv::FCVImageType::PKG_BGRA_F32;
+    }
+  }
+  FDASSERT(false, "Data type of %s is not supported.", Str(type).c_str());
+  return fcv::FCVImageType::PKG_BGR_F32;
+}
+
 fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im) {
   int type = im.type() % 8;
   // 0: uint8; 5: float32; 6: float64
@@ -183,6 +183,97 @@ cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim) {
   auto ocv_type = CreateOpenCVDataType(fd_dtype, fim.channels());
   return cv::Mat(fim.height(), fim.width(), ocv_type,
                  fim.data());  // reference only
+}
+#endif
+
+cv::Mat CreateZeroCopyOpenCVMatFromBuffer(
+  int height, int width, int channels, 
+  FDDataType type, void* data) {
+  cv::Mat ocv_mat;
+  switch (type) {
+    case FDDataType::UINT8:
+      ocv_mat = cv::Mat(height, width, CV_8UC(channels), data);
+      break;
+    case FDDataType::INT8:
+      ocv_mat = cv::Mat(height, width, CV_8SC(channels), data);
+      break;
+    case FDDataType::INT16:
+      ocv_mat = cv::Mat(height, width, CV_16SC(channels), data);
+      break;
+    case FDDataType::INT32:
+      ocv_mat = cv::Mat(height, width, CV_32SC(channels), data);
+      break;
+    case FDDataType::FP32:
+      ocv_mat = cv::Mat(height, width, CV_32FC(channels), data);
+      break;
+    case FDDataType::FP64:
+      ocv_mat = cv::Mat(height, width, CV_64FC(channels), data);
+      break;
+    default:
+      FDASSERT(false,
+               "Tensor type %d is not supported While calling "
+               "CreateZeroCopyOpenCVMat.",
+               type);
+      break;
+  }
+  return ocv_mat;
+}
+
+cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor) {
+  // TODO(qiuyanjun): Should add a Layout checking. Now, we 
+  // assume that the input tensor is already in Layout::HWC. 
+  FDASSERT(tensor.shape.size() == 3, "When create OepnCV Mat from tensor,"
+  "tensor shape should be 3-Dim, HWC layout");
+  FDDataType type = tensor.dtype;
+  int height = static_cast<int>(tensor.shape[0]);
+  int width = static_cast<int>(tensor.shape[1]);
+  int channels = static_cast<int>(tensor.shape[2]);
+  return CreateZeroCopyOpenCVMatFromBuffer(
+          height, width, channels, type, 
+          const_cast<void*>(tensor.Data()));
+}
+
+#ifdef ENABLE_FLYCV
+fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(
+  int height, int width, int channels, 
+  FDDataType type, void* data) {
+  fcv::Mat fcv_mat;
+  auto fcv_type = CreateFlyCVDataType(type, channels);
+  switch (type) {
+    case FDDataType::UINT8:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, data);
+      break;
+    case FDDataType::FP32:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, data);
+      break;
+    case FDDataType::FP64:
+      fcv_mat =
+        fcv::Mat(width, height, fcv_type, data);
+    break;
+    default:
+      FDASSERT(false,
+              "Tensor type %d is not supported While calling "
+              "CreateZeroCopyFlyCVMat.",
+               type);
+    break;
+  }
+  return fcv_mat;
+}
+
+fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor) {
+  // TODO(qiuyanjun): Should add a Layout checking. Now, we 
+  // assume that the input tensor is already in Layout::HWC. 
+  FDASSERT(tensor.shape.size() == 3, "When create FlyCV Mat from tensor,"
+  "tensor shape should be 3-Dim, HWC layout");
+  FDDataType type = tensor.dtype;
+  int height = static_cast<int>(tensor.shape[0]);
+  int width = static_cast<int>(tensor.shape[1]);
+  int channels = static_cast<int>(tensor.shape[2]);
+  return CreateZeroCopyFlyCVMatFromBuffer(
+          height, width, channels, type, 
+          const_cast<void*>(tensor.Data()));
 }
 #endif
 

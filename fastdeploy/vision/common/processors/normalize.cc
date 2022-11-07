@@ -86,7 +86,7 @@ bool Normalize::ImplByFlyCV(Mat* mat) {
   if (swap_rb_) std::swap(channel_reorder_index[0], channel_reorder_index[2]);
 
   fcv::Mat new_im(im->width(), im->height(),
-                  fcv::FCVImageType::PACKAGE_BGR_F32);
+                  fcv::FCVImageType::PKG_BGR_F32);
   fcv::normalize_to_submean_to_reorder(*im, mean, std, channel_reorder_index,
                                        new_im, true);
   mat->SetMat(new_im);

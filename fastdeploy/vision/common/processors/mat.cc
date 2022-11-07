@@ -101,21 +101,77 @@ FDDataType Mat::Type() {
   return OpenCVDataTypeToFD(cpu_mat.type());
 }
 
-std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
-  switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
+Mat Mat::Create(const FDTensor& tensor) {
+  if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromTensor(tensor);
+    Mat mat = Mat(tmp_fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
   }
-  return out;
+  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromTensor(tensor);
+  Mat mat = Mat(tmp_ocv_mat);
+  return mat;
+}
+
+Mat Mat::Create(const FDTensor& tensor, ProcLib lib) {
+  if (lib == ProcLib::DEFAULT) {
+    return Create(tensor);
+  }
+  if (lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromTensor(tensor);
+    Mat mat = Mat(tmp_fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } 
+  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromTensor(tensor);
+  Mat mat = Mat(tmp_ocv_mat);
+  return mat;
+}
+
+Mat Mat::Create(int height, int width, int channels,
+                FDDataType type, void* data) {
+  if (DefaultProcLib::default_lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
+      height, width, channels, type, data);
+    Mat mat = Mat(tmp_fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  }
+  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
+      height, width, channels, type, data);
+  Mat mat = Mat(tmp_ocv_mat);
+  return mat;    
+}
+
+Mat Mat::Create(int height, int width, int channels,
+                FDDataType type, void* data,
+                ProcLib lib) {
+  if (lib == ProcLib::DEFAULT) {
+    return Create(height, width, channels, type, data);
+  }                  
+  if (lib == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    fcv::Mat tmp_fcv_mat = CreateZeroCopyFlyCVMatFromBuffer(
+      height, width, channels, type, data);
+    Mat mat = Mat(tmp_fcv_mat);
+    return mat;
+#else
+    FDASSERT(false, "FastDeploy didn't compiled with FlyCV!");
+#endif
+  } 
+  cv::Mat tmp_ocv_mat = CreateZeroCopyOpenCVMatFromBuffer(
+      height, width, channels, type, data);
+  Mat mat = Mat(tmp_ocv_mat);
+  return mat;    
 }
 
 }  // namespace vision

@@ -37,11 +37,14 @@ class FASTDEPLOY_DECL Processor {
   // all the function in `processor` will force to use
   // default_lib if this flag is set.
   // DEFAULT means this flag is not set
-  static ProcLib default_lib;
+  // static ProcLib default_lib;
 
   virtual std::string Name() = 0;
 
-  virtual bool ImplByOpenCV(Mat* mat) = 0;
+  virtual bool ImplByOpenCV(Mat* mat) {
+    FDERROR << Name() << " Not Implement Yet." << std::endl;
+    return false;
+  }
 
   virtual bool ImplByFlyCV(Mat* mat) {
     return ImplByOpenCV(mat);
@@ -49,13 +52,6 @@ class FASTDEPLOY_DECL Processor {
 
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
-
-// Create OpenCV/FlyCV/FD Mat from FD Tensor
-cv::Mat CreateOpenCVMatFromTensor(const FDTensor& tensor);
-#ifdef ENABLE_FLYCV
-fcv::Mat CreateFlyCVMatFromTensor(const FDTensor& tensor);
-#endif
-Mat CreateFDMatFromTensor(const FDTensor& tensor);
 
 }  // namespace vision
 }  // namespace fastdeploy
