@@ -87,13 +87,15 @@ class PaddleClasModel(FastDeployModel):
 
         return self._model.predict(im)
 
-    def batch_predict(self, images):
+    def batch_predict(self, images, topk=1):
         """Classify a batch of input image
 
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :param topk: (int) Filter the topk classify result, default 1
         :return list of ClassifyResult
         """
 
+        self.postprocessor.topk = topk
         return self._model.batch_predict(images)
 
     @property
