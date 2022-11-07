@@ -15,3 +15,11 @@
     :members:
     :inherited-members:
 ```
+
+## fastdeploy.vision.matting.RobustVideoMatting
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.matting.RobustVideoMatting
+    :members:
+    :inherited-members:
+```
