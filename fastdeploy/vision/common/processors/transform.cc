@@ -104,8 +104,8 @@ void FuseNormalizeColorConvert(
   // we can still fuse Normalize and BGR2RGB/RGB2BGR
   static std::unordered_set<std::string> middle_processors(
       {"Resize", "ResizeByShort", "ResizeByLong", "Crop", "CenterCrop",
-       "LimitByStride", "LimitLong", "LimitShort", "Pad", "PadToSize",
-       "StridePad", "WarpAffine"});
+       "LimitByStride", "LimitShort", "Pad", "PadToSize", "StridePad",
+       "WarpAffine"});
 
   for (size_t i = 0; i < processors->size(); ++i) {
     if ((*processors)[i]->Name() == "BGR2RGB" ||
