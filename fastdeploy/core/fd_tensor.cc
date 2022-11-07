@@ -71,11 +71,12 @@ const void* FDTensor::CpuData() const {
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,
-                               const Device& new_device) {
+                               const Device& new_device, const std::string& tensor_name) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
   device = new_device;
+  name = tensor_name;
 }
 
 void FDTensor::ExpandDim(int64_t axis) {
@@ -131,6 +132,7 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
   dtype = data_type;

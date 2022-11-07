@@ -162,6 +162,24 @@ void BindRuntime(pybind11::module& m) {
              }
              return results;
            })
+      .def("infer", [](Runtime& self, std::map<std::string, FDTensor>& data) {
+        std::vector<FDTensor> inputs;
+        inputs.reserve(data.size());
+        for (auto iter = data.begin(); iter != data.end(); ++iter) {
+          FDTensor tensor;
+          tensor.SetExternalData(iter->second.Shape(), iter->second.Dtype(), iter->second.Data(), iter->second.device, iter->first);
+          inputs.push_back(tensor);
+        }
+        std::vector<FDTensor> outputs;
+        if (!self.Infer(inputs, &outputs)) {
+          pybind11::eval("raise Exception('Failed to inference with Runtime.')");
+        }
+        return outputs;
+      })
+      .def("infer", [](Runtime& self, std::vector<FDTensor>& inputs) {
+        std::vector<FDTensor> outputs;
+        return self.Infer(inputs, &outputs);
+      })
       .def("num_inputs", &Runtime::NumInputs)
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
@@ -201,33 +219,6 @@ void BindRuntime(pybind11::module& m) {
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
-
-  pybind11::class_<FDTensor>(m, "FDTensor", pybind11::buffer_protocol())
-      .def(pybind11::init())
-      .def("cpu_data",
-           [](FDTensor& self) {
-             auto ptr = self.CpuData();
-             auto numel = self.Numel();
-             auto dtype = FDDataTypeToNumpyDataType(self.dtype);
-             auto base = pybind11::array(dtype, self.shape);
-             return pybind11::array(dtype, self.shape, ptr, base);
-           })
-      .def("resize", static_cast<void (FDTensor::*)(size_t)>(&FDTensor::Resize))
-      .def("resize",
-           static_cast<void (FDTensor::*)(const std::vector<int64_t>&)>(
-               &FDTensor::Resize))
-      .def(
-          "resize",
-          [](FDTensor& self, const std::vector<int64_t>& shape,
-             const FDDataType& dtype, const std::string& name,
-             const Device& device) { self.Resize(shape, dtype, name, device); })
-      .def("numel", &FDTensor::Numel)
-      .def("nbytes", &FDTensor::Nbytes)
-      .def_readwrite("name", &FDTensor::name)
-      .def_readwrite("is_pinned_memory", &FDTensor::is_pinned_memory)
-      .def_readonly("shape", &FDTensor::shape)
-      .def_readonly("dtype", &FDTensor::dtype)
-      .def_readonly("device", &FDTensor::device);
 
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }

@@ -148,6 +148,8 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
     }
   }
   processors_.push_back(std::make_shared<HWC2CHW>());
+
+  FuseTransforms(&processors_);
   return true;
 }
 
