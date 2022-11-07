@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/tracking/pptracking/model.h"
+#include "fastdeploy/vision/tracking/pptracking/letter_box_resize.h"
 #include "yaml-cpp/yaml.h"
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
@@ -29,7 +30,7 @@ PPTracking::PPTracking(const std::string& model_file,
                        const ModelFormat& model_format){
   config_file_=config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-  valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -150,6 +151,8 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
     }
   }
   processors_.push_back(std::make_shared<HWC2CHW>());
+
+  FuseTransforms(&processors_);
   return true;
 }
 
@@ -164,9 +167,7 @@ bool PPTracking::Initialize() {
     return false;
   }
   // create JDETracker instance
-  std::unique_ptr<JDETracker> jdeTracker(new JDETracker);
-  jdeTracker_ = std::move(jdeTracker);
-
+  jdeTracker_ = std::unique_ptr<JDETracker>(new JDETracker);
   return true;
 }
 
@@ -248,7 +249,6 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
   cv::Mat dets(bbox_shape[0], 6, CV_32FC1, bbox_data);
   cv::Mat emb(bbox_shape[0], emb_shape[1], CV_32FC1, emb_data);
 
-
   result->Clear();
   std::vector<Track> tracks;
   std::vector<int> valid;
@@ -267,7 +267,6 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
     result->boxes.push_back(box);
     result->ids.push_back(1);
     result->scores.push_back(*dets.ptr<float>(0, 4));
-
   } else {
     std::vector<Track>::iterator titer;
     for (titer = tracks.begin(); titer != tracks.end(); ++titer) {
@@ -288,7 +287,34 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
       }
     }
   }
+  if (!is_record_trail_) return true;
+  int nums = result->boxes.size();
+  for (int i=0; i<nums; i++) {
+    float center_x = (result->boxes[i][0] + result->boxes[i][2]) / 2;
+    float center_y = (result->boxes[i][1] + result->boxes[i][3]) / 2;
+    int id = result->ids[i];
+    recorder_->Add(id,{int(center_x), int(center_y)});
+  }
   return true;
+}
+
+void PPTracking::BindRecorder(TrailRecorder* recorder){
+
+    recorder_ = recorder;
+    is_record_trail_ = true;
+}
+
+void PPTracking::UnbindRecorder(){
+
+    is_record_trail_ = false;
+    std::map<int, std::vector<std::array<int, 2>>>::iterator iter;
+    for(iter = recorder_->records.begin(); iter != recorder_->records.end(); iter++){
+      iter->second.clear();
+      iter->second.shrink_to_fit();
+    }
+    recorder_->records.clear();
+    std::map<int, std::vector<std::array<int, 2>>>().swap(recorder_->records);
+    recorder_ = nullptr;
 }
 
 } // namespace tracking

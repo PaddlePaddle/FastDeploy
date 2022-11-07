@@ -31,12 +31,12 @@ class FASTDEPLOY_DECL Crop : public Processor {
   bool ImplByOpenCV(Mat* mat);
 
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Crop"; }
 
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int offset_w_;

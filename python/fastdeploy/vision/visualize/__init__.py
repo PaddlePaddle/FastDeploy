@@ -15,6 +15,7 @@
 from __future__ import absolute_import
 import logging
 from ... import c_lib_wrap as C
+import cv2
 
 
 def vis_detection(im_data,
@@ -34,6 +35,10 @@ def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
 def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
     return C.vision.vis_face_detection(im_data, face_det_result, line_size,
                                        font_size)
+
+
+def vis_face_alignment(im_data, face_align_result, line_size=1):
+    return C.vision.vis_face_alignment(im_data, face_align_result, line_size)
 
 
 def vis_segmentation(im_data, seg_result, weight=0.5):
@@ -63,12 +68,14 @@ def swap_background_matting(im_data,
         "DEPRECATED: fastdeploy.vision.swap_background_matting is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
     assert isinstance(
-        result, C.vision.MattingResult), "The result must be MattingResult type"
+        result,
+        C.vision.MattingResult), "The result must be MattingResult type"
     return C.vision.Visualize.swap_background_matting(
         im_data, background, result, remove_small_connected_area)
 
 
-def swap_background_segmentation(im_data, background, background_label, result):
+def swap_background_segmentation(im_data, background, background_label,
+                                 result):
     logging.warning(
         "DEPRECATED: fastdeploy.vision.swap_background_segmentation is deprecated, please use fastdeploy.vision.swap_background function instead."
     )
@@ -100,5 +107,9 @@ def vis_ppocr(im_data, det_result):
     return C.vision.vis_ppocr(im_data, det_result)
 
 
-def vis_mot(im_data, mot_result, fps, frame_id):
-    return C.vision.vis_mot(im_data, mot_result, fps, frame_id)
+def vis_mot(im_data, mot_result, score_threshold=0.0, records=None):
+    return C.vision.vis_mot(im_data, mot_result, score_threshold, records)
+
+
+def vis_headpose(im_data, headpose_result, size=50, line_size=1):
+    return C.vision.vis_headpose(im_data, headpose_result, size, line_size)

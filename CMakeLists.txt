@@ -54,7 +54,6 @@ if(ANDROID)
 endif()
 
 ############################# Basic Options for FastDeploy ################################
-option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
@@ -194,13 +193,8 @@ if(WITH_SW)
   add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
 endif()
 
-if(ENABLE_PADDLE_FRONTEND)
-  add_definitions(-DENABLE_PADDLE_FRONTEND)
-  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
-  list(APPEND DEPEND_LIBS external_paddle2onnx)
-endif(ENABLE_PADDLE_FRONTEND)
-
 if(ENABLE_ORT_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/onnxruntime.cmake)
@@ -228,6 +222,7 @@ if(ENABLE_PADDLE_BACKEND)
 endif()
 
 if(ENABLE_OPENVINO_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
@@ -320,8 +315,9 @@ endif()
 if(WITH_GPU)
   set(BUILD_CUDA_SRC ON)
   enable_language(CUDA)
-  set(CMAKE_CUDA_STANDARD 11)
-  set(CUDA_PROPAGATE_HOST_FLAGS FALSE)
+  message(STATUS "CUDA compiler: ${CMAKE_CUDA_COMPILER}, version: "
+                 "${CMAKE_CUDA_COMPILER_ID} ${CMAKE_CUDA_COMPILER_VERSION}")
+  include(${PROJECT_SOURCE_DIR}/cmake/cuda.cmake)
   list(APPEND ALL_DEPLOY_SRCS ${FDTENSOR_FUNC_CUDA_SRCS})
 else()
   set(BUILD_CUDA_SRC OFF)
@@ -332,8 +328,9 @@ if(WITH_IPU)
 endif()
 
 if(ENABLE_TRT_BACKEND)
-  if(APPLE OR ANDROID OR IOS OR RK)
-    message(FATAL_ERROR "Cannot enable tensorrt backend in mac/ios/android/RK os, please set -DENABLE_TRT_BACKEND=OFF.")
+  set(ENABLE_PADDLE_FRONTEND ON)
+  if(APPLE OR ANDROID OR IOS)
+    message(FATAL_ERROR "Cannot enable tensorrt backend in mac/ios/android os, please set -DENABLE_TRT_BACKEND=OFF.")
   endif()
   if(NOT WITH_GPU)
     message(FATAL_ERROR "While -DENABLE_TRT_BACKEND=ON, must set -DWITH_GPU=ON, but now it's OFF")
@@ -385,7 +382,6 @@ endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
-#  set(ENABLE_VISION_VISUALIZE ON)
   add_definitions(-DENABLE_VISION_VISUALIZE)
   if(ENABLE_OPENCV_CUDA)
     if(NOT WITH_GPU)
@@ -426,6 +422,13 @@ if(ENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/faster_tokenizer.cmake)
 endif()
+
+if(ENABLE_PADDLE_FRONTEND)
+  add_definitions(-DENABLE_PADDLE_FRONTEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
+  list(APPEND DEPEND_LIBS external_paddle2onnx)
+endif(ENABLE_PADDLE_FRONTEND)
+
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
@@ -490,13 +493,16 @@ if(BUILD_EXAMPLES AND EXISTS ${PROJECT_SOURCE_DIR}/examples)
   if(NOT EXECUTABLE_OUTPUT_PATH STREQUAL ${CMAKE_CURRENT_BINARY_DIR}/bin)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
   endif()
+  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
   add_subdirectory(examples)
 endif()
 
 if (WITH_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/tests)
   add_definitions(-DWITH_TESTING)
   include(${PROJECT_SOURCE_DIR}/cmake/gtest.cmake)
-  include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  if(NOT BUILD_EXAMPLES)
+    include(${PROJECT_SOURCE_DIR}/cmake/gflags.cmake)
+  endif()
   include(${PROJECT_SOURCE_DIR}/cmake/glog.cmake)
   add_subdirectory(tests)
 endif()
@@ -562,6 +568,11 @@ install(
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/utils
 )
 
 if(NOT WIN32)

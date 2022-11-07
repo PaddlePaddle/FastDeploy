@@ -20,8 +20,10 @@ from . import tracking
 from . import keypointdetection
 from . import matting
 from . import facedet
+from . import facealign
 from . import faceid
 from . import ocr
+from . import headpose
 from . import evaluation
 from .utils import fd_result_to_json
 from .visualize import *
