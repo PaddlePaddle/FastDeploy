@@ -35,6 +35,14 @@ std::string ClassifyResult::Str() {
   return out;
 }
 
+ClassifyResult& ClassifyResult::operator=(ClassifyResult&& other) {
+  if (&other != this) {
+    label_ids = std::move(other.label_ids);
+    scores = std::move(other.scores);
+  }
+  return *this;
+}
+
 void Mask::Reserve(int size) { data.reserve(size); }
 
 void Mask::Resize(int size) { data.resize(size); }

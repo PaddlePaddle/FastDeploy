@@ -44,6 +44,7 @@ struct FASTDEPLOY_DECL BaseResult {
 /*! @brief Classify result structure for all the image classify models
  */
 struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
+  ClassifyResult() = default;
   /// Classify result for an image
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
@@ -52,6 +53,11 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
 
   /// Clear result
   void Clear();
+
+  /// Copy constructor
+  ClassifyResult(const ClassifyResult& other) = default;
+  /// Move assignment
+  ClassifyResult& operator=(ClassifyResult&& other);
 
   /// Debug function, convert the result to string to print
   std::string Str();
