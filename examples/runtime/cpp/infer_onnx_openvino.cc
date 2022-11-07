@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
   std::vector<fd::FDTensor> output_tensors(1);
 
   std::vector<float> inputs_data;
-  inputs_data.reserve(1 * 3 * 224 * 224);
+  inputs_data.resize(1 * 3 * 224 * 224);
   for (size_t i = 0; i < inputs_data.size(); ++i) {
     inputs_data[i] = std::rand() % 1000 / 1000.0f;
   }
