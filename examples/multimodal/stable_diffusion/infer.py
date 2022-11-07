@@ -17,7 +17,11 @@ import os
 
 from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
 from scheduling_utils import PNDMScheduler
-from paddlenlp.transformers import CLIPTokenizer
+
+try:
+    from paddlenlp.transformers import CLIPTokenizer
+except ImportError:
+    from transformers import CLIPTokenizer
 
 import fastdeploy as fd
 from fastdeploy import ModelFormat
