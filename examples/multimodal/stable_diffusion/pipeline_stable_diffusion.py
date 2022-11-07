@@ -38,25 +38,12 @@ class StableDiffusionFastDeployPipeline(object):
                  tokenizer: CLIPTokenizer,
                  unet_runtime: fd.Runtime,
                  scheduler: Union[DDIMScheduler, PNDMScheduler,
-                                  LMSDiscreteScheduler],
-                 safety_checker: fd.Runtime=None,
-                 feature_extractor: fd.Runtime=None):
+                                  LMSDiscreteScheduler]):
         self.vae_decoder_runtime = vae_decoder_runtime
         self.text_encoder_runtime = text_encoder_runtime
         self.unet_runtime = unet_runtime
         self.scheduler = scheduler
         self.tokenizer = tokenizer
-        self.safety_checker = safety_checker
-        self.feature_extractor = feature_extractor
-        if safety_checker is None:
-            logging.warning(
-                f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
-                " that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered"
-                " results in services or applications open to the public. Both the diffusers team and Hugging Face"
-                " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
-                " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
-                " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
-            )
 
     def __call__(
             self,

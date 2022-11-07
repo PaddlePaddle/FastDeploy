@@ -71,7 +71,10 @@ def parse_arguments():
         default="fd_astronaut_rides_horse.png",
         help="The model directory of diffusion_model.")
     parser.add_argument(
-        "--device_id", type=int, default=0, help="The selected gpu id.")
+        "--device_id",
+        type=int,
+        default=0,
+        help="The selected gpu id. -1 means use cpu")
     return parser.parse_args()
 
 
@@ -206,9 +209,11 @@ if __name__ == "__main__":
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     elif args.backend == "pp" or args.backend == "pp-trt":
         use_trt = True if args.backend == "pp-trt" else False
-        text_encoder_runtime = create_paddle_inference_runtime(
+        # Note(zhoushunjie): Will change to paddle runtime later
+        text_encoder_runtime = create_ort_runtime(
             args.model_dir,
             args.text_encoder_model_prefix,
+            args.model_format,
             device_id=args.device_id)
         vae_decoder_runtime = create_paddle_inference_runtime(
             args.model_dir,

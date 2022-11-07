@@ -17,6 +17,7 @@ import paddle
 import paddlenlp
 
 from ppdiffusers import UNet2DConditionModel, AutoencoderKL
+from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from paddlenlp.transformers import CLIPTextModel
 
 
@@ -42,6 +43,7 @@ class VAEDecoder(AutoencoderKL):
 
 
 if __name__ == "__main__":
+    paddle.set_device('cpu')
     args = parse_arguments()
     # Load models and create wrapper for stable diffusion
     text_encoder = CLIPTextModel.from_pretrained(

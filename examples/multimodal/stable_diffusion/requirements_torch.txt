@@ -3,6 +3,3 @@ torch
 diffusers
 transformers
 scipy
-ppdiffusers
-paddlenlp
-paddlepaddle-gpu
