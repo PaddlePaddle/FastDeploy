@@ -20,13 +20,7 @@ ___注意：模型导出过程中，需要下载StableDiffusion模型。为了�
 
 ___Tips: Stable Diffusion是基于以下的License: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
 
-若第一次导出，需要先登录HuggingFace客户端。执行以下命令进行登录：
-
-```shell
-huggingface-cli login
-```
-
-完成登录后，可执行以下命令行完成模型导出。
+可执行以下命令行完成模型导出。
 
 ```shell
 python export_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path paddle_diffusion_model
@@ -55,7 +49,7 @@ paddle_diffusion_model/
 
 | 参数 |参数说明 |
 |----------|--------------|
-|<div style="width: 180pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[ppdiffuser模型列表](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers/examples/textual_inversion)。|
+|<div style="width: 230pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[ppdiffuser模型列表](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers/examples/textual_inversion)。|
 |--output_path | 导出的模型目录。 |
 
 ### 预测运行
@@ -100,15 +94,17 @@ pip install -r requirements_torch.txt
 
 ### 模型导出
 
-
 ___注意：模型导出过程中，需要下载StableDiffusion模型。为了使用该模型与权重，你必须接受该模型所要求的License，并且获取HF Hub授予的Token。请访问HuggingFace的[model card](https://huggingface.co/runwayml/stable-diffusion-v1-5), 仔细阅读里面的License，然后签署该协议。___
 
 ___Tips: Stable Diffusion是基于以下的License: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
 
+若第一次导出模型，需要先登录HuggingFace客户端。执行以下命令进行登录：
+
 ```shell
+huggingface-cli login
 ```
 
-执行以下命令行完成模型导出。
+完成登录后，执行以下命令行完成模型导出。
 
 ```shell
 python export_torch_to_onnx_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path torch_diffusion_model
@@ -132,7 +128,7 @@ torch_diffusion_model/
 
 | 参数 |参数说明 |
 |----------|--------------|
-|<div style="width: 180pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[HuggingFace模型列表说明](https://huggingface.co/CompVis/stable-diffusion-v1-4)。|
+|<div style="width: 230pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[HuggingFace模型列表说明](https://huggingface.co/CompVis/stable-diffusion-v1-4)。|
 |--output_path | 导出的模型目录。 |
 
 ### 预测运行
