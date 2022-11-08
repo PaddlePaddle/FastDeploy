@@ -44,6 +44,8 @@ class WarpAffine : public Processor {
     return std::make_tuple(width_, height_);
   }
 
+  bool InferShape(std::vector<int>* shape_trace);
+
   static bool Run(Mat* mat, const cv::Mat& trans_matrix, int width, int height,
                   int interp = 1, int border_mode = 0,
                   const cv::Scalar& borderValue = cv::Scalar(),

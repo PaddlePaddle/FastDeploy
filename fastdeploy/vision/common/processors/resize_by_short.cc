@@ -17,6 +17,13 @@
 namespace fastdeploy {
 namespace vision {
 
+bool ResizeByShort::InferShape(std::vector<int>* shape_trace) {
+  double scale = GenerateScale((*shape_trace)[0], (*shape_trace)[1]);
+  (*shape_trace)[0] = static_cast<int>(round(scale * (*shape_trace)[0]));
+  (*shape_trace)[1] =  static_cast<int>(round(scale * (*shape_trace)[1]));
+  return true;
+}
+
 bool ResizeByShort::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;

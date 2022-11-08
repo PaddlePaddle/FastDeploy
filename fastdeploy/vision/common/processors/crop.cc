@@ -17,6 +17,20 @@
 namespace fastdeploy {
 namespace vision {
 
+bool Crop::InferShape(std::vector<int>* shape_trace) {
+  if ((*shape_trace)[1] < height_ + offset_h_ || (*shape_trace)[0] < width_ + offset_w_) {
+    FDERROR << "[Crop] Cannot crop [" << height_ << ", " << width_
+            << "] from the input image [" << (*shape_trace)[1] << ", " << (*shape_trace)[0]
+            << "], with offset [" << offset_h_ << ", " << offset_w_ << "]."
+            << std::endl;
+    return false;
+  }
+
+  (*shape_trace)[0] = width_;
+  (*shape_trace)[1] = height_;
+  return true;
+}
+
 bool Crop::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);

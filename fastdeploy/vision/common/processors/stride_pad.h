@@ -32,6 +32,7 @@ class FASTDEPLOY_DECL StridePad : public Processor {
 #endif
   std::string Name() { return "StridePad"; }
 
+  bool InferShape(std::vector<int>* shape_trace);
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
                   ProcLib lib = ProcLib::DEFAULT);

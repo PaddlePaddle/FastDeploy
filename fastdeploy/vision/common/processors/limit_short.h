@@ -38,6 +38,8 @@ class LimitShort : public Processor {
 #endif
   std::string Name() { return "LimitShort"; }
 
+  bool InferShape(std::vector<int>* shape_trace);
+
   static bool Run(Mat* mat, int max_short = -1, int min_short = -1,
                   int interp = 1, ProcLib lib = ProcLib::DEFAULT);
   int GetMaxShort() const { return max_short_; }

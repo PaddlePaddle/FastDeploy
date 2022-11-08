@@ -17,6 +17,25 @@
 namespace fastdeploy {
 namespace vision {
 
+bool LimitShort::InferShape(std::vector<int>* shape_trace) {
+  int origin_w = (*shape_trace)[0];
+  int origin_h = (*shape_trace)[1];
+  int im_size_min = std::min(origin_w, origin_h);
+  int target = im_size_min;
+  if (max_short_ > 0 && im_size_min > max_short_) {
+    target = max_short_;
+  } else if (min_short_ > 0 && im_size_min < min_short_) {
+    target = min_short_;
+  }
+  double scale = -1.f;
+  if (target != im_size_min) {
+    scale = static_cast<double>(target) / static_cast<double>(im_size_min);
+  }
+  (*shape_trace)[0] = static_cast<int>(round(origin_w) * scale);
+  (*shape_trace)[1] = static_cast<int>(round(origin_h) * scale);
+  return true;
+}
+
 bool LimitShort::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;

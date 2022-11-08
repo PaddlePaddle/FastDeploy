@@ -17,6 +17,12 @@
 namespace fastdeploy {
 namespace vision {
 
+bool Pad::InferShape(std::vector<int>* shape_trace) {
+  (*shape_trace)[0] = (*shape_trace)[0] + left_ + right_;
+  (*shape_trace)[1] = (*shape_trace)[1] + top_ + bottom_;
+  return true;
+}
+
 bool Pad::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Pad: The input data must be Layout::HWC format!" << std::endl;

@@ -34,6 +34,7 @@ class FASTDEPLOY_DECL Pad : public Processor {
   bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Pad"; }
+  bool InferShape(std::vector<int>* shape_trace);
 
   static bool Run(Mat* mat, const int& top, const int& bottom, const int& left,
                   const int& right, const std::vector<float>& value,

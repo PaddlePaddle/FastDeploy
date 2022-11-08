@@ -17,6 +17,16 @@
 namespace fastdeploy {
 namespace vision {
 
+bool CenterCrop::InferShape(std::vector<int>* shape_trace) {
+  if ((*shape_trace)[1] < height_ || (*shape_trace)[0] < width_) {
+    FDERROR << "[CenterCrop] Image size less than crop size" << std::endl;
+    return false;
+  }
+  (*shape_trace)[0] = width_;
+  (*shape_trace)[1] = height_;
+  return true;
+}
+
 bool CenterCrop::ImplByOpenCV(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int height = static_cast<int>(im->rows);

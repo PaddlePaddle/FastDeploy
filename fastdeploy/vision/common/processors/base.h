@@ -55,6 +55,11 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mat);
   }
 
+  // shape_trace recording the shape after process, [w, h]
+  virtual bool InferShape(std::vector<int*> shape_trace) {
+    return true;
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 

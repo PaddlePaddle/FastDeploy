@@ -17,6 +17,25 @@
 namespace fastdeploy {
 namespace vision {
 
+bool PadToSize::InferShape(std::vector<int>* shape_trace) {
+  if ((*shape_trace)[0] > width_) {
+    FDERROR << "PadToSize: the input width:" << (*shape_trace)[0] 
+            << " is greater than the target width: " << width_ << "."
+            << std::endl;
+    return false;
+  }
+  if ((*shape_trace)[1] > height_) {
+    FDERROR << "PadToSize: the input height:" << (*shape_trace)[1] 
+            << " is greater than the target height: " << height_ << "."
+            << std::endl;
+    return false;
+  }
+
+  (*shape_trace)[0] = width_;
+  (*shape_trace)[1] = height_;
+  return true;
+}
+
 bool PadToSize::ImplByOpenCV(Mat* mat) {
   if (width_ == -1 || height_ == -1) {
     return true;

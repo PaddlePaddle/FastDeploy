@@ -27,7 +27,6 @@
 #include "fastdeploy/vision/common/processors/pad.h"
 #include "fastdeploy/vision/common/processors/pad_to_size.h"
 #include "fastdeploy/vision/common/processors/resize.h"
-#include "fastdeploy/vision/common/processors/resize_by_long.h"
 #include "fastdeploy/vision/common/processors/resize_by_short.h"
 #include "fastdeploy/vision/common/processors/stride_pad.h"
 #include "fastdeploy/vision/common/processors/warp_affine.h"

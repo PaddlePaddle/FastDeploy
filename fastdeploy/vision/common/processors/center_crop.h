@@ -28,6 +28,8 @@ class FASTDEPLOY_DECL CenterCrop : public Processor {
 #endif
   std::string Name() { return "CenterCrop"; }
 
+  bool InferShape(std::vector<int>* shape_trace);
+
   static bool Run(Mat* mat, const int& width, const int& height,
                   ProcLib lib = ProcLib::DEFAULT);
 

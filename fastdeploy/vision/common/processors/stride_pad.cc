@@ -17,6 +17,14 @@
 namespace fastdeploy {
 namespace vision {
 
+bool StridePad::InferShape(std::vector<int>* shape_trace) {
+  int pad_h = ((*shape_trace)[1] / stride_) * stride_ +
+              ((*shape_trace)[1] % stride_ != 0) * stride_ - (*shape_trace)[1];
+  int pad_w = ((*shape_trace)[0] / stride_) * stride_ +
+              ((*shape_trace)[0] % stride_ != 0) * stride_ - (*shape_trace)[0];
+  return true;
+}
+
 bool StridePad::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "StridePad: The input data must be Layout::HWC format!"

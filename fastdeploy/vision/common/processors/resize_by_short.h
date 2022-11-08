@@ -34,6 +34,8 @@ class FASTDEPLOY_DECL ResizeByShort : public Processor {
 #endif
   std::string Name() { return "ResizeByShort"; }
 
+  bool InferShape(std::vector<int>* shape_trace);
+
   static bool Run(Mat* mat, int target_size, int interp = 1,
                   bool use_scale = true,
                   const std::vector<int>& max_hw = std::vector<int>(),

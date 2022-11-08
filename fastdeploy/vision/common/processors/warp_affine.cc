@@ -17,6 +17,12 @@
 namespace fastdeploy {
 namespace vision {
 
+bool WarpAffine::InferShape(std::vector<int>* shape_trace) {
+  (*shape_trace)[0] = width_;
+  (*shape_trace)[1] = height_;
+  return true;
+}
+
 bool WarpAffine::ImplByOpenCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "WarpAffine: The format of input is not HWC." << std::endl;
