@@ -5,10 +5,6 @@ import android.os.Handler;
 import android.util.AttributeSet;
 import android.widget.ListView;
 
-/**
- * Created by ruanshimin on 2018/5/14.
- */
-
 public class ResultListView extends ListView {
     public ResultListView(Context context) {
         super(context);

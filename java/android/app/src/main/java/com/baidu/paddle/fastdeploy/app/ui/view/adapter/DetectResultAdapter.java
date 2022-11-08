@@ -15,10 +15,6 @@ import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import java.text.DecimalFormat;
 import java.util.List;
 
-/**
- * Created by ruanshimin on 2018/5/13.
- */
-
 public class DetectResultAdapter extends ArrayAdapter<BaseResultModel> {
     private int resourceId;
 
