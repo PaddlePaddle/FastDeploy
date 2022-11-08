@@ -34,12 +34,14 @@ diff_score_threshold = {
     }
 }
 
+
 def all_sort(x):
     x1 = x.T
     y = np.split(x1, len(x1))
     z = list(reversed(y))
     index = np.lexsort(z)
     return x[index]
+
 
 def parse_arguments():
     import argparse
@@ -89,8 +91,8 @@ def write2file(error_file):
     with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
-        f.write(args.platform + " " + py_version + " " +
-                args.result_path.split(".")[0] + "\n")
+        f.write(args.platform + " " + py_version + " " + args.result_path.split(
+            ".")[0] + "\n")
 
 
 def save_numpy_result(file_path, error_msg):
