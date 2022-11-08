@@ -111,6 +111,8 @@ make -j
 source /Path/to/fastdeploy_cpp_sdk/fastdeploy_init.sh
 ```
 
+本示例代码在各平台(Windows/Linux/Mac)上通用，但编译过程仅支持(Linux/Mac)，Windows上使用msbuild进行编译，具体使用方式参考[Windows平台使用FastDeploy C++ SDK](../../faq/use_sdk_on_windows.md)
+
 ## 其它文档
 
 - [不同后端Runtime demo示例](../../../../examples/runtime/README.md)
