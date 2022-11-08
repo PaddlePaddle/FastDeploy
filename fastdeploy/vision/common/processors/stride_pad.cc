@@ -22,6 +22,8 @@ bool StridePad::InferShape(std::vector<int>* shape_trace) {
               ((*shape_trace)[1] % stride_ != 0) * stride_ - (*shape_trace)[1];
   int pad_w = ((*shape_trace)[0] / stride_) * stride_ +
               ((*shape_trace)[0] % stride_ != 0) * stride_ - (*shape_trace)[0];
+  (*shape_trace)[0] += pad_w;
+  (*shape_trace)[1] += pad_h;
   return true;
 }
 
