@@ -15,9 +15,7 @@
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "fastdeploy/vision/tracking/pptracking/letter_box_resize.h"
 #include "yaml-cpp/yaml.h"
-#ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
-#endif
 
 namespace fastdeploy {
 namespace vision {
