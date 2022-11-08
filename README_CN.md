@@ -50,7 +50,7 @@
     -  **📲 移动端和端侧部署：移动端后端能力升级，支持更多的CV模型**
        - 集成 Paddle Lite，并保证其使用与服务端常用推理引擎 Paddle Inference、TensorRT、OpenVINO、ONNX Runtime 等一致的开发体验；
        - 新增 [轻量化目标检测模型](examples/vision/detection/paddledetection/android)和[分类模型](examples/vision/classification/paddleclas/android)的安卓端部署能力；
-    -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署：新增Web端部署能力**
+    -  **🌐 Web和小程序部署：新增Web端部署能力**
        - 集成 Paddle.js部署能力，新增 OCR、目标检测、人像分割背景替换、物体识别等Web端部署能力和[Demo](examples/application/js)；
 
 ## 目录
@@ -92,7 +92,7 @@
 * **📲 移动端和端侧部署**
     * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
     * [端侧模型支持列表](#fastdeploy-edge-models)
-* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署**  
+* **🌐 Web和小程序部署**  
     * [Web端模型支持列表](#fastdeploy-web-models)
 * [**社区交流**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
     
     
-## <img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署
+## 🌐 Web和小程序部署
 
 <div id="fastdeploy-web-models"></div>
     
