@@ -35,7 +35,6 @@ class FASTDEPLOY_DECL Crop : public Processor {
 #endif
   std::string Name() { return "Crop"; }
 
-  bool InferShape(std::vector<int>* shape_trace);
   static bool Run(Mat* mat, int offset_w, int offset_h, int width, int height,
                   ProcLib lib = ProcLib::DEFAULT);
 

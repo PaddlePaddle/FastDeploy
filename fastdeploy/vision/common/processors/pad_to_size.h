@@ -33,8 +33,6 @@ class FASTDEPLOY_DECL PadToSize : public Processor {
 #endif
   std::string Name() { return "PadToSize"; }
 
-  bool InferShape(std::vector<int>* shape_trace);
-
   static bool Run(Mat* mat, int width, int height,
                   const std::vector<float>& value,
                   ProcLib lib = ProcLib::DEFAULT);
