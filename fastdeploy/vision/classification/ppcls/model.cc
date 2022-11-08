@@ -60,18 +60,18 @@ bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
 
 bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vector<ClassifyResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
 
-  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
-  if (!Infer(reused_input_tensors, &reused_output_tensors)) {
+  reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
+  if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors, results)) {
+  if (!postprocessor_.Run(reused_output_tensors_, results)) {
     FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
     return false;
   }

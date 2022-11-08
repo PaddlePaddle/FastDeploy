@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool Infer(std::vector<FDTensor>& input_tensors,
                      std::vector<FDTensor>* output_tensors);
 
-  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors to do inference and writing results to reused_output_tensors
+  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors_ to do inference and writing results to reused_output_tensors_
   */
   virtual bool Infer();
 
@@ -107,16 +107,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** \brief Release reused input/output buffers
   */
   virtual void ReleaseReusedBuffer() {
-    std::vector<FDTensor>().swap(reused_input_tensors);
-    std::vector<FDTensor>().swap(reused_output_tensors);
+    std::vector<FDTensor>().swap(reused_input_tensors_);
+    std::vector<FDTensor>().swap(reused_output_tensors_);
   }
-
-  /** \brief Reused input tensors
-  */
-  std::vector<FDTensor> reused_input_tensors;
-  /** \brief Reused output tensors
-  */
-  std::vector<FDTensor> reused_output_tensors;
 
  protected:
   virtual bool InitRuntime();
@@ -126,7 +119,11 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool CreateRKNPUBackend();
 
   bool initialized = false;
-  std::vector<Backend> valid_external_backends;
+  std::vector<Backend> valid_external_backends_;
+  // Reused input tensors
+  std::vector<FDTensor> reused_input_tensors_;
+  // Reused output tensors
+  std::vector<FDTensor> reused_output_tensors_;
 
  private:
   std::shared_ptr<Runtime> runtime_;

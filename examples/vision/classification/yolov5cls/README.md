@@ -17,8 +17,6 @@
 | [YOLOv5x-cls](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5x-cls.onnx) | 184MB | 79.0% | 94.4% |
 
 
-
-
 ## 详细部署文档
 
 - [Python部署](python)

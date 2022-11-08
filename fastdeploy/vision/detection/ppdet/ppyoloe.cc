@@ -55,7 +55,7 @@ bool PPYOLOE::Initialize() {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-  reused_input_tensors.resize(2);
+  reused_input_tensors_.resize(2);
 
   return true;
 }
@@ -252,7 +252,7 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
 bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
   Mat mat(*im);
 
-  if (!Preprocess(&mat, &reused_input_tensors)) {
+  if (!Preprocess(&mat, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
@@ -264,7 +264,7 @@ bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
     return false;
   }
 
-  if (!Postprocess(reused_output_tensors, result)) {
+  if (!Postprocess(reused_output_tensors_, result)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;
