@@ -16,7 +16,7 @@ import * as ocr from "@paddle-js-models/ocr";
 await ocr.init(detConfig, recConfig);
 const res = await ocr.recognize(img, option, postConfig);
 ```
-ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转换方式参考[文档](../../../../application/web_demo/README.md)
+ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转换方式参考[文档](../../../../application/js/web_demo/README.md)
 
 **init函数参数**
 

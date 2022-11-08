@@ -16,6 +16,7 @@ API:`fastdeploy.vision.SegmentationResult`, 该结果返回:
 - **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`--output_op argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`--output_op softmax`或者导出模型时指定`--output_op none`同时模型初始化的时候设置模型类成员属性`apply_softmax=true`).
 - **shape**(list of int): 成员变量，表示输出图片的尺寸，为`H*W`.
 
+
 ## DetectionResult
 DetectionResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度.
 
@@ -39,6 +40,7 @@ API:`fastdeploy.vision.FaceDetectionResult` , 该结果返回:
 - **scores**(list of float): 成员变量，表示单张图片检测出来的所有目标置信度.
 - **landmarks**(list of list(float)): 成员变量，表示单张图片检测出来的所有人脸的关键点.
 - **landmarks_per_face**(int): 成员变量，表示每个人脸框中的关键点的数量.
+
 
 ## KeyPointDetectionResult
 KeyPointDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中目标行为的各个关键点坐标和置信度。
@@ -70,6 +72,7 @@ API:`fastdeploy.vision.MattingResult`, 该结果返回:
 - **contain_foreground**(bool): 表示预测的结果是否包含前景.
 - **shape**(list of int): 表示输出结果的shape，当`contain_foreground`为`false`，shape只包含`(H,W)`，当`contain_foreground`为`true`，shape包含`(H,W,C)`, C一般为3.
 
+
 ## OCRResult
 OCRResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测和识别出来的文本框，文本框方向分类，以及文本框内的文本内容.
 
@@ -79,3 +82,17 @@ API:`fastdeploy.vision.OCRResult`, 该结果返回:
 - **rec_scores**(list of float): 成员变量，表示文本框内识别出来的文本的置信度，其元素个数与`boxes.size()`一致.
 - **cls_scores**(list of float): 成员变量，表示文本框的分类结果的置信度，其元素个数与`boxes.size()`一致.
 - **cls_labels**(list of int): 成员变量，表示文本框的方向分类类别，其元素个数与`boxes.size()`一致.
+
+
+## FaceAlignmentResult
+FaceAlignmentResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸landmarks。
+
+API:`fastdeploy.vision.FaceAlignmentResult`, 该结果返回:
+- **landmarks**(list of list(float)): 成员变量，表示单张人脸图片检测出来的所有关键点
+
+
+## HeadPoseResult
+HeadPoseResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明头部姿态结果。
+
+API:`fastdeploy.vision.HeadPoseResult`, 该结果返回:
+- **euler_angles**(list of float): 成员变量，表示单张人脸图片预测的欧拉角，存放的顺序是(yaw, pitch, roll)， yaw 代表水平转角，pitch 代表垂直角，roll 代表翻滚角，值域都为 [-90, +90]度

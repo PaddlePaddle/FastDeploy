@@ -93,6 +93,12 @@ struct FASTDEPLOY_DECL FDTensor {
   // Total number of elements in this tensor
   int Numel() const;
 
+  // Get shape of FDTensor
+  std::vector<int64_t> Shape() const { return shape; }
+
+  // Get dtype of FDTensor
+  FDDataType Dtype() const { return dtype; }
+
   void Resize(size_t nbytes);
 
   void Resize(const std::vector<int64_t>& new_shape);

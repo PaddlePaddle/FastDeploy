@@ -21,13 +21,13 @@ namespace vision {
 class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
  public:
   NormalizeAndPermute(const std::vector<float>& mean,
-            const std::vector<float>& std,
-            bool is_scale = true,
-            const std::vector<float>& min = std::vector<float>(),
-            const std::vector<float>& max = std::vector<float>());
+                      const std::vector<float>& std, bool is_scale = true,
+                      const std::vector<float>& min = std::vector<float>(),
+                      const std::vector<float>& max = std::vector<float>(),
+                      bool swap_rb = false);
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "NormalizeAndPermute"; }
 
@@ -45,7 +45,7 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT, bool swap_rb = false);
 
   void SetAlpha(const std::vector<float>& alpha) {
     alpha_.clear();
@@ -59,9 +59,18 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
     beta_.assign(beta.begin(), beta.end());
   }
 
+  bool GetSwapRB() {
+    return swap_rb_;
+  }
+
+  void SetSwapRB(bool swap_rb) {
+    swap_rb_ = swap_rb;
+  }
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
+  bool swap_rb_;
 };
 }  // namespace vision
 }  // namespace fastdeploy
