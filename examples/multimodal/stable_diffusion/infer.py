@@ -111,6 +111,10 @@ def create_paddle_inference_runtime(model_dir,
                                     device_id=0):
     option = fd.RuntimeOption()
     option.use_paddle_backend()
+    if device_id == -1:
+        option.use_cpu()
+    else:
+        option.use_gpu(device_id)
     if use_trt:
         option.use_trt_backend()
         option.enable_paddle_to_trt()
@@ -127,10 +131,6 @@ def create_paddle_inference_runtime(model_dir,
                     min_shape=shape_dict["min_shape"],
                     opt_shape=shape_dict.get("opt_shape", None),
                     max_shape=shape_dict.get("max_shape", None))
-    if device_id == -1:
-        option.use_cpu()
-    else:
-        option.use_gpu(device_id)
     model_file = os.path.join(model_dir, model_prefix, "inference.pdmodel")
     params_file = os.path.join(model_dir, model_prefix, "inference.pdiparams")
     option.set_model_path(model_file, params_file)
