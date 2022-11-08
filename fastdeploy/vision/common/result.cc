@@ -35,6 +35,14 @@ std::string ClassifyResult::Str() {
   return out;
 }
 
+ClassifyResult& ClassifyResult::operator=(ClassifyResult&& other) {
+  if (&other != this) {
+    label_ids = std::move(other.label_ids);
+    scores = std::move(other.scores);
+  }
+  return *this;
+}
+
 void Mask::Reserve(int size) { data.reserve(size); }
 
 void Mask::Resize(int size) { data.resize(size); }
@@ -232,6 +240,30 @@ std::string FaceDetectionResult::Str() {
       }
     }
   }
+  return out;
+}
+
+void FaceAlignmentResult::Clear() {
+  std::vector<std::array<float, 2>>().swap(landmarks);
+}
+
+void FaceAlignmentResult::Reserve(int size) {
+  landmarks.resize(size);
+}
+
+void FaceAlignmentResult::Resize(int size) {
+  landmarks.resize(size);
+}
+
+std::string FaceAlignmentResult::Str() {
+  std::string out;
+
+  out = "FaceAlignmentResult: [x, y]\n";
+  for (size_t i = 0; i < landmarks.size(); ++i) {
+    out = out + std::to_string(landmarks[i][0]) + "," +
+          std::to_string(landmarks[i][1]) + "\n";
+  }
+  out += "num_landmarks:" + std::to_string(landmarks.size()) + "\n";
   return out;
 }
 
@@ -460,6 +492,29 @@ std::string OCRResult::Str() {
   no_result = no_result + "No Results!";
   return no_result;
 }
+
+void HeadPoseResult::Clear() {
+  std::vector<float>().swap(euler_angles);
+}
+
+void HeadPoseResult::Reserve(int size) {
+  euler_angles.resize(size);
+}
+
+void HeadPoseResult::Resize(int size) {
+  euler_angles.resize(size);
+}
+
+std::string HeadPoseResult::Str() {
+  std::string out;
+
+  out = "HeadPoseResult: [yaw, pitch, roll]\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  return out;
+}
+
 
 }  // namespace vision
 }  // namespace fastdeploy

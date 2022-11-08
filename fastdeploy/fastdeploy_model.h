@@ -28,6 +28,10 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool Infer(std::vector<FDTensor>& input_tensors,
                      std::vector<FDTensor>* output_tensors);
 
+  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors to do inference and writing results to reused_output_tensors
+  */
+  virtual bool Infer();
+
   RuntimeOption runtime_option;
   /** \brief Model's valid cpu backends. This member defined all the cpu backends have successfully tested for the model
    */
@@ -99,6 +103,20 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool EnabledRecordTimeOfRuntime() {
     return enable_record_time_of_runtime_;
   }
+
+  /** \brief Release reused input/output buffers
+  */
+  virtual void ReleaseReusedBuffer() {
+    std::vector<FDTensor>().swap(reused_input_tensors);
+    std::vector<FDTensor>().swap(reused_output_tensors);
+  }
+
+  /** \brief Reused input tensors
+  */
+  std::vector<FDTensor> reused_input_tensors;
+  /** \brief Reused output tensors
+  */
+  std::vector<FDTensor> reused_output_tensors;
 
  protected:
   virtual bool InitRuntime();

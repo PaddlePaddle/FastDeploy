@@ -28,13 +28,13 @@ class FASTDEPLOY_DECL StridePad : public Processor {
   }
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "StridePad"; }
 
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int stride_ = 32;

@@ -2,10 +2,6 @@
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -38,11 +34,17 @@ if __name__ == "__main__":
     model = RKNN(config.verbose)
 
     # Config
-    mean_values = [[255 * mean for mean in yaml_config["normalize"]["mean"]]]
-    std_values = [[255 * std for std in yaml_config["normalize"]["std"]]]
-    model.config(mean_values=mean_values,
-                 std_values=std_values,
-                 target_platform=yaml_config["target_platform"])
+    if yaml_config["normalize"] == "None":
+        model.config(target_platform=yaml_config["target_platform"])
+    else:
+        mean_values = [[256 * mean for mean in mean_ls]
+                       for mean_ls in yaml_config["normalize"]["mean"]]
+        std_values = [[256 * std for std in std_ls]
+                      for std_ls in yaml_config["normalize"]["std"]]
+        model.config(
+            mean_values=mean_values,
+            std_values=std_values,
+            target_platform=yaml_config["target_platform"])
 
     # Load ONNX model
     print(type(yaml_config["outputs"]))
@@ -50,8 +52,8 @@ if __name__ == "__main__":
     if yaml_config["outputs"] == "None":
         ret = model.load_onnx(model=yaml_config["model_path"])
     else:
-        ret = model.load_onnx(model=yaml_config["model_path"],
-                              outputs=yaml_config["outputs"])
+        ret = model.load_onnx(
+            model=yaml_config["model_path"], outputs=yaml_config["outputs"])
     assert ret == 0, "Load model failed!"
 
     # Build model

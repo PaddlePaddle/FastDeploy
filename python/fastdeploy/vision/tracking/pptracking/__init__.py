@@ -48,3 +48,18 @@ class PPTracking(FastDeployModel):
         """
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
+
+    def bind_recorder(self, val):
+        """ Binding tracking trail
+
+        :param val: (TrailRecorder) trail recorder, which is contained object's id and center point sequence
+        :return: None
+        """
+        self._model.bind_recorder(val)
+
+    def unbind_recorder(self):
+        """ cancel binding of tracking trail
+
+        :return:
+        """
+        self._model.unbind_recorder()
