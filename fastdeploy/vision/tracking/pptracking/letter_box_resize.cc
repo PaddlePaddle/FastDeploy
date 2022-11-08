@@ -27,7 +27,6 @@ bool LetterBoxResize::operator()(Mat* mat, ProcLib lib) {
             << std::endl;
     return false;
   }
-  cv::Mat* im = mat->GetOpenCVMat();
   // generate scale_factor
   int origin_w = mat->Width();
   int origin_h = mat->Height();
