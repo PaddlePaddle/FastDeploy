@@ -31,8 +31,8 @@ bool LimitShort::InferShape(std::vector<int>* shape_trace) {
   if (target != im_size_min) {
     scale = static_cast<double>(target) / static_cast<double>(im_size_min);
   }
-  (*shape_trace)[0] = static_cast<int>(round(origin_w) * scale);
-  (*shape_trace)[1] = static_cast<int>(round(origin_h) * scale);
+  (*shape_trace)[0] = static_cast<int>(round(origin_w * scale));
+  (*shape_trace)[1] = static_cast<int>(round(origin_h * scale));
   return true;
 }
 
