@@ -1,9 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.ui.view.model;
 
-/**
- * Created by ruanshimin on 2018/5/16.
- */
-
 public class BaseResultModel {
     private int index;
     private String name;

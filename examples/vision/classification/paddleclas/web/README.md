@@ -6,7 +6,7 @@
 
 ## 前端部署图像分类模型
 
-图像分类模型web demo使用[**参考文档**](../../../../examples/application/js/web_demo)
+图像分类模型web demo使用[**参考文档**](../../../../application/js/web_demo/)
 
 
 ## MobileNet js接口
@@ -34,4 +34,3 @@ console.log(res);
 
 - [PaddleClas模型 python部署](../../paddleclas/python/)
 - [PaddleClas模型 C++部署](../cpp/)
-

@@ -179,7 +179,7 @@ D:\qiuyanjun\fastdeploy_build\built\fastdeploy-win-x64-gpu-0.2.1\third_libs\inst
 
 ![image](https://user-images.githubusercontent.com/31974251/192827842-1f05d435-8a3e-492b-a3b7-d5e88f85f814.png)  
 
-Compile successfully, you can see the exe saved in： 
+Compile successfully, you can see the exe saved in：
 
 ```bat  
 D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe  
@@ -221,7 +221,7 @@ This section is for CMake users and describes how to create CMake projects in Vi
 ![image](https://user-images.githubusercontent.com/31974251/192144782-79bccf8f-65d0-4f22-9f41-81751c530319.png)
 
 （2）The code of infer_ppyoloe.cpp can be copied directly from the code in examples：  
-- [examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc](../../examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc)
+- [examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc](../../../examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc)
 
 （3）CMakeLists.txt mainly includes the configuration of the path of FastDeploy C++ SDK, if it is the GPU version of the SDK, you also need to configure CUDA_DIRECTORY as the installation path of CUDA, the configuration of CMakeLists.txt is as follows：
 
@@ -361,7 +361,7 @@ A brief description of the usage is as follows.
 #### 4.1.2 fastdeploy_init.bat View all dll, lib and include paths in the SDK  
 <div id="CommandLineDeps12"></div>  
 
-Go to the root directory of the SDK and run the show command to view all the dll, lib and include paths in the SDK. In the following command, %cd% means the current directory (the root directory of the SDK). 
+Go to the root directory of the SDK and run the show command to view all the dll, lib and include paths in the SDK. In the following command, %cd% means the current directory (the root directory of the SDK).
 
 ```bat
 D:\path-to-fastdeploy-sdk-dir>fastdeploy_init.bat show %cd%
@@ -504,7 +504,7 @@ copy /Y %FASTDEPLOY_HOME%\third_libs\install\yaml-cpp\lib\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.dll Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\bin\*.xml Release\
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\openvino\3rdparty\tbb\bin\*.dll Release\
-``` 
+```
 Note that if you compile the latest SDK or version >0.2.1 by yourself, the opencv and openvino directory structure has changed and the path needs to be modified appropriately. For example：
 ```bat  
 copy /Y %FASTDEPLOY_HOME%\third_libs\install\opencv\build\x64\vc15\bin\*.dll Release\

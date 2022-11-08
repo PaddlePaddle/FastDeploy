@@ -2,8 +2,8 @@
     <!-- Default App name -->
     <string name="app_name">EasyEdge</string>
     <!-- Other App name -->
-    <string name="detection_app_name">FastDeploy PicoDet</string>
-    <string name="ocr_app_name">FastDeploy PP-OCRv2</string>
+    <string name="detection_app_name">EasyEdge</string>
+    <string name="ocr_app_name">EasyEdge</string>
     <!-- Keys for PreferenceScreen -->
     <string name="CHOOSE_PRE_INSTALLED_MODEL_KEY">CHOOSE_INSTALLED_MODEL_KEY</string>
     <string name="MODEL_DIR_KEY">MODEL_DIR_KEY</string>
