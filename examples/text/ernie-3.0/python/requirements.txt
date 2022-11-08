@@ -1,0 +1,2 @@
+faster_toeknizer
+paddlenlp
