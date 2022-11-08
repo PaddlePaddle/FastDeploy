@@ -200,6 +200,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set max_workspace_size for TensorRT, default 1<<30
   void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
 
+  /// Set max_batch_size for TensorRT, default 32
+  void SetTrtMaxBatchSize(size_t max_batch_size);
+
   /**
    * @brief Enable FP16 inference while using TensorRT backend. Notice: not all the GPU device support FP16, on those device doesn't support FP16, FastDeploy will fallback to FP32 automaticly
    */
@@ -339,7 +342,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";  // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   // format of input model
-  ModelFormat model_format = ModelFormat::AUTOREC; 
+  ModelFormat model_format = ModelFormat::AUTOREC;
 };
 
 /*! @brief Runtime object used to inference the loaded model on different devices
