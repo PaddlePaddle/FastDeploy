@@ -40,7 +40,7 @@
     -  **🖥️ 服务端部署：支持推理速度更快的后端，支持更多的模型**
         -  集成 Paddle Inference TensorRT后端，并保证其使用与Paddle Inference、TensorRT、OpenVINO、ONNX Runtime、Paddle Lite等一致的开发体验；
         -  支持并测试 Graphcore IPU 通过 Paddle Inference后端;
-        -  优化[一键模型量化工具](./tools/auto_compression)，支持YOLOv7、YOLOv6、YOLOv5等视觉模型，在CPU和GPU推理速度可提升1.5～2倍；
+        -  优化[一键模型自动化压缩工具](./tools/auto_compression)，支持YOLOv7、YOLOv6、YOLOv5等视觉模型，在CPU和GPU推理速度可提升1.5～2倍；
         -  新增 [PP-Tracking](./examples/vision/tracking/pptracking) 和 [RobustVideoMatting](./examples/vision/matting) 等模型；
 
 - 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)**
