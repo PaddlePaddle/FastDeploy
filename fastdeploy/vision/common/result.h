@@ -33,7 +33,8 @@ enum FASTDEPLOY_DECL ResultType {
   FACE_RECOGNITION,
   MATTING,
   MASK,
-  KEYPOINT_DETECTION
+  KEYPOINT_DETECTION,
+  HEADPOSE,
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -43,6 +44,7 @@ struct FASTDEPLOY_DECL BaseResult {
 /*! @brief Classify result structure for all the image classify models
  */
 struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
+  ClassifyResult() = default;
   /// Classify result for an image
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
@@ -51,6 +53,11 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
 
   /// Clear result
   void Clear();
+
+  /// Copy constructor
+  ClassifyResult(const ClassifyResult& other) = default;
+  /// Move assignment
+  ClassifyResult& operator=(ClassifyResult&& other);
 
   /// Debug function, convert the result to string to print
   std::string Str();
@@ -312,6 +319,25 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
   void Reserve(int size);
 
   void Resize(int size);
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
+/*! @brief HeadPose result structure for all the headpose models
+ */
+struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
+  /** \brief EulerAngles for an input image, and the element of `euler_angles` is a vector, contains {yaw, pitch, roll}
+   */
+  std::vector<float> euler_angles;
+
+  ResultType type = ResultType::HEADPOSE;
+  /// Clear headpose result
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
   /// Debug function, convert the result to string to print
   std::string Str();
 };

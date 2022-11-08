@@ -13,54 +13,52 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
+
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 
-ProcLib Processor::default_lib = ProcLib::DEFAULT;
-
 bool Processor::operator()(Mat* mat, ProcLib lib) {
-  // if default_lib is set
-  // then use default_lib
   ProcLib target = lib;
-  if (default_lib != ProcLib::DEFAULT) {
-    target = default_lib;
+  if (lib == ProcLib::DEFAULT) {
+    target = DefaultProcLib::default_lib;
   }
-
   if (target == ProcLib::FLYCV) {
 #ifdef ENABLE_FLYCV
-    if (mat->mat_type != ProcLib::FLYCV) {
-      if (mat->layout != Layout::HWC) {
-        FDERROR << "Cannot convert cv::Mat to fcv::Mat while layout is not HWC." << std::endl;
-      }
-      fcv::Mat fcv_mat = ConvertOpenCVMatToFalconCV(*(mat->GetOpenCVMat()));
-      mat->SetMat(fcv_mat);
-    }
-    return ImplByFalconCV(mat);
+    return ImplByFlyCV(mat);
 #else
-    FDASSERT(false, "FastDeploy didn't compile with FalconCV.");
+    FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
 #endif
   }
+  // DEFAULT & OPENCV
   return ImplByOpenCV(mat);
 }
 
 void EnableFlyCV() {
 #ifdef ENABLE_FLYCV
-  Processor::default_lib = ProcLib::FLYCV;
+  DefaultProcLib::default_lib = ProcLib::FLYCV;
   FDINFO << "Will change to use image processing library "
-         << Processor::default_lib << std::endl;
+         << DefaultProcLib::default_lib << std::endl;
 #else
   FDWARNING << "FastDeploy didn't compile with FlyCV, "
-                "will fallback to use OpenCV instead."
+               "will fallback to use OpenCV instead."
             << std::endl;
 #endif
 }
 
 void DisableFlyCV() {
-  Processor::default_lib = ProcLib::OPENCV;
+  DefaultProcLib::default_lib = ProcLib::OPENCV;
   FDINFO << "Will change to use image processing library "
-         << Processor::default_lib << std::endl;
+         << DefaultProcLib::default_lib << std::endl;
+}
+
+void SetProcLibCpuNumThreads(int threads) {
+  cv::setNumThreads(threads);
+#ifdef ENABLE_FLYCV
+  fcv::set_thread_num(threads);
+#endif
 }
 
 }  // namespace vision
