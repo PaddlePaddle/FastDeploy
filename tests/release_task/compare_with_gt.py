@@ -34,6 +34,12 @@ diff_score_threshold = {
     }
 }
 
+def all_sort(x):
+    x1 = x.T
+    y = np.split(x1, len(x1))
+    z = list(reversed(y))
+    index = np.lexsort(z)
+    return x[index]
 
 def parse_arguments():
     import argparse
@@ -96,7 +102,7 @@ def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    label_diff = diff[:, -1]
+    label_diff = np.abs(gt_result[:, -1].astype("int32") - infer_result[:, -1].astype("int32"))
     score_diff = diff[:, -2]
     boxes_diff = diff[:, :-2]
     boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
@@ -134,4 +140,6 @@ if __name__ == '__main__':
 
     gt_numpy = convert2numpy(args.gt_path, args.conf_threshold)
     infer_numpy = convert2numpy(args.result_path, args.conf_threshold)
+    gt_numpy = all_sort(gt_numpy)
+    infer_numpy = all_sort(infer_numpy)
     check_result(gt_numpy, infer_numpy, args)
