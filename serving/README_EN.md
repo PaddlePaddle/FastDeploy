@@ -38,6 +38,6 @@ Users can also compile the image by themselves according to their own needs, ref
 ## Other Tutorials
 
 - [How to Prepare Serving Model Repository](docs/zh_CN/model_repository.md)
-- [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md) 
+- [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md)
 - [Serving Deployment Demo](docs/zh_CN/demo.md)
   - [YOLOV5 - Detection Task](../examples/vision/detection/yolov5/serving/README.md)

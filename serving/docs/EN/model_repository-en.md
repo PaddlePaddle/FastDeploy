@@ -1,6 +1,6 @@
 # Model Repository
 
-FastDeploy starts the serving by specifying one or more models in the model repository to deploy the service. When the serving is running, the models in the service can be modified following [Model Management](https://github.com/triton-inference-server/server/blob/main/docs/model_management.md), and obtain serving from one or more model repositories specified at the serving initiation. 
+FastDeploy starts the serving by specifying one or more models in the model repository to deploy the service. When the serving is running, the models in the service can be modified following [Model Management](https://github.com/triton-inference-server/server/blob/main/docs/model_management.md), and obtain serving from one or more model repositories specified at the serving initiation.
 
 ## Repository Architecture
 
@@ -64,7 +64,7 @@ Example: A minimal model repository directory for deploying Paddle models
       └── config.pbtxt
 ```
 
-To deploy an ONNX model, model with the name `model.onnx` must be included in the version directory 
+To deploy an ONNX model, model with the name `model.onnx` must be included in the version directory
 
 Example: A minimal model repository directory for deploying ONNX models
 

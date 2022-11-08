@@ -107,15 +107,15 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 ### Pybind
 
 * Create Pybind file
-  
+
   * Create path
-    
+
     * FastDeploy/fastdeploy/vision/classification/contrib/resnet_pybind.cc (FastDeploy/C++ code/vision model/taks name/external model/model name_pybind.cc)
-  
+
   * Create content
-    
+
     * Use Pybind to bind function variables from C++ to Python, please refer to [resnet_pybind.cc](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-270af0d65720310e2cfbd5373c391b2110d65c0f4efa547f7b7eeffcb958bdec) for more details.
-      
+
       ```C++
       void BindResNet(pybind11::module& m) {
       pybind11::class_<vision::classification::ResNet, FastDeployModel>(
@@ -129,13 +129,13 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
       ```
 
 * Call Pybind function
-  
+
   * modify path
-    
+
     * FastDeploy/fastdeploy/vision/classification/classification_pybind.cc (FastDeploy/C++ code/vision model/task name/task name}_pybind.cc)
-  
+
   * modify content
-    
+
     ```C++
     void BindResNet(pybind11::module& m);
     void BindClassification(pybind11::module& m) {
@@ -151,7 +151,7 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
   * Create path
     * FastDeploy/python/fastdeploy/vision/classification/contrib/resnet.py (FastDeploy/Python code/fastdeploy/vision model/task name/external model/model name.py)
   * Create content
-    * Create ResNet class inherited from FastDeployModel, and implement `\_\_init\_\_`, Pybind bonded functions (such as `predict()`), and `functions to assign and get global variables bound to Pybind`. Please refer to [resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157) for details 
+    * Create ResNet class inherited from FastDeployModel, and implement `\_\_init\_\_`, Pybind bonded functions (such as `predict()`), and `functions to assign and get global variables bound to Pybind`. Please refer to [resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157) for details
 
 ```python
 class ResNet(FastDeployModel):
@@ -245,7 +245,7 @@ make
 
 
 
-To make the code clear for understanding,  developers can annotate the newly-added code. 
+To make the code clear for understanding,  developers can annotate the newly-added code.
 
 - C++ code
   Developers need to add annotations for functions and variables in the resnet.h file, there are three annotating methods as follows, please refer to [resnet.h](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff- 69128489e918f305c208476ba793d8167e77de2aa7cadf5dcbac30da448bd28e) for more details.
@@ -265,8 +265,8 @@ std::vector<int> size;
 bool Initialize();
 ```
 
-- Python 
-  The following example is to demonstrate how to annotate functions and variables in resnet.py file. For more details, please refer to [resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157). 
+- Python
+  The following example is to demonstrate how to annotate functions and variables in resnet.py file. For more details, please refer to [resnet.py](https://github.com/PaddlePaddle/FastDeploy/pull/347/files#diff-a4dc5ec2d450e91f1c03819bf314c238b37ac678df56d7dea3aab7feac10a157).
 
 ```python
   def predict(self, input_image, topk=1):

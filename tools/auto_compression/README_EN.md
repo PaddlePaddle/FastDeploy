@@ -41,7 +41,7 @@ Fastdeploy Auto Compression can include multiple strategies, At present, offline
 ##### 1. Prepare models and Calibration data set
 
 Developers need to prepare the model to be quantized and the Calibration dataset on their own.
-In this demo, developers can execute the following command to download the yolov5s.onnx model to be quantized and calibration data set. 
+In this demo, developers can execute the following command to download the yolov5s.onnx model to be quantized and calibration data set.
 
 ```shell
 # Download yolov5.onnx
@@ -109,7 +109,7 @@ To complete the quantization, developers only need to provide a customized model
 | --method      | Quantization method selection, PTQ for post-training quantization, QAT for quantization distillation training |
 | --save_dir    | Output of quantized model paths, which can be deployed directly in FastDeploy                                 |
 
-## 3. FastDeploy One-Click Model Auto Compression Config file examples 
+## 3. FastDeploy One-Click Model Auto Compression Config file examples
 FastDeploy currently provides users with compression [config](./configs/) files of multiple models, and the corresponding FP32 model, Users can directly download and experience it.
 
 | Config文件                | 待压缩的FP32模型 | 备注                                                       |

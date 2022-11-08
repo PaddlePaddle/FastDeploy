@@ -35,7 +35,7 @@ PTQ:
   calibration_method: 'avg'                   #Activate calibration algorithm of post-training quantization , Options: avg, abs_max, hist, KL, mse, emd
   skip_tensor_list: None                      #Developers can skip some conv layers‘ quantization
 
-#Traning 
+#Traning
 TrainConfig:
   train_iter: 3000
   learning_rate: 0.00001
@@ -49,5 +49,3 @@ TrainConfig:
 ## More details
 
 FastDeploy one-click quantization tool is powered by PaddeSlim, please refer to [Automated Compression of Hyperparameter Tutorial](https://github.com/PaddlePaddle/PaddleSlim/blob/develop/example/auto_compression/hyperparameter_tutorial.md) for more details.
-
-
