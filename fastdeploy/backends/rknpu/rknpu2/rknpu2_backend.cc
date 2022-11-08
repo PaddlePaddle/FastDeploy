@@ -187,7 +187,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       return false;
     }
 
-    DumpTensorAttr(input_attrs_[i]);
     if ((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
         (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)) {
       FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED"
@@ -228,8 +227,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       FDERROR << "rknn_query fail! ret = " << ret << std::endl;
       return false;
     }
-
-    DumpTensorAttr(output_attrs_[i]);
 
     // If the output dimension is 3, the runtime will automatically change it to 4.
     // Obviously, this is wrong, and manual correction is required here.
