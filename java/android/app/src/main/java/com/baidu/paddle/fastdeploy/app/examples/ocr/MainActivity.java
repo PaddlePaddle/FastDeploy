@@ -25,8 +25,8 @@ import android.widget.Toast;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.vision.OCRResult;
 import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
@@ -37,8 +37,8 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class OcrMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = OcrMainActivity.class.getSimpleName();
+public class MainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = MainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -64,7 +64,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.ocr_activity_main);
+        setContentView(R.layout.activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -91,10 +91,10 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 synchronized (this) {
                     savedImagePath = Utils.getDCIMDirectory() + File.separator + date.format(new Date()).toString() + ".png";
                 }
-                Toast.makeText(OcrMainActivity.this, "Save snapshot to " + savedImagePath, Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Save snapshot to " + savedImagePath, Toast.LENGTH_SHORT).show();
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(OcrMainActivity.this, OcrSettingsActivity.class));
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -128,14 +128,14 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
         String savedImagePath = "";
         synchronized (this) {
-            savedImagePath = OcrMainActivity.this.savedImagePath;
+            savedImagePath = MainActivity.this.savedImagePath;
         }
         boolean modified = false;
         OCRResult result = predictor.predict(ARGB8888ImageBitmap, savedImagePath);
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
-                OcrMainActivity.this.savedImagePath = "result.jpg";
+                MainActivity.this.savedImagePath = "result.jpg";
             }
         }
         lastFrameIndex++;
@@ -201,12 +201,12 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        OcrSettingsActivity.resetSettings();
+        SettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
+        if (SettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + SettingsActivity.modelDir;
             // String detModelName = "ch_PP-OCRv2_det_infer";
             String detModelName = "ch_PP-OCRv3_det_infer";
             // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
@@ -217,14 +217,14 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             String realDetModelDir = realModelDir + "/" + detModelName;
             String realClsModelDir = realModelDir + "/" + clsModelName;
             String realRecModelDir = realModelDir + "/" + recModelName;
-            String srcDetModelDir =  OcrSettingsActivity.modelDir + "/" + detModelName;
-            String srcClsModelDir =  OcrSettingsActivity.modelDir + "/" + clsModelName;
-            String srcRecModelDir =  OcrSettingsActivity.modelDir + "/" + recModelName;
+            String srcDetModelDir =  SettingsActivity.modelDir + "/" + detModelName;
+            String srcClsModelDir =  SettingsActivity.modelDir + "/" + clsModelName;
+            String srcRecModelDir =  SettingsActivity.modelDir + "/" + recModelName;
             Utils.copyDirectoryFromAssets(this, srcDetModelDir, realDetModelDir);
             Utils.copyDirectoryFromAssets(this, srcClsModelDir, realClsModelDir);
             Utils.copyDirectoryFromAssets(this, srcRecModelDir, realRecModelDir);
-            String realLabelPath = getCacheDir() + "/" + OcrSettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, OcrSettingsActivity.labelPath, realLabelPath);
+            String realLabelPath = getCacheDir() + "/" + SettingsActivity.labelPath;
+            Utils.copyFileFromAssets(this, SettingsActivity.labelPath, realLabelPath);
 
             String detModelFile = realDetModelDir + "/" + "inference.pdmodel";
             String detParamsFile = realDetModelDir + "/" + "inference.pdiparams";
@@ -236,16 +236,16 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             RuntimeOption detOption = new RuntimeOption();
             RuntimeOption clsOption = new RuntimeOption();
             RuntimeOption recOption = new RuntimeOption();
-            detOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            clsOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            recOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            detOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            clsOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            recOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
+            detOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            clsOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            recOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
+            detOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            clsOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
+            recOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
             detOption.enableRecordTimeOfRuntime();
             clsOption.enableRecordTimeOfRuntime();
             recOption.enableRecordTimeOfRuntime();
-            if (Boolean.parseBoolean(OcrSettingsActivity.enableLiteFp16)) {
+            if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
                 detOption.enableLiteFp16();
                 clsOption.enableLiteFp16();
                 recOption.enableLiteFp16();
@@ -263,7 +263,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(OcrMainActivity.this)
+            new AlertDialog.Builder(MainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -271,7 +271,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            OcrMainActivity.this.finish();
+                            MainActivity.this.finish();
                         }
                     }).show();
         }
