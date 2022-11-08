@@ -22,9 +22,11 @@ import runtime_config as rc
 
 def test_classification_mobilenetv2():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_x0_25_infer.tgz"
-    input_url = "https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg"
+    input_url1 = "https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg"
+    input_url2 = "https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00030010.jpeg"
     fd.download_and_decompress(model_url, "resources")
-    fd.download(input_url, "resources")
+    fd.download(input_url1, "resources")
+    fd.download(input_url2, "resources")
     model_path = "resources/MobileNetV1_x0_25_infer"
 
     model_file = "resources/MobileNetV1_x0_25_infer/inference.pdmodel"
@@ -33,18 +35,65 @@ def test_classification_mobilenetv2():
     model = fd.vision.classification.PaddleClasModel(
         model_file, params_file, config_file, runtime_option=rc.test_option)
 
-    expected_label_ids = [153, 333, 259, 338, 265, 154]
-    expected_scores = [
+    expected_label_ids_1 = [153, 333, 259, 338, 265, 154]
+    expected_scores_1 = [
         0.221088, 0.109457, 0.078668, 0.076814, 0.052401, 0.048206
     ]
+    expected_label_ids_2 = [80, 23, 93, 99, 143, 7]
+    expected_scores_2 = [
+        0.975599, 0.014083, 0.003821, 0.001571, 0.001233, 0.000924
+    ]
+
     # compare diff
-    im = cv2.imread("./resources/ILSVRC2012_val_00000010.jpeg")
-    for i in range(2):
-        result = model.predict(im, topk=6)
-        diff_label = np.fabs(
-            np.array(result.label_ids) - np.array(expected_label_ids))
-        diff_scores = np.fabs(
-            np.array(result.scores) - np.array(expected_scores))
-        assert diff_label.max() < 1e-06, "There's difference in classify label."
-        assert diff_scores.max(
-        ) < 1e-05, "There's difference in classify score."
+    im1 = cv2.imread("./resources/ILSVRC2012_val_00000010.jpeg")
+    im2 = cv2.imread("./resources/ILSVRC2012_val_00030010.jpeg")
+
+    for i in range(3):
+        # test single predict
+        result1 = model.predict(im1, 6)
+        result2 = model.predict(im2, 6)
+
+        diff_label_1 = np.fabs(
+            np.array(result1.label_ids) - np.array(expected_label_ids_1))
+        diff_label_2 = np.fabs(
+            np.array(result2.label_ids) - np.array(expected_label_ids_2))
+
+        diff_scores_1 = np.fabs(
+            np.array(result1.scores) - np.array(expected_scores_1))
+        diff_scores_2 = np.fabs(
+            np.array(result2.scores) - np.array(expected_scores_2))
+        assert diff_label_1.max(
+        ) < 1e-06, "There's difference in classify label 1."
+        assert diff_scores_1.max(
+        ) < 1e-05, "There's difference in classify score 1."
+        assert diff_label_2.max(
+        ) < 1e-06, "There's difference in classify label 2."
+        assert diff_scores_2.max(
+        ) < 1e-05, "There's difference in classify score 2."
+
+        # test batch predict
+        results = model.batch_predict([im1, im2])
+        result1 = results[0]
+        result2 = results[1]
+
+        diff_label_1 = np.fabs(
+            np.array(result1.label_ids) - np.array(expected_label_ids_1))
+        diff_label_2 = np.fabs(
+            np.array(result2.label_ids) - np.array(expected_label_ids_2))
+
+        diff_scores_1 = np.fabs(
+            np.array(result1.scores) - np.array(expected_scores_1))
+        diff_scores_2 = np.fabs(
+            np.array(result2.scores) - np.array(expected_scores_2))
+        assert diff_label_1.max(
+        ) < 1e-06, "There's difference in classify label 1."
+        assert diff_scores_1.max(
+        ) < 1e-05, "There's difference in classify score 1."
+        assert diff_label_2.max(
+        ) < 1e-06, "There's difference in classify label 2."
+        assert diff_scores_2.max(
+        ) < 1e-05, "There's difference in classify score 2."
+
+
+if __name__ == "__main__":
+    test_classification_mobilenetv2()
