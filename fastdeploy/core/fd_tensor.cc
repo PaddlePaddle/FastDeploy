@@ -89,8 +89,9 @@ void FDTensor::Squeeze(int64_t axis) {
   size_t ndim = shape.size();
   FDASSERT(axis >= 0 && axis < ndim,
            "The allowed 'axis' must be in range of (0, %lu)!", ndim);
-  FDASSERT(shape[axis]==1,
-           "The No.%ld dimension of shape should be 1, but it is %ld!", (long)axis, (long)shape[axis]);
+  FDASSERT(shape[axis] == 1,
+           "The No.%ld dimension of shape should be 1, but it is %ld!",
+           (long)axis, (long)shape[axis]);
   shape.erase(shape.begin() + axis);
 }
 
@@ -130,6 +131,7 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
   dtype = data_type;
@@ -220,9 +222,9 @@ bool FDTensor::ReallocFn(size_t nbytes) {
       return buffer_ != nullptr;
 #else
       FDASSERT(false,
-              "The FastDeploy FDTensor allocator didn't compile under "
-              "-DWITH_GPU=ON,"
-              "so this is an unexpected problem happend.");
+               "The FastDeploy FDTensor allocator didn't compile under "
+               "-DWITH_GPU=ON,"
+               "so this is an unexpected problem happend.");
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
@@ -316,16 +318,15 @@ FDTensor& FDTensor::operator=(const FDTensor& other) {
     if (other.buffer_ == nullptr) {
       FreeFn();
       buffer_ = nullptr;
+      shape = other.shape;
+      name = other.name;
+      dtype = other.dtype;
+      device = other.device;
     } else {
-      Resize(other.shape);
+      Resize(other.shape, other.dtype, other.name, other.device);
       size_t nbytes = Nbytes();
       CopyBuffer(buffer_, other.buffer_, nbytes);
     }
-
-    shape = other.shape;
-    name = other.name;
-    dtype = other.dtype;
-    device = other.device;
     external_data_ptr = other.external_data_ptr;
   }
   return *this;

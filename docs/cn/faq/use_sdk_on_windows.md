@@ -218,7 +218,7 @@ D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe
 ![image](https://user-images.githubusercontent.com/31974251/192144782-79bccf8f-65d0-4f22-9f41-81751c530319.png)
 
 （2）其中infer_ppyoloe.cpp的代码可以直接从examples中的代码拷贝过来：  
-- [examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc](../../examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc)
+- [examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc](../../../examples/vision/detection/paddledetection/cpp/infer_ppyoloe.cc)
 
 （3）CMakeLists.txt主要包括配置FastDeploy C++ SDK的路径，如果是GPU版本的SDK，还需要配置CUDA_DIRECTORY为CUDA的安装路径，CMakeLists.txt的配置如下：
 

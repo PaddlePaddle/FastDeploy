@@ -4,7 +4,7 @@
 
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/rknpu2.md)
 
-【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../matting)
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../../matting/)
 
 本目录下提供`infer.py`快速完成PPHumanseg在RKNPU上部署的示例。执行如下脚本即可完成
 
