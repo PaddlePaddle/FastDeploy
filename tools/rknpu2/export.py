@@ -64,7 +64,12 @@ if __name__ == "__main__":
     assert ret == 0, "Load model failed!"
 
     # Build model
-    ret = model.build(do_quantization=None)
+    if "do_quantization" in yaml_config:
+        ret = model.build(
+            do_quantization=yaml_config['do_quantization'],
+            dataset=yaml_config['dataset'])
+    else:
+        ret = model.build(do_quantization=None)
     assert ret == 0, "Build model failed!"
 
     # Init Runtime

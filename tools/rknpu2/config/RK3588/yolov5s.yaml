@@ -5,3 +5,5 @@ normalize:
   mean: None
   std: [[1,1,1]]
 outputs: None
+do_quantization: True
+dataset: ./dataset.txt
