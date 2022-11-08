@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.ui;
+package com.baidu.paddle.fastdeploy.app.ui.layout;
 
 import android.content.Context;
 import android.graphics.Color;
