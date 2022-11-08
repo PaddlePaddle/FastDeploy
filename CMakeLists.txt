@@ -205,6 +205,7 @@ if(ENABLE_LITE_BACKEND)
 endif()
 
 if(ENABLE_PADDLE_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/paddle_inference.cmake)
