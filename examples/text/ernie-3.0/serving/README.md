@@ -1,4 +1,4 @@
-# Ernie-3.0 服务化部署示例
+# ERNIE 3.0 服务化部署示例
 
 ## 准备模型
 
@@ -168,4 +168,4 @@ entity: 华夏   label: LOC   pos: [14, 15]
 
 ## 配置修改
 
-当前分类任务(ernie_seqcls_model/config.pbtxt)默认配置在CPU上运行OpenVINO引擎; 序列标注任务默认配置在GPU上运行Paddle引擎。如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+当前分类任务(ernie_seqcls_model/config.pbtxt)默认配置在CPU上运行OpenVINO引擎; 序列标注任务默认配置在GPU上运行Paddle引擎。如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
