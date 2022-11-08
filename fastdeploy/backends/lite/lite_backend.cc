@@ -89,9 +89,9 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   }
 }
 
-bool LiteBackend::ReadFile(const std::string &filename,
-               std::vector<char> *contents,
-               const bool& binary) {
+bool LiteBackend::ReadFile(const std::string& filename,
+               std::vector<char>* contents,
+               const bool binary) {
   FILE *fp = fopen(filename.c_str(), binary ? "rb" : "r");
   if (!fp) return false;
   fseek(fp, 0, SEEK_END);
