@@ -3,31 +3,31 @@ import re
 
 diff_score_threshold = {
     "linux-x64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "linux-aarch64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "osx-x86_64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 2e-4,
         "boxes_diff": 1e-3
     },
     "osx-arm64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 2e-4,
         "boxes_diff": 1e-3
     },
     "win-x64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 5e-4,
         "boxes_diff_ratio": 1e-3,
         "boxes_diff": 1e-3
@@ -102,7 +102,7 @@ def check_result(gt_result, infer_result, args):
     if len(gt_result) != len(infer_result):
         infer_result = infer_result[-len(gt_result):]
     diff = np.abs(gt_result - infer_result)
-    label_diff = np.abs(gt_result[:, -1].astype("int32") - infer_result[:, -1].astype("int32"))
+    label_diff = diff[:, -1]
     score_diff = diff[:, -2]
     boxes_diff = diff[:, :-2]
     boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
