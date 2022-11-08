@@ -15,23 +15,23 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 ## 模型转换example
 下面以Picodet-npu为例子,教大家如何转换PaddleDetection模型到RKNN模型。
 ```bash
-## 下载Paddle静态图模型并解压
-wget https://bj.bcebos.com/fastdeploy/models/rknn2/picodet_s_416_coco_npu.zip
-unzip -qo picodet_s_416_coco_npu.zip
+# 下载Paddle静态图模型并解压
+wget https://paddledet.bj.bcebos.com/deploy/Inference/picodet_s_416_coco_lcnet.tar
+tar xvf picodet_s_416_coco_lcnet.zip
 
 # 静态图转ONNX模型，注意，这里的save_file请和压缩包名对齐
-paddle2onnx --model_dir picodet_s_416_coco_npu \
+paddle2onnx --model_dir picodet_s_416_coco_lcnet \
             --model_filename model.pdmodel \
             --params_filename model.pdiparams \
-            --save_file picodet_s_416_coco_npu/picodet_s_416_coco_npu.onnx \
+            --save_file picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx \
             --enable_dev_version True
 
-python -m paddle2onnx.optimize --input_model picodet_s_416_coco_npu/picodet_s_416_coco_npu.onnx \
-                                --output_model picodet_s_416_coco_npu/picodet_s_416_coco_npu.onnx \
+python -m paddle2onnx.optimize --input_model picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx \
+                                --output_model picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx \
                                 --input_shape_dict "{'image':[1,3,416,416]}"
 # ONNX模型转RKNN模型
 # 转换模型,模型将生成在picodet_s_320_coco_lcnet_non_postprocess目录下
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/RK3588/picodet_s_416_coco_npu.yaml
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/RK3588/picodet_s_416_coco_lcnet.yaml
 ```
 
 - [Python部署](./python)
