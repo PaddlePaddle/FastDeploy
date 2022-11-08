@@ -79,7 +79,7 @@ bool Resize::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else {
-    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FlyCV, but "
+    FDERROR << "Resize: Only support interp_ be 0/1/2 with FlyCV, but "
                "now it's "
             << interp_ << "." << std::endl;
     return false;
