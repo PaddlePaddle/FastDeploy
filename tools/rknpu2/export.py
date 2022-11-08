@@ -37,10 +37,17 @@ if __name__ == "__main__":
     if yaml_config["normalize"] == "None":
         model.config(target_platform=yaml_config["target_platform"])
     else:
-        mean_values = [[256 * mean for mean in mean_ls]
-                       for mean_ls in yaml_config["normalize"]["mean"]]
-        std_values = [[256 * std for std in std_ls]
-                      for std_ls in yaml_config["normalize"]["std"]]
+        if yaml_config["normalize"]["mean"] != "None":
+            mean_values = [[256 * mean for mean in mean_ls]
+                           for mean_ls in yaml_config["normalize"]["mean"]]
+        else:
+            mean_values = None
+
+        if yaml_config["normalize"]["std"] != "None":
+            std_values = [[256 * std for std in std_ls]
+                          for std_ls in yaml_config["normalize"]["std"]]
+        else:
+            std_values = None
         model.config(
             mean_values=mean_values,
             std_values=std_values,

@@ -12,6 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include "fastdeploy/vision/detection/contrib/rknpu2/rkpicodet.h"
-#include "fastdeploy/vision/detection/contrib/rknpu2/rkyolov5.h"
+#include "fastdeploy/pybind/main.h"
+
+namespace fastdeploy {
+void BindRKYOLOv5(pybind11::module& m) {
+  pybind11::class_<vision::detection::RKYOLOv5, FastDeployModel>(m, "RKYOLOv5")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::detection::RKYOLOv5& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::DetectionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           });
+
+}
+}  // namespace fastdeploy

@@ -28,7 +28,7 @@ void BindPPDet(pybind11::module& m);
 void BindYOLOv7End2EndTRT(pybind11::module& m);
 void BindYOLOv7End2EndORT(pybind11::module& m);
 void BindRKDet(pybind11::module& m);
-
+void BindRKYOLOv5(pybind11::module& m);
 
 void BindDetection(pybind11::module& m) {
   auto detection_module =
@@ -45,5 +45,6 @@ void BindDetection(pybind11::module& m) {
   BindYOLOv7End2EndTRT(detection_module);
   BindYOLOv7End2EndORT(detection_module);
   BindRKDet(detection_module);
+  BindRKYOLOv5(detection_module);
 }
 }  // namespace fastdeploy

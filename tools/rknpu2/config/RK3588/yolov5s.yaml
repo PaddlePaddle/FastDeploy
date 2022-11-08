@@ -1,0 +1,7 @@
+model_path: ./yolov5s.onnx
+output_folder: ./
+target_platform: RK3588
+normalize:
+  mean: None
+  std: [[1,1,1]]
+outputs: None
