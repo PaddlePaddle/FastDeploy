@@ -30,7 +30,7 @@ python infer.py --model fairmot_hrnetv2_w18_dlafpn_30e_576x320 --video person.mp
 fd.vision.tracking.PPTracking(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-PP-Tracking模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleSeg/tree/release/2.6/Matting)
+PP-Tracking模型加载和初始化，其中model_file, params_file以及config_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.5/deploy/pptracking/cpp/README.md)
 
 **参数**
 
@@ -42,7 +42,7 @@ PP-Tracking模型加载和初始化，其中model_file, params_file以及config_
 
 ### predict函数
 
-> ```python 
+> ```python
 > PPTracking.predict(frame)
 > ```
 >

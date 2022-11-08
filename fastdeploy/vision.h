@@ -53,6 +53,7 @@
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "fastdeploy/vision/headpose/contrib/fsanet.h"
+#include "fastdeploy/vision/gan/vsr/model.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"

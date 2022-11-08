@@ -48,7 +48,7 @@ void CpuInfer(const std::string& model_dir, const std::string& video_file) {
       std::cerr << "Failed to predict." << std::endl;
       return;
     }
-    // such as adding this code can cancel trail datat bind
+    // such as adding this code can cancel trail data binding
     // if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
     cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
@@ -91,7 +91,7 @@ void GpuInfer(const std::string& model_dir, const std::string& video_file) {
       std::cerr << "Failed to predict." << std::endl;
       return;
     }
-    // such as adding this code can cancel trail datat bind
+    // such as adding this code can cancel trail data binding
     //if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
     cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &trail_recorder);
@@ -135,7 +135,7 @@ void TrtInfer(const std::string& model_dir, const std::string& video_file) {
         std::cerr << "Failed to predict." << std::endl;
         return;
     }
-    // such as adding this code can cancel trail datat bind
+    // such as adding this code can cancel trail data binding
     // if(count++ == 10) model.UnbindRecorder();
     // std::cout << result.Str() << std::endl;
     cv::Mat out_img = fastdeploy::vision::VisMOT(frame, result, 0.0, &recorder);
