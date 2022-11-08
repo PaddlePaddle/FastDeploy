@@ -7,7 +7,7 @@
 
 ## 前端部署PP-Humanseg v1模型
 
-PP-Humanseg v1模型web demo部署及使用参考[文档](../../../../application/web_demo/README.md)
+PP-Humanseg v1模型web demo部署及使用参考[文档](../../../../application/js/web_demo/README.md)
 
 
 ## PP-Humanseg v1 js接口
@@ -41,7 +41,3 @@ humanSeg.blurBackground(res)
 
 **drawHumanSeg()函数参数**
 > * **seg_values**(number[]): 输入参数，一般是getGrayValue函数计算的结果作为输入
-
-
-
-

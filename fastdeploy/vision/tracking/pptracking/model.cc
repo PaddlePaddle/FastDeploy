@@ -27,7 +27,7 @@ PPTracking::PPTracking(const std::string& model_file,
                        const ModelFormat& model_format){
   config_file_=config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
-  valid_gpu_backends = {Backend::PDINFER, Backend::ORT};
+  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -148,6 +148,8 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
     }
   }
   processors_.push_back(std::make_shared<HWC2CHW>());
+
+  FuseTransforms(&processors_);
   return true;
 }
 
