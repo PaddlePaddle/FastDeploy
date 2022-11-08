@@ -81,8 +81,8 @@
         - [4. TensorRT使用中的一些技巧](docs/cn/faq/tensorrt_tricks.md)
         - [5. 如何增加新的模型](docs/cn/faq/develop_a_new_model.md)(进行中)
    - 更多FastDeploy部署模块
-        - [服务化部署](../serving)
-        - [Benchmark测试](../benchmark)
+        - [服务化部署](./serving)
+        - [Benchmark测试](./benchmark)
 </details>
 
 * **🖥️ 服务器端部署**
