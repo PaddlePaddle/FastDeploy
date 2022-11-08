@@ -4,7 +4,7 @@ project(rknpu_test)
 set(CMAKE_CXX_STANDARD 14)
 
 # 指定下载解压后的fastdeploy库路径
-set(FASTDEPLOY_INSTALL_DIR "thirdpartys/fastdeploy-0.0.3")
+set(FASTDEPLOY_INSTALL_DIR "thirdpartys/fastdeploy-0.6.0")
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeployConfig.cmake)
 include_directories(${FastDeploy_INCLUDE_DIRS})
