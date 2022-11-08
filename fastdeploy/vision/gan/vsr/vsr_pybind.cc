@@ -27,7 +27,7 @@ void BindVSR(pybind11::module &m) {
         std::vector<pybind11::array> res_pyarray;
         self.Predict(inputs, res);
         for (auto& img: res){
-          auto ret = pybind11::array_t<u_char>({img.rows, img.cols, img.channels()}, img.data);
+          auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
           res_pyarray.push_back(ret);
         }
         return res_pyarray;
@@ -44,7 +44,7 @@ void BindVSR(pybind11::module &m) {
         std::vector<pybind11::array> res_pyarray;
         self.Predict(inputs, res);
         for (auto& img: res){
-          auto ret = pybind11::array_t<u_char>({img.rows, img.cols, img.channels()}, img.data);
+          auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
           res_pyarray.push_back(ret);
         }
         return res_pyarray;
@@ -61,7 +61,7 @@ void BindVSR(pybind11::module &m) {
         std::vector<pybind11::array> res_pyarray;
         self.Predict(inputs, res);
         for (auto& img: res){
-            auto ret = pybind11::array_t<u_char>({img.rows, img.cols, img.channels()}, img.data);
+            auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
             res_pyarray.push_back(ret);
         }
         return res_pyarray;

@@ -185,7 +185,7 @@ void GpuInfer(const std::string& model_dir,
 void TrtInfer(const std::string& model_dir,
               const std::string& video_file, int frame_num) {
   auto model_file = model_dir + sep + "model.pdmodel";
-  auto params_file = model_dir + sep + "model.pdiparams"
+  auto params_file = model_dir + sep + "model.pdiparams";
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
   option.UseTrtBackend();
