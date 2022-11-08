@@ -104,7 +104,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   if(save_external){
     std::string model_file_name = "model.onnx";
     std::fstream f(model_file_name, std::ios::out);
-    Assert(f.is_open(), "Can not open file: " + model_file_name + " to save model.")
+    FDASSERT(f.is_open(), "Can not open file: " + model_file_name + " to save model.")
     f << onnx_model_proto;
     f.close();
     return InitFromOnnx(model_file_name, option, false);

@@ -151,7 +151,7 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   if(save_external_){
     model_file_name_ = "model.onnx";
     std::fstream f(model_file_name_, std::ios::out);
-    Assert(f.is_open(), "Can not open file: " + model_file_name_ + " to save model.")
+    FDASSERT(f.is_open(), "Can not open file: " + model_file_name_ + " to save model.")
     f << onnx_model_proto;
     f.close();
     return InitFromOnnx(model_file_name_, option, false);
