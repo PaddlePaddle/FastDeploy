@@ -63,19 +63,9 @@ bool RKYOLOv5::Preprocess(fastdeploy::vision::Mat* mat,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
-
-  // yolov5's preprocess steps
-  // 1. letterbox
-  // 2. BGR->RGB
-  // 3. HWC->CHW
-  PadToSize::Run(mat, output_shape[0], output_shape[1], padding_value);
   BGR2RGB::Run(mat);
-//  HWC2CHW::Run(mat);
-//  std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
-//  std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-//  Convert::Run(mat, alpha, beta);
+  PadToSize::Run(mat, output_shape[0], output_shape[1], padding_value);
   Cast::Run(mat, "float");
-
   outputs->resize(1);
   (*outputs)[0].name = InputInfoOfRuntime(0).name;
   mat->ShareWithTensor(&((*outputs)[0]));
@@ -84,43 +74,77 @@ bool RKYOLOv5::Preprocess(fastdeploy::vision::Mat* mat,
   return true;
 }
 
-int RKYOLOv5::ArgMax(std::vector<float>& vSingleProbs) {
-  int result;
-  auto iter = std::max_element(vSingleProbs.begin(), vSingleProbs.end());
-  result = static_cast<int>(iter - vSingleProbs.begin());
-  return result;
+int RKYOLOv5::Process(FDTensor &input_tensor,
+                      std::vector<int> &anchor,
+                      int &stride,
+                      DetectionResult* result) {
+  int validCount = 0;
+  auto* input = static_cast<int8_t *>(input_tensor.MutableData());
+  int prob_box_size = input_tensor.shape[2];
+  int obj_class_num = prob_box_size - 5;
+  int grid_h = input_tensor.shape[3];
+  int grid_w = input_tensor.shape[4];
+  int grid_len = grid_h * grid_w;
+  float thres = unsigmoid(threshold);
+  int8_t thres_i8 = qnt_f32_to_affine(thres,
+                                      input_tensor.rknpu2_zp,
+                                      input_tensor.rknpu2_scale);
+  for (int a = 0; a < 3; a++) {
+    for (int i = 0; i < grid_h; i++) {
+      for (int j = 0; j < grid_w; j++) {
+        int8_t box_confidence =
+            input[(prob_box_size * a + 4) * grid_len + i * grid_w + j];
+        if (box_confidence >= thres_i8) {
+          int     offset = (prob_box_size * a) * grid_len + i * grid_w + j;
+          int8_t* in_ptr = input + offset;
+          float   box_x  = sigmoid(deqnt_affine_to_f32(*in_ptr, input_tensor.rknpu2_zp, input_tensor.rknpu2_scale)) * 2.0 - 0.5;
+          float   box_y  = sigmoid(deqnt_affine_to_f32(in_ptr[grid_len], input_tensor.rknpu2_zp, input_tensor.rknpu2_scale)) * 2.0 - 0.5;
+          float   box_w  = sigmoid(deqnt_affine_to_f32(in_ptr[2 * grid_len], input_tensor.rknpu2_zp, input_tensor.rknpu2_scale)) * 2.0;
+          float   box_h  = sigmoid(deqnt_affine_to_f32(in_ptr[3 * grid_len], input_tensor.rknpu2_zp, input_tensor.rknpu2_scale)) * 2.0;
+          box_x = (box_x + j) * (float)stride;
+          box_y = (box_y + i) * (float)stride;
+          box_w = box_w * box_w * (float)anchor[a * 2];
+          box_h = box_h * box_h * (float)anchor[a * 2 + 1];
+          box_x -= (box_w / 2.0);
+          box_y -= (box_h / 2.0);
+
+          int8_t maxClassProbs = in_ptr[5 * grid_len];
+          int maxClassId = 0;
+          for (int k = 1; k < obj_class_num; ++k) {
+            int8_t prob = in_ptr[(5 + k) * grid_len];
+            if (prob > maxClassProbs) {
+              maxClassId = k;
+              maxClassProbs = prob;
+            }
+          }
+          if (maxClassProbs > thres_i8) {
+            result->scores.push_back(
+                sigmoid(deqnt_affine_to_f32(maxClassProbs,
+                                      input_tensor.rknpu2_zp,
+                                      input_tensor.rknpu2_scale)) *
+                sigmoid(deqnt_affine_to_f32(box_confidence,
+                                      input_tensor.rknpu2_zp,
+                                      input_tensor.rknpu2_scale)));
+            result->label_ids.push_back(maxClassId);
+            validCount++;
+            result->boxes.emplace_back(std::array<float, 4>{
+                box_x, box_y,
+                box_x+box_w, box_y+box_h});
+          }
+        }
+      }
+    }
+  }
+  return validCount;
 }
 
 bool RKYOLOv5::Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result) {
-  int nc = 80;
-  float* output = static_cast<float*>(infer_result[0].Data());
-  float confThresh = 0.2;
-  int num_box = 0;
-  for (int i = 0; i < 25200; i++) {
-    float conf = output[i * (nc + 5) + 4];
-    if (conf > confThresh) {
-      num_box++;
-    }
-  }
-  result->Reserve(num_box);
-
-  for (int i = 0; i < 25200; i++) {
-    float conf = output[i * (nc + 5) + 4];
-    if (conf > confThresh) {
-      float cx = output[i * (nc + 5)];
-      float cy = output[i * (nc + 5) + 1];
-      float w = output[i * (nc + 5) + 2];
-      float h = output[i * (nc + 5) + 3];
-      std::vector<float> vSingleProbs(nc);
-      for (int j = 0; j < vSingleProbs.size(); j++) {
-        vSingleProbs[j] = output[i * 85 + 5 + j];
-      }
-      result->label_ids.push_back(ArgMax(vSingleProbs));
-      result->scores.push_back(conf);
-      result->boxes.emplace_back(std::array<float, 4>{
-          cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f});
-    }
+  for (int i = 0; i < infer_result.size(); ++i) {
+    std::cout << Process(infer_result[i],
+                         anchors[i],
+                         strides[i],
+                         result) << std::endl;
   }
   utils::NMS(result);
   return true;

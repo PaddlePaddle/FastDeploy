@@ -16,25 +16,31 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/detection/contrib/rknpu2/utils.h"
 #include "fastdeploy/vision/utils/utils.h"
 namespace fastdeploy {
 namespace vision {
 namespace detection {
 class FASTDEPLOY_DECL RKYOLOv5 : public FastDeployModel {
  public:
-  RKYOLOv5(const std::string& model_file,
-           const std::string& params_file = "",
+  RKYOLOv5(const std::string& model_file, const std::string& params_file = "",
            const RuntimeOption& custom_option = RuntimeOption(),
            const ModelFormat& model_format = ModelFormat::ONNX);
-  virtual bool Predict(cv::Mat* im, DetectionResult* result);
+  bool Predict(cv::Mat* im, DetectionResult* result);
 
  protected:
-  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
-  virtual bool Postprocess(std::vector<FDTensor>& infer_result,
-                           DetectionResult* result);
  private:
   bool Initialize();
-  int ArgMax(std::vector<float>& vSingleProbs);
+  bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
+  bool Postprocess(std::vector<FDTensor>& infer_result,
+                   DetectionResult* result);
+  int Process(FDTensor& input_tensor, std::vector<int>& anchor, int& stride,
+              DetectionResult* result);
+  std::vector<int> strides = {8, 16, 32};
+  std::vector<std::vector<int>> anchors = {{10, 13, 16, 30, 33, 23},
+                                           {30, 61, 62, 45, 59, 119},
+                                           {116, 90, 156, 198, 373, 326}};
+  float threshold = 0.25;
 };
 }  // namespace detection
 }  // namespace vision

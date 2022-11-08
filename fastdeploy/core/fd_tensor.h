@@ -30,10 +30,17 @@ struct FASTDEPLOY_DECL FDTensor {
   std::string name = "";
   FDDataType dtype = FDDataType::INT8;
 
+  // This only use to recode quantized rknpu model's zp and scale.
+  int rknpu2_zp = 0;
+  float rknpu2_scale = 1.0;
+  void SetRKNPU2ZpAndScale(int &zp, float &scale);
+
+
   // This use to skip memory copy step
   // the external_data_ptr will point to the user allocated memory
   // user has to maintain the memory, allocate and release
   void* external_data_ptr = nullptr;
+
   // The internal data will be on CPU
   // Some times, the external data is on the GPU, and we are going to use
   // GPU to inference the model

@@ -27,14 +27,14 @@ RKNPU2Backend::~RKNPU2Backend() {
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     rknn_destroy_mem(ctx, input_mems_[i]);
   }
-  if(input_mems_ != nullptr){
+  if (input_mems_ != nullptr) {
     free(input_mems_);
   }
 
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     rknn_destroy_mem(ctx, output_mems_[i]);
   }
-  if(output_mems_ != nullptr){
+  if (output_mems_ != nullptr) {
     free(output_mems_);
   }
 }
@@ -173,7 +173,8 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
 
   // create input tensor memory
   // rknn_tensor_mem* input_mems[io_num.n_input];
-  input_mems_ = (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_input);
+  input_mems_ =
+      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_input);
 
   // get input info and copy to input tensor info
   for (uint32_t i = 0; i < io_num.n_input; i++) {
@@ -185,9 +186,12 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       printf("rknn_init error! ret=%d\n", ret);
       return false;
     }
-    if((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
-        (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)){
-      FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED" << std::endl;
+
+    DumpTensorAttr(input_attrs_[i]);
+    if ((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
+        (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)) {
+      FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED"
+              << std::endl;
     }
 
     // copy input_attrs_ to input tensor info
@@ -211,7 +215,9 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   outputs_desc_.resize(io_num.n_output);
 
   // Create output tensor memory
-  output_mems_ = (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_output);;
+  output_mems_ =
+      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_output);
+
 
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     output_attrs_[i].index = i;
@@ -223,14 +229,14 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       return false;
     }
 
-    // If the output dimension is 3, the runtime will automatically change it to 4. 
+    DumpTensorAttr(output_attrs_[i]);
+
+    // If the output dimension is 3, the runtime will automatically change it to 4.
     // Obviously, this is wrong, and manual correction is required here.
     int n_dims = output_attrs_[i].n_dims;
-    if((n_dims == 4) && (output_attrs_[i].dims[3] == 1)){
+    if ((n_dims == 4) && (output_attrs_[i].dims[3] == 1)) {
       n_dims--;
-      FDWARNING << "The output[" 
-                << i
-                << "].shape[3] is 1, remove this dim." 
+      FDWARNING << "The output[" << i << "].shape[3] is 1, remove this dim."
                 << std::endl;
     }
 
@@ -288,6 +294,7 @@ std::vector<TensorInfo> RKNPU2Backend::GetOutputInfos() {
   return outputs_desc_;
 }
 
+
 bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
                           std::vector<FDTensor>* outputs) {
   int ret = RKNN_SUCC;
@@ -299,15 +306,17 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  if(!this->infer_init){
+  if (!this->infer_init) {
     for (uint32_t i = 0; i < io_num.n_input; i++) {
       // Judge whether the input and output types are the same
       rknn_tensor_type input_type =
-          fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(inputs[i].dtype);
+          fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(
+              inputs[i].dtype);
       if (input_type != input_attrs_[i].type) {
         FDWARNING << "The input tensor type != model's inputs type."
-                  << "The input_type need " << get_type_string(input_attrs_[i].type)
-                  << ",but inputs["<< i << "].type is " << get_type_string(input_type)
+                  << "The input_type need "
+                  << get_type_string(input_attrs_[i].type) << ",but inputs["
+                  << i << "].type is " << get_type_string(input_type)
                   << std::endl;
       }
 
@@ -341,7 +350,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
         return false;
       }
       // default output type is depend on model, this requires float32 to compute top5
-      output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
       // set output memory and attribute
       if (ret != RKNN_SUCC) {
@@ -353,7 +361,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
     this->infer_init = true;
   }
-  
+
   // Copy input data to input tensor memory
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     uint32_t width = input_attrs_[i].dims[2];
@@ -369,7 +377,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
   }
-  
 
   // run rknn
   ret = rknn_run(ctx, nullptr);
@@ -386,10 +393,15 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     for (int j = 0; j < outputs_desc_[i].shape.size(); ++j) {
       temp_shape[j] = outputs_desc_[i].shape[j];
     }
-    (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
+    (*outputs)[i].Resize(temp_shape,
+                         outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->virt_addr,
+    memcpy((*outputs)[i].MutableData(),
+           output_mems_[i]->virt_addr,
            (*outputs)[i].Nbytes());
+    std::cout << "set zp and scale" << output_attrs_[i].zp << " " << output_attrs_[i].scale << std::endl;
+    (*outputs)[i].SetRKNPU2ZpAndScale(output_attrs_[i].zp,
+                                      output_attrs_[i].scale);
   }
 
   return true;

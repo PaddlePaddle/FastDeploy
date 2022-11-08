@@ -350,4 +350,9 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
   return *this;
 }
 
+void FDTensor::SetRKNPU2ZpAndScale(int &zp, float &scale) {
+    rknpu2_zp = zp;
+    rknpu2_scale = scale;
+}
+
 }  // namespace fastdeploy
