@@ -10,11 +10,11 @@
 为了方便开发者的测试，下面提供了YOLOv5导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    |
 |:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv5n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n.onnx) | 1.9MB | 28.4% |
-| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx) | 7.2MB | 37.2% |
-| [YOLOv5m](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5m.onnx) | 21.2MB | 45.2% |
-| [YOLOv5l](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5l.onnx) | 46.5MB | 48.8% |
-| [YOLOv5x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5x.onnx) | 86.7MB | 50.7% |
+| [YOLOv5n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n.onnx) | 7.5MB | 28.4% |
+| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx) | 28.9MB | 37.2% |
+| [YOLOv5m](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5m.onnx) | 84.7MB | 45.2% |
+| [YOLOv5l](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5l.onnx) | 186.2MB | 48.8% |
+| [YOLOv5x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5x.onnx) | 346.9MB | 50.7% |
 
 
 
