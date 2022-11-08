@@ -3,36 +3,44 @@ import re
 
 diff_score_threshold = {
     "linux-x64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "linux-aarch64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "osx-x86_64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 2e-4,
         "boxes_diff": 1e-3
     },
     "osx-arm64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 2e-4,
         "boxes_diff": 1e-3
     },
     "win-x64": {
-        "label_diff": 0,
+        "label_diff": 1e-02,
         "score_diff": 5e-4,
         "boxes_diff_ratio": 1e-3,
         "boxes_diff": 1e-3
     }
 }
+
+
+def all_sort(x):
+    x1 = x.T
+    y = np.split(x1, len(x1))
+    z = list(reversed(y))
+    index = np.lexsort(z)
+    return x[index]
 
 
 def parse_arguments():
@@ -83,8 +91,8 @@ def write2file(error_file):
     with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
-        f.write(args.platform + " " + py_version + " " +
-                args.result_path.split(".")[0] + "\n")
+        f.write(args.platform + " " + py_version + " " + args.result_path.split(
+            ".")[0] + "\n")
 
 
 def save_numpy_result(file_path, error_msg):
@@ -134,4 +142,6 @@ if __name__ == '__main__':
 
     gt_numpy = convert2numpy(args.gt_path, args.conf_threshold)
     infer_numpy = convert2numpy(args.result_path, args.conf_threshold)
+    gt_numpy = all_sort(gt_numpy)
+    infer_numpy = all_sort(infer_numpy)
     check_result(gt_numpy, infer_numpy, args)
