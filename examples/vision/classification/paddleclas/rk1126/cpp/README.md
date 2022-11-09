@@ -3,7 +3,7 @@
 
 ## 部署准备
 ### FastDeploy 交叉编译环境准备
-- 1. 软硬件环境满足要求，以及交叉编译环境的准备，参考[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/rk1126.md#交叉编译环境搭建)  
+- 1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/rk1126.md#交叉编译环境搭建)  
 
 ### 量化模型准备
 - 1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
@@ -12,7 +12,7 @@
 
 ## 在 RK1126 上部署量化后的 ResNet50_Vd 分类模型
 请按照以下步骤完成在 RK1126 上部署 ResNet50_Vd 量化模型：
-1. 交叉编译编译 FastDeploy 库，具体请参考[交叉编译 FastDeploy](../../../../../../docs/cn/build_and_install/rk1126.md#基于-paddlelite-的-fastdeploy-交叉编译库编译)
+1. 交叉编译编译 FastDeploy 库，具体请参考：[交叉编译 FastDeploy](../../../../../../docs/cn/build_and_install/rk1126.md#基于-paddlelite-的-fastdeploy-交叉编译库编译)
 
 2. 将编译后的库拷贝到当前目录，可使用如下命令：
 ```bash
