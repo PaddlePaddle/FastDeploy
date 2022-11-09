@@ -52,7 +52,7 @@ class YOLOv5Cls(FastDeployModel):
     @property
     def size(self):
         """
-        Returns the preprocess image size
+        Returns the preprocess image size, default is (224, 224)
         """
         return self._model.size
 

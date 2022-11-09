@@ -24,6 +24,13 @@ class UltraFace(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
+        """Load a UltraFace model exported by UltraFace.
+
+        :param model_file: (str)Path of model file, e.g ./ultraface.onnx
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(UltraFace, self).__init__(runtime_option)
@@ -34,6 +41,13 @@ class UltraFace(FastDeployModel):
         assert self.initialized, "UltraFace initialize failed."
 
     def predict(self, input_image, conf_threshold=0.7, nms_iou_threshold=0.3):
+        """Detect the location and key points of human faces from an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param conf_threshold: confidence threashold for postprocessing, default is 0.7
+        :param nms_iou_threshold: iou threashold for NMS, default is 0.3
+        :return: FaceDetectionResult
+        """
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
@@ -41,6 +55,9 @@ class UltraFace(FastDeployModel):
     # 多数是预处理相关，可通过修改如model.size = [640, 480]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
+        """
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default (320, 240)
+        """
         return self._model.size
 
     @size.setter

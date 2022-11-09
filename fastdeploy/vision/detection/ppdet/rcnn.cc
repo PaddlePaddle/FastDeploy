@@ -24,7 +24,7 @@ FasterRCNN::FasterRCNN(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER};
   has_nms_ = true;
   runtime_option = custom_option;

@@ -16,7 +16,7 @@ import logging
 import numpy as np
 from . import ModelFormat
 from . import c_lib_wrap as C
-
+from . import rknpu2
 
 class Runtime:
     """FastDeploy Runtime object.
@@ -207,6 +207,11 @@ class RuntimeOption:
         """
         return self._option.use_cpu()
 
+    def use_rknpu2(self,rknpu2_name=rknpu2.CpuName.RK3588,rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
+        """Inference with CPU
+        """
+        return self._option.use_rknpu2(rknpu2_name,rknpu2_core)
+
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
 
@@ -344,6 +349,23 @@ class RuntimeOption:
 
     def disable_paddle_trt_collect_shape(self):
         return self._option.disable_paddle_trt_collect_shape()
+
+    def use_ipu(self,
+                device_num=1,
+                micro_batch_size=1,
+                enable_pipelining=False,
+                batches_per_step=1):
+        return self._option.use_ipu(device_num, micro_batch_size,
+                                    enable_pipelining, batches_per_step)
+
+    def set_ipu_config(self,
+                       enable_fp16=False,
+                       replica_num=1,
+                       available_memory_proportion=1.0,
+                       enable_half_partial=False):
+        return self._option.set_ipu_config(enable_fp16, replica_num,
+                                           available_memory_proportion,
+                                           enable_half_partial)
 
     def __repr__(self):
         attrs = dir(self._option)

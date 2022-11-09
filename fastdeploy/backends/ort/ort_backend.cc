@@ -63,6 +63,10 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     } else {
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = option.gpu_id;
+      if(option.external_stream_) {
+        cuda_options.has_user_compute_stream = 1;
+        cuda_options.user_compute_stream = option.external_stream_;
+      }
       session_options_.AppendExecutionProvider_CUDA(cuda_options);
     }
   }
@@ -76,21 +80,18 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
             << std::endl;
     return false;
   }
-#ifdef ENABLE_PADDLE_FRONTEND
   char* model_content_ptr;
   int model_content_size = 0;
+  bool save_external = false;
+#ifdef ENABLE_PADDLE_FRONTEND
+  paddle2onnx::CustomOp op;
+  strcpy(op.op_name, "multiclass_nms3");
+  strcpy(op.export_op_name, "MultiClassNMS");
 
-  std::vector<paddle2onnx::CustomOp> custom_ops;
-  for (auto& item : option.custom_op_info_) {
-    paddle2onnx::CustomOp op;
-    strcpy(op.op_name, item.first.c_str());
-    strcpy(op.export_op_name, item.second.c_str());
-    custom_ops.emplace_back(op);
-  }
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size())) {
+                           verbose, true, true, true, &op,
+                           1, "onnxruntime", nullptr, 0, "", &save_external)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -100,9 +101,18 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
+  if(save_external){
+    std::string model_file_name = "model.onnx";
+    std::fstream f(model_file_name, std::ios::out);
+    FDASSERT(f.is_open(), "Can not open file: %s to save model.",
+                        model_file_name.c_str());
+    f << onnx_model_proto;
+    f.close();
+    return InitFromOnnx(model_file_name, option, false);
+  }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
-  FDERROR << "Didn't compile with PaddlePaddle frontend, you can try to "
+  FDERROR << "Didn't compile with PaddlePaddle Frontend, you can try to "
              "call `InitFromOnnx` instead."
           << std::endl;
 #endif

@@ -52,19 +52,25 @@ class FASTDEPLOY_DECL RetinaFace : public FastDeployModel {
                        float conf_threshold = 0.25f,
                        float nms_iou_threshold = 0.4f);
 
-  /// tuple of (width, height), default (640, 640)
+  /*! @brief
+  Argument for image preprocessing step, tuple of (width, height), decide the target size after resize, default (640, 640)
+  */
   std::vector<int> size;
   /*! @brief
-  variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
+  Argument for image postprocessing step, variance in RetinaFace's prior-box(anchor) generate process, default (0.1, 0.2)
   */
   std::vector<float> variance;
   /*! @brief
-  downsample strides (namely, steps) for RetinaFace to generate anchors, will take (8,16,32) as default values
+  Argument for image postprocessing step, downsample strides (namely, steps) for RetinaFace to generate anchors, will take (8,16,32) as default values
   */
   std::vector<int> downsample_strides;
-  /// min sizes, width and height for each anchor
+  /*! @brief
+  Argument for image postprocessing step, min sizes, width and height for each anchor, default min_sizes = {{16, 32}, {64, 128}, {256, 512}}
+  */
   std::vector<std::vector<int>> min_sizes;
-  /// landmarks_per_face, default 5 in RetinaFace
+  /*! @brief
+  Argument for image postprocessing step, landmarks_per_face, default 5 in RetinaFace
+  */
   int landmarks_per_face;
 
  private:

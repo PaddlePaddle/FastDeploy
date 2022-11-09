@@ -46,7 +46,7 @@ def process_on_linux(current_dir):
                 if len(items) != 4:
                     os.remove(os.path.join(root, f))
                     continue
-                if items[0].strip() not in ["libopencv_highgui", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
+                if items[0].strip() not in ["libopencv_highgui", "libopencv_video", "libopencv_videoio", "libopencv_imgcodecs", "libopencv_imgproc", "libopencv_core"]:
                     os.remove(os.path.join(root, f))
 
     all_libs_paths = [third_libs_path] + user_specified_dirs

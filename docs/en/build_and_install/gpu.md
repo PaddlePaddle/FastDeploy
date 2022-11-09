@@ -10,7 +10,7 @@ FastDeploy supports Paddle Inference, ONNX Runtime and TensorRT in the GPU envir
 | TensorRT              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support GPU only, and compilation switch is `ENABLE_TRT_BACKEND`. The default is OFF        |
 | OpenVINO              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support CPU only, and compilation switch is `ENABLE_OPENVINO_BACKEND`. The default is OFF   |
 
-Note: 
+Note:
 
 When the environment is GPU, please set `WITH_GPU` as ON and specify `CUDA_DIRECTORY`. If TensorRT integration is needed, please specify `TRT_DIRECTORY` as well.
 
@@ -50,6 +50,8 @@ Prerequisite for Compiling on Windows:
 - Visual Studio 2019
 - cuda >= 11.2
 - cudnn >= 8.2
+
+Notice: Make sure `Visual Studio Integration` is installed during CUDA installation, or manually copy the 4 files under `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\extras\visual_studio_integration\MSBuildExtensions\` into `C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Microsoft\VC\v160\BuildCustomizations\`. Otherwise, you may run into `No CUDA toolset found` error during cmake.
 
 Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Menu and run the following commands:
 
@@ -124,14 +126,14 @@ Launch the x64 Native Tools Command Prompt for VS 2019 from the Windows Start Me
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export ENABLE_ORT_BACKEND=ON
-export ENABLE_PADDLE_BACKEND=ON
-export ENABLE_OPENVINO_BACKEND=ON
-export ENABLE_VISION=ON
-export ENABLE_TRT_BACKEND=ON
-export WITH_GPU=ON
-export TRT_DIRECTORY="D:\Paddle\TensorRT-8.4.1.5"
-export CUDA_DIRECTORY="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2"
+set ENABLE_ORT_BACKEND=ON
+set ENABLE_PADDLE_BACKEND=ON
+set ENABLE_OPENVINO_BACKEND=ON
+set ENABLE_VISION=ON
+set ENABLE_TRT_BACKEND=ON
+set WITH_GPU=ON
+set TRT_DIRECTORY=D:\Paddle\TensorRT-8.4.1.5
+set CUDA_DIRECTORY=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2
 
 python setup.py build
 python setup.py bdist_wheel

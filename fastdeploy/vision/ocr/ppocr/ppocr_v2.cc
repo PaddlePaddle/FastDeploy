@@ -110,7 +110,6 @@ bool PPOCRv2::Predict(cv::Mat* img,
     if (nullptr != classifier_ && result->cls_labels[i] % 2 == 1 && result->cls_scores[i] > classifier_->cls_thresh) {
       cv::rotate(image_list[i], image_list[i], 1);
     }
-
     if (nullptr != recognizer_ && !Recognize(&(image_list[i]), result)) {
       FDERROR << "Failed to recgnize croped image of index " << i << "." << std::endl;
       return false;

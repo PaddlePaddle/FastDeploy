@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class StridePad : public Processor {
+class FASTDEPLOY_DECL StridePad : public Processor {
  public:
   // only support pad with left-top padding mode
   StridePad(int stride, const std::vector<float>& value) {
@@ -27,11 +27,14 @@ class StridePad : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFlyCV(Mat* mat);
+#endif
   std::string Name() { return "StridePad"; }
 
   static bool Run(Mat* mat, int stride,
                   const std::vector<float>& value = std::vector<float>(),
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int stride_ = 32;

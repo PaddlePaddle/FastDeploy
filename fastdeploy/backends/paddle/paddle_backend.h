@@ -24,6 +24,7 @@
 #include "paddle2onnx/converter.h"
 #endif
 #include "paddle_inference_api.h"  // NOLINT
+#include "fastdeploy/utils/unique_ptr.h"
 
 #ifdef ENABLE_TRT_BACKEND
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
@@ -31,7 +32,21 @@
 
 namespace fastdeploy {
 
+struct IpuOption {
+  int ipu_device_num;
+  int ipu_micro_batch_size;
+  bool ipu_enable_pipelining;
+  int ipu_batches_per_step;
+  bool ipu_enable_fp16;
+  int ipu_replica_num;
+  float ipu_available_memory_proportion;
+  bool ipu_enable_half_partial;
+};
+
 struct PaddleBackendOption {
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+
 #ifdef WITH_GPU
   bool use_gpu = true;
 #else
@@ -47,6 +62,13 @@ struct PaddleBackendOption {
   bool collect_shape = false;
 #endif
 
+#ifdef WITH_IPU
+  bool use_ipu = true;
+  IpuOption ipu_option;
+#else
+  bool use_ipu = false;
+#endif
+
   int mkldnn_cache_size = 1;
   int cpu_thread_num = 8;
   // initialize memory size(MB) for GPU
@@ -54,6 +76,7 @@ struct PaddleBackendOption {
   // gpu device id
   int gpu_id = 0;
   bool enable_pinned_memory = false;
+  void* external_stream_ = nullptr;
 
   std::vector<std::string> delete_pass_names = {};
 };
@@ -90,6 +113,9 @@ class PaddleBackend : public BaseBackend {
   int NumInputs() const override { return inputs_desc_.size(); }
 
   int NumOutputs() const override { return outputs_desc_.size(); }
+
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;
   TensorInfo GetOutputInfo(int index) override;

@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class Pad : public Processor {
+class FASTDEPLOY_DECL Pad : public Processor {
  public:
   Pad(int top, int bottom, int left, int right,
       const std::vector<float>& value) {
@@ -30,11 +30,14 @@ class Pad : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFlyCV(Mat* mat);
+#endif
   std::string Name() { return "Pad"; }
 
   static bool Run(Mat* mat, const int& top, const int& bottom, const int& left,
                   const int& right, const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int top_;
@@ -43,5 +46,5 @@ class Pad : public Processor {
   int right_;
   std::vector<float> value_;
 };
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

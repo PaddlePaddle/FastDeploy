@@ -24,3 +24,4 @@ from .contrib.yolov6 import YOLOv6
 from .contrib.yolov7end2end_trt import YOLOv7End2EndTRT
 from .contrib.yolov7end2end_ort import YOLOv7End2EndORT
 from .ppdet import PPYOLOE, PPYOLO, PPYOLOv2, PaddleYOLOX, PicoDet, FasterRCNN, YOLOv3, MaskRCNN
+from .rknpu2 import RKPicoDet

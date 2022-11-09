@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import codecs
 import json
 import math
@@ -19,13 +18,33 @@ import sys
 import threading
 import time
 
+import fastdeploy as fd
 import numpy as np
-import onnxruntime as ort
 import triton_python_backend_utils as pb_utils
 
 from paddlespeech.server.utils.util import denorm
 from paddlespeech.server.utils.util import get_chunks
 from paddlespeech.t2s.frontend.zh_frontend import Frontend
+
+model_name_fastspeech2 = "fastspeech2_cnndecoder_csmsc_streaming_static_1.0.0"
+model_zip_fastspeech2 = model_name_fastspeech2 + ".zip"
+model_url_fastspeech2 = "https://paddlespeech.bj.bcebos.com/Parakeet/released_models/fastspeech2/" + model_zip_fastspeech2
+model_name_mb_melgan = "mb_melgan_csmsc_static_0.1.1"
+model_zip_mb_melgan = model_name_mb_melgan + ".zip"
+model_url_mb_melgan = "https://paddlespeech.bj.bcebos.com/Parakeet/released_models/mb_melgan/" + model_zip_mb_melgan
+
+dir_name = os.path.dirname(os.path.realpath(__file__)) + "/"
+
+if not os.path.exists(model_name_fastspeech2):
+    if os.path.exists(model_zip_fastspeech2):
+        os.remove(model_zip_fastspeech2)
+    fd.download_and_decompress(model_url_fastspeech2, path=dir_name)
+    os.remove(model_zip_fastspeech2)
+if not os.path.exists(model_name_mb_melgan):
+    if os.path.exists(model_zip_mb_melgan):
+        os.remove(model_zip_mb_melgan)
+    fd.download_and_decompress(model_url_mb_melgan, path=dir_name)
+    os.remove(model_zip_mb_melgan)
 
 voc_block = 36
 voc_pad = 14
@@ -34,33 +53,49 @@ am_pad = 12
 voc_upsample = 300
 
 # 模型路径
-dir_name = "/models/streaming_tts_serving/1/"
-phones_dict = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/phone_id_map.txt"
-am_stat_path = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/speech_stats.npy"
+phones_dict = dir_name + model_name_fastspeech2 + "/phone_id_map.txt"
+am_stat_path = dir_name + model_name_fastspeech2 + "/speech_stats.npy"
 
-onnx_am_encoder = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/fastspeech2_csmsc_am_encoder_infer.onnx"
-onnx_am_decoder = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/fastspeech2_csmsc_am_decoder.onnx"
-onnx_am_postnet = dir_name + "fastspeech2_cnndecoder_csmsc_streaming_onnx_1.0.0/fastspeech2_csmsc_am_postnet.onnx"
-onnx_voc_melgan = dir_name + "mb_melgan_csmsc_onnx_0.2.0/mb_melgan_csmsc.onnx"
+am_encoder_model = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_encoder_infer.pdmodel"
+am_decoder_model = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_decoder.pdmodel"
+am_postnet_model = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_postnet.pdmodel"
+voc_melgan_model = dir_name + model_name_mb_melgan + "/mb_melgan_csmsc.pdmodel"
+
+am_encoder_para = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_encoder_infer.pdiparams"
+am_decoder_para = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_decoder.pdiparams"
+am_postnet_para = dir_name + model_name_fastspeech2 + "/fastspeech2_csmsc_am_postnet.pdiparams"
+voc_melgan_para = dir_name + model_name_mb_melgan + "/mb_melgan_csmsc.pdiparams"
 
 frontend = Frontend(phone_vocab_path=phones_dict, tone_vocab_path=None)
 am_mu, am_std = np.load(am_stat_path)
 
-# 用CPU推理
-providers = ['CPUExecutionProvider']
+option_1 = fd.RuntimeOption()
+option_1.set_model_path(am_encoder_model, am_encoder_para)
+option_1.use_cpu()
+option_1.use_ort_backend()
+option_1.set_cpu_thread_num(12)
+am_encoder_runtime = fd.Runtime(option_1)
 
-# 配置ort session
-sess_options = ort.SessionOptions()
+option_2 = fd.RuntimeOption()
+option_2.set_model_path(am_decoder_model, am_decoder_para)
+option_2.use_cpu()
+option_2.use_ort_backend()
+option_2.set_cpu_thread_num(12)
+am_decoder_runtime = fd.Runtime(option_2)
 
-# 创建session
-am_encoder_infer_sess = ort.InferenceSession(
-    onnx_am_encoder, providers=providers, sess_options=sess_options)
-am_decoder_sess = ort.InferenceSession(
-    onnx_am_decoder, providers=providers, sess_options=sess_options)
-am_postnet_sess = ort.InferenceSession(
-    onnx_am_postnet, providers=providers, sess_options=sess_options)
-voc_melgan_sess = ort.InferenceSession(
-    onnx_voc_melgan, providers=providers, sess_options=sess_options)
+option_3 = fd.RuntimeOption()
+option_3.set_model_path(am_postnet_model, am_postnet_para)
+option_3.use_cpu()
+option_3.use_ort_backend()
+option_3.set_cpu_thread_num(12)
+am_postnet_runtime = fd.Runtime(option_3)
+
+option_4 = fd.RuntimeOption()
+option_4.set_model_path(voc_melgan_model, voc_melgan_para)
+option_4.use_cpu()
+option_4.use_ort_backend()
+option_4.set_cpu_thread_num(12)
+voc_melgan_runtime = fd.Runtime(option_4)
 
 
 def depadding(data, chunk_num, chunk_id, block, pad, upsample):
@@ -199,8 +234,10 @@ class TritonPythonModel:
             part_phone_ids = phone_ids[i].numpy()
             voc_chunk_id = 0
 
-            orig_hs = am_encoder_infer_sess.run(
-                None, input_feed={'text': part_phone_ids})
+            orig_hs = am_encoder_runtime.infer({
+                'text':
+                part_phone_ids.astype("int64")
+            })
             orig_hs = orig_hs[0]
 
             # streaming voc chunk info
@@ -213,13 +250,16 @@ class TritonPythonModel:
             hss = get_chunks(orig_hs, am_block, am_pad, "am")
             am_chunk_num = len(hss)
             for i, hs in enumerate(hss):
-                am_decoder_output = am_decoder_sess.run(
-                    None, input_feed={'xs': hs})
-                am_postnet_output = am_postnet_sess.run(
-                    None,
-                    input_feed={
-                        'xs': np.transpose(am_decoder_output[0], (0, 2, 1))
-                    })
+
+                am_decoder_output = am_decoder_runtime.infer({
+                    'xs':
+                    hs.astype("float32")
+                })
+
+                am_postnet_output = am_postnet_runtime.infer({
+                    'xs':
+                    np.transpose(am_decoder_output[0], (0, 2, 1))
+                })
                 am_output_data = am_decoder_output + np.transpose(
                     am_postnet_output[0], (0, 2, 1))
                 normalized_mel = am_output_data[0][0]
@@ -239,9 +279,10 @@ class TritonPythonModel:
                 while (mel_streaming.shape[0] >= end and
                        voc_chunk_id < voc_chunk_num):
                     voc_chunk = mel_streaming[start:end, :]
-
-                    sub_wav = voc_melgan_sess.run(
-                        output_names=None, input_feed={'logmel': voc_chunk})
+                    sub_wav = voc_melgan_runtime.infer({
+                        'logmel':
+                        voc_chunk.astype("float32")
+                    })
                     sub_wav = depadding(sub_wav[0], voc_chunk_num, voc_chunk_id,
                                         voc_block, voc_pad, voc_upsample)
 

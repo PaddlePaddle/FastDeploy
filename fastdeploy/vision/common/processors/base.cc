@@ -13,23 +13,52 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
+
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 
-ProcLib Processor::default_lib = ProcLib::DEFAULT;
-
 bool Processor::operator()(Mat* mat, ProcLib lib) {
-  // if default_lib is set
-  // then use default_lib
   ProcLib target = lib;
-  if (default_lib != ProcLib::DEFAULT) {
-    target = default_lib;
+  if (lib == ProcLib::DEFAULT) {
+    target = DefaultProcLib::default_lib;
   }
+  if (target == ProcLib::FLYCV) {
+#ifdef ENABLE_FLYCV
+    return ImplByFlyCV(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
+#endif
+  }
+  // DEFAULT & OPENCV
+  return ImplByOpenCV(mat);
+}
 
-  bool ret = ImplByOpenCV(mat);
-  return ret;
+void EnableFlyCV() {
+#ifdef ENABLE_FLYCV
+  DefaultProcLib::default_lib = ProcLib::FLYCV;
+  FDINFO << "Will change to use image processing library "
+         << DefaultProcLib::default_lib << std::endl;
+#else
+  FDWARNING << "FastDeploy didn't compile with FlyCV, "
+               "will fallback to use OpenCV instead."
+            << std::endl;
+#endif
+}
+
+void DisableFlyCV() {
+  DefaultProcLib::default_lib = ProcLib::OPENCV;
+  FDINFO << "Will change to use image processing library "
+         << DefaultProcLib::default_lib << std::endl;
+}
+
+void SetProcLibCpuNumThreads(int threads) {
+  cv::setNumThreads(threads);
+#ifdef ENABLE_FLYCV
+  fcv::set_thread_num(threads);
+#endif
 }
 
 }  // namespace vision

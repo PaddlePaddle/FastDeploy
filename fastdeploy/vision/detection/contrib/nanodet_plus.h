@@ -53,21 +53,23 @@ class FASTDEPLOY_DECL NanoDetPlus : public FastDeployModel {
                        float conf_threshold = 0.35f,
                        float nms_iou_threshold = 0.5f);
 
-  /// tuple of input size (width, height), e.g (320, 320)
+  /*! @brief
+  Argument for image preprocessing step, tuple of input size (width, height), default (320, 320)
+  */
   std::vector<int> size;
-  /// padding value, size should be the same as channels
+  // padding value, size should be the same as channels
   std::vector<float> padding_value;
-  /*! @brief
-  keep aspect ratio or not when perform resize operation. This option is set as `false` by default in NanoDet-Plus
-  */
+  // keep aspect ratio or not when perform resize operation.
+  // This option is set as `false` by default in NanoDet-Plus
   bool keep_ratio;
-  /*! @brief
-  downsample strides for NanoDet-Plus to generate anchors, will take (8, 16, 32, 64) as default values
-  */
+  // downsample strides for NanoDet-Plus to generate anchors,
+  // will take (8, 16, 32, 64) as default values
   std::vector<int> downsample_strides;
-  /// for offseting the boxes by classes when using NMS, default 4096
+  // for offseting the boxes by classes when using NMS, default 4096
   float max_wh;
-  /// reg_max for GFL regression, default 7
+  /*! @brief
+  Argument for image postprocessing step, reg_max for GFL regression, default 7
+  */
   int reg_max;
 
  private:

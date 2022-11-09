@@ -48,7 +48,7 @@ Recognizer::Recognizer(const std::string& model_file,
                           Backend::OPENVINO};  
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
 
@@ -164,8 +164,10 @@ bool Recognizer::Postprocess(FDTensor& infer_result,
     }
     last_index = argmax_idx;
   }
-  score /= count;
-
+  score /= (count + 1e-6);
+  if (count == 0 || std::isnan(score)) {
+    score = 0.f;
+  }
   std::get<0>(*rec_result) = str_res;
   std::get<1>(*rec_result) = score;
 

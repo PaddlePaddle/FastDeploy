@@ -14,21 +14,40 @@
 
 #pragma once
 
-#include "fastdeploy/utils/utils.h"
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
+#include "opencv2/core/core.hpp"
+
+#ifdef ENABLE_FLYCV
+#include "flycv.h"  // NOLINT
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
 // Convert data type of opencv to FDDataType
 FDDataType OpenCVDataTypeToFD(int type);
-
-#ifdef ENABLE_FALCONCV
-// Convert data type of falconcv to FDDataType
-FDDataType FalconCVDataTypeToFD(fcv::FCVImageType type);
-// Create data type of falconcv by FDDataType
-fcv::FCVImageType CreateFalconCVDataType(FDDataType type, int channel = 1);
+// Create data type of opencv by FDDataType
+int CreateOpenCVDataType(FDDataType type, int channel = 1);
+#ifdef ENABLE_FLYCV
+// Convert data type of flycv to FDDataType
+FDDataType FlyCVDataTypeToFD(fcv::FCVImageType type);
+// Create data type of flycv by FDDataType
+fcv::FCVImageType CreateFlyCVDataType(FDDataType type, int channel = 1);
+// Convert cv::Mat to fcv::Mat
+fcv::Mat ConvertOpenCVMatToFlyCV(cv::Mat& im);
+// Convert fcv::Mat to fcv::mat
+cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim);
 #endif
 
-} // namespace vision
-} // namespace fastdeploy
+// Create zero copy OpenCV/FlyCV Mat from FD Tensor / Buffer
+cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width,
+  int channels, FDDataType type, void* data);
+cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor);
+#ifdef ENABLE_FLYCV
+fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width,
+  int channels, FDDataType type, void* data);
+fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor);
+#endif
+}  // namespace vision
+}  // namespace fastdeploy

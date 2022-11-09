@@ -28,6 +28,10 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool Infer(std::vector<FDTensor>& input_tensors,
                      std::vector<FDTensor>* output_tensors);
 
+  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors_ to do inference and writing results to reused_output_tensors_
+  */
+  virtual bool Infer();
+
   RuntimeOption runtime_option;
   /** \brief Model's valid cpu backends. This member defined all the cpu backends have successfully tested for the model
    */
@@ -35,6 +39,15 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid gpu backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
+  /** Model's valid ipu backends. This member defined all the ipu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_ipu_backends = {Backend::PDINFER};
+
+
+  /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_rknpu_backends = {};
+
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
   /// Get number of outputs for this model
@@ -91,12 +104,26 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
+  /** \brief Release reused input/output buffers
+  */
+  virtual void ReleaseReusedBuffer() {
+    std::vector<FDTensor>().swap(reused_input_tensors_);
+    std::vector<FDTensor>().swap(reused_output_tensors_);
+  }
+
  protected:
   virtual bool InitRuntime();
   virtual bool CreateCpuBackend();
   virtual bool CreateGpuBackend();
+  virtual bool CreateIpuBackend();
+  virtual bool CreateRKNPUBackend();
+
   bool initialized = false;
-  std::vector<Backend> valid_external_backends;
+  std::vector<Backend> valid_external_backends_;
+  // Reused input tensors
+  std::vector<FDTensor> reused_input_tensors_;
+  // Reused output tensors
+  std::vector<FDTensor> reused_output_tensors_;
 
  private:
   std::shared_ptr<Runtime> runtime_;

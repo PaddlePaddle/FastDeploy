@@ -1,3 +1,5 @@
+English | [中文](../../cn/faq/tensorrt_tricks.md)
+
 # TensorRT Q&As
 
 ## 1. The following log may pop up when running TensorRT 

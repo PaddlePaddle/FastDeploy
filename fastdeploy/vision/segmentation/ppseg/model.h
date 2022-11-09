@@ -60,6 +60,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
    */
   bool is_vertical_screen = false;
 
+
+  // This function will disable normalize and hwc2chw in preprocessing step.
+  void DisableNormalizeAndPermute();
  private:
   bool Initialize();
 
@@ -76,6 +79,9 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
+  
+  // for recording the switch of normalize and hwc2chw
+  bool disable_normalize_and_permute = false;
 };
 
 }  // namespace segmentation

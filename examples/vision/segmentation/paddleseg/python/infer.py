@@ -53,5 +53,5 @@ result = model.predict(im.copy())
 print(result)
 
 # 可视化结果
-vis_im = fd.vision.visualize.vis_segmentation(im, result)
+vis_im = fd.vision.vis_segmentation(im, result, weight=0.5)
 cv2.imwrite("vis_img.png", vis_im)

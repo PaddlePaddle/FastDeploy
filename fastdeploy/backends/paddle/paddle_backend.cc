@@ -22,6 +22,9 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
   option_ = option;
   if (option.use_gpu) {
     config_.EnableUseGpu(option.gpu_mem_init_size, option.gpu_id);
+    if(option_.external_stream_) {
+      config_.SetExecStream(option_.external_stream_);
+    }
     if (option.enable_trt) {
 #ifdef ENABLE_TRT_BACKEND
       auto precision = paddle_infer::PrecisionType::kFloat32;
@@ -39,6 +42,21 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
 #endif
     }
+  } else if (option.use_ipu) {
+#ifdef WITH_IPU
+    config_.EnableIpu(option.ipu_option.ipu_device_num,
+                      option.ipu_option.ipu_micro_batch_size,
+                      option.ipu_option.ipu_enable_pipelining,
+                      option.ipu_option.ipu_batches_per_step);
+    config_.SetIpuConfig(option.ipu_option.ipu_enable_fp16,
+                         option.ipu_option.ipu_replica_num,
+                         option.ipu_option.ipu_available_memory_proportion,
+                         option.ipu_option.ipu_enable_half_partial);
+#else
+    FDWARNING << "The FastDeploy is not compiled with IPU backend, so will "
+                 "fallback to CPU with Paddle Inference Backend."
+              << std::endl;
+#endif
   } else {
     config_.DisableGpu();
     if (option.enable_mkldnn) {
@@ -196,6 +214,30 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     CopyTensorToCpu(handle, &((*outputs)[i]));
   }
   return true;
+}
+
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream, int device_id) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<PaddleBackend>();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
+  if(device_id > 0 && option_.use_gpu == true && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file,
+                                   clone_option);
+    FDWARNING << "The target device id:" 
+             << device_id
+             << " is different from current device id:"
+             << option_.gpu_id
+             << ", cannot share memory with current engine."
+             << std::endl;
+    return new_backend;
+  }
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->predictor_ = std::move(predictor_->Clone(stream));
+  return new_backend;
 }
 
 #ifdef ENABLE_TRT_BACKEND

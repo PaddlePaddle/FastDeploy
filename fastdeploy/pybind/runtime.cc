@@ -22,6 +22,8 @@ void BindRuntime(pybind11::module& m) {
       .def("set_model_path", &RuntimeOption::SetModelPath)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
+      .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
+      .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
       .def("use_poros_backend", &RuntimeOption::UsePorosBackend)
@@ -48,10 +50,13 @@ void BindRuntime(pybind11::module& m) {
       .def("disable_pinned_memory", &RuntimeOption::DisablePinnedMemory)
       .def("enable_paddle_trt_collect_shape", &RuntimeOption::EnablePaddleTrtCollectShape)
       .def("disable_paddle_trt_collect_shape", &RuntimeOption::DisablePaddleTrtCollectShape)
+      .def("use_ipu", &RuntimeOption::UseIpu)
+      .def("set_ipu_config", &RuntimeOption::SetIpuConfig)
       .def_readwrite("model_file", &RuntimeOption::model_file)
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
       .def_readwrite("backend", &RuntimeOption::backend)
+      .def_readwrite("backend", &RuntimeOption::external_stream_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
@@ -72,7 +77,20 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("long_to_int", &RuntimeOption::long_to_int)
       .def_readwrite("use_nvidia_tf32", &RuntimeOption::use_nvidia_tf32)
       .def_readwrite("unconst_ops_thres", &RuntimeOption::unconst_ops_thres)
-      .def_readwrite("poros_file", &RuntimeOption::poros_file);
+      .def_readwrite("poros_file", &RuntimeOption::poros_file)
+      .def_readwrite("ipu_device_num", &RuntimeOption::ipu_device_num)
+      .def_readwrite("ipu_micro_batch_size",
+                     &RuntimeOption::ipu_micro_batch_size)
+      .def_readwrite("ipu_enable_pipelining",
+                     &RuntimeOption::ipu_enable_pipelining)
+      .def_readwrite("ipu_batches_per_step",
+                     &RuntimeOption::ipu_batches_per_step)
+      .def_readwrite("ipu_enable_fp16", &RuntimeOption::ipu_enable_fp16)
+      .def_readwrite("ipu_replica_num", &RuntimeOption::ipu_replica_num)
+      .def_readwrite("ipu_available_memory_proportion",
+                     &RuntimeOption::ipu_available_memory_proportion)
+      .def_readwrite("ipu_enable_half_partial",
+                     &RuntimeOption::ipu_enable_half_partial);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -144,6 +162,25 @@ void BindRuntime(pybind11::module& m) {
              }
              return results;
            })
+      .def("infer", [](Runtime& self, std::map<std::string, FDTensor>& data) {
+        std::vector<FDTensor> inputs;
+        inputs.reserve(data.size());
+        for (auto iter = data.begin(); iter != data.end(); ++iter) {
+          FDTensor tensor;
+          tensor.SetExternalData(iter->second.Shape(), iter->second.Dtype(), iter->second.Data(), iter->second.device);
+          tensor.name = iter->first;
+          inputs.push_back(tensor);
+        }
+        std::vector<FDTensor> outputs;
+        if (!self.Infer(inputs, &outputs)) {
+          pybind11::eval("raise Exception('Failed to inference with Runtime.')");
+        }
+        return outputs;
+      })
+      .def("infer", [](Runtime& self, std::vector<FDTensor>& inputs) {
+        std::vector<FDTensor> outputs;
+        return self.Infer(inputs, &outputs);
+      })
       .def("num_inputs", &Runtime::NumInputs)
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
@@ -157,16 +194,20 @@ void BindRuntime(pybind11::module& m) {
       .value("TRT", Backend::TRT)
       .value("POROS", Backend::POROS)
       .value("PDINFER", Backend::PDINFER)
+      .value("RKNPU2", Backend::RKNPU2)
       .value("LITE", Backend::LITE);
   pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
                                "ModelFormat for inference.")
       .value("PADDLE", ModelFormat::PADDLE)
       .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
+      .value("RKNN", ModelFormat::RKNN)
       .value("ONNX", ModelFormat::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
-      .value("GPU", Device::GPU);
+      .value("GPU", Device::GPU)
+      .value("IPU", Device::IPU)
+      .value("RKNPU", Device::RKNPU);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),
                               "Data type of FastDeploy.")
@@ -179,33 +220,6 @@ void BindRuntime(pybind11::module& m) {
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
-
-  pybind11::class_<FDTensor>(m, "FDTensor", pybind11::buffer_protocol())
-      .def(pybind11::init())
-      .def("cpu_data",
-           [](FDTensor& self) {
-             auto ptr = self.CpuData();
-             auto numel = self.Numel();
-             auto dtype = FDDataTypeToNumpyDataType(self.dtype);
-             auto base = pybind11::array(dtype, self.shape);
-             return pybind11::array(dtype, self.shape, ptr, base);
-           })
-      .def("resize", static_cast<void (FDTensor::*)(size_t)>(&FDTensor::Resize))
-      .def("resize",
-           static_cast<void (FDTensor::*)(const std::vector<int64_t>&)>(
-               &FDTensor::Resize))
-      .def(
-          "resize",
-          [](FDTensor& self, const std::vector<int64_t>& shape,
-             const FDDataType& dtype, const std::string& name,
-             const Device& device) { self.Resize(shape, dtype, name, device); })
-      .def("numel", &FDTensor::Numel)
-      .def("nbytes", &FDTensor::Nbytes)
-      .def_readwrite("name", &FDTensor::name)
-      .def_readwrite("is_pinned_memory", &FDTensor::is_pinned_memory)
-      .def_readonly("shape", &FDTensor::shape)
-      .def_readonly("dtype", &FDTensor::dtype)
-      .def_readonly("device", &FDTensor::device);
 
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }

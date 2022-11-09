@@ -1,6 +1,6 @@
 {
   "name": "@paddle-js-models/ocr",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "",
   "main": "lib/index.js",
   "module": "lib/index.esm.js",

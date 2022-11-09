@@ -31,10 +31,12 @@ void BindYOLOv5Lite(pybind11::module& m) {
       .def("use_cuda_preprocessing",
            [](vision::detection::YOLOv5Lite& self, int max_image_size) {
              self.UseCudaPreprocessing(max_image_size);
-           })
+           })                 
       .def_readwrite("size", &vision::detection::YOLOv5Lite::size)
       .def_readwrite("padding_value",
                      &vision::detection::YOLOv5Lite::padding_value)
+      .def_readwrite("downsample_strides",
+                     &vision::detection::YOLOv5Lite::downsample_strides)
       .def_readwrite("is_mini_pad", &vision::detection::YOLOv5Lite::is_mini_pad)
       .def_readwrite("is_no_pad", &vision::detection::YOLOv5Lite::is_no_pad)
       .def_readwrite("is_scale_up", &vision::detection::YOLOv5Lite::is_scale_up)

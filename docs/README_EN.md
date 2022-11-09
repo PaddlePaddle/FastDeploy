@@ -1,4 +1,4 @@
-[简体中文](README_CN.md)| English 
+[简体中文](README_CN.md)| English
 
 # Tutorials
 
@@ -7,13 +7,14 @@
 - [How to Install FastDeploy Prebuilt Libraries](en/build_and_install/download_prebuilt_libraries.md)
 - [How to Build and Install FastDeploy Library on GPU Platform](en/build_and_install/gpu.md)
 - [How to Build and Install FastDeploy Library on CPU Platform](en/build_and_install/cpu.md)
+- [How to Build and Install FastDeploy Library on IPU Platform](en/build_and_install/ipu.md)
 - [How to Build and Install FastDeploy Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
 - [How to Build and Install FastDeploy Library on Android Platform](en/build_and_install/android.md)
 
 ## A Quick Start - Demos
 
-- [PP-YOLOE Python Deployment Demo](en/quick_start/models/python.md)
-- [PP-YOLOE C++ Deployment Demo](en/quick_start/models/cpp.md)
+- [Python Deployment Demo](en/quick_start/models/python.md)
+- [C++ Deployment Demo](en/quick_start/models/cpp.md)
 - [A Quick Start on Runtime Python](en/quick_start/runtime/python.md)
 - [A Quick Start on Runtime C++](en/quick_start/runtime/cpp.md)
 

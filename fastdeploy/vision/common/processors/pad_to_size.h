@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace vision {
 
-class PadToSize : public Processor {
+class FASTDEPLOY_DECL PadToSize : public Processor {
  public:
   // only support pad with right-bottom padding mode
   PadToSize(int width, int height, const std::vector<float>& value) {
@@ -28,11 +28,14 @@ class PadToSize : public Processor {
     value_ = value;
   }
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFlyCV(Mat* mat);
+#endif
   std::string Name() { return "PadToSize"; }
 
   static bool Run(Mat* mat, int width, int height,
                   const std::vector<float>& value,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   int width_;

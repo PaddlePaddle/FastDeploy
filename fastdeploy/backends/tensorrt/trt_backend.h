@@ -25,6 +25,7 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
  public:
@@ -45,7 +46,7 @@ class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 
   void writeCalibrationCache(const void* cache,
                              size_t length) noexcept override {
-    std::cout << "NOT IMPLEMENT." << std::endl;
+    fastdeploy::FDERROR << "NOT IMPLEMENT." << std::endl;
   }
 
  private:
@@ -57,10 +58,16 @@ namespace fastdeploy {
 struct TrtValueInfo {
   std::string name;
   std::vector<int> shape;
-  nvinfer1::DataType dtype;
+  nvinfer1::DataType dtype;  // dtype of TRT model
+  FDDataType original_dtype;  // dtype of original ONNX/Paddle model
 };
 
 struct TrtBackendOption {
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+  // format of input model
+  ModelFormat model_format = ModelFormat::AUTOREC;
+
   int gpu_id = 0;
   bool enable_fp16 = false;
   bool enable_int8 = false;
@@ -71,10 +78,7 @@ struct TrtBackendOption {
   std::map<std::string, std::vector<int32_t>> opt_shape;
   std::string serialize_file = "";
   bool enable_pinned_memory = false;
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
+  void* external_stream_ = nullptr;
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);
@@ -101,6 +105,8 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
   ~TrtBackend() {
     if (parser_) {
@@ -121,8 +127,11 @@ class TrtBackend : public BaseBackend {
   std::vector<TrtValueInfo> outputs_desc_;
   std::map<std::string, FDDeviceBuffer> inputs_device_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_device_buffer_;
+  std::map<std::string, int> io_name_index_;
 
   std::string calibration_str_;
+  bool save_external_ = false;
+  std::string model_file_name_ = "";
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
@@ -139,6 +148,13 @@ class TrtBackend : public BaseBackend {
   // For dynmaic shape will record its range information
   // Also will update the range information while inferencing
   std::map<std::string, ShapeRangeInfo> shape_range_info_;
+
+  // If the final output tensor's dtype is different from the
+  // model output tensor's dtype, then we need cast the data
+  // to the final output's dtype.
+  // E.g. When trt model output tensor is int32, but final tensor is int64
+  // This map stores the casted tensors.
+  std::map<std::string, FDTensor> casted_output_tensors_;
 
   void GetInputOutputInfo();
   bool CreateTrtEngineFromOnnx(const std::string& onnx_model_buffer);

@@ -10,6 +10,7 @@ API: `fastdeploy.vision.ClassifyResult`, The ClassifyResult will return:
 
 - **scores**(list of float):Member variables that indicate the confidence level of a single image on the corresponding classification result, the number of which is determined by the  `topk` passed in when using the classification model, e.g. the confidence level of a Top 5 classification can be returned.
 
+
 ## SegmentationResult
 The code of SegmentationResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the segmentation category predicted for each pixel in the image and the probability of the segmentation category.
 
@@ -33,6 +34,7 @@ API: `fastdeploy.vision.Mask`, The Mask will return:
 - **data**:Member variable indicating a detected mask.
 - **shape**:Member variable representing the shape of the mask, e.g.  `(H,W)`.
 
+
 ## FaceDetectionResult
 The FaceDetectionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the target frames detected by face detection, face landmarks, target confidence and the number of landmarks per face.
 
@@ -41,6 +43,7 @@ API: `fastdeploy.vision.FaceDetectionResult`, The FaceDetectionResult will retur
 - **scores**(list of float):Member variable indicating the confidence of all targets detected by a single image.
 - **landmarks**(list of list(float)): Member variables that represent the key points of all faces detected by a single image.
 - **landmarks_per_face**(int):Member variable indicating the number of key points in each face frame.
+
 
 ## KeyPointDetectionResult
 The KeyPointDetectionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the coordinates and confidence of each keypoint of the target behavior in the image.
@@ -55,11 +58,13 @@ API:`fastdeploy.vision.KeyPointDetectionResult`, The KeyPointDetectionResult wil
     - `J`: num_joints（number of keypoints for a target）
 - **num_joints**(int): Member variable, representing the number of keypoints for a target
 
+
 ## FaceRecognitionResult
 The FaceRecognitionResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the embedding of the image features by the face recognition model.
 
 API: `fastdeploy.vision.FaceRecognitionResult`, The FaceRecognitionResult will return:
 - **landmarks_per_face**(list of float):Member variables, which indicate the final extracted features embedding of the face recognition model, can be used to calculate the feature similarity between faces.
+
 
 ## MattingResult
 The MattingResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the value of alpha transparency predicted by the model, the predicted outlook, etc.
@@ -70,6 +75,7 @@ API:`fastdeploy.vision.MattingResult`, The MattingResult will return:
 - **contain_foreground**(bool):Indicates whether the predicted outcome includes the foreground.
 - **shape**(list of int): When `contain_foreground` is false, the shape only contains `(H,W)`, when `contain_foreground` is `true,` the shape contains `(H,W,C)`, C is generally 3.
 
+
 ## OCRResult
 The OCRResult code is defined in `fastdeploy/vision/common/result.h` and is used to indicate the text box detected in the image, the text box orientation classification, and the text content recognized inside the text box.
 
@@ -79,3 +85,17 @@ API:`fastdeploy.vision.OCRResult`, The OCRResult will return:
 - **rec_scores**(list of float):Member variable indicating the confidence level of the text identified in the box, the number of elements is the same as `boxes.size()`.
 - **cls_scores**(list of float):Member variable indicating the confidence level of the classification result of the text box, with the same number of elements as `boxes.size()`.
 - **cls_labels**(list of int):Member variable indicating the orientation category of the text box, the number of elements is the same as `boxes.size()`.
+
+
+## FaceAlignmentResult
+The code of FaceAlignmentResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the key points of the face.
+
+API: `fastdeploy.vision.FaceAlignmentResult`, The FaceAlignmentResult will return:
+- **landmarks**(list of list(float)):Member variables that represent the all key points detected from a single face image.
+
+
+## HeadPoseResult
+The code of HeadPoseResult is defined in `fastdeploy/vision/common/result.h` and is used to indicate the head pose result.
+
+API: `fastdeploy.vision.HeadPoseResult`, The HeadPoseResult will return:
+- **euler_angles**(list of float):Member variables that represent the Euler angle predicted by a single face image. The storage order is (yaw, pitch, roll), yaw represents the horizontal angle, pitch represents the vertical angle, roll represents the roll angle, and the value range is [-90, +90] Spend.

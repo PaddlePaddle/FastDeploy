@@ -18,18 +18,21 @@
 
 namespace fastdeploy {
 namespace vision {
-class Convert : public Processor {
+class FASTDEPLOY_DECL Convert : public Processor {
  public:
   Convert(const std::vector<float>& alpha, const std::vector<float>& beta);
 
   bool ImplByOpenCV(Mat* mat);
+#ifdef ENABLE_FLYCV
+  bool ImplByFlyCV(Mat* mat);
+#endif
   std::string Name() { return "Convert"; }
 
   // Compute `result = mat * alpha + beta` directly by channel.
   // The default behavior is the same as OpenCV's convertTo method.
   static bool Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   std::vector<float> alpha_;

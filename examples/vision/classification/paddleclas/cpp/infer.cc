@@ -70,6 +70,32 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
 }
 
+void IpuInfer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto params_file = model_dir + sep + "inference.pdiparams";
+  auto config_file = model_dir + sep + "inference_cls.yaml";
+
+  auto option = fastdeploy::RuntimeOption();
+  option.UseIpu();
+  auto model = fastdeploy::vision::classification::PaddleClasModel(
+      model_file, params_file, config_file, option);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto im = cv::imread(image_file);
+
+  fastdeploy::vision::ClassifyResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+
+  // print res
+  std::cout << res.Str() << std::endl;
+}
+
 void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
@@ -113,6 +139,8 @@ int main(int argc, char* argv[]) {
     GpuInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 2) {
     TrtInfer(argv[1], argv[2]);
+  } else if (std::atoi(argv[3]) == 3) {
+    IpuInfer(argv[1], argv[2]);
   }
   return 0;
 }
