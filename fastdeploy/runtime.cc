@@ -528,7 +528,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
     FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
-             "Backend::LITE only supports Device::CPU");
+             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
