@@ -24,7 +24,7 @@ from . import facealign
 from . import faceid
 from . import ocr
 from . import headpose
-from . import gan
+from . import sr
 from . import evaluation
 from .utils import fd_result_to_json
 from .visualize import *

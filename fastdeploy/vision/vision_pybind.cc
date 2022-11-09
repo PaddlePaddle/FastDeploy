@@ -27,7 +27,7 @@ void BindOcr(pybind11::module& m);
 void BindTracking(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
 void BindHeadPose(pybind11::module& m);
-void BindGAN(pybind11::module& m);
+void BindSR(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -143,7 +143,7 @@ void BindVision(pybind11::module& m) {
   BindTracking(m);
   BindKeyPointDetection(m);
   BindHeadPose(m);
-  BindGAN(m);
+  BindSR(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif
