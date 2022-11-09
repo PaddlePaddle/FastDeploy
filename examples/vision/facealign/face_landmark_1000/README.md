@@ -1,8 +1,8 @@
-# PFLD 模型部署
+# FaceLandmark 模型部署
 
 ## 模型版本说明
 
-- [FaceLandmark1000](https://github.com/Single430/FaceLandmark1000/commit/1a951b6)
+- [FaceLandmark1000](https://github.com/Single430/FaceLandmark1000/tree/1a951b6)
 
 ## 支持模型列表
 
@@ -12,11 +12,11 @@
 
 ## 下载预训练模型
 
-为了方便开发者的测试，下面提供了PFLD导出的各系列模型，开发者可直接下载使用。
+为了方便开发者的测试，下面提供了FaceLandmark导出的各系列模型，开发者可直接下载使用。
 
 | 模型                                                               | 参数大小    | 精度    | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
-| [FaceLandmark1000.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/TODO) | 2.1M | - |
+| [FaceLandmark1000](https://bj.bcebos.com/paddlehub/fastdeploy/FaceLandmark1000.onnx) | 2.1M | - |
 
 
 ## 详细部署文档

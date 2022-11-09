@@ -35,6 +35,7 @@
 #include "fastdeploy/vision/facedet/contrib/yolov5face.h"
 #include "fastdeploy/vision/facealign/contrib/pfld.h"
 #include "fastdeploy/vision/facealign/contrib/face_landmark_1000.h"
+#include "fastdeploy/vision/facealign/contrib/pipnet.h"
 #include "fastdeploy/vision/faceid/contrib/adaface.h"
 #include "fastdeploy/vision/faceid/contrib/arcface.h"
 #include "fastdeploy/vision/faceid/contrib/cosface.h"

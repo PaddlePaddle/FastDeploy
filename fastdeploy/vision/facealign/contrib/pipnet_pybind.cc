@@ -26,6 +26,9 @@ void BindPIPNet(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            })
-      .def_readwrite("size", &vision::facealign::PIPNet::size);
+      .def_readwrite("size", &vision::facealign::PIPNet::size_)
+      .def_readwrite("mean_vals", &vision::facealign::PIPNet::mean_vals_)
+      .def_readwrite("std_vals", &vision::facealign::PIPNet::std_vals_)
+      .def_readwrite("num_landmarks", &vision::facealign::PIPNet::num_landmarks_);
 }
 }  // namespace fastdeploy

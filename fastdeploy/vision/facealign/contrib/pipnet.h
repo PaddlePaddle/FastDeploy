@@ -16,6 +16,7 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include <set>
 
 namespace fastdeploy {
 
@@ -46,17 +47,57 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, FaceAlignmentResult* result);
 
-  /// tuple of (width, height), default (256, 256)
-  std::vector<int> size;
+  // tuple of (width, height), default (256, 256)
+  std::vector<int> size_;
 
-  /*! @brief
-  Mean parameters for normalize, size should be the the same as channels, default mean_vals = {0.485f, 0.456f, 0.406f}
-  */
-  std::vector<float> mean_vals;
-  /*! @brief
-  Std parameters for normalize, size should be the the same as channels, default std_vals = {0.229f, 0.224f, 0.225f}
-  */
-  std::vector<float> std_vals;
+  // Mean parameters for normalize, size should be the the same as channels,
+  // default mean_vals = {0.485f, 0.456f, 0.406f}
+  std::vector<float> mean_vals_;
+  // Std parameters for normalize, size should be the the same as channels,
+  // default std_vals = {0.229f, 0.224f, 0.225f}
+  std::vector<float> std_vals_;
+  // number of landmarks
+  int num_landmarks_;
+  /** \brief Get the number of landmakrs
+   *
+   * \return Integer type, default num_landmarks = 19
+   */
+  int GetNumLandmarks() {return num_landmarks_;}
+  /** \brief Get the mean values for normalization
+   *
+   * \return Vector of float values, default mean_vals = {0.485f, 0.456f, 0.406f}
+   */
+  std::vector<float> GetMeanVals() { return mean_vals_;}
+  /** \brief Get the std values for normalization
+   *
+   * \return Vector of float values, default std_vals = {0.229f, 0.224f, 0.225f}
+   */
+  std::vector<float> GetStdVals() { return std_vals_;}
+  /** \brief Get the input size of image
+   *
+   * \return Vector of int values, default {256, 256}
+   */
+  std::vector<int> GetSize() { return size_;}
+  /** \brief Set the number of landmarks
+   *
+   * \param[in] num_landmarks Integer value which represents number of landmarks
+   */
+  void SetNumLandmarks(int num_landmarks);
+  /** \brief Set the mean values for normalization
+   *
+   * \param[in] mean_vals Vector of float values whose length is equal to 3
+   */
+  void SetMeanVals(std::vector<float> mean_vals) { mean_vals_ = mean_vals;}
+  /** \brief Set the std values for normalization
+   *
+   * \param[in] std_vals Vector of float values whose length is equal to 3
+   */
+  void SetStdVals(std::vector<float> std_vals) {std_vals_ = std_vals;}
+  /** \brief Set the input size of image
+   *
+   * \param[in] size Vector of int values which represents {width, height} of image
+   */
+  void SetSize(std::vector<int> size) {size_ = size;}
 
  private:
   bool Initialize();
@@ -64,8 +105,20 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
   bool Preprocess(Mat* mat, FDTensor* outputs,
                   std::map<std::string, std::array<int, 2>>* im_info);
 
-  bool Postprocess(FDTensor& infer_result, FaceAlignmentResult* result,
+  bool Postprocess(std::vector<FDTensor>& infer_result,
+                   FaceAlignmentResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
+  void GenerateLandmarks(std::vector<FDTensor>& infer_result,
+                         FaceAlignmentResult* result,
+                         float img_height, float img_width);
+  std::map<int, int> num_lms_map_;
+  std::map<int, int> max_len_map_;
+  std::map<int, std::vector<int>> reverse_index1_map_;
+  std::map<int, std::vector<int>> reverse_index2_map_;
+  int num_nb_;
+  int net_stride_;
+  // Now PIPNet support num_landmarks in {19, 29, 68, 98}
+  std::set<int> supported_num_landmarks_;
 };
 
 }  // namespace facealign

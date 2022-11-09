@@ -7,8 +7,7 @@ def parse_arguments():
     import argparse
     import ast
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model", required=True, help="Path of FaceLandmark1000 model.")
+    parser.add_argument("--model", required=True, help="Path of PIPNet model.")
     parser.add_argument("--image", type=str, help="Path of test image file.")
     parser.add_argument(
         "--device",
@@ -24,6 +23,11 @@ def parse_arguments():
         "--enable_trt_fp16",
         type=bool,
         default=False,
+        help="whether enable fp16 in trt/paddle_trt backend")
+    parser.add_argument(
+        "--num_landmarks",
+        type=int,
+        default=19,
         help="whether enable fp16 in trt/paddle_trt backend")
     return parser.parse_args()
 
@@ -77,9 +81,8 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.facealign.FaceLandmark1000(
-    args.model, runtime_option=runtime_option)
-
+model = fd.vision.facealign.PIPNet(args.model, runtime_option=runtime_option)
+model.num_landmarks = args.num_landmarks
 # for image
 im = cv2.imread(args.image)
 result = model.predict(im.copy())

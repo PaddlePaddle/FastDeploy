@@ -42,7 +42,7 @@ FaceLandmark1000::FaceLandmark1000(const std::string& model_file,
 
 bool FaceLandmark1000::Initialize() {
   // parameters for preprocess
-  size = {128, 128};
+  size_ = {128, 128};
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -54,8 +54,8 @@ bool FaceLandmark1000::Initialize() {
 bool FaceLandmark1000::Preprocess(Mat* mat, FDTensor* output,
                       std::map<std::string, std::array<int, 2>>* im_info) {
   // Resize
-  int resize_w = size[0];
-  int resize_h = size[1];
+  int resize_w = size_[0];
+  int resize_h = size_[1];
   if (resize_h != mat->Height() || resize_w != mat->Width()) {
     Resize::Run(mat, resize_w, resize_h);
   }
