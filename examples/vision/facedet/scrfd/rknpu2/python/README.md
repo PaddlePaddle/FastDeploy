@@ -28,5 +28,5 @@ RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作�
 
 - [SCRFD 模型介绍](..)
 - [SCRFD C++部署](../cpp)
-- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [模型预测结果说明](../../../../../../docs/api/vision_results)
 - [转换SCRFD RKNN模型文档](../README.md)

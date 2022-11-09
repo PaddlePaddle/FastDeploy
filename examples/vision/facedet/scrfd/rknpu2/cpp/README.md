@@ -69,4 +69,4 @@ cd ./build/install
 
 - [模型介绍](../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results)
