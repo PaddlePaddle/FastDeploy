@@ -44,6 +44,7 @@ struct LiteBackendOption {
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
   std::string nnadapter_subgraph_partition_config_path = "";
+  bool enable_timvx = false;
 };
 
 // Convert data type from paddle lite to fastdeploy

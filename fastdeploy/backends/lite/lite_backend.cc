@@ -72,15 +72,15 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       }
     }
   }
-#ifdef TIMVX
-  config_.set_nnadapter_device_names({"verisilicon_timvx"});
-  valid_places.push_back(
-        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
-  valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
-  valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-#endif
+  if(option_.enable_timvx){
+    config_.set_nnadapter_device_names({"verisilicon_timvx"});
+    valid_places.push_back(
+          paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+  }
   valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
   config_.set_valid_places(valid_places);
@@ -97,7 +97,10 @@ bool LiteBackend::ReadFile(const std::string& filename,
                std::vector<char>* contents,
                const bool binary) {
   FILE *fp = fopen(filename.c_str(), binary ? "rb" : "r");
-  if (!fp) return false;
+  if (!fp){
+     FDERROR << "Cannot open file " << filename << "." << std::endl;
+     return false;
+  } 
   fseek(fp, 0, SEEK_END);
   size_t size = ftell(fp);
   fseek(fp, 0, SEEK_SET);

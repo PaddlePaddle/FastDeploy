@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-# include <string>
+# include<string>
 #include "fastdeploy/vision.h"
 #ifdef WIN32
 const char sep = '\\';
@@ -25,8 +25,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto config_file = model_dir + sep + "inference_cls.yaml";
   
   fastdeploy::RuntimeOption option;
-  option.UseCpu();
-  option.UseLiteBackend();
+  option.UseTimVX();
 
   auto model = fastdeploy::vision::classification::PaddleClasModel(
       model_file, params_file, config_file, option);
@@ -34,7 +33,6 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
 
   fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(&im, &res)) {
