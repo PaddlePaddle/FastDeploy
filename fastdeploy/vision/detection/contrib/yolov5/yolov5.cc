@@ -64,17 +64,25 @@ YOLOv5::~YOLOv5() {
 bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold, float nms_threshold) {
   postprocessor_.SetConfThreshold(conf_threshold);
   postprocessor_.SetNMSThreshold(nms_threshold);
-
+  if (!Predict(*im, result)) {
+    return false;
+  }
+  return true;
 }
 
-YOLOv5::Predict(const cv::Mat* im, DetectionResult* result) {
+bool YOLOv5::Predict(const cv::Mat& im, DetectionResult* result) {
+  std::vector<DetectionResult> results;
+  if (!BatchPredict({im}, &results)) {
+    return false;
+  }
+  *result = std::move(results[0]);
+  return true;
+}
 
-                     }
-
-YOLOv5::BatchPredict(const std::vector<cv::Mat>& images, std::vector<DetectionResult>* results) {
+bool YOLOv5::BatchPredict(const std::vector<cv::Mat>& images, std::vector<DetectionResult>* results) {
   std::map<std::string, std::array<float, 2>> im_info;
-
   std::vector<FDMat> fd_images = WrapMat(images);
+
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &im_info)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
