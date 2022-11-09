@@ -231,7 +231,7 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 }
 
 void RuntimeOption::UseTimVX() {
-  enable_timvx= true;
+  enable_timvx = true;
   device = Device::TIMVX;
   UseLiteBackend();
 }
