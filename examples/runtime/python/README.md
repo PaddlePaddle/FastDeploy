@@ -1,8 +1,11 @@
 # Python推理
 
-确认开发环境已安装FastDeploy，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。
+在运行demo前，需确认以下两个步骤
 
-本文档以 PaddleClas 分类模型 MobileNetV2 为例展示CPU上的推理示例
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+
+本文档以 PaddleClas 分类模型 MobileNetV2 为例展示 CPU 上的推理示例
 
 ## 1. 获取模型
 
@@ -14,8 +17,6 @@ fd.download_and_decompress(model_url, path=".")
 ```
 
 ## 2. 配置后端
-
-- 更多后端的示例可参考[examples/runtime](https://github.com/PaddlePaddle/FastDeploy/tree/develop/examples/runtime)
 
 ``` python
 option = fd.RuntimeOption()
@@ -48,5 +49,5 @@ print(results[0].shape)
 
 ## 其它文档
 
-- [不同后端Runtime demo示例](../../../../examples/runtime/README.md)
-- [切换模型推理的硬件和后端](../../faq/how_to_change_backend.md)
+- [Runtime C++ 示例](../cpp)
+- [切换模型推理的硬件和后端](../../../../../docs/cn/faq/how_to_change_backend.md)

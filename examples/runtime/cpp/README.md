@@ -1,6 +1,9 @@
 # C++推理
 
-确认开发环境已准备FastDeploy C++部署库，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。
+在运行demo前，需确认以下两个步骤
+
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本文档以 PaddleClas 分类模型 MobileNetV2 为例展示CPU上的推理示例
 
@@ -94,7 +97,6 @@ target_link_libraries(runtime_demo ${FASTDEPLOY_LIBS})
 打开命令行终端，进入`infer_paddle_onnxruntime.cc`和`CMakeLists.txt`所在的目录，执行如下命令
 
 ```bash
-cd examples/runtime/cpp
 mkdir build & cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=$fastdeploy_cpp_sdk
 make -j
@@ -111,9 +113,9 @@ make -j
 source /Path/to/fastdeploy_cpp_sdk/fastdeploy_init.sh
 ```
 
-本示例代码在各平台(Windows/Linux/Mac)上通用，但编译过程仅支持(Linux/Mac)，Windows上使用msbuild进行编译，具体使用方式参考[Windows平台使用FastDeploy C++ SDK](../../faq/use_sdk_on_windows.md)
+本示例代码在各平台(Windows/Linux/Mac)上通用，但编译过程仅支持(Linux/Mac)，Windows上使用msbuild进行编译，具体使用方式参考[Windows平台使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## 其它文档
 
-- [不同后端Runtime demo示例](../../../../examples/runtime/README.md)
-- [切换模型推理的硬件和后端](../../faq/how_to_change_backend.md)
+- [Runtime Python 示例](../python)
+- [切换模型推理的硬件和后端](../../../../../docs/cn/faq/how_to_change_backend.md)
