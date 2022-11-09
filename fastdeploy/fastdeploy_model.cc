@@ -239,7 +239,7 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool FastDeployModel::Infer() {
-  return Infer(reused_input_tensors, &reused_output_tensors);
+  return Infer(reused_input_tensors_, &reused_output_tensors_);
 }
 
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
