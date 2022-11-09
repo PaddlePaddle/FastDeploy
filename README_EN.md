@@ -63,7 +63,7 @@ English | [简体中文](README_CN.md)
 
 ## Contents
 
-* <details open> <summary><style="font-size:100px"><b>📖 Tutorials（click to shrink） </b></font></summary>
+* <details open> <summary><style="font-size:100px"><b>📖 Tutorials（click to fold） </b></font></summary>
     
    - Install
         - [How to Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
@@ -111,7 +111,7 @@ English | [简体中文](README_CN.md)
 <div id="fastdeploy-quick-start-python"></div>
 
 <details open>
-<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to shrink）</b></font></summary>
+<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to fold）</b></font></summary>
 
 
 #### Installation
