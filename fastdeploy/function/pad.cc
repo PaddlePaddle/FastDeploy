@@ -20,7 +20,7 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 template <typename T, int Rank>
 struct PadEigen {
   using Array = std::array<std::pair<int64_t, int64_t>, Rank>;
@@ -123,4 +123,5 @@ void Pad(const FDTensor& x, FDTensor* out, const std::vector<int>& pads, float v
 
 
 
+}  // namespace function
 }  // namespace fastdeploy
