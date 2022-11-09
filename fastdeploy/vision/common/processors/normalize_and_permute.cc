@@ -57,6 +57,9 @@ NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
 }
 
 bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
+#ifdef WITH_GPU
+  return ImplByCuda(mat);
+#else
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -77,6 +80,7 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   mat->SetMat(res);
   mat->layout = Layout::CHW;
   return true;
+#endif
 }
 
 #ifdef ENABLE_FLYCV

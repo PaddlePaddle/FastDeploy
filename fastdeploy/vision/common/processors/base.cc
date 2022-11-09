@@ -36,6 +36,20 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
   return ImplByOpenCV(mat);
 }
 
+FDTensor* Processor::UpdateAndGetReusedBuffer(
+    const std::vector<int64_t>& new_shape, const int& opencv_dtype,
+    const std::string& buffer_name, const Device& new_device,
+    const bool& use_pinned_memory) {
+  if (reused_buffers_.count(buffer_name) == 0) {
+    reused_buffers_[buffer_name] = FDTensor();
+  }
+  reused_buffers_[buffer_name].is_pinned_memory = use_pinned_memory;
+  reused_buffers_[buffer_name].Resize(new_shape,
+                                      OpenCVDataTypeToFD(opencv_dtype),
+                                      buffer_name, new_device);
+  return &reused_buffers_[buffer_name];
+}
+
 void EnableFlyCV() {
 #ifdef ENABLE_FLYCV
   DefaultProcLib::default_lib = ProcLib::FLYCV;

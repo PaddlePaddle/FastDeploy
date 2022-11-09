@@ -130,8 +130,9 @@ struct FASTDEPLOY_DECL FDTensor {
 
   ~FDTensor() { FreeFn(); }
 
- private:
-  void CopyBuffer(void* dst, const void* src, size_t nbytes);
+  static void CopyBuffer(void* dst, const void* src, size_t nbytes,
+                         const Device& device = Device::CPU,
+                        bool is_pinned_memory = false);
 };
 
 }  // namespace fastdeploy
