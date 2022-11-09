@@ -140,8 +140,6 @@ include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 if (ENABLE_TIMVX)
-  set(ENABLE_LITE_BACKEND ON)
-  set(ENABLE_PADDLE_FRONTEND OFF)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
@@ -571,6 +569,7 @@ install(
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
 
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
