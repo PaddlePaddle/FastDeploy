@@ -32,14 +32,10 @@ RKYOLOv5::RKYOLOv5(const std::string& model_file,
 }
 
 bool RKYOLOv5::Initialize() {
-  // parameters for preprocess
-  reused_input_tensors.resize(1);
-
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
   }
-
   return true;
 }
 
