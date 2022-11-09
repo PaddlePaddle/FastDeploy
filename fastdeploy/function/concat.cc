@@ -21,7 +21,7 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 std::string Str(const std::vector<int64_t>& shape) {
   std::ostringstream oss;
   oss << "[ " << shape[0];
@@ -122,4 +122,5 @@ void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {
                      ([&] { ConcatKernel<data_t>(x, out, axis); }));
 }
 
+}  // namespace function
 }  // namespace fastdeploy

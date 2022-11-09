@@ -15,7 +15,7 @@
 #include "fastdeploy/function/cuda_cast.h"
 
 namespace fastdeploy {
-
+namespace function {
 template <typename T_IN, typename T_OUT>
 __global__ void CudaCastKernel(const T_IN* in, T_OUT* out, int edge) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
@@ -42,4 +42,5 @@ void CudaCast(const FDTensor& in, FDTensor* out, cudaStream_t stream) {
   }
 }
 
+}  // namespace function
 }  // namespace fastdeploy

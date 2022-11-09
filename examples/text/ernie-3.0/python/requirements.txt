@@ -1,2 +1,2 @@
-faster_toeknizer
+faster_tokenizer
 paddlenlp
