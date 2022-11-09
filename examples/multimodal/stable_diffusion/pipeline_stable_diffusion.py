@@ -14,12 +14,12 @@
 # limitations under the License.
 
 import inspect
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 import numpy as np
 
 from paddlenlp.transformers import CLIPTokenizer
 import fastdeploy as fd
-from scheduling_utils import PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler
+from scheduling_utils import PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler, EulerAncestralDiscreteScheduler
 import PIL
 from PIL import Image
 import logging
@@ -30,7 +30,8 @@ class StableDiffusionFastDeployPipeline(object):
     text_encoder_runtime: fd.Runtime
     tokenizer: CLIPTokenizer
     unet_runtime: fd.Runtime
-    scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler]
+    scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler,
+                     EulerAncestralDiscreteScheduler]
 
     def __init__(self,
                  vae_decoder_runtime: fd.Runtime,
@@ -52,10 +53,15 @@ class StableDiffusionFastDeployPipeline(object):
             width: Optional[int]=512,
             num_inference_steps: Optional[int]=50,
             guidance_scale: Optional[float]=7.5,
+            negative_prompt: Optional[Union[str, List[str]]]=None,
+            num_images_per_prompt: Optional[int]=1,
             eta: Optional[float]=0.0,
+            generator: Optional[np.random.RandomState]=None,
             latents: Optional[np.ndarray]=None,
             output_type: Optional[str]="pil",
             return_dict: bool=True,
+            callback: Optional[Callable[[int, int, np.ndarray], None]]=None,
+            callback_steps: Optional[int]=1,
             **kwargs, ):
         if isinstance(prompt, str):
             batch_size = 1
@@ -70,6 +76,15 @@ class StableDiffusionFastDeployPipeline(object):
             raise ValueError(
                 f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
             )
+
+        if (callback_steps is None) or (callback_steps is not None and (
+                not isinstance(callback_steps, int) or callback_steps <= 0)):
+            raise ValueError(
+                f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
+                f" {type(callback_steps)}.")
+
+        if generator is None:
+            generator = np.random
 
         # get prompt text embeddings
         text_inputs = self.tokenizer(
@@ -92,18 +107,40 @@ class StableDiffusionFastDeployPipeline(object):
         text_embeddings = self.text_encoder_runtime.infer({
             input_name: text_input_ids.astype(np.int64)
         })[0]
+        text_embeddings = np.repeat(
+            text_embeddings, num_images_per_prompt, axis=0)
 
         do_classifier_free_guidance = guidance_scale > 1.0
         if do_classifier_free_guidance:
+            uncond_tokens: List[str]
+            if negative_prompt is None:
+                uncond_tokens = [""] * batch_size
+            elif type(prompt) is not type(negative_prompt):
+                raise TypeError(
+                    f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
+                    f" {type(prompt)}.")
+            elif isinstance(negative_prompt, str):
+                uncond_tokens = [negative_prompt] * batch_size
+            elif batch_size != len(negative_prompt):
+                raise ValueError(
+                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
+                    f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
+                    " the batch size of `prompt`.")
+            else:
+                uncond_tokens = negative_prompt
+
             max_length = text_input_ids.shape[-1]
             uncond_input = self.tokenizer(
-                [""] * batch_size,
+                uncond_tokens,
                 padding="max_length",
                 max_length=max_length,
+                truncation=True,
                 return_tensors="np")
             uncond_embeddings = self.text_encoder_runtime.infer({
                 input_name: uncond_input.input_ids.astype(np.int64)
             })[0]
+            uncond_embeddings = np.repeat(
+                uncond_embeddings, num_images_per_prompt, axis=0)
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
@@ -111,9 +148,11 @@ class StableDiffusionFastDeployPipeline(object):
                 [uncond_embeddings, text_embeddings])
 
         # get the initial random noise unless the user supplied it
-        latents_shape = (batch_size, 4, height // 8, width // 8)
+        latents_dtype = text_embeddings.dtype
+        latents_shape = (batch_size * num_images_per_prompt, 4, height // 8,
+                         width // 8)
         if latents is None:
-            latents = np.random.randn(*latents_shape).astype(np.float32)
+            latents = generator.randn(*latents_shape).astype(latents_dtype)
         elif latents.shape != latents_shape:
             raise ValueError(
                 f"Unexpected latents shape, got {latents.shape}, expected {latents_shape}"
@@ -122,23 +161,20 @@ class StableDiffusionFastDeployPipeline(object):
         # set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
 
-        # if we use LMSDiscreteScheduler, let's make sure latents are multiplied by sigmas
-        if isinstance(self.scheduler, LMSDiscreteScheduler):
-            latents = latents * self.scheduler.sigmas[0]
+        latents = latents * self.scheduler.init_noise_sigma
 
         accepts_eta = "eta" in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
+
         for i, t in enumerate(self.scheduler.timesteps):
             # expand the latents if we are doing classifier free guidance
             latent_model_input = np.concatenate(
                 [latents] * 2) if do_classifier_free_guidance else latents
-            if isinstance(self.scheduler, LMSDiscreteScheduler):
-                sigma = self.scheduler.sigmas[i]
-                # the model input needs to be scaled to match the continuous ODE formulation in K-LMS
-                latent_model_input = latent_model_input / ((sigma**2 + 1)**0.5)
+            latent_model_input = self.scheduler.scale_model_input(
+                latent_model_input, t)
 
             # predict the noise residual
             sample_name = self.unet_runtime.get_input_info(0).name
@@ -163,13 +199,13 @@ class StableDiffusionFastDeployPipeline(object):
                     noise_pred_text - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            if isinstance(self.scheduler, LMSDiscreteScheduler):
-                latents = self.scheduler.step(noise_pred, i, latents,
-                                              **extra_step_kwargs).prev_sample
-            else:
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents,
+                                          **extra_step_kwargs).prev_sample
             latents = np.array(latents)
+            # call the callback, if provided
+            if callback is not None and i % callback_steps == 0:
+                callback(i, t, latents)
+
         # scale and decode the image latents with vae
         latents = 1 / 0.18215 * latents
         sample_name = self.vae_decoder_runtime.get_input_info(0).name
