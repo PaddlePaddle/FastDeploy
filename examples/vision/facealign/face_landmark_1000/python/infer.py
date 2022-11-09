@@ -22,7 +22,7 @@ def parse_arguments():
         help="inference backend, ort, ov, trt, paddle, paddle_trt.")
     parser.add_argument(
         "--enable_trt_fp16",
-        type=bool,
+        type=ast.literal_eval,
         default=False,
         help="whether enable fp16 in trt/paddle_trt backend")
     return parser.parse_args()
