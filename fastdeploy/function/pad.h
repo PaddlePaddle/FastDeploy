@@ -17,7 +17,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
-
+namespace function {
 /** Excute the pad operation for input FDTensor along given dims.
     @param x The input tensor.
     @param out The output tensor which stores the result.
@@ -27,4 +27,5 @@ namespace fastdeploy {
 FASTDEPLOY_DECL void Pad(const FDTensor& x, FDTensor* out,
             const std::vector<int>& pads, float pad_value = 0);
 
+}
 }  // namespace fastdeploy

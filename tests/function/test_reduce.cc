@@ -21,7 +21,7 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, reduce_max) {
   FDTensor input, output;
   CheckShape check_shape;
@@ -371,4 +371,5 @@ TEST(fastdeploy, reduce_argmin) {
              expected_result_noaxis.data(), expected_result_noaxis.size());
 }
 
+}  // namespace function
 }  // namespace fastdeploy

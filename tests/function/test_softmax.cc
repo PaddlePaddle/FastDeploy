@@ -20,7 +20,7 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, softmax) {
   FDTensor input, input1, output;
   CheckShape check_shape;
@@ -57,4 +57,5 @@ TEST(fastdeploy, softmax) {
              expected_result_axis1.data(), expected_result_axis1.size());
 }
 
+}  // namespace function
 }  // namespace fastdeploy

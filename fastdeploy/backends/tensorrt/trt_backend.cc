@@ -318,7 +318,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
   
       casted_output_tensors_[(*outputs)[i].name].Resize((*outputs)[i].shape, (*outputs)[i].dtype,
                                                         (*outputs)[i].name, Device::GPU);
-      CudaCast(output_tensor, &casted_output_tensors_[(*outputs)[i].name], stream_);
+      function::CudaCast(output_tensor, &casted_output_tensors_[(*outputs)[i].name], stream_);
     } else {
       casted_output_tensors_[(*outputs)[i].name].SetExternalData(
           (*outputs)[i].shape, model_output_dtype,
@@ -392,7 +392,7 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
         input_tensor.SetExternalData(item.shape, FDDataType::INT32,
                                      inputs_device_buffer_[item.name].data(),
                                      Device::GPU);
-        CudaCast(item, &input_tensor, stream_);
+        function::CudaCast(item, &input_tensor, stream_);
       } else {
         // no copy
         inputs_device_buffer_[item.name].SetExternalData(dims, item.Data());

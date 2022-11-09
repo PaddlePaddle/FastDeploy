@@ -99,7 +99,11 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);
   }
-  Concat(tensors, &((*outputs)[0]), 0);
+  if (tensors.size() == 1) {
+    (*outputs)[0] = std::move(tensors[0]);
+  } else {
+    function::Concat(tensors, &((*outputs)[0]), 0);
+  }
   return true;
 }
 

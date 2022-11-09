@@ -220,7 +220,7 @@ bool PaddleSegModel::Postprocess(
   }
 
   if (!is_with_softmax && apply_softmax) {
-    Softmax(*infer_result, infer_result, 1);
+    function::Softmax(*infer_result, infer_result, 1);
   }
 
   if (!is_with_argmax) {
@@ -228,7 +228,7 @@ bool PaddleSegModel::Postprocess(
     result->contain_score_map = true;
 
     std::vector<int64_t> dim{0, 2, 3, 1};
-    Transpose(*infer_result, infer_result, dim);
+    function::Transpose(*infer_result, infer_result, dim);
   }
   // batch always 1, so ignore
   infer_result->shape = {infer_height, infer_width, infer_channel};
@@ -284,11 +284,11 @@ bool PaddleSegModel::Postprocess(
     std::vector<int64_t> reduce_dim{-1};
     // argmax
     if (is_resized) {
-      ArgMax(new_infer_result, &argmax_infer_result, -1, FDDataType::INT32);
-      Max(new_infer_result, &max_score_result, reduce_dim);
+      function::ArgMax(new_infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      function::Max(new_infer_result, &max_score_result, reduce_dim);
     } else {
-      ArgMax(*infer_result, &argmax_infer_result, -1, FDDataType::INT32);
-      Max(*infer_result, &max_score_result, reduce_dim);
+      function::ArgMax(*infer_result, &argmax_infer_result, -1, FDDataType::INT32);
+      function::Max(*infer_result, &max_score_result, reduce_dim);
     }
     argmax_infer_result_buffer =
         static_cast<int32_t*>(argmax_infer_result.Data());

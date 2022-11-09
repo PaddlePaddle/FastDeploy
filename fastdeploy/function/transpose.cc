@@ -17,7 +17,7 @@
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 template <typename T>
 struct TransposeNormalKernel {
   void operator()(const FDTensor& in, FDTensor* out,
@@ -121,4 +121,5 @@ void Transpose(const FDTensor& x, FDTensor* out,
   *out = std::move(out_temp);
 }
 
+}  // namespace function
 }  // namespace fastdeploy

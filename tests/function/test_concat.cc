@@ -21,7 +21,7 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, concat1) {
   CheckShape check_shape;
   std::vector<FDTensor> inputs(3);
@@ -77,4 +77,5 @@ TEST(fastdeploy, concat5) {
   check_shape(output.shape, {5, 6, 4, 5});
 }
 
+}  // namespace function
 }  // namespace fastdeploy

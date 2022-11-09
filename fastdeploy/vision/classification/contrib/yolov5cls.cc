@@ -75,7 +75,7 @@ bool YOLOv5Cls::Postprocess(const FDTensor& infer_result,
                             ClassifyResult* result, int topk) {
   // Softmax
   FDTensor infer_result_softmax;
-  Softmax(infer_result, &infer_result_softmax, 1);
+  function::Softmax(infer_result, &infer_result_softmax, 1);
   int num_classes = infer_result_softmax.shape[1];
   const float* infer_result_buffer =
       reinterpret_cast<const float*>(infer_result_softmax.Data());
