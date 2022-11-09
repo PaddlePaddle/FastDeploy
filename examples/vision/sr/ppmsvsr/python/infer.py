@@ -30,6 +30,7 @@ def build_option(args):
         option.use_gpu()
     if args.use_trt:
         option.use_trt_backend()
+        option.enable_paddle_to_trt()
     return option
 
 
