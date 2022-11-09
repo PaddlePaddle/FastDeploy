@@ -68,7 +68,11 @@ def parse_arguments():
         "--backend",
         type=str,
         default='paddle',
-        choices=['onnx_runtime', 'tensorrt', 'paddle', 'paddle-tensorrt'],
+        # Note(zhoushunjie): Will support 'tensorrt', 'paddle-tensorrt' soon.
+        choices=[
+            'onnx_runtime',
+            'paddle',
+        ],
         help="The inference runtime backend of unet model and text encoder model."
     )
     parser.add_argument(
