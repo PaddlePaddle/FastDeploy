@@ -3,7 +3,7 @@
 
 - [SCRFD](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)
     - （1）[官方库](https://github.com/deepinsight/insightface/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-    - （2）开发者基于自己数据训练的SCRFD模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+    - （2）开发者基于自己数据训练的SCRFD模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
 
 ## 下载预训练ONNX模型
 
@@ -32,6 +32,29 @@
 | [SCRFD-10G-kps-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_10g_bnkps_shape1280x1280.onnx) | 17MB | - |
 | [SCRFD-10G-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_10g_shape1280x1280.onnx) | 15MB | - |
 
+## 导出ONNX模型
+
+  ```bash
+  #下载scrfd模型文件
+  e.g. download from  https://onedrive.live.com/?authkey=%21ABbFJx2JMhNjhNA&id=4A83B6B633B029CC%215542&cid=4A83B6B633B029CC
+
+  # 安装官方库配置环境，此版本导出环境为：
+  - 手动配置环境
+    torch==1.8.0
+    mmcv==1.3.5
+    mmdet==2.7.0
+
+  - 通过docker配置
+    docker pull qyjdefdocker/onnx-scrfd-converter:v0.3
+
+  # 导出onnx格式文件
+  - 手动生成
+    python tools/scrfd2onnx.py configs/scrfd/scrfd_500m.py weights/scrfd_500m.pth --shape 640 --input-img face-xxx.jpg
+
+  - docker
+    docker的onnx目录中已有生成好的onnx文件
+
+  ```
 
 ## ONNX模型转换RKNN模型
 ```bash
