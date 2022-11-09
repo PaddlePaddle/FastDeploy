@@ -34,7 +34,8 @@ English | [简体中文](README_CN.md)
 - 🔥 **【Live Preview】2022.11.09 20:30～21:30，《Covering the full spectrum of cloud-side scenarios with 150+ popular models for rapid deployment》**
 - 🔥 **【Live Preview】2022.11.10 20:30～21:30，《10+ AI hardware deployments from Rockchip, Amlogic, NXP and others, straight to industry landing》**
 - 🔥 **【Live Preview】2022.11.10 19:00～20:00，《10+ popular models deployed in RK3588, RK3568 in action》**
-    - Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
+    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas 
+    - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
  <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
   </div>
