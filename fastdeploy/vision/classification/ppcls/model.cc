@@ -22,7 +22,8 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& params_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
-                                 const ModelFormat& model_format) : preprocessor_(config_file) {
+                                 const ModelFormat& model_format)
+    : preprocessor_(config_file, (custom_option.device == Device::GPU)) {
   valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
                         Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};

@@ -28,7 +28,8 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    *
    * \param[in] config_file Path of configuration file for deployment, e.g resnet/infer_cfg.yml
    */
-  explicit PaddleClasPreprocessor(const std::string& config_file);
+  explicit PaddleClasPreprocessor(const std::string& config_file,
+                                  bool use_cuda = false);
 
   /** \brief Process the input image and prepare input tensors for runtime
    *
@@ -40,7 +41,8 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
 
 
  private:
-  bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
+  bool BuildPreprocessPipelineFromConfig(const std::string& config_file,
+                                         bool use_cuda = false);
   std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
 };
