@@ -820,7 +820,7 @@ class LMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `np.ndarray`: scaled input sample
         """
-        step_index = (self.timesteps == timestep).nonzero()
+        step_index = (self.timesteps == timestep).nonzero()[0]
         sigma = self.sigmas[step_index]
         sample = sample / ((sigma**2 + 1)**0.5)
         self.is_scale_input_called = True
@@ -1027,7 +1027,7 @@ class EulerAncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `np.ndarray`: scaled input sample
         """
-        step_index = (self.timesteps == timestep).nonzero()
+        step_index = (self.timesteps == timestep).nonzero()[0]
         sigma = self.sigmas[step_index]
         sample = sample / ((sigma**2 + 1)**0.5)
         self.is_scale_input_called = True
@@ -1079,7 +1079,7 @@ class EulerAncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
             logger.warn(
                 "The `scale_model_input` function should be called before `step` to ensure correct denoising. "
                 "See `StableDiffusionPipeline` for a usage example.")
-        step_index = (self.timesteps == timestep).nonzero()
+        step_index = (self.timesteps == timestep).nonzero()[0]
         sigma = self.sigmas[step_index]
 
         # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise

@@ -16,7 +16,7 @@ import time
 import os
 
 from pipeline_stable_diffusion import StableDiffusionFastDeployPipeline
-from scheduling_utils import PNDMScheduler
+from scheduling_utils import PNDMScheduler, EulerAncestralDiscreteScheduler
 
 try:
     from paddlenlp.transformers import CLIPTokenizer
@@ -85,6 +85,12 @@ def parse_arguments():
         type=int,
         default=0,
         help="The selected gpu id. -1 means use cpu")
+    parser.add_argument(
+        "--scheduler",
+        type=str,
+        default='pndm',
+        choices=['pndm', 'euler_ancestral'],
+        help="The scheduler type of stable diffusion.")
     return parser.parse_args()
 
 
@@ -168,15 +174,27 @@ def create_trt_runtime(model_dir,
     return fd.Runtime(option)
 
 
+def get_scheduler(args):
+    if args.scheduler == "pndm":
+        scheduler = PNDMScheduler(
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            beta_start=0.00085,
+            num_train_timesteps=1000,
+            skip_prk_steps=True)
+    elif args.scheduler == "euler_ancestral":
+        scheduler = EulerAncestralDiscreteScheduler(
+            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear")
+    else:
+        raise ValueError(
+            f"Scheduler '{args.scheduler}' is not supportted right now.")
+    return scheduler
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     # 1. Init scheduler
-    scheduler = PNDMScheduler(
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-        beta_start=0.00085,
-        num_train_timesteps=1000,
-        skip_prk_steps=True)
+    scheduler = get_scheduler(args)
 
     # 2. Init tokenizer
     tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14")
