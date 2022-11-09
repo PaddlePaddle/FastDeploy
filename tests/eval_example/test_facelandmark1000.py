@@ -19,17 +19,17 @@ import numpy as np
 
 
 def test_facealignment_pipnet():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/Facelandmark1000.onnx"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/FaceLandmark1000.onnx"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png"
     output_url = "https://bj.bcebos.com/paddlehub/fastdeploy/tests/facelandmark1000_result_landmarks.npy"
     fd.download(model_url, ".")
     fd.download(input_url, ".")
     fd.download(output_url, ".")
-    model_path = "Facelandmark1000.onnx"
+    model_path = "FaceLandmark1000.onnx"
     # use ORT
     runtime_option = fd.RuntimeOption()
     runtime_option.use_ort_backend()
-    model = fd.vision.facealign.Facelandmark1000(
+    model = fd.vision.facealign.FaceLandmark1000(
         model_path, runtime_option=runtime_option)
 
     # compare diff
