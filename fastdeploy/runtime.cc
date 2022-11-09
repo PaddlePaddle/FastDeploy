@@ -371,6 +371,9 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   trt_max_workspace_size = max_workspace_size;
 }
+void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size){
+  trt_max_batch_size = max_batch_size; 
+}
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
 
