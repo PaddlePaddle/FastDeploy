@@ -4,19 +4,33 @@
 RKNPU2模型导出只支持在x86Linux平台上进行导出，安装流程请参考[RKNPU2模型导出环境配置文档](./install_rknn_toolkit2.md)
 
 ## ONNX模型转换为RKNN模型
-ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型转换为RKNN模型，具体流程请查看[转换文档](./export.md)
+ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型转换为RKNN模型，具体流程请查看[RKNPU2转换文档](./export.md)
 
 ## RKNPU2已经支持的模型列表
+以下环境测试的速度均为端到端，测试环境如下:
+* 设备型号: RK3588
+* ARM CPU使用ONNX框架进行测试
+* NPU均使用单核进行测试
 
-| 任务场景             | 模型                | 模型版本(表示已经测试的版本)                                                                                                                            | 大小  | ONNX/RKNN是否支持 | ONNX/RKNN速度(ms) |
-|------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----|---------------|-----------------|
-| Detection        | Picodet           | [Picodet-s-npu](https://bj.bcebos.com/fastdeploy/models/rknn2/picodet_s_416_coco_npu_3588.tgz)                                             | -   | True/True     | 454/177         |
-| Segmentation     | PP-LiteSeg        | [PP_LiteSeg_T_STDC1_cityscapes](https://bj.bcebos.com/fastdeploy/models/rknn2/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_3588.tgz) | -   | True/True     | 6634/5598       |
-| Segmentation     | PP-HumanSegV2Lite | [portrait](https://bj.bcebos.com/fastdeploy/models/rknn2/portrait_pp_humansegv2_lite_256x144_inference_model_without_softmax_3588.tgz)     | -   | True/True     | 456/266         |
-| Segmentation     | PP-HumanSegV2Lite | [human](https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz)                                | -   | True/True     | 496/256         |
-| Face Detection   | SCRFD             | [SCRFD-2.5G-kps-640](https://bj.bcebos.com/fastdeploy/models/rknn2/scrfd_2.5g_bnkps_shape640x640.rknn)                                     | -   | True/True     | 963/142         |
-| Face Recognition | ArcFace           | [ArcFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_ms1mv3_arcface_r18.rknn)                                                   | -   | True/True     | 600/3           |
-| Face Recognition | cosFace           | [cosFace_r18](https://bj.bcebos.com/fastdeploy/models/rknn2/new_glint360k_cosface_r18.rknn)                                                | -   | True/True     | 600/3           |
+| 任务场景             | 模型                | 模型版本(表示已经测试的版本)               | ARM CPU/RKNN速度(ms) |
+|------------------|-------------------|-------------------------------|--------------------|
+| Detection        | Picodet           | Picodet-s                     | 599/136            |
+| Segmentation     | Unet              | Unet-cityscapes               | -/-                |
+| Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes | 6634/5598          |
+| Segmentation     | PP-HumanSegV2Lite | portrait                      | 456/266            |
+| Segmentation     | PP-HumanSegV2Lite | human                         | 496/256            |
+| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 963/142            |
+
+## TODO
+以下为TODO计划，表示还正在准备支持，但是还存在问题或还可以改进的模型。
+
+| 任务场景             | 模型      | 模型版本(表示已经测试的版本)     | ARM CPU/RKNN速度(ms) |
+|------------------|---------|---------------------|--------------------|
+| Detection        | Picodet | Picodet-s(int8)     | -/-                |
+| Detection        | PPYOLOE | PPYOLOE(int8)       | -/-                |
+| Detection        | YOLOv5  | YOLOv5-s_v6.2(int8) | -/-                |
+| Face Recognition | ArcFace | ArcFace_r18         | 600/3              |
+| Face Recognition | cosFace | cosFace_r18         | 600/3              |
 
 ## RKNPU2 Backend推理使用教程
 
