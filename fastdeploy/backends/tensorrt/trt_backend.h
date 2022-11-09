@@ -130,6 +130,8 @@ class TrtBackend : public BaseBackend {
   std::map<std::string, int> io_name_index_;
 
   std::string calibration_str_;
+  bool save_external_ = false;
+  std::string model_file_name_ = "";
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
