@@ -64,8 +64,8 @@ python tools/rknpu2/export.py --config_path tools/rknpu2/config/RK3588/scrfd.yam
 
 ## 详细部署文档
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python部署](python/README.md)
+- [C++部署](cpp/README.md)
 
 
 ## 版本说明

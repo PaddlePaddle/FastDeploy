@@ -67,6 +67,6 @@ cd ./build/install
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301789-1981d065-208f-4a6b-857c-9a0f9a63e0b1.jpg">
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results)
+- [模型介绍](../../README.md)
+- [Python部署](../python/README.md)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results/README.md)
