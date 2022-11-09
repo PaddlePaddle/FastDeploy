@@ -16,7 +16,7 @@
 
 #include "fastdeploy/function/eigen.h"
 namespace fastdeploy {
-
+namespace function {
 //////// Max Functor ///////
 struct MaxFunctor {
   template <typename X, typename Y, typename Dim>
@@ -73,4 +73,5 @@ struct ProdFunctor {
   }
 };
 
+}  // namespace function
 }  // namespace fastdeploy
