@@ -27,10 +27,10 @@ class FASTDEPLOY_DECL RKYOLOv5 : public FastDeployModel {
            const RuntimeOption& custom_option = RuntimeOption(),
            const ModelFormat& model_format = ModelFormat::ONNX);
   bool Predict(cv::Mat* im, DetectionResult* result);
+  bool Initialize();
 
  protected:
  private:
-  bool Initialize();
   bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
   bool Postprocess(std::vector<FDTensor>& infer_result,
                    DetectionResult* result);
