@@ -28,7 +28,7 @@ python infer.py --model pipnet_resnet18_10x19x32x256_aflw.onnx --image facealign
 运行完成可视化结果如下图所示
 
 <div width="500">
-<img width="470" height="384" float="left" src="https://user-images.githubusercontent.com/19977378/197931737-c2d8e760-a76d-478a-a6c9-4574fb5c70eb.png">
+<img width="470" height="384" float="left" src="https://user-images.githubusercontent.com/67993288/200761400-08491112-56c3-470f-87ac-87be805d5658.jpg">
 </div>
 
 ## PIPNet Python接口
