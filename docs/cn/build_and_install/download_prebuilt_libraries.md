@@ -32,12 +32,12 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 
 ### C++ SDK安装
 
-Release版本（当前最新0.4.0）
+Release版本（当前最新0.5.0）
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-0.4.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
-| Windows x64 | [fastdeploy-win-x64-gpu-0.4.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.4.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
+| Linux x64 | [fastdeploy-linux-x64-gpu-0.5.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.5.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
+| Windows x64 | [fastdeploy-win-x64-gpu-0.5.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.5.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
 
 Develop版本（Nightly build）
 
