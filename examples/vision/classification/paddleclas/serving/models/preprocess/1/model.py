@@ -89,7 +89,6 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
         for request in requests:
             data = pb_utils.get_input_tensor_by_name(request,
                                                      self.input_names[0])
@@ -100,7 +99,6 @@ class TritonPythonModel:
             dlpack_tensor = outputs[0].to_dlpack()
             output_tensor = pb_utils.Tensor.from_dlpack(self.output_names[0],
                                                         dlpack_tensor)
-            # output_tensor = pb_utils.Tensor(self.output_names[0], outputs[0].numpy())
 
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[output_tensor, ])

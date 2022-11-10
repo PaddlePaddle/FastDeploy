@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-DLDataType fd_to_dlpack_type(FDDataType fd_dtype) {
+DLDataType FDToDlpackType(FDDataType fd_dtype) {
   DLDataType dl_dtype;
   DLDataTypeCode dl_code;
 
@@ -78,7 +78,7 @@ DLDataType fd_to_dlpack_type(FDDataType fd_dtype) {
 }
 
 FDDataType
-dlpack_to_fd_type(const DLDataType& data_type) {
+DlpackToFDType(const DLDataType& data_type) {
   FDASSERT(data_type.lanes == 1,
           "FDTensor does not support dlpack lanes != 1")
 
@@ -115,7 +115,7 @@ dlpack_to_fd_type(const DLDataType& data_type) {
   return FDDataType::UNKNOWN1;
 }
 
-void delete_unused_dltensor(PyObject* dlp) {
+void DeleteUnusedDltensor(PyObject* dlp) {
   if (PyCapsule_IsValid(dlp, "dltensor")) {
     DLManagedTensor* dl_managed_tensor =
         static_cast<DLManagedTensor*>(PyCapsule_GetPointer(dlp, "dltensor"));
@@ -142,7 +142,6 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
     free(m);
   };
 
-  // FDTensor* tensor_ptr = &fd_tensor;
   pybind11::handle tensor_handle = pybind11::cast(&fd_tensor);
 
   // Increase the reference count by one to make sure that the DLPack
@@ -150,7 +149,7 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
   // scope.
   tensor_handle.inc_ref();
 
-  dlpack_tensor->dl_tensor.dtype = fd_to_dlpack_type(fd_tensor.dtype);
+  dlpack_tensor->dl_tensor.dtype = FDToDlpackType(fd_tensor.dtype);
 
   // TODO(liqi): FDTensor add device_id
   dlpack_tensor->dl_tensor.device.device_id = 0;
@@ -165,7 +164,7 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
   }
 
   return pybind11::capsule(
-      static_cast<void*>(dlpack_tensor), "dltensor", &delete_unused_dltensor);
+      static_cast<void*>(dlpack_tensor), "dltensor", &DeleteUnusedDltensor);
 }
 
 
