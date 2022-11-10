@@ -1,0 +1,18 @@
+PROJECT_NAME           = @PROJECT_NAME@
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "Common in-memory tensor structure and operator interface for deep learning and other systems"
+STRIP_FROM_PATH        = @PROJECT_SOURCE_DIR@ \
+                         @PROJECT_BINARY_DIR@
+OUTPUT_LANGUAGE        = English
+FILE_PATTERNS          = *.h *.md
+RECURSIVE              = YES
+INPUT                  = @CMAKE_SOURCE_DIR@/include/dlpack
+IMAGE_PATH             = @CMAKE_SOURCE_DIR@/docs
+USE_MDFILE_AS_MAINPAGE = @CMAKE_SOURCE_DIR@/docs/readme.md
+JAVADOC_AUTOBRIEF      = YES
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = YES
+OUTPUT_DIRECTORY       = @CMAKE_BINARY_DIR@/docs/doxygen
