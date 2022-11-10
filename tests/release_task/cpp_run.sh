@@ -54,8 +54,8 @@ do
        backend=${RUN_CASE[i]}
        echo "Cpp Backend:" $backend
        if [ "$backend" != "trt" ];then
-               ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=cpu --backend=$backend >> cpp_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold $CONF_THRESHOLD
+               ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=cpu --backend=$backend >> cpp_$backend\_cpu_result.txt
+               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_$backend\_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold $CONF_THRESHOLD
        fi
        if [ "$DEVICE" = "gpu" ];then
 
@@ -63,8 +63,8 @@ do
                        ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_trt_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_trt_result.txt --platform $PLATFORM --device trt --conf_threshold $CONF_THRESHOLD
 	       else
-                       ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_gpu_result.txt
-                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
+                       ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_$backend\_gpu_result.txt
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_$backend\_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
                fi
        fi
 done
