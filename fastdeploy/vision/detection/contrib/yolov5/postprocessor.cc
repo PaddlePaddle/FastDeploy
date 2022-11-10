@@ -41,14 +41,14 @@ bool YOLOv5Postprocessor::Postprocess(
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }
-    float* data = reinterpret_cast<float*>(infer_results[0].Data()) + bs * infer_results[0].shape[1] * infer_results[0].shape[2];
+    const float* data = reinterpret_cast<const float*>(infer_results[0].Data()) + bs * infer_results[0].shape[1] * infer_results[0].shape[2];
     for (size_t i = 0; i < infer_results[0].shape[1]; ++i) {
       int s = i * infer_results[0].shape[2];
       float confidence = data[s + 4];
       if (multi_label_) {
         for (size_t j = 5; j < infer_results[0].shape[2]; ++j) {
           confidence = data[s + 4];
-          float* class_score = data + s + j;
+          const float* class_score = data + s + j;
           confidence *= (*class_score);
           // filter boxes by conf_threshold
           if (confidence <= conf_threshold_) {
@@ -66,7 +66,7 @@ bool YOLOv5Postprocessor::Postprocess(
           (*results)[bs].scores.push_back(confidence);
         }
       } else {
-        float* max_class_score =
+        const float* max_class_score =
             std::max_element(data + s + 5, data + s + infer_results[0].shape[2]);
         confidence *= (*max_class_score);
         // filter boxes by conf_threshold
