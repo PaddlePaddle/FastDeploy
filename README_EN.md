@@ -63,7 +63,7 @@ English | [简体中文](README_CN.md)
 
 ## Contents
 
-* <details open> <summary><style="font-size:100px"><b>📖 Tutorials（click to fold） </b></font></summary>
+* <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
     
    - Install
         - [How to Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
@@ -91,7 +91,7 @@ English | [简体中文](README_CN.md)
    - More FastDeploy Deployment Module
         - [deployment AI Model as a Service](./serving)
         - [Benchmark Testing](./benchmark)
-</details>
+</div></details>
 
 * **🖥️ Data Center and Cloud Deployment**
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
@@ -111,7 +111,7 @@ English | [简体中文](README_CN.md)
 <div id="fastdeploy-quick-start-python"></div>
 
 <details open>
-<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to fold）</b></font></summary>
+<summary><b>A Quick Start for Python SDK（click to fold）</b></summary><div>
 
 
 #### Installation
@@ -167,12 +167,12 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-</details>
+</div></details>
          
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>A Quick Start for C++ SDK（click to expand）</b></font></summary>
+<summary><b>A Quick Start for C++ SDK（click to expand）</b></summary><div>
 
 #### Installation
 
@@ -209,7 +209,7 @@ int main(int argc, char* argv[]) {
   return 0;
  }
 ```
-</details>
+</div></details>
 
 For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
