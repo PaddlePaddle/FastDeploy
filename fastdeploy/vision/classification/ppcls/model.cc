@@ -27,6 +27,8 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
                         Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+  valid_timvx_backends = {Backend::LITE};
+  
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;

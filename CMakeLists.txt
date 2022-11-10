@@ -39,9 +39,10 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))
   include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
 endif()
+
 
 if(ANDROID)
   # To reduce the volume of the library
@@ -68,6 +69,8 @@ option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
 option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
 option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
+
+option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
@@ -135,6 +138,11 @@ option(BUILD_FASTDEPLOY_PYTHON "if build python lib for fastdeploy." OFF)
 set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+if (ENABLE_TIMVX)
+  include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
+endif()
+
 
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)
@@ -562,6 +570,7 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
+
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
@@ -629,6 +638,7 @@ if(BUILD_FASTDEPLOY_PYTHON)
                              ${PYTHON_INCLUDE_DIR})
 
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/dlpack/include)
 
   if(APPLE)
     set_target_properties(${PY_LIBRARY_NAME}
