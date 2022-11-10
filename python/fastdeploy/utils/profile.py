@@ -11,4 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .profile import profile
+
+import cProfile, pstats, io
+from pstats import SortKey
+
+
+def profile(func, *args, **kwargs):
+    pr = cProfile.Profile()
+    pr.enable()
+    func(*args, **kwargs)
+    pr.disable()
+    s = io.StringIO()
+    sortby = SortKey.CUMULATIVE
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
