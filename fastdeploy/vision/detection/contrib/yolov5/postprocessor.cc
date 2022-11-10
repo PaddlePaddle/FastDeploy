@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/classification/ppcls/postprocessor.h"
+#include "fastdeploy/vision/detection/contrib/yolov5/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace classification {
+namespace detection {
 
 YOLOv5Postprocessor::YOLOv5Postprocessor() {
   conf_threshold_ = 0.25;
@@ -31,11 +31,11 @@ bool YOLOv5Postprocessor::Postprocess(
     const std::map<std::string, std::array<float, 2>>& im_info) {
   auto& infer_result = infer_results[0];
   for (size_t bs = 0; bs < results->size(); ++bs) {
-    *results[bs].Clear();
+    (*results)[bs].Clear();
     if (multi_label_) {
-      *results[bs].Reserve(infer_result.shape[1] * (infer_result.shape[2] - 5));
+      (*results)[bs].Reserve(infer_result.shape[1] * (infer_result.shape[2] - 5));
     } else {
-      *results[bs].Reserve(infer_result.shape[1]);
+      (*results)[bs].Reserve(infer_result.shape[1]);
     }
     if (infer_result.dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
@@ -57,13 +57,13 @@ bool YOLOv5Postprocessor::Postprocess(
           int32_t label_id = std::distance(data + s + 5, class_score);
 
           // convert from [x, y, w, h] to [x1, y1, x2, y2]
-          *results[bs].boxes.emplace_back(std::array<float, 4>{
+          (*results)[bs].boxes.emplace_back(std::array<float, 4>{
               data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
               data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
               data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
               data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-          *results[bs].label_ids.push_back(label_id);
-          *results[bs].scores.push_back(confidence);
+          (*results)[bs].label_ids.push_back(label_id);
+          (*results)[bs].scores.push_back(confidence);
         }
       } else {
         float* max_class_score =
@@ -75,21 +75,21 @@ bool YOLOv5Postprocessor::Postprocess(
         }
         int32_t label_id = std::distance(data + s + 5, max_class_score);
         // convert from [x, y, w, h] to [x1, y1, x2, y2]
-        *results[bs].boxes.emplace_back(std::array<float, 4>{
+        (*results)[bs].boxes.emplace_back(std::array<float, 4>{
             data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
             data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
             data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
             data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-        *results[bs].label_ids.push_back(label_id);
-        *results[bs].scores.push_back(confidence);
+        (*results)[bs].label_ids.push_back(label_id);
+        (*results)[bs].scores.push_back(confidence);
       }
     }
 
-    if (*results[bs].boxes.size() == 0) {
+    if ((*results)[bs].boxes.size() == 0) {
       return true;
     }
 
-    utils::NMS(&(*results[bs]), nms_threshold_);
+    utils::NMS(&((*results)[bs]), nms_threshold_);
 
     // scale the boxes to the origin image shape
     auto iter_out = im_info.find("output_shape");
@@ -101,23 +101,23 @@ bool YOLOv5Postprocessor::Postprocess(
     float ipt_h = iter_ipt->second[0];
     float ipt_w = iter_ipt->second[1];
     float scale = std::min(out_h / ipt_h, out_w / ipt_w);
-    for (size_t i = 0; i < *results[bs].boxes.size(); ++i) {
+    for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
       float pad_h = (out_h - ipt_h * scale) / 2;
       float pad_w = (out_w - ipt_w * scale) / 2;
-      int32_t label_id = (*results[bs].label_ids)[i];
+      int32_t label_id = ((*results)[bs].label_ids)[i];
       // clip box
-      *results[bs].boxes[i][0] = *results[bs].boxes[i][0] - max_wh * label_id;
-      *results[bs].boxes[i][1] = *results[bs].boxes[i][1] - max_wh * label_id;
-      *results[bs].boxes[i][2] = *results[bs].boxes[i][2] - max_wh * label_id;
-      *results[bs].boxes[i][3] = *results[bs].boxes[i][3] - max_wh * label_id;
-      *results[bs].boxes[i][0] = std::max((*results[bs].boxes[i][0] - pad_w) / scale, 0.0f);
-      *results[bs].boxes[i][1] = std::max((*results[bs].boxes[i][1] - pad_h) / scale, 0.0f);
-      *results[bs].boxes[i][2] = std::max((*results[bs].boxes[i][2] - pad_w) / scale, 0.0f);
-      *results[bs].boxes[i][3] = std::max((*results[bs].boxes[i][3] - pad_h) / scale, 0.0f);
-      *results[bs].boxes[i][0] = std::min(*results[bs].boxes[i][0], ipt_w);
-      *results[bs].boxes[i][1] = std::min(*results[bs].boxes[i][1], ipt_h);
-      *results[bs].boxes[i][2] = std::min(*results[bs].boxes[i][2], ipt_w);
-      *results[bs].boxes[i][3] = std::min(*results[bs].boxes[i][3], ipt_h);
+      (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh * label_id;
+      (*results)[bs].boxes[i][1] = (*results)[bs].boxes[i][1] - max_wh * label_id;
+      (*results)[bs].boxes[i][2] = (*results)[bs].boxes[i][2] - max_wh * label_id;
+      (*results)[bs].boxes[i][3] = (*results)[bs].boxes[i][3] - max_wh * label_id;
+      (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0] - pad_w) / scale, 0.0f);
+      (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) / scale, 0.0f);
+      (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2] - pad_w) / scale, 0.0f);
+      (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3] - pad_h) / scale, 0.0f);
+      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
+      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
+      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
+      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
     }
   }
   return true;
@@ -139,6 +139,6 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     return false;
   }
   return true;
-}  // namespace classification
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

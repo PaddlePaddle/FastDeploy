@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/contrib/yolov5.h"
+#include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
 
 namespace fastdeploy {
 namespace vision {
