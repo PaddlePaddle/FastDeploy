@@ -125,7 +125,7 @@ bool YOLOv5Postprocessor::Postprocess(
 }
 
 bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
-                              std::map<std::string, std::array<float, 2>>* im_info) {
+                              const std::map<std::string, std::array<float, 2>>& im_info) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -135,7 +135,7 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
  
   results->resize(batch);
 
-  if (!Postprocess(tensors, results, &im_info)) {
+  if (!Postprocess(tensors, results, im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }

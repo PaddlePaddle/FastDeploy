@@ -16,58 +16,73 @@
 
 namespace fastdeploy {
 void BindYOLOv5(pybind11::module& m) {
+  pybind11::class_<vision::detection::YOLOv5Preprocessor>(
+      m, "YOLOv5Preprocessor")
+      .def(pybind11::init<std::string>())
+      .def("run", [](vision::detection::YOLOv5Preprocessor& self, std::vector<pybind11::array>& im_list) {
+        std::vector<vision::FDMat> images;
+        for (size_t i = 0; i < im_list.size(); ++i) {
+          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+        }
+        std::vector<FDTensor> outputs;
+        std::map<std::string, std::array<float, 2>> im_info;
+        if (!self.Run(&images, &outputs, &im_info)) {
+          pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
+        }
+        return make_pair(outputs, im_info);
+      })
+      .def("use_cuda_preprocessing",
+        [](vision::detection::YOLOv5Preprocessor& self, int max_image_size) {
+          self.UseCudaPreprocessing(max_image_size);
+        })
+      .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize, &vision::detection::YOLOv5Preprocessor::SetSize)
+      .def_property("padding_value", &vision::detection::YOLOv5Preprocessor::GetPaddingValue, &vision::detection::YOLOv5Preprocessor::SetPaddingValue);
+
+  pybind11::class_<vision::detection::YOLOv5Postprocessor>(
+      m, "YOLOv5Postprocessor")
+      .def(pybind11::init<int>())
+      .def("run", [](vision::detection::YOLOv5Postprocessor& self, std::vector<FDTensor>& inputs,
+                     const std::map<std::string, std::array<float, 2>>& im_info) {
+        std::vector<vision::DetectionResult> results;
+        if (!self.Run(inputs, &results, im_info)) {
+          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv5Postprocessor.')");
+        }
+        return results;
+      })
+      .def("run", [](vision::detection::YOLOv5Postprocessor& self, std::vector<pybind11::array>& input_array,
+                     const std::map<std::string, std::array<float, 2>>& im_info) {
+        std::vector<vision::DetectionResult> results;
+        std::vector<FDTensor> inputs;
+        PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
+        if (!self.Run(inputs, &results)) {
+          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv5Postprocessor.')");
+        }
+        return results;
+      })
+      .def_property("conf_threshold", &vision::detection::YOLOv5Postprocessor::GetConfThreshold, &vision::detection::YOLOv5Postprocessor::SetConfThreshold)
+      .def_property("nms_threshold", &vision::detection::YOLOv5Postprocessor::GetNMSThreshold, &vision::detection::YOLOv5Postprocessor::SetNMSThreshold)
+      .def_property("multi_label", &vision::detection::YOLOv5Postprocessor::GetMultiLabel, &vision::detection::YOLOv5Postprocessor::SetMultiLabel);
+
   pybind11::class_<vision::detection::YOLOv5, FastDeployModel>(m, "YOLOv5")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
-           [](vision::detection::YOLOv5& self, pybind11::array& data,
-              float conf_threshold, float nms_threshold) {
+           [](vision::detection::YOLOv5& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
-             self.Predict(&mat, &res, conf_threshold, nms_threshold);
+             self.Predict(mat, &res);
              return res;
            })
-      .def("use_cuda_preprocessing",
-           [](vision::detection::YOLOv5& self, int max_image_size) {
-             self.UseCudaPreprocessing(max_image_size);
-           })
-      .def_static("preprocess",
-                  [](pybind11::array& data, const std::vector<int>& size,
-                     const std::vector<float> padding_value, bool is_mini_pad,
-                     bool is_no_pad, bool is_scale_up, int stride, float max_wh,
-                     bool multi_label) {
-                    auto mat = PyArrayToCvMat(data);
-                    fastdeploy::vision::Mat fd_mat(mat);
-                    FDTensor output;
-                    std::map<std::string, std::array<float, 2>> im_info;
-                    vision::detection::YOLOv5::Preprocess(
-                        &fd_mat, &output, &im_info, size, padding_value,
-                        is_mini_pad, is_no_pad, is_scale_up, stride, max_wh,
-                        multi_label);
-                    return make_pair(TensorToPyArray(output), im_info);
-                  })
-      .def_static(
-          "postprocess",
-          [](std::vector<pybind11::array> infer_results,
-             const std::map<std::string, std::array<float, 2>>& im_info,
-             float conf_threshold, float nms_threshold, bool multi_label,
-             float max_wh) {
-            std::vector<FDTensor> fd_infer_results(infer_results.size());
-            PyArrayToTensorList(infer_results, &fd_infer_results, true);
-            vision::DetectionResult result;
-            vision::detection::YOLOv5::Postprocess(
-                fd_infer_results, &result, im_info, conf_threshold,
-                nms_threshold, multi_label, max_wh);
-            return result;
-          })
-      .def_readwrite("size", &vision::detection::YOLOv5::size_)
-      .def_readwrite("padding_value",
-                     &vision::detection::YOLOv5::padding_value_)
-      .def_readwrite("is_mini_pad", &vision::detection::YOLOv5::is_mini_pad_)
-      .def_readwrite("is_no_pad", &vision::detection::YOLOv5::is_no_pad_)
-      .def_readwrite("is_scale_up", &vision::detection::YOLOv5::is_scale_up_)
-      .def_readwrite("stride", &vision::detection::YOLOv5::stride_)
-      .def_readwrite("max_wh", &vision::detection::YOLOv5::max_wh_)
-      .def_readwrite("multi_label", &vision::detection::YOLOv5::multi_label_);
+      .def("batch_predict", [](vision::detection::YOLOv5& self, std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<vision::DetectionResult> results;
+        self.BatchPredict(images, &results);
+        return results;
+      })
+      .def_property_readonly("preprocessor", &vision::detection::YOLOv5::GetPreprocessor)
+      .def_property_readonly("postprocessor", &vision::detection::YOLOv5::GetPostprocessor);
 }
 }  // namespace fastdeploy

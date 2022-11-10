@@ -52,11 +52,12 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   /// Get padding value, size should be the same as channels
   void GetPaddingValue() const { return padding_value_; }
 
+  /// Use Cuda Preprocess
+  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
+
  private:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
-
-  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
 
   bool CudaPreprocess(FDMat* mat, FDTensor* output,
                       std::map<std::string, std::array<float, 2>>* im_info);

@@ -37,7 +37,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
    */
   bool Run(const std::vector<FDTensor>& tensors,
            std::vector<DetectionResult>* results,
-           std::map<std::string, std::array<float, 2>>* im_info);
+           const std::map<std::string, std::array<float, 2>>& im_info);
 
   /// Set conf_threshold, default 0.25
   void SetConfThreshold(float conf_threshold) {

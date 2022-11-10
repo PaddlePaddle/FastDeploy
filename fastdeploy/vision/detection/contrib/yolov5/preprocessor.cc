@@ -102,7 +102,7 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 }
 
@@ -158,7 +158,7 @@ bool YOLOv5Preprocessor::CudaPreprocess(FDMat* mat, FDTensor* output,
   output->SetExternalData({mat->Channels(), size_[0], size_[1]}, FDDataType::FP32,
                           input_tensor_cuda_buffer_device_);
   output->device = Device::GPU;
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 #else
   FDERROR << "CUDA src code was not enabled." << std::endl;
