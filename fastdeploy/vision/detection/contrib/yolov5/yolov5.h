@@ -40,7 +40,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
 
   std::string ModelName() const { return "yolov5"; }
 
-  /** \brief Predict the detection result for an input image
+  /** \brief DEPRECATED Predict the detection result for an input image, remove at 1.0 version
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result The output detection result will be writen to this structure
@@ -63,7 +63,7 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
   /** \brief Predict the detection results for a batch of input images
    *
    * \param[in] imgs, The input image list, each element comes from cv::imread()
-   * \param[in] results The output classification result list
+   * \param[in] results The output detection result list
    * \return true if the prediction successed, otherwise false
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
