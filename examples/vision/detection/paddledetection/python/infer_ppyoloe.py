@@ -3,7 +3,7 @@ import os
 import tempfile
 
 import fastdeploy as fd
-from fastdeploy.utils.example_resouce import get_detection_test_image
+import fastdeploy.utils
 
 
 def parse_arguments():
@@ -14,11 +14,6 @@ def parse_arguments():
         "--model_dir",
         default=None,
         help="Path of PaddleDetection model directory")
-    parser.add_argument(
-        "--model_hub",
-        default=None,
-        help="Model name in model hub, the model will be downloaded automatically."
-    )
     parser.add_argument(
         "--image", default=None, help="Path of test image file.")
     parser.add_argument(
@@ -49,12 +44,10 @@ def build_option(args):
 
 args = parse_arguments()
 
-if args.model_dir is None and args.model_hub is None:
+if args.model_dir is None:
     model_dir = fd.download_model(name='ppyoloe_crn_l_300e_coco')
-elif args.model_dir is not None:
-    model_dir = args.model_dir
 else:
-    model_dir = fd.download_model(name=args.model_hub)
+    model_dir = args.model_dir
 
 model_file = os.path.join(model_dir, "model.pdmodel")
 params_file = os.path.join(model_dir, "model.pdiparams")
@@ -67,7 +60,7 @@ model = fd.vision.detection.PPYOLOE(
 
 # 预测图片检测结果
 if args.image is None:
-    image = get_detection_test_image()
+    image = fd.utils.get_detection_test_image()
 else:
     image = args.image
 im = cv2.imread(image)

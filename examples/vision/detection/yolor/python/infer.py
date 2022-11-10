@@ -1,7 +1,7 @@
 import cv2
 
 import fastdeploy as fd
-from fastdeploy.utils.example_resouce import get_detection_test_image
+import fastdeploy.utils
 
 
 def parse_arguments():
@@ -10,11 +10,6 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model", default=None, help="Path of yolor onnx model.")
-    parser.add_argument(
-        "--model_hub",
-        default=None,
-        help="Model name in model hub, the model will be downloaded automatically."
-    )
     parser.add_argument(
         "--image", default=None, help="Path of test image file.")
     parser.add_argument(
@@ -46,17 +41,16 @@ args = parse_arguments()
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-if args.model is None and args.model_hub is None:
+if args.model is None:
     model = fd.download_model(name='YOLOR-W6')
-elif args.model is not None:
-    model = args.model
 else:
-    model = fd.download_model(name=args.model_hub)
+    model = args.model
+
 model = fd.vision.detection.YOLOR(model, runtime_option=runtime_option)
 
 # 预测图片检测结果
 if args.image is None:
-    image = get_detection_test_image()
+    image = fd.utils.get_detection_test_image()
 else:
     image = args.image
 
