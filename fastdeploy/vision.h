@@ -21,7 +21,7 @@
 #include "fastdeploy/vision/detection/contrib/nanodet_plus.h"
 #include "fastdeploy/vision/detection/contrib/scaledyolov4.h"
 #include "fastdeploy/vision/detection/contrib/yolor.h"
-#include "fastdeploy/vision/detection/contrib/yolov5.h"
+#include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
 #include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/vision/detection/contrib/yolov7.h"

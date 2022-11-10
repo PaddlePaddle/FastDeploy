@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/contrib/yolov5/postprocessor.h"
+#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {

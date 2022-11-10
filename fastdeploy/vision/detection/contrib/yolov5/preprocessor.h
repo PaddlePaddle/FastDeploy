@@ -15,9 +15,6 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#ifdef ENABLE_CUDA_PREPROCESS
-#include "fastdeploy/vision/utils/cuda_utils.h"
-#endif  // ENABLE_CUDA_PREPROCESS
 
 namespace fastdeploy {
 namespace vision {
@@ -55,15 +52,9 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   /// Get padding value, size should be the same as channels
   std::vector<float> GetPaddingValue() const { return padding_value_; }
 
-  /// Use Cuda Preprocess
-  void UseCudaPreprocessing(int max_img_size = 3840 * 2160);
-
  private:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
-
-  bool CudaPreprocess(FDMat* mat, FDTensor* output,
-                      std::map<std::string, std::array<float, 2>>* im_info);
 
   bool IsDynamicInput() const { return is_dynamic_input_; }
 
@@ -101,16 +92,6 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   // value will
   // auto check by fastdeploy after the internal Runtime already initialized.
   bool is_dynamic_input_;
-  // CUDA host buffer for input image
-  uint8_t* input_img_cuda_buffer_host_ = nullptr;
-  // CUDA device buffer for input image
-  uint8_t* input_img_cuda_buffer_device_ = nullptr;
-  // CUDA device buffer for TRT input tensor
-  float* input_tensor_cuda_buffer_device_ = nullptr;
-  // Whether to use CUDA preprocessing
-  bool use_cuda_preprocessing_ = false;
-  // CUDA stream
-  void* cuda_stream_ = nullptr;
 };
 
 }  // namespace detection

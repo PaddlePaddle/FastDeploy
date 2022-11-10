@@ -15,7 +15,6 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {

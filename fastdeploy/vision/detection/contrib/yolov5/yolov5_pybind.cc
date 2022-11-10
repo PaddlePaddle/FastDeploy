@@ -31,10 +31,6 @@ void BindYOLOv5(pybind11::module& m) {
         }
         return make_pair(outputs, im_info);
       })
-      .def("use_cuda_preprocessing",
-        [](vision::detection::YOLOv5Preprocessor& self, int max_image_size) {
-          self.UseCudaPreprocessing(max_image_size);
-        })
       .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize, &vision::detection::YOLOv5Preprocessor::SetSize)
       .def_property("padding_value", &vision::detection::YOLOv5Preprocessor::GetPaddingValue, &vision::detection::YOLOv5Preprocessor::SetPaddingValue);
 

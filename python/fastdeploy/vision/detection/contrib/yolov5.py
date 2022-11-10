@@ -32,13 +32,6 @@ class YOLOv5Preprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def use_cuda_preprocessing(self, max_image_size):
-        """Preprocess input images by CUDA
-
-        :param: max_image_size: (int)Set max_image_size
-        """
-        return self._preprocessor.use_cuda_preprocessing(max_image_size)
-
     @property
     def size(self):
         """

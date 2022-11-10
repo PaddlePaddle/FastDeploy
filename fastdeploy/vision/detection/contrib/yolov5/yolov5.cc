@@ -32,13 +32,6 @@ YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-#ifdef ENABLE_CUDA_PREPROCESS
-  cudaSetDevice(runtime_option.device_id);
-  cudaStream_t stream;
-  CUDA_CHECK(cudaStreamCreate(&stream));
-  cuda_stream_ = reinterpret_cast<void*>(stream);
-  runtime_option.SetExternalStream(cuda_stream_);
-#endif  // ENABLE_CUDA_PREPROCESS
   initialized = Initialize();
 }
 
@@ -48,17 +41,6 @@ bool YOLOv5::Initialize() {
     return false;
   }
   return true;
-}
-
-YOLOv5::~YOLOv5() {
-#ifdef ENABLE_CUDA_PREPROCESS
-  if (use_cuda_preprocessing_) {
-    CUDA_CHECK(cudaFreeHost(input_img_cuda_buffer_host_));
-    CUDA_CHECK(cudaFree(input_img_cuda_buffer_device_));
-    CUDA_CHECK(cudaFree(input_tensor_cuda_buffer_device_));
-    CUDA_CHECK(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(cuda_stream_)));
-  }
-#endif  // ENABLE_CUDA_PREPROCESS
 }
 
 bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold, float nms_threshold) {
