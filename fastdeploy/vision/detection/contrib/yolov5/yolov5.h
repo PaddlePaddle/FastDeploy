@@ -36,8 +36,6 @@ class FASTDEPLOY_DECL YOLOv5 : public FastDeployModel {
          const RuntimeOption& custom_option = RuntimeOption(),
          const ModelFormat& model_format = ModelFormat::ONNX);
 
-  ~YOLOv5();
-
   std::string ModelName() const { return "yolov5"; }
 
   /** \brief DEPRECATED Predict the detection result for an input image, remove at 1.0 version
