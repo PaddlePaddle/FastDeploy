@@ -50,7 +50,7 @@ void BindYOLOv5(pybind11::module& m) {
         std::vector<vision::DetectionResult> results;
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
-        if (!self.Run(inputs, &results)) {
+        if (!self.Run(inputs, &results, im_info)) {
           pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv5Postprocessor.')");
         }
         return results;
