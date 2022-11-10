@@ -1,6 +1,5 @@
 import cv2
 import os
-import tempfile
 
 import fastdeploy as fd
 import fastdeploy.utils
