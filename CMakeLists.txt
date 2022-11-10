@@ -280,7 +280,6 @@ if(ENABLE_POROS_BACKEND)
   if(NOT TRT_DIRECTORY)
     message(FATAL_ERROR "While -DENABLE_POROS_BACKEND=ON, must define -DTRT_DIRECTORY, e.g -DTRT_DIRECTORY=/Downloads/TensorRT-8.4")
   endif()
-  list(APPEND DEPEND_LIBS ${TRT_DIRECTORY})
 
   find_library(TRT_INFER_LIB nvinfer ${TRT_DIRECTORY}/lib)
   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_DIRECTORY}/lib)
