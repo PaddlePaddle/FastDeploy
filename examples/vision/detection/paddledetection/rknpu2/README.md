@@ -17,7 +17,7 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 ```bash
 # 下载Paddle静态图模型并解压
 wget https://paddledet.bj.bcebos.com/deploy/Inference/picodet_s_416_coco_lcnet.tar
-tar xvf picodet_s_416_coco_lcnet.zip
+tar xvf picodet_s_416_coco_lcnet.tar
 
 # 静态图转ONNX模型，注意，这里的save_file请和压缩包名对齐
 paddle2onnx --model_dir picodet_s_416_coco_lcnet \

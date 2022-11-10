@@ -99,6 +99,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
                  fastdeploy::rknpu2::CoreMask rknpu2_core
                              = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
 
+  /// Use TimVX to inference
+  void UseTimVX();
+
   void SetExternalStream(void* external_stream);
 
   /*
@@ -159,6 +162,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
+
+  /**
+   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -312,6 +321,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
+  std::string lite_nnadapter_subgraph_partition_config_path = "";
+  bool enable_timvx = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
