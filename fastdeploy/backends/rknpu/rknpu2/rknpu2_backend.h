@@ -86,8 +86,13 @@ class RKNPU2Backend : public BaseBackend {
   std::vector<TensorInfo> inputs_desc_;
   std::vector<TensorInfo> outputs_desc_;
 
-  rknn_tensor_attr* input_attrs = nullptr;
-  rknn_tensor_attr* output_attrs = nullptr;
+  rknn_tensor_attr* input_attrs_ = nullptr;
+  rknn_tensor_attr* output_attrs_ = nullptr;
+
+  rknn_tensor_mem** input_mems_;
+  rknn_tensor_mem** output_mems_;
+
+  bool infer_init = false;
 
   RKNPU2BackendOption option_;
 

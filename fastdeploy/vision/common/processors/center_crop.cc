@@ -36,8 +36,8 @@ bool CenterCrop::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool CenterCrop::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool CenterCrop::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   int height = static_cast<int>(im->height());
   int width = static_cast<int>(im->width());
   if (height < height_ || width < width_) {
@@ -62,5 +62,5 @@ bool CenterCrop::Run(Mat* mat, const int& width, const int& height,
   return c(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

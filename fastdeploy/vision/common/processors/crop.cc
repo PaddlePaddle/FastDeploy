@@ -37,8 +37,8 @@ bool Crop::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool Crop::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool Crop::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   int height = static_cast<int>(im->height());
   int width = static_cast<int>(im->width());
   if (height < height_ + offset_h_ || width < width_ + offset_w_) {

@@ -24,7 +24,7 @@ class FASTDEPLOY_DECL Convert : public Processor {
 
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Convert"; }
 
@@ -32,7 +32,7 @@ class FASTDEPLOY_DECL Convert : public Processor {
   // The default behavior is the same as OpenCV's convertTo method.
   static bool Run(Mat* mat, const std::vector<float>& alpha,
                   const std::vector<float>& beta,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
  private:
   std::vector<float> alpha_;

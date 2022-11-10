@@ -36,7 +36,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
         use_static = true;
       }
-      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, precision, use_static);
+      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, option.trt_option.max_batch_size, 3, precision, use_static);
       SetTRTDynamicShapeToConfig(option);
 #else
       FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
@@ -112,8 +112,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
           FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
           use_static = true;
         }
-        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, false);
+        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, option.trt_option.max_batch_size, 3, paddle_infer::PrecisionType::kInt8, use_static, false);
         SetTRTDynamicShapeToConfig(option);
+        
 #endif
       }
     }
@@ -214,6 +215,30 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
     CopyTensorToCpu(handle, &((*outputs)[i]));
   }
   return true;
+}
+
+std::unique_ptr<BaseBackend> PaddleBackend::Clone(void *stream, int device_id) {
+  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<PaddleBackend>();
+  auto casted_backend = dynamic_cast<PaddleBackend*>(new_backend.get());
+  if(device_id > 0 && option_.use_gpu == true && device_id != option_.gpu_id) {
+    auto clone_option = option_;
+    clone_option.gpu_id = device_id;
+    clone_option.external_stream_ = stream;
+    casted_backend->InitFromPaddle(clone_option.model_file,
+                                   clone_option.params_file,
+                                   clone_option);
+    FDWARNING << "The target device id:" 
+             << device_id
+             << " is different from current device id:"
+             << option_.gpu_id
+             << ", cannot share memory with current engine."
+             << std::endl;
+    return new_backend;
+  }
+  casted_backend->inputs_desc_.assign(inputs_desc_.begin(), inputs_desc_.end());
+  casted_backend->outputs_desc_.assign(outputs_desc_.begin(), outputs_desc_.end());
+  casted_backend->predictor_ = std::move(predictor_->Clone(stream));
+  return new_backend;
 }
 
 #ifdef ENABLE_TRT_BACKEND

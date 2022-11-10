@@ -2,9 +2,9 @@
 
 在部署前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/rknpu2.md) 
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/rknpu2.md)
 
-【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../matting)
+【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../../matting/)
 
 本目录下提供`infer.py`快速完成PPHumanseg在RKNPU上部署的示例。执行如下脚本即可完成
 
@@ -13,17 +13,13 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/segmentation/paddleseg/python
 
-# 下载模型
-wget https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
-tar xvf human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
-
 # 下载图片
 wget https://paddleseg.bj.bcebos.com/dygraph/pp_humanseg_v2/images.zip
 unzip images.zip
 
 # 推理
-python3 infer.py --model_file ./human_pp_humansegv2_lite_192x192_pretrained_3588/human_pp_humansegv2_lite_192x192_pretrained_3588.rknn \
-                --config_file ./human_pp_humansegv2_lite_192x192_pretrained_3588/deploy.yaml \
+python3 infer.py --model_file ./Portrait_PP_HumanSegV2_Lite_256x144_infer/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn \
+                --config_file ./Portrait_PP_HumanSegV2_Lite_256x144_infer/deploy.yaml \
                 --image images/portrait_heng.jpg
 ```
 

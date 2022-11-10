@@ -17,6 +17,7 @@
 #include <opencv2/opencv.hpp>
 #include <set>
 #include <vector>
+
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 #include "fastdeploy/vision/common/result.h"
@@ -43,7 +44,7 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
   std::vector<int32_t> res(topk);
   std::set<int32_t> searched;
   for (int32_t i = 0; i < topk; ++i) {
-    T min = -99999999;
+    T min = static_cast<T>(-99999999);
     for (int32_t j = 0; j < array_size; ++j) {
       if (searched.find(j) != searched.end()) {
         continue;
@@ -75,23 +76,25 @@ FASTDEPLOY_DECL float CosineSimilarity(const std::vector<float>& a,
                                        const std::vector<float>& b,
                                        bool normalized = true);
 
-bool CropImageByBox(const Mat& src_im, Mat* dst_im,
+bool CropImageByBox(Mat& src_im, Mat* dst_im,
                     const std::vector<float>& box, std::vector<float>* center,
                     std::vector<float>* scale, const float expandratio = 0.3);
 
 /**
-  * Function: for keypoint detection model, fine positioning of keypoints in postprocess
-  * Parameters:
-  * heatmap: model inference results for keypoint detection models
-  * dim: shape information of the inference result
-  * coords: coordinates after refined positioning
-  * px: px = int(coords[ch * 2] + 0.5) , refer to API detection::GetFinalPredictions
-  * py: px = int(coords[ch * 2 + 1] + 0.5), refer to API detection::GetFinalPredictions
-  * index: index information of heatmap pixels
-  * ch: channel
-  * Paper reference: DARK postpocessing, Zhang et al. Distribution-Aware Coordinate
-  *         Representation for Human Pose Estimation (CVPR 2020).
-  */
+ * Function: for keypoint detection model, fine positioning of keypoints in
+ * postprocess
+ * Parameters:
+ * heatmap: model inference results for keypoint detection models
+ * dim: shape information of the inference result
+ * coords: coordinates after refined positioning
+ * px: px = int(coords[ch * 2] + 0.5) , refer to API detection::GetFinalPredictions
+ * py: px = int(coords[ch * 2 + 1] + 0.5), refer to API detection::GetFinalPredictions
+ * index: index information of heatmap pixels
+ * ch: channel
+ * Paper reference: DARK postpocessing, Zhang et al.
+ * Distribution-Aware Coordinate Representation for Human Pose Estimation (CVPR
+ * 2020).
+ */
 void DarkParse(const std::vector<float>& heatmap, const std::vector<int>& dim,
                std::vector<float>* coords, const int px, const int py,
                const int index, const int ch);
