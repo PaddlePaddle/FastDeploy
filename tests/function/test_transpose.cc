@@ -22,7 +22,7 @@
 #include "gtest_utils.h"
 
 namespace fastdeploy {
-
+namespace function {
 TEST(fastdeploy, transpose_2d) {
   FDTensor input, output;
   CheckShape check_shape;
@@ -67,4 +67,5 @@ TEST(fastdeploy, transpose_5d) {
              expected_result.size());
 }
 
+}  // namespace function
 }  // namespace fastdeploy

@@ -19,7 +19,7 @@ namespace vision {
 Normalize::Normalize(const std::vector<float>& mean,
                      const std::vector<float>& std, bool is_scale,
                      const std::vector<float>& min,
-                     const std::vector<float>& max) {
+                     const std::vector<float>& max, bool swap_rb) {
   FDASSERT(mean.size() == std.size(),
            "Normalize: requires the size of mean equal to the size of std.");
   std::vector<double> mean_(mean.begin(), mean.end());
@@ -50,6 +50,7 @@ Normalize::Normalize(const std::vector<float>& mean,
     alpha_.push_back(alpha);
     beta_.push_back(beta);
   }
+  swap_rb_ = swap_rb;
 }
 
 bool Normalize::ImplByOpenCV(Mat* mat) {
@@ -57,6 +58,7 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
 
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
+  if (swap_rb_) std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -79,9 +81,13 @@ bool Normalize::ImplByFlyCV(Mat* mat) {
     std[i] = 1.0 / alpha_[i];
     mean[i] = -1 * beta_[i] * std[i];
   }
+
+  std::vector<uint32_t> channel_reorder_index = {0, 1, 2};
+  if (swap_rb_) std::swap(channel_reorder_index[0], channel_reorder_index[2]);
+
   fcv::Mat new_im(im->width(), im->height(),
                   fcv::FCVImageType::PKG_BGR_F32);
-  fcv::normalize_to_submean_to_reorder(*im, mean, std, std::vector<uint32_t>(),
+  fcv::normalize_to_submean_to_reorder(*im, mean, std, channel_reorder_index,
                                        new_im, true);
   mat->SetMat(new_im);
   return true;
@@ -91,8 +97,8 @@ bool Normalize::ImplByFlyCV(Mat* mat) {
 bool Normalize::Run(Mat* mat, const std::vector<float>& mean,
                     const std::vector<float>& std, bool is_scale,
                     const std::vector<float>& min,
-                    const std::vector<float>& max, ProcLib lib) {
-  auto n = Normalize(mean, std, is_scale, min, max);
+                    const std::vector<float>& max, ProcLib lib, bool swap_rb) {
+  auto n = Normalize(mean, std, is_scale, min, max, swap_rb);
   return n(mat, lib);
 }
 

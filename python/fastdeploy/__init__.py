@@ -37,3 +37,4 @@ from . import vision
 from . import pipeline
 from . import text
 from .download import download, download_and_decompress, download_model
+from .utils import profile

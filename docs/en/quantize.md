@@ -27,7 +27,7 @@ FastDeploy基于PaddleSlim, 集成了一键模型量化的工具, 同时, FastDe
 
 ### 用户使用FastDeploy一键模型量化工具来量化模型
 Fastdeploy基于PaddleSlim, 为用户提供了一键模型量化的工具，请参考如下文档进行模型量化.
-- [FastDeploy 一键模型量化](../../tools/quantization/)
+- [FastDeploy 一键模型量化](../../tools/auto_compression/)
 当用户获得产出的量化模型之后，即可以使用FastDeploy来部署量化模型.
 
 
