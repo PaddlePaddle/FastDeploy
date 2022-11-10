@@ -36,7 +36,7 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
         FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
         use_static = true;
       }
-      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, precision, use_static);
+      config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, option.trt_option.max_batch_size, 3, precision, use_static);
       SetTRTDynamicShapeToConfig(option);
 #else
       FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so will fallback to GPU with Paddle Inference Backend." << std::endl;
@@ -112,8 +112,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
           FDWARNING << "Detect that tensorrt cache file has been set to " << option.trt_option.serialize_file << ", but while enable paddle2trt, please notice that the cache file will save to the directory where paddle model saved." << std::endl;
           use_static = true;
         }
-        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, 32, 3, paddle_infer::PrecisionType::kInt8, use_static, false);
+        config_.EnableTensorRtEngine(option.trt_option.max_workspace_size, option.trt_option.max_batch_size, 3, paddle_infer::PrecisionType::kInt8, use_static, false);
         SetTRTDynamicShapeToConfig(option);
+        
 #endif
       }
     }

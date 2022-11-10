@@ -46,7 +46,7 @@ dependencies {
 
 def archives = [
         [
-                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-0.5.0-shared-dev.tgz',
+                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-latest-shared-dev.tgz',
                 'dest': 'libs'
         ]
 ]
