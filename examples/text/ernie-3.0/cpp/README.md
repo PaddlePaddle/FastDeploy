@@ -16,14 +16,14 @@
 
 ```bash
 # 下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.6.0.tgz
 
-cd fastdeploy-linux-x64-gpu-0.4.0/examples/text/ernie-3.0/cpp
+cd fastdeploy-linux-x64-gpu-0.6.0/examples/text/ernie-3.0/cpp
 mkdir build
 cd build
 # 执行cmake，需要指定FASTDEPLOY_INSTALL_DIR为FastDeploy SDK的目录。
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.6.0
 make -j
 
 # 下载AFQMC数据集的微调后的ERNIE 3.0模型以及词表
