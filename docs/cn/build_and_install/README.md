@@ -5,6 +5,7 @@
 - [CPU部署环境编译安装](cpu.md)
 - [Jetson部署环境编译安装](jetson.md)
 - [Android平台部署环境编译安装](android.md)
+- [瑞芯微RK1126部署环境编译安装](rk1126.md)
 
 
 ## FastDeploy编译选项说明

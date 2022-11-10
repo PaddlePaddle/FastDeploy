@@ -59,6 +59,9 @@ std::string Str(const Device& d) {
     case Device::IPU:
       out = "Device::IPU";
       break;
+    case Device::TIMVX:
+      out = "Device::TIMVX";
+      break;
     default:
       out = "Device::UNKOWN";
   }
@@ -75,6 +78,9 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
     break;
   case Device::RKNPU:
     out << "Device::RKNPU";
+    break;
+  case Device::TIMVX:
+    out << "Device::TIMVX";
     break;
   default:
     out << "Device::UNKOWN";
