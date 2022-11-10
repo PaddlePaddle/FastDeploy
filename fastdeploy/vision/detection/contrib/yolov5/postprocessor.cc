@@ -24,30 +24,29 @@ YOLOv5Postprocessor::YOLOv5Postprocessor() {
   nms_threshold_ = 0.5;
   multi_label_ = true;
   initialized_ = true;
-  max_wh_ = 7680.0
+  max_wh_ = 7680.0;
 }
 
 bool YOLOv5Postprocessor::Postprocess(
     const std::vector<FDTensor>& infer_results, std::vector<DetectionResult>* results,
     const std::map<std::string, std::array<float, 2>>& im_info) {
-  auto& infer_result = infer_results[0];
   for (size_t bs = 0; bs < results->size(); ++bs) {
     (*results)[bs].Clear();
     if (multi_label_) {
-      (*results)[bs].Reserve(infer_result.shape[1] * (infer_result.shape[2] - 5));
+      (*results)[bs].Reserve(infer_results[0].shape[1] * (infer_results[0].shape[2] - 5));
     } else {
-      (*results)[bs].Reserve(infer_result.shape[1]);
+      (*results)[bs].Reserve(infer_results[0].shape[1]);
     }
-    if (infer_result.dtype != FDDataType::FP32) {
+    if (infer_results[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }
-    float* data = static_cast<float*>(infer_result.Data()) + bs * infer_result.shape[1] * infer_result.shape[2];
-    for (size_t i = 0; i < infer_result.shape[1]; ++i) {
-      int s = i * infer_result.shape[2];
+    float* data = reinterpret_cast<float*>(infer_results[0].Data()) + bs * infer_results[0].shape[1] * infer_results[0].shape[2];
+    for (size_t i = 0; i < infer_results[0].shape[1]; ++i) {
+      int s = i * infer_results[0].shape[2];
       float confidence = data[s + 4];
       if (multi_label_) {
-        for (size_t j = 5; j < infer_result.shape[2]; ++j) {
+        for (size_t j = 5; j < infer_results[0].shape[2]; ++j) {
           confidence = data[s + 4];
           float* class_score = data + s + j;
           confidence *= (*class_score);
@@ -68,7 +67,7 @@ bool YOLOv5Postprocessor::Postprocess(
         }
       } else {
         float* max_class_score =
-            std::max_element(data + s + 5, data + s + infer_result.shape[2]);
+            std::max_element(data + s + 5, data + s + infer_results[0].shape[2]);
         confidence *= (*max_class_score);
         // filter boxes by conf_threshold
         if (confidence <= conf_threshold_) {
@@ -107,10 +106,10 @@ bool YOLOv5Postprocessor::Postprocess(
       float pad_w = (out_w - ipt_w * scale) / 2;
       int32_t label_id = ((*results)[bs].label_ids)[i];
       // clip box
-      (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh * label_id;
-      (*results)[bs].boxes[i][1] = (*results)[bs].boxes[i][1] - max_wh * label_id;
-      (*results)[bs].boxes[i][2] = (*results)[bs].boxes[i][2] - max_wh * label_id;
-      (*results)[bs].boxes[i][3] = (*results)[bs].boxes[i][3] - max_wh * label_id;
+      (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][1] = (*results)[bs].boxes[i][1] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][2] = (*results)[bs].boxes[i][2] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][3] = (*results)[bs].boxes[i][3] - max_wh_ * label_id;
       (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0] - pad_w) / scale, 0.0f);
       (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) / scale, 0.0f);
       (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2] - pad_w) / scale, 0.0f);
@@ -140,6 +139,8 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     return false;
   }
   return true;
+}
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

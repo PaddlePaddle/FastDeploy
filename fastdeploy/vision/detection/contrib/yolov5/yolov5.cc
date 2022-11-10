@@ -76,7 +76,7 @@ bool YOLOv5::BatchPredict(const std::vector<cv::Mat>& images, std::vector<Detect
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, results, &im_info)) {
+  if (!postprocessor_.Run(reused_output_tensors_, results, im_info)) {
     FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
     return false;
   }
