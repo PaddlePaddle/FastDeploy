@@ -286,6 +286,7 @@ if(ENABLE_POROS_BACKEND)
   find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_DIRECTORY}/lib)
 
   if(TRT_INFER_LIB AND TRT_ONNX_LIB AND TRT_PLUGIN_LIB)
+    include_directories(${TRT_DIRECTORY}/include)
     list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
   else()
     list(APPEND DEPEND_LIBS ${TRT_DIRECTORY})
