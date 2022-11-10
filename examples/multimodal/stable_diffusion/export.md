@@ -23,12 +23,12 @@ ___Tips: Stable Diffusion是基于以下的License: The CreativeML OpenRAIL M li
 可执行以下命令行完成模型导出。
 
 ```shell
-python export_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path paddle_diffusion_model
+python export_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path stable-diffusion-v1-4
 ```
 
 输出的模型目录结构如下：
 ```shell
-paddle_diffusion_model/
+stable-diffusion-v1-4/
 ├── text_encoder
 │   ├── inference.pdiparams
 │   ├── inference.pdiparams.info
