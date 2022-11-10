@@ -15,6 +15,7 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -45,7 +46,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   }
 
   /// Get conf_threshold, default 0.25
-  void GetConfThreshold() const { return conf_threshold_; }
+  float GetConfThreshold() const { return conf_threshold_; }
 
   /// Set nms_threshold, default 0.5
   void SetNMSThreshold(float nms_threshold) {
@@ -53,7 +54,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   }
 
   /// Get nms_threshold, default 0.5
-  void GetNMSThreshold() const { return nms_threshold_; }
+  float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set multi_label, default true
   void SetMultiLabel(bool multi_label) {
@@ -61,7 +62,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   }
 
   /// Get multi_label, default true
-  void GetMultiLabel() const { return multi_label_; }
+  bool GetMultiLabel() const { return multi_label_; }
 
  private:
   bool Postprocess(const std::vector<FDTensor>& tensors,

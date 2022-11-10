@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/classification/ppcls/postprocessor.h"
-#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {

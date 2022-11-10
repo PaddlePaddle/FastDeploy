@@ -15,6 +15,9 @@
 #pragma once
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
+#ifdef ENABLE_CUDA_PREPROCESS
+#include "fastdeploy/vision/utils/cuda_utils.h"
+#endif  // ENABLE_CUDA_PREPROCESS
 
 namespace fastdeploy {
 namespace vision {
@@ -42,7 +45,7 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   void SetSize(std::vector<int> size) { size_ = size; }
 
   /// Get target size, tuple of (width, height), default size = {640, 640}
-  void GetSize() const { return size_; }
+  std::vector<int> GetSize() const { return size_; }
 
   /// Set padding value, size should be the same as channels
   void SetPaddingValue(std::vector<float> padding_value) {
@@ -50,7 +53,7 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   }
 
   /// Get padding value, size should be the same as channels
-  void GetPaddingValue() const { return padding_value_; }
+  std::vector<float> GetPaddingValue() const { return padding_value_; }
 
   /// Use Cuda Preprocess
   void UseCudaPreprocessing(int max_img_size = 3840 * 2160);

@@ -14,9 +14,6 @@
 
 #include "fastdeploy/vision/detection/contrib/yolov5/preprocessor.h"
 #include "fastdeploy/function/concat.h"
-#ifdef ENABLE_CUDA_PREPROCESS
-#include "fastdeploy/vision/utils/cuda_utils.h"
-#endif  // ENABLE_CUDA_PREPROCESS
 
 namespace fastdeploy {
 namespace vision {
