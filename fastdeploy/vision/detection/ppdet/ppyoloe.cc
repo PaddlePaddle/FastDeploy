@@ -1,9 +1,6 @@
 #include "fastdeploy/vision/detection/ppdet/ppyoloe.h"
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
-#ifdef ENABLE_PADDLE_FRONTEND
-#include "paddle2onnx/converter.h"
-#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -12,7 +9,7 @@ namespace detection {
 PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
                  const std::string& config_file,
                  const RuntimeOption& custom_option,
-                 const ModelFormat& model_format) {
+                 const ModelFormat& model_format) : preprocessor_(config_file) {
   config_file_ = config_file;
   valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
@@ -21,28 +18,6 @@ PPYOLOE::PPYOLOE(const std::string& model_file, const std::string& params_file,
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
   initialized = Initialize();
-}
-
-void PPYOLOE::GetNmsInfo() {
-#ifdef ENABLE_PADDLE_FRONTEND
-  if (runtime_option.model_format == ModelFormat::PADDLE) {
-    std::string contents;
-    if (!ReadBinaryFromFile(runtime_option.model_file, &contents)) {
-      return;
-    }
-    auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
-    if (reader.has_nms) {
-      has_nms_ = true;
-      background_label = reader.nms_params.background_label;
-      keep_top_k = reader.nms_params.keep_top_k;
-      nms_eta = reader.nms_params.nms_eta;
-      nms_threshold = reader.nms_params.nms_threshold;
-      score_threshold = reader.nms_params.score_threshold;
-      nms_top_k = reader.nms_params.nms_top_k;
-      normalized = reader.nms_params.normalized;
-    }
-  }
-#endif
 }
 
 bool PPYOLOE::Initialize() {
@@ -250,23 +225,39 @@ bool PPYOLOE::Postprocess(std::vector<FDTensor>& infer_result,
 }
 
 bool PPYOLOE::Predict(cv::Mat* im, DetectionResult* result) {
-  Mat mat(*im);
+  return Predict(*im, result);
+}
 
-  if (!Preprocess(&mat, &reused_input_tensors_)) {
-    FDERROR << "Failed to preprocess input data while using model:"
-            << ModelName() << "." << std::endl;
+bool PPYOLOE::Predict(const cv::Mat& im, DetectionResult* result) {
+  std::vector<DetectionResult> results;
+  if (!BatchPredict({im}, &results)) {
+    return false;
+  }
+  *result = std::move(results[0]);
+  return true;
+}
+
+bool PPYOLOE::BatchPredict(const std::vector<cv::Mat>& imgs, std::vector<DetectionResult>* results) {
+  std::vector<FDMat> fd_images = WrapMat(imgs);
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+    FDERROR << "Failed to preprocess the input image." << std::endl;
+    return false;
+  }
+  reused_input_tensors_[0].name = "image";
+  reused_input_tensors_[1].name = "scale_factor";
+  reused_input_tensors_[2].name = "im_shape";
+  // Some models don't need im_shape as input
+  if (NumInputsOfRuntime() == 2) {
+    reused_input_tensors_.pop_back();
+  }
+
+  if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
+    FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
 
-  if (!Infer()) {
-    FDERROR << "Failed to inference while using model:" << ModelName() << "."
-            << std::endl;
-    return false;
-  }
-
-  if (!Postprocess(reused_output_tensors_, result)) {
-    FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
-            << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, results)) {
+    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
     return false;
   }
   return true;

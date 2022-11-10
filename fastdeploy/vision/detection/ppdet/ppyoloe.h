@@ -14,6 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/detection/ppdet/preprocessor.h"
+#include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -54,6 +56,12 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, DetectionResult* result);
 
+  virtual bool Predict(const cv::Mat& im, DetectionResult* result);
+
+  virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
+                            std::vector<DetectionResult>* results);
+
+
  protected:
   PPYOLOE() {}
   virtual bool Initialize();
@@ -66,6 +74,8 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   virtual bool Postprocess(std::vector<FDTensor>& infer_result,
                            DetectionResult* result);
 
+  PaddleDetPreprocessor preprocessor_;
+  PaddleDetPostprocessor postprocessor_;
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
   // configuration for nms
@@ -77,10 +87,6 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
   int64_t nms_top_k = 10000;
   bool normalized = true;
   bool has_nms_ = true;
-
-  // This function will used to check if this model contains multiclass_nms
-  // and get parameters from the operator
-  void GetNmsInfo();
 };
 
 }  // namespace detection
