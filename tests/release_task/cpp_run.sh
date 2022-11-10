@@ -48,7 +48,7 @@ tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
 mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../$CPP_FASTDEPLOY_PACKAGE -DCMAKE_CXX_COMPILER=$CMAKE_CXX_COMPILER
 make -j
-
+ret=0
 for((i=0;i<case_number;i+=1))
 do
        backend=${RUN_CASE[i]}
@@ -67,9 +67,10 @@ do
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_$backend\_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
                fi
        fi
+       if [ $? -ne 0 ];then
+               ret=-1
+       fi
 done
-
-ret=$?
 
 res_file="result.txt"
 if [ ! -f $res_file ];then
