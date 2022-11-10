@@ -54,7 +54,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
-                                                      config_file);
+                                                      config_file, option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
