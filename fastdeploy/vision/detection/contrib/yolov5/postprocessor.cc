@@ -23,8 +23,8 @@ YOLOv5Postprocessor::YOLOv5Postprocessor() {
   conf_threshold_ = 0.25;
   nms_threshold_ = 0.5;
   multi_label_ = true;
-  initialized_ = true;
   max_wh_ = 7680.0;
+  initialized_ = true;
 }
 
 bool YOLOv5Postprocessor::Postprocess(

@@ -18,7 +18,7 @@ namespace fastdeploy {
 void BindYOLOv5(pybind11::module& m) {
   pybind11::class_<vision::detection::YOLOv5Preprocessor>(
       m, "YOLOv5Preprocessor")
-      .def(pybind11::init<std::string>())
+      .def(pybind11::init<>())
       .def("run", [](vision::detection::YOLOv5Preprocessor& self, std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
@@ -36,7 +36,7 @@ void BindYOLOv5(pybind11::module& m) {
 
   pybind11::class_<vision::detection::YOLOv5Postprocessor>(
       m, "YOLOv5Postprocessor")
-      .def(pybind11::init<int>())
+      .def(pybind11::init<>())
       .def("run", [](vision::detection::YOLOv5Postprocessor& self, std::vector<FDTensor>& inputs,
                      const std::map<std::string, std::array<float, 2>>& im_info) {
         std::vector<vision::DetectionResult> results;
