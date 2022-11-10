@@ -162,7 +162,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 #### 安装
 
-- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
+- 参考[C++预编译库下载](../docs/quick_start/CPP_prebuilt_libraries.md)文档  
 
 #### C++ 推理示例
 
