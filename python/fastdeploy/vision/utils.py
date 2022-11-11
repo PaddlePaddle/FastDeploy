@@ -38,11 +38,26 @@ def detection_to_json(result):
     return json.dumps(r_json)
 
 
+def classify_to_json(result):
+    r_json = {
+        "label_ids": result.label_ids,
+        "scores": result.scores,
+    }
+    return json.dumps(r_json)
+
+
 def fd_result_to_json(result):
-    if isinstance(result, C.vision.DetectionResult):
+    if isinstance(result, list):
+        r_list = []
+        for r in result:
+            r_list.append(fd_result_to_json(r))
+        return r_list
+    elif isinstance(result, C.vision.DetectionResult):
         return detection_to_json(result)
     elif isinstance(result, C.vision.Mask):
         return mask_to_json(result)
+    elif isinstance(result, C.vision.ClassifyResult):
+        return classify_to_json(result)
     else:
         assert False, "{} Conversion to JSON format is not supported".format(
             type(result))
