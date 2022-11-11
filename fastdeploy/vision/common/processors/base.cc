@@ -31,6 +31,12 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #else
     FDASSERT(false, "FastDeploy didn't compile with FlyCV.");
 #endif
+  } else if (target == ProcLib::CUDA) {
+#ifdef WITH_GPU
+    return ImplByCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
+#endif
   }
   // DEFAULT & OPENCV
   return ImplByOpenCV(mat);

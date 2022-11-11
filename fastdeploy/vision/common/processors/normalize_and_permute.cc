@@ -57,15 +57,6 @@ NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
 }
 
 bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
-  if (use_cuda_) {
-#ifdef WITH_GPU
-    return ImplByCuda(mat);
-#else
-    FDWARNING << "The FastDeploy didn't compile with GPU, will force to use CPU."
-              << std::endl;
-    use_cuda_ = false;
-#endif
-  }
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;

@@ -20,15 +20,14 @@ namespace fastdeploy {
 namespace vision {
 namespace classification {
 
-PaddleClasPreprocessor::PaddleClasPreprocessor(const std::string& config_file,
-                                               bool use_cuda) {
-  FDASSERT(BuildPreprocessPipelineFromConfig(config_file, use_cuda),
+PaddleClasPreprocessor::PaddleClasPreprocessor(const std::string& config_file) {
+  FDASSERT(BuildPreprocessPipelineFromConfig(config_file),
            "Failed to create PaddleClasPreprocessor.");
   initialized_ = true;
 }
 
 bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
-    const std::string& config_file, bool use_cuda) {
+    const std::string& config_file) {
   processors_.clear();
   YAML::Node cfg;
   try {
@@ -73,12 +72,6 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
 
   // Fusion will improve performance
   FuseTransforms(&processors_);
-
-  // Set all processors to use CUDA, but only those support CUDA can actually
-  // use CUDA
-  for (size_t i = 0; use_cuda && i < processors_.size(); ++i) {
-    processors_[i]->UseCuda();
-  }
   return true;
 }
 
@@ -94,8 +87,15 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
 
   for (size_t i = 0; i < images->size(); ++i) {
     for (size_t j = 0; j < processors_.size(); ++j) {
-      if (!(*(processors_[j].get()))(&((*images)[i]))) {
-        FDERROR << "Failed to processs image:" << i << " in " << processors_[i]->Name() << "." << std::endl;
+      bool ret = false;
+      if (processors_[j]->Name() == "NormalizeAndPermute" && use_cuda_) {
+        ret = (*(processors_[j].get()))(&((*images)[i]), ProcLib::CUDA);
+      } else {
+        ret = (*(processors_[j].get()))(&((*images)[i]));
+      }
+      if (!ret) {
+        FDERROR << "Failed to processs image:" << i << " in "
+                << processors_[i]->Name() << "." << std::endl;
         return false;
       }
     }

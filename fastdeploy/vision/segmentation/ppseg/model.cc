@@ -143,14 +143,6 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
 
   // Fusion will improve performance
   FuseTransforms(&processors_);
-
-  // Set all processors to use CUDA, but only those support CUDA can actually
-  // use CUDA
-  if (runtime_option.device == Device::GPU) {
-    for (size_t i = 0; i < processors_.size(); ++i) {
-      processors_[i]->UseCuda();
-    }
-  }
   return true;
 }
 
