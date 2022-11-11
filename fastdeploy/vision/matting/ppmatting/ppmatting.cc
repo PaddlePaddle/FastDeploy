@@ -170,7 +170,7 @@ bool PPMatting::Postprocess(
     return false;
   }
   std::vector<int64_t> dim{0, 2, 3, 1};
-  Transpose(alpha_tensor, &alpha_tensor, dim);
+  function::Transpose(alpha_tensor, &alpha_tensor, dim);
   alpha_tensor.Squeeze(0);
   Mat mat = Mat::Create(alpha_tensor);
 

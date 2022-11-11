@@ -245,5 +245,6 @@ def download_model(name: str,
                 except FileExistsError:
                     pass
         print('Successfully download model at path: {}'.format(fullpath))
+        return fullpath
     else:
         print('ERROR: Could not find a model named {}'.format(name))
