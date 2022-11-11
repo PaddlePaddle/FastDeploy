@@ -40,7 +40,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {1, 3, 32, 320},
                                 {1, 3, 32, 2304});
   
-  // Users could save TRT cache file to diskas follow. 
+  // Users could save TRT cache file to disk as follow. 
   // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
   // cls_option.SetTrtCacheFile(cls_model_dir + sep + "cls_trt_cache.trt");
   // rec_option.SetTrtCacheFile(rec_model_dir + sep + "rec_trt_cache.trt");
