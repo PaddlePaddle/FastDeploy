@@ -61,6 +61,12 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
   virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             fastdeploy::vision::OCRBatchResult* batch_result);
+  virtual bool SetDetBatchSize(int batch_size);
+  virtual bool SetClsBatchSize(int batch_size);
+  virtual bool SetRecBatchSize(int batch_size);
+  virtual int GetDetBatchSize();
+  virtual int GetClsBatchSize();
+  virtual int GetRecBatchSize();
   bool Initialized() const override;
 
  protected:

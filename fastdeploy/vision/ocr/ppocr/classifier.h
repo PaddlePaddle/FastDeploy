@@ -58,6 +58,7 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
 
   ClassifierPreprocessor preprocessor_;
   ClassifierPostprocessor postprocessor_;
+  int batch_size_ = 6;
 
  private:
   bool Initialize();

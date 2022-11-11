@@ -72,7 +72,7 @@ bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<std::vector<std::array<int, 8>>>* det_results){
   std::vector<FDMat> fd_images = WrapMat(images);
 
-  std::vector<std::array<<int,4>> batch_det_img_info = preprocessor_.Run(&fd_images, &reused_input_tensors_);
+  std::vector<std::array<int, 4>> batch_det_img_info = preprocessor_.Run(&fd_images, &reused_input_tensors_);
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {

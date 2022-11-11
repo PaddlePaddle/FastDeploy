@@ -61,6 +61,7 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
 
   DBDetectorPreprocessor preprocessor_;
   DBDetectorPostprocessor postprocessor_;
+  int batch_size_ = 2;
 
  private:
   bool Initialize();

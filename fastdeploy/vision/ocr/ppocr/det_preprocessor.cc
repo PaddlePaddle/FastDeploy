@@ -24,7 +24,7 @@ DBDetectorPreprocessor::DBDetectorPreprocessor() {
   initialized_ = true;
 }
 
-std::array<int,4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
+std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
 
@@ -59,7 +59,7 @@ bool OcrDetectorResizeImage(FDMat* img,
   return true;
 }
 
-std::vector<std::array<<int,4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
+std::vector<std::array<int, 4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
                                                             std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
@@ -71,7 +71,7 @@ std::vector<std::array<<int,4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* 
   }
   int max_resize_w = 0;
   int max_resize_h = 0;
-  std::vector<std::array<int,4>> batch_det_img_info(images->size());
+  std::vector<std::array<int, 4>> batch_det_img_info(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     batch_det_img_info[i] = OcrDetectorGetInfo(mat,max_side_len_);

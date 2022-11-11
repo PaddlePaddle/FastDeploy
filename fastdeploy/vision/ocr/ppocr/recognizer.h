@@ -62,6 +62,7 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
 
   RecognizerPreprocessor preprocessor_;
   RecognizerPostprocessor postprocessor_;
+  int batch_size_ = 6;
 
  private:
   bool Initialize();

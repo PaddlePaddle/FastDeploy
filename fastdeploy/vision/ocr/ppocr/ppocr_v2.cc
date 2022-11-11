@@ -191,5 +191,50 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images, fastdeploy::visio
   return true;
 }
 
+bool PPOCRv2::SetDetBatchSize(int batch_size){
+  if(nullptr != detector_){
+    detector_->batch_size_ = batch_size;
+    return true;
+  }
+  return false;
+}
+
+bool PPOCRv2::SetClsBatchSize(int batch_size){
+  if(nullptr != classifier_){
+    classifier_->batch_size_ = batch_size;
+    return true;
+  }
+  return false;
+}
+
+bool PPOCRv2::SetRecBatchSize(int batch_size){
+  if(nullptr != recognizer_){
+    recognizer_->batch_size_ = batch_size;
+    return true;
+  }
+  return false;
+}
+
+int PPOCRv2::GetDetBatchSize(){
+  if(nullptr != detector_){
+    return detector_->batch_size_;
+  }
+  return 0;
+}
+
+int PPOCRv2::GetClsBatchSize(){
+  if(nullptr != classifier_){
+    return classifier_->batch_size_;
+  }
+  return 0;
+}
+
+int PPOCRv2::GetRecBatchSize(){
+  if(nullptr != recognizer_){
+    return recognizer_->batch_size_;
+  }
+  return 0;
+}
+
 }  // namesapce pipeline
 }  // namespace fastdeploy
