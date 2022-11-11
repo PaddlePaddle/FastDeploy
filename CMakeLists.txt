@@ -39,9 +39,10 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))
   include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
 endif()
+
 
 if(ANDROID)
   # To reduce the volume of the library
@@ -50,7 +51,6 @@ if(ANDROID)
 endif()
 
 ############################# Basic Options for FastDeploy ################################
-option(ENABLE_PADDLE_FRONTEND "Whether to enable PaddlePaddle frontend to support load paddle model in fastdeploy." ON)
 option(WITH_GPU "Whether WITH_GPU=ON, will enable onnxruntime-gpu/paddle-infernce-gpu/poros-gpu" OFF)
 option(WITH_IPU "Whether WITH_IPU=ON, will enable paddle-infernce-ipu" OFF)
 option(ENABLE_ORT_BACKEND "Whether to enable onnxruntime backend." OFF)
@@ -69,6 +69,8 @@ option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
 option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
 option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
+
+option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
@@ -137,6 +139,11 @@ set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+if (ENABLE_TIMVX)
+  include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
+endif()
+
+
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)
     message(FATAL_ERROR "Not support ONNXRuntime backend for Andorid/IOS now. Please set ENABLE_ORT_BACKEND=OFF.")
@@ -190,13 +197,8 @@ if(WITH_SW)
   add_definitions(-DEIGEN_AVOID_THREAD_LOCAL)
 endif()
 
-if(ENABLE_PADDLE_FRONTEND)
-  add_definitions(-DENABLE_PADDLE_FRONTEND)
-  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
-  list(APPEND DEPEND_LIBS external_paddle2onnx)
-endif(ENABLE_PADDLE_FRONTEND)
-
 if(ENABLE_ORT_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/onnxruntime.cmake)
@@ -211,6 +213,7 @@ if(ENABLE_LITE_BACKEND)
 endif()
 
 if(ENABLE_PADDLE_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/paddle_inference.cmake)
@@ -224,6 +227,7 @@ if(ENABLE_PADDLE_BACKEND)
 endif()
 
 if(ENABLE_OPENVINO_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   add_definitions(-DENABLE_OPENVINO_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_OPENVINO_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/openvino.cmake)
@@ -329,6 +333,7 @@ if(WITH_IPU)
 endif()
 
 if(ENABLE_TRT_BACKEND)
+  set(ENABLE_PADDLE_FRONTEND ON)
   if(APPLE OR ANDROID OR IOS)
     message(FATAL_ERROR "Cannot enable tensorrt backend in mac/ios/android os, please set -DENABLE_TRT_BACKEND=OFF.")
   endif()
@@ -382,7 +387,6 @@ endif()
 
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
-#  set(ENABLE_VISION_VISUALIZE ON)
   add_definitions(-DENABLE_VISION_VISUALIZE)
   if(ENABLE_OPENCV_CUDA)
     if(NOT WITH_GPU)
@@ -423,6 +427,13 @@ if(ENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/faster_tokenizer.cmake)
 endif()
+
+if(ENABLE_PADDLE_FRONTEND)
+  add_definitions(-DENABLE_PADDLE_FRONTEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/paddle2onnx.cmake)
+  list(APPEND DEPEND_LIBS external_paddle2onnx)
+endif(ENABLE_PADDLE_FRONTEND)
+
 
 configure_file(${PROJECT_SOURCE_DIR}/FastDeploy.cmake.in ${PROJECT_SOURCE_DIR}/FastDeploy.cmake @ONLY)
 configure_file(${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py.in ${PROJECT_SOURCE_DIR}/python/fastdeploy/c_lib_wrap.py)
@@ -559,6 +570,7 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
+
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
   DESTINATION ${CMAKE_INSTALL_PREFIX}
@@ -626,6 +638,7 @@ if(BUILD_FASTDEPLOY_PYTHON)
                              ${PYTHON_INCLUDE_DIR})
 
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/dlpack/include)
 
   if(APPLE)
     set_target_properties(${PY_LIBRARY_NAME}

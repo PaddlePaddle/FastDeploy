@@ -71,4 +71,4 @@ PPTinyPosePipeline模型加载和初始化，其中det_model是使用`fd.vision.
 - [Pipeline 模型介绍](..)
 - [Pipeline C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/runtime/how_to_change_backend.md)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)

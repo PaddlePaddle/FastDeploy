@@ -38,3 +38,5 @@ coverage
 *.local
 yalc.*
 .yalc
+examples/vision/collect_quantize_cc.sh
+examples/vision/tests_quantize
