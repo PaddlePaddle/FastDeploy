@@ -35,6 +35,11 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
+    def use_cuda(self):
+        """Use CUDA preprocessors
+        """
+        return self._preprocessor.use_cuda()
+
 
 class PaddleClasPostprocessor:
     def __init__(self, topk=1):

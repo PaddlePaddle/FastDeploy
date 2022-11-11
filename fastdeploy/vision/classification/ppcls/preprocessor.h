@@ -38,6 +38,9 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
+  void UseCuda() {
+    use_cuda_ = true;
+  }
 
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);

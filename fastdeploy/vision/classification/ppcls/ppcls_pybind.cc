@@ -28,6 +28,9 @@ void BindPaddleClas(pybind11::module& m) {
           pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
         }
         return outputs;
+      })
+      .def("use_cuda", [](vision::classification::PaddleClasPreprocessor& self) {
+        self.UseCuda();
       });
 
   pybind11::class_<vision::classification::PaddleClasPostprocessor>(
