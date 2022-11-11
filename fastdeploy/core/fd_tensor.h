@@ -39,6 +39,7 @@ struct FASTDEPLOY_DECL FDTensor {
   // GPU to inference the model
   // so we can skip data transfer, which may improve the efficience
   Device device = Device::CPU;
+  int device_id = 0;
 
   // Whether the data buffer is in pinned memory, which is allocated
   // with cudaMallocHost()

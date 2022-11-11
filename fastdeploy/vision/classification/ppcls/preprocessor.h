@@ -38,15 +38,19 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
-  void UseCuda() {
-    use_cuda_ = true;
-  }
+  /** \brief Use GPU to run preprocessing
+   *
+   * \param[in] gpu_id GPU device id
+   */
+  void UseGpu(int gpu_id = 0);
 
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
   std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
   bool use_cuda_ = false;
+  // GPU device id
+  int device_id_ = 0;
 };
 
 }  // namespace classification

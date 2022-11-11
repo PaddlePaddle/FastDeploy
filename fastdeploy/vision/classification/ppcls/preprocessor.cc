@@ -15,6 +15,9 @@
 #include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 #include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
 
 namespace fastdeploy {
 namespace vision {
@@ -75,6 +78,18 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
   return true;
 }
 
+void PaddleClasPreprocessor::UseGpu(int gpu_id) {
+#ifdef WITH_GPU
+  use_cuda_ = true;
+  device_id_ = gpu_id;
+  cudaSetDevice(device_id_);
+#else
+  FDWARNING << "FastDeploy didn't compile with WITH_GPU. "
+            << "Will force to use CPU to run preprocessing." << std::endl;
+  use_cuda_ = false;
+#endif
+}
+
 bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
@@ -113,6 +128,7 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   } else {
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
+  (*outputs)[0].device_id = device_id_;
   return true;
 }
 
