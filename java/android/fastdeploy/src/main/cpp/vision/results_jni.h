@@ -13,7 +13,24 @@
 // limitations under the License.
 
 #pragma once
-#include "bitmap_jni.h"   // NOLINT
-#include "convert_jni.h"  // NOLINT
-#include "utils_jni.h"    // NOLINT
-#include "runtime_option_jni.h"  // NOLINT
+
+#include <jni.h>  // NOLINT
+
+#include "fastdeploy/vision.h"  // NOLINT
+
+namespace fastdeploy {
+namespace jni {
+
+bool AllocateJavaResultFromCxx(
+    JNIEnv *env, jobject j_result_obj, void *cxx_result,
+    vision::ResultType type);
+
+bool AllocateCxxResultFromJava(
+    JNIEnv *env, jobject j_result_obj, void *cxx_result,
+    vision::ResultType type);
+
+jobject NewJavaResultFromCxx(
+    JNIEnv *env, void *cxx_result, vision::ResultType type);
+
+}  // namespace jni
+}  // namespace fastdeploy

@@ -13,11 +13,20 @@ public class Visualize {
     public static boolean visDetection(Bitmap ARGB8888Bitmap,
                                        DetectionResult result) {
         return visDetectionNative(
+                ARGB8888Bitmap, result,
+                0.f, 2, 0.5f,
+                new String[]{});
+    }
+
+    public static boolean visDetection(Bitmap ARGB8888Bitmap,
+                                       DetectionResult result,
+                                       float score_threshold) {
+        return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                0.f, 1, 0.5f,
+                result,
+                score_threshold,
+                2,
+                0.5f,
                 new String[]{});
     }
 
@@ -28,9 +37,7 @@ public class Visualize {
                                        float font_size) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
+                result,
                 score_threshold,
                 line_size,
                 font_size,
@@ -43,10 +50,8 @@ public class Visualize {
                                        String[] labels) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                0.f, 1, 0.5f,
+                result,
+                0.f, 2, 0.5f,
                 labels);
     }
 
@@ -58,9 +63,7 @@ public class Visualize {
                                        float font_size) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
+                result,
                 score_threshold,
                 line_size,
                 font_size,
@@ -71,9 +74,7 @@ public class Visualize {
     public static boolean visClassification(Bitmap ARGB8888Bitmap,
                                             ClassifyResult result) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                ARGB8888Bitmap, result,
                 0.f, 1,
                 new String[]{});
 
@@ -84,9 +85,7 @@ public class Visualize {
                                             float score_threshold,
                                             float font_size) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                ARGB8888Bitmap, result,
                 score_threshold,
                 font_size,
                 new String[]{});
@@ -98,9 +97,7 @@ public class Visualize {
                                             ClassifyResult result,
                                             String[] labels) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                ARGB8888Bitmap, result,
                 0.f, 1,
                 labels);
 
@@ -113,8 +110,7 @@ public class Visualize {
                                             float font_size) {
         return visClassificationNative(
                 ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                result,
                 score_threshold,
                 font_size,
                 labels);
@@ -126,18 +122,12 @@ public class Visualize {
                                  OCRResult result) {
         return visOcrNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mText,
-                result.mRecScores,
-                result.mClsScores,
-                result.mClsLabels);
+                result);
     }
 
     // VisDetection in native
     private static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
-                                                     float[][] boxes,
-                                                     float[] scores,
-                                                     int[] labelIds,
+                                                     DetectionResult result,
                                                      float score_threshold,
                                                      int line_size,
                                                      float font_size,
@@ -145,19 +135,14 @@ public class Visualize {
 
     // VisClassification in native
     private static native boolean visClassificationNative(Bitmap ARGB8888Bitmap,
-                                                          float[] scores,
-                                                          int[] labelIds,
+                                                          ClassifyResult result,
                                                           float score_threshold,
                                                           float font_size,
                                                           String[] labels);
 
     // VisOCRResult in native
     private static native boolean visOcrNative(Bitmap ARGB8888Bitmap,
-                                               int[][] boxes,
-                                               String[] text,
-                                               float[] recScores,
-                                               float[] clsScores,
-                                               int[] clsLabels);
+                                               OCRResult result);
 
 
     /* Initializes at the beginning */

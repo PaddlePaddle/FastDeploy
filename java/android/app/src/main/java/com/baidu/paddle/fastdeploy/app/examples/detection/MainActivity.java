@@ -15,6 +15,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -29,13 +30,14 @@ import com.baidu.paddle.fastdeploy.app.ui.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class MainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = MainActivity.class.getSimpleName();
+    private static final String TAG = MainActivity.class.getSimpleName() + "[fastdeploy]";
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -129,7 +131,12 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
         }
         boolean modified = false;
         DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, savedImagePath, SettingsActivity.scoreThreshold);
+                ARGB8888ImageBitmap, true, SettingsActivity.scoreThreshold);
+//        DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
+//        if (result.initialized()) {
+//            Visualize.visDetection(ARGB8888ImageBitmap, result, SettingsActivity.scoreThreshold);
+//        }
+
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
@@ -216,7 +223,6 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(SettingsActivity.cpuThreadNum);
             option.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            option.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }

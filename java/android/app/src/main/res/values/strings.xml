@@ -1,8 +1,8 @@
 <resources>
     <!-- Default App name -->
-    <string name="app_name">FastDeploy PicoDet</string>
+    <string name="app_name">EasyEdge PicoDet</string>
     <!-- Other App name -->
-    <string name="detection_app_name">FastDeploy PicoDet</string>
+    <string name="detection_app_name">EasyEdge PicoDet</string>
     <string name="ocr_app_name">FastDeploy PP-OCRv2</string>
     <!-- Keys for PreferenceScreen -->
     <string name="CHOOSE_PRE_INSTALLED_MODEL_KEY">CHOOSE_INSTALLED_MODEL_KEY</string>
@@ -25,7 +25,7 @@
     <string name="OCR_REC_LABEL_DEFAULT">labels/ppocr_keys_v1.txt</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
-    <string name="action_bar_realtime">FD 实时识别</string>
+    <string name="action_bar_realtime">EasyEdge 实时识别</string>
     <string name="action_bar_back">&lt;</string>
     <string name="action_bar_model_name">模型名称</string>
     <string name="result_label">识别结果</string>

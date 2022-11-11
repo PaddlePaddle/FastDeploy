@@ -75,7 +75,7 @@ bool AssetsLoaderUtils::LoadLabelsFromTxt(const std::string& txt_path,
   }
   file.clear();
   file.close();
-  return labels->size() > 0;
+  return !labels->empty();
 }
 
 }  // namespace jni

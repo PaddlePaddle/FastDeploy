@@ -7,6 +7,7 @@ import com.baidu.paddle.fastdeploy.vision.OCRResult;
 import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
 import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
+import com.baidu.paddle.fastdeploy.RuntimeOption;
 
 public class PPOCRBase {
     protected long mNativeHandlerContext = 0; // Context from native.
@@ -62,9 +63,25 @@ public class PPOCRBase {
             return new OCRResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        return new OCRResult(predictNative(
-                mNativeHandlerContext, ARGB8888Bitmap, false,
-                "", false));
+        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+                false, "", false);
+        if (result == null) {
+            return new OCRResult();
+        }
+        return result;
+    }
+
+    public OCRResult predict(Bitmap ARGB8888Bitmap, boolean rendering) {
+        if (mNativeHandlerContext == 0) {
+            return new OCRResult();
+        }
+        // Only support ARGB8888 bitmap in native now.
+        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+                false, "", rendering);
+        if (result == null) {
+            return new OCRResult();
+        }
+        return result;
     }
 
     // Predict with image saving and bitmap rendering (will cost more times)
@@ -75,9 +92,12 @@ public class PPOCRBase {
             return new OCRResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        return new OCRResult(predictNative(
-                mNativeHandlerContext, ARGB8888Bitmap, true,
-                savedImagePath, true));
+        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+                true, savedImagePath, true);
+        if (result == null) {
+            return new OCRResult();
+        }
+        return result;
     }
 
     public boolean init_(DBDetector detModel,
@@ -94,21 +114,9 @@ public class PPOCRBase {
                     recModel.mModelFile,
                     recModel.mParamsFile,
                     recModel.mLabelPath,
-                    detModel.mRuntimeOption.mCpuThreadNum,
-                    clsModel.mRuntimeOption.mCpuThreadNum,
-                    recModel.mRuntimeOption.mCpuThreadNum,
-                    detModel.mRuntimeOption.mEnableLiteFp16,
-                    clsModel.mRuntimeOption.mEnableLiteFp16,
-                    recModel.mRuntimeOption.mEnableLiteFp16,
-                    detModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                    clsModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                    recModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                    detModel.mRuntimeOption.mLiteOptimizedModelDir,
-                    clsModel.mRuntimeOption.mLiteOptimizedModelDir,
-                    recModel.mRuntimeOption.mLiteOptimizedModelDir,
-                    detModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
-                    clsModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
-                    recModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
+                    detModel.mRuntimeOption,
+                    clsModel.mRuntimeOption,
+                    recModel.mRuntimeOption,
                     clsModel.initialized());
             if (mNativeHandlerContext != 0) {
                 mInitialized = true;
@@ -126,21 +134,9 @@ public class PPOCRBase {
                         recModel.mModelFile,
                         recModel.mParamsFile,
                         recModel.mLabelPath,
-                        detModel.mRuntimeOption.mCpuThreadNum,
-                        clsModel.mRuntimeOption.mCpuThreadNum,
-                        recModel.mRuntimeOption.mCpuThreadNum,
-                        detModel.mRuntimeOption.mEnableLiteFp16,
-                        clsModel.mRuntimeOption.mEnableLiteFp16,
-                        recModel.mRuntimeOption.mEnableLiteFp16,
-                        detModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                        clsModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                        recModel.mRuntimeOption.mLitePowerMode.ordinal(),
-                        detModel.mRuntimeOption.mLiteOptimizedModelDir,
-                        clsModel.mRuntimeOption.mLiteOptimizedModelDir,
-                        recModel.mRuntimeOption.mLiteOptimizedModelDir,
-                        detModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
-                        clsModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
-                        recModel.mRuntimeOption.mEnableRecordTimeOfRuntime,
+                        detModel.mRuntimeOption,
+                        clsModel.mRuntimeOption,
+                        recModel.mRuntimeOption,
                         clsModel.initialized());
                 if (mNativeHandlerContext != 0) {
                     mInitialized = true;
@@ -160,29 +156,17 @@ public class PPOCRBase {
                                    String recModelFile,
                                    String recParamsFile,
                                    String recLabelPath,
-                                   int detCpuNumThread,
-                                   int clsCpuNumThread,
-                                   int recCpuNumThread,
-                                   boolean detEnableLiteFp16,
-                                   boolean clsEnableLiteFp16,
-                                   boolean recEnableLiteFp16,
-                                   int detLitePowerMode,
-                                   int clsLitePowerMode,
-                                   int recLitePowerMode,
-                                   String detLiteOptimizedModelDir,
-                                   String clsLiteOptimizedModelDir,
-                                   String recLiteOptimizedModelDir,
-                                   boolean detEnableRecordTimeOfRuntime,
-                                   boolean clsEnableRecordTimeOfRuntime,
-                                   boolean recEnableRecordTimeOfRuntime,
+                                   RuntimeOption detRuntimeOption,
+                                   RuntimeOption clsRuntimeOption,
+                                   RuntimeOption recRuntimeOption,
                                    boolean haveClsModel);
 
-    // Call prediction from native context.
-    private native long predictNative(long nativeHandlerContext,
-                                      Bitmap ARGB8888Bitmap,
-                                      boolean saved,
-                                      String savedImagePath,
-                                      boolean rendering);
+    // Call prediction from native context with rendering.
+    private native OCRResult predictNative(long nativeHandlerContext,
+                                           Bitmap ARGB8888Bitmap,
+                                           boolean saved,
+                                           String savedImagePath,
+                                           boolean rendering);
 
     // Release buffers allocated in native context.
     private native boolean releaseNative(long nativeHandlerContext);

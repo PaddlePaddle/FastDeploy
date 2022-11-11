@@ -207,13 +207,11 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
     public void checkAndUpdateSettings() {
         if (SettingsActivity.checkAndUpdateSettings(this)) {
             String realModelDir = getCacheDir() + "/" + SettingsActivity.modelDir;
-            // String detModelName = "ch_PP-OCRv2_det_infer";
-            String detModelName = "ch_PP-OCRv3_det_infer";
+            String detModelName = "ch_PP-OCRv2_det_infer";
             // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
             String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
             // String recModelName = "ch_ppocr_mobile_v2.0_rec_infer";
-            String recModelName = "ch_PP-OCRv3_rec_infer";
-            // String recModelName = "ch_PP-OCRv2_rec_infer";
+            String recModelName = "ch_PP-OCRv2_rec_infer";
             String realDetModelDir = realModelDir + "/" + detModelName;
             String realClsModelDir = realModelDir + "/" + clsModelName;
             String realRecModelDir = realModelDir + "/" + recModelName;
@@ -242,9 +240,6 @@ public class MainActivity extends Activity implements View.OnClickListener, Came
             detOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
             clsOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
             recOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            detOption.enableRecordTimeOfRuntime();
-            clsOption.enableRecordTimeOfRuntime();
-            recOption.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
                 detOption.enableLiteFp16();
                 clsOption.enableLiteFp16();
