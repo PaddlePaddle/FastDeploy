@@ -18,12 +18,12 @@ if [ $WITH_GPU == "ON" ]; then
 
 bash scripts/build_fd_vison.sh ON
 bash scripts/build_fd_runtime.sh ON
-bash scripts/build_fd_backend.sh ON
+bash scripts/build_fd_server.sh ON
 
 else
 
 bash scripts/build_fd_vison.sh OFF
 bash scripts/build_fd_runtime.sh OFF
-bash scripts/build_fd_backend.sh OFF
+bash scripts/build_fd_server.sh OFF
 
 fi
