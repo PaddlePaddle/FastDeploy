@@ -161,7 +161,7 @@ model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
   vision::DetectionResult res;
   model.Predict(&im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  auto vis_im = vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
  }
