@@ -59,6 +59,8 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    * \return true if the prediction successed, otherwise false.
    */
   virtual bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+                            fastdeploy::vision::OCRBatchResult* batch_result);
   bool Initialized() const override;
 
  protected:
@@ -67,10 +69,17 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
   /// Launch the detection process in OCR.
   virtual bool Detect(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool BatchDetect(const std::vector<cv::Mat>& images,
+                           fastdeploy::vision::OCRBatchResult* batch_result);
   /// Launch the recognition process in OCR.
   virtual bool Recognize(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool BatchRecognize(const std::vector<cv::Mat>& images,
+               std::vector<std::string>* text, std::vector<float>* rec_scores);
   /// Launch the classification process in OCR.
   virtual bool Classify(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+  virtual bool BatchClassify(const std::vector<cv::Mat>& images,
+                             std::vector<int32_t>* cls_labels,
+                             std::vector<float>* cls_scores);
 };
 
 namespace application {

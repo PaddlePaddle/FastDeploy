@@ -156,6 +156,14 @@ void OCRResult::Clear() {
   cls_labels.clear();
 }
 
+void OCRBatchResult::Clear() {
+  batch_boxes.clear();
+  batch_text.clear();
+  batch_rec_scores.clear();
+  batch_cls_scores.clear();
+  batch_cls_labels.clear();
+}
+
 void MOTResult::Clear(){
   boxes.clear();
   ids.clear();
@@ -491,6 +499,32 @@ std::string OCRResult::Str() {
 
   no_result = no_result + "No Results!";
   return no_result;
+}
+
+std::string OCRBatchResult::Str() {
+  std::string out_str;
+  OCRResult temp_ocr_result;
+  void* boxes_ptr = &temp_ocr_result.boxes;
+  void* text_ptr = &temp_ocr_result.text;
+  void* rec_scores_ptr = &temp_ocr_result.rec_scores;
+  void* cls_scores_ptr = &temp_ocr_result.cls_scores;
+  void* cls_labels_ptr = &temp_ocr_result.cls_labels;
+
+  for(int i_batch = 0; i_batch<batch_boxes.size(); ++i_batch){
+    &temp_ocr_result.boxes = &batch_boxes[i_batch];
+    &temp_ocr_result.text = &batch_text[i_batch];
+    &temp_ocr_result.rec_scores = &batch_rec_scores[i_batch];
+    &temp_ocr_result.cls_scores = &batch_cls_scores[i_batch];
+    &temp_ocr_result.cls_labels = &batch_cls_labels[i_batch];
+    out_str += temp_ocr_result.Str();
+    out_str += "\n\n";
+  }
+  &temp_ocr_result.boxes = boxes_ptr;
+  &temp_ocr_result.text = text_ptr;
+  &temp_ocr_result.rec_scores = rec_scores_ptr;
+  &temp_ocr_result.cls_scores = cls_scores_ptr;
+  &temp_ocr_result.cls_labels = cls_labels_ptr;
+  return out_str;
 }
 
 void HeadPoseResult::Clear() {

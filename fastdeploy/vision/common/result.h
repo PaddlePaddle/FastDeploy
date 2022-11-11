@@ -164,6 +164,22 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::string Str();
 };
 
+struct FASTDEPLOY_DECL OCRBatchResult : public BaseResult {
+  std::vector<std::vector<std::array<int, 8>>> batch_boxes;
+
+  std::vector<std::vector<std::string>> batch_text;
+  std::vector<std::vector<float>> batch_rec_scores;
+
+  std::vector<std::vector<float>> batch_cls_scores;
+  std::vector<std::vector<int32_t>> batch_cls_labels;
+
+  ResultType type = ResultType::OCR;
+
+  void Clear();
+
+  std::string Str();
+};
+
 /*! @brief MOT(Multi-Object Tracking) result structure for all the MOT models
  */
 struct FASTDEPLOY_DECL MOTResult : public BaseResult {
