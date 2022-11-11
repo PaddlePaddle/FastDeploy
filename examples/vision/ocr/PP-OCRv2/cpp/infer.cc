@@ -36,7 +36,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   // If use TRT backend, the dynamic shape will be set as follow.
   det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
                                 {1, 3, 1536, 1536});
-  cls_option.SetTrtInputShape("x", {1, 3, 48, 10},{1, 3, 48, 320},{1, 3, 48, 1024});
+  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320}, {1, 3, 48, 1024});
   rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {1, 3, 32, 320},
                                 {1, 3, 32, 2304});
   
