@@ -22,6 +22,12 @@ if [ ! -d "./cmake-3.18.6-Linux-x86_64/" ]; then
     rm -rf cmake-3.18.6-Linux-x86_64.tar.gz
 fi
 
+if [ ! -d "./TensorRT-8.4.1.5/" ]; then
+    wget https://fastdeploy.bj.bcebos.com/third_libs/TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
+    tar -zxvf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
+    rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
+fi
+
 docker run -it --rm --name build_fd_vison \
            -v`pwd`/..:/workspace/fastdeploy \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
@@ -33,7 +39,11 @@ docker run -it --rm --name build_fd_vison \
             ln -s /usr/bin/python3 /usr/bin/python;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
-            export ENABLE_ORT_BACKEND=OFF;
+            export ENABLE_TRT_BACKEND=ON;
+            export TRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/;
+            export ENABLE_ORT_BACKEND=ON;
+            export ENABLE_PADDLE_BACKEND=ON;
+            export ENABLE_OPENVINO_BACKEND=ON;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
@@ -49,6 +59,9 @@ docker run -it --rm --name build_fd_vison \
             rm -rf .setuptools-cmake-build dist;
             ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
+            export ENABLE_ORT_BACKEND=ON;
+            export ENABLE_PADDLE_BACKEND=ON;
+            export ENABLE_OPENVINO_BACKEND=ON;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
