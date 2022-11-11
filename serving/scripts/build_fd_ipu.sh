@@ -50,7 +50,7 @@ docker run -it --rm --name build_fd_runtime \
             apt-get install -y --no-install-recommends python3-dev python3-pip build-essential;
             ln -s /usr/bin/python3 /usr/bin/python;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
-            cmake .. -DENABLE_ORT_BACKEND=OFF -DENABLE_TEXT=OFF -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_BACKEND=ON -DWITH_IPU=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-install -DLIBRARY_NAME=fastdeploy_runtime;
+            cmake .. -DENABLE_ORT_BACKEND=OFF -DENABLE_TEXT=OFF -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_BACKEND=ON -DWITH_IPU=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install"
 
@@ -63,4 +63,4 @@ docker run -it --rm --name build_fd_backend \
             rm -rf build; mkdir build; cd build;
             apt-get update; apt-get install -y --no-install-recommends rapidjson-dev build-essential git ca-certificates;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
-            cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy-install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10; make -j`nproc`"
+            cmake .. -DTRITON_ENABLE_GPU=OFF -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10; make -j`nproc`"
