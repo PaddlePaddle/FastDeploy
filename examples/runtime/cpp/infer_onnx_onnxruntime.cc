@@ -17,12 +17,11 @@
 namespace fd = fastdeploy;
 
 int main(int argc, char* argv[]) {
-  std::string model_file = "mobilenetv2/inference.pdmodel";
-  std::string params_file = "mobilenetv2/inference.pdiparams";
+  std::string model_file = "mobilenetv2.onnx";
 
   // setup option
   fd::RuntimeOption runtime_option;
-  runtime_option.SetModelPath(model_file, params_file, fd::ModelFormat::PADDLE);
+  runtime_option.SetModelPath(model_file, "", fd::ModelFormat::ONNX);
   runtime_option.UseOrtBackend();
   runtime_option.SetCpuThreadNum(12);
 
