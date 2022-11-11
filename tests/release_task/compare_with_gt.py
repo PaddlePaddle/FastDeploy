@@ -40,7 +40,7 @@ def all_sort(x):
     y = np.split(x1, len(x1))
     z = list(reversed(y))
     index = np.lexsort(z)
-    return x[index]
+    return np.squeeze(x[index])
 
 
 def parse_arguments():
@@ -91,8 +91,8 @@ def write2file(error_file):
     with open(error_file, "a+") as f:
         from platform import python_version
         py_version = python_version()
-        f.write(args.platform + " " + py_version + " " + args.result_path.split(
-            ".")[0] + "\n")
+        f.write(args.platform + " " + py_version + " " +
+                args.result_path.split(".")[0] + "\n")
 
 
 def save_numpy_result(file_path, error_msg):
@@ -108,29 +108,37 @@ def check_result(gt_result, infer_result, args):
     score_diff = diff[:, -2]
     boxes_diff = diff[:, :-2]
     boxes_diff_ratio = boxes_diff / (infer_result[:, :-2] + 1e-6)
+    label_diff_threshold = diff_score_threshold[platform]["label_diff"]
+    score_diff_threshold = diff_score_threshold[platform]["score_diff"]
+    boxes_diff_threshold = diff_score_threshold[platform]["boxes_diff"]
+    boxes_diff_ratio_threshold = diff_score_threshold[platform][
+        "boxes_diff_ratio"]
     is_diff = False
     backend = args.result_path.split(".")[0]
-    if (label_diff > diff_score_threshold[platform]["label_diff"]).any():
+    if (label_diff > label_diff_threshold).any():
         print(args.platform, args.device, "label diff ", label_diff)
         is_diff = True
         label_diff_bool_file = args.platform + "_" + backend + "_" + "label_diff_bool.txt"
-        save_numpy_result(label_diff_bool_file, label_diff > 0)
-    if (score_diff > diff_score_threshold[platform]["score_diff"]).any():
+        save_numpy_result(label_diff_bool_file,
+                          label_diff > label_diff_threshold)
+    if (score_diff > score_diff_threshold).any():
         print(args.platform, args.device, "score diff ", score_diff)
         is_diff = True
         score_diff_bool_file = args.platform + "_" + backend + "_" + "score_diff_bool.txt"
-        save_numpy_result(score_diff_bool_file, score_diff > 1e-4)
-    if (boxes_diff_ratio > diff_score_threshold[platform]["boxes_diff_ratio"]
-        ).any() and (
-            boxes_diff > diff_score_threshold[platform]["boxes_diff"]).any():
+        save_numpy_result(score_diff_bool_file,
+                          score_diff > score_diff_threshold)
+    if (boxes_diff_ratio > boxes_diff_ratio_threshold).any() and (
+            boxes_diff > boxes_diff_threshold).any():
         print(args.platform, args.device, "boxes diff ", boxes_diff_ratio)
         is_diff = True
         boxes_diff_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_bool.txt"
         boxes_diff_ratio_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio.txt"
         boxes_diff_ratio_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio_bool"
-        save_numpy_result(boxes_diff_bool_file, boxes_diff > 1e-3)
+        save_numpy_result(boxes_diff_bool_file,
+                          boxes_diff > boxes_diff_threshold)
         save_numpy_result(boxes_diff_ratio_file, boxes_diff_ratio)
-        save_numpy_result(boxes_diff_ratio_bool_file, boxes_diff_ratio > 1e-4)
+        save_numpy_result(boxes_diff_ratio_bool_file,
+                          boxes_diff_ratio > boxes_diff_ratio_threshold)
     if is_diff:
         write2file("result.txt")
     else:

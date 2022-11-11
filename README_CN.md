@@ -55,7 +55,7 @@
 
 ## 目录
 
-* <details open> <summary><style="font-size:100px"><b>📖 文档教程（点击可收缩）</b></font></summary>
+* <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
     
    - 安装文档
         - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
@@ -83,7 +83,7 @@
    - 更多FastDeploy部署模块
         - [服务化部署](./serving)
         - [Benchmark测试](./benchmark)
-</details>
+</div></details>
 
 * **🖥️ 服务器端部署**
     * [Python SDK快速开始](#fastdeploy-quick-start-python)  
@@ -102,7 +102,7 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details open> <summary><style="font-size:100px"><b>Python SDK快速开始（点击可收缩）</b></font></summary>
+<details open> <summary><b>Python SDK快速开始（点击可收缩）</b></summary><div>
 
 #### 快速安装
 
@@ -152,17 +152,17 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
-</details>
+</div></details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>C++ SDK快速开始（点开查看详情）</b></font></summary>
+<summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
     
 
 #### 安装
 
-- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
+- 参考[C++预编译库下载](docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
 
 #### C++ 推理示例
 
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 ```
-</details>
+</div></details>
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
