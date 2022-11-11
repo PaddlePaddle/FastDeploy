@@ -47,8 +47,6 @@ class FASTDEPLOY_DECL FaceLandmark1000 : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, FaceAlignmentResult* result);
 
-  // tuple of (width, height), default (128, 128)
-  std::vector<int> size_;
   /** \brief Get the input size of image
    *
    * \return Vector of int values, default {128,128}
@@ -58,7 +56,7 @@ class FASTDEPLOY_DECL FaceLandmark1000 : public FastDeployModel {
    *
    * \param[in] size Vector of int values which represents {width, height} of image
    */
-  void SetSize(std::vector<int> size) {size_ = size;}
+  void SetSize(const std::vector<int>& size) {size_ = size;}
 
  private:
   bool Initialize();
@@ -68,6 +66,8 @@ class FASTDEPLOY_DECL FaceLandmark1000 : public FastDeployModel {
 
   bool Postprocess(FDTensor& infer_result, FaceAlignmentResult* result,
                    const std::map<std::string, std::array<int, 2>>& im_info);
+  // tuple of (width, height), default (128, 128)
+  std::vector<int> size_;
 };
 
 }  // namespace facealign

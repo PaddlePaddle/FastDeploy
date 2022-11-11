@@ -35,8 +35,8 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    * \param[in] model_format Model format of the loaded model, default is ONNX format
    */
   PIPNet(const std::string& model_file, const std::string& params_file = "",
-             const RuntimeOption& custom_option = RuntimeOption(),
-             const ModelFormat& model_format = ModelFormat::ONNX);
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "PIPNet"; }
   /** \brief Predict the face detection result for an input image
@@ -47,17 +47,6 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, FaceAlignmentResult* result);
 
-  // tuple of (width, height), default (256, 256)
-  std::vector<int> size_;
-
-  // Mean parameters for normalize, size should be the the same as channels,
-  // default mean_vals = {0.485f, 0.456f, 0.406f}
-  std::vector<float> mean_vals_;
-  // Std parameters for normalize, size should be the the same as channels,
-  // default std_vals = {0.229f, 0.224f, 0.225f}
-  std::vector<float> std_vals_;
-  // number of landmarks
-  int num_landmarks_;
   /** \brief Get the number of landmakrs
    *
    * \return Integer type, default num_landmarks = 19
@@ -82,22 +71,23 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    *
    * \param[in] num_landmarks Integer value which represents number of landmarks
    */
-  void SetNumLandmarks(int num_landmarks);
+  void SetNumLandmarks(const int& num_landmarks);
   /** \brief Set the mean values for normalization
    *
    * \param[in] mean_vals Vector of float values whose length is equal to 3
    */
-  void SetMeanVals(std::vector<float> mean_vals) { mean_vals_ = mean_vals;}
+  void SetMeanVals(const std::vector<float>& mean_vals)
+  { mean_vals_ = mean_vals;}
   /** \brief Set the std values for normalization
    *
    * \param[in] std_vals Vector of float values whose length is equal to 3
    */
-  void SetStdVals(std::vector<float> std_vals) {std_vals_ = std_vals;}
+  void SetStdVals(const std::vector<float>& std_vals) {std_vals_ = std_vals;}
   /** \brief Set the input size of image
    *
    * \param[in] size Vector of int values which represents {width, height} of image
    */
-  void SetSize(std::vector<int> size) {size_ = size;}
+  void SetSize(const std::vector<int>& size) {size_ = size;}
 
  private:
   bool Initialize();
@@ -119,6 +109,17 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
   int net_stride_;
   // Now PIPNet support num_landmarks in {19, 29, 68, 98}
   std::set<int> supported_num_landmarks_;
+  // tuple of (width, height), default (256, 256)
+  std::vector<int> size_;
+
+  // Mean parameters for normalize, size should be the the same as channels,
+  // default mean_vals = {0.485f, 0.456f, 0.406f}
+  std::vector<float> mean_vals_;
+  // Std parameters for normalize, size should be the the same as channels,
+  // default std_vals = {0.229f, 0.224f, 0.225f}
+  std::vector<float> std_vals_;
+  // number of landmarks
+  int num_landmarks_;
 };
 
 }  // namespace facealign

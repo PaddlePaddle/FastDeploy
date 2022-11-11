@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/facealign/contrib/pipnet.h"
-#include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
@@ -23,8 +22,8 @@ namespace vision {
 namespace facealign {
 
 void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result, 
-                        FaceAlignmentResult* result,
-                        float img_height, float img_width){
+                               FaceAlignmentResult* result,
+                               float img_height, float img_width){
   FDTensor outputs_cls = infer_result.at(0);
   FDTensor outputs_x = infer_result.at(1);  
   FDTensor outputs_y = infer_result.at(2);  
@@ -164,7 +163,7 @@ void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result,
   }
 };
 
-void PIPNet::SetNumLandmarks(int num_landmarks){
+void PIPNet::SetNumLandmarks(const int& num_landmarks){
   if(supported_num_landmarks_.find(num_landmarks_)==supported_num_landmarks_.end()){
     FDWARNING<<"The number of landmarks should be in {19, 29, 68, 98}."<<std::endl;
   }

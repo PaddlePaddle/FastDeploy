@@ -26,6 +26,6 @@ void BindFaceLandmark1000(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            })
-      .def_readwrite("size", &vision::facealign::FaceLandmark1000::size_);
+      .def_property("size", &vision::facealign::FaceLandmark1000::GetSize, &vision::facealign::FaceLandmark1000::SetSize);
 }
 }  // namespace fastdeploy
