@@ -13,6 +13,9 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/plain",
     packages=setuptools.find_packages(),
+    author='fastdeploy',
+    author_email='fastdeploy@baidu.com',
+    url='https://github.com/PaddlePaddle/FastDeploy.git',
     install_requires=REQUIRED_PACKAGES,
     classifiers=[
         "Programming Language :: Python :: 3",
