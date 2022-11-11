@@ -28,6 +28,7 @@ void BindSCRFD(pybind11::module& m) {
              self.Predict(&mat, &res, conf_threshold, nms_iou_threshold);
              return res;
            })
+      .def("disable_normalize_and_permute",&vision::facedet::SCRFD::DisableNormalizeAndPermute)
       .def_readwrite("size", &vision::facedet::SCRFD::size)
       .def_readwrite("padding_value", &vision::facedet::SCRFD::padding_value)
       .def_readwrite("is_mini_pad", &vision::facedet::SCRFD::is_mini_pad)
@@ -41,6 +42,7 @@ void BindSCRFD(pybind11::module& m) {
       .def_readwrite("num_anchors", &vision::facedet::SCRFD::num_anchors)
       .def_readwrite("landmarks_per_face",
                      &vision::facedet::SCRFD::landmarks_per_face);
+
 }
 
 }  // namespace fastdeploy

@@ -16,9 +16,6 @@ import fastdeploy as fd
 import cv2
 import os
 import numpy as np
-import pynvml
-import psutil
-import GPUtil
 import time
 
 
@@ -112,6 +109,8 @@ def build_option(args):
 
 
 def get_current_memory_mb(gpu_id=None):
+    import pynvml
+    import psutil
     pid = os.getpid()
     p = psutil.Process(pid)
     info = p.memory_full_info()
@@ -126,6 +125,7 @@ def get_current_memory_mb(gpu_id=None):
 
 
 def get_current_gputil(gpu_id):
+    import GPUtil
     GPUs = GPUtil.getGPUs()
     gpu_load = GPUs[gpu_id].load
     return gpu_load

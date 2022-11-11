@@ -42,6 +42,7 @@ void BindRuntime(pybind11::module& m) {
       .def("set_lite_power_mode", &RuntimeOption::SetLitePowerMode)
       .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
       .def("set_trt_max_workspace_size", &RuntimeOption::SetTrtMaxWorkspaceSize)
+      .def("set_trt_max_batch_size", &RuntimeOption::SetTrtMaxBatchSize)
       .def("enable_paddle_to_trt", &RuntimeOption::EnablePaddleToTrt)
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)

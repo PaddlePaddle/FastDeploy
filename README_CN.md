@@ -50,12 +50,12 @@
     -  **📲 移动端和端侧部署：移动端后端能力升级，支持更多的CV模型**
        - 集成 Paddle Lite，并保证其使用与服务端常用推理引擎 Paddle Inference、TensorRT、OpenVINO、ONNX Runtime 等一致的开发体验；
        - 新增 [轻量化目标检测模型](examples/vision/detection/paddledetection/android)和[分类模型](examples/vision/classification/paddleclas/android)的安卓端部署能力；
-    -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署：新增Web端部署能力**
+    -  **🌐 Web和小程序部署：新增Web端部署能力**
        - 集成 Paddle.js部署能力，新增 OCR、目标检测、人像分割背景替换、物体识别等Web端部署能力和[Demo](examples/application/js)；
 
 ## 目录
 
-* <details open> <summary><style="font-size:100px"><b>📖 文档教程（点击可收缩）</b></font></summary>
+* <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
     
    - 安装文档
         - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
@@ -83,7 +83,7 @@
    - 更多FastDeploy部署模块
         - [服务化部署](./serving)
         - [Benchmark测试](./benchmark)
-</details>
+</div></details>
 
 * **🖥️ 服务器端部署**
     * [Python SDK快速开始](#fastdeploy-quick-start-python)  
@@ -92,7 +92,7 @@
 * **📲 移动端和端侧部署**
     * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
     * [端侧模型支持列表](#fastdeploy-edge-models)
-* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署**  
+* **🌐 Web和小程序部署**  
     * [Web端模型支持列表](#fastdeploy-web-models)
 * [**社区交流**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
@@ -102,7 +102,7 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details open> <summary><style="font-size:100px"><b>Python SDK快速开始（点击可收缩）</b></font></summary>
+<details open> <summary><b>Python SDK快速开始（点击可收缩）</b></summary><div>
 
 #### 快速安装
 
@@ -152,17 +152,17 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
-</details>
+</div></details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>C++ SDK快速开始（点开查看详情）</b></font></summary>
+<summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
     
 
 #### 安装
 
-- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
+- 参考[C++预编译库下载](docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
 
 #### C++ 推理示例
 
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 ```
-</details>
+</div></details>
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
     
     
-## <img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署
+## 🌐 Web和小程序部署
 
 <div id="fastdeploy-web-models"></div>
     

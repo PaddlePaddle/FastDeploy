@@ -230,6 +230,12 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   device = Device::RKNPU;
 }
 
+void RuntimeOption::UseTimVX() {
+  enable_timvx = true;
+  device = Device::TIMVX;
+  UseLiteBackend();
+}
+
 void RuntimeOption::SetExternalStream(void* external_stream) {
   external_stream_ = external_stream;
 }
@@ -348,6 +354,11 @@ void RuntimeOption::SetLiteOptimizedModelDir(
   lite_optimized_model_dir = optimized_model_dir;
 }
 
+void RuntimeOption::SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path) {
+  lite_nnadapter_subgraph_partition_config_path = nnadapter_subgraph_partition_config_path;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -370,6 +381,9 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
 
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   trt_max_workspace_size = max_workspace_size;
+}
+void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size){
+  trt_max_batch_size = max_batch_size; 
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
@@ -513,8 +527,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU,
-             "Backend::LITE only supports Device::CPU");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -723,6 +737,8 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.enable_timvx = option.enable_timvx;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
