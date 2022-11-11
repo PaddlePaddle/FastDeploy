@@ -1,4 +1,4 @@
-[English](README.md) | 简体中文
+[English](README_EN.md) | 简体中文
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -18,13 +18,13 @@
 
 **⚡️FastDeploy**是一款**易用高效**的推理部署开发套件。覆盖业界🔥**热门CV、NLP、Speech的AI模型**并提供📦**开箱即用**的部署体验，包括图像分类、目标检测、图像分割、人脸检测、人脸识别、人体关键点识别、文字识别、语义理解等多任务，满足开发者**多场景**，**多硬件**、**多平台**的产业部署需求。
 
-|       [Object Detection](examples/vision)                                       | [3D Object Detection](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                                             | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                     | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                         |
+|      [Image Classification](examples/vision/classification)                                       |  [Object Detection](examples/vision/detection)                                                                                             | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                     | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                         |
 |:---------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">                                                                                                                    | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                 |
-| [**Image Matting**](examples/vision/matting)                 |  [**Real-Time Matting**](examples/vision/matting)           | [**OCR**](examples/vision/ocr)                  |[**Face Alignment**](examples/vision/ocr)
+| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">                                                                                                                    | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                 |
+| [**Image Matting**](examples/vision/matting)                 |  [**Real-Time Matting**](examples/vision/matting)           | [**OCR**](examples/vision/ocr)                  |[**Face Alignment**](examples/vision/facealign)
 | <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> |<img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  >                                                                                                                              |<img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">  |
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                     | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                                        |  [**NLP**](examples/text)                                                                                                                                                                                                           |[**Speech**](examples/audio/pp-tts)  
-| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input** ：早上好，今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p>|
+| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p>|
 
 
 ## 近期更新
@@ -40,7 +40,7 @@
     -  **🖥️ 服务端部署：支持推理速度更快的后端，支持更多的模型**
         -  集成 Paddle Inference TensorRT后端，并保证其使用与Paddle Inference、TensorRT、OpenVINO、ONNX Runtime、Paddle Lite等一致的开发体验；
         -  支持并测试 Graphcore IPU 通过 Paddle Inference后端;
-        -  优化[一键模型量化工具](tools/quantization)，支持YOLOv7、YOLOv6、YOLOv5等视觉模型，在CPU和GPU推理速度可提升1.5～2倍；
+        -  优化[一键模型自动化压缩工具](./tools/auto_compression)，支持YOLOv7、YOLOv6、YOLOv5等视觉模型，在CPU和GPU推理速度可提升1.5～2倍；
         -  新增 [PP-Tracking](./examples/vision/tracking/pptracking) 和 [RobustVideoMatting](./examples/vision/matting) 等模型；
 
 - 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)**
@@ -50,12 +50,12 @@
     -  **📲 移动端和端侧部署：移动端后端能力升级，支持更多的CV模型**
        - 集成 Paddle Lite，并保证其使用与服务端常用推理引擎 Paddle Inference、TensorRT、OpenVINO、ONNX Runtime 等一致的开发体验；
        - 新增 [轻量化目标检测模型](examples/vision/detection/paddledetection/android)和[分类模型](examples/vision/classification/paddleclas/android)的安卓端部署能力；
-    -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署：新增Web端部署能力**
+    -  **🌐 Web和小程序部署：新增Web端部署能力**
        - 集成 Paddle.js部署能力，新增 OCR、目标检测、人像分割背景替换、物体识别等Web端部署能力和[Demo](examples/application/js)；
 
 ## 目录
 
-* <details open> <summary><style="font-size:100px"><b>📖 文档教程（点击可收缩）</b></font></summary>
+* <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
     
    - 安装文档
         - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
@@ -81,9 +81,9 @@
         - [4. TensorRT使用中的一些技巧](docs/cn/faq/tensorrt_tricks.md)
         - [5. 如何增加新的模型](docs/cn/faq/develop_a_new_model.md)(进行中)
    - 更多FastDeploy部署模块
-        - [服务化部署](../serving)
-        - [Benchmark测试](../benchmark)
-</details>
+        - [服务化部署](./serving)
+        - [Benchmark测试](./benchmark)
+</div></details>
 
 * **🖥️ 服务器端部署**
     * [Python SDK快速开始](#fastdeploy-quick-start-python)  
@@ -92,7 +92,7 @@
 * **📲 移动端和端侧部署**
     * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
     * [端侧模型支持列表](#fastdeploy-edge-models)
-* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署**  
+* **🌐 Web和小程序部署**  
     * [Web端模型支持列表](#fastdeploy-web-models)
 * [**社区交流**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
@@ -102,7 +102,7 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details open> <summary><style="font-size:100px"><b>Python SDK快速开始（点击可收缩）</b></font></summary>
+<details open> <summary><b>Python SDK快速开始（点击可收缩）</b></summary><div>
 
 #### 快速安装
 
@@ -152,17 +152,17 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
-</details>
+</div></details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>C++ SDK快速开始（点开查看详情）</b></font></summary>
+<summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
     
 
 #### 安装
 
-- 参考[C++预编译库下载](docs/quick_start/CPP_prebuilt_libraries.md)文档  
+- 参考[C++预编译库下载](docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
 
 #### C++ 推理示例
 
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 ```
-</details>
+</div></details>
 
 更多部署案例请参考[视觉模型部署示例](examples/vision) .
 
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
     
     
-## <img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web和小程序部署
+## 🌐 Web和小程序部署
 
 <div id="fastdeploy-web-models"></div>
     

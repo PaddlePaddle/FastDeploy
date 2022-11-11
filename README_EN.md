@@ -20,13 +20,13 @@ English | [简体中文](README_CN.md)
 
 **⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**critical CV、NLP、Speech AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform** .
 
-|       [Object Detection](examples/vision)                                       | [3D Object Detection](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                                             | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                     | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                         |
+|      [Image Classification](examples/vision/classification)                                       |  [Object Detection](examples/vision/detection)                                                                                             | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                     | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                         |
 |:---------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">                                                                                                                    | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                 |
-| [**Image Matting**](examples/vision/matting)                 |  [**Real-Time Matting**](examples/vision/matting)           | [**OCR**](examples/vision/ocr)                  |[**Face Alignment**](examples/vision/ocr)
+| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">                                                                                                                    | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                 |
+| [**Image Matting**](examples/vision/matting)                 |  [**Real-Time Matting**](examples/vision/matting)           | [**OCR**](examples/vision/ocr)                  |[**Face Alignment**](examples/vision/facealign)
 | <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> |<img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  >                                                                                                                              |<img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">  |
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                     | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                                        |  [**NLP**](examples/text)                                                                                                                                                                                                           |[**Speech**](examples/audio/pp-tts)  
-| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input** ：Life was like a box of chocolates, you never know what you're gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p>|
+| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p>|
 
 
 ## 📣 Recent Updates
@@ -34,7 +34,8 @@ English | [简体中文](README_CN.md)
 - 🔥 **【Live Preview】2022.11.09 20:30～21:30，《Covering the full spectrum of cloud-side scenarios with 150+ popular models for rapid deployment》**
 - 🔥 **【Live Preview】2022.11.10 20:30～21:30，《10+ AI hardware deployments from Rockchip, Amlogic, NXP and others, straight to industry landing》**
 - 🔥 **【Live Preview】2022.11.10 19:00～20:00，《10+ popular models deployed in RK3588, RK3568 in action》**
-    - Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
+    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas 
+    - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
  <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
   </div>
@@ -62,7 +63,7 @@ English | [简体中文](README_CN.md)
 
 ## Contents
 
-* <details open> <summary><style="font-size:100px"><b>📖 Tutorials（click to shrink） </b></font></summary>
+* <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
     
    - Install
         - [How to Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
@@ -90,7 +91,7 @@ English | [简体中文](README_CN.md)
    - More FastDeploy Deployment Module
         - [deployment AI Model as a Service](./serving)
         - [Benchmark Testing](./benchmark)
-</details>
+</div></details>
 
 * **🖥️ Data Center and Cloud Deployment**
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
@@ -110,7 +111,7 @@ English | [简体中文](README_CN.md)
 <div id="fastdeploy-quick-start-python"></div>
 
 <details open>
-<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to shrink）</b></font></summary>
+<summary><b>A Quick Start for Python SDK（click to fold）</b></summary><div>
 
 
 #### Installation
@@ -166,12 +167,12 @@ print(result)
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-</details>
+</div></details>
          
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>A Quick Start for C++ SDK（click to expand）</b></font></summary>
+<summary><b>A Quick Start for C++ SDK（click to expand）</b></summary><div>
 
 #### Installation
 
@@ -208,7 +209,7 @@ int main(int argc, char* argv[]) {
   return 0;
  }
 ```
-</details>
+</div></details>
 
 For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 

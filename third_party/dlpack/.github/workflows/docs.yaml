@@ -1,0 +1,49 @@
+name: Build Doc
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test_linux:
+    name: Linux
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Configuring Test Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install build-essential doxygen
+        python3 -m pip install -U pip wheel
+        python3 -m pip install cmake ninja
+
+        python3 --version
+        python3 -m pip --version
+        doxygen --version
+        make --version
+        cmake --version
+        ninja --version
+
+    - name: Installing dependencies
+      run: |
+        python3 -m pip install -r doc_requirements.txt
+
+    - name: Testing CMakeLists.txt
+      run: |
+        mkdir build
+        cd build
+        cmake .. -G Ninja -DCMAKE_INSTALL_PREFIX=./install -DBUILD_DOCS=ON
+        ninja
+        ninja install
+
+    - name: Testing Makefile
+      run: |
+        make doc
