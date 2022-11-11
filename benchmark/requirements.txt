@@ -1,4 +1,1 @@
 numpy
-pynvml
-psutil
-GPUtil
