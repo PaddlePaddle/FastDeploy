@@ -2,8 +2,6 @@ package com.baidu.paddle.fastdeploy.vision;
 
 import android.support.annotation.NonNull;
 
-import com.baidu.paddle.fastdeploy.FastDeployInitializer;
-
 public class SegmentationResult {
     // Init from native
     public int[] mLabelMap;

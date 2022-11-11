@@ -47,6 +47,15 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
   const jmethodID j_lite_power_mode_ordinal_id = env->GetMethodID(
       j_lite_power_mode_clazz, "ordinal", "()I");
 
+  fastdeploy::RuntimeOption c_runtime_option;
+  c_runtime_option.UseCpu();
+  c_runtime_option.UseLiteBackend();
+
+  // Instance check
+  if (!env->IsInstanceOf(j_runtime_option_obj, j_runtime_option_clazz)) {
+    return c_runtime_option;
+  }
+
   // Get values from Java RuntimeOption.
   jint j_cpu_num_thread = env->GetIntField(
       j_runtime_option_obj, j_cpu_num_thread_id);
@@ -67,9 +76,7 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
   std::string c_lite_optimized_model_dir =
       fastdeploy::jni::ConvertTo<std::string>(env, j_lite_optimized_model_dir);
 
-  fastdeploy::RuntimeOption c_runtime_option;
-  c_runtime_option.UseCpu();
-  c_runtime_option.UseLiteBackend();
+  // Setup Cxx RuntimeOption
   c_runtime_option.SetCpuThreadNum(c_cpu_num_thread);
   c_runtime_option.SetLitePowerMode(c_lite_power_mode);
   c_runtime_option.SetLiteOptimizedModelDir(c_lite_optimized_model_dir);
