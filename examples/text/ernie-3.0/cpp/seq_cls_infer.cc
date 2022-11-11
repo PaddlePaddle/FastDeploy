@@ -187,11 +187,11 @@ struct ErnieForSequenceClassificationPredictor {
                    std::vector<SeqClsResult>* seq_cls_results) {
     const auto& logits = outputs[0];
     fastdeploy::FDTensor probs;
-    fastdeploy::Softmax(logits, &probs);
+    fastdeploy::function::Softmax(logits, &probs);
 
     fastdeploy::FDTensor labels, confidences;
-    fastdeploy::Max(probs, &confidences, {-1});
-    fastdeploy::ArgMax(probs, &labels, -1);
+    fastdeploy::function::Max(probs, &confidences, {-1});
+    fastdeploy::function::ArgMax(probs, &labels, -1);
     if (labels.Numel() != confidences.Numel()) {
       return false;
     }
