@@ -72,8 +72,8 @@ void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result,
   }
 
   // find nb_x & nb_y offsets
-  std::unordered_map<unsigned int, std::vector<float>> output_nb_x_select;
-  std::unordered_map<unsigned int, std::vector<float>> output_nb_y_select;
+  std::map<unsigned int, std::vector<float>> output_nb_x_select;
+  std::map<unsigned int, std::vector<float>> output_nb_y_select;
   // initialize offsets map
   for (unsigned int i = 0; i < num_landmarks_; ++i)
   {
@@ -97,8 +97,8 @@ void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result,
   // calculate coords
   std::vector<float> lms_pred_x(num_landmarks_); // 19
   std::vector<float> lms_pred_y(num_landmarks_); // 19
-  std::unordered_map<unsigned int, std::vector<float>> lms_pred_nb_x; // 19,10
-  std::unordered_map<unsigned int, std::vector<float>> lms_pred_nb_y; // 19,10
+  std::map<unsigned int, std::vector<float>> lms_pred_nb_x; // 19,10
+  std::map<unsigned int, std::vector<float>> lms_pred_nb_y; // 19,10
 
   // initialize pred maps
   for (unsigned int i = 0; i < num_landmarks_; ++i)
@@ -123,8 +123,8 @@ void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result,
   }
 
   // reverse indexes
-  std::unordered_map<unsigned int, std::vector<float>> tmp_nb_x; // 19,max_len_map_[num_landmarks_]
-  std::unordered_map<unsigned int, std::vector<float>> tmp_nb_y; // 19,max_len_map_[num_landmarks_]
+  std::map<unsigned int, std::vector<float>> tmp_nb_x; // 19,max_len_map_[num_landmarks_]
+  std::map<unsigned int, std::vector<float>> tmp_nb_y; // 19,max_len_map_[num_landmarks_]
   // initialize reverse maps
   for (unsigned int i = 0; i < num_landmarks_; ++i)
   {
