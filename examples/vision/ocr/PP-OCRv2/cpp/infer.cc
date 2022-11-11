@@ -29,9 +29,25 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto rec_model_file = rec_model_dir + sep + "inference.pdmodel";
   auto rec_params_file = rec_model_dir + sep + "inference.pdiparams";
 
-  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, option);
-  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, option);
-  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, option);
+  auto det_option = option;
+  auto cls_option = option;
+  auto rec_option = option;
+
+  // If use TRT backend, the dynamic shape will be set as follow.
+  det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
+                                {1, 3, 1536, 1536});
+  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320}, {1, 3, 48, 1024});
+  rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {1, 3, 32, 320},
+                                {1, 3, 32, 2304});
+  
+  // Users could save TRT cache file to disk as follow. 
+  // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
+  // cls_option.SetTrtCacheFile(cls_model_dir + sep + "cls_trt_cache.trt");
+  // rec_option.SetTrtCacheFile(rec_model_dir + sep + "rec_trt_cache.trt");
+
+  auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option);
+  auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
+  auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
 
   assert(det_model.Initialized());
   assert(cls_model.Initialized());
