@@ -12,7 +12,7 @@ project("fastdeploy_jni")
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
-set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-0.5.0-shared-dev")
+set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-latest-shared-dev")
 
 find_package(FastDeploy REQUIRED)
 

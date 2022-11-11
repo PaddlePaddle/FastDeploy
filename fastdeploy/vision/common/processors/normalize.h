@@ -23,7 +23,8 @@ class FASTDEPLOY_DECL Normalize : public Processor {
   Normalize(const std::vector<float>& mean, const std::vector<float>& std,
             bool is_scale = true,
             const std::vector<float>& min = std::vector<float>(),
-            const std::vector<float>& max = std::vector<float>());
+            const std::vector<float>& max = std::vector<float>(),
+            bool swap_rb = false);
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
@@ -44,14 +45,23 @@ class FASTDEPLOY_DECL Normalize : public Processor {
                   const std::vector<float>& std, bool is_scale = true,
                   const std::vector<float>& min = std::vector<float>(),
                   const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::DEFAULT);
+                  ProcLib lib = ProcLib::DEFAULT, bool swap_rb = false);
 
   std::vector<float> GetAlpha() const { return alpha_; }
   std::vector<float> GetBeta() const { return beta_; }
 
+  bool GetSwapRB() {
+    return swap_rb_;
+  }
+
+  void SetSwapRB(bool swap_rb) {
+    swap_rb_ = swap_rb;
+  }
+
  private:
   std::vector<float> alpha_;
   std::vector<float> beta_;
+  bool swap_rb_;
 };
 }  // namespace vision
 }  // namespace fastdeploy

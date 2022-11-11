@@ -17,7 +17,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
-
+namespace function {
 /** Excute the transpose operation for input FDTensor along given dims.
     @param x The input tensor.
     @param out The output tensor which stores the result.
@@ -25,4 +25,5 @@ namespace fastdeploy {
 */
 FASTDEPLOY_DECL void Transpose(const FDTensor& x, FDTensor* out,
                                const std::vector<int64_t>& dims);
+}  // namespace function
 }  // namespace fastdeploy

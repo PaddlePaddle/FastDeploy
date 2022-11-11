@@ -42,6 +42,7 @@ bool FastDeployModel::InitRuntime() {
     use_ipu = false;
 #endif
     bool use_rknpu = (runtime_option.device == Device::RKNPU);
+    bool use_timvx = (runtime_option.device == Device::TIMVX);
 
     // whether the model is supported by the setted backend
     bool is_supported = false;
@@ -59,7 +60,14 @@ bool FastDeployModel::InitRuntime() {
           break;
         }
       }
-    } else if(use_ipu) {
+    } else if (use_timvx) {
+      for (auto& item : valid_timvx_backends) {
+        if (item == runtime_option.backend) {
+          is_supported = true;
+          break;
+        }
+      }
+    }else if(use_ipu) {
       for (auto& item : valid_ipu_backends) {
         if (item == runtime_option.backend) {
           is_supported = true;
@@ -111,6 +119,8 @@ bool FastDeployModel::InitRuntime() {
 #endif
   } else if (runtime_option.device == Device::RKNPU) {
     return CreateRKNPUBackend();
+  } else if (runtime_option.device == Device::TIMVX) {
+    return CreateTimVXBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -195,6 +205,29 @@ bool FastDeployModel::CreateRKNPUBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateTimVXBackend() {
+  if (valid_timvx_backends.size() == 0) {
+    FDERROR << "There's no valid timvx backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_timvx_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_timvx_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_timvx_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
 bool FastDeployModel::CreateIpuBackend() {
   if (valid_ipu_backends.size() == 0) {
     FDERROR << "There's no valid ipu backends for model: " << ModelName()
@@ -239,7 +272,7 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool FastDeployModel::Infer() {
-  return Infer(reused_input_tensors, &reused_output_tensors);
+  return Infer(reused_input_tensors_, &reused_output_tensors_);
 }
 
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {
