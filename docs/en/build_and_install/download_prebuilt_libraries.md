@@ -3,8 +3,8 @@
 FastDeploy provides pre-built libraries for developers to download and install directly. Meanwhile, FastDeploy also offers easy access to compile so that developers can compile FastDeploy according to their own needs.
 
 This article is divided into two parts:
-- [1.GPU Deployment Environment](#GPU Deployment Environment)
-- [2.CPU Deployment Environment](#CPU Deployment Environment)
+- [1.GPU Deployment Environment](#gpu-deployment-environment)
+- [2.CPU Deployment Environment](#cpu-deployment-environment)
 
 ## GPU Deployment Environment
 
