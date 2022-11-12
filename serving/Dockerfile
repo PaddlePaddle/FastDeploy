@@ -42,7 +42,7 @@ RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
-COPY build/fastdeploy-0.0.3 /opt/fastdeploy/
+COPY build/fastdeploy_install /opt/fastdeploy/
 
 ENV LD_LIBRARY_PATH="/opt/TensorRT-8.4.1.5/lib/:/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/tensorrt/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
 ENV PATH="/opt/tritonserver/bin:$PATH"
