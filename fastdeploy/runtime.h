@@ -115,6 +115,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
 
+  /// Wrapper function of UsePaddleBackend()
+  void UsePaddleInferBackend() {
+    return UsePaddleBackend();
+  }
+
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
 
@@ -129,6 +134,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
+
+  /// Wrapper function of UseLiteBackend()
+  void UsePaddleLiteBackend() {
+    return UseLiteBackend();
+  }
 
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
