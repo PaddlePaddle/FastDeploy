@@ -115,7 +115,8 @@ bool YOLOv5Face::Preprocess(
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {  // always true
+#ifndef __ANDROID__     
+  if (std::fabs(ratio - 1.0f) > 1e-06) {  
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -124,6 +125,7 @@ bool YOLOv5Face::Preprocess(
     int resize_w = int(round(static_cast<float>(mat->Width()) * ratio));
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+#endif  
   // yolov5face's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
