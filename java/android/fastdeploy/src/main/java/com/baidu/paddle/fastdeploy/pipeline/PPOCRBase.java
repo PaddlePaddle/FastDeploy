@@ -10,7 +10,7 @@ import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 
 public class PPOCRBase {
-    protected long mNativeHandlerContext = 0; // Context from native.
+    protected long mCxxContext = 0; // Context from native.
     protected boolean mInitialized = false;
 
     public PPOCRBase() {
@@ -47,10 +47,10 @@ public class PPOCRBase {
 
     public boolean release() {
         mInitialized = false;
-        if (mNativeHandlerContext == 0) {
+        if (mCxxContext == 0) {
             return false;
         }
-        return releaseNative(mNativeHandlerContext);
+        return releaseNative(mCxxContext);
     }
 
     public boolean initialized() {
@@ -59,11 +59,11 @@ public class PPOCRBase {
 
     // Predict without image saving and bitmap rendering.
     public OCRResult predict(Bitmap ARGB8888Bitmap) {
-        if (mNativeHandlerContext == 0) {
+        if (mCxxContext == 0) {
             return new OCRResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+        OCRResult result = predictNative(mCxxContext, ARGB8888Bitmap,
                 false, "", false);
         if (result == null) {
             return new OCRResult();
@@ -72,11 +72,11 @@ public class PPOCRBase {
     }
 
     public OCRResult predict(Bitmap ARGB8888Bitmap, boolean rendering) {
-        if (mNativeHandlerContext == 0) {
+        if (mCxxContext == 0) {
             return new OCRResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+        OCRResult result = predictNative(mCxxContext, ARGB8888Bitmap,
                 false, "", rendering);
         if (result == null) {
             return new OCRResult();
@@ -88,11 +88,11 @@ public class PPOCRBase {
     public OCRResult predict(Bitmap ARGB8888Bitmap,
                              String savedImagePath) {
         // scoreThreshold is for visualizing only.
-        if (mNativeHandlerContext == 0) {
+        if (mCxxContext == 0) {
             return new OCRResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        OCRResult result = predictNative(mNativeHandlerContext, ARGB8888Bitmap,
+        OCRResult result = predictNative(mCxxContext, ARGB8888Bitmap,
                 true, savedImagePath, true);
         if (result == null) {
             return new OCRResult();
@@ -105,7 +105,7 @@ public class PPOCRBase {
                          Recognizer recModel,
                          PPOCRVersion OCRVersionTag) {
         if (!mInitialized) {
-            mNativeHandlerContext = bindNative(
+            mCxxContext = bindNative(
                     OCRVersionTag.ordinal(),
                     detModel.mModelFile,
                     detModel.mParamsFile,
@@ -118,14 +118,14 @@ public class PPOCRBase {
                     clsModel.mRuntimeOption,
                     recModel.mRuntimeOption,
                     clsModel.initialized());
-            if (mNativeHandlerContext != 0) {
+            if (mCxxContext != 0) {
                 mInitialized = true;
             }
             return mInitialized;
         } else {
             // release current native context and bind a new one.
             if (release()) {
-                mNativeHandlerContext = bindNative(
+                mCxxContext = bindNative(
                         OCRVersionTag.ordinal(),
                         detModel.mModelFile,
                         detModel.mParamsFile,
@@ -138,7 +138,7 @@ public class PPOCRBase {
                         clsModel.mRuntimeOption,
                         recModel.mRuntimeOption,
                         clsModel.initialized());
-                if (mNativeHandlerContext != 0) {
+                if (mCxxContext != 0) {
                     mInitialized = true;
                 }
                 return mInitialized;
@@ -162,14 +162,14 @@ public class PPOCRBase {
                                    boolean haveClsModel);
 
     // Call prediction from native context with rendering.
-    private native OCRResult predictNative(long nativeHandlerContext,
+    private native OCRResult predictNative(long CxxContext,
                                            Bitmap ARGB8888Bitmap,
-                                           boolean saved,
-                                           String savedImagePath,
+                                           boolean saveImage,
+                                           String savePath,
                                            boolean rendering);
 
     // Release buffers allocated in native context.
-    private native boolean releaseNative(long nativeHandlerContext);
+    private native boolean releaseNative(long CxxContext);
 
     // Initializes at the beginning.
     static {

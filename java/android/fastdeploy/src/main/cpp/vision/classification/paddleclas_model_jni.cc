@@ -23,8 +23,8 @@ namespace jni {
 /// Rendering ClassifyResult to ARGB888Bitmap
 void RenderingClassify(
     JNIEnv *env, const cv::Mat &c_bgr, const vision::ClassifyResult &c_result,
-    jobject argb8888_bitmap, bool saved, float score_threshold,
-    jstring saved_image_path) {
+    jobject argb8888_bitmap, bool save_image, float score_threshold,
+    jstring save_path) {
   if (!c_result.scores.empty()) {
     auto t = fastdeploy::jni::GetCurrentTime();
     cv::Mat c_vis_im;
@@ -45,8 +45,8 @@ void RenderingClassify(
       LOGD("Write to bitmap from native failed!");
     }
     std::string c_saved_image_path =
-        fastdeploy::jni::ConvertTo<std::string>(env, saved_image_path);
-    if (!c_saved_image_path.empty() && saved) {
+        fastdeploy::jni::ConvertTo<std::string>(env, save_path);
+    if (!c_saved_image_path.empty() && save_image) {
       cv::imwrite(c_saved_image_path, c_bgr);
     }
   }
@@ -102,10 +102,10 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_bindNativ
 
 JNIEXPORT jobject JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNative(
-    JNIEnv *env, jobject thiz, jlong native_model_context,
-    jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
-    jfloat score_threshold, jboolean rendering) {
-  if (native_model_context == 0) {
+    JNIEnv *env, jobject thiz, jlong cxx_context,
+    jobject argb8888_bitmap, jboolean save_image, jstring save_path,
+    jboolean rendering, jfloat score_threshold) {
+  if (cxx_context == 0) {
     return NULL;
   }
   cv::Mat c_bgr;
@@ -114,7 +114,7 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNa
   }
   auto c_model_ptr = reinterpret_cast<
       fastdeploy::vision::classification::PaddleClasModel *>(
-        native_model_context);
+        cxx_context);
 
   fastdeploy::vision::ClassifyResult c_result;
   auto t = fastdeploy::jni::GetCurrentTime();
@@ -123,8 +123,8 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNa
 
   if (rendering) {
     fastdeploy::jni::RenderingClassify(env, c_bgr, c_result,
-                                       argb8888_bitmap,saved,
-                                       score_threshold, saved_image_path);
+                                       argb8888_bitmap,save_image,
+                                       score_threshold, save_path);
   }
 
   return fastdeploy::jni::NewJavaResultFromCxx(
@@ -134,10 +134,10 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNa
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_releaseNative(
-    JNIEnv *env, jobject thiz, jlong native_model_context) {
+    JNIEnv *env, jobject thiz, jlong cxx_context) {
   auto c_model_ptr = reinterpret_cast<
       fastdeploy::vision::classification::PaddleClasModel *>(
-          native_model_context);
+          cxx_context);
   fastdeploy::jni::PrintPaddleClasModelTimeOfRuntime(c_model_ptr);
   delete c_model_ptr;
   LOGD("[End] Release PaddleClasModel in native !");

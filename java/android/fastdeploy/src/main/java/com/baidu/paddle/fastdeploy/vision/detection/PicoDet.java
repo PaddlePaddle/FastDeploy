@@ -7,7 +7,7 @@ import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 
 public class PicoDet {
-    protected long mNativeModelContext = 0; // Context from native.
+    protected long mCxxContext = 0; // Context from native.
     protected boolean mInitialized = false;
 
     public PicoDet() {
@@ -64,10 +64,10 @@ public class PicoDet {
 
     public boolean release() {
         mInitialized = false;
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return false;
         }
-        return releaseNative(mNativeModelContext);
+        return releaseNative(mCxxContext);
     }
 
     public boolean initialized() {
@@ -76,12 +76,12 @@ public class PicoDet {
 
     // Predict without image saving and bitmap rendering.
     public DetectionResult predict(Bitmap ARGB8888Bitmap) {
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return new DetectionResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        DetectionResult result = predictNative(mNativeModelContext, ARGB8888Bitmap,
-                false, "", 0.f, false);
+        DetectionResult result = predictNative(mCxxContext, ARGB8888Bitmap,
+                false, "", false, 0.f);
         if (result == null) {
             return new DetectionResult();
         }
@@ -91,12 +91,12 @@ public class PicoDet {
     public DetectionResult predict(Bitmap ARGB8888Bitmap,
                                    boolean rendering,
                                    float scoreThreshold) {
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return new DetectionResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        DetectionResult result = predictNative(mNativeModelContext, ARGB8888Bitmap,
-                false, "", scoreThreshold, rendering);
+        DetectionResult result = predictNative(mCxxContext, ARGB8888Bitmap,
+                false, "", rendering, scoreThreshold);
         if (result == null) {
             return new DetectionResult();
         }
@@ -108,13 +108,13 @@ public class PicoDet {
                                    String savedImagePath,
                                    float scoreThreshold) {
         // scoreThreshold is for visualizing only.
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return new DetectionResult();
         }
         // Only support ARGB8888 bitmap in native now.
         DetectionResult result = predictNative(
-                mNativeModelContext, ARGB8888Bitmap, true,
-                savedImagePath, scoreThreshold, true);
+                mCxxContext, ARGB8888Bitmap, true,
+                savedImagePath, true, scoreThreshold);
         if (result == null) {
             return new DetectionResult();
         }
@@ -127,26 +127,26 @@ public class PicoDet {
                           String labelFile,
                           RuntimeOption runtimeOption) {
         if (!mInitialized) {
-            mNativeModelContext = bindNative(
+            mCxxContext = bindNative(
                     modelFile,
                     paramsFile,
                     configFile,
                     runtimeOption,
                     labelFile);
-            if (mNativeModelContext != 0) {
+            if (mCxxContext != 0) {
                 mInitialized = true;
             }
             return mInitialized;
         } else {
             // release current native context and bind a new one.
             if (release()) {
-                mNativeModelContext = bindNative(
+                mCxxContext = bindNative(
                         modelFile,
                         paramsFile,
                         configFile,
                         runtimeOption,
                         labelFile);
-                if (mNativeModelContext != 0) {
+                if (mCxxContext != 0) {
                     mInitialized = true;
                 }
                 return mInitialized;
@@ -163,15 +163,15 @@ public class PicoDet {
                                    String labelFile);
 
     // Call prediction from native context with rendering.
-    private native DetectionResult predictNative(long nativeModelContext,
+    private native DetectionResult predictNative(long CxxContext,
                                                  Bitmap ARGB8888Bitmap,
-                                                 boolean saved,
-                                                 String savedImagePath,
-                                                 float scoreThreshold,
-                                                 boolean rendering);
+                                                 boolean saveImage,
+                                                 String savePath,
+                                                 boolean rendering,
+                                                 float scoreThreshold);
 
     // Release buffers allocated in native context.
-    private native boolean releaseNative(long nativeModelContext);
+    private native boolean releaseNative(long CxxContext);
 
     // Initializes at the beginning.
     static {

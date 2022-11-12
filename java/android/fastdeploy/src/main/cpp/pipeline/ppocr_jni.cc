@@ -187,7 +187,7 @@ namespace jni {
 /// Rendering OCRResult to ARGB888Bitmap
 void RenderingOCR(
     JNIEnv *env, const cv::Mat &c_bgr, const vision::OCRResult &c_result,
-    jobject argb8888_bitmap, bool saved, jstring saved_image_path) {
+    jobject argb8888_bitmap, bool save_image, jstring saved_path) {
   if (!c_result.boxes.empty()) {
     auto t = fastdeploy::jni::GetCurrentTime();
     cv::Mat c_vis_im;
@@ -200,8 +200,8 @@ void RenderingOCR(
       LOGD("Write to bitmap from native failed!");
     }
     std::string c_saved_image_path =
-        fastdeploy::jni::ConvertTo<std::string>(env, saved_image_path);
-    if (!c_saved_image_path.empty() && saved) {
+        fastdeploy::jni::ConvertTo<std::string>(env, saved_path);
+    if (!c_saved_image_path.empty() && save_image) {
       cv::imwrite(c_saved_image_path, c_bgr);
     }
   }
@@ -301,10 +301,10 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
 
 JNIEXPORT jobject JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
-    JNIEnv *env, jobject thiz, jlong native_handler_context,
-    jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
+    JNIEnv *env, jobject thiz, jlong cxx_context,
+    jobject argb8888_bitmap, jboolean save_image, jstring save_path,
     jboolean rendering) {
-  if (native_handler_context == 0) {
+  if (cxx_context == 0) {
     return NULL;
   }
   cv::Mat c_bgr;
@@ -313,7 +313,7 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
   }
   auto c_ppocr_handler_ptr = reinterpret_cast<
       fastdeploy::jni::pipeline::PPOCRHandler*>(
-          native_handler_context);
+          cxx_context);
 
   fastdeploy::vision::OCRResult c_result;
   c_ppocr_handler_ptr->Predict(&c_bgr, &c_result);
@@ -323,8 +323,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
 
   if (rendering) {
     fastdeploy::jni::RenderingOCR(env, c_bgr, c_result,
-                                  argb8888_bitmap, saved,
-                                  saved_image_path);
+                                  argb8888_bitmap, save_image,
+                                  save_path);
   }
 
   return fastdeploy::jni::NewJavaResultFromCxx(
@@ -334,13 +334,13 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_releaseNative(
-    JNIEnv *env, jobject thiz, jlong native_handler_context) {
-  if (native_handler_context == 0) {
+    JNIEnv *env, jobject thiz, jlong cxx_context) {
+  if (cxx_context == 0) {
     return JNI_FALSE;
   }
   auto c_ppocr_handler_ptr = reinterpret_cast<
-      fastdeploy::jni::pipeline::PPOCRHandler*>(
-          native_handler_context);
+      fastdeploy::jni::pipeline::PPOCRHandler*>(cxx_context);
+
   if (!c_ppocr_handler_ptr->ReleaseAllocatedOCRMemories()) {
     delete c_ppocr_handler_ptr;
     return JNI_FALSE;
