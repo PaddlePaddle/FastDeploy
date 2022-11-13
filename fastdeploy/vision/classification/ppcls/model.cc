@@ -23,10 +23,16 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
                                  const ModelFormat& model_format) : preprocessor_(config_file) {
-  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
-                        Backend::LITE};
-  valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-  valid_timvx_backends = {Backend::LITE};
+  if (model_format == ModelFormat::PADDLE) {
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_ipu_backends = {Backend::PDINFER};
+  } else if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  }
   
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
