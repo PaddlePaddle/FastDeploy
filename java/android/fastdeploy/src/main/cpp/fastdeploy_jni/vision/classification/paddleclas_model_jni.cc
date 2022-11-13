@@ -38,6 +38,8 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_bindNativ
   auto c_runtime_option = fni::NewCxxRuntimeOption(env, runtime_option);
   auto c_model_ptr = new classification::PaddleClasModel(
       c_model_file, c_params_file, c_config_file, c_runtime_option);
+  INITIALIZED_OR_RETURN(c_model_ptr)
+
 #ifdef ENABLE_RUNTIME_PERF
   c_model_ptr->EnableRecordTimeOfRuntime();
 #endif
@@ -66,7 +68,7 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_predictNa
   vision::ClassifyResult c_result;
   auto t = fni::GetCurrentTime();
   c_model_ptr->Predict(&c_bgr, &c_result);
-  fni::PerfTimeOfRuntime(c_model_ptr, t);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, t)
 
   if (rendering) {
     fni::RenderingClassify(env, c_bgr, c_result, argb8888_bitmap, save_image,
@@ -82,7 +84,7 @@ Java_com_baidu_paddle_fastdeploy_vision_classification_PaddleClasModel_releaseNa
     JNIEnv *env, jobject thiz, jlong cxx_context) {
   auto c_model_ptr =
       reinterpret_cast<classification::PaddleClasModel *>(cxx_context);
-  fni::PerfTimeOfRuntime(c_model_ptr);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, -1)
   delete c_model_ptr;
   LOGD("[End] Release PaddleClasModel in native !");
   return JNI_TRUE;

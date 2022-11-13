@@ -136,26 +136,6 @@ bool PPOCRHandler::ReleaseAllocatedOCRMemories() {
   return true;
 }
 
-void PPOCRHandler::PerfTimeOfRuntime() const {
-#ifdef ENABLE_RUNTIME_PERF
-  if ((detector_ != nullptr) && (detector_->EnabledRecordTimeOfRuntime())) {
-    auto det_info_of_runtime = detector_->PrintStatisInfoOfRuntime();
-    LOGD("[Det] Avg runtime costs %f ms",
-         det_info_of_runtime["avg_time"] * 1000.0f);
-  }
-  if ((classifier_ != nullptr) && (classifier_->EnabledRecordTimeOfRuntime())) {
-    auto cls_info_of_runtime = classifier_->PrintStatisInfoOfRuntime();
-    LOGD("[Cls] Avg runtime costs %f ms",
-         cls_info_of_runtime["avg_time"] * 1000.0f);
-  }
-  if ((recognizer_ != nullptr) && (recognizer_->EnabledRecordTimeOfRuntime())) {
-    auto rec_info_of_runtime = recognizer_->PrintStatisInfoOfRuntime();
-    LOGD("[Rec] Avg runtime costs %f ms",
-         rec_info_of_runtime["avg_time"] * 1000.0f);
-  }
-#endif
-}
-
 /// Rendering OCRResult to ARGB888Bitmap
 void RenderingOCR(JNIEnv *env, const cv::Mat &c_bgr,
                   const vision::OCRResult &c_result, jobject argb8888_bitmap,

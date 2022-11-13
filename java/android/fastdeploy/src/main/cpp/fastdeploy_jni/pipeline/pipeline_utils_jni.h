@@ -57,8 +57,6 @@ class PPOCRHandler {
   // PP-OCRv2/v3's memory by 'new' operator via 'delete'.
   bool ReleaseAllocatedOCRMemories();
 
-  void PerfTimeOfRuntime() const;
-
  public:
   vision::ocr::DBDetector *detector_ = nullptr;
   vision::ocr::Classifier *classifier_ = nullptr;

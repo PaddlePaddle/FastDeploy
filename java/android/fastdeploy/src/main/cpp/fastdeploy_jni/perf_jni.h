@@ -80,5 +80,15 @@ inline void PerfTimeOfRuntime(
 #endif
 }
 
+#define INITIALIZED_OR_RETURN(c_model_ptr) \
+  if (!(c_model_ptr)->Initialized()) { \
+    LOGE("Failed to initialize!"); \
+    delete (c_model_ptr); \
+    return 0; \
+  }
+
+#define PERF_TIME_OF_RUNTIME(c_model_ptr, start) \
+  fastdeploy::jni::PerfTimeOfRuntime((c_model_ptr), (start));
+
 }  // namespace jni
 }  // namespace fastdeploy

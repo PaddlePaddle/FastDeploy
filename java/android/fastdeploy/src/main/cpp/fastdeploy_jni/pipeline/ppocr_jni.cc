@@ -41,9 +41,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
     return 0;
   }
   // TODO(qiuyanjun): Allows users to set model parameters, such as
-  // det_db_box_thresh,
-  //  det_db_thresh, use_dilation, etc. These parameters should be passed in via
-  //  JNI.
+  // det_db_box_thresh, det_db_thresh, use_dilation, etc. These
+  // parameters should be passed in via JNI.
   auto c_det_model_file = fni::ConvertTo<std::string>(env, det_model_file);
   auto c_det_params_file = fni::ConvertTo<std::string>(env, det_params_file);
   auto c_cls_model_file = fni::ConvertTo<std::string>(env, cls_model_file);
@@ -59,8 +58,12 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
   // Init PP-OCR pipeline
   auto c_det_model_ptr = new ocr::DBDetector(
       c_det_model_file, c_det_params_file, c_det_runtime_option);
+  INITIALIZED_OR_RETURN(c_det_model_ptr)
+
   auto c_rec_model_ptr = new ocr::Recognizer(
       c_rec_model_file, c_rec_params_file, c_rec_label_path, c_rec_runtime_option);
+  INITIALIZED_OR_RETURN(c_rec_model_ptr)
+
 #ifdef ENABLE_RUNTIME_PERF
   c_det_model_ptr->EnableRecordTimeOfRuntime();
   c_rec_model_ptr->EnableRecordTimeOfRuntime();
@@ -70,6 +73,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
     if (c_have_cls_model) {
       auto c_cls_model_ptr = new ocr::Classifier(
           c_cls_model_file, c_cls_params_file, c_cls_runtime_option);
+      INITIALIZED_OR_RETURN(c_cls_model_ptr)
+
 #ifdef ENABLE_RUNTIME_PERF
       c_cls_model_ptr->EnableRecordTimeOfRuntime();
 #endif
@@ -99,6 +104,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
     if (c_have_cls_model) {
       auto c_cls_model_ptr = new ocr::Classifier(
           c_cls_model_file, c_cls_params_file, c_cls_runtime_option);
+      INITIALIZED_OR_RETURN(c_cls_model_ptr)
+
 #ifdef ENABLE_RUNTIME_PERF
       c_cls_model_ptr->EnableRecordTimeOfRuntime();
 #endif
@@ -129,8 +136,9 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_bindNative(
 
 JNIEXPORT jobject JNICALL
 Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
-    JNIEnv *env, jobject thiz, jlong cxx_context, jobject argb8888_bitmap,
-    jboolean save_image, jstring save_path, jboolean rendering) {
+    JNIEnv *env, jobject thiz, jlong cxx_context,
+    jobject argb8888_bitmap, jboolean save_image,
+    jstring save_path, jboolean rendering) {
   if (cxx_context == 0) {
     return NULL;
   }
@@ -142,8 +150,10 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
 
   vision::OCRResult c_result;
   c_ppocr_handler_ptr->Predict(&c_bgr, &c_result);
-  LOGD("Result: %s", c_result.Str().c_str());
-  c_ppocr_handler_ptr->PerfTimeOfRuntime();
+  LOGD("OCR Result: %s", c_result.Str().c_str());
+  PERF_TIME_OF_RUNTIME(c_ppocr_handler_ptr->detector_, -1)
+  PERF_TIME_OF_RUNTIME(c_ppocr_handler_ptr->classifier_, -1)
+  PERF_TIME_OF_RUNTIME(c_ppocr_handler_ptr->recognizer_, -1)
 
   if (rendering) {
     fni::RenderingOCR(env, c_bgr, c_result, argb8888_bitmap, save_image,
