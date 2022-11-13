@@ -13,6 +13,20 @@
 // limitations under the License.
 
 #pragma once
-#include "bitmap_jni.h"   // NOLINT
-#include "convert_jni.h"  // NOLINT
-#include "utils_jni.h"    // NOLINT
+
+#include <jni.h>  // NOLINT
+
+#include <string>  // NOLINT
+#include <vector>  // NOLINT
+
+#include "fastdeploy/vision.h"
+
+namespace fastdeploy {
+namespace jni {
+
+/// Create a C++ RuntimeOption from Java RuntimeOption.
+fastdeploy::RuntimeOption NewCxxRuntimeOption(
+    JNIEnv *env, jobject j_runtime_option_obj);
+
+}  // namespace jni
+}  // namespace fastdeploy
