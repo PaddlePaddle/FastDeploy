@@ -1,5 +1,5 @@
 # FastDeploy 工具包
-FastDeploy工具包提供例如一键模型自动化压缩等工具, 本文降介绍如何使用此工具包
+FastDeploy工具包提供例如一键模型自动化压缩等工具, 本文将以FastDeploy一键自动化压缩工具为例, 介绍如何使用此工具包
 
 ## 以FastDeploy一键模型压缩为例
 
