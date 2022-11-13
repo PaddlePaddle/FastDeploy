@@ -12,40 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "convert_jni.h"  // NOLINT
-#include "runtime_option_jni.h"  // NOLINT
+#include "fastdeploy_jni/convert_jni.h"  // NOLINT
+#include "fastdeploy_jni/runtime_option_jni.h"  // NOLINT
 
 namespace fastdeploy {
 namespace jni {
 
-fastdeploy::RuntimeOption NewCxxRuntimeOption(
-    JNIEnv *env, jobject j_runtime_option_obj) {
+fastdeploy::RuntimeOption NewCxxRuntimeOption(JNIEnv *env,
+                                              jobject j_runtime_option_obj) {
   // WARN: Please make sure 'j_runtime_option_obj' param is a
   // ref of Java RuntimeOption.
   // Field signatures of Java RuntimeOption.
   // (1) mCpuThreadNum int:               I
   // (2) mEnableLiteFp16 boolean:         Z
-  // (3) mLitePowerMode LitePowerMode:    com/baidu/paddle/fastdeploy/LitePowerMode
+  // (3) mLitePowerMode LitePowerMode: com/baidu/paddle/fastdeploy/LitePowerMode
   // (4) mLiteOptimizedModelDir String:   java/lang/String
 
-  const jclass j_runtime_option_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/RuntimeOption");
-  const jfieldID j_cpu_num_thread_id = env->GetFieldID(
-      j_runtime_option_clazz, "mCpuThreadNum", "I");
-  const jfieldID j_enable_lite_fp16_id = env->GetFieldID(
-      j_runtime_option_clazz, "mEnableLiteFp16", "Z");
-  const jfieldID j_lite_power_mode_id = env->GetFieldID(
-      j_runtime_option_clazz, "mLitePowerMode",
-      "Lcom/baidu/paddle/fastdeploy/LitePowerMode;");
+  const jclass j_runtime_option_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/RuntimeOption");
+  const jfieldID j_cpu_num_thread_id =
+      env->GetFieldID(j_runtime_option_clazz, "mCpuThreadNum", "I");
+  const jfieldID j_enable_lite_fp16_id =
+      env->GetFieldID(j_runtime_option_clazz, "mEnableLiteFp16", "Z");
+  const jfieldID j_lite_power_mode_id =
+      env->GetFieldID(j_runtime_option_clazz, "mLitePowerMode",
+                      "Lcom/baidu/paddle/fastdeploy/LitePowerMode;");
   const jfieldID j_lite_optimized_model_dir_id = env->GetFieldID(
-      j_runtime_option_clazz, "mLiteOptimizedModelDir",
-      "Ljava/lang/String;");
+      j_runtime_option_clazz, "mLiteOptimizedModelDir", "Ljava/lang/String;");
 
   // mLitePowerMode is Java Enum.
-  const jclass j_lite_power_mode_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/LitePowerMode");
-  const jmethodID j_lite_power_mode_ordinal_id = env->GetMethodID(
-      j_lite_power_mode_clazz, "ordinal", "()I");
+  const jclass j_lite_power_mode_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/LitePowerMode");
+  const jmethodID j_lite_power_mode_ordinal_id =
+      env->GetMethodID(j_lite_power_mode_clazz, "ordinal", "()I");
 
   fastdeploy::RuntimeOption c_runtime_option;
   c_runtime_option.UseCpu();
@@ -57,24 +56,23 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
   }
 
   // Get values from Java RuntimeOption.
-  jint j_cpu_num_thread = env->GetIntField(
-      j_runtime_option_obj, j_cpu_num_thread_id);
-  jboolean j_enable_lite_fp16 = env->GetBooleanField(
-      j_runtime_option_obj, j_enable_lite_fp16_id);
-  jstring j_lite_optimized_model_dir =
-      static_cast<jstring>(env->GetObjectField(
-          j_runtime_option_obj, j_lite_optimized_model_dir_id));
-  jobject j_lite_power_mode_obj = env->GetObjectField(
-      j_runtime_option_obj, j_lite_power_mode_id);
-  jint j_lite_power_mode = env->CallIntMethod(
-      j_lite_power_mode_obj, j_lite_power_mode_ordinal_id);
+  jint j_cpu_num_thread =
+      env->GetIntField(j_runtime_option_obj, j_cpu_num_thread_id);
+  jboolean j_enable_lite_fp16 =
+      env->GetBooleanField(j_runtime_option_obj, j_enable_lite_fp16_id);
+  jstring j_lite_optimized_model_dir = static_cast<jstring>(
+      env->GetObjectField(j_runtime_option_obj, j_lite_optimized_model_dir_id));
+  jobject j_lite_power_mode_obj =
+      env->GetObjectField(j_runtime_option_obj, j_lite_power_mode_id);
+  jint j_lite_power_mode =
+      env->CallIntMethod(j_lite_power_mode_obj, j_lite_power_mode_ordinal_id);
 
   int c_cpu_num_thread = static_cast<int>(j_cpu_num_thread);
   bool c_enable_lite_fp16 = static_cast<bool>(j_enable_lite_fp16);
   fastdeploy::LitePowerMode c_lite_power_mode =
       static_cast<fastdeploy::LitePowerMode>(j_lite_power_mode);
   std::string c_lite_optimized_model_dir =
-      fastdeploy::jni::ConvertTo<std::string>(env, j_lite_optimized_model_dir);
+      ConvertTo<std::string>(env, j_lite_optimized_model_dir);
 
   // Setup Cxx RuntimeOption
   c_runtime_option.SetCpuThreadNum(c_cpu_num_thread);

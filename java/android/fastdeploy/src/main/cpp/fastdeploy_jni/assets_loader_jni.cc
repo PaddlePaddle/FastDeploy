@@ -1,7 +1,3 @@
-//
-// Created by qiuyanjun on 2022/10/19.
-//
-
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,50 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "utils_jni.h"
+#include "fastdeploy_jni/assets_loader_jni.h"
 
 namespace fastdeploy {
 namespace jni {
 
-// Assets Loader Utils.
-bool AssetsLoaderUtils::detection_labels_loaded_ = false;
-bool AssetsLoaderUtils::classification_labels_loaded_ = false;
-std::vector<std::string> AssetsLoaderUtils::detection_labels_ = {};
-std::vector<std::string> AssetsLoaderUtils::classification_labels_ = {};
+/// Assets loader
+bool AssetsLoader::detection_labels_loaded_ = false;
+bool AssetsLoader::classification_labels_loaded_ = false;
+std::vector<std::string> AssetsLoader::detection_labels_ = {};
+std::vector<std::string> AssetsLoader::classification_labels_ = {};
 
-bool AssetsLoaderUtils::IsDetectionLabelsLoaded() {
+bool AssetsLoader::IsDetectionLabelsLoaded() {
   return detection_labels_loaded_;
 }
 
-bool AssetsLoaderUtils::IsClassificationLabelsLoaded() {
+bool AssetsLoader::IsClassificationLabelsLoaded() {
   return classification_labels_loaded_;
 }
 
-const std::vector<std::string>& AssetsLoaderUtils::GetDetectionLabels() {
+const std::vector<std::string>& AssetsLoader::GetDetectionLabels() {
   return detection_labels_;
 }
 
-const std::vector<std::string>& AssetsLoaderUtils::GetClassificationLabels() {
+const std::vector<std::string>& AssetsLoader::GetClassificationLabels() {
   return classification_labels_;
 }
 
-void AssetsLoaderUtils::LoadClassificationLabels(const std::string& path,
-                                                 bool force_reload) {
+void AssetsLoader::LoadClassificationLabels(const std::string& path,
+                                            bool force_reload) {
   if (force_reload || (!classification_labels_loaded_)) {
     classification_labels_loaded_ =
         LoadLabelsFromTxt(path, &classification_labels_);
   }
 }
 
-void AssetsLoaderUtils::LoadDetectionLabels(const std::string& path,
-                                            bool force_reload) {
+void AssetsLoader::LoadDetectionLabels(const std::string& path,
+                                       bool force_reload) {
   if (force_reload || (!detection_labels_loaded_)) {
     detection_labels_loaded_ = LoadLabelsFromTxt(path, &detection_labels_);
   }
 }
 
-bool AssetsLoaderUtils::LoadLabelsFromTxt(const std::string& txt_path,
-                                          std::vector<std::string>* labels) {
+bool AssetsLoader::LoadLabelsFromTxt(const std::string& txt_path,
+                                     std::vector<std::string>* labels) {
   labels->clear();
   std::ifstream file;
   file.open(txt_path);

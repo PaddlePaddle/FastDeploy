@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <android/bitmap.h>  // NOLINT
 #include <jni.h>             // NOLINT
-
-#include "fastdeploy_jni.h"     // NOLINT
-#include "vision/results_jni.h" // NOLINT
+#include <android/bitmap.h>  // NOLINT
+#include "fastdeploy_jni/perf_jni.h"  // NOLINT
+#include "fastdeploy_jni/convert_jni.h"  // NOLINT
+#include "fastdeploy_jni/vision/results_jni.h"  // NOLINT
 
 namespace fastdeploy {
 namespace jni {
 
 /// Initialize a Java Result object from native cxx_result.
-bool AllocateJavaClassifyResultFromCxx(
-    JNIEnv *env, jobject j_cls_result_obj, void *cxx_result) {
+bool AllocateJavaClassifyResultFromCxx(JNIEnv *env, jobject j_cls_result_obj,
+                                       void *cxx_result) {
   // WARN: Please make sure 'j_cls_result_obj' param
   // is a ref of Java ClassifyResult.
   // Field signatures of Java ClassifyResult:
@@ -33,22 +33,21 @@ bool AllocateJavaClassifyResultFromCxx(
   if (cxx_result == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<
-      fastdeploy::vision::ClassifyResult *>(cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::ClassifyResult *>(cxx_result);
 
   const int len = static_cast<int>(c_result_ptr->scores.size());
   if (len == 0) {
     return false;
   }
 
-  const jclass j_cls_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/ClassifyResult");
-  const jfieldID j_cls_scores_id = env->GetFieldID(
-      j_cls_result_clazz, "mScores", "[F");
-  const jfieldID j_cls_label_ids_id = env->GetFieldID(
-      j_cls_result_clazz, "mLabelIds", "[I");
-  const jfieldID j_cls_initialized_id = env->GetFieldID(
-      j_cls_result_clazz, "mInitialized", "Z");
+  const jclass j_cls_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/ClassifyResult");
+  const jfieldID j_cls_scores_id =
+      env->GetFieldID(j_cls_result_clazz, "mScores", "[F");
+  const jfieldID j_cls_label_ids_id =
+      env->GetFieldID(j_cls_result_clazz, "mLabelIds", "[I");
+  const jfieldID j_cls_initialized_id =
+      env->GetFieldID(j_cls_result_clazz, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_cls_result_obj, j_cls_result_clazz)) {
     return false;
@@ -65,8 +64,10 @@ bool AllocateJavaClassifyResultFromCxx(
   env->SetIntArrayRegion(j_cls_label_ids_int_arr, 0, len, label_ids.data());
 
   // Set object fields
-  env->SetObjectField(j_cls_result_obj, j_cls_scores_id, j_cls_scores_float_arr);
-  env->SetObjectField(j_cls_result_obj, j_cls_label_ids_id, j_cls_label_ids_int_arr);
+  env->SetObjectField(j_cls_result_obj, j_cls_scores_id,
+                      j_cls_scores_float_arr);
+  env->SetObjectField(j_cls_result_obj, j_cls_label_ids_id,
+                      j_cls_label_ids_int_arr);
   env->SetBooleanField(j_cls_result_obj, j_cls_initialized_id, JNI_TRUE);
 
   // Release local Refs
@@ -77,8 +78,8 @@ bool AllocateJavaClassifyResultFromCxx(
   return true;
 }
 
-bool AllocateJavaDetectionResultFromCxx(
-    JNIEnv *env, jobject j_det_result_obj, void *cxx_result) {
+bool AllocateJavaDetectionResultFromCxx(JNIEnv *env, jobject j_det_result_obj,
+                                        void *cxx_result) {
   // WARN: Please make sure 'j_det_result_obj' param
   // is a ref of Java DetectionResult.
   // Field signatures of Java DetectionResult:
@@ -89,24 +90,24 @@ bool AllocateJavaDetectionResultFromCxx(
   if (cxx_result == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<fastdeploy::vision::DetectionResult *>(
-      cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::DetectionResult *>(cxx_result);
+
   const int len = static_cast<int>(c_result_ptr->scores.size());
   if (len == 0) {
     return false;
   }
 
-  const jclass j_det_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/DetectionResult");
-  const jclass j_det_float_arr_clazz = env->FindClass("[F"); // (4,)
-  const jfieldID j_det_boxes_id = env->GetFieldID(
-      j_det_result_clazz, "mBoxes", "[[F");
-  const jfieldID j_det_scores_id = env->GetFieldID(
-      j_det_result_clazz, "mScores", "[F");
-  const jfieldID j_det_label_ids_id = env->GetFieldID(
-      j_det_result_clazz, "mLabelIds", "[I");
-  const jfieldID j_det_initialized_id = env->GetFieldID(
-      j_det_result_clazz, "mInitialized", "Z");
+  const jclass j_det_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/DetectionResult");
+  const jclass j_det_float_arr_clazz = env->FindClass("[F");  // (4,)
+  const jfieldID j_det_boxes_id =
+      env->GetFieldID(j_det_result_clazz, "mBoxes", "[[F");
+  const jfieldID j_det_scores_id =
+      env->GetFieldID(j_det_result_clazz, "mScores", "[F");
+  const jfieldID j_det_label_ids_id =
+      env->GetFieldID(j_det_result_clazz, "mLabelIds", "[I");
+  const jfieldID j_det_initialized_id =
+      env->GetFieldID(j_det_result_clazz, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_det_result_obj, j_det_result_clazz)) {
     return false;
@@ -114,8 +115,8 @@ bool AllocateJavaDetectionResultFromCxx(
 
   // mBoxes float[][] shape (n,4): [[F
   const auto &boxes = c_result_ptr->boxes;
-  jobjectArray j_det_boxes_float_arr = env->NewObjectArray(
-      len, j_det_float_arr_clazz, NULL);
+  jobjectArray j_det_boxes_float_arr =
+      env->NewObjectArray(len, j_det_float_arr_clazz, NULL);
   for (int i = 0; i < len; ++i) {
     jfloatArray j_box = env->NewFloatArray(4);
     env->SetFloatArrayRegion(j_box, 0, 4, boxes.at(i).data());
@@ -135,8 +136,10 @@ bool AllocateJavaDetectionResultFromCxx(
 
   // Set object fields
   env->SetObjectField(j_det_result_obj, j_det_boxes_id, j_det_boxes_float_arr);
-  env->SetObjectField(j_det_result_obj, j_det_scores_id, j_det_scores_float_arr);
-  env->SetObjectField(j_det_result_obj, j_det_label_ids_id, j_det_label_ids_int_arr);
+  env->SetObjectField(j_det_result_obj, j_det_scores_id,
+                      j_det_scores_float_arr);
+  env->SetObjectField(j_det_result_obj, j_det_label_ids_id,
+                      j_det_label_ids_int_arr);
   env->SetBooleanField(j_det_result_obj, j_det_initialized_id, JNI_TRUE);
 
   // Release non static local Refs
@@ -149,8 +152,8 @@ bool AllocateJavaDetectionResultFromCxx(
   return true;
 }
 
-bool AllocateJavaOCRResultFromCxx(
-    JNIEnv *env, jobject j_ocr_result_obj, void *cxx_result) {
+bool AllocateJavaOCRResultFromCxx(JNIEnv *env, jobject j_ocr_result_obj,
+                                  void *cxx_result) {
   // WARN: Please make sure 'j_ocr_result_obj' param is a ref of Java OCRResult.
   // Field signatures of Java OCRResult:
   // (1) mBoxes int[][] shape (n,8):      [[I
@@ -162,29 +165,28 @@ bool AllocateJavaOCRResultFromCxx(
   if (cxx_result == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<fastdeploy::vision::OCRResult *>(
-      cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::OCRResult *>(cxx_result);
   const int len = static_cast<int>(c_result_ptr->boxes.size());
   if (len == 0) {
     return false;
   }
 
-  const jclass j_ocr_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/OCRResult");
-  const jclass j_ocr_int_arr_clazz = env->FindClass("[I"); // (8,)
+  const jclass j_ocr_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/OCRResult");
+  const jclass j_ocr_int_arr_clazz = env->FindClass("[I");  // (8,)
   const jclass j_ocr_str_clazz = env->FindClass("java/lang/String");
-  const jfieldID j_ocr_boxes_id = env->GetFieldID(
-      j_ocr_result_clazz, "mBoxes", "[[I");
-  const jfieldID j_ocr_text_id = env->GetFieldID(
-      j_ocr_result_clazz, "mText", "[Ljava/lang/String;");
-  const jfieldID j_ocr_rec_scores_id = env->GetFieldID(
-      j_ocr_result_clazz, "mRecScores", "[F");
-  const jfieldID j_ocr_cls_scores_id = env->GetFieldID(
-      j_ocr_result_clazz, "mClsScores", "[F");
-  const jfieldID j_ocr_cls_labels_id = env->GetFieldID(
-      j_ocr_result_clazz, "mClsLabels", "[I");
-  const jfieldID j_ocr_initialized_id = env->GetFieldID(
-      j_ocr_result_clazz, "mInitialized", "Z");
+  const jfieldID j_ocr_boxes_id =
+      env->GetFieldID(j_ocr_result_clazz, "mBoxes", "[[I");
+  const jfieldID j_ocr_text_id =
+      env->GetFieldID(j_ocr_result_clazz, "mText", "[Ljava/lang/String;");
+  const jfieldID j_ocr_rec_scores_id =
+      env->GetFieldID(j_ocr_result_clazz, "mRecScores", "[F");
+  const jfieldID j_ocr_cls_scores_id =
+      env->GetFieldID(j_ocr_result_clazz, "mClsScores", "[F");
+  const jfieldID j_ocr_cls_labels_id =
+      env->GetFieldID(j_ocr_result_clazz, "mClsLabels", "[I");
+  const jfieldID j_ocr_initialized_id =
+      env->GetFieldID(j_ocr_result_clazz, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_ocr_result_obj, j_ocr_result_clazz)) {
     return false;
@@ -192,8 +194,8 @@ bool AllocateJavaOCRResultFromCxx(
 
   // mBoxes int[][] shape (n,8):      [[I
   const auto &boxes = c_result_ptr->boxes;
-  jobjectArray j_ocr_boxes_int_arr = env->NewObjectArray(
-      len, j_ocr_int_arr_clazz, NULL);
+  jobjectArray j_ocr_boxes_int_arr =
+      env->NewObjectArray(len, j_ocr_int_arr_clazz, NULL);
   for (int i = 0; i < len; ++i) {
     jintArray j_box = env->NewIntArray(8);
     env->SetIntArrayRegion(j_box, 0, 8, boxes.at(i).data());
@@ -203,22 +205,24 @@ bool AllocateJavaOCRResultFromCxx(
 
   // mText String[] shape (n):        [Ljava/lang/String;
   const auto &text = c_result_ptr->text;
-  jobjectArray j_ocr_text_arr = env->NewObjectArray(
-      len, j_ocr_str_clazz,env->NewStringUTF(""));
+  jobjectArray j_ocr_text_arr =
+      env->NewObjectArray(len, j_ocr_str_clazz, env->NewStringUTF(""));
   for (int64_t i = 0; i < len; ++i) {
-    env->SetObjectArrayElement(
-        j_ocr_text_arr, i, fastdeploy::jni::ConvertTo<jstring>(env, text.at(i)));
+    env->SetObjectArrayElement(j_ocr_text_arr, i,
+                               ConvertTo<jstring>(env, text.at(i)));
   }
 
   // mRecScores float[]  shape (n):   [F
   const auto &rec_scores = c_result_ptr->rec_scores;
   jfloatArray j_ocr_rec_scores_float_arr = env->NewFloatArray(len);
-  env->SetFloatArrayRegion(j_ocr_rec_scores_float_arr, 0, len, rec_scores.data());
+  env->SetFloatArrayRegion(j_ocr_rec_scores_float_arr, 0, len,
+                           rec_scores.data());
 
   // mClsScores float[]  shape (n):   [F
   const auto &cls_scores = c_result_ptr->cls_scores;
   jfloatArray j_ocr_cls_scores_float_arr = env->NewFloatArray(len);
-  env->SetFloatArrayRegion(j_ocr_cls_scores_float_arr, 0, len, cls_scores.data());
+  env->SetFloatArrayRegion(j_ocr_cls_scores_float_arr, 0, len,
+                           cls_scores.data());
 
   // mClsLabels int[]  shape (n):     [I
   const auto &cls_labels = c_result_ptr->cls_labels;
@@ -228,9 +232,12 @@ bool AllocateJavaOCRResultFromCxx(
   // Set object fields
   env->SetObjectField(j_ocr_result_obj, j_ocr_boxes_id, j_ocr_boxes_int_arr);
   env->SetObjectField(j_ocr_result_obj, j_ocr_text_id, j_ocr_text_arr);
-  env->SetObjectField(j_ocr_result_obj, j_ocr_rec_scores_id, j_ocr_rec_scores_float_arr);
-  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_scores_id, j_ocr_cls_scores_float_arr);
-  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_labels_id, j_ocr_cls_labels_int_arr);
+  env->SetObjectField(j_ocr_result_obj, j_ocr_rec_scores_id,
+                      j_ocr_rec_scores_float_arr);
+  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_scores_id,
+                      j_ocr_cls_scores_float_arr);
+  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_labels_id,
+                      j_ocr_cls_labels_int_arr);
   env->SetBooleanField(j_ocr_result_obj, j_ocr_initialized_id, JNI_TRUE);
 
   // Release non static local Refs
@@ -246,8 +253,9 @@ bool AllocateJavaOCRResultFromCxx(
   return true;
 }
 
-bool AllocateJavaSegmentationResultFromCxx(
-    JNIEnv *env, jobject j_seg_result_obj, void *cxx_result) {
+bool AllocateJavaSegmentationResultFromCxx(JNIEnv *env,
+                                           jobject j_seg_result_obj,
+                                           void *cxx_result) {
   // WARN: Please make sure 'j_seg_result_obj' param is
   // a ref of Java SegmentationResult.
   // Field signatures of Java SegmentationResult:
@@ -259,26 +267,26 @@ bool AllocateJavaSegmentationResultFromCxx(
   if (cxx_result == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<
-      fastdeploy::vision::SegmentationResult *>(cxx_result);
+  auto c_result_ptr =
+      reinterpret_cast<vision::SegmentationResult *>(cxx_result);
 
   const int len = static_cast<int>(c_result_ptr->label_map.size());
   if (len == 0) {
     return false;
   }
 
-  const jclass j_seg_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
-  const jfieldID j_seg_label_map_id = env->GetFieldID(
-      j_seg_result_clazz, "mLabelMap", "[I");
-  const jfieldID j_seg_shape_id = env->GetFieldID(
-      j_seg_result_clazz, "mShape", "[J");
-  const jfieldID j_seg_contain_shape_map_id = env->GetFieldID(
-      j_seg_result_clazz, "mContainScoreMap", "Z");
-  const jfieldID j_seg_score_map_id = env->GetFieldID(
-      j_seg_result_clazz, "mScoreMap", "[F");
-  const jfieldID j_seg_initialized_id = env->GetFieldID(
-      j_seg_result_clazz, "mInitialized", "Z");
+  const jclass j_seg_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/SegmentationResult");
+  const jfieldID j_seg_label_map_id =
+      env->GetFieldID(j_seg_result_clazz, "mLabelMap", "[I");
+  const jfieldID j_seg_shape_id =
+      env->GetFieldID(j_seg_result_clazz, "mShape", "[J");
+  const jfieldID j_seg_contain_shape_map_id =
+      env->GetFieldID(j_seg_result_clazz, "mContainScoreMap", "Z");
+  const jfieldID j_seg_score_map_id =
+      env->GetFieldID(j_seg_result_clazz, "mScoreMap", "[F");
+  const jfieldID j_seg_initialized_id =
+      env->GetFieldID(j_seg_result_clazz, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_seg_result_obj, j_seg_result_clazz)) {
     return false;
@@ -286,7 +294,7 @@ bool AllocateJavaSegmentationResultFromCxx(
 
   // mLabelMap int[] shape (n):        [I
   const auto &label_map_uint8 = c_result_ptr->label_map;
-  std::vector<int> label_map; // cast uint8 -> int32
+  std::vector<int> label_map;  // cast uint8 -> int32
   label_map.assign(label_map_uint8.begin(), label_map_uint8.end());
   jintArray j_seg_label_map_int_arr = env->NewIntArray(len);
   env->SetIntArrayRegion(j_seg_label_map_int_arr, 0, len, label_map.data());
@@ -300,20 +308,24 @@ bool AllocateJavaSegmentationResultFromCxx(
   // mContainScoreMap boolean:         Z
   const auto &contain_score_map = c_result_ptr->contain_score_map;
   if (contain_score_map) {
-    env->SetBooleanField(j_seg_result_obj, j_seg_contain_shape_map_id, JNI_TRUE);
+    env->SetBooleanField(j_seg_result_obj, j_seg_contain_shape_map_id,
+                         JNI_TRUE);
   }
 
   // mScoreMap float[]  shape (n):     [F
   if (contain_score_map) {
     const auto &score_map = c_result_ptr->score_map;
     jfloatArray j_seg_score_map_float_arr = env->NewFloatArray(len);
-    env->SetFloatArrayRegion(j_seg_score_map_float_arr, 0, len, score_map.data());
-    env->SetObjectField(j_seg_result_obj, j_seg_score_map_id, j_seg_score_map_float_arr);
+    env->SetFloatArrayRegion(j_seg_score_map_float_arr, 0, len,
+                             score_map.data());
+    env->SetObjectField(j_seg_result_obj, j_seg_score_map_id,
+                        j_seg_score_map_float_arr);
     env->DeleteLocalRef(j_seg_score_map_float_arr);
   }
 
   // Set object fields
-  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_int_arr);
+  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id,
+                      j_seg_label_map_int_arr);
   env->SetObjectField(j_seg_result_obj, j_seg_shape_id, j_seg_shape_long_arr);
   env->SetBooleanField(j_seg_result_obj, j_seg_initialized_id, JNI_TRUE);
 
@@ -325,9 +337,8 @@ bool AllocateJavaSegmentationResultFromCxx(
   return true;
 }
 
-bool AllocateJavaResultFromCxx(
-    JNIEnv *env, jobject j_result_obj, void *cxx_result, 
-    vision::ResultType type) {
+bool AllocateJavaResultFromCxx(JNIEnv *env, jobject j_result_obj,
+                               void *cxx_result, vision::ResultType type) {
   if (type == vision::ResultType::CLASSIFY) {
     return AllocateJavaClassifyResultFromCxx(env, j_result_obj, cxx_result);
   } else if (type == vision::ResultType::DETECTION) {
@@ -345,10 +356,10 @@ bool AllocateJavaResultFromCxx(
 
 /// New a Java Result object from native result cxx_result.
 jobject NewJavaClassifyResultFromCxx(JNIEnv *env, void *cxx_result) {
-  const jclass j_cls_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/ClassifyResult");
-  const jmethodID j_cls_result_init = env->GetMethodID(
-      j_cls_result_clazz, "<init>", "()V");
+  const jclass j_cls_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/ClassifyResult");
+  const jmethodID j_cls_result_init =
+      env->GetMethodID(j_cls_result_clazz, "<init>", "()V");
   jobject j_cls_result_obj =
       env->NewObject(j_cls_result_clazz, j_cls_result_init);
   AllocateJavaClassifyResultFromCxx(env, j_cls_result_obj, cxx_result);
@@ -357,10 +368,10 @@ jobject NewJavaClassifyResultFromCxx(JNIEnv *env, void *cxx_result) {
 }
 
 jobject NewJavaDetectionResultFromCxx(JNIEnv *env, void *cxx_result) {
-  const jclass j_det_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/DetectionResult");
-  const jmethodID j_det_result_init = env->GetMethodID(
-      j_det_result_clazz, "<init>", "()V");
+  const jclass j_det_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/DetectionResult");
+  const jmethodID j_det_result_init =
+      env->GetMethodID(j_det_result_clazz, "<init>", "()V");
   jobject j_det_result_obj =
       env->NewObject(j_det_result_clazz, j_det_result_init);
   AllocateJavaDetectionResultFromCxx(env, j_det_result_obj, cxx_result);
@@ -369,10 +380,10 @@ jobject NewJavaDetectionResultFromCxx(JNIEnv *env, void *cxx_result) {
 }
 
 jobject NewJavaOCRResultFromCxx(JNIEnv *env, void *cxx_result) {
-  const jclass j_ocr_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/OCRResult");
-  const jmethodID j_ocr_result_init = env->GetMethodID(
-      j_ocr_result_clazz, "<init>", "()V");
+  const jclass j_ocr_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/OCRResult");
+  const jmethodID j_ocr_result_init =
+      env->GetMethodID(j_ocr_result_clazz, "<init>", "()V");
   jobject j_ocr_result_obj =
       env->NewObject(j_ocr_result_clazz, j_ocr_result_init);
   AllocateJavaOCRResultFromCxx(env, j_ocr_result_obj, cxx_result);
@@ -381,10 +392,10 @@ jobject NewJavaOCRResultFromCxx(JNIEnv *env, void *cxx_result) {
 }
 
 jobject NewJavaSegmentationResultFromCxx(JNIEnv *env, void *cxx_result) {
-  const jclass j_seg_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
-  const jmethodID j_seg_result_init = env->GetMethodID(
-      j_seg_result_clazz, "<init>", "()V");
+  const jclass j_seg_result_clazz =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/SegmentationResult");
+  const jmethodID j_seg_result_init =
+      env->GetMethodID(j_seg_result_clazz, "<init>", "()V");
   jobject j_seg_result_obj =
       env->NewObject(j_seg_result_clazz, j_seg_result_init);
   AllocateJavaSegmentationResultFromCxx(env, j_seg_result_obj, cxx_result);
@@ -392,8 +403,8 @@ jobject NewJavaSegmentationResultFromCxx(JNIEnv *env, void *cxx_result) {
   return j_seg_result_obj;
 }
 
-jobject NewJavaResultFromCxx(
-    JNIEnv *env, void *cxx_result, vision::ResultType type) {
+jobject NewJavaResultFromCxx(JNIEnv *env, void *cxx_result,
+                             vision::ResultType type) {
   if (type == vision::ResultType::CLASSIFY) {
     return NewJavaClassifyResultFromCxx(env, cxx_result);
   } else if (type == vision::ResultType::DETECTION) {
@@ -410,8 +421,8 @@ jobject NewJavaResultFromCxx(
 }
 
 /// Init Cxx result from Java Result
-bool AllocateClassifyResultFromJava(
-    JNIEnv *env, jobject j_cls_result_obj, void *cxx_result) {
+bool AllocateClassifyResultFromJava(JNIEnv *env, jobject j_cls_result_obj,
+                                    void *cxx_result) {
   // WARN: Please make sure 'j_cls_result_obj' param
   // is a ref of Java ClassifyResult.
   // Field signatures of Java ClassifyResult:
@@ -421,25 +432,24 @@ bool AllocateClassifyResultFromJava(
   if (cxx_result == nullptr || j_cls_result_obj == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<
-      fastdeploy::vision::ClassifyResult *>(cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::ClassifyResult *>(cxx_result);
 
-  const jclass j_cls_result_clazz_cc = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/ClassifyResult");
-  const jfieldID j_cls_scores_id_cc = env->GetFieldID(
-      j_cls_result_clazz_cc, "mScores", "[F");
-  const jfieldID j_cls_label_ids_id_cc = env->GetFieldID(
-      j_cls_result_clazz_cc, "mLabelIds", "[I");
-  const jfieldID j_cls_initialized_id_cc = env->GetFieldID(
-      j_cls_result_clazz_cc, "mInitialized", "Z");
+  const jclass j_cls_result_clazz_cc =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/ClassifyResult");
+  const jfieldID j_cls_scores_id_cc =
+      env->GetFieldID(j_cls_result_clazz_cc, "mScores", "[F");
+  const jfieldID j_cls_label_ids_id_cc =
+      env->GetFieldID(j_cls_result_clazz_cc, "mLabelIds", "[I");
+  const jfieldID j_cls_initialized_id_cc =
+      env->GetFieldID(j_cls_result_clazz_cc, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_cls_result_obj, j_cls_result_clazz_cc)) {
     return false;
   }
 
   // mInitialized boolean:         Z
-  jboolean j_cls_initialized = env->GetBooleanField(
-      j_cls_result_obj, j_cls_initialized_id_cc);
+  jboolean j_cls_initialized =
+      env->GetBooleanField(j_cls_result_obj, j_cls_initialized_id_cc);
   if (j_cls_initialized == JNI_FALSE) {
     return false;
   }
@@ -460,15 +470,17 @@ bool AllocateClassifyResultFromJava(
   c_result_ptr->label_ids.resize(len);
 
   // mScores float[]  shape (n):   [F
-  jfloat *j_cls_scores_ptr = env->GetFloatArrayElements(
-      j_cls_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->scores.data(), j_cls_scores_ptr, len * sizeof(float));
+  jfloat *j_cls_scores_ptr =
+      env->GetFloatArrayElements(j_cls_scores_float_arr, nullptr);
+  std::memcpy(c_result_ptr->scores.data(), j_cls_scores_ptr,
+              len * sizeof(float));
   env->ReleaseFloatArrayElements(j_cls_scores_float_arr, j_cls_scores_ptr, 0);
 
   // mLabelIds int[]  shape (n):   [I
-  jint *j_cls_label_ids_ptr = env->GetIntArrayElements(
-      j_cls_label_ids_int_arr, nullptr);
-  std::memcpy(c_result_ptr->label_ids.data(), j_cls_label_ids_ptr, len * sizeof(int));
+  jint *j_cls_label_ids_ptr =
+      env->GetIntArrayElements(j_cls_label_ids_int_arr, nullptr);
+  std::memcpy(c_result_ptr->label_ids.data(), j_cls_label_ids_ptr,
+              len * sizeof(int));
   env->ReleaseIntArrayElements(j_cls_label_ids_int_arr, j_cls_label_ids_ptr, 0);
 
   env->DeleteLocalRef(j_cls_result_clazz_cc);
@@ -476,8 +488,8 @@ bool AllocateClassifyResultFromJava(
   return true;
 }
 
-bool AllocateDetectionResultFromJava(
-    JNIEnv *env, jobject j_det_result_obj, void *cxx_result) {
+bool AllocateDetectionResultFromJava(JNIEnv *env, jobject j_det_result_obj,
+                                     void *cxx_result) {
   // WARN: Please make sure 'j_det_result_obj' param
   // is a ref of Java DetectionResult.
   // Field signatures of Java DetectionResult:
@@ -488,27 +500,26 @@ bool AllocateDetectionResultFromJava(
   if (cxx_result == nullptr || j_det_result_obj == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<
-      fastdeploy::vision::DetectionResult *>(cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::DetectionResult *>(cxx_result);
 
-  const jclass j_det_result_clazz_cc = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/DetectionResult");
-  const jfieldID j_det_boxes_id_cc = env->GetFieldID(
-      j_det_result_clazz_cc, "mBoxes", "[[F");
-  const jfieldID j_det_scores_id_cc = env->GetFieldID(
-      j_det_result_clazz_cc, "mScores", "[F");
-  const jfieldID j_det_label_ids_id_cc = env->GetFieldID(
-      j_det_result_clazz_cc, "mLabelIds", "[I");
-  const jfieldID j_det_initialized_id_cc = env->GetFieldID(
-      j_det_result_clazz_cc, "mInitialized", "Z");
+  const jclass j_det_result_clazz_cc =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/DetectionResult");
+  const jfieldID j_det_boxes_id_cc =
+      env->GetFieldID(j_det_result_clazz_cc, "mBoxes", "[[F");
+  const jfieldID j_det_scores_id_cc =
+      env->GetFieldID(j_det_result_clazz_cc, "mScores", "[F");
+  const jfieldID j_det_label_ids_id_cc =
+      env->GetFieldID(j_det_result_clazz_cc, "mLabelIds", "[I");
+  const jfieldID j_det_initialized_id_cc =
+      env->GetFieldID(j_det_result_clazz_cc, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_det_result_obj, j_det_result_clazz_cc)) {
     return false;
   }
 
   // mInitialized boolean:         Z
-  jboolean j_det_initialized = env->GetBooleanField(
-      j_det_result_obj, j_det_initialized_id_cc);
+  jboolean j_det_initialized =
+      env->GetBooleanField(j_det_result_obj, j_det_initialized_id_cc);
   if (j_det_initialized == JNI_FALSE) {
     return false;
   }
@@ -550,15 +561,17 @@ bool AllocateDetectionResultFromJava(
   }
 
   // mScores float[]  shape (n):   [F
-  jfloat *j_det_scores_ptr = env->GetFloatArrayElements(
-      j_det_scores_float_arr,nullptr);
-  std::memcpy(c_result_ptr->scores.data(), j_det_scores_ptr, len * sizeof(float));
+  jfloat *j_det_scores_ptr =
+      env->GetFloatArrayElements(j_det_scores_float_arr, nullptr);
+  std::memcpy(c_result_ptr->scores.data(), j_det_scores_ptr,
+              len * sizeof(float));
   env->ReleaseFloatArrayElements(j_det_scores_float_arr, j_det_scores_ptr, 0);
 
   // mLabelIds int[]  shape (n):   [I
-  jint *j_det_label_ids_ptr = env->GetIntArrayElements(
-      j_det_label_ids_int_arr,nullptr);
-  std::memcpy(c_result_ptr->label_ids.data(), j_det_label_ids_ptr, len * sizeof(int));
+  jint *j_det_label_ids_ptr =
+      env->GetIntArrayElements(j_det_label_ids_int_arr, nullptr);
+  std::memcpy(c_result_ptr->label_ids.data(), j_det_label_ids_ptr,
+              len * sizeof(int));
   env->ReleaseIntArrayElements(j_det_label_ids_int_arr, j_det_label_ids_ptr, 0);
 
   env->DeleteLocalRef(j_det_result_clazz_cc);
@@ -566,8 +579,8 @@ bool AllocateDetectionResultFromJava(
   return true;
 }
 
-bool AllocateOCRResultFromJava(
-    JNIEnv *env, jobject j_ocr_result_obj, void *cxx_result) {
+bool AllocateOCRResultFromJava(JNIEnv *env, jobject j_ocr_result_obj,
+                               void *cxx_result) {
   // WARN: Please make sure 'j_ocr_result_obj' param is a ref of Java OCRResult.
   // Field signatures of Java OCRResult:
   // (1) mBoxes int[][] shape (n,8):      [[I
@@ -579,31 +592,30 @@ bool AllocateOCRResultFromJava(
   if (cxx_result == nullptr || j_ocr_result_obj == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<fastdeploy::vision::OCRResult *>(
-      cxx_result);
+  auto c_result_ptr = reinterpret_cast<vision::OCRResult *>(cxx_result);
 
-  const jclass j_ocr_result_clazz_cc = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/OCRResult");
-  const jfieldID j_ocr_boxes_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mBoxes", "[[I");
-  const jfieldID j_ocr_text_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mText", "[Ljava/lang/String;");
-  const jfieldID j_ocr_rec_scores_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mRecScores", "[F");
-  const jfieldID j_ocr_cls_scores_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mClsScores", "[F");
-  const jfieldID j_ocr_cls_labels_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mClsLabels", "[I");
-  const jfieldID j_ocr_initialized_id_cc = env->GetFieldID(
-      j_ocr_result_clazz_cc, "mInitialized", "Z");
+  const jclass j_ocr_result_clazz_cc =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/OCRResult");
+  const jfieldID j_ocr_boxes_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mBoxes", "[[I");
+  const jfieldID j_ocr_text_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mText", "[Ljava/lang/String;");
+  const jfieldID j_ocr_rec_scores_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mRecScores", "[F");
+  const jfieldID j_ocr_cls_scores_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mClsScores", "[F");
+  const jfieldID j_ocr_cls_labels_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mClsLabels", "[I");
+  const jfieldID j_ocr_initialized_id_cc =
+      env->GetFieldID(j_ocr_result_clazz_cc, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_ocr_result_obj, j_ocr_result_clazz_cc)) {
     return false;
   }
 
   // mInitialized boolean:         Z
-  jboolean j_ocr_initialized = env->GetBooleanField(
-      j_ocr_result_obj, j_ocr_initialized_id_cc);
+  jboolean j_ocr_initialized =
+      env->GetBooleanField(j_ocr_result_obj, j_ocr_initialized_id_cc);
   if (j_ocr_initialized == JNI_FALSE) {
     return false;
   }
@@ -637,8 +649,8 @@ bool AllocateOCRResultFromJava(
   // mBoxes int[][] shape (n,8):      [[I
   bool c_check_validation = true;
   for (int i = 0; i < len; ++i) {
-    auto j_box =
-        reinterpret_cast<jintArray>(env->GetObjectArrayElement(j_ocr_boxes_arr, i));
+    auto j_box = reinterpret_cast<jintArray>(
+        env->GetObjectArrayElement(j_ocr_boxes_arr, i));
     if (env->GetArrayLength(j_box) == 8) {
       jint *j_box_ptr = env->GetIntArrayElements(j_box, nullptr);
       std::memcpy(c_result_ptr->boxes[i].data(), j_box_ptr, 8 * sizeof(int));
@@ -654,70 +666,74 @@ bool AllocateOCRResultFromJava(
 
   // mText String[] shape (n):        [Ljava/lang/String;
   for (int i = 0; i < len; ++i) {
-    auto j_text = reinterpret_cast<jstring>(env->GetObjectArrayElement(
-        j_ocr_text_arr, i));
-    c_result_ptr->text.push_back(fastdeploy::jni::ConvertTo<
-        std::string>(env, j_text));
+    auto j_text = reinterpret_cast<jstring>(
+        env->GetObjectArrayElement(j_ocr_text_arr, i));
+    c_result_ptr->text.push_back(ConvertTo<std::string>(env, j_text));
   }
 
   // mRecScores float[]  shape (n):   [F
-  jfloat *j_ocr_rec_scores_ptr = env->GetFloatArrayElements(
-      j_ocr_rec_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_rec_scores_ptr, len * sizeof(float));
-  env->ReleaseFloatArrayElements(j_ocr_rec_scores_float_arr, j_ocr_rec_scores_ptr, 0);
+  jfloat *j_ocr_rec_scores_ptr =
+      env->GetFloatArrayElements(j_ocr_rec_scores_float_arr, nullptr);
+  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_rec_scores_ptr,
+              len * sizeof(float));
+  env->ReleaseFloatArrayElements(j_ocr_rec_scores_float_arr,
+                                 j_ocr_rec_scores_ptr, 0);
 
   // mClsScores float[]  shape (n):   [F
-  jfloat *j_ocr_cls_scores_ptr = env->GetFloatArrayElements(
-      j_ocr_cls_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_cls_scores_ptr, len * sizeof(float));
-  env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr, j_ocr_cls_scores_ptr, 0);
+  jfloat *j_ocr_cls_scores_ptr =
+      env->GetFloatArrayElements(j_ocr_cls_scores_float_arr, nullptr);
+  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_cls_scores_ptr,
+              len * sizeof(float));
+  env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr,
+                                 j_ocr_cls_scores_ptr, 0);
 
   //  mClsLabels int[]  shape (n):     [I
-  jint *j_ocr_cls_labels_ptr = env->GetIntArrayElements(
-      j_ocr_cls_labels_int_arr, nullptr);
-  std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr, len * sizeof(int));
-  env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr, 0);
+  jint *j_ocr_cls_labels_ptr =
+      env->GetIntArrayElements(j_ocr_cls_labels_int_arr, nullptr);
+  std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr,
+              len * sizeof(int));
+  env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr,
+                               0);
 
   env->DeleteLocalRef(j_ocr_result_clazz_cc);
 
   return true;
 }
 
-bool AllocateSegmentationResultFromJava(
-    JNIEnv *env, jobject j_seg_result_obj, void *cxx_result) {
-  // WARN: Please make sure 'j_seg_result_obj' param is a ref of Java SegmentationResult.
-  // Field signatures of Java SegmentationResult:
-  // (1) mLabelMap int[] shape (n):        [I
-  // (2) mShape long[]  shape (2) (H,W):   [J
+bool AllocateSegmentationResultFromJava(JNIEnv *env, jobject j_seg_result_obj,
+                                        void *cxx_result) {
+  // WARN: Please make sure 'j_seg_result_obj' param is a ref of Java
+  // SegmentationResult. Field signatures of Java SegmentationResult: (1)
+  // mLabelMap int[] shape (n):        [I (2) mShape long[]  shape (2) (H,W): [J
   // (3) mContainScoreMap boolean:         Z
   // (4) mScoreMap float[]  shape (n):     [F
   // (5) mInitialized boolean:             Z
   if (cxx_result == nullptr || j_seg_result_obj == nullptr) {
     return false;
   }
-  auto c_result_ptr = reinterpret_cast<fastdeploy::vision::SegmentationResult *>(
-      cxx_result);
+  auto c_result_ptr =
+      reinterpret_cast<vision::SegmentationResult *>(cxx_result);
 
-  const jclass j_seg_result_clazz_cc = env->FindClass(
-      "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
-  const jfieldID j_seg_label_map_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mLabelMap", "[I");
-  const jfieldID j_seg_shape_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mShape", "[J");
-  const jfieldID j_seg_contain_shape_map_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mContainScoreMap", "Z");
-  const jfieldID j_seg_score_map_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mScoreMap", "[F");
-  const jfieldID j_seg_initialized_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mInitialized", "Z");
+  const jclass j_seg_result_clazz_cc =
+      env->FindClass("com/baidu/paddle/fastdeploy/vision/SegmentationResult");
+  const jfieldID j_seg_label_map_id_cc =
+      env->GetFieldID(j_seg_result_clazz_cc, "mLabelMap", "[I");
+  const jfieldID j_seg_shape_id_cc =
+      env->GetFieldID(j_seg_result_clazz_cc, "mShape", "[J");
+  const jfieldID j_seg_contain_shape_map_id_cc =
+      env->GetFieldID(j_seg_result_clazz_cc, "mContainScoreMap", "Z");
+  const jfieldID j_seg_score_map_id_cc =
+      env->GetFieldID(j_seg_result_clazz_cc, "mScoreMap", "[F");
+  const jfieldID j_seg_initialized_id_cc =
+      env->GetFieldID(j_seg_result_clazz_cc, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_seg_result_obj, j_seg_result_clazz_cc)) {
     return false;
   }
 
   // mInitialized boolean:         Z
-  jboolean j_seg_initialized = env->GetBooleanField(
-      j_seg_result_obj, j_seg_initialized_id_cc);
+  jboolean j_seg_initialized =
+      env->GetBooleanField(j_seg_result_obj, j_seg_initialized_id_cc);
   if (j_seg_initialized == JNI_FALSE) {
     return false;
   }
@@ -726,16 +742,17 @@ bool AllocateSegmentationResultFromJava(
       env->GetObjectField(j_seg_result_obj, j_seg_label_map_id_cc));
   jlongArray j_seg_shape_long_arr = reinterpret_cast<jlongArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_shape_id_cc));
-  jboolean j_seg_contain_score_map = env->GetBooleanField(
-      j_seg_result_obj, j_seg_contain_shape_map_id_cc);
+  jboolean j_seg_contain_score_map =
+      env->GetBooleanField(j_seg_result_obj, j_seg_contain_shape_map_id_cc);
   jfloatArray j_seg_score_map_float_arr = reinterpret_cast<jfloatArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_score_map_id_cc));
 
   // Init cxx result
   c_result_ptr->Clear();
-  const int label_len = env->GetArrayLength(j_seg_label_map_int_arr); // HxW
-  const int shape_len = env->GetArrayLength(j_seg_shape_long_arr); // 2
-  const int score_len = env->GetArrayLength(j_seg_score_map_float_arr); // 0 | HxW
+  const int label_len = env->GetArrayLength(j_seg_label_map_int_arr);  // HxW
+  const int shape_len = env->GetArrayLength(j_seg_shape_long_arr);     // 2
+  const int score_len =
+      env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
   c_result_ptr->label_map.resize(label_len);
   c_result_ptr->shape.resize(shape_len);
   if (j_seg_contain_score_map) {
@@ -744,23 +761,31 @@ bool AllocateSegmentationResultFromJava(
   }
 
   // mLabelMap int[] shape (n):        [I
-  std::vector<uint8_t> label_map_int8; // cast int32 -> uint8_t
-  jint *j_seg_label_map_int_ptr = env->GetIntArrayElements(j_seg_label_map_int_arr,nullptr);
-  label_map_int8.assign(j_seg_label_map_int_ptr,j_seg_label_map_int_ptr + label_len);
-  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(), label_len * sizeof(int));
-  env->ReleaseIntArrayElements(j_seg_label_map_int_arr,j_seg_label_map_int_ptr,0);
+  std::vector<uint8_t> label_map_int8;  // cast int32 -> uint8_t
+  jint *j_seg_label_map_int_ptr =
+      env->GetIntArrayElements(j_seg_label_map_int_arr, nullptr);
+  label_map_int8.assign(j_seg_label_map_int_ptr,
+                        j_seg_label_map_int_ptr + label_len);
+  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(),
+              label_len * sizeof(int));
+  env->ReleaseIntArrayElements(j_seg_label_map_int_arr, j_seg_label_map_int_ptr,
+                               0);
 
   // mShape long[]  shape (2) (H,W):   [J
-  jlong *j_seg_shape_long_ptr = env->GetLongArrayElements(j_seg_shape_long_arr,nullptr);
-  std::memcpy(c_result_ptr->shape.data(), j_seg_shape_long_ptr, shape_len * sizeof(int64_t));
+  jlong *j_seg_shape_long_ptr =
+      env->GetLongArrayElements(j_seg_shape_long_arr, nullptr);
+  std::memcpy(c_result_ptr->shape.data(), j_seg_shape_long_ptr,
+              shape_len * sizeof(int64_t));
   env->ReleaseLongArrayElements(j_seg_shape_long_arr, j_seg_shape_long_ptr, 0);
 
   //  mScoreMap float[]  shape (n):     [F
   if (j_seg_contain_score_map) {
-    jfloat *j_seg_score_map_float_ptr = env->GetFloatArrayElements(
-        j_seg_score_map_float_arr, nullptr);
-    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
-    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
+    jfloat *j_seg_score_map_float_ptr =
+        env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
+    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr,
+                score_len * sizeof(float));
+    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr,
+                                   j_seg_score_map_float_ptr, 0);
   }
 
   env->DeleteLocalRef(j_seg_result_clazz_cc);
@@ -768,9 +793,8 @@ bool AllocateSegmentationResultFromJava(
   return true;
 }
 
-bool AllocateCxxResultFromJava(
-    JNIEnv *env, jobject j_result_obj, void *cxx_result,
-    vision::ResultType type) {
+bool AllocateCxxResultFromJava(JNIEnv *env, jobject j_result_obj,
+                               void *cxx_result, vision::ResultType type) {
   if (type == vision::ResultType::CLASSIFY) {
     return AllocateClassifyResultFromJava(env, j_result_obj, cxx_result);
   } else if (type == vision::ResultType::DETECTION) {
@@ -788,28 +812,3 @@ bool AllocateCxxResultFromJava(
 
 }  // namespace jni
 }  // namespace fastdeploy
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -15,22 +15,17 @@
 #pragma once
 
 #include <jni.h>  // NOLINT
-
 #include "fastdeploy/vision.h"  // NOLINT
+#include "fastdeploy_jni/perf_jni.h"  // NOLINT
+#include "fastdeploy_jni/bitmap_jni.h"  // NOLINT
 
 namespace fastdeploy {
 namespace jni {
 
-bool AllocateJavaResultFromCxx(
-    JNIEnv *env, jobject j_result_obj, void *cxx_result,
-    vision::ResultType type);
-
-bool AllocateCxxResultFromJava(
-    JNIEnv *env, jobject j_result_obj, void *cxx_result,
-    vision::ResultType type);
-
-jobject NewJavaResultFromCxx(
-    JNIEnv *env, void *cxx_result, vision::ResultType type);
+void RenderingDetection(JNIEnv *env, const cv::Mat &c_bgr,
+                        const vision::DetectionResult &c_result,
+                        jobject argb8888_bitmap, bool save_image,
+                        float score_threshold, jstring save_path);
 
 }  // namespace jni
 }  // namespace fastdeploy

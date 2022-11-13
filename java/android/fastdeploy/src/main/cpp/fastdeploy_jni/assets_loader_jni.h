@@ -13,55 +13,22 @@
 // limitations under the License.
 
 #pragma once
-
-#ifdef __ANDROID__
-#include <android/log.h>  // NOLINT
-#endif
 #include <fstream>  // NOLINT
 #include <string>   // NOLINT
 #include <vector>   // NOLINT
 
-#define TAG "[FastDeploy][JNI]"
-#ifdef __ANDROID__
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, TAG, __VA_ARGS__)
-#else
-#define LOGD(...) \
-  {}
-#define LOGI(...) \
-  {}
-#define LOGW(...) \
-  {}
-#define LOGE(...) \
-  {}
-#define LOGF(...) \
-  {}
-#endif
-
 namespace fastdeploy {
 namespace jni {
 
-inline int64_t GetCurrentTime() {
-  struct timeval time;
-  gettimeofday(&time, NULL);
-  return 1000000LL * (int64_t)time.tv_sec + (int64_t)time.tv_usec;
-}
-
-inline double GetElapsedTime(int64_t time) {
-  return (GetCurrentTime() - time) / 1000.0f;
-}
-
-class AssetsLoaderUtils {
- public:
+/// Assets loader
+class AssetsLoader {
+public:
   static bool detection_labels_loaded_;
   static bool classification_labels_loaded_;
   static std::vector<std::string> detection_labels_;
   static std::vector<std::string> classification_labels_;
 
- public:
+public:
   static bool IsDetectionLabelsLoaded();
   static bool IsClassificationLabelsLoaded();
   static const std::vector<std::string>& GetDetectionLabels();
@@ -71,7 +38,7 @@ class AssetsLoaderUtils {
   static void LoadDetectionLabels(const std::string& path,
                                   bool force_reload = false);
 
- private:
+private:
   static bool LoadLabelsFromTxt(const std::string& txt_path,
                                 std::vector<std::string>* labels);
 };

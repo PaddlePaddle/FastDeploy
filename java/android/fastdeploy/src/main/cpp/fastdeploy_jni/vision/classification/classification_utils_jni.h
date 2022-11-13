@@ -13,7 +13,19 @@
 // limitations under the License.
 
 #pragma once
-#include "bitmap_jni.h"   // NOLINT
-#include "convert_jni.h"  // NOLINT
-#include "utils_jni.h"    // NOLINT
-#include "runtime_option_jni.h"  // NOLINT
+
+#include <jni.h>  // NOLINT
+#include "fastdeploy/vision.h"  // NOLINT
+#include "fastdeploy_jni/perf_jni.h"  // NOLINT
+#include "fastdeploy_jni/bitmap_jni.h"  // NOLINT
+
+namespace fastdeploy {
+namespace jni {
+
+void RenderingClassify(JNIEnv *env, const cv::Mat &c_bgr,
+                       const vision::ClassifyResult &c_result,
+                       jobject argb8888_bitmap, bool save_image,
+                       float score_threshold, jstring save_path);
+
+}  // namespace jni
+}  // namespace fastdeploy
