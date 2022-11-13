@@ -16,7 +16,6 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include <set>
 
 namespace fastdeploy {
 
@@ -108,7 +107,7 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
   int num_nb_;
   int net_stride_;
   // Now PIPNet support num_landmarks in {19, 29, 68, 98}
-  std::set<int> supported_num_landmarks_;
+  std::vector<int> supported_num_landmarks_;
   // tuple of (width, height), default (256, 256)
   std::vector<int> size_;
 

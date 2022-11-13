@@ -164,7 +164,8 @@ void PIPNet::GenerateLandmarks(std::vector<FDTensor>& infer_result,
 };
 
 void PIPNet::SetNumLandmarks(const int& num_landmarks){
-  if(supported_num_landmarks_.find(num_landmarks_)==supported_num_landmarks_.end()){
+  if(std::find(supported_num_landmarks_.begin(), supported_num_landmarks_.end(), num_landmarks) \
+  ==supported_num_landmarks_.end()){
     FDWARNING<<"The number of landmarks should be in {19, 29, 68, 98}."<<std::endl;
   }
   num_landmarks_ = num_landmarks;
