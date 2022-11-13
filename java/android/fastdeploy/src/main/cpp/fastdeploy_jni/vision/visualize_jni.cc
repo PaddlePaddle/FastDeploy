@@ -26,20 +26,20 @@ extern "C" {
 /// VisClassification
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap, jobject result,
-    jfloat score_threshold, jfloat font_size, jobjectArray labels) {
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat score_threshold, jfloat font_size,
+    jobjectArray labels) {
   // Allocate cxx result
   vision::ClassifyResult c_result;
-  if (!fni::AllocateCxxResultFromJava(env, result,
-                                      reinterpret_cast<void *>(&c_result),
-                                      vision::ResultType::CLASSIFY)) {
+  if (!fni::AllocateCxxResultFromJava(
+      env, result, reinterpret_cast<void *>(&c_result),
+      vision::ResultType::CLASSIFY)) {
     return JNI_FALSE;
   }
   // Get labels from Java [n]
   auto c_labels = fni::ConvertTo<std::vector<std::string>>(env, labels);
 
   cv::Mat c_bgr;
-  // From ARGB Bitmap to BGR
   if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
     return JNI_FALSE;
   }
@@ -51,7 +51,6 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
     c_vis_im = vision::VisClassification(c_bgr, c_result, 5, score_threshold,
                                          font_size);
   }
-  // Rendering to bitmap
   if (!fni::BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {
     return JNI_FALSE;
   }
@@ -61,14 +60,14 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
 /// VisDetection
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap, jobject result,
-    jfloat score_threshold, jint line_size, jfloat font_size,
-    jobjectArray labels) {
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat score_threshold, jint line_size,
+    jfloat font_size, jobjectArray labels) {
   // // Allocate cxx result
   vision::DetectionResult c_result;
-  if (!fni::AllocateCxxResultFromJava(env, result,
-                                      reinterpret_cast<void *>(&c_result),
-                                      vision::ResultType::DETECTION)) {
+  if (!fni::AllocateCxxResultFromJava(
+      env, result, reinterpret_cast<void *>(&c_result),
+      vision::ResultType::DETECTION)) {
     return JNI_FALSE;
   }
 
@@ -76,7 +75,6 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
   auto c_labels = fni::ConvertTo<std::vector<std::string>>(env, labels);
 
   cv::Mat c_bgr;
-  // From ARGB Bitmap to BGR
   if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
     return JNI_FALSE;
   }
@@ -88,7 +86,6 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
     c_vis_im = vision::VisDetection(c_bgr, c_result, score_threshold, line_size,
                                     font_size);
   }
-  // Rendering to bitmap
   if (!fni::BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {
     return JNI_FALSE;
   }
@@ -98,22 +95,44 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
 /// VisOcr
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap, jobject result) {
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result) {
   // Allocate cxx result
   vision::OCRResult c_result;
-  if (!fni::AllocateCxxResultFromJava(env, result,
-                                      reinterpret_cast<void *>(&c_result),
-                                      vision::ResultType::OCR)) {
+  if (!fni::AllocateCxxResultFromJava(
+      env, result, reinterpret_cast<void *>(&c_result),
+      vision::ResultType::OCR)) {
     return JNI_FALSE;
   }
 
   cv::Mat c_bgr;
-  // From ARGB Bitmap to BGR
   if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
     return JNI_FALSE;
   }
   auto c_vis_im = vision::VisOcr(c_bgr, c_result);
-  // Rendering to bitmap
+  if (!fni::BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {
+    return JNI_FALSE;
+  }
+  return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visSegmentationNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat weight) {
+  // Allocate cxx result
+  vision::SegmentationResult c_result;
+  if (!fni::AllocateCxxResultFromJava(
+      env, result, reinterpret_cast<void *>(&c_result),
+      vision::ResultType::SEGMENTATION)) {
+    return JNI_FALSE;
+  }
+
+  cv::Mat c_bgr;
+  if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
+    return JNI_FALSE;
+  }
+  auto c_vis_im = vision::VisSegmentation(c_bgr, c_result, weight);
   if (!fni::BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {
     return JNI_FALSE;
   }
@@ -123,3 +142,4 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
 #ifdef __cplusplus
 }
 #endif
+

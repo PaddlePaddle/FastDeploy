@@ -6,9 +6,7 @@ import com.baidu.paddle.fastdeploy.FastDeployInitializer;
 
 
 public class Visualize {
-    // TODO(qiuyanjun):
-    //  VisClassification, VisSegmentation, VisMatting, VisOcr, ...
-
+    // visClassification, visDetection, visSegmentation, visOcr, ...
     // Visualize DetectionResult without labels
     public static boolean visDetection(Bitmap ARGB8888Bitmap,
                                        DetectionResult result) {
@@ -125,6 +123,24 @@ public class Visualize {
                 result);
     }
 
+    // Visualize SegmentationResult
+    public static boolean visSegmentation(Bitmap ARGB8888Bitmap,
+                                          SegmentationResult result) {
+        return visSegmentationNative(
+                ARGB8888Bitmap,
+                result,
+                0.5f);
+    }
+
+    public static boolean visSegmentation(Bitmap ARGB8888Bitmap,
+                                          SegmentationResult result,
+                                          float weight) {
+        return visSegmentationNative(
+                ARGB8888Bitmap,
+                result,
+                weight);
+    }
+
     // VisDetection in native
     private static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
                                                      DetectionResult result,
@@ -140,9 +156,14 @@ public class Visualize {
                                                           float font_size,
                                                           String[] labels);
 
-    // VisOCRResult in native
+    // VisOcr in native
     private static native boolean visOcrNative(Bitmap ARGB8888Bitmap,
                                                OCRResult result);
+
+    // visSegmentation in native
+    private static native boolean visSegmentationNative(Bitmap ARGB8888Bitmap,
+                                                        SegmentationResult result,
+                                                        float weight);
 
 
     /* Initializes at the beginning */

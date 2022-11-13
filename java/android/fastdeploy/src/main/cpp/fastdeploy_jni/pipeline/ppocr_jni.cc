@@ -156,8 +156,8 @@ Java_com_baidu_paddle_fastdeploy_pipeline_PPOCRBase_predictNative(
   PERF_TIME_OF_RUNTIME(c_ppocr_handler_ptr->recognizer_, -1)
 
   if (rendering) {
-    fni::RenderingOCR(env, c_bgr, c_result, argb8888_bitmap, save_image,
-                      save_path);
+    fni::RenderingOCR(env, c_bgr, c_result, argb8888_bitmap,
+                      save_image, save_path);
   }
 
   return fni::NewJavaResultFromCxx(env, reinterpret_cast<void *>(&c_result),

@@ -208,8 +208,7 @@ bool AllocateJavaOCRResultFromCxx(JNIEnv *env, jobject j_ocr_result_obj,
   jobjectArray j_ocr_text_arr =
       env->NewObjectArray(len, j_ocr_str_clazz, env->NewStringUTF(""));
   for (int64_t i = 0; i < len; ++i) {
-    env->SetObjectArrayElement(j_ocr_text_arr, i,
-                               ConvertTo<jstring>(env, text.at(i)));
+    env->SetObjectArrayElement(j_ocr_text_arr, i, ConvertTo<jstring>(env, text.at(i)));
   }
 
   // mRecScores float[]  shape (n):   [F
@@ -324,8 +323,7 @@ bool AllocateJavaSegmentationResultFromCxx(JNIEnv *env,
   }
 
   // Set object fields
-  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id,
-                      j_seg_label_map_int_arr);
+  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_int_arr);
   env->SetObjectField(j_seg_result_obj, j_seg_shape_id, j_seg_shape_long_arr);
   env->SetBooleanField(j_seg_result_obj, j_seg_initialized_id, JNI_TRUE);
 
@@ -472,15 +470,13 @@ bool AllocateClassifyResultFromJava(JNIEnv *env, jobject j_cls_result_obj,
   // mScores float[]  shape (n):   [F
   jfloat *j_cls_scores_ptr =
       env->GetFloatArrayElements(j_cls_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->scores.data(), j_cls_scores_ptr,
-              len * sizeof(float));
+  std::memcpy(c_result_ptr->scores.data(), j_cls_scores_ptr, len * sizeof(float));
   env->ReleaseFloatArrayElements(j_cls_scores_float_arr, j_cls_scores_ptr, 0);
 
   // mLabelIds int[]  shape (n):   [I
   jint *j_cls_label_ids_ptr =
       env->GetIntArrayElements(j_cls_label_ids_int_arr, nullptr);
-  std::memcpy(c_result_ptr->label_ids.data(), j_cls_label_ids_ptr,
-              len * sizeof(int));
+  std::memcpy(c_result_ptr->label_ids.data(), j_cls_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(j_cls_label_ids_int_arr, j_cls_label_ids_ptr, 0);
 
   env->DeleteLocalRef(j_cls_result_clazz_cc);
@@ -563,15 +559,13 @@ bool AllocateDetectionResultFromJava(JNIEnv *env, jobject j_det_result_obj,
   // mScores float[]  shape (n):   [F
   jfloat *j_det_scores_ptr =
       env->GetFloatArrayElements(j_det_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->scores.data(), j_det_scores_ptr,
-              len * sizeof(float));
+  std::memcpy(c_result_ptr->scores.data(), j_det_scores_ptr, len * sizeof(float));
   env->ReleaseFloatArrayElements(j_det_scores_float_arr, j_det_scores_ptr, 0);
 
   // mLabelIds int[]  shape (n):   [I
   jint *j_det_label_ids_ptr =
       env->GetIntArrayElements(j_det_label_ids_int_arr, nullptr);
-  std::memcpy(c_result_ptr->label_ids.data(), j_det_label_ids_ptr,
-              len * sizeof(int));
+  std::memcpy(c_result_ptr->label_ids.data(), j_det_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(j_det_label_ids_int_arr, j_det_label_ids_ptr, 0);
 
   env->DeleteLocalRef(j_det_result_clazz_cc);
@@ -674,26 +668,20 @@ bool AllocateOCRResultFromJava(JNIEnv *env, jobject j_ocr_result_obj,
   // mRecScores float[]  shape (n):   [F
   jfloat *j_ocr_rec_scores_ptr =
       env->GetFloatArrayElements(j_ocr_rec_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_rec_scores_ptr,
-              len * sizeof(float));
-  env->ReleaseFloatArrayElements(j_ocr_rec_scores_float_arr,
-                                 j_ocr_rec_scores_ptr, 0);
+  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_rec_scores_ptr, len * sizeof(float));
+  env->ReleaseFloatArrayElements(j_ocr_rec_scores_float_arr, j_ocr_rec_scores_ptr, 0);
 
   // mClsScores float[]  shape (n):   [F
   jfloat *j_ocr_cls_scores_ptr =
       env->GetFloatArrayElements(j_ocr_cls_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_cls_scores_ptr,
-              len * sizeof(float));
-  env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr,
-                                 j_ocr_cls_scores_ptr, 0);
+  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_cls_scores_ptr, len * sizeof(float));
+  env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr, j_ocr_cls_scores_ptr, 0);
 
   //  mClsLabels int[]  shape (n):     [I
   jint *j_ocr_cls_labels_ptr =
       env->GetIntArrayElements(j_ocr_cls_labels_int_arr, nullptr);
-  std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr,
-              len * sizeof(int));
-  env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr,
-                               0);
+  std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr, len * sizeof(int));
+  env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr,0);
 
   env->DeleteLocalRef(j_ocr_result_clazz_cc);
 
@@ -751,8 +739,7 @@ bool AllocateSegmentationResultFromJava(JNIEnv *env, jobject j_seg_result_obj,
   c_result_ptr->Clear();
   const int label_len = env->GetArrayLength(j_seg_label_map_int_arr);  // HxW
   const int shape_len = env->GetArrayLength(j_seg_shape_long_arr);     // 2
-  const int score_len =
-      env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
+  const int score_len = env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
   c_result_ptr->label_map.resize(label_len);
   c_result_ptr->shape.resize(shape_len);
   if (j_seg_contain_score_map) {
@@ -766,26 +753,21 @@ bool AllocateSegmentationResultFromJava(JNIEnv *env, jobject j_seg_result_obj,
       env->GetIntArrayElements(j_seg_label_map_int_arr, nullptr);
   label_map_int8.assign(j_seg_label_map_int_ptr,
                         j_seg_label_map_int_ptr + label_len);
-  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(),
-              label_len * sizeof(int));
-  env->ReleaseIntArrayElements(j_seg_label_map_int_arr, j_seg_label_map_int_ptr,
-                               0);
+  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(), label_len * sizeof(int));
+  env->ReleaseIntArrayElements(j_seg_label_map_int_arr, j_seg_label_map_int_ptr,0);
 
   // mShape long[]  shape (2) (H,W):   [J
   jlong *j_seg_shape_long_ptr =
       env->GetLongArrayElements(j_seg_shape_long_arr, nullptr);
-  std::memcpy(c_result_ptr->shape.data(), j_seg_shape_long_ptr,
-              shape_len * sizeof(int64_t));
+  std::memcpy(c_result_ptr->shape.data(), j_seg_shape_long_ptr, shape_len * sizeof(int64_t));
   env->ReleaseLongArrayElements(j_seg_shape_long_arr, j_seg_shape_long_ptr, 0);
 
   //  mScoreMap float[]  shape (n):     [F
   if (j_seg_contain_score_map) {
     jfloat *j_seg_score_map_float_ptr =
         env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
-    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr,
-                score_len * sizeof(float));
-    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr,
-                                   j_seg_score_map_float_ptr, 0);
+    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
+    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
   }
 
   env->DeleteLocalRef(j_seg_result_clazz_cc);

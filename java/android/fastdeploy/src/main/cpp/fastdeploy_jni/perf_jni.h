@@ -32,16 +32,11 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 #define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, TAG, __VA_ARGS__)
 #else
-#define LOGD(...) \
-  {}
-#define LOGI(...) \
-  {}
-#define LOGW(...) \
-  {}
-#define LOGE(...) \
-  {}
-#define LOGF(...) \
-  {}
+#define LOGD(...) {}
+#define LOGI(...) {}
+#define LOGW(...) {}
+#define LOGE(...) {}
+#define LOGF(...) {}
 #endif
 
 #define ENABLE_RUNTIME_PERF
