@@ -62,10 +62,11 @@ bool YOLOv5::Predict(const cv::Mat& im, DetectionResult* result) {
 }
 
 bool YOLOv5::BatchPredict(const std::vector<cv::Mat>& images, std::vector<DetectionResult>* results) {
-  std::map<std::string, std::array<float, 2>> im_info;
+  std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
+  ims_info.resize(images.size());
   std::vector<FDMat> fd_images = WrapMat(images);
 
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &im_info)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &ims_info)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }

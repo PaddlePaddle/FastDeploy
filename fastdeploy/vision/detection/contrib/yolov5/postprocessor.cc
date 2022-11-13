@@ -27,7 +27,7 @@ YOLOv5Postprocessor::YOLOv5Postprocessor() {
 }
 
 bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
-                              const std::map<std::string, std::array<float, 2>>& im_info) {
+                              const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
   int batch = tensors[0].shape[0];
  
   results->resize(batch);
@@ -94,9 +94,9 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     utils::NMS(&((*results)[bs]), nms_threshold_);
 
     // scale the boxes to the origin image shape
-    auto iter_out = im_info.find("output_shape");
-    auto iter_ipt = im_info.find("input_shape");
-    FDASSERT(iter_out != im_info.end() && iter_ipt != im_info.end(),
+    auto iter_out = ims_info[bs].find("output_shape");
+    auto iter_ipt = ims_info[bs].find("input_shape");
+    FDASSERT(iter_out != ims_info[bs].end() && iter_ipt != ims_info[bs].end(),
             "Cannot find input_shape or output_shape from im_info.");
     float out_h = iter_out->second[0];
     float out_w = iter_out->second[1];

@@ -32,12 +32,12 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
    *
    * \param[in] tensors The inference result from runtime
    * \param[in] result The output result of detection
-   * \param[in] im_info record input_shape and output_shape
+   * \param[in] ims_info The shape info list, record input_shape and output_shape
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-           std::vector<DetectionResult>* results,
-           const std::map<std::string, std::array<float, 2>>& im_info);
+      std::vector<DetectionResult>* results,
+      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info);
 
   /// Set conf_threshold, default 0.25
   void SetConfThreshold(const float& conf_threshold) {

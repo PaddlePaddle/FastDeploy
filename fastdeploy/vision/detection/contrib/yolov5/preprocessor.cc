@@ -98,7 +98,7 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
 }
 
 bool YOLOv5Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                             std::map<std::string, std::array<float, 2>>* im_info) {
+                             std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;
@@ -107,7 +107,7 @@ bool YOLOv5Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* 
   // Concat all the preprocessed data to a batch tensor
   std::vector<FDTensor> tensors(images->size()); 
   for (size_t i = 0; i < images->size(); ++i) {
-    if (!Preprocess(&(*images)[i], &tensors[i], im_info)) {
+    if (!Preprocess(&(*images)[i], &tensors[i], &(*ims_info)[i])) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }

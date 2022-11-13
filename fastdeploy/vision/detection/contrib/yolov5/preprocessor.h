@@ -32,11 +32,11 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
    * \param[in] outputs The output tensors which will feed in runtime
-   * \param[in] im_info record input_shape and output_shape
+   * \param[in] ims_info The shape info list, record input_shape and output_shape
    * \return true if the preprocess successed, otherwise false
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-           std::map<std::string, std::array<float, 2>>* im_info);
+           std::vector<std::map<std::string, std::array<float, 2>>>* ims_info);
 
   /// Set target size, tuple of (width, height), default size = {640, 640}
   void SetSize(const std::vector<int>& size) { size_ = size; }

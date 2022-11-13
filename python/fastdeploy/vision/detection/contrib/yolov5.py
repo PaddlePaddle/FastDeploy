@@ -67,14 +67,14 @@ class YOLOv5Postprocessor:
         """
         self._postprocessor = C.vision.detection.YOLOv5Postprocessor()
 
-    def run(self, runtime_results, im_info):
+    def run(self, runtime_results, ims_info):
         """Postprocess the runtime results for YOLOv5
 
         :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
-        :param: im_info: (dict)Record input_shape and output_shape
+        :param: ims_info: (list of dict)Record input_shape and output_shape
         :return: list of DetectionResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
-        return self._postprocessor.run(runtime_results, im_info)
+        return self._postprocessor.run(runtime_results, ims_info)
 
     @property
     def conf_threshold(self):
