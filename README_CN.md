@@ -283,7 +283,7 @@ int main(int argc, char* argv[]) {
 
 ### Paddle Lite NPU部署
 
-- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
+- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](./examples/vision/detection/paddledetection/rk1126)
 
 <div id="fastdeploy-edge-models"></div>
 
