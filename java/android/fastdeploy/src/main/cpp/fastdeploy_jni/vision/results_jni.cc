@@ -488,7 +488,7 @@ jobject NewJavaFaceDetectionResultFromCxx(JNIEnv *env, void *cxx_result) {
       j_face_det_result_clazz, "<init>", "()V");
   jobject j_face_det_result_obj = env->NewObject(
       j_face_det_result_clazz, j_face_det_result_init);
-  AllocateJavaSegmentationResultFromCxx(env, j_face_det_result_obj, cxx_result);
+  AllocateJavaFaceDetectionResultFromCxx(env, j_face_det_result_obj, cxx_result);
   env->DeleteLocalRef(j_face_det_result_clazz);
   return j_face_det_result_obj;
 }
@@ -872,7 +872,7 @@ bool AllocateSegmentationResultFromJava(
 bool AllocateFaceDetectionResultFromJava(
     JNIEnv *env, jobject j_face_det_result_obj, void *cxx_result) {
   // WARN: Please make sure 'j_face_det_result_obj' param is a ref of Java
-  // FaceDetectionResult. Field signatures of Java DetectionResult:
+  // FaceDetectionResult. Field signatures of Java FaceDetectionResult:
   // (1) mBoxes float[][] shape (n,4):     [[F
   // (2) mScores float[]  shape (n):       [F
   // (3) mLandmarks float[][] shape (n,2): [[F

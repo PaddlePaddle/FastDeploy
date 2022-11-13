@@ -34,7 +34,7 @@ Java_com_baidu_paddle_fastdeploy_vision_facedet_SCRFD_bindNative(
   auto c_params_file = fni::ConvertTo<std::string>(env, params_file);
   auto c_runtime_option = fni::NewCxxRuntimeOption(env, runtime_option);
   auto c_model_ptr = new facedet::SCRFD(
-      c_model_file, c_params_file, c_runtime_option,fastdeploy::ModelFormat::PADDLE);
+      c_model_file, c_params_file, c_runtime_option, fastdeploy::ModelFormat::PADDLE);
   INITIALIZED_OR_RETURN(c_model_ptr)
 
 #ifdef ENABLE_RUNTIME_PERF
