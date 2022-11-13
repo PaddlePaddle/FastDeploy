@@ -39,16 +39,9 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
-  /// Disable Normalize and Permute, this is used for deploy on RKNPU2 now
-  void DisableNormalizeAndPermute() {
-    disable_normalize_and_permute_ = true;
-  }
-
-
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
   std::vector<std::shared_ptr<Processor>> processors_;
-  bool disable_normalize_and_permute_ = false;
   bool initialized_ = false;
 };
 

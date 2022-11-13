@@ -71,6 +71,13 @@ class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
                             std::vector<DetectionResult>* results);
 
+  PaddleDetPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  PaddleDetPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  protected:
   virtual bool Initialize();

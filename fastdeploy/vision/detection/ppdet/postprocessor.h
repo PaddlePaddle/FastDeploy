@@ -24,6 +24,7 @@ namespace detection {
  */
 class FASTDEPLOY_DECL PaddleDetPostprocessor {
  public:
+  PaddleDetPostprocessor() = default;
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
    * \param[in] tensors The inference result from runtime
