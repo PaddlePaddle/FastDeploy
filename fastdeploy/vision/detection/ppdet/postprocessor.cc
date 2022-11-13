@@ -19,6 +19,47 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
+bool PaddleDetPostprocessor::ProcessMask(const FDTensor& tensor, std::vector<DetectionResult>* results) {
+  auto shape = tensor.Shape();
+  if (tensor.Dtype() != FDDataType::INT32) {
+    FDERROR << "The data type of out mask tensor should be INT32, but now it's " << tensor.Dtype() << std::endl;
+    return false;
+  }
+  int64_t out_mask_h = shape[1];
+  int64_t out_mask_w = shape[2];
+  int64_t out_mask_numel = shape[1] * shape[2];
+  const int32_t* data = reinterpret_cast<const int32_t*>(tensor.CpuData());
+  int index = 0;
+  tensor.PrintInfo("Tensor mask");
+
+  for (int i = 0; i < results->size(); ++i) {
+    (*results)[i].contain_masks = true;
+    (*results)[i].masks.resize((*results)[i].boxes.size());
+    for (int j = 0; j < (*results)[i].boxes.size(); ++j) {
+      int x1 = static_cast<int>((*results)[i].boxes[j][0]);
+      int y1 = static_cast<int>((*results)[i].boxes[j][1]);
+      int x2 = static_cast<int>((*results)[i].boxes[j][2]);
+      int y2 = static_cast<int>((*results)[i].boxes[j][3]);
+      int keep_mask_h = y2 - y1;
+      int keep_mask_w = x2 - x1;
+      int keep_mask_numel = keep_mask_h * keep_mask_w;
+      (*results)[i].masks[j].Resize(keep_mask_numel);
+      (*results)[i].masks[j].shape = {keep_mask_h, keep_mask_w};
+      const int32_t* current_ptr = data + index * out_mask_numel;
+
+      int32_t* keep_mask_ptr = reinterpret_cast<int32_t*>((*results)[i].masks[j].Data());
+      for (int row = y1; row < y2; ++row) {
+        size_t keep_nbytes_in_col = keep_mask_w * sizeof(int32_t);
+        const int32_t* out_row_start_ptr = current_ptr + row * out_mask_w + x1;
+        int32_t* keep_row_start_ptr = keep_mask_ptr + (row - y1) * keep_mask_w;
+        std::memcpy(keep_row_start_ptr, out_row_start_ptr, keep_nbytes_in_col);
+      }
+      index += 1; 
+    }
+  }
+  return true;
+}
+
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results) {
   if (tensors[0].shape[0] == 0) {
     // No detected boxes
@@ -72,7 +113,19 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       offset += num_boxes[i];
     }
   }
-  return true;
+
+  // Only detection
+  if (tensors.size() <= 2) {
+    return true;
+  }
+
+  if (tensors[2].Shape()[0] != num_output_boxes) {
+    FDERROR << "The first dimension of output mask tensor:"  << tensors[2].Shape()[0] << " is not equal to the first dimension of output boxes tensor:" << num_output_boxes << "." << std::endl;
+    return false;
+  }
+
+  // process for maskrcnn
+  return ProcessMask(tensors[2], results);
 }
 
 }  // namespace detection

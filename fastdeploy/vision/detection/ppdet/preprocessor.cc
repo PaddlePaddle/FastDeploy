@@ -111,7 +111,7 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
   }
 
   // Fusion will improve performance
-  FuseTransforms(&processors_);
+  // FuseTransforms(&processors_);
 
   return true;
 }
@@ -145,12 +145,14 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   for (size_t i = 0; i < images->size(); ++i) {
     int origin_w = (*images)[i].Width();
     int origin_h = (*images)[i].Height();
+    scale_factor_ptr[2 * i] = 1.0;
+    scale_factor_ptr[2 * i + 1] = 1.0;
     for (size_t j = 0; j < processors_.size(); ++j) {
       if (!(*(processors_[j].get()))(&((*images)[i]))) {
         FDERROR << "Failed to processs image:" << i << " in " << processors_[i]->Name() << "." << std::endl;
         return false;
       }
-      if (processors_[i]->Name().find("Resize") != std::string::npos) {
+      if (processors_[j]->Name().find("Resize") != std::string::npos) {
         scale_factor_ptr[2 * i] = (*images)[i].Height() * 1.0 / origin_h;
         scale_factor_ptr[2 * i + 1] = (*images)[i].Width() * 1.0 / origin_w;
       }

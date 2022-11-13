@@ -37,17 +37,6 @@ void BindPPDet(pybind11::module& m) {
              return res;
            });
 
-  pybind11::class_<vision::detection::PPYOLOv2, FastDeployModel>(m, "PPYOLOv2")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::PPYOLOv2& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
-
   pybind11::class_<vision::detection::PicoDet, FastDeployModel>(m, "PicoDet")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())

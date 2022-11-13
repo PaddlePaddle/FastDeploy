@@ -143,9 +143,9 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
 }
 
 template <typename T>
-void CalculateStatisInfo(void* src_ptr, int size, double* mean, double* max,
+void CalculateStatisInfo(const void* src_ptr, int size, double* mean, double* max,
                          double* min) {
-  T* ptr = static_cast<T*>(src_ptr);
+  const T* ptr = static_cast<const T*>(src_ptr);
   *mean = 0;
   *max = -99999999;
   *min = 99999999;
@@ -161,24 +161,24 @@ void CalculateStatisInfo(void* src_ptr, int size, double* mean, double* max,
   *mean = *mean / size;
 }
 
-void FDTensor::PrintInfo(const std::string& prefix) {
+void FDTensor::PrintInfo(const std::string& prefix) const {
   double mean = 0;
   double max = -99999999;
   double min = 99999999;
   if (dtype == FDDataType::FP32) {
-    CalculateStatisInfo<float>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<float>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::FP64) {
-    CalculateStatisInfo<double>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<double>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT8) {
-    CalculateStatisInfo<int8_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int8_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::UINT8) {
-    CalculateStatisInfo<uint8_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<uint8_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT32) {
-    CalculateStatisInfo<int32_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int32_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT64) {
-    CalculateStatisInfo<int64_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int64_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::FP16) {
-    CalculateStatisInfo<float16>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<float16>(CpuData(), Numel(), &mean, &max, &min);
   } else {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "

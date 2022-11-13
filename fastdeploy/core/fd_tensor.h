@@ -110,7 +110,7 @@ struct FASTDEPLOY_DECL FDTensor {
   // Debug function
   // Use this function to print shape, dtype, mean, max, min
   // prefix will also be printed as tag
-  void PrintInfo(const std::string& prefix = "TensorInfo: ");
+  void PrintInfo(const std::string& prefix = "TensorInfo: ") const;
 
   bool ReallocFn(size_t nbytes);
 
