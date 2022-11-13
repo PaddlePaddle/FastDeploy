@@ -117,8 +117,9 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::LITE";
+  } else {
+    out << "UNKNOWN-Backend";
   }
-  out << "UNKNOWN-Backend";
   return out;
 }
 
