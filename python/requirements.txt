@@ -3,3 +3,4 @@ requests
 tqdm
 numpy
 opencv-python
+fd-auto-compress
