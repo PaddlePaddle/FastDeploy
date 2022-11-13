@@ -24,9 +24,13 @@ python setup.py install
 
 ### Install Fastdeploy Auto Compression Toolkit
 
-Run the following command in the current directory
+Run the following command to install
 
 ```
+# Install fd-auto-compress package using pip
+pip install fd-auto-compress
+
+# Execute the following command in the previous directory (not in the current directory)
 python setup.py install
 ```
 
@@ -52,12 +56,12 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2. Run fastdeploy_auto_compress command to compress the model
+##### 2. Run fastdeploy --auto_compress command to compress the model
 
 The following command is to quantize the yolov5s model, if developers want to quantize other models, replace the config_path with other model configuration files in the configs folder.
 
 ```shell
-fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
 
 [notice] PTQ is short for post-training quantization
@@ -89,14 +93,14 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2.Use fastdeploy_auto_compress command to compress models
+##### 2.Use fastdeploy --auto_compress command to compress models
 
 The following command is to quantize the yolov5s model, if developers want to quantize other models, replace the config_path with other model configuration files in the configs folder.
 
 ```shell
 # Please specify the single card GPU before training, otherwise it may get stuck during the training process.
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy_quant --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.Parameters
