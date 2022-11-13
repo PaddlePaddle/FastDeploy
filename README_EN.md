@@ -291,7 +291,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
     
 ### Paddle Lite NPU Deployment
 
-- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
+- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](./examples/vision/detection/paddledetection/rk1126)
 
 <div id="fastdeploy-edge-models"></div>
     
