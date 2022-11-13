@@ -25,6 +25,11 @@ int main(int argc, char* argv[]) {
   runtime_option.SetModelPath(model_file, params_file, fd::ModelFormat::PADDLE);
   runtime_option.UseOrtBackend();
   runtime_option.SetCpuThreadNum(12);
+
+  // **** GPU ****
+  // To use GPU, use the following commented code
+  // runtime_option.UseGpu(0);
+
   // init runtime
   std::unique_ptr<fd::Runtime> runtime =
       std::unique_ptr<fd::Runtime>(new fd::Runtime());

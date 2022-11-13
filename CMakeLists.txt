@@ -63,14 +63,11 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
+option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
-option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
-option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
-
-option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
@@ -638,6 +635,7 @@ if(BUILD_FASTDEPLOY_PYTHON)
                              ${PYTHON_INCLUDE_DIR})
 
   target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/pybind11/include)
+  target_include_directories(${PY_LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/third_party/dlpack/include)
 
   if(APPLE)
     set_target_properties(${PY_LIBRARY_NAME}
