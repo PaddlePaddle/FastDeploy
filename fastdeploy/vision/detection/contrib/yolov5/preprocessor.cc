@@ -99,10 +99,6 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
 bool YOLOv5Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
                              std::map<std::string, std::array<float, 2>>* im_info) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;

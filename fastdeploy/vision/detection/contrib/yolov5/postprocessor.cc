@@ -28,11 +28,6 @@ YOLOv5Postprocessor::YOLOv5Postprocessor() {
 
 bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
                               const std::map<std::string, std::array<float, 2>>& im_info) {
-  if (!initialized_) {
-    FDERROR << "Postprocessor is not initialized." << std::endl;
-    return false;
-  }
-
   int batch = tensors[0].shape[0];
  
   results->resize(batch);
