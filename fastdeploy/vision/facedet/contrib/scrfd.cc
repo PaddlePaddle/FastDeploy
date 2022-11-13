@@ -66,7 +66,7 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
   }
@@ -119,7 +119,11 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                        std::map<std::string, std::array<float, 2>>* im_info) {
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+ #ifndef __ANDROID__  
+  // Because of the low CPU performance on the Android device, 
+  // we decided to hide this extra resize. It won't make much 
+  // difference to the final result.
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -128,6 +132,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+#endif  
   // scrfd's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -153,7 +158,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 
@@ -226,7 +231,13 @@ bool SCRFD::Postprocess(
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }
   // must be setup landmarks_per_face before reserve
-  result->landmarks_per_face = landmarks_per_face;
+  if (use_kps) {
+    result->landmarks_per_face = landmarks_per_face;
+  } else {
+    // force landmarks_per_face = 0, if use_kps has been set as 'false'.
+    result->landmarks_per_face = 0; 
+  }
+
   result->Reserve(total_num_boxes);
   unsigned int count = 0;
   // loop each stride
@@ -310,11 +321,13 @@ bool SCRFD::Postprocess(
     result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
   }
   // scale and clip landmarks
-  for (size_t i = 0; i < result->landmarks.size(); ++i) {
-    result->landmarks[i][0] = std::max(result->landmarks[i][0], 0.0f);
-    result->landmarks[i][1] = std::max(result->landmarks[i][1], 0.0f);
-    result->landmarks[i][0] = std::min(result->landmarks[i][0], ipt_w - 1.0f);
-    result->landmarks[i][1] = std::min(result->landmarks[i][1], ipt_h - 1.0f);
+  if (use_kps) {
+      for (size_t i = 0; i < result->landmarks.size(); ++i) {
+        result->landmarks[i][0] = std::max(result->landmarks[i][0], 0.0f);
+        result->landmarks[i][1] = std::max(result->landmarks[i][1], 0.0f);
+        result->landmarks[i][0] = std::min(result->landmarks[i][0], ipt_w - 1.0f);
+        result->landmarks[i][1] = std::min(result->landmarks[i][1], ipt_h - 1.0f);
+    }
   }
   return true;
 }
