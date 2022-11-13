@@ -45,6 +45,14 @@ import multiprocessing
 with open(os.path.join(TOP_DIR, "python", "requirements.txt")) as fin:
     REQUIRED_PACKAGES = fin.read()
 
+if os.getenv("BUILD_ON_CPU", "OFF") == "ON":
+    os.environ["ENABLE_PADDLE_BACKEND"] = "ON"
+    os.environ["ENABLE_ORT_BACKEND"] = "ON"
+    os.environ["ENABLE_OPENVINO_BACKEND"] = "ON"
+    os.environ["ENABLE_VISION"] = "ON"
+    os.environ["ENABLE_TEXT"] = "ON"
+    os.environ["WITH_GPU"] = "OFF"
+
 setup_configs = dict()
 setup_configs["ENABLE_RKNPU2_BACKEND"] = os.getenv("ENABLE_RKNPU2_BACKEND",
                                                    "OFF")
