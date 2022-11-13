@@ -32,35 +32,24 @@ Including image classification, object detection, image segmentation, face detec
 
 ## 📣 Recent Updates
 
-- 🔥【Live Preview】2022.11.09 20:30～21:30，*Covering the full spectrum of cloud-side scenarios with 150+ popular models for rapid deployment*
-- 🔥【Live Preview】2022.11.10 20:30～21:30，*10+ AI hardware deployments from Rockchip, Amlogic, NXP and others, straight to industry landing*
-- 🔥【Live Preview】2022.11.10 19:00～20:00，*10+ popular models deployed in RK3588, RK3568 in action*
+- 🔥【Live Preview】2022.11.09~2022.11.10  China Standard Time, 20:30～21:30， Engineers@FastDeploy will show Using FastDeploy Efficiently for 3 days.
     - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
-    - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
+    - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
  <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
   </div>
   
-
-- 🔥 **2022.10.31：Release FastDeploy [release v0.5.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.5.0)** <br>
+- 🔥 **2022.11.8：Release FastDeploy [release v0.6.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.6.0)** <br>
     -  **🖥️ Server-side and Cloud Deployment: Support more backend, Support more CV models**
-        -  Support Paddle Inference TensorRT, and provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime；
-        -  Support Graphcore IPU through paddle Inference;
-        -  Support tracking model [PP-Tracking](./examples/vision/tracking/pptracking) and [RobustVideoMatting](./examples/vision/matting) model；
-        -  Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
-
-- 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)** <br>
-    -  **🖥️ Server-side and Cloud Deployment: end-to-end optimization, Support more CV and NLP model**
-       - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;
-       - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/);
-       - Support information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie);
-       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet and TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
+        -  Optimize preprocessing and postprocessing memory creation logic on YOLO series, PaddleClas, PaddleDetection;
+        -  Integrate visual preprocessing operations, optimize the preprocessing performance of PaddleClas and PaddleDetection, and improve end-to-end performance;
+        -  Add Clone interface support for service-based deployment, reducing the memory、GPU memory usage of Paddle Inference、TensorRT、OpenVINO backend in multiple instances
+        -  Support [FSANet](./examples/vision/headpose) head pose recognition model, [PFLD](./examples/vision/facealign) face alignment model, [ERNIE](./examples/text/ernie-3.0) text classification model etc.
     -  **📱 Mobile and Edge Device Deployment: support new backend，support more CV model**
-       - Integrate Paddle Lite and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Inference；
-       - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out.
-    -  **🌐 Browser Deployment: support more CV model**  
-       - Browser deployment and Mini Program deployment New [OCR and other CV models](examples/application/js) capability.
-      
+        -  Support RKNPU2, and provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Inference TensorRT、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime；
+        -  Support [PP-HumanSeg、Unet](examples/vision/segmentation/paddleseg/rknpu2)、[PicoDet](./examples/vision/detection/paddledetection/rknpu2)、[SCRFD](./examples/vision/facedet/scrfd/rknpu2) and other popular models on NPU.
+
+- [**more releases information**](./releases)
 
 ## Contents
 
