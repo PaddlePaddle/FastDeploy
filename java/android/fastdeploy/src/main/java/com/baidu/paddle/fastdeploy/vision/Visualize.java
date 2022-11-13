@@ -6,34 +6,39 @@ import com.baidu.paddle.fastdeploy.FastDeployInitializer;
 
 
 public class Visualize {
-    // TODO(qiuyanjun):
-    //  VisClassification, VisSegmentation, VisMatting, VisOcr, ...
-
+    // visClassification, visDetection, visSegmentation, visOcr, ...
     // Visualize DetectionResult without labels
     public static boolean visDetection(Bitmap ARGB8888Bitmap,
                                        DetectionResult result) {
         return visDetectionNative(
-                ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                0.f, 1, 0.5f,
+                ARGB8888Bitmap, result,
+                0.f, 2, 0.5f,
                 new String[]{});
     }
 
     public static boolean visDetection(Bitmap ARGB8888Bitmap,
                                        DetectionResult result,
-                                       float score_threshold,
-                                       int line_size,
-                                       float font_size) {
+                                       float scoreThreshold) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                score_threshold,
-                line_size,
-                font_size,
+                result,
+                scoreThreshold,
+                2,
+                0.5f,
+                new String[]{});
+    }
+
+    public static boolean visDetection(Bitmap ARGB8888Bitmap,
+                                       DetectionResult result,
+                                       float scoreThreshold,
+                                       int lineSize,
+                                       float fontSize) {
+        return visDetectionNative(
+                ARGB8888Bitmap,
+                result,
+                scoreThreshold,
+                lineSize,
+                fontSize,
                 new String[]{});
     }
 
@@ -43,27 +48,23 @@ public class Visualize {
                                        String[] labels) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                0.f, 1, 0.5f,
+                result,
+                0.f, 2, 0.5f,
                 labels);
     }
 
     public static boolean visDetection(Bitmap ARGB8888Bitmap,
                                        DetectionResult result,
                                        String[] labels,
-                                       float score_threshold,
-                                       int line_size,
-                                       float font_size) {
+                                       float scoreThreshold,
+                                       int lineSize,
+                                       float fontSize) {
         return visDetectionNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mScores,
-                result.mLabelIds,
-                score_threshold,
-                line_size,
-                font_size,
+                result,
+                scoreThreshold,
+                lineSize,
+                fontSize,
                 labels);
     }
 
@@ -71,9 +72,7 @@ public class Visualize {
     public static boolean visClassification(Bitmap ARGB8888Bitmap,
                                             ClassifyResult result) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                ARGB8888Bitmap, result,
                 0.f, 1,
                 new String[]{});
 
@@ -81,14 +80,12 @@ public class Visualize {
 
     public static boolean visClassification(Bitmap ARGB8888Bitmap,
                                             ClassifyResult result,
-                                            float score_threshold,
-                                            float font_size) {
+                                            float scoreThreshold,
+                                            float fontSize) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
-                score_threshold,
-                font_size,
+                ARGB8888Bitmap, result,
+                scoreThreshold,
+                fontSize,
                 new String[]{});
 
     }
@@ -98,9 +95,7 @@ public class Visualize {
                                             ClassifyResult result,
                                             String[] labels) {
         return visClassificationNative(
-                ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
+                ARGB8888Bitmap, result,
                 0.f, 1,
                 labels);
 
@@ -109,14 +104,13 @@ public class Visualize {
     public static boolean visClassification(Bitmap ARGB8888Bitmap,
                                             ClassifyResult result,
                                             String[] labels,
-                                            float score_threshold,
-                                            float font_size) {
+                                            float scoreThreshold,
+                                            float fontSize) {
         return visClassificationNative(
                 ARGB8888Bitmap,
-                result.mScores,
-                result.mLabelIds,
-                score_threshold,
-                font_size,
+                result,
+                scoreThreshold,
+                fontSize,
                 labels);
 
     }
@@ -126,39 +120,76 @@ public class Visualize {
                                  OCRResult result) {
         return visOcrNative(
                 ARGB8888Bitmap,
-                result.mBoxes,
-                result.mText,
-                result.mRecScores,
-                result.mClsScores,
-                result.mClsLabels);
+                result);
+    }
+
+    // Visualize SegmentationResult
+    public static boolean visSegmentation(Bitmap ARGB8888Bitmap,
+                                          SegmentationResult result) {
+        return visSegmentationNative(
+                ARGB8888Bitmap,
+                result,
+                0.5f);
+    }
+
+    public static boolean visSegmentation(Bitmap ARGB8888Bitmap,
+                                          SegmentationResult result,
+                                          float weight) {
+        return visSegmentationNative(
+                ARGB8888Bitmap,
+                result,
+                weight);
+    }
+
+    // Visualize FaceDetectionResult
+    public static boolean visFaceDetection(Bitmap ARGB8888Bitmap,
+                                           FaceDetectionResult result) {
+        return visFaceDetectionNative(
+                ARGB8888Bitmap,
+                result,
+                2, 0.5f);
+    }
+
+    public static boolean visFaceDetection(Bitmap ARGB8888Bitmap,
+                                           FaceDetectionResult result,
+                                           int lineSize,
+                                           float fontSize) {
+        return visFaceDetectionNative(
+                ARGB8888Bitmap,
+                result,
+                lineSize,
+                fontSize);
     }
 
     // VisDetection in native
     private static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
-                                                     float[][] boxes,
-                                                     float[] scores,
-                                                     int[] labelIds,
-                                                     float score_threshold,
-                                                     int line_size,
-                                                     float font_size,
+                                                     DetectionResult result,
+                                                     float scoreThreshold,
+                                                     int lineSize,
+                                                     float fontSize,
                                                      String[] labels);
 
     // VisClassification in native
     private static native boolean visClassificationNative(Bitmap ARGB8888Bitmap,
-                                                          float[] scores,
-                                                          int[] labelIds,
-                                                          float score_threshold,
-                                                          float font_size,
+                                                          ClassifyResult result,
+                                                          float scoreThreshold,
+                                                          float fontSize,
                                                           String[] labels);
 
-    // VisOCRResult in native
+    // VisOcr in native
     private static native boolean visOcrNative(Bitmap ARGB8888Bitmap,
-                                               int[][] boxes,
-                                               String[] text,
-                                               float[] recScores,
-                                               float[] clsScores,
-                                               int[] clsLabels);
+                                               OCRResult result);
 
+    // VisSegmentation in native
+    private static native boolean visSegmentationNative(Bitmap ARGB8888Bitmap,
+                                                        SegmentationResult result,
+                                                        float weight);
+
+    // VisFaceDetection in native
+    private static native boolean visFaceDetectionNative(Bitmap ARGB8888Bitmap,
+                                                         FaceDetectionResult result,
+                                                         int lineSize,
+                                                         float fontSize);
 
     /* Initializes at the beginning */
     static {

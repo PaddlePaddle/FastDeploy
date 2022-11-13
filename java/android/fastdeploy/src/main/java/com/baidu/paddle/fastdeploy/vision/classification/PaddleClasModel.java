@@ -7,14 +7,14 @@ import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.vision.ClassifyResult;
 
 public class PaddleClasModel {
-    protected long mNativeModelContext = 0; // Context from native.
+    protected long mCxxContext = 0; // Context from native.
     protected boolean mInitialized = false;
 
     public PaddleClasModel() {
         mInitialized = false;
     }
 
-    // Constructor with default runtime option
+    // Constructor with default runtimeOption
     public PaddleClasModel(String modelFile,
                            String paramsFile,
                            String configFile) {
@@ -32,8 +32,8 @@ public class PaddleClasModel {
     public PaddleClasModel(String modelFile,
                            String paramsFile,
                            String configFile,
-                           RuntimeOption option) {
-        init_(modelFile, paramsFile, configFile, "", option);
+                           RuntimeOption runtimeOption) {
+        init_(modelFile, paramsFile, configFile, "", runtimeOption);
     }
 
     // Constructor with label file
@@ -41,16 +41,16 @@ public class PaddleClasModel {
                            String paramsFile,
                            String configFile,
                            String labelFile,
-                           RuntimeOption option) {
-        init_(modelFile, paramsFile, configFile, labelFile, option);
+                           RuntimeOption runtimeOption) {
+        init_(modelFile, paramsFile, configFile, labelFile, runtimeOption);
     }
 
     // Call init manually without label file
     public boolean init(String modelFile,
                         String paramsFile,
                         String configFile,
-                        RuntimeOption option) {
-        return init_(modelFile, paramsFile, configFile, "", option);
+                        RuntimeOption runtimeOption) {
+        return init_(modelFile, paramsFile, configFile, "", runtimeOption);
     }
 
     // Call init manually with label file
@@ -58,17 +58,16 @@ public class PaddleClasModel {
                         String paramsFile,
                         String configFile,
                         String labelFile,
-                        RuntimeOption option) {
-        return init_(modelFile, paramsFile, configFile, labelFile, option);
+                        RuntimeOption runtimeOption) {
+        return init_(modelFile, paramsFile, configFile, labelFile, runtimeOption);
     }
-
 
     public boolean release() {
         mInitialized = false;
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return false;
         }
-        return releaseNative(mNativeModelContext);
+        return releaseNative(mCxxContext);
     }
 
     public boolean initialized() {
@@ -77,13 +76,31 @@ public class PaddleClasModel {
 
     // Predict without image saving and bitmap rendering.
     public ClassifyResult predict(Bitmap ARGB8888Bitmap) {
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return new ClassifyResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        return new ClassifyResult(predictNative(
-                mNativeModelContext, ARGB8888Bitmap, false,
-                "", 0.f, false));
+        ClassifyResult result = predictNative(mCxxContext, ARGB8888Bitmap,
+                false, "", false, 0.f);
+        if (result == null) {
+            return new ClassifyResult();
+        }
+        return result;
+    }
+
+    public ClassifyResult predict(Bitmap ARGB8888Bitmap,
+                                  boolean rendering,
+                                  float scoreThreshold) {
+        if (mCxxContext == 0) {
+            return new ClassifyResult();
+        }
+        // Only support ARGB8888 bitmap in native now.
+        ClassifyResult result = predictNative(mCxxContext, ARGB8888Bitmap,
+                false, "", rendering, scoreThreshold);
+        if (result == null) {
+            return new ClassifyResult();
+        }
+        return result;
     }
 
     // Predict with image saving and bitmap rendering (will cost more times)
@@ -91,13 +108,18 @@ public class PaddleClasModel {
                                   String savedImagePath,
                                   float scoreThreshold) {
         // scoreThreshold is for visualizing only.
-        if (mNativeModelContext == 0) {
+        if (mCxxContext == 0) {
             return new ClassifyResult();
         }
         // Only support ARGB8888 bitmap in native now.
-        return new ClassifyResult(predictNative(
-                mNativeModelContext, ARGB8888Bitmap, true,
-                savedImagePath, scoreThreshold, true));
+        ClassifyResult result = predictNative(
+                mCxxContext, ARGB8888Bitmap,
+                true, savedImagePath, true,
+                scoreThreshold);
+        if (result == null) {
+            return new ClassifyResult();
+        }
+        return result;
     }
 
     // Internal init_ method
@@ -105,34 +127,28 @@ public class PaddleClasModel {
                           String paramsFile,
                           String configFile,
                           String labelFile,
-                          RuntimeOption option) {
+                          RuntimeOption runtimeOption) {
         if (!mInitialized) {
-            mNativeModelContext = bindNative(
+            mCxxContext = bindNative(
                     modelFile,
                     paramsFile,
                     configFile,
-                    option.mCpuThreadNum,
-                    option.mEnableLiteFp16,
-                    option.mLitePowerMode.ordinal(),
-                    option.mLiteOptimizedModelDir,
-                    option.mEnableRecordTimeOfRuntime, labelFile);
-            if (mNativeModelContext != 0) {
+                    runtimeOption,
+                    labelFile);
+            if (mCxxContext != 0) {
                 mInitialized = true;
             }
             return mInitialized;
         } else {
             // release current native context and bind a new one.
             if (release()) {
-                mNativeModelContext = bindNative(
+                mCxxContext = bindNative(
                         modelFile,
                         paramsFile,
                         configFile,
-                        option.mCpuThreadNum,
-                        option.mEnableLiteFp16,
-                        option.mLitePowerMode.ordinal(),
-                        option.mLiteOptimizedModelDir,
-                        option.mEnableRecordTimeOfRuntime, labelFile);
-                if (mNativeModelContext != 0) {
+                        runtimeOption,
+                        labelFile);
+                if (mCxxContext != 0) {
                     mInitialized = true;
                 }
                 return mInitialized;
@@ -146,23 +162,19 @@ public class PaddleClasModel {
     private native long bindNative(String modelFile,
                                    String paramsFile,
                                    String configFile,
-                                   int cpuNumThread,
-                                   boolean enableLiteFp16,
-                                   int litePowerMode,
-                                   String liteOptimizedModelDir,
-                                   boolean enableRecordTimeOfRuntime,
+                                   RuntimeOption runtimeOption,
                                    String labelFile);
 
-    // Call prediction from native context.
-    private native long predictNative(long nativeModelContext,
-                                      Bitmap ARGB8888Bitmap,
-                                      boolean saved,
-                                      String savedImagePath,
-                                      float scoreThreshold,
-                                      boolean rendering);
+    // Call prediction from native context with rendering.
+    private native ClassifyResult predictNative(long CxxContext,
+                                                Bitmap ARGB8888Bitmap,
+                                                boolean saveImage,
+                                                String savePath,
+                                                boolean rendering,
+                                                float scoreThreshold);
 
     // Release buffers allocated in native context.
-    private native boolean releaseNative(long nativeModelContext);
+    private native boolean releaseNative(long CxxContext);
 
     // Initializes at the beginning.
     static {

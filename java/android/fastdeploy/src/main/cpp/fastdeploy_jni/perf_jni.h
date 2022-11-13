@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <jni.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>  // NOLINT
@@ -20,6 +21,8 @@
 #include <fstream>  // NOLINT
 #include <string>   // NOLINT
 #include <vector>   // NOLINT
+
+#include "fastdeploy/vision.h"
 
 #define TAG "[FastDeploy][JNI]"
 #ifdef __ANDROID__
@@ -29,52 +32,58 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 #define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, TAG, __VA_ARGS__)
 #else
-#define LOGD(...) \
-  {}
-#define LOGI(...) \
-  {}
-#define LOGW(...) \
-  {}
-#define LOGE(...) \
-  {}
-#define LOGF(...) \
-  {}
+#define LOGD(...) {}
+#define LOGI(...) {}
+#define LOGW(...) {}
+#define LOGE(...) {}
+#define LOGF(...) {}
 #endif
+
+#define ENABLE_RUNTIME_PERF
 
 namespace fastdeploy {
 namespace jni {
 
+/// Time counter
 inline int64_t GetCurrentTime() {
   struct timeval time;
   gettimeofday(&time, NULL);
-  return 1000000LL * (int64_t)time.tv_sec + (int64_t)time.tv_usec;
+  return 1000000LL * static_cast<int64_t>(time.tv_sec) +
+         static_cast<int64_t>(time.tv_usec);
 }
 
 inline double GetElapsedTime(int64_t time) {
   return (GetCurrentTime() - time) / 1000.0f;
 }
 
-class AssetsLoaderUtils {
- public:
-  static bool detection_labels_loaded_;
-  static bool classification_labels_loaded_;
-  static std::vector<std::string> detection_labels_;
-  static std::vector<std::string> classification_labels_;
+/// Show the performance of Runtime
+inline void PerfTimeOfRuntime(
+    FastDeployModel *c_model_ptr, int64_t start = -1) {
+#ifdef ENABLE_RUNTIME_PERF
+  if (c_model_ptr == nullptr) {
+    return;
+  }
+  if (start > 0) {
+    auto tc = GetElapsedTime(start);
+    LOGD("Predict from native costs %f ms", tc);
+  }
+  if (c_model_ptr->EnabledRecordTimeOfRuntime()) {
+    auto info_of_runtime = c_model_ptr->PrintStatisInfoOfRuntime();
+    const float avg_time = info_of_runtime["avg_time"] * 1000.0f;
+    LOGD("Avg runtime costs %f ms", avg_time);
+  }
+#endif
+}
 
- public:
-  static bool IsDetectionLabelsLoaded();
-  static bool IsClassificationLabelsLoaded();
-  static const std::vector<std::string>& GetDetectionLabels();
-  static const std::vector<std::string>& GetClassificationLabels();
-  static void LoadClassificationLabels(const std::string& path,
-                                       bool force_reload = false);
-  static void LoadDetectionLabels(const std::string& path,
-                                  bool force_reload = false);
+#define INITIALIZED_OR_RETURN(c_model_ptr) \
+  if (!(c_model_ptr)->Initialized()) { \
+    LOGE("Failed to initialize!"); \
+    delete (c_model_ptr); \
+    return 0; \
+  }
 
- private:
-  static bool LoadLabelsFromTxt(const std::string& txt_path,
-                                std::vector<std::string>* labels);
-};
+#define PERF_TIME_OF_RUNTIME(c_model_ptr, start) \
+  fastdeploy::jni::PerfTimeOfRuntime((c_model_ptr), (start));
 
 }  // namespace jni
 }  // namespace fastdeploy

@@ -41,8 +41,8 @@ inline std::string ConvertTo(JNIEnv *env, jstring jstr) {
   const jclass jstring_clazz = env->GetObjectClass(jstr);
   const jmethodID getBytesID =
       env->GetMethodID(jstring_clazz, "getBytes", "(Ljava/lang/String;)[B");
-  const jbyteArray jstring_bytes = (jbyteArray)env->CallObjectMethod(
-      jstr, getBytesID, env->NewStringUTF("UTF-8"));
+  const jbyteArray jstring_bytes = reinterpret_cast<jbyteArray>(
+      env->CallObjectMethod(jstr, getBytesID, env->NewStringUTF("UTF-8")));
 
   size_t length = static_cast<size_t>(env->GetArrayLength(jstring_bytes));
   jbyte *jstring_bytes_ptr = env->GetByteArrayElements(jstring_bytes, NULL);
@@ -53,6 +53,28 @@ inline std::string ConvertTo(JNIEnv *env, jstring jstr) {
 
   env->DeleteLocalRef(jstring_bytes);
   env->DeleteLocalRef(jstring_clazz);
+  return res;
+}
+
+/// jstring s-> std::vector<std::string>
+template <>
+inline std::vector<std::string> ConvertTo(JNIEnv *env, jobjectArray jstrs) {
+  // In java, a unicode char will be encoded using 2 bytes (utf16).
+  // so jstring will contain characters utf16. std::string in c++ is
+  // essentially a string of bytes, not characters, so if we want to
+  // pass jstring from JNI to c++, we have convert utf16 to bytes.
+  if (!jstrs) {
+    return {};
+  }
+  std::vector<std::string> res;
+  const int len = env->GetArrayLength(jstrs);
+  if (len > 0) {
+    for (int i = 0; i < len; ++i) {
+      auto j_str =
+          reinterpret_cast<jstring>(env->GetObjectArrayElement(jstrs, i));
+      res.push_back(fastdeploy::jni::ConvertTo<std::string>(env, j_str));
+    }
+  }
   return res;
 }
 
@@ -69,8 +91,8 @@ inline jstring ConvertTo(JNIEnv *env, std::string str) {
                           reinterpret_cast<const jbyte *>(cstr_data_ptr));
 
   jstring jstring_encoding = env->NewStringUTF("UTF-8");
-  jstring res = (jstring)(env->NewObject(jstring_clazz, initID, jstring_bytes,
-                                         jstring_encoding));
+  jstring res = reinterpret_cast<jstring>(
+      env->NewObject(jstring_clazz, initID, jstring_bytes, jstring_encoding));
 
   env->DeleteLocalRef(jstring_clazz);
   env->DeleteLocalRef(jstring_bytes);
@@ -86,6 +108,16 @@ inline std::vector<int64_t> ConvertTo(JNIEnv *env, jlongArray jdata) {
   jlong *jdata_ptr = env->GetLongArrayElements(jdata, nullptr);
   std::vector<int64_t> res(jdata_ptr, jdata_ptr + jdata_size);
   env->ReleaseLongArrayElements(jdata, jdata_ptr, 0);
+  return res;
+}
+
+/// jintArray -> std::vector<int>
+template <>
+inline std::vector<int> ConvertTo(JNIEnv *env, jintArray jdata) {
+  int jdata_size = env->GetArrayLength(jdata);
+  jint *jdata_ptr = env->GetIntArrayElements(jdata, nullptr);
+  std::vector<int> res(jdata_ptr, jdata_ptr + jdata_size);
+  env->ReleaseIntArrayElements(jdata, jdata_ptr, 0);
   return res;
 }
 
@@ -105,7 +137,7 @@ inline jlongArray ConvertTo(JNIEnv *env, const std::vector<int64_t> &cvec) {
   jlongArray res = env->NewLongArray(cvec.size());
   jlong *jbuf = new jlong[cvec.size()];
   for (size_t i = 0; i < cvec.size(); ++i) {
-    jbuf[i] = (jlong)cvec[i];
+    jbuf[i] = static_cast<jlong>(cvec[i]);
   }
   env->SetLongArrayRegion(res, 0, cvec.size(), jbuf);
   delete[] jbuf;

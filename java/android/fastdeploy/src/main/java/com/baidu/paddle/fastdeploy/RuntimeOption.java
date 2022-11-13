@@ -3,14 +3,12 @@ package com.baidu.paddle.fastdeploy;
 public class RuntimeOption {
     public int mCpuThreadNum = 1;
     public boolean mEnableLiteFp16 = false;
-    public boolean mEnableRecordTimeOfRuntime = false;
     public LitePowerMode mLitePowerMode = LitePowerMode.LITE_POWER_NO_BIND;
     public String mLiteOptimizedModelDir = "";
 
     public RuntimeOption() {
         mCpuThreadNum = 1;
         mEnableLiteFp16 = false;
-        mEnableRecordTimeOfRuntime = false;
         mLitePowerMode = LitePowerMode.LITE_POWER_NO_BIND;
         mLiteOptimizedModelDir = "";
     }
@@ -37,10 +35,6 @@ public class RuntimeOption {
 
     public void setLiteOptimizedModelDir(String modelDir) {
         mLiteOptimizedModelDir = modelDir;
-    }
-
-    public void enableRecordTimeOfRuntime() {
-        mEnableRecordTimeOfRuntime = true;
     }
 
     // Helpers: parse lite power mode from string
