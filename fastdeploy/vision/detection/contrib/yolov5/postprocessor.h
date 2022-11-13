@@ -40,7 +40,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
            const std::map<std::string, std::array<float, 2>>& im_info);
 
   /// Set conf_threshold, default 0.25
-  void SetConfThreshold(float conf_threshold) {
+  void SetConfThreshold(const float& conf_threshold) {
     conf_threshold_ = conf_threshold;
   }
 
@@ -48,7 +48,7 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   float GetConfThreshold() const { return conf_threshold_; }
 
   /// Set nms_threshold, default 0.5
-  void SetNMSThreshold(float nms_threshold) {
+  void SetNMSThreshold(const float& nms_threshold) {
     nms_threshold_ = nms_threshold;
   }
 
@@ -56,19 +56,14 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   float GetNMSThreshold() const { return nms_threshold_; }
 
   /// Set multi_label, default true
-  void SetMultiLabel(bool multi_label) {
+  void SetMultiLabel(const bool& multi_label) {
     multi_label_ = multi_label;
   }
 
   /// Get multi_label, default true
   bool GetMultiLabel() const { return multi_label_; }
 
- private:
-  bool Postprocess(const std::vector<FDTensor>& tensors,
-                   std::vector<DetectionResult>* results,
-                   const std::map<std::string, std::array<float, 2>>& im_info);
-
-  bool initialized_ = false;
+ protected:
   float conf_threshold_;
   float nms_threshold_;
   bool multi_label_;

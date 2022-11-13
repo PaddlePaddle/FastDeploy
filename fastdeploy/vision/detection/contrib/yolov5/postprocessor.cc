@@ -24,29 +24,36 @@ YOLOv5Postprocessor::YOLOv5Postprocessor() {
   nms_threshold_ = 0.5;
   multi_label_ = true;
   max_wh_ = 7680.0;
-  initialized_ = true;
 }
 
-bool YOLOv5Postprocessor::Postprocess(
-    const std::vector<FDTensor>& infer_results, std::vector<DetectionResult>* results,
-    const std::map<std::string, std::array<float, 2>>& im_info) {
-  for (size_t bs = 0; bs < results->size(); ++bs) {
+bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
+                              const std::map<std::string, std::array<float, 2>>& im_info) {
+  if (!initialized_) {
+    FDERROR << "Postprocessor is not initialized." << std::endl;
+    return false;
+  }
+
+  int batch = tensors[0].shape[0];
+ 
+  results->resize(batch);
+
+  for (size_t bs = 0; bs < batch; ++bs) {
     (*results)[bs].Clear();
     if (multi_label_) {
-      (*results)[bs].Reserve(infer_results[0].shape[1] * (infer_results[0].shape[2] - 5));
+      (*results)[bs].Reserve(tensors[0].shape[1] * (tensors[0].shape[2] - 5));
     } else {
-      (*results)[bs].Reserve(infer_results[0].shape[1]);
+      (*results)[bs].Reserve(tensors[0].shape[1]);
     }
-    if (infer_results[0].dtype != FDDataType::FP32) {
+    if (tensors[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
     }
-    const float* data = reinterpret_cast<const float*>(infer_results[0].Data()) + bs * infer_results[0].shape[1] * infer_results[0].shape[2];
-    for (size_t i = 0; i < infer_results[0].shape[1]; ++i) {
-      int s = i * infer_results[0].shape[2];
+    const float* data = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
+    for (size_t i = 0; i < tensors[0].shape[1]; ++i) {
+      int s = i * tensors[0].shape[2];
       float confidence = data[s + 4];
       if (multi_label_) {
-        for (size_t j = 5; j < infer_results[0].shape[2]; ++j) {
+        for (size_t j = 5; j < tensors[0].shape[2]; ++j) {
           confidence = data[s + 4];
           const float* class_score = data + s + j;
           confidence *= (*class_score);
@@ -67,7 +74,7 @@ bool YOLOv5Postprocessor::Postprocess(
         }
       } else {
         const float* max_class_score =
-            std::max_element(data + s + 5, data + s + infer_results[0].shape[2]);
+            std::max_element(data + s + 5, data + s + tensors[0].shape[2]);
         confidence *= (*max_class_score);
         // filter boxes by conf_threshold
         if (confidence <= conf_threshold_) {
@@ -119,24 +126,6 @@ bool YOLOv5Postprocessor::Postprocess(
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
       (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
     }
-  }
-  return true;
-}
-
-bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
-                              const std::map<std::string, std::array<float, 2>>& im_info) {
-  if (!initialized_) {
-    FDERROR << "Postprocessor is not initialized." << std::endl;
-    return false;
-  }
-
-  int batch = tensors[0].shape[0];
- 
-  results->resize(batch);
-
-  if (!Postprocess(tensors, results, im_info)) {
-    FDERROR << "Failed to preprocess input image." << std::endl;
-    return false;
   }
   return true;
 }

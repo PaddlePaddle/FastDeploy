@@ -27,7 +27,6 @@ YOLOv5Preprocessor::YOLOv5Preprocessor() {
   is_scale_up_ = false;
   stride_ = 32;
   max_wh_ = 7680.0;
-  initialized_ = true;
 }
 
 void YOLOv5Preprocessor::LetterBox(FDMat* mat) {
@@ -83,21 +82,16 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
   }
   // yolov5's preprocess steps
   // 1. letterbox
-  // 2. BGR->RGB
-  // 3. HWC->CHW
+  // 2. convert_and_permute(swap_rb=true)
   LetterBox(mat);
-  BGR2RGB::Run(mat);
-  // Compute `result = mat * alpha + beta` directly by channel
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  Convert::Run(mat, alpha, beta);
+  ConvertAndPermute::Run(mat, alpha, beta, true);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
 
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
   output->ExpandDim(0);  // reshape to n, h, w, c
   return true;

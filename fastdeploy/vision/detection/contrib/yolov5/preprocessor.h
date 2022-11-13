@@ -39,28 +39,25 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
            std::map<std::string, std::array<float, 2>>* im_info);
 
   /// Set target size, tuple of (width, height), default size = {640, 640}
-  void SetSize(std::vector<int> size) { size_ = size; }
+  void SetSize(const std::vector<int>& size) { size_ = size; }
 
   /// Get target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> GetSize() const { return size_; }
 
   /// Set padding value, size should be the same as channels
-  void SetPaddingValue(std::vector<float> padding_value) {
+  void SetPaddingValue(const std::vector<float>& padding_value) {
     padding_value_ = padding_value;
   }
 
   /// Get padding value, size should be the same as channels
   std::vector<float> GetPaddingValue() const { return padding_value_; }
 
- private:
+ protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  bool IsDynamicInput() const { return is_dynamic_input_; }
-
   void LetterBox(FDMat* mat);
 
-  bool initialized_ = false;
   // target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> size_;
 
@@ -83,15 +80,6 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
 
   // for offseting the boxes by classes when using NMS
   float max_wh_;
-
-  // whether to inference with dynamic shape (e.g ONNX export with dynamic shape
-  // or not.)
-  // YOLOv5 official 'export_onnx.py' script will export dynamic ONNX by
-  // default.
-  // while is_dynamic_shape if 'false', is_mini_pad will force 'false'. This
-  // value will
-  // auto check by fastdeploy after the internal Runtime already initialized.
-  bool is_dynamic_input_;
 };
 
 }  // namespace detection
