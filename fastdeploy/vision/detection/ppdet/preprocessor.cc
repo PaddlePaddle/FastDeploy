@@ -111,7 +111,7 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
   }
 
   // Fusion will improve performance
-  // FuseTransforms(&processors_);
+  FuseTransforms(&processors_);
 
   return true;
 }
