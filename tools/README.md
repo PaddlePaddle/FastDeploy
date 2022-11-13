@@ -1,7 +1,7 @@
 # FastDeploy 工具包
 FastDeploy工具包提供例如一键模型自动化压缩等工具, 本文将以FastDeploy一键自动化压缩工具为例, 介绍如何使用此工具包
 
-## 以FastDeploy一键模型压缩为例
+## FastDeploy一键模型压缩工具
 
 ### 环境准备
 1.用户参考PaddlePaddle官网, 安装develop版本
@@ -25,5 +25,7 @@ python setup.py install
 ```
 ### 一键量化工具的使用
 按照以上步骤成功安装后,即可使用FastDeploy一键模型自动化压缩工具, 示例如下.
+
 fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+
 详细使用文档请参考[FastDeploy一键模型自动化压缩工具](./auto_compression/README.md)
