@@ -40,6 +40,9 @@ add_library(
         fastdeploy_jni/vision/classification/classification_utils_jni.cc
         fastdeploy_jni/vision/segmentation/paddleseg_model_jni.cc
         fastdeploy_jni/vision/segmentation/segmentation_utils_jni.cc
+        fastdeploy_jni/vision/facedet/scrfd_jni.cc
+        fastdeploy_jni/vision/facedet/yolov5face_jni.cc
+        fastdeploy_jni/vision/facedet/facedet_utils_jni.cc
 )
 
 # Searches for a specified prebuilt library and stores the path as a

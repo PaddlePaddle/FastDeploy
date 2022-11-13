@@ -4,14 +4,16 @@ import android.support.annotation.NonNull;
 
 import java.util.Arrays;
 
-public class DetectionResult {
+public class FaceDetectionResult {
     public float[][] mBoxes; // [n,4]
     public float[] mScores;  // [n]
-    public int[] mLabelIds;  // [n]
+    public float[][] mLandmarks; // [n,2]
+    int mLandmarksPerFace = 0;
     public boolean mInitialized = false;
 
-    public DetectionResult() {
+    public FaceDetectionResult() {
         mInitialized = false;
+        mLandmarksPerFace = 0;
     }
 
     public boolean initialized() {
@@ -35,9 +37,18 @@ public class DetectionResult {
         }
     }
 
-    public void setLabelIds(@NonNull int[] labelIdsBuffer) {
-        if (labelIdsBuffer.length > 0) {
-            mLabelIds = labelIdsBuffer.clone();
+    public void setLandmarks(@NonNull float[] landmarksBuffer) {
+        int landmarksNum = landmarksBuffer.length / 2;
+        if (landmarksNum > 0) {
+            mLandmarks = new float[landmarksNum][2];
+            for (int i = 0; i < landmarksNum; ++i) {
+                mLandmarks[i] = Arrays.copyOfRange(
+                        landmarksBuffer, i * 2, (i + 1) * 2);
+            }
         }
+    }
+
+    public void setLandmarksPerFace(int landmarksPerFace) {
+        mLandmarksPerFace = landmarksPerFace;
     }
 }

@@ -111,6 +111,16 @@ inline std::vector<int64_t> ConvertTo(JNIEnv *env, jlongArray jdata) {
   return res;
 }
 
+/// jintArray -> std::vector<int>
+template <>
+inline std::vector<int> ConvertTo(JNIEnv *env, jintArray jdata) {
+  int jdata_size = env->GetArrayLength(jdata);
+  jint *jdata_ptr = env->GetIntArrayElements(jdata, nullptr);
+  std::vector<int> res(jdata_ptr, jdata_ptr + jdata_size);
+  env->ReleaseIntArrayElements(jdata, jdata_ptr, 0);
+  return res;
+}
+
 /// jfloatArray -> std::vector<float>
 template <>
 inline std::vector<float> ConvertTo(JNIEnv *env, jfloatArray jdata) {

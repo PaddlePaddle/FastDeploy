@@ -116,6 +116,9 @@ bool YOLOv5Face::Preprocess(
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
 #ifndef __ANDROID__     
+  // Because of the low CPU performance on the Android device, 
+  // we decided to hide this extra resize. It won't make much 
+  // difference to the final result.
   if (std::fabs(ratio - 1.0f) > 1e-06) {  
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
