@@ -97,7 +97,7 @@ std::string Str(const Backend& b) {
   }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
-    return "Backend::LITE";
+    return "Backend::PDLITE";
   }
   return "UNKNOWN-Backend";
 }
@@ -116,7 +116,7 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
   }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
-    out << "Backend::LITE";
+    out << "Backend::PDLITE";
   } else {
     out << "UNKNOWN-Backend";
   }
