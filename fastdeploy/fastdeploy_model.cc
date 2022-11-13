@@ -47,13 +47,11 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
     return false;
   }
 
-  std::cout << "?????????" << runtime_option.device << std::endl;
   bool use_gpu = (runtime_option.device == Device::GPU);
   bool use_ipu = (runtime_option.device == Device::IPU);
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
 
-  std::cout << "??????ddd " << use_gpu << " " << IsSupported(valid_gpu_backends, runtime_option.backend) << std::endl;
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
       FDERROR << "The valid gpu backends of model " << ModelName() << " are " << Str(valid_gpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
