@@ -569,7 +569,7 @@ std::vector<TensorInfo> Runtime::GetOutputInfos() {
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
   for (auto& tensor: input_tensors) {
-    FDASSERT(FDtensor.device_id == option.device_id,
+    FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
              "Input tensor and runtime have different device ids.");
   }
   return backend_->Infer(input_tensors, output_tensors);

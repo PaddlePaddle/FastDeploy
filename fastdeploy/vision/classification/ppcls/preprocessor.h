@@ -50,7 +50,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
   bool initialized_ = false;
   bool use_cuda_ = false;
   // GPU device id
-  int device_id_ = 0;
+  int device_id_ = -1;
 };
 
 }  // namespace classification
