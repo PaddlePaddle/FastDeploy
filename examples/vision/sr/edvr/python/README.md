@@ -10,7 +10,7 @@
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/sr/vsr/python
+cd FastDeploy/examples/vision/sr/edvr/python
 
 # 下载VSR模型文件和测试视频
 wget https://bj.bcebos.com/paddlehub/fastdeploy/EDVR_M_wo_tsa_SRx4.tgz

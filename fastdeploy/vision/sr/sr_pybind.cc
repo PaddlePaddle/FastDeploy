@@ -16,10 +16,10 @@
 
 namespace fastdeploy {
 
-  void BindVSR(pybind11::module& m);
+  void BindPPSR(pybind11::module& m);
 
   void BindSR(pybind11::module& m) {
-    auto vsr_module = m.def_submodule("sr", "sr(super resolution) submodule");
-    BindVSR(vsr_module);
+    auto sr_module = m.def_submodule("sr", "sr(super resolution) submodule");
+    BindPPSR(sr_module);
   }
 }  // namespace fastdeploy

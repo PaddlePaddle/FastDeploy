@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/sr/vsr/ppmsvsr.h"
+#include "fastdeploy/vision/sr/ppsr/ppmsvsr.h"
 
 namespace fastdeploy {
 namespace vision {

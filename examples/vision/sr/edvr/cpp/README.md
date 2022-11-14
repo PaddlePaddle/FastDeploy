@@ -14,7 +14,7 @@
 # fastdeploy版本 >= 0.7.0
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.7.0.tgz
 tar xvf fastdeploy-linux-x64-gpu-0.7.0.tgz
-cd fastdeploy-linux-x64-gpu-0.7.0/examples/vision/sr/EDVR/cpp/
+cd fastdeploy-linux-x64-gpu-0.7.0/examples/vision/sr/edvr/cpp/
 mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.7.0
 make -j

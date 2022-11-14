@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/sr/vsr/basicvsr.h"
+#include "fastdeploy/vision/sr/ppsr/basicvsr.h"
 
 namespace fastdeploy {
 namespace vision {
