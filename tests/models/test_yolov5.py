@@ -37,12 +37,6 @@ def test_detection_yolov5():
     model = fd.vision.detection.YOLOv5(
         model_file, runtime_option=rc.test_option)
 
-    preprocessor = fd.vision.detection.YOLOv5Preprocessor()
-    postprocessor = fd.vision.detection.YOLOv5Postprocessor()
-
-    rc.test_option.set_model_path(model_file, model_format=ModelFormat.ONNX)
-    runtime = fd.Runtime(rc.test_option)
-
     with open("resources/yolov5_result1.pkl", "rb") as f:
         expect1 = pickle.load(f)
 
@@ -54,25 +48,6 @@ def test_detection_yolov5():
     im2 = cv2.imread("./resources/000000570688.jpg")
 
     for i in range(3):
-        # test runtime
-        input_tensors, ims_info = preprocessor.run([im1])
-        output_tensors = runtime.infer({"images": input_tensors[0]})
-        results = postprocessor.run(output_tensors, ims_info)
-        result1 = results[0]
-
-        diff_boxes_1 = np.fabs(
-            np.array(result1.boxes) - np.array(expect1["boxes"]))
-        diff_label_1 = np.fabs(
-            np.array(result1.label_ids) - np.array(expect1["label_ids"]))
-        diff_scores_1 = np.fabs(
-            np.array(result1.scores) - np.array(expect1["scores"]))
-
-        assert diff_boxes_1.max(
-        ) < 1e-06, "There's difference in detection boxes 1."
-        assert diff_label_1.max(
-        ) < 1e-06, "There's difference in detection label 1."
-        assert diff_scores_1.max(
-        ) < 1e-05, "There's difference in detection score 1."
         # test single predict
         result1 = model.predict(im1)
         result2 = model.predict(im2)
@@ -140,5 +115,51 @@ def test_detection_yolov5():
         ) < 1e-05, "There's difference in detection score 2."
 
 
+def test_detection_yolov5_runtime():
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx"
+    input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
+    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov5_result1.pkl"
+    fd.download(model_url, "resources")
+    fd.download(input_url1, "resources")
+    fd.download(result_url1, "resources")
+
+    model_file = "resources/yolov5s.onnx"
+
+    preprocessor = fd.vision.detection.YOLOv5Preprocessor()
+    postprocessor = fd.vision.detection.YOLOv5Postprocessor()
+
+    rc.test_option.set_model_path(model_file, model_format=ModelFormat.ONNX)
+    rc.test_option.use_openvino_backend()
+    runtime = fd.Runtime(rc.test_option)
+
+    with open("resources/yolov5_result1.pkl", "rb") as f:
+        expect1 = pickle.load(f)
+
+    # compare diff
+    im1 = cv2.imread("./resources/000000014439.jpg")
+
+    for i in range(3):
+        # test runtime
+        input_tensors, ims_info = preprocessor.run([im1.copy()])
+        output_tensors = runtime.infer({"images": input_tensors[0]})
+        results = postprocessor.run(output_tensors, ims_info)
+        result1 = results[0]
+
+        diff_boxes_1 = np.fabs(
+            np.array(result1.boxes) - np.array(expect1["boxes"]))
+        diff_label_1 = np.fabs(
+            np.array(result1.label_ids) - np.array(expect1["label_ids"]))
+        diff_scores_1 = np.fabs(
+            np.array(result1.scores) - np.array(expect1["scores"]))
+
+        assert diff_boxes_1.max(
+        ) < 1e-04, "There's difference in detection boxes 1."
+        assert diff_label_1.max(
+        ) < 1e-06, "There's difference in detection label 1."
+        assert diff_scores_1.max(
+        ) < 1e-05, "There's difference in detection score 1."
+
+
 if __name__ == "__main__":
     test_detection_yolov5()
+    test_detection_yolov5_runtime()
