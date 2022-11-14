@@ -67,6 +67,8 @@ Prerequisite for Compiling:
 - cmake >= 3.18.0
 - python >= 3.6
 
+Notice the `wheel` is required if you need to pack a wheel, execute `pip install wheel` first.
+
 All compilation options are introduced via environment variables
 
 ### Linux & Mac

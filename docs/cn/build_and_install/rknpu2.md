@@ -80,6 +80,8 @@ make install
 
 ### 编译Python SDK
 
+Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy

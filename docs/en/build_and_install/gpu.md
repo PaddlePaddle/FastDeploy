@@ -79,6 +79,8 @@ If you use CMake GUI, please refer to [How to Compile with CMakeGUI + Visual Stu
 
 ## How to Build and Install Python SDK
 
+Notice the `wheel` is required if you need to pack a wheel, execute `pip install wheel` first.
+
 ### Linux
 
 Prerequisite for Compiling on Linux:

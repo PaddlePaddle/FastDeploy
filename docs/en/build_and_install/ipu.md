@@ -34,6 +34,8 @@ Prerequisite for Compiling on Linux:
 - popart >= 3.0.0
 - python >= 3.6
 
+Notice the `wheel` is required if you need to pack a wheel, execute `pip install wheel` first.
+
 All compilation options are imported via environment variables
 
 ```bash

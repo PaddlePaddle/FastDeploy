@@ -34,6 +34,8 @@ Linux编译过程同样需要满足
 - popart >= 3.0.0
 - python >= 3.6
 
+Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+
 所有编译选项通过环境变量导入
 
 ```bash
