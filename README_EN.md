@@ -38,7 +38,7 @@ Including image classification, object detection, image segmentation, face detec
  <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
   </div>
-  
+
 - 🔥 **2022.11.8：Release FastDeploy [release v0.6.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.6.0)** <br>
     -  **🖥️ Server-side and Cloud Deployment: Support more backend, Support more CV models**
         -  Optimize preprocessing and postprocessing memory creation logic on YOLO series, PaddleClas, PaddleDetection;
@@ -54,7 +54,7 @@ Including image classification, object detection, image segmentation, face detec
 ## Contents
 
 * <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
-    
+
    - Install
         - [How to Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
         - [How to Build and Install FastDeploy Library on GPU Platform](docs/en/build_and_install/gpu.md)
@@ -158,7 +158,7 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 </div></details>
-         
+
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
@@ -213,13 +213,13 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
 </div>
-  
+
 
 | Task                          | Model                                                                                   | API                                                                                                                               | Linux                 | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux                       | Linux                       |  Linux        |
 |:-----------------------------:|:---------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:|:---------------------------:|:--------------------------:|:---------------------------:|
 | ---                           | ---                                                                                     | ---                                                                                                                               | <font size=2> X86 CPU | <font size=2> NVIDIA GPU | <font size=2> Intel  CPU | <font size=2> NVIDIA GPU | <font size=2> Intel CPU | <font size=2> Arm CPU | <font size=2>  AArch64 CPU | <font size=2> NVIDIA Jetson | <font size=2> Graphcore IPU | Serving|
 | Classification         | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas)                           | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
-| Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | [Python](./examples/vision/classification/resnet/python)/[C++](./examples/vision/classification/resnet/python/cpp)                        | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | [Python](./examples/vision/classification/resnet/python)/[C++](./examples/vision/classification/resnet/cpp)                        | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Classification         | [ltralytics/YOLOv5Cls](examples/vision/classification/yolov5cls)                             | [Python](./examples/vision/classification/yolov5cls/python)/[C++](./examples/vision/classification/yolov5cls/cpp)                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Classification         | [PaddleClas/PP-LCNet](./examples/vision/classification/paddleclas)                           | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
 | Classification         | [PaddleClas/PP-LCNetv2](./examples/vision/classification/paddleclas)                         | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
@@ -251,9 +251,9 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Detection              | [WongKinYiu/ScaledYOLOv4](./examples/vision/detection/scaledyolov4)                          | [Python](./examples/vision/detection/scaledyolov4/python)/[C++](./examples/vision/detection/scaledyolov4/cpp)                             | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Detection              | [ppogg/YOLOv5Lite](./examples/vision/detection/yolov5lite)                                   | [Python](./examples/vision/detection/yolov5lite/python)/[C++](./examples/vision/detection/yolov5lite/cpp)                                 | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Detection              | [RangiLyu/NanoDetPlus](./examples/vision/detection/nanodet_plus)                             | [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/detection/nanodet_plus/cpp)                             | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
-| KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | [Python](./examples/vision/keypointdetection/tiny_pose/python)/[C++](./examples/vision/keypointdetection/tiny_pose/python/cpp)            | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | [Python](./examples/vision/keypointdetection/tiny_pose/python)/[C++](./examples/vision/keypointdetection/tiny_pose/cpp)            | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | KeyPoint               | [PaddleDetection/PicoDet + TinyPose](./examples/vision/keypointdetection/det_keypoint_unite) | [Python](./examples/vision/keypointdetection/det_keypoint_unite/python)/[C++](./examples/vision/keypointdetection/det_keypoint_unite/cpp) | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
-| HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | [Python](./xamples/vision/headpose/fsanet/python)/[C++](./xamples/vision/headpose/fsanet/cpp/cpp)                                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | [Python](./examples/vision/headpose/fsanet/python)/[C++](./examples/vision/headpose/fsanet/cpp)                                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Tracking               | [PaddleDetection/PP-Tracking](examples/vision/tracking/pptracking)                           | [Python](examples/vision/tracking/pptracking/python)/[C++](examples/vision/tracking/pptracking/cpp)                                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | OCR                    | [PaddleOCR/PP-OCRv2](./examples/vision/ocr)                                                  | [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp)                                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | OCR                    | [PaddleOCR/PP-OCRv3](./examples/vision/ocr)                                                  | [Python](./examples/vision/ocr/PP-OCRv3/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp)                                                 | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
@@ -280,21 +280,21 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Information Extraction | [PaddleNLP/UIE](./examples/text/uie)                                                         | [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp)                                                                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | Python/C++                                                                                                                                | ❔       | ❔          | ❔       | ❔          | ❔       | ❔       | ❔           | ❔             | ❔             | ✅       |
 | Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | [Python](examples/audio/pp-tts/python)/C++                                                                                                | ❔       | ❔          | ❔       | ❔          | ❔       | ❔       | ❔           | ❔             | --            | ✅       |
-    
+
 
 <div id="fastdeploy-edge-doc"></div>
-    
+
 ## 📱 Mobile and Edge Device Deployment
 
 
 <div id="fastdeploy-edge-sdk-npu"></div>
-    
+
 ### Paddle Lite NPU Deployment
 
 - [Rockchip-NPU / Amlogic-NPU / NXP-NPU](./examples/vision/detection/paddledetection/rk1126)
 
 <div id="fastdeploy-edge-models"></div>
-    
+
 ### Mobile and Edge Model List 🔥🔥🔥🔥
 
 <div align="center">
@@ -340,11 +340,11 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | OCR                | [PaddleOCR/PP-OCRv3](examples/vision/ocr/PP-OCRv3)                                        | 2.4+10.6 | ✅       | ❔       | ❔       | ❔                          | ❔                                    | ❔                                 | ❔                        | --      |
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
 
-    
+
 ## 🌐 Browser-based Model List
 
 <div id="fastdeploy-web-models"></div>
-    
+
 | Task                | Model                                                                                         | [web_demo](examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
 | ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
@@ -355,7 +355,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Object Recognition | [ItemIdentification](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
 
-    
+
 ## Community
 
 <div id="fastdeploy-community"></div>

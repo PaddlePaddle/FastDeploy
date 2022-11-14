@@ -2,8 +2,8 @@
 
 在运行demo前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本文档以 PaddleClas 分类模型 MobileNetV2 为例展示CPU上的推理示例
 
@@ -113,9 +113,9 @@ make -j
 source /Path/to/fastdeploy_cpp_sdk/fastdeploy_init.sh
 ```
 
-本示例代码在各平台(Windows/Linux/Mac)上通用，但编译过程仅支持(Linux/Mac)，Windows上使用msbuild进行编译，具体使用方式参考[Windows平台使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+本示例代码在各平台(Windows/Linux/Mac)上通用，但编译过程仅支持(Linux/Mac)，Windows上使用msbuild进行编译，具体使用方式参考[Windows平台使用FastDeploy C++ SDK](../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## 其它文档
 
 - [Runtime Python 示例](../python)
-- [切换模型推理的硬件和后端](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [切换模型推理的硬件和后端](../../../docs/cn/faq/how_to_change_backend.md)
