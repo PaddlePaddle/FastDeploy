@@ -29,8 +29,8 @@ void BindPaddleClas(pybind11::module& m) {
         }
         return outputs;
       })
-      .def("use_cuda", [](vision::classification::PaddleClasPreprocessor& self) {
-        self.UseCuda();
+      .def("use_gpu", [](vision::classification::PaddleClasPreprocessor& self, int gpu_id = 0) {
+        self.UseGpu(gpu_id);
       });
 
   pybind11::class_<vision::classification::PaddleClasPostprocessor>(
