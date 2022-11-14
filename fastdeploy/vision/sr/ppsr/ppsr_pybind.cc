@@ -14,7 +14,7 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy{
-void BindVSR(pybind11::module &m) {
+void BindPPSR(pybind11::module &m) {
     pybind11::class_<vision::sr::PPMSVSR, FastDeployModel>(m, "PPMSVSR")
       .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
       .def("predict", [](vision::sr::PPMSVSR& self, std::vector<pybind11::array>& datas){
