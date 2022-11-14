@@ -103,7 +103,7 @@ bool YOLOv5Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* 
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;
   }
-  ims_info->resize(images.size());
+  ims_info->resize(images->size());
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
   std::vector<FDTensor> tensors(images->size()); 
