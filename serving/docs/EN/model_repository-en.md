@@ -39,7 +39,7 @@ Paddle models are saved in the version number subdirectory, which must be `model
 
 ## Model Version
 
-Each model can have one or more versions available in the repository. The subdirectory named with a number in the model directory implies the version number. Subdirectories that are not named with a number, or that start with *0* will be ignored. A [version policy](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#version-policy) can be specified in the model configuration file to control which version of the model in model  directory is launched by Triton.
+Each model can have one or more versions available in the repository. The subdirectory named with a number in the model directory implies the version number. Subdirectories that are not named with a number, or that start with *0* will be ignored. A [version policy](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#version-policy) can be specified in the model configuration file to control which version of the model in model  directory is launched by Triton.
 
 ## Repository Demo
 
