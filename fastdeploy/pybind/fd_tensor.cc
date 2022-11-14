@@ -69,7 +69,7 @@ DLDataType FDToDlpackType(FDDataType fd_dtype) {
 
     default:
       FDASSERT(false,
-              "Convert to DlPack, FDType \"%s\" is not supported.", Str(fd_dtype));
+              "Convert to DlPack, FDType \"%s\" is not supported.", Str(fd_dtype).c_str());
   }
 
   dl_dtype.code = dl_code;
