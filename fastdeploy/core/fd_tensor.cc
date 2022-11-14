@@ -117,15 +117,15 @@ int FDTensor::Numel() const {
 void FDTensor::Resize(size_t new_nbytes) { ReallocFn(new_nbytes); }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
-  external_data_ptr = nullptr;
   int numel = Numel();
   int new_numel = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                   std::multiplies<int>());
-  if (new_numel > numel) {
+  if (new_numel > numel || external_data_ptr != nullptr) {
     size_t nbytes = new_numel * FDDataTypeSize(dtype);
     ReallocFn(nbytes);
   }
   shape.assign(new_shape.begin(), new_shape.end());
+  external_data_ptr = nullptr;
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
