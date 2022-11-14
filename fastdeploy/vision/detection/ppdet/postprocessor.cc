@@ -30,7 +30,6 @@ bool PaddleDetPostprocessor::ProcessMask(const FDTensor& tensor, std::vector<Det
   int64_t out_mask_numel = shape[1] * shape[2];
   const int32_t* data = reinterpret_cast<const int32_t*>(tensor.CpuData());
   int index = 0;
-  tensor.PrintInfo("Tensor mask");
 
   for (int i = 0; i < results->size(); ++i) {
     (*results)[i].contain_masks = true;

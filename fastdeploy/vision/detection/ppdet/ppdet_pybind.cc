@@ -27,6 +27,9 @@ void BindPPDet(pybind11::module& m) {
         if (!self.Run(&images, &outputs)) {
           pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleDetPreprocessor.')");
         }
+        for (size_t i = 0; i < outputs.size(); ++i) {
+          outputs[i].StopSharing();
+        }
         return outputs;
       });
 

@@ -19,6 +19,40 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class PaddleDetPreprocessor:
+    def __init__(self, config_file):
+        """Create a preprocessor for PaddleDetection Model from configuration file
+
+        :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
+        """
+        self._preprocessor = C.vision.detection.PaddleDetPreprocessor(
+            config_file)
+
+    def run(self, input_ims):
+        """Preprocess input images for PaddleDetection Model
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor, include image, scale_factor, im_shape
+        """
+        return self._preprocessor.run(input_ims)
+
+
+class PaddleDetPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for PaddleDetection Model
+
+        """
+        self._postprocessor = C.vision.detection.PaddleDetPostprocessor()
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for PaddleDetection Model
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
+
+
 class PPYOLOE(FastDeployModel):
     def __init__(self,
                  model_file,
