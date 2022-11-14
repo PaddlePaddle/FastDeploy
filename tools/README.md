@@ -18,11 +18,11 @@ python setup.py install
 
 3.安装fd-auto-compress一键模型自动化压缩工具
 ```bash
-# 通过pip安装fd-auto-compress
-# FastDeploy的python安装包已包含此工具, 不需重复安装.
+# 通过pip安装fd-auto-compress.
+# FastDeploy的python包已包含此工具, 不需重复安装.
 pip install fd-auto-compress
 
-# 并在当前目录执行
+# 在当前目录执行以下命令
 python setup.py install
 ```
 
