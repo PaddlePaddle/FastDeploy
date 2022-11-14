@@ -82,13 +82,11 @@ def reader_wrapper(reader, input_list):
         return gen
 
 
-def main():
+def auto_compress(FLAGS):
 
+    #FLAGS needs parse
     time_s = time.time()
-
     paddle.enable_static()
-    parser = argsparser()
-    FLAGS = parser.parse_args()
 
     assert FLAGS.devices in ['cpu', 'gpu', 'xpu', 'npu']
     paddle.set_device(FLAGS.devices)
@@ -189,7 +187,3 @@ def main():
 
     time_total = time.time() - time_s
     print("Finish Compression, total time used is : ", time_total, "seconds.")
-
-
-if __name__ == '__main__':
-    main()
