@@ -41,11 +41,7 @@ fi
 ret=0
 check_ret(){
        if [ $? -ne 0 ];then
-               echo "ret before"
-               echo $ret
                ret=-1
-               echo "ret after"
-               echo $ret
        fi
 }
 
