@@ -42,7 +42,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    *
    * \param[in] gpu_id GPU device id
    */
-  void UseGpu(int gpu_id = 0);
+  void UseGpu(int gpu_id = -1);
 
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);

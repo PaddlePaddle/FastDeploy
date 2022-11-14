@@ -81,6 +81,7 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
 void PaddleClasPreprocessor::UseGpu(int gpu_id) {
 #ifdef WITH_GPU
   use_cuda_ = true;
+  if (gpu_id < 0) return;
   device_id_ = gpu_id;
   cudaSetDevice(device_id_);
 #else

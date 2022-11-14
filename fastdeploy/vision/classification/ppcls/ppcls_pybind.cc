@@ -29,7 +29,7 @@ void BindPaddleClas(pybind11::module& m) {
         }
         return outputs;
       })
-      .def("use_gpu", [](vision::classification::PaddleClasPreprocessor& self, int gpu_id = 0) {
+      .def("use_gpu", [](vision::classification::PaddleClasPreprocessor& self, int gpu_id = -1) {
         self.UseGpu(gpu_id);
       });
 
