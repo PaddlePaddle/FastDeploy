@@ -29,6 +29,7 @@ python setup.py install
 ### 一键模型自动化压缩工具的使用
 按照以上步骤成功安装后,即可使用FastDeploy一键模型自动化压缩工具, 示例如下.
 
+```bash
 fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
-
+```
 详细使用文档请参考[FastDeploy一键模型自动化压缩工具](./auto_compression/README.md)
