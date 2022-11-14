@@ -1,6 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -20,6 +19,7 @@ import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -208,12 +208,15 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+        Log.d(TAG, "onTextureChanged: bitmap height: "
+                + ARGB8888ImageBitmap.getHeight() + " width: "
+                + ARGB8888ImageBitmap.getWidth());
         String savedImagePath = "";
         synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.png";
+            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
         }
-        shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888,true);
-        originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888,true);
+        shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+        originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
         boolean modified = false;
         DetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, savedImagePath, DetectionSettingsActivity.scoreThreshold);
@@ -392,7 +395,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
             option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
-            option.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
