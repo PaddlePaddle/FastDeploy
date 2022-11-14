@@ -28,10 +28,13 @@ namespace jni {
 // to get the more details about Bitmap.Config.ARGB8888
 jboolean ARGB888Bitmap2RGBA(JNIEnv *env, jobject j_argb8888_bitmap,
                             cv::Mat *c_rgba);
+
 jboolean RGBA2ARGB888Bitmap(JNIEnv *env, jobject j_argb8888_bitmap,
                             const cv::Mat &c_rgba);
+
 jboolean ARGB888Bitmap2BGR(JNIEnv *env, jobject j_argb8888_bitmap,
                            cv::Mat *c_bgr);
+
 jboolean BGR2ARGB888Bitmap(JNIEnv *env, jobject j_argb8888_bitmap,
                            const cv::Mat &c_bgr);
 
