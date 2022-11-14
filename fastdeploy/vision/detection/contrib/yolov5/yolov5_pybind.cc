@@ -29,6 +29,9 @@ void BindYOLOv5(pybind11::module& m) {
         if (!self.Run(&images, &outputs, &ims_info)) {
           pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
         }
+        for (size_t i = 0; i < outputs.size(); ++i) {
+          outputs[i].StopSharing();
+        }
         return make_pair(outputs, ims_info);
       })
       .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize, &vision::detection::YOLOv5Preprocessor::SetSize)
