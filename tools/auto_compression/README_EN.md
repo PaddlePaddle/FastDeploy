@@ -1,7 +1,5 @@
 # FastDeploy One-Click Model Auto Compression
 
-
-
 FastDeploy, based on PaddleSlim's Auto Compression Toolkit(ACT), provides developers with a one-click model auto compression tool that supports post-training quantization and knowledge distillation training.
 We take the Yolov5 series as an example to demonstrate how to install and execute FastDeploy's one-click model auto compression.
 
