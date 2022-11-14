@@ -55,6 +55,8 @@ def eval_detection(model,
     start_time = 0
     end_time = 0
     average_inference_time = 0
+    im_list = list()
+    im_id_list = list()
     for image_info, i in zip(all_image_info,
                              trange(
                                  image_num, desc="Inference Progress")):
@@ -76,28 +78,28 @@ def eval_detection(model,
             }
             eval_metric.update(im_id, pred)
         else:
-            im_list = list()
-            im_id_list = list()
             im_list.append(im)
             im_id_list.append(im_id)
-            if (i + 1) % batch_size != 0:
+            # If the batch_size is not satisfied, the remaining pictures are formed into a batch
+            if (i + 1) % batch_size != 0 and i != image_num - 1:
                 continue
             if conf_threshold is None and nms_iou_threshold is None:
                 results = model.batch_predict(im_list)
             else:
                 model.postprocessor.conf_threshold = conf_threshold
                 model.postprocessor.nms_threshold = nms_iou_threshold
-                results = model.batch_predict(im_list, conf_threshold,
-                                              nms_iou_threshold)
-            for b in range(batch_size):
+                results = model.batch_predict(im_list)
+            for k in range(len(im_list)):
                 pred = {
                     'bbox': [[c] + [s] + b
-                             for b, s, c in zip(results[b].boxes, results[
-                                 b].scores, results[b].label_ids)],
-                    'bbox_num': len(results[b].boxes),
-                    'im_id': im_id_list[b]
+                             for b, s, c in zip(results[k].boxes, results[
+                                 k].scores, results[k].label_ids)],
+                    'bbox_num': len(results[k].boxes),
+                    'im_id': im_id_list[k]
                 }
-                eval_metric.update(im_id_list[b], pred)
+                eval_metric.update(im_id_list[k], pred)
+            im_list.clear()
+            im_id_list.clear()
 
         if i == image_num - 1:
             end_time = time.time()

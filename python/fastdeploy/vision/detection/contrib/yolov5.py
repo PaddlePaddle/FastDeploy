@@ -140,17 +140,17 @@ class YOLOv5(FastDeployModel):
         # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOv5 initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.25, nms_threshold=0.5):
+    def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):
         """Detect an input image
 
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :param conf_threshold: confidence threshold for postprocessing, default is 0.25
-        :param nms_threshold: iou threshold for NMS, default is 0.5
+        :param nms_iou_threshold: iou threshold for NMS, default is 0.5
         :return: DetectionResult
         """
 
         self.postprocessor.conf_threshold = conf_threshold
-        self.postprocessor.nms_threshold = nms_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
         return self._model.predict(input_image)
 
     def batch_predict(self, images):
