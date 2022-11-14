@@ -21,7 +21,7 @@ python setup.py install
 ```bash
 # Installing fd-auto-compress via pip
 # This tool is included in the python installer of FastDeploy, so you don't need to install it again.
-pip install fd-auto-compress
+pip install fd-auto-compress==0.0.1
 
 # Execute in the current directory
 python setup.py install
