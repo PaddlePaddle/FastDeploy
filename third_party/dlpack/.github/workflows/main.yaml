@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  Build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Python
+      run: |
+        python3 -m pip install cpplint
+    - name: Setup@Ubuntu
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo apt-get install -y doxygen wget graphviz unzip
+    - name: Lint
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        ./tests/scripts/task_lint.sh
+    - name: Test
+      run: |
+        ./tests/scripts/task_build.sh

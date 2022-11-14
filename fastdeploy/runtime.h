@@ -99,6 +99,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
                  fastdeploy::rknpu2::CoreMask rknpu2_core
                              = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
 
+  /// Use TimVX to inference
+  void UseTimVX();
+
   void SetExternalStream(void* external_stream);
 
   /*
@@ -111,6 +114,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
+
+  /// Wrapper function of UsePaddleBackend()
+  void UsePaddleInferBackend() {
+    return UsePaddleBackend();
+  }
 
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
@@ -126,6 +134,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
+
+  /// Wrapper function of UseLiteBackend()
+  void UsePaddleLiteBackend() {
+    return UseLiteBackend();
+  }
 
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
@@ -159,6 +172,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
+
+  /**
+   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -312,6 +331,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
+  std::string lite_nnadapter_subgraph_partition_config_path = "";
+  bool enable_timvx = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;

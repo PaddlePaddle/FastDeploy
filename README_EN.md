@@ -18,7 +18,8 @@ English | [简体中文](README_CN.md)
 
 
 
-**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**critical CV、NLP、Speech AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform** .
+**⚡️FastDeploy** is an **Easy-to-use** and **High Performance** AI model deployment toolkit for Cloud and Edge with 📦**out-of-the-box and unified experience**, 🔚**end-to-end optimization** for over **🔥150+ Text, Vision, Speech and Cross-modal AI models**.
+Including image classification, object detection, image segmentation, face detection, face recognition, keypoint detection, matting, OCR, NLP, TTS and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
 
 |      [Image Classification](examples/vision/classification)                                       |  [Object Detection](examples/vision/detection)                                                                                             | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                     | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                         |
 |:---------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
@@ -26,43 +27,33 @@ English | [简体中文](README_CN.md)
 | [**Image Matting**](examples/vision/matting)                 |  [**Real-Time Matting**](examples/vision/matting)           | [**OCR**](examples/vision/ocr)                  |[**Face Alignment**](examples/vision/facealign)
 | <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> |<img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  >                                                                                                                              |<img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">  |
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                     | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                                        |  [**NLP**](examples/text)                                                                                                                                                                                                           |[**Speech**](examples/audio/pp-tts)  
-| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p>|
+| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">  |  <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p>|
 
 
 ## 📣 Recent Updates
 
-- 🔥 **【Live Preview】2022.11.09 20:30～21:30，《Covering the full spectrum of cloud-side scenarios with 150+ popular models for rapid deployment》**
-- 🔥 **【Live Preview】2022.11.10 20:30～21:30，《10+ AI hardware deployments from Rockchip, Amlogic, NXP and others, straight to industry landing》**
-- 🔥 **【Live Preview】2022.11.10 19:00～20:00，《10+ popular models deployed in RK3588, RK3568 in action》**
-    - Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group  
+- 🔥【Live Preview】2022.11.09~2022.11.10  China Standard Time, 20:30～21:30， Engineers@FastDeploy will show Using FastDeploy Efficiently for 3 days.
+    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
+    - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
  <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
   </div>
   
+- 🔥 **2022.11.8：Release FastDeploy [release v0.6.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.6.0)** <br>
+    -  **🖥️ Server-side and Cloud Deployment: Support more backend, Support more CV models**
+        -  Optimize preprocessing and postprocessing memory creation logic on YOLO series, PaddleClas, PaddleDetection;
+        -  Integrate visual preprocessing operations, optimize the preprocessing performance of PaddleClas and PaddleDetection, and improve end-to-end performance;
+        -  Add Clone interface support for service-based deployment, reducing the memory、GPU memory usage of Paddle Inference、TensorRT、OpenVINO backend in multiple instances
+        -  Support [FSANet](./examples/vision/headpose) head pose recognition model, [PFLD](./examples/vision/facealign) face alignment model, [ERNIE](./examples/text/ernie-3.0) text classification model etc.
+    -  **📱 Mobile and Edge Device Deployment: support new backend，support more CV model**
+        -  Support RKNPU2, and provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Inference TensorRT、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime；
+        -  Support [PP-HumanSeg、Unet](examples/vision/segmentation/paddleseg/rknpu2)、[PicoDet](./examples/vision/detection/paddledetection/rknpu2)、[SCRFD](./examples/vision/facedet/scrfd/rknpu2) and other popular models on NPU.
 
-- 🔥 **2022.10.31：Release FastDeploy [release v0.5.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.5.0)** <br>
-    -  **🖥️ Data Center and Cloud Deployment: Support more backend, Support more CV models**
-        -  Support Paddle Inference TensorRT, and provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime；
-        -  Support Graphcore IPU through paddle Inference;
-        -  Support tracking model [PP-Tracking](./examples/vision/tracking/pptracking) and [RobustVideoMatting](./examples/vision/matting) model；
-        -  Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
-
-- 🔥 **2022.10.24：Release FastDeploy [release v0.4.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.4.0)** <br>
-    -  **🖥️ Data Center and Cloud Deployment: end-to-end optimization, Support more CV and NLP model**
-       - end-to-end optimization on GPU, [YOLO series](examples/vision/detection) model end-to-end inference speedup from 43ms to 25ms;
-       - Support CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/);
-       - Support information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie);
-       - Support [TinyPose](examples/vision/keypointdetection/tiny_pose) and [PicoDet and TinyPose](examples/vision/keypointdetection/det_keypoint_unite)Pipeline deployment.
-    -  **📲 Mobile and Edge Device Deployment: support new backend，support more CV model**
-       - Integrate Paddle Lite and provide a seamless deployment experience with other inference engines include TensorRT、OpenVINO、ONNX Runtime、Paddle Inference；
-       - Support [Lightweight Detection Model](examples/vision/detection/paddledetection/android) and [classification model](examples/vision/classification/paddleclas/android) on Android Platform，Download to try it out.
-    -  **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web-Side Deployment: support more CV model**  
-       - Web deployment and Mini Program deployment New [OCR and other CV models](examples/application/js) capability.
-      
+- [**more releases information**](./releases)
 
 ## Contents
 
-* <details open> <summary><style="font-size:100px"><b>📖 Tutorials（click to shrink） </b></font></summary>
+* <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
     
    - Install
         - [How to Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
@@ -90,27 +81,27 @@ English | [简体中文](README_CN.md)
    - More FastDeploy Deployment Module
         - [deployment AI Model as a Service](./serving)
         - [Benchmark Testing](./benchmark)
-</details>
+</div></details>
 
-* **🖥️ Data Center and Cloud Deployment**
+* **🖥️ Server-side and Cloud Deployment**
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
   * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
-  * [Supported Data Center and Cloud Model List](#fastdeploy-server-models)
-* **📲 Mobile and Edge Device Deployment**
+  * [Supported Server-side and Cloud Model List](#fastdeploy-server-models)
+* **📱 Mobile and Edge Device Deployment**
   * [Paddle Lite NPU Deployment](#fastdeploy-edge-sdk-npu)
   * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
-* **<img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" />Web and Mini Program Deployment** 
+* **🌐 Browser and Mini Program Deployment**
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 * [**Community**](#fastdeploy-community)
 * [**Acknowledge**](#fastdeploy-acknowledge)  
 * [**License**](#fastdeploy-license)
 
-## 🖥️ Data Center and Cloud Deployment
+## 🖥️ Server-side and Cloud Deployment
 
 <div id="fastdeploy-quick-start-python"></div>
 
 <details open>
-<summary><style="font-size:100px"><b>A Quick Start for Python SDK（click to shrink）</b></font></summary>
+<summary><b>A Quick Start for Python SDK（click to fold）</b></summary><div>
 
 
 #### Installation
@@ -120,7 +111,7 @@ English | [简体中文](README_CN.md)
 - CUDA >= 11.2 、cuDNN >= 8.0  、 Python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### Install Fastdeploy SDK with CPU&GPU support
+##### Install FastDeploy SDK with both CPU and GPU support
 
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -132,7 +123,7 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### Install Fastdeploy SDK with only CPU support
+##### Install FastDeploy SDK with only CPU support
 
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -140,7 +131,7 @@ pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.
 
 #### Python Inference Example
 
-* Prepare models and pictures
+* Prepare model and picture
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -155,23 +146,23 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-
+im = cv2.imread("000000014439.jpg")
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
-im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
+
+result = model.predict(im)
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
-</details>
+</div></details>
          
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details>
-<summary><style="font-size:100px"><b>A Quick Start for C++ SDK（click to expand）</b></font></summary>
+<summary><b>A Quick Start for C++ SDK（click to expand）</b></summary><div>
 
 #### Installation
 
@@ -195,27 +186,27 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
+  auto im = cv::imread("000000014439.jpg");
   auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                           "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                           "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
-  auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
   model.Predict(&im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  auto vis_im = vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
  }
 ```
-</details>
+</div></details>
 
 For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
 
 <div id="fastdeploy-server-models"></div>
 
-### Supported Data Center and Web Model List🔥🔥🔥🔥🔥
+### Server-side and Cloud Model List🔥🔥🔥🔥🔥
 
 Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
 
@@ -293,18 +284,18 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 <div id="fastdeploy-edge-doc"></div>
     
-## 📲 Mobile and Edge Device Deployment 
+## 📱 Mobile and Edge Device Deployment
 
 
 <div id="fastdeploy-edge-sdk-npu"></div>
     
 ### Paddle Lite NPU Deployment
 
-- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
+- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](./examples/vision/detection/paddledetection/rk1126)
 
 <div id="fastdeploy-edge-models"></div>
     
-### Supported Mobile and Edge Model List 🔥🔥🔥🔥
+### Mobile and Edge Model List 🔥🔥🔥🔥
 
 <div align="center">
   <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
@@ -350,7 +341,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
 
     
-## <img src="https://user-images.githubusercontent.com/54695910/200179541-05f8e187-9f8b-444c-9252-d9ce3f1ab05f.png" width = "18" height = "18" /> Web and Mini Program Deployment
+## 🌐 Browser-based Model List
 
 <div id="fastdeploy-web-models"></div>
     
@@ -377,8 +368,6 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 <div align="center">
 <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
 </div>
-
-
 
 ## Acknowledge
 

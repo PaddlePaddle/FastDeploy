@@ -68,6 +68,7 @@ FSANet模型加载和初始化，其中model_file为导出的ONNX模型格式。
 ### 类成员变量
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 > > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
+
 - [模型介绍](../../)
 - [Python部署](../python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
