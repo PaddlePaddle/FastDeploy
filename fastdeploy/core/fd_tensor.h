@@ -57,6 +57,18 @@ struct FASTDEPLOY_DECL FDTensor {
 
   void* Data();
 
+  bool IsShared() {
+    return external_data_ptr != nullptr;
+  }
+
+  void StopSharing() {
+    if (IsShared()) {
+      ReallocFn(Nbytes());
+      CopyBuffer(buffer_, external_data_ptr, Nbytes());
+      external_data_ptr = nullptr;
+    }
+  }
+
   const void* Data() const;
 
   // Use this data to get the tensor data to process
@@ -113,7 +125,7 @@ struct FASTDEPLOY_DECL FDTensor {
   // Debug function
   // Use this function to print shape, dtype, mean, max, min
   // prefix will also be printed as tag
-  void PrintInfo(const std::string& prefix = "TensorInfo: ");
+  void PrintInfo(const std::string& prefix = "TensorInfo: ") const;
 
   bool ReallocFn(size_t nbytes);
 
