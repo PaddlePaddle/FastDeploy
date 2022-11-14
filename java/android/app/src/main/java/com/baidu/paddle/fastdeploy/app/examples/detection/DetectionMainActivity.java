@@ -209,9 +209,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
-        Log.d(TAG, "onTextureChanged: bitmap height: "
-                + ARGB8888ImageBitmap.getHeight() + " width: "
-                + ARGB8888ImageBitmap.getWidth());
         String savedImagePath = "";
         synchronized (this) {
             savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
@@ -224,10 +221,12 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             shutterBitmap = ARGB8888ImageBitmap;
             originShutterBitmap = ARGB8888ImageBitmap;
         }
+
         boolean modified = false;
         DetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
         modified = result.initialized();
+
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 DetectionMainActivity.this.savedImagePath = "result.jpg";
