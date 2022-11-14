@@ -14,7 +14,7 @@ LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
 #LINUX_AARCH_CPU_CASE=('ort' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort')
-MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
+MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -38,33 +38,43 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
 	RUN_CASE=(${MACOS_ARM64_CPU_CASE[*]})
 fi
 
+ret=0
+check_ret(){
+       if [ $? -ne 0 ];then
+               ret=-1
+       fi
+}
+
 case_number=${#RUN_CASE[@]}
 py_version=$(python -V | awk '{print $2}')
 echo "py_version:" $py_version
-ret=0
 for((j=0;j<case_number;j+=1))
 do
        backend=${RUN_CASE[j]}
        echo "Python Backend:" $backend
        if [ "$backend" != "trt" ];then
                python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device cpu --backend $backend >> py_$backend\_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu
+               if [ "$PLATFORM" = "osx-arm64" ] || [ "$PLATFORM" = "osx-x86_64" ];then
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold 0.5
+                       check_ret
+               else
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu
+                       check_ret
+               fi
        fi
        if [ "$DEVICE" = "gpu" ];then
 
 	       if [ "$backend" = "trt" ];then
                        python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_trt_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_trt_result.txt --platform $PLATFORM --device trt
+                       check_ret
 	       else
 		       python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_$backend\_gpu_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_gpu_result.txt --platform $PLATFORM --device gpu
+                       check_ret
                fi
        fi
-       if [ $? -ne 0 ];then
-               ret=-1
-       fi
 done
-
 
 res_file="result.txt"
 if [ ! -f $res_file ];then
@@ -76,3 +86,5 @@ else
        cat $res_file
        exit -1
 fi
+
+
