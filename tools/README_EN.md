@@ -32,4 +32,4 @@ After the above steps are successfully installed, you can use FastDeploy one-cli
 ```bash
 fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
-For detailed documentation, please refer to [FastDeploy One-Click Model Auto Compression Tool].(./auto_compression/README.md)
+For detailed documentation, please refer to [FastDeploy One-Click Model Auto Compression Tool](./auto_compression/README.md)
