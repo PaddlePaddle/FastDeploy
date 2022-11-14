@@ -2,7 +2,7 @@
 FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别、语义分割和人脸检测等任务，对更多的AI任务支持将会陆续添加进来。以下为各个任务对应的API文档，在Android下使用FastDeploy中集成的模型，只需以下几个步骤：  
 - 模型初始化  
 - 调用`predict`接口  
-- 可视化验证
+- 可视化验证（可选）
 
 ## 图像分类
 ### PaddleClasModel Java API 说明  
@@ -202,34 +202,36 @@ public boolean initialized(); // 检查是否初始化成功
 - 图像分类ClassifyResult说明  
 ```java
 public class ClassifyResult {
-  public float[] mScores;  // [n]   得分
-  public int[] mLabelIds;  // [n]   分类ID
+  public float[] mScores;  // [n]   每个类别的得分(概率)
+  public int[] mLabelIds;  // [n]   分类ID 具体的类别类型
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
+其他参考：C++/Python对应的ClassifyResult说明 [api/vision_results/classification_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result.md)
 
 - 目标检测DetectionResult说明  
 ```java
 public class DetectionResult {
   public float[][] mBoxes; // [n,4] 检测框 (x1,y1,x2,y2)
-  public float[] mScores;  // [n]   得分
+  public float[] mScores;  // [n]   每个检测框得分(置信度，概率值)
   public int[] mLabelIds;  // [n]   分类ID
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
+其他参考：C++/Python对应的DetectionResult说明 [api/vision_results/detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/detection_result.md)
 
 - OCR文字识别OCRResult说明  
 ```java
 public class OCRResult {
-  public int[][] mBoxes;  // [n,8]
-  public String[] mText;  // [n]
-  public float[] mRecScores;  // [n]
-  public float[] mClsScores;  // [n]
-  public int[] mClsLabels;  // [n]
-  public boolean mInitialized = false;
+  public int[][] mBoxes;  // [n,8] 表示单张图片检测出来的所有目标框坐标 每个框以8个int数值依次表示框的4个坐标点，顺序为左下，右下，右上，左上
+  public String[] mText;  // [n] 表示多个文本框内被识别出来的文本内容
+  public float[] mRecScores;  // [n] 表示文本框内识别出来的文本的置信度
+  public float[] mClsScores;  // [n] 表示文本框的分类结果的置信度
+  public int[] mClsLabels;  // [n] 表示文本框的方向分类类别
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
+其他参考：C++/Python对应的OCRResult说明 [api/vision_results/ocr_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/ocr_result.md)
 
 - 语义分割SegmentationResult结果说明  
 ```java
@@ -241,17 +243,19 @@ public class SegmentationResult {
   public boolean initialized(); // 检测结果是否有效
 }  
 ```
+其他参考：C++/Python对应的SegmentationResult说明 [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
 
 - 人脸检测FaceDetectionResult结果说明  
 ```java
 public class FaceDetectionResult {
   public float[][] mBoxes; // [n,4] 检测框 (x1,y1,x2,y2)
-  public float[] mScores;  // [n]   得分
+  public float[] mScores;  // [n]   每个检测框得分(置信度，概率值)
   public float[][] mLandmarks; // [nx?,2] 每个检测到的人脸对应关键点
   int mLandmarksPerFace = 0;  // 每个人脸对应的关键点个数
   public boolean initialized(); // 检测结果是否有效
 }  
 ```
+其他参考：C++/Python对应的FaceDetectionResult说明 [api/vision_results/face_detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/face_detection_result.md)
 
 ## RuntimeOption说明
 - RuntimeOption设置说明  
@@ -266,14 +270,20 @@ public class RuntimeOption {
 ```
 
 ## 可视化接口  
-FastDeploy Android SDK同时提供一些可视化接口，可用于快速验证推理结果。可视化API接口如下：
+FastDeploy Android SDK同时提供一些可视化接口，可用于快速验证推理结果。以下接口均把结果result渲染在输入的Bitmap上。具体的可视化API接口如下：
 
 ```java  
-public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result);
-public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result);
-public static boolean visFaceDetection(Bitmap ARGB8888Bitmap, FaceDetectionResult result);
-public static boolean visOcr(Bitmap ARGB8888Bitmap, OCRResult result);
-public static boolean visSegmentation(Bitmap ARGB8888Bitmap, SegmentationResult result);
+public class Visualize {
+  public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result);
+  public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result);
+  public static boolean visFaceDetection(Bitmap ARGB8888Bitmap, FaceDetectionResult result);
+  public static boolean visOcr(Bitmap ARGB8888Bitmap, OCRResult result);
+  public static boolean visSegmentation(Bitmap ARGB8888Bitmap, SegmentationResult result);
+}
+```  
+对应的可视化类型为：  
+```java
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 ```
 
 ## 使用示例  
