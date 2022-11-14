@@ -1,6 +1,6 @@
 # FastDeploy 工具包
 FastDeploy提供了一系列高效易用的工具优化部署体验, 提升推理性能.
-例如, FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具, 用户可以轻松地通过一行命令对模型进行自动化压缩. 本文档将以FastDeploy一键模型自动化压缩工具为例, 介绍如何安装此工具, 并提供相应的使用文档.
+例如, FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具, 用户可以轻松地通过一行命令对模型进行自动化压缩, 并在FastDeploy上部署压缩后的模型, 提升推理速度. 本文档将以FastDeploy一键模型自动化压缩工具为例, 介绍如何安装此工具, 并提供相应的使用文档.
 
 ## FastDeploy一键模型自动化压缩工具
 
