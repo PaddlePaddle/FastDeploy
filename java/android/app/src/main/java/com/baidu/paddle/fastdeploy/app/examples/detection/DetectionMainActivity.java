@@ -1,6 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -392,7 +391,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
             option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
-            option.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
