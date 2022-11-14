@@ -1,6 +1,6 @@
 # 模型仓库(Model Repository)
 
-FastDeploy启动服务时指定模型仓库中一个或多个模型部署服务。当服务运行时，可以用[Model Management](https://github.com/triton-inference-server/server/blob/main/docs/model_management.md)中描述的方式修改服务中的模型。
+FastDeploy启动服务时指定模型仓库中一个或多个模型部署服务。当服务运行时，可以用[Model Management](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_management.md)中描述的方式修改服务中的模型。
 从服务器启动时指定的一个或多个模型存储库中为模型提供服务
 
 ## 仓库结构
@@ -36,7 +36,7 @@ $ fastdeploy --model-repository=<model-repository-path>
 Paddle模型存在版本号子目录中，必须为`model.pdmodel`文件和`model.pdiparams`文件。
 
 ## 模型版本
-每个模型在仓库中可以有一个或多个可用的版本，模型目录中以数字命名的子目录就是对应的版本，数字即版本号。没有以数字命名的子目录，或以*0*开头的子目录都会被忽略。模型配置文件中可以指定[版本策略](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#version-policy)，控制Triton启动模型目录中的哪个版本。
+每个模型在仓库中可以有一个或多个可用的版本，模型目录中以数字命名的子目录就是对应的版本，数字即版本号。没有以数字命名的子目录，或以*0*开头的子目录都会被忽略。模型配置文件中可以指定[版本策略](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#version-policy)，控制Triton启动模型目录中的哪个版本。
 
 ## 模型仓库示例
 部署Paddle模型时需要的模型必须是2.0版本以上导出的推理模型，模型包含`model.pdmodel`和`model.pdiparams`两个文件放在版本目录中。

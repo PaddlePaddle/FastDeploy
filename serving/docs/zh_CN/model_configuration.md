@@ -2,7 +2,7 @@
 模型存储库中的每个模型都必须包含一个模型配置，该配置提供了关于模型的必要和可选信息。这些配置信息一般写在 *config.pbtxt* 文件中，[ModelConfig protobuf](https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto)格式。
 
 ## 模型通用最小配置
-详细的模型通用配置请看官网文档: [model_configuration](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md).Triton的最小模型配置必须包括: *platform* 或 *backend* 属性、*max_batch_size* 属性和模型的输入输出.
+详细的模型通用配置请看官网文档: [model_configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md).Triton的最小模型配置必须包括: *platform* 或 *backend* 属性、*max_batch_size* 属性和模型的输入输出.
 
 例如一个Paddle模型，有两个输入*input0* 和 *input1*，一个输出*output0*，输入输出都是float32类型的tensor，最大batch为8.则最小的配置如下:
 

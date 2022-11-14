@@ -466,8 +466,7 @@ void Predict(
 **参数**
 
 > * **texts**(list(str)): 文本列表
-> * **results**(list(dict())): UIE模型抽取结果。UIEResult结构详细可见[UIEResult说明](../../../../docs/api/text_results/uie_result.md)。
-
+> * **results**(list(dict())): UIE模型抽取结果。
 ## 相关文档
 
 [UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)

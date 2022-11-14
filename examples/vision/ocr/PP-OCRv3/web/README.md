@@ -37,4 +37,4 @@ ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转
 - [PP-OCRv3 C++部署](../cpp)
 - [模型预测结果说明](../../../../../docs/api/vision_results/)
 - [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
-- [PP-OCRv3 微信小程序部署文档](../../../../application/web_demo/examples/ocrXcx/)
+- [PP-OCRv3 微信小程序部署文档](../mini_program/)

@@ -118,7 +118,7 @@ Paddle-Lite-Demo/object_detection/linux/picodet_detection/run.sh
 
 ## 代码讲解 （使用 Paddle Lite `C++ API` 执行预测）
 
-ARMLinux 示例基于 C++ API 开发，调用 Paddle Lite `C++s API` 包括以下五步。更详细的 `API` 描述参考：[Paddle Lite C++ API ](https://paddle-lite.readthedocs.io/zh/latest/api_reference/c++_api_doc.html)。
+ARMLinux 示例基于 C++ API 开发，调用 Paddle Lite `C++s API` 包括以下五步。更详细的 `API` 描述参考：[Paddle Lite C++ API ](https://paddle-lite.readthedocs.io/zh/latest/api_reference/cxx_api_doc.html)。
 
 ```c++
 #include <iostream>
@@ -198,7 +198,7 @@ export LD_LIBRARY_PATH=../Paddle-Lite/libs/$TARGET_ABI/
 export GLOG_v=0 # Paddle-Lite 日志等级
 export VSI_NN_LOG_LEVEL=0 # TIM-VX 日志等级
 export VIV_VX_ENABLE_GRAPH_TRANSFORM=-pcq:1 # NPU 开启 perchannel 量化模型
-export VIV_VX_SET_PER_CHANNEL_ENTROPY=100 # 同上 
+export VIV_VX_SET_PER_CHANNEL_ENTROPY=100 # 同上
 build/object_detection_demo models/picodetv2_relu6_coco_no_fuse ../../assets/labels/coco_label_list.txt models/picodetv2_relu6_coco_no_fuse/subgraph.txt models/picodetv2_relu6_coco_no_fuse/picodet.yml  # 执行 Demo 程序，4个 arg 分别为：模型、 label 文件、 自定义异构配置、 yaml
 ```
 
@@ -206,7 +206,7 @@ build/object_detection_demo models/picodetv2_relu6_coco_no_fuse ../../assets/lab
 
 ```shell
 # 代码文件 `object_detection_demo/rush.sh`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${PADDLE_LITE_DIR}/libs/${TARGET_ARCH_ABI} 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${PADDLE_LITE_DIR}/libs/${TARGET_ARCH_ABI}
 build/object_detection_demo {模型} {label} {自定义异构配置文件} {yaml}
 ```
 
