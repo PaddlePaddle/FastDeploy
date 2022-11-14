@@ -15,17 +15,22 @@
 #include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 #include "fastdeploy/function/concat.h"
 #include "yaml-cpp/yaml.h"
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
 
 namespace fastdeploy {
 namespace vision {
 namespace classification {
 
 PaddleClasPreprocessor::PaddleClasPreprocessor(const std::string& config_file) {
-  FDASSERT(BuildPreprocessPipelineFromConfig(config_file), "Failed to create PaddleClasPreprocessor.");
+  FDASSERT(BuildPreprocessPipelineFromConfig(config_file),
+           "Failed to create PaddleClasPreprocessor.");
   initialized_ = true;
 }
 
-bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(const std::string& config_file) {
+bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
+    const std::string& config_file) {
   processors_.clear();
   YAML::Node cfg;
   try {
@@ -73,6 +78,19 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(const std::string
   return true;
 }
 
+void PaddleClasPreprocessor::UseGpu(int gpu_id) {
+#ifdef WITH_GPU
+  use_cuda_ = true;
+  if (gpu_id < 0) return;
+  device_id_ = gpu_id;
+  cudaSetDevice(device_id_);
+#else
+  FDWARNING << "FastDeploy didn't compile with WITH_GPU. "
+            << "Will force to use CPU to run preprocessing." << std::endl;
+  use_cuda_ = false;
+#endif
+}
+
 bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
@@ -85,8 +103,15 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
 
   for (size_t i = 0; i < images->size(); ++i) {
     for (size_t j = 0; j < processors_.size(); ++j) {
-      if (!(*(processors_[j].get()))(&((*images)[i]))) {
-        FDERROR << "Failed to processs image:" << i << " in " << processors_[i]->Name() << "." << std::endl;
+      bool ret = false;
+      if (processors_[j]->Name() == "NormalizeAndPermute" && use_cuda_) {
+        ret = (*(processors_[j].get()))(&((*images)[i]), ProcLib::CUDA);
+      } else {
+        ret = (*(processors_[j].get()))(&((*images)[i]));
+      }
+      if (!ret) {
+        FDERROR << "Failed to processs image:" << i << " in "
+                << processors_[i]->Name() << "." << std::endl;
         return false;
       }
     }
@@ -104,6 +129,7 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   } else {
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
+  (*outputs)[0].device_id = device_id_;
   return true;
 }
 

@@ -29,6 +29,9 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef WITH_GPU
+  bool ImplByCuda(Mat* mat);
+#endif
   std::string Name() { return "NormalizeAndPermute"; }
 
   // While use normalize, it is more recommend not use this function

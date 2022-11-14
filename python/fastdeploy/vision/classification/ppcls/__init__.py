@@ -35,6 +35,13 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
+    def use_gpu(self, gpu_id=-1):
+        """Use CUDA preprocessors
+
+        :param: gpu_id: GPU device id
+        """
+        return self._preprocessor.use_gpu(gpu_id)
+
 
 class PaddleClasPostprocessor:
     def __init__(self, topk=1):

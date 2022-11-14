@@ -34,7 +34,7 @@ void* Mat::Data() {
 
 void Mat::ShareWithTensor(FDTensor* tensor) {
   tensor->SetExternalData({Channels(), Height(), Width()}, Type(), Data());
-  tensor->device = Device::CPU;
+  tensor->device = device;
   if (layout == Layout::HWC) {
     tensor->shape = {Height(), Width(), Channels()};
   }
