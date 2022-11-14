@@ -4,6 +4,7 @@
     <!-- Other App name -->
     <string name="detection_app_name">EasyEdge</string>
     <string name="ocr_app_name">EasyEdge</string>
+    <string name="classification_app_name">EasyEdge</string>
     <!-- Keys for PreferenceScreen -->
     <string name="CHOOSE_PRE_INSTALLED_MODEL_KEY">CHOOSE_INSTALLED_MODEL_KEY</string>
     <string name="MODEL_DIR_KEY">MODEL_DIR_KEY</string>
@@ -16,14 +17,18 @@
     <string name="CPU_THREAD_NUM_DEFAULT">2</string>
     <string name="CPU_POWER_MODE_DEFAULT">LITE_POWER_HIGH</string>
     <string name="SCORE_THRESHOLD_DEFAULT">0.4</string>
+    <string name="SCORE_THRESHOLD_CLASSIFICATION">0.1</string>
     <string name="ENABLE_LITE_FP16_MODE_DEFAULT">true</string>
     <!--Other values-->
-    <!-- Default model & Label paths & other values ... -->
-    <string name="MODEL_DIR_DEFAULT">models/picodet_s_320_coco_lcnet</string>
-    <string name="LABEL_PATH_DEFAULT">labels/coco_label_list.txt</string>
+    <!-- Detection model & Label paths & other values ... -->
+    <string name="DETECTION_MODEL_DIR_DEFAULT">models/picodet_s_320_coco_lcnet</string>
+    <string name="DETECTION_LABEL_PATH_DEFAULT">labels/coco_label_list.txt</string>
     <!-- PP-OCRv2 & PP-OCRv3 values ... -->
     <string name="OCR_MODEL_DIR_DEFAULT">models</string>
     <string name="OCR_REC_LABEL_DEFAULT">labels/ppocr_keys_v1.txt</string>
+    <!-- classification values ... -->
+    <string name="CLASSIFICATION_MODEL_DIR_DEFAULT">models/MobileNetV1_x0_25_infer</string>
+    <string name="CLASSIFICATION_LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">EasyEdge 实时识别</string>
