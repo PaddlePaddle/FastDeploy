@@ -21,9 +21,9 @@ ConvertAndPermute::ConvertAndPermute(const std::vector<float>& alpha,
                                      const std::vector<float>& beta,
                                      bool swap_rb) {
   FDASSERT(alpha.size() == beta.size(),
-           "Convert: requires the size of alpha equal to the size of beta.");
+           "ConvertAndPermute: requires the size of alpha equal to the size of beta.");
   FDASSERT(alpha.size() > 0 && beta.size() > 0,
-           "Convert: requires the size of alpha and beta > 0.");
+           "ConvertAndPermute: requires the size of alpha and beta > 0.");
   alpha_.assign(alpha.begin(), alpha.end());
   beta_.assign(beta.begin(), beta.end());
   swap_rb_ = swap_rb;

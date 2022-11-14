@@ -53,7 +53,7 @@ class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
     return swap_rb_;
   }
 
-  void SetSwapRB(const bool& swap_rb) {
+  void SetSwapRB(bool swap_rb) {
     swap_rb_ = swap_rb;
   }
 
