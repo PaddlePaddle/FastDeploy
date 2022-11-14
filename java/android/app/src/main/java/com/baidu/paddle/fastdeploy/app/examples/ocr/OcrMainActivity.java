@@ -205,8 +205,8 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     }
 
     public void checkAndUpdateSettings() {
-        if (SettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + SettingsActivity.modelDir;
+        if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
             String detModelName = "ch_PP-OCRv2_det_infer";
             // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
             String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
@@ -234,13 +234,13 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             RuntimeOption detOption = new RuntimeOption();
             RuntimeOption clsOption = new RuntimeOption();
             RuntimeOption recOption = new RuntimeOption();
-            detOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
-            clsOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
-            recOption.setCpuThreadNum(SettingsActivity.cpuThreadNum);
-            detOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            clsOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            recOption.setLitePowerMode(SettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(SettingsActivity.enableLiteFp16)) {
+            detOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
+            clsOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
+            recOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
+            detOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
+            clsOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
+            recOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(OcrSettingsActivity.enableLiteFp16)) {
                 detOption.enableLiteFp16();
                 clsOption.enableLiteFp16();
                 recOption.enableLiteFp16();
