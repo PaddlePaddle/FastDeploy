@@ -20,7 +20,7 @@ python setup.py install
 ```bash
 # 通过pip安装fd-auto-compress.
 # FastDeploy的python包已包含此工具, 不需重复安装.
-pip install fd-auto-compress
+pip install fd-auto-compress==0.0.1
 
 # 在当前目录执行以下命令
 python setup.py install
