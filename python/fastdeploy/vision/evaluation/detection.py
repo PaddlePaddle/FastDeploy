@@ -23,7 +23,8 @@ def eval_detection(model,
                    ann_file,
                    conf_threshold=None,
                    nms_iou_threshold=None,
-                   plot=False):
+                   plot=False,
+                   batch_size=1):
     from .utils import CocoDetection
     from .utils import COCOMetric
     import cv2
@@ -61,19 +62,43 @@ def eval_detection(model,
             start_time = time.time()
         im = cv2.imread(image_info["image"])
         im_id = image_info["im_id"]
-        if conf_threshold is None and nms_iou_threshold is None:
-            result = model.predict(im.copy())
+        if batch_size == 1:
+            if conf_threshold is None and nms_iou_threshold is None:
+                result = model.predict(im.copy())
+            else:
+                result = model.predict(im, conf_threshold, nms_iou_threshold)
+            pred = {
+                'bbox': [[c] + [s] + b
+                         for b, s, c in zip(result.boxes, result.scores,
+                                            result.label_ids)],
+                'bbox_num': len(result.boxes),
+                'im_id': im_id
+            }
+            eval_metric.update(im_id, pred)
         else:
-            result = model.predict(im, conf_threshold, nms_iou_threshold)
-        pred = {
-            'bbox':
-            [[c] + [s] + b
-             for b, s, c in zip(result.boxes, result.scores, result.label_ids)
-             ],
-            'bbox_num': len(result.boxes),
-            'im_id': im_id
-        }
-        eval_metric.update(im_id, pred)
+            im_list = list()
+            im_id_list = list()
+            im_list.append(im)
+            im_id_list.append(im_id)
+            if (i + 1) % batch_size != 0:
+                continue
+            if conf_threshold is None and nms_iou_threshold is None:
+                results = model.batch_predict(im_list)
+            else:
+                model.postprocessor.conf_threshold = conf_threshold
+                model.postprocessor.nms_threshold = nms_iou_threshold
+                results = model.batch_predict(im_list, conf_threshold,
+                                              nms_iou_threshold)
+            for b in range(batch_size):
+                pred = {
+                    'bbox': [[c] + [s] + b
+                             for b, s, c in zip(results[b].boxes, results[
+                                 b].scores, results[b].label_ids)],
+                    'bbox_num': len(results[b].boxes),
+                    'im_id': im_id_list[b]
+                }
+                eval_metric.update(im_id_list[b], pred)
+
         if i == image_num - 1:
             end_time = time.time()
     average_inference_time = round(
