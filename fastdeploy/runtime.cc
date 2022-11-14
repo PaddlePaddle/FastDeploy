@@ -570,7 +570,8 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
   for (auto& tensor: input_tensors) {
     FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
-             "Input tensor and runtime have different device ids.");
+             "Device id of input tensor(%d) and runtime(%d) are not same.",
+             tensor.device_id, option.device_id);
   }
   return backend_->Infer(input_tensors, output_tensors);
 }
