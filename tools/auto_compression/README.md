@@ -18,8 +18,11 @@ python setup.py install
 ```
 
 ### fastdeploy-auto-compression 一键模型自动化压缩工具安装方式
-用户在当前目录下，运行如下命令:
 ```
+# 通过pip安装fd-auto-compress包
+pip install fd-auto-compress
+
+# 并在上一层目录(非本级目录)执行如下命令
 python setup.py install
 ```
 
@@ -43,12 +46,11 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2.使用fastdeploy_auto_compress命令，执行一键模型自动化压缩:
+##### 2.使用fastdeploy --auto_compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
-fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
-【说明】离线量化（训练后量化）：post-training quantization，缩写是PTQ
 
 ##### 3.参数说明
 
@@ -78,12 +80,12 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_train_320.tar
 tar -xvf COCO_train_320.tar
 ```
 
-##### 2.使用fastdeploy_auto_compress命令，执行一键模型自动化压缩:
+##### 2.使用fastdeploy --auto_compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
 # 执行命令默认为单卡训练，训练前请指定单卡GPU, 否则在训练过程中可能会卡住.
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy_auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.参数说明

@@ -15,7 +15,7 @@
         <com.baidu.paddle.fastdeploy.app.ui.layout.ActionBarLayout
             android:id="@+id/action_bar_main"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"/>
 
             <ImageView
                 android:id="@+id/back_in_preview"
@@ -52,7 +52,6 @@
                     android:text="@string/action_bar_realtime"
                     android:textAlignment="center" />
             </LinearLayout>
-        </com.baidu.paddle.fastdeploy.app.ui.layout.ActionBarLayout>
 
         <!--        实时-->
         <com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView
