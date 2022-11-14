@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "bitmap_jni.h"  // NOLINT
-
 #include <android/bitmap.h>  // NOLINT
-
-#include "utils_jni.h"  // NOLINT
+#include "fastdeploy_jni/bitmap_jni.h"  // NOLINT
+#include "fastdeploy_jni/perf_jni.h"  // NOLINT
 
 namespace fastdeploy {
 namespace jni {
