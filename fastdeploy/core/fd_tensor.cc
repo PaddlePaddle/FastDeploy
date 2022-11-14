@@ -120,11 +120,12 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   int numel = Numel();
   int new_numel = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                   std::multiplies<int>());
-  if (new_numel > numel) {
+  if (new_numel > numel || external_data_ptr != nullptr) {
     size_t nbytes = new_numel * FDDataTypeSize(dtype);
     ReallocFn(nbytes);
   }
   shape.assign(new_shape.begin(), new_shape.end());
+  external_data_ptr = nullptr;
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
@@ -252,7 +253,8 @@ void FDTensor::FreeFn() {
   }
 }
 
-void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes) {
+void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes,
+                          const Device& device, bool is_pinned_memory) {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
     FDASSERT(cudaMemcpy(dst, src, nbytes, cudaMemcpyDeviceToDevice) == 0,
@@ -295,7 +297,7 @@ FDTensor::FDTensor(const FDTensor& other)
     size_t nbytes = Nbytes();
     FDASSERT(ReallocFn(nbytes),
              "The FastDeploy FDTensor allocate memory error");
-    CopyBuffer(buffer_, other.buffer_, nbytes);
+    CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
   }
 }
 
@@ -325,7 +327,7 @@ FDTensor& FDTensor::operator=(const FDTensor& other) {
     } else {
       Resize(other.shape, other.dtype, other.name, other.device);
       size_t nbytes = Nbytes();
-      CopyBuffer(buffer_, other.buffer_, nbytes);
+      CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
     }
     external_data_ptr = other.external_data_ptr;
   }
