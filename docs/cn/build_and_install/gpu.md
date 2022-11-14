@@ -88,6 +88,8 @@ msbuild INSTALL.vcxproj /m /p:Configuration=Release /p:Platform=x64
 - cuda >= 11.2
 - cudnn >= 8.2
 
+Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+
 所有编译选项通过环境变量导入
 
 ```bash
