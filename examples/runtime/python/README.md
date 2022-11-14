@@ -2,8 +2,8 @@
 
 在运行demo前，需确认以下两个步骤
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 本文档以 PaddleClas 分类模型 MobileNetV2 为例展示 CPU 上的推理示例
 
@@ -50,4 +50,4 @@ print(results[0].shape)
 ## 其它文档
 
 - [Runtime C++ 示例](../cpp)
-- [切换模型推理的硬件和后端](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [切换模型推理的硬件和后端](../../../docs/cn/faq/how_to_change_backend.md)
