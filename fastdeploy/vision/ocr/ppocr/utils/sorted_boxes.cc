@@ -37,9 +37,9 @@ void SortBoxes(std::vector<std::array<int, 8>>* boxes) {
   }
 
   for (int i = 0; i < boxes->size() - 1; i++) {
-    if (abs(*boxes[i + 1][1] - *boxes[i][1]) < 10 &&
-        (*boxes[i + 1][0] < *boxes[i][0])) {
-      std::swap(*boxes[i], *boxes[i + 1]);
+    if (abs((*boxes)[i + 1][1] - (*boxes)[i][1]) < 10 &&
+        ((*boxes)[i + 1][0] < (*boxes)[i][0])) {
+      std::swap((*boxes)[i], (*boxes)[i + 1]);
     }
   }
 }

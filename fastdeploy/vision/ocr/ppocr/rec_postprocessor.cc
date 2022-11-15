@@ -66,12 +66,12 @@ bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
     if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
       score += max_value;
       count += 1;
-      if(argmax_idx > label_list.size()) {
+      if(argmax_idx > label_list_.size()) {
         FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "
-        << label_list.size() << ". Please check the label file!" << std::endl;
+        << label_list_.size() << ". Please check the label file!" << std::endl;
         return false; 
       }
-      str_res += label_list[argmax_idx];
+      str_res += label_list_[argmax_idx];
     }
     last_index = argmax_idx;
   }
