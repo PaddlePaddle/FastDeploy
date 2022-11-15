@@ -53,7 +53,7 @@ bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   std::vector<fastdeploy::vision::OCRResult> batch_result(1);
   BatchPredict({*img},&batch_result);
-  *result = std::move(batch_result[0]);
+  *result = batch_result[0];
   return true;
 };
 
