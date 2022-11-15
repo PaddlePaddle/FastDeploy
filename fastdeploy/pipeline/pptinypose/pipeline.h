@@ -35,7 +35,7 @@ class FASTDEPLOY_DECL PPTinyPose {
    * \param[in] pptinypose_model Initialized pptinypose model object
    */
   PPTinyPose(
-      fastdeploy::vision::detection::PPYOLOE* det_model,
+      fastdeploy::vision::detection::PicoDet* det_model,
       fastdeploy::vision::keypointdetection::PPTinyPose* pptinypose_model);
 
   /** \brief Predict the keypoint detection result for an input image
@@ -52,7 +52,7 @@ class FASTDEPLOY_DECL PPTinyPose {
   float detection_model_score_threshold = 0;
 
  protected:
-  fastdeploy::vision::detection::PPYOLOE* detector_ = nullptr;
+  fastdeploy::vision::detection::PicoDet* detector_ = nullptr;
   fastdeploy::vision::keypointdetection::PPTinyPose* pptinypose_model_ =
       nullptr;
 

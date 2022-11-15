@@ -17,7 +17,7 @@
 namespace fastdeploy {
 namespace pipeline {
 PPTinyPose::PPTinyPose(
-    fastdeploy::vision::detection::PPYOLOE* det_model,
+    fastdeploy::vision::detection::PicoDet* det_model,
     fastdeploy::vision::keypointdetection::PPTinyPose* pptinypose_model)
     : detector_(det_model), pptinypose_model_(pptinypose_model) {}
 
