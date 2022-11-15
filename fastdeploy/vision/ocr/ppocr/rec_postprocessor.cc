@@ -22,16 +22,11 @@ namespace ocr {
 
 std::vector<std::string> ReadDict(const std::string& path) {
   std::ifstream in(path);
+  FDASSERT(in, "Cannot open file %s to read.", path.c_str());
   std::string line;
   std::vector<std::string> m_vec;
-  if (in) {
-    while (getline(in, line)) {
-      m_vec.push_back(line);
-    }
-  } else {
-    std::cout << "no such label file: " << path << ", exit the program..."
-              << std::endl;
-    exit(1);
+  while (getline(in, line)) {
+    m_vec.push_back(line);
   }
   m_vec.insert(label_list.begin(), "#");  // blank char for ctc
   m_vec.push_back(" ");
@@ -46,11 +41,12 @@ RecognizerPostprocessor::RecognizerPostprocessor(const std::string& label_path) 
 
 bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
                               const std::vector<size_t>& output_shape,
-                              std::tuple<std::string, float>* rec_result){
-  std::string str_res;
+                              std::string* text, float* rec_score) {
+  std::string& str_res = *text;
+  float& score = *rec_score;
+  score = 0.f;
   int argmax_idx;
   int last_index = 0;
-  float score = 0.f;
   int count = 0;
   float max_value = 0.0f;
 
@@ -66,7 +62,7 @@ bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
     if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
       score += max_value;
       count += 1;
-      if(argmax_idx > label_list.size()){
+      if(argmax_idx > label_list.size()) {
         FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "
         << label_list.size() << ". Please check the label file!" << std::endl;
         return false; 
@@ -79,14 +75,11 @@ bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
   if (count == 0 || std::isnan(score)) {
     score = 0.f;
   }
-  std::get<0>(*rec_result) = str_res;
-  std::get<1>(*rec_result) = score;
-
   return true;
 }
 
 bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
-                                  std::vector<std::tuple<std::string, float>>* results) {
+                                  std::vector<std::string>* texts, std::vector<float>* rec_scores) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -96,10 +89,12 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   // For Recognizer, the output tensor shape = [batch, ?, 6625]
   size_t batch = tensor.shape[0];
   size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, multiplies<int>());
-  results->resize(batch);
+
+  texts->resize(batch);
+  rec_scores->resize(batch);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
     for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, tensor.shape, &results->at(i_batch)))return false;
+    if(!SingleBatchPostprocessor(tensor_data, tensor.shape, &texts->at(i_batch), &rec_scores->at(i_batch)))return false;
     tensor_data = tensor_data + length;
   }
 

@@ -52,16 +52,25 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* img,
                        std::vector<std::array<int, 8>>* boxes_result);
-
-  virtual bool Predict(cv::Mat& img,
+   /** \brief Predict the input image and get OCR detection model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] boxes_result The output of OCR detection model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img,
                        std::vector<std::array<int, 8>>* boxes_result);
-
+   /** \brief BatchPredict the input image and get OCR detection model result.
+   *
+   * \param[in] images The list input of image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] det_results The output of OCR detection model result will be writen to this structure.
+   * \return true if the prediction is successed, otherwise false.
+   */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
           std::vector<std::vector<std::array<int, 8>>>* det_results);
 
   DBDetectorPreprocessor preprocessor_;
   DBDetectorPostprocessor postprocessor_;
-  int batch_size_ = 2;
 
  private:
   bool Initialize();

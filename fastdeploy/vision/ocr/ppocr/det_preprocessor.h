@@ -33,10 +33,12 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
    *
    * \param[in] images The input image data list, all the elements are returned by cv::imread()
    * \param[in] outputs The output tensors which will feed in runtime
+   * \param[in] batch_det_img_info The output tensors which will feed in runtime
    * \return true if the preprocess successed, otherwise false
    */
-  std::vector<std::array<float, 4>> Run(std::vector<FDMat>* images,
-                                        std::vector<FDTensor>* outputs);
+  bool Run(std::vector<FDMat>* images,
+           std::vector<FDTensor>* outputs,
+           std::vector<std::array<float, 4>>* batch_det_img_info_ptr);
 
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};

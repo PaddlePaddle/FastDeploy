@@ -24,20 +24,19 @@ ClassifierPostprocessor::ClassifierPostprocessor() {
   initialized_ = true;
 }
 
-bool SingleBatchPostprocessor(const float* out_data, const size_t& length, std::tuple<int, float>* cls_result){
+bool SingleBatchPostprocessor(const float* out_data, const size_t& length, int* cls_label, float* cls_score) {
 
-  int label = std::distance(
+  *cls_label = std::distance(
       &out_data[0], std::max_element(&out_data[0], &out_data[length]));
 
-  float score =
+  *cls_score =
       float(*std::max_element(&out_data[0], &out_data[length]));
-
-  std::get<0>(*cls_result) = label;
-  std::get<1>(*cls_result) = score;
   return true;
 }
 
-bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<std::tuple<int, float>>* results) {
+bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
+                                  std::vector<int32_t>* cls_labels,
+                                  std::vector<float>* cls_scores) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -49,11 +48,12 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vec
   size_t batch = tensor.shape[0];
   size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, multiplies<int>());
 
-  results->resize(batch);
+  cls_labels->resize(batch);
+  cls_scores->resize(batch);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
  
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, length, &results->at(i_batch))) return false;
+    if(!SingleBatchPostprocessor(tensor_data, length, &cls_labels->at(i_batch),&cls_scores->at(i_batch))) return false;
     tensor_data = tensor_data + length;
   }
 

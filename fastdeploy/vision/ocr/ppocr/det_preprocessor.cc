@@ -52,15 +52,16 @@ bool OcrDetectorResizeImage(FDMat* img,
                             int resize_w,
                             int resize_h,
                             int max_resize_w,
-                            int max_resize_h){
+                            int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
   std::vector<float> value = {0, 0, 0};
   Pad::Run(mat, 0, max_resize_h-resize_h, 0, max_resize_w - resize_w, value);
   return true;
 }
 
-std::vector<std::array<int, 4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
-                                                            std::vector<FDTensor>* outputs) {
+bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs,
+                                 std::vector<std::array<float, 4>>* batch_det_img_info_ptr) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
@@ -71,7 +72,9 @@ std::vector<std::array<int, 4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* 
   }
   int max_resize_w = 0;
   int max_resize_h = 0;
-  std::vector<std::array<int, 4>> batch_det_img_info(images->size());
+  std::vector<std::array<int, 4>>& batch_det_img_info = *batch_det_img_info_ptr;
+  batch_det_img_info.clear();
+  batch_det_img_info.resize(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     batch_det_img_info[i] = OcrDetectorGetInfo(mat,max_side_len_);
@@ -81,9 +84,12 @@ std::vector<std::array<int, 4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* 
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrDetectorResizeImage(mat, batch_det_img_info[i][2],batch_det_img_info[i][3],max_resize_w,max_resize_h);
+    NormalizeAndPermute(mat, mean_, scale_, is_scale_);
+    /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
+    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
@@ -98,7 +104,7 @@ std::vector<std::array<int, 4>> DBDetectorPreprocessor::Run(std::vector<FDMat>* 
   } else {
     function::Concat(tensors, &((*outputs)[0]), 0);
   }
-  return batch_det_img_info;
+  return true;
 }
 
 }  // namespace ocr

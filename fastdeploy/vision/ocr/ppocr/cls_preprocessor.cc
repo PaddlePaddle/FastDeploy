@@ -59,9 +59,12 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
+    NormalizeAndPermute(mat, mean_, scale_, is_scale_);
+    /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
+    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);

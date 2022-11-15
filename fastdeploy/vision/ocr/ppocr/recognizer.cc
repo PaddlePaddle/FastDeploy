@@ -53,27 +53,8 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-
-bool Recognizer::Predict(cv::Mat* img,
-                         std::tuple<std::string, float>* rec_result) {
-  if (!Predict(*img, rec_result)) {
-    return false;
-  }
-  return true;
-}
-
-bool Recognizer::Predict(cv::Mat& img,
-                         std::tuple<std::string, float>* rec_result) {
-  std::vector<std::tuple<string, float>> rec_results;
-  if (!BatchPredict({img}, &rec_results)) {
-    return false;
-  }
-  *rec_result = std::move(rec_results[0]);
-  return true;
-}
-
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::tuple<int, float>>* rec_results){
+                              std::vector<std::string>* texts, std::vector<float>* rec_scores) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -85,7 +66,7 @@ bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, rec_results)) {
+  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
     return false;
   }

@@ -41,7 +41,6 @@ Classifier::Classifier(const std::string& model_file,
   initialized = Initialize();
 }
 
-// Init
 bool Classifier::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -51,25 +50,8 @@ bool Classifier::Initialize() {
   return true;
 }
 
-bool Classifier::Predict(cv::Mat* img, std::tuple<int, float>* cls_result) {
-  if (!Predict(*img, cls_result)) {
-    return false;
-  }
-  return true;
-}
-
-bool Classifier::Predict(cv::Mat& img, std::tuple<int, float>* cls_result) {
-  std::vector<std::tuple<int, float>> cls_results;
-  if (!BatchPredict({img}, &cls_results)) {
-    return false;
-  }
-  *cls_result = std::move(cls_results[0]);
-  return true;
-}
-
-
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::tuple<int, float>>* cls_results){
+                              std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -81,7 +63,7 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, cls_results)) {
+  if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
     return false;
   }

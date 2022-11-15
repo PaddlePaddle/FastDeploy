@@ -24,7 +24,7 @@ RecognizerPreprocessor::RecognizerPreprocessor() {
   initialized_ = true;
 }
 
-void OcrRecognizerResizeImage(FDMat* mat, const float& max_wh_ratio,
+void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
                               const std::vector<int>& rec_image_shape) {
   int imgC, imgH, imgW;
   imgC = rec_image_shape[0];
@@ -70,9 +70,12 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);
+    NormalizeAndPermute(mat, mean_, scale_, is_scale_);
+    /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
+    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);

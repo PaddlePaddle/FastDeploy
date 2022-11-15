@@ -164,6 +164,7 @@ struct FASTDEPLOY_DECL OCRResult : public BaseResult {
   std::string Str();
 };
 
+/*
 struct FASTDEPLOY_DECL OCRBatchResult : public BaseResult {
   std::vector<std::vector<std::array<int, 8>>> batch_boxes;
 
@@ -179,6 +180,7 @@ struct FASTDEPLOY_DECL OCRBatchResult : public BaseResult {
 
   std::string Str();
 };
+*/
 
 /*! @brief MOT(Multi-Object Tracking) result structure for all the MOT models
  */

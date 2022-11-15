@@ -58,7 +58,7 @@ bool DBDetector::Predict(cv::Mat* img,
   return true;
 }
 
-bool DBDetector::Predict(cv::Mat& img,
+bool DBDetector::Predict(const cv::Mat& img,
                          std::vector<std::array<int, 8>>* boxes_result) {
   std::vector<std::vector<std::array<int, 8>>> det_results;
   if (!BatchPredict({img}, &det_results)) {
@@ -69,10 +69,13 @@ bool DBDetector::Predict(cv::Mat& img,
 }
 
 bool DBDetector::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::vector<std::array<int, 8>>>* det_results){
+                              std::vector<std::vector<std::array<int, 8>>>* det_results) {
   std::vector<FDMat> fd_images = WrapMat(images);
-
-  std::vector<std::array<int, 4>> batch_det_img_info = preprocessor_.Run(&fd_images, &reused_input_tensors_);
+  std::vector<std::array<int, 4>> batch_det_img_info;
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &batch_det_img_info)) {
+    FDERROR << "Failed to preprocess input image." << std::endl;
+    return false;
+  }
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {

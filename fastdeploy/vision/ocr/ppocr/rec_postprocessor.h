@@ -38,12 +38,12 @@ class FASTDEPLOY_DECL RecognizerPostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-           std::vector<std::tuple<std::string, float>>* results);
+           std::vector<std::string>* texts, std::vector<float>* rec_scores);
 
  private:
   bool SingleBatchPostprocessor(float* out_data,
                               const std::vector<size_t>& output_shape,
-                              std::tuple<std::string, float>* rec_result);
+                              std::string* text, float* rec_score);
   bool initialized_ = false;
   std::vector<std::string> label_list_;
 };
