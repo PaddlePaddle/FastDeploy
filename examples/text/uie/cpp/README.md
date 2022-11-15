@@ -12,13 +12,13 @@
 
 ```
 #下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz
+tar xvf fastdeploy-linux-x64-gpu-0.6.0.tgz
 
-cd fastdeploy-linux-x64-gpu-0.4.0/examples/text/uie/cpp
+cd fastdeploy-linux-x64-gpu-0.6.0/examples/text/uie/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.6.0
 make -j
 
 # 下载uie-base模型以及词表
@@ -466,8 +466,7 @@ void Predict(
 **参数**
 
 > * **texts**(list(str)): 文本列表
-> * **results**(list(dict())): UIE模型抽取结果。UIEResult结构详细可见[UIEResult说明](../../../../docs/api/text_results/uie_result.md)。
-
+> * **results**(list(dict())): UIE模型抽取结果。
 ## 相关文档
 
 [UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)

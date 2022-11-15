@@ -66,8 +66,9 @@ SCRFD::SCRFD(const std::string& model_file, const std::string& params_file,
     valid_cpu_backends = {Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};  
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -118,7 +119,11 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                        std::map<std::string, std::array<float, 2>>* im_info) {
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+ #ifndef __ANDROID__  
+  // Because of the low CPU performance on the Android device, 
+  // we decided to hide this extra resize. It won't make much 
+  // difference to the final result.
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -127,6 +132,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+#endif  
   // scrfd's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -135,21 +141,24 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                    is_scale_up, stride);
 
   BGR2RGB::Run(mat);
-  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-  //                std::vector<float>(mat->Channels(), 1.0));
-  // Compute `result = mat * alpha + beta` directly by channel
-  // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
-  // input_size, (127.5, 127.5, 127.5), swapRB=True)
-  std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
-  std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
-  Convert::Run(mat, alpha, beta);
+  if(!this->disable_normalize_and_permute_){
+    // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
+    //                std::vector<float>(mat->Channels(), 1.0));
+    // Compute `result = mat * alpha + beta` directly by channel
+    // Original Repo/tools/scrfd.py: cv2.dnn.blobFromImage(img, 1.0/128,
+    // input_size, (127.5, 127.5, 127.5), swapRB=True)
+    std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
+    std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
+    Convert::Run(mat, alpha, beta);
+    HWC2CHW::Run(mat);
+    Cast::Run(mat, "float");
+  }
+  
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->shape.insert(output->shape.begin(), 1);  // reshape to n, c, h, w
   return true;
 }
 
@@ -222,7 +231,13 @@ bool SCRFD::Postprocess(
     pad_w = static_cast<float>(static_cast<int>(pad_w) % stride);
   }
   // must be setup landmarks_per_face before reserve
-  result->landmarks_per_face = landmarks_per_face;
+  if (use_kps) {
+    result->landmarks_per_face = landmarks_per_face;
+  } else {
+    // force landmarks_per_face = 0, if use_kps has been set as 'false'.
+    result->landmarks_per_face = 0; 
+  }
+
   result->Reserve(total_num_boxes);
   unsigned int count = 0;
   // loop each stride
@@ -306,11 +321,13 @@ bool SCRFD::Postprocess(
     result->boxes[i][3] = std::min(result->boxes[i][3], ipt_h - 1.0f);
   }
   // scale and clip landmarks
-  for (size_t i = 0; i < result->landmarks.size(); ++i) {
-    result->landmarks[i][0] = std::max(result->landmarks[i][0], 0.0f);
-    result->landmarks[i][1] = std::max(result->landmarks[i][1], 0.0f);
-    result->landmarks[i][0] = std::min(result->landmarks[i][0], ipt_w - 1.0f);
-    result->landmarks[i][1] = std::min(result->landmarks[i][1], ipt_h - 1.0f);
+  if (use_kps) {
+      for (size_t i = 0; i < result->landmarks.size(); ++i) {
+        result->landmarks[i][0] = std::max(result->landmarks[i][0], 0.0f);
+        result->landmarks[i][1] = std::max(result->landmarks[i][1], 0.0f);
+        result->landmarks[i][0] = std::min(result->landmarks[i][0], ipt_w - 1.0f);
+        result->landmarks[i][1] = std::min(result->landmarks[i][1], ipt_h - 1.0f);
+    }
   }
   return true;
 }
@@ -347,7 +364,9 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
   }
   return true;
 }
-
+void SCRFD::DisableNormalizeAndPermute(){
+  this->disable_normalize_and_permute_ = true;
+}
 }  // namespace facedet
 }  // namespace vision
 }  // namespace fastdeploy

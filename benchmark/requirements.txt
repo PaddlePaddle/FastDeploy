@@ -1,7 +1,1 @@
 numpy
-pynvml
-psutil
-GPUtil
-faster_tokenizer
-paddlenlp
-prettytable

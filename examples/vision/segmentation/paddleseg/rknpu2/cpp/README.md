@@ -41,13 +41,7 @@ fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
 在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model，这里提供了转换好的文件，输入以下命令下载使用(模型文件为RK3588，RK3568需要重新[转换PPSeg RKNN模型](../README.md))。
-```bash
-cd model
-wget https://bj.bcebos.com/fastdeploy/models/rknn2/human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
-tar xvf human_pp_humansegv2_lite_192x192_pretrained_3588.tgz
-cp -r ./human_pp_humansegv2_lite_192x192_pretrained_3588 ./model
-```
+转换为RKNN后的模型文件也需要拷贝至model，输入以下命令下载使用(模型文件为RK3588，RK3568需要重新[转换PPSeg RKNN模型](../README.md))。
 
 ### 准备测试图片至image文件夹
 ```bash

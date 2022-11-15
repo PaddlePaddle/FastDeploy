@@ -14,3 +14,4 @@ FastDeploy根据视觉模型的任务类型，定义了不同的结构体(`fastd
 | MattingResult           | [C++/Python文档](./matting_result.md)           | 图片/视频抠图返回结果      | MODNet、RVM系列模型等         |
 | OCRResult               | [C++/Python文档](./ocr_result.md)               | 文本框检测，分类和文本识别返回结果 | OCR系列模型等                |
 | MOTResult               | [C++/Python文档](./mot_result.md)               | 多目标跟踪返回结果         | pptracking系列模型等         |
+| HeadPoseResult               | [C++/Python文档](./headpose_result.md)               | 头部姿态估计返回结果         | FSANet系列模型等         |

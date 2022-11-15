@@ -43,6 +43,14 @@ const void* FDTensor::Data() const {
   return buffer_;
 }
 
+void FDTensor::StopSharing() {
+  if (IsShared()) {
+    ReallocFn(Nbytes());
+    CopyBuffer(buffer_, external_data_ptr, Nbytes());
+    external_data_ptr = nullptr;
+  }
+}
+
 const void* FDTensor::CpuData() const {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
@@ -89,8 +97,9 @@ void FDTensor::Squeeze(int64_t axis) {
   size_t ndim = shape.size();
   FDASSERT(axis >= 0 && axis < ndim,
            "The allowed 'axis' must be in range of (0, %lu)!", ndim);
-  FDASSERT(shape[axis]==1,
-           "The No.%ld dimension of shape should be 1, but it is %ld!", (long)axis, (long)shape[axis]);
+  FDASSERT(shape[axis] == 1,
+           "The No.%ld dimension of shape should be 1, but it is %ld!",
+           (long)axis, (long)shape[axis]);
   shape.erase(shape.begin() + axis);
 }
 
@@ -119,17 +128,19 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   int numel = Numel();
   int new_numel = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                   std::multiplies<int>());
-  if (new_numel > numel) {
+  if (new_numel > numel || external_data_ptr != nullptr) {
     size_t nbytes = new_numel * FDDataTypeSize(dtype);
     ReallocFn(nbytes);
   }
   shape.assign(new_shape.begin(), new_shape.end());
+  external_data_ptr = nullptr;
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
                       const Device& new_device) {
+  external_data_ptr = nullptr;
   name = tensor_name;
   device = new_device;
   dtype = data_type;
@@ -141,9 +152,9 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
 }
 
 template <typename T>
-void CalculateStatisInfo(void* src_ptr, int size, double* mean, double* max,
+void CalculateStatisInfo(const void* src_ptr, int size, double* mean, double* max,
                          double* min) {
-  T* ptr = static_cast<T*>(src_ptr);
+  const T* ptr = static_cast<const T*>(src_ptr);
   *mean = 0;
   *max = -99999999;
   *min = 99999999;
@@ -159,24 +170,24 @@ void CalculateStatisInfo(void* src_ptr, int size, double* mean, double* max,
   *mean = *mean / size;
 }
 
-void FDTensor::PrintInfo(const std::string& prefix) {
+void FDTensor::PrintInfo(const std::string& prefix) const {
   double mean = 0;
   double max = -99999999;
   double min = 99999999;
   if (dtype == FDDataType::FP32) {
-    CalculateStatisInfo<float>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<float>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::FP64) {
-    CalculateStatisInfo<double>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<double>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT8) {
-    CalculateStatisInfo<int8_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int8_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::UINT8) {
-    CalculateStatisInfo<uint8_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<uint8_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT32) {
-    CalculateStatisInfo<int32_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int32_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::INT64) {
-    CalculateStatisInfo<int64_t>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<int64_t>(CpuData(), Numel(), &mean, &max, &min);
   } else if (dtype == FDDataType::FP16) {
-    CalculateStatisInfo<float16>(Data(), Numel(), &mean, &max, &min);
+    CalculateStatisInfo<float16>(CpuData(), Numel(), &mean, &max, &min);
   } else {
     FDASSERT(false,
              "PrintInfo function doesn't support current situation, maybe you "
@@ -220,9 +231,9 @@ bool FDTensor::ReallocFn(size_t nbytes) {
       return buffer_ != nullptr;
 #else
       FDASSERT(false,
-              "The FastDeploy FDTensor allocator didn't compile under "
-              "-DWITH_GPU=ON,"
-              "so this is an unexpected problem happend.");
+               "The FastDeploy FDTensor allocator didn't compile under "
+               "-DWITH_GPU=ON,"
+               "so this is an unexpected problem happend.");
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
@@ -250,7 +261,8 @@ void FDTensor::FreeFn() {
   }
 }
 
-void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes) {
+void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes,
+                          const Device& device, bool is_pinned_memory) {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
     FDASSERT(cudaMemcpy(dst, src, nbytes, cudaMemcpyDeviceToDevice) == 0,
@@ -293,7 +305,7 @@ FDTensor::FDTensor(const FDTensor& other)
     size_t nbytes = Nbytes();
     FDASSERT(ReallocFn(nbytes),
              "The FastDeploy FDTensor allocate memory error");
-    CopyBuffer(buffer_, other.buffer_, nbytes);
+    CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
   }
 }
 
@@ -316,16 +328,15 @@ FDTensor& FDTensor::operator=(const FDTensor& other) {
     if (other.buffer_ == nullptr) {
       FreeFn();
       buffer_ = nullptr;
+      shape = other.shape;
+      name = other.name;
+      dtype = other.dtype;
+      device = other.device;
     } else {
-      Resize(other.shape);
+      Resize(other.shape, other.dtype, other.name, other.device);
       size_t nbytes = Nbytes();
-      CopyBuffer(buffer_, other.buffer_, nbytes);
+      CopyBuffer(buffer_, other.buffer_, nbytes, device, is_pinned_memory);
     }
-
-    shape = other.shape;
-    name = other.name;
-    dtype = other.dtype;
-    device = other.device;
     external_data_ptr = other.external_data_ptr;
   }
   return *this;

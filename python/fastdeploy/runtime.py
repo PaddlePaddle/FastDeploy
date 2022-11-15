@@ -18,6 +18,7 @@ from . import ModelFormat
 from . import c_lib_wrap as C
 from . import rknpu2
 
+
 class Runtime:
     """FastDeploy Runtime object.
     """
@@ -171,8 +172,7 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `long_to_int` must be type of bool."
+            value, bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -207,10 +207,12 @@ class RuntimeOption:
         """
         return self._option.use_cpu()
 
-    def use_rknpu2(self,rknpu2_name=rknpu2.CpuName.RK3588,rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
+    def use_rknpu2(self,
+                   rknpu2_name=rknpu2.CpuName.RK3588,
+                   rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
         """Inference with CPU
         """
-        return self._option.use_rknpu2(rknpu2_name,rknpu2_core)
+        return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
@@ -226,6 +228,11 @@ class RuntimeOption:
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
         return self._option.use_paddle_backend()
+
+    def use_paddle_infer_backend(self):
+        """Wrapper function of use_paddle_backend(), use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
+        """
+        return self.use_paddle_backend()
 
     def use_poros_backend(self):
         """Use Poros backend, support inference TorchScript model on CPU/Nvidia GPU.
@@ -251,6 +258,11 @@ class RuntimeOption:
         """Use Paddle Lite backend, support inference Paddle model on ARM CPU.
         """
         return self._option.use_lite_backend()
+
+    def use_paddle_lite_backend(self):
+        """Wrapper function of use_lite_backend(), use Paddle Lite backend, support inference Paddle model on ARM CPU.
+        """
+        return self.use_lite_backend()
 
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
@@ -344,6 +356,11 @@ class RuntimeOption:
         """
         return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
 
+    def set_trt_max_batch_size(self, trt_max_batch_size):
+        """Set max batch size while using TensorRT backend.
+        """
+        return self._option.set_trt_max_batch_size(trt_max_batch_size)
+
     def enable_paddle_trt_collect_shape(self):
         return self._option.enable_paddle_trt_collect_shape()
 
@@ -375,8 +392,7 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr,
-                                              getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

@@ -118,7 +118,7 @@ void Trajectory::update(Trajectory *traj,
   if (update_embedding_) update_embedding(traj->current_embedding);
 }
 
-void Trajectory::activate(int &cnt,int timestamp_) {
+void Trajectory::activate(int &cnt, int timestamp_) {
   id = next_id(cnt);
   TKalmanFilter::init(cv::Mat(xyah));
   length = 0;
@@ -130,7 +130,7 @@ void Trajectory::activate(int &cnt,int timestamp_) {
   starttime = timestamp_;
 }
 
-void Trajectory::reactivate(Trajectory *traj,int &cnt, int timestamp_, bool newid) {
+void Trajectory::reactivate(Trajectory *traj, int &cnt, int timestamp_, bool newid) {
   TKalmanFilter::correct(cv::Mat(traj->xyah));
   update_embedding(traj->current_embedding);
   length = 0;

@@ -1,0 +1,3 @@
+ppdiffusers
+paddlenlp
+paddlepaddle-gpu

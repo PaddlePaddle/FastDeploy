@@ -106,7 +106,7 @@ bool YOLOv7End2EndTRT::Initialize() {
   is_no_pad = false;
   is_scale_up = false;
   stride = 32;
-  reused_input_tensors.resize(1);
+  reused_input_tensors_.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -146,7 +146,7 @@ bool YOLOv7End2EndTRT::Preprocess(
     std::map<std::string, std::array<float, 2>>* im_info) {
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -320,24 +320,24 @@ bool YOLOv7End2EndTRT::Predict(cv::Mat* im, DetectionResult* result,
                              static_cast<float>(mat.Width())};
 
   if (use_cuda_preprocessing_) {
-    if (!CudaPreprocess(&mat, &reused_input_tensors[0], &im_info)) {
+    if (!CudaPreprocess(&mat, &reused_input_tensors_[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   } else {
-    if (!Preprocess(&mat, &reused_input_tensors[0], &im_info)) {
+    if (!Preprocess(&mat, &reused_input_tensors_[0], &im_info)) {
       FDERROR << "Failed to preprocess input image." << std::endl;
       return false;
     }
   }
 
-  reused_input_tensors[0].name = InputInfoOfRuntime(0).name;
+  reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
 
-  if (!Postprocess(reused_output_tensors, result, im_info, conf_threshold)) {
+  if (!Postprocess(reused_output_tensors_, result, im_info, conf_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }

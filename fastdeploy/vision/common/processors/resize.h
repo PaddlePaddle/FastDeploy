@@ -33,13 +33,13 @@ class FASTDEPLOY_DECL Resize : public Processor {
 
   bool ImplByOpenCV(Mat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(Mat* mat);
+  bool ImplByFlyCV(Mat* mat);
 #endif
   std::string Name() { return "Resize"; }
 
   static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,
                   float scale_h = -1.0, int interp = 1, bool use_scale = false,
-                  ProcLib lib = ProcLib::OPENCV);
+                  ProcLib lib = ProcLib::DEFAULT);
 
   bool SetWidthAndHeight(int width, int height) {
     width_ = width;
