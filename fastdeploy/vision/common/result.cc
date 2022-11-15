@@ -372,7 +372,7 @@ void MattingResult::Reserve(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Reserve.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.reserve(size * c);
   }
 }
@@ -382,7 +382,7 @@ void MattingResult::Resize(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Resize.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.resize(size * c);
   }
 }
