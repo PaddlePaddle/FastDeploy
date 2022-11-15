@@ -33,6 +33,8 @@ Prerequisite for Compiling on NVIDIA Jetson:
 - jetpack >= 4.6.1
 - python >= 3.6
 
+Notice the `wheel` is required if you need to pack a wheel, execute `pip install wheel` first.
+
 All compilation options are imported via environment variables
 
 ```
