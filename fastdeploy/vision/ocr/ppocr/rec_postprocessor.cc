@@ -28,9 +28,13 @@ std::vector<std::string> ReadDict(const std::string& path) {
   while (getline(in, line)) {
     m_vec.push_back(line);
   }
-  m_vec.insert(label_list_.begin(), "#");  // blank char for ctc
+  m_vec.insert(m_vec.begin(), "#");  // blank char for ctc
   m_vec.push_back(" ");
   return m_vec;
+}
+
+RecognizerPostprocessor::RecognizerPostprocessor(){
+  initialized_ = true;
 }
 
 RecognizerPostprocessor::RecognizerPostprocessor(const std::string& label_path) {

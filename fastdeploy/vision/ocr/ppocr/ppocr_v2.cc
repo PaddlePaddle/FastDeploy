@@ -51,7 +51,9 @@ bool PPOCRv2::Initialized() const {
 
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
-  BatchPredict({*img},&{*result});
+  std::vector<fastdeploy::vision::OCRResult> batch_result(1);
+  BatchPredict({*img},&batch_result);
+  *result = std::move(batch_result[0]);
   return true;
 };
 
@@ -96,7 +98,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
       return false;
     }else{
       for (size_t i_img = 0; i_img < image_list.size(); ++i_img) {
-        if(*cls_labels_ptr[i_img] % 2 == 1 && *cls_scores_ptr[i_img] > classifier_->postprocessor_.cls_thresh_) {
+        if(cls_labels_ptr->at[i_img] % 2 == 1 && cls_scores_ptr->at[i_img] > classifier_->postprocessor_.cls_thresh_) {
           cv::rotate(image_list[i_img], image_list[i_img], 1);
         }
       }

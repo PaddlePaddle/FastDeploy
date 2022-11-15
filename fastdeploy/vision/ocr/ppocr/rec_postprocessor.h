@@ -25,6 +25,7 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL RecognizerPostprocessor {
  public:
+  RecognizerPostprocessor();
   /** \brief Create a postprocessor instance for Recognizer serials model
    *
    * \param[in] label_path The path of label_dict
@@ -42,7 +43,7 @@ class FASTDEPLOY_DECL RecognizerPostprocessor {
 
  private:
   bool SingleBatchPostprocessor(const float* out_data,
-                              const std::vector<size_t>& output_shape,
+                              const std::vector<int64_t>& output_shape,
                               std::string* text, float* rec_score);
   bool initialized_ = false;
   std::vector<std::string> label_list_;

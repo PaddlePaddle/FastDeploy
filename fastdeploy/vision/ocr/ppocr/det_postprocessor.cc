@@ -85,7 +85,7 @@ bool DBDetectorPostprocessor::Run(const std::vector<FDTensor>& tensors,
     return false;
   }
   // DBDetector have only 1 output tensor.
-  FDTensor& tensor = tensors[0];
+  const FDTensor& tensor = tensors[0];
 
   // For DBDetector, the output tensor shape = [batch, 1, ?, ?]
   size_t batch = tensor.shape[0];

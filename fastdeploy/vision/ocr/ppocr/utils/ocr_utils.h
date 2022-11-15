@@ -31,7 +31,7 @@ namespace ocr {
 cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
                            const std::array<int, 8>& box);
 
-void SortBoxes(OCRResult* result);
+void SortBoxes(std::vector<std::array<int, 8>>* boxes);
 
 }  // namespace ocr
 }  // namespace vision
