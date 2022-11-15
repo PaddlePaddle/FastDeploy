@@ -43,6 +43,14 @@ const void* FDTensor::Data() const {
   return buffer_;
 }
 
+void FDTensor::StopSharing() {
+  if (IsShared()) {
+    ReallocFn(Nbytes());
+    CopyBuffer(buffer_, external_data_ptr, Nbytes());
+    external_data_ptr = nullptr;
+  }
+}
+
 const void* FDTensor::CpuData() const {
   if (device == Device::GPU) {
 #ifdef WITH_GPU
