@@ -18,6 +18,105 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class YOLOv5Preprocessor:
+    def __init__(self):
+        """Create a preprocessor for YOLOv5
+        """
+        self._preprocessor = C.vision.detection.YOLOv5Preprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for YOLOv5
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+    @property
+    def size(self):
+        """
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
+        """
+        return self._preprocessor.size
+
+    @property
+    def padding_value(self):
+        #  padding value, size should be the same as channels
+        return self._preprocessor.padding_value
+
+    @size.setter
+    def size(self, wh):
+        assert isinstance(wh, (list, tuple)),\
+            "The value to set `size` must be type of tuple or list."
+        assert len(wh) == 2,\
+            "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
+            len(wh))
+        self._preprocessor.size = wh
+
+    @padding_value.setter
+    def padding_value(self, value):
+        assert isinstance(
+            value,
+            list), "The value to set `padding_value` must be type of list."
+        self._preprocessor.padding_value = value
+
+
+class YOLOv5Postprocessor:
+    def __init__(self):
+        """Create a postprocessor for YOLOv5
+        """
+        self._postprocessor = C.vision.detection.YOLOv5Postprocessor()
+
+    def run(self, runtime_results, ims_info):
+        """Postprocess the runtime results for YOLOv5
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :param: ims_info: (list of dict)Record input_shape and output_shape
+        :return: list of DetectionResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results, ims_info)
+
+    @property
+    def conf_threshold(self):
+        """
+        confidence threshold for postprocessing, default is 0.25
+        """
+        return self._postprocessor.conf_threshold
+
+    @property
+    def nms_threshold(self):
+        """
+        nms threshold for postprocessing, default is 0.5
+        """
+        return self._postprocessor.nms_threshold
+
+    @property
+    def multi_label(self):
+        """
+        multi_label for postprocessing, default is true
+        """
+        return self._postprocessor.multi_label
+
+    @conf_threshold.setter
+    def conf_threshold(self, conf_threshold):
+        assert isinstance(conf_threshold, float),\
+            "The value to set `conf_threshold` must be type of float."
+        self._postprocessor.conf_threshold = conf_threshold
+
+    @nms_threshold.setter
+    def nms_threshold(self, nms_threshold):
+        assert isinstance(nms_threshold, float),\
+            "The value to set `nms_threshold` must be type of float."
+        self._postprocessor.nms_threshold = nms_threshold
+
+    @multi_label.setter
+    def multi_label(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `multi_label` must be type of bool."
+        self._postprocessor.multi_label = value
+
+
 class YOLOv5(FastDeployModel):
     def __init__(self,
                  model_file,
@@ -35,6 +134,7 @@ class YOLOv5(FastDeployModel):
         # 初始化后的option保存在self._runtime_option
         super(YOLOv5, self).__init__(runtime_option)
 
+        assert model_format == ModelFormat.ONNX, "YOLOv5 only support model format of ModelFormat.ONNX now."
         self._model = C.vision.detection.YOLOv5(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
@@ -44,135 +144,36 @@ class YOLOv5(FastDeployModel):
         """Detect an input image
 
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param conf_threshold: confidence threashold for postprocessing, default is 0.25
-        :param nms_iou_threshold: iou threashold for NMS, default is 0.5
+        :param conf_threshold: confidence threshold for postprocessing, default is 0.25
+        :param nms_iou_threshold: iou threshold for NMS, default is 0.5
         :return: DetectionResult
         """
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
 
-    @staticmethod
-    def preprocess(input_image,
-                   size=[640, 640],
-                   padding_value=[114.0, 114.0, 114.0],
-                   is_mini_pad=False,
-                   is_no_pad=False,
-                   is_scale_up=False,
-                   stride=32,
-                   max_wh=7680.0,
-                   multi_label=True):
-        return C.vision.detection.YOLOv5.preprocess(
-            input_image, size, padding_value, is_mini_pad, is_no_pad,
-            is_scale_up, stride, max_wh, multi_label)
+        self.postprocessor.conf_threshold = conf_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
+        return self._model.predict(input_image)
 
-    @staticmethod
-    def postprocess(infer_result,
-                    im_info,
-                    conf_threshold=0.25,
-                    nms_iou_threshold=0.5,
-                    multi_label=True,
-                    max_wh=7680.0):
-        return C.vision.detection.YOLOv5.postprocess(
-            infer_result, im_info, conf_threshold, nms_iou_threshold,
-            multi_label, max_wh)
+    def batch_predict(self, images):
+        """Classify a batch of input image
 
-    # 一些跟YOLOv5模型有关的属性封装
-    # 多数是预处理相关，可通过修改如model.size = [1280, 1280]改变预处理时resize的大小（前提是模型支持）
-    @property
-    def size(self):
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get YOLOv5Preprocessor object of the loaded model
+
+        :return YOLOv5Preprocessor
         """
-        return self._model.size
+        return self._model.preprocessor
 
     @property
-    def padding_value(self):
-        #  padding value, size should be the same as channels
-        return self._model.padding_value
+    def postprocessor(self):
+        """Get YOLOv5Postprocessor object of the loaded model
 
-    @property
-    def is_no_pad(self):
-        # while is_mini_pad = false and is_no_pad = true, will resize the image to the set size
-        return self._model.is_no_pad
-
-    @property
-    def is_mini_pad(self):
-        # only pad to the minimum rectange which height and width is times of stride
-        return self._model.is_mini_pad
-
-    @property
-    def is_scale_up(self):
-        # if is_scale_up is false, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0
-        return self._model.is_scale_up
-
-    @property
-    def stride(self):
-        # padding stride, for is_mini_pad
-        return self._model.stride
-
-    @property
-    def max_wh(self):
-        # for offseting the boxes by classes when using NMS
-        return self._model.max_wh
-
-    @property
-    def multi_label(self):
+        :return YOLOv5Postprocessor
         """
-        Argument for image preprocessing step, for different strategies to get boxes when postprocessing, default True
-        """
-        return self._model.multi_label
-
-    @size.setter
-    def size(self, wh):
-        assert isinstance(wh, (list, tuple)),\
-            "The value to set `size` must be type of tuple or list."
-        assert len(wh) == 2,\
-            "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
-            len(wh))
-        self._model.size = wh
-
-    @padding_value.setter
-    def padding_value(self, value):
-        assert isinstance(
-            value,
-            list), "The value to set `padding_value` must be type of list."
-        self._model.padding_value = value
-
-    @is_no_pad.setter
-    def is_no_pad(self, value):
-        assert isinstance(
-            value, bool), "The value to set `is_no_pad` must be type of bool."
-        self._model.is_no_pad = value
-
-    @is_mini_pad.setter
-    def is_mini_pad(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `is_mini_pad` must be type of bool."
-        self._model.is_mini_pad = value
-
-    @is_scale_up.setter
-    def is_scale_up(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `is_scale_up` must be type of bool."
-        self._model.is_scale_up = value
-
-    @stride.setter
-    def stride(self, value):
-        assert isinstance(
-            value, int), "The value to set `stride` must be type of int."
-        self._model.stride = value
-
-    @max_wh.setter
-    def max_wh(self, value):
-        assert isinstance(
-            value, float), "The value to set `max_wh` must be type of float."
-        self._model.max_wh = value
-
-    @multi_label.setter
-    def multi_label(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `multi_label` must be type of bool."
-        self._model.multi_label = value
+        return self._model.postprocessor

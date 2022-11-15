@@ -61,13 +61,7 @@ struct FASTDEPLOY_DECL FDTensor {
     return external_data_ptr != nullptr;
   }
 
-  void StopSharing() {
-    if (IsShared()) {
-      ReallocFn(Nbytes());
-      CopyBuffer(buffer_, external_data_ptr, Nbytes());
-      external_data_ptr = nullptr;
-    }
-  }
+  void StopSharing();
 
   const void* Data() const;
 
