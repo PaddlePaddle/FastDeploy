@@ -12,28 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/classification/ppcls/model.h"
+#include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace classification {
+namespace detection {
 
-PaddleClasModel::PaddleClasModel(const std::string& model_file,
-                                 const std::string& params_file,
-                                 const std::string& config_file,
-                                 const RuntimeOption& custom_option,
-                                 const ModelFormat& model_format) : preprocessor_(config_file) {
-  if (model_format == ModelFormat::PADDLE) {
-    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
-                          Backend::LITE};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_timvx_backends = {Backend::LITE};
-    valid_ipu_backends = {Backend::PDINFER};
-  } else if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
+               const RuntimeOption& custom_option,
+               const ModelFormat& model_format) {
+  if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  } else {
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
-  
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -41,7 +35,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool PaddleClasModel::Initialize() {
+bool YOLOv5::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -49,16 +43,17 @@ bool PaddleClasModel::Initialize() {
   return true;
 }
 
-bool PaddleClasModel::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
-  postprocessor_.SetTopk(topk);
+bool YOLOv5::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold, float nms_threshold) {
+  postprocessor_.SetConfThreshold(conf_threshold);
+  postprocessor_.SetNMSThreshold(nms_threshold);
   if (!Predict(*im, result)) {
     return false;
   }
   return true;
 }
 
-bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
-  std::vector<ClassifyResult> results;
+bool YOLOv5::Predict(const cv::Mat& im, DetectionResult* result) {
+  std::vector<DetectionResult> results;
   if (!BatchPredict({im}, &results)) {
     return false;
   }
@@ -66,9 +61,11 @@ bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
   return true;
 }
 
-bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vector<ClassifyResult>* results) {
+bool YOLOv5::BatchPredict(const std::vector<cv::Mat>& images, std::vector<DetectionResult>* results) {
+  std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &ims_info)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
@@ -79,7 +76,7 @@ bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vect
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, results)) {
+  if (!postprocessor_.Run(reused_output_tensors_, results, ims_info)) {
     FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
     return false;
   }
@@ -87,6 +84,6 @@ bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vect
   return true;
 }
 
-}  // namespace classification
+}  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

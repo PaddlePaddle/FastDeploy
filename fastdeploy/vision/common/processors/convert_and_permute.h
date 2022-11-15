@@ -18,43 +18,30 @@
 
 namespace fastdeploy {
 namespace vision {
-class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
+class FASTDEPLOY_DECL ConvertAndPermute : public Processor {
  public:
-  NormalizeAndPermute(const std::vector<float>& mean,
-                      const std::vector<float>& std, bool is_scale = true,
-                      const std::vector<float>& min = std::vector<float>(),
-                      const std::vector<float>& max = std::vector<float>(),
-                      bool swap_rb = false);
-  bool ImplByOpenCV(Mat* mat);
+  ConvertAndPermute(const std::vector<float>& alpha = std::vector<float>(),
+                    const std::vector<float>& beta = std::vector<float>(),
+                    bool swap_rb = false);
+  bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFlyCV(Mat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
-#ifdef WITH_GPU
-  bool ImplByCuda(Mat* mat);
-#endif
-  std::string Name() { return "NormalizeAndPermute"; }
+  std::string Name() { return "ConvertAndPermute"; }
 
-  // While use normalize, it is more recommend not use this function
-  // this function will need to compute result = ((mat / 255) - mean) / std
-  // if we use the following method
-  // ```
-  // auto norm = Normalize(...)
-  // norm(mat)
-  // ```
-  // There will be some precomputation in contruct function
-  // and the `norm(mat)` only need to compute result = mat * alpha + beta
-  // which will reduce lots of time
-  static bool Run(Mat* mat, const std::vector<float>& mean,
-                  const std::vector<float>& std, bool is_scale = true,
-                  const std::vector<float>& min = std::vector<float>(),
-                  const std::vector<float>& max = std::vector<float>(),
-                  ProcLib lib = ProcLib::DEFAULT, bool swap_rb = false);
+  static bool Run(FDMat* mat, const std::vector<float>& alpha,
+                  const std::vector<float>& beta, bool swap_rb = false,
+                  ProcLib lib = ProcLib::DEFAULT);
+
+  std::vector<float> GetAlpha() const { return alpha_; }
 
   void SetAlpha(const std::vector<float>& alpha) {
     alpha_.clear();
     std::vector<float>().swap(alpha_);
     alpha_.assign(alpha.begin(), alpha.end());
   }
+
+  std::vector<float> GetBeta() const { return beta_; }
 
   void SetBeta(const std::vector<float>& beta) {
     beta_.clear();

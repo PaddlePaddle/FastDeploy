@@ -12,51 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/common/processors/normalize_and_permute.h"
+#include "fastdeploy/vision/common/processors/convert_and_permute.h"
 
 namespace fastdeploy {
 namespace vision {
 
-NormalizeAndPermute::NormalizeAndPermute(const std::vector<float>& mean,
-                                         const std::vector<float>& std,
-                                         bool is_scale,
-                                         const std::vector<float>& min,
-                                         const std::vector<float>& max,
-                                         bool swap_rb) {
-  FDASSERT(mean.size() == std.size(),
-           "Normalize: requires the size of mean equal to the size of std.");
-  std::vector<double> mean_(mean.begin(), mean.end());
-  std::vector<double> std_(std.begin(), std.end());
-  std::vector<double> min_(mean.size(), 0.0);
-  std::vector<double> max_(mean.size(), 255.0);
-  if (min.size() != 0) {
-    FDASSERT(
-        min.size() == mean.size(),
-        "Normalize: while min is defined, requires the size of min equal to "
-        "the size of mean.");
-    min_.assign(min.begin(), min.end());
-  }
-  if (max.size() != 0) {
-    FDASSERT(
-        min.size() == mean.size(),
-        "Normalize: while max is defined, requires the size of max equal to "
-        "the size of mean.");
-    max_.assign(max.begin(), max.end());
-  }
-  for (auto c = 0; c < mean_.size(); ++c) {
-    double alpha = 1.0;
-    if (is_scale) {
-      alpha /= (max_[c] - min_[c]);
-    }
-    double beta = -1.0 * (mean_[c] + min_[c] * alpha) / std_[c];
-    alpha /= std_[c];
-    alpha_.push_back(alpha);
-    beta_.push_back(beta);
-  }
+ConvertAndPermute::ConvertAndPermute(const std::vector<float>& alpha,
+                                     const std::vector<float>& beta,
+                                     bool swap_rb) {
+  FDASSERT(alpha.size() == beta.size(),
+           "ConvertAndPermute: requires the size of alpha equal to the size of beta.");
+  FDASSERT(alpha.size() > 0 && beta.size() > 0,
+           "ConvertAndPermute: requires the size of alpha and beta > 0.");
+  alpha_.assign(alpha.begin(), alpha.end());
+  beta_.assign(beta.begin(), beta.end());
   swap_rb_ = swap_rb;
 }
 
-bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
+bool ConvertAndPermute::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;
@@ -73,13 +46,14 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
                                res.ptr() + i * origin_h * origin_w * 4),
                        0);
   }
+
   mat->SetMat(res);
   mat->layout = Layout::CHW;
   return true;
 }
 
 #ifdef ENABLE_FLYCV
-bool NormalizeAndPermute::ImplByFlyCV(Mat* mat) {
+bool ConvertAndPermute::ImplByFlyCV(FDMat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Only supports input with HWC layout." << std::endl;
     return false;
@@ -109,12 +83,10 @@ bool NormalizeAndPermute::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
-bool NormalizeAndPermute::Run(Mat* mat, const std::vector<float>& mean,
-                              const std::vector<float>& std, bool is_scale,
-                              const std::vector<float>& min,
-                              const std::vector<float>& max, ProcLib lib,
-                              bool swap_rb) {
-  auto n = NormalizeAndPermute(mean, std, is_scale, min, max, swap_rb);
+bool ConvertAndPermute::Run(FDMat* mat, const std::vector<float>& alpha,
+                            const std::vector<float>& beta, bool swap_rb,
+                            ProcLib lib) {
+  auto n = ConvertAndPermute(alpha, beta, swap_rb);
   return n(mat, lib);
 }
 
