@@ -31,7 +31,7 @@
     <string name="CLASSIFICATION_LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
-    <string name="action_bar_realtime">EasyEdge 实时识别</string>
+    <string name="action_bar_realtime">实时识别</string>
     <string name="action_bar_back">&lt;</string>
     <string name="action_bar_model_name">模型名称</string>
     <string name="result_label">识别结果</string>
