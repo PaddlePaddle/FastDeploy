@@ -270,10 +270,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         releaseCamera();
     }
 
-    public void onPauseAndGetBitmap() {
-
-    }
-
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
         requestRender();
