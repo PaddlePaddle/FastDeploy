@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.detection;
+package com.baidu.paddle.fastdeploy.app.examples.classification;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
@@ -11,18 +11,14 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -39,16 +35,16 @@ import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
-import com.baidu.paddle.fastdeploy.vision.DetectionResult;
-import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+import com.baidu.paddle.fastdeploy.vision.ClassifyResult;
+import com.baidu.paddle.fastdeploy.vision.classification.PaddleClasModel;
 
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = DetectionMainActivity.class.getSimpleName();
+public class ClassificationMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = ClassificationMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -85,7 +81,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     long lastFrameTime;
 
     // Call 'init' and 'release' manually later
-    PicoDet predictor = new PicoDet();
+    PaddleClasModel predictor = new PaddleClasModel();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,7 +91,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.detection_activity_main);
+        setContentView(R.layout.classification_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -126,7 +122,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 resultImage.setImageBitmap(shutterBitmap);
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
+                startActivity(new Intent(ClassificationMainActivity.this, ClassificationSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -206,14 +202,13 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             shutterBitmap = ARGB8888ImageBitmap;
             originShutterBitmap = ARGB8888ImageBitmap;
         }
-
         boolean modified = false;
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
+        ClassifyResult result = predictor.predict(
+                ARGB8888ImageBitmap, true, ClassificationSettingsActivity.scoreThreshold);
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
-                DetectionMainActivity.this.savedImagePath = "result.jpg";
+                ClassificationMainActivity.this.savedImagePath = "result.jpg";
             }
         }
         lastFrameIndex++;
@@ -287,7 +282,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         results.add(new BaseResultModel(1, "cup", 0.4f));
         results.add(new BaseResultModel(2, "pen", 0.6f));
         results.add(new BaseResultModel(3, "tang", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.detection_result_page_item, results);
+        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.classification_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
@@ -337,24 +332,24 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        DetectionSettingsActivity.resetSettings();
+        ClassificationSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (DetectionSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + DetectionSettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, DetectionSettingsActivity.modelDir, realModelDir);
-            String realLabelPath = getCacheDir() + "/" + DetectionSettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, DetectionSettingsActivity.labelPath, realLabelPath);
+        if (ClassificationSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + ClassificationSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, ClassificationSettingsActivity.modelDir, realModelDir);
+            String realLabelPath = getCacheDir() + "/" + ClassificationSettingsActivity.labelPath;
+            Utils.copyFileFromAssets(this, ClassificationSettingsActivity.labelPath, realLabelPath);
 
-            String modelFile = realModelDir + "/" + "model.pdmodel";
-            String paramsFile = realModelDir + "/" + "model.pdiparams";
-            String configFile = realModelDir + "/" + "infer_cfg.yml";
+            String modelFile = realModelDir + "/" + "inference.pdmodel";
+            String paramsFile = realModelDir + "/" + "inference.pdiparams";
+            String configFile = realModelDir + "/" + "inference_cls.yaml";
             String labelFile = realLabelPath;
             RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
+            option.setCpuThreadNum(ClassificationSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(ClassificationSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(ClassificationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
             predictor.init(modelFile, paramsFile, configFile, labelFile, option);
@@ -366,7 +361,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(DetectionMainActivity.this)
+            new AlertDialog.Builder(ClassificationMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -374,7 +369,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            DetectionMainActivity.this.finish();
+                            ClassificationMainActivity.this.finish();
                         }
                     }).show();
         }
