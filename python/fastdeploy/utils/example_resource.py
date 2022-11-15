@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import fastdeploy.download as download
+import fastdeploy as fd
 import fastdeploy.utils.hub_env as hubenv
 
 
 def get_detection_test_image(path=None):
     if path is None:
         path = hubenv.RESOURCE_HOME
-    fullpath = download.download(
+    fullpath = fd.download(
         url='https://bj.bcebos.com/paddlehub/fastdeploy/example/detection_test_image.jpg',
         path=path)
     return fullpath
