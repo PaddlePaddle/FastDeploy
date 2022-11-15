@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.detection;
+package com.baidu.paddle.fastdeploy.app.examples.classification;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -10,22 +10,22 @@ import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.view.AppCompatPreferenceActivity;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.AppCompatPreferenceActivity;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class DetectionSettingsActivity extends AppCompatPreferenceActivity implements
+public class ClassificationSettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String TAG = DetectionSettingsActivity.class.getSimpleName();
+    private static final String TAG = ClassificationSettingsActivity.class.getSimpleName();
 
     static public int selectedModelIdx = -1;
     static public String modelDir = "";
     static public String labelPath = "";
     static public int cpuThreadNum = 2;
     static public String cpuPowerMode = "";
-    static public float scoreThreshold = 0.4f;
+    static public float scoreThreshold = 0.1f;
     static public String enableLiteFp16 = "true";
 
     ListPreference lpChoosePreInstalledModel = null;
@@ -46,7 +46,7 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        addPreferencesFromResource(R.xml.detection_settings);
+        addPreferencesFromResource(R.xml.classification_settings);
         ActionBar supportActionBar = getSupportActionBar();
         if (supportActionBar != null) {
             supportActionBar.setDisplayHomeAsUpEnabled(true);
@@ -59,11 +59,11 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         preInstalledCPUPowerModes = new ArrayList<String>();
         preInstalledScoreThresholds = new ArrayList<String>();
         preInstalledEnableLiteFp16s = new ArrayList<String>();
-        preInstalledModelDirs.add(getString(R.string.DETECTION_MODEL_DIR_DEFAULT));
-        preInstalledLabelPaths.add(getString(R.string.DETECTION_LABEL_PATH_DEFAULT));
+        preInstalledModelDirs.add(getString(R.string.CLASSIFICATION_MODEL_DIR_DEFAULT));
+        preInstalledLabelPaths.add(getString(R.string.CLASSIFICATION_LABEL_PATH_DEFAULT));
         preInstalledCPUThreadNums.add(getString(R.string.CPU_THREAD_NUM_DEFAULT));
         preInstalledCPUPowerModes.add(getString(R.string.CPU_POWER_MODE_DEFAULT));
-        preInstalledScoreThresholds.add(getString(R.string.SCORE_THRESHOLD_DEFAULT));
+        preInstalledScoreThresholds.add(getString(R.string.SCORE_THRESHOLD_CLASSIFICATION));
         preInstalledEnableLiteFp16s.add(getString(R.string.ENABLE_LITE_FP16_MODE_DEFAULT));
 
         // Setup UI components
@@ -90,7 +90,7 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         SharedPreferences sharedPreferences = getPreferenceScreen().getSharedPreferences();
 
         String selected_model_dir = sharedPreferences.getString(getString(R.string.CHOOSE_PRE_INSTALLED_MODEL_KEY),
-                getString(R.string.DETECTION_MODEL_DIR_DEFAULT));
+                getString(R.string.CLASSIFICATION_MODEL_DIR_DEFAULT));
         int selected_model_idx = lpChoosePreInstalledModel.findIndexOfValue(selected_model_dir);
         if (selected_model_idx >= 0 && selected_model_idx < preInstalledModelDirs.size() && selected_model_idx != selectedModelIdx) {
             SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -106,15 +106,15 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         }
 
         String model_dir = sharedPreferences.getString(getString(R.string.MODEL_DIR_KEY),
-                getString(R.string.DETECTION_MODEL_DIR_DEFAULT));
+                getString(R.string.CLASSIFICATION_MODEL_DIR_DEFAULT));
         String label_path = sharedPreferences.getString(getString(R.string.LABEL_PATH_KEY),
-                getString(R.string.DETECTION_LABEL_PATH_DEFAULT));
+                getString(R.string.CLASSIFICATION_LABEL_PATH_DEFAULT));
         String cpu_thread_num = sharedPreferences.getString(getString(R.string.CPU_THREAD_NUM_KEY),
                 getString(R.string.CPU_THREAD_NUM_DEFAULT));
         String cpu_power_mode = sharedPreferences.getString(getString(R.string.CPU_POWER_MODE_KEY),
                 getString(R.string.CPU_POWER_MODE_DEFAULT));
         String score_threshold = sharedPreferences.getString(getString(R.string.SCORE_THRESHOLD_KEY),
-                getString(R.string.SCORE_THRESHOLD_DEFAULT));
+                getString(R.string.SCORE_THRESHOLD_CLASSIFICATION));
         String enable_lite_fp16 = sharedPreferences.getString(getString(R.string.ENABLE_LITE_FP16_MODE_KEY),
                 getString(R.string.ENABLE_LITE_FP16_MODE_DEFAULT));
 
@@ -136,12 +136,12 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(ctx);
 
         String model_dir = sharedPreferences.getString(ctx.getString(R.string.MODEL_DIR_KEY),
-                ctx.getString(R.string.DETECTION_MODEL_DIR_DEFAULT));
+                ctx.getString(R.string.CLASSIFICATION_MODEL_DIR_DEFAULT));
         settingsChanged |= !modelDir.equalsIgnoreCase(model_dir);
         modelDir = model_dir;
 
         String label_path = sharedPreferences.getString(ctx.getString(R.string.LABEL_PATH_KEY),
-                ctx.getString(R.string.DETECTION_LABEL_PATH_DEFAULT));
+                ctx.getString(R.string.CLASSIFICATION_LABEL_PATH_DEFAULT));
         settingsChanged |= !labelPath.equalsIgnoreCase(label_path);
         labelPath = label_path;
 
@@ -156,7 +156,7 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         cpuPowerMode = cpu_power_mode;
 
         String score_threshold = sharedPreferences.getString(ctx.getString(R.string.SCORE_THRESHOLD_KEY),
-                ctx.getString(R.string.SCORE_THRESHOLD_DEFAULT));
+                ctx.getString(R.string.SCORE_THRESHOLD_CLASSIFICATION));
         settingsChanged |= scoreThreshold != Float.parseFloat(score_threshold);
         scoreThreshold = Float.parseFloat(score_threshold);
 
@@ -174,7 +174,7 @@ public class DetectionSettingsActivity extends AppCompatPreferenceActivity imple
         labelPath = "";
         cpuThreadNum = 2;
         cpuPowerMode = "";
-        scoreThreshold = 0.4f;
+        scoreThreshold = 0.1f;
         enableLiteFp16 = "true";
     }
 
