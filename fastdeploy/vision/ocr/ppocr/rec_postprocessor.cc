@@ -28,7 +28,7 @@ std::vector<std::string> ReadDict(const std::string& path) {
   while (getline(in, line)) {
     m_vec.push_back(line);
   }
-  m_vec.insert(label_list.begin(), "#");  // blank char for ctc
+  m_vec.insert(label_list_.begin(), "#");  // blank char for ctc
   m_vec.push_back(" ");
   return m_vec;
 }
@@ -40,7 +40,7 @@ RecognizerPostprocessor::RecognizerPostprocessor(const std::string& label_path) 
 }
 
 bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
-                              const std::vector<size_t>& output_shape,
+                              const std::vector<int64_t>& output_shape,
                               std::string* text, float* rec_score) {
   std::string& str_res = *text;
   float& score = *rec_score;
@@ -85,10 +85,10 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
     return false;
   }
   // Recognizer have only 1 output tensor.
-  FDTensor& tensor = tensors[0];
+  const FDTensor& tensor = tensors[0];
   // For Recognizer, the output tensor shape = [batch, ?, 6625]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
 
   texts->resize(batch);
   rec_scores->resize(batch);

@@ -89,14 +89,14 @@ bool DBDetectorPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
   // For DBDetector, the output tensor shape = [batch, 1, ?, ?]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
  
   results->resize(batch);
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
     if(!SingleBatchPostprocessor(tensor_data,
-                                 output_shape[2],
-                                 output_shape[3],
+                                 tensor.shape[2],
+                                 tensor.shape[3],
                                  batch_det_img_info[i_batch],
                                  &results->at(i_batch)
                                 ))return false;

@@ -15,6 +15,7 @@
 #include "fastdeploy/vision/ocr/ppocr/det_preprocessor.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -55,7 +56,7 @@ bool OcrDetectorResizeImage(FDMat* img,
                             int max_resize_h) {
   Resize::Run(img, resize_w, resize_h);
   std::vector<float> value = {0, 0, 0};
-  Pad::Run(mat, 0, max_resize_h-resize_h, 0, max_resize_w - resize_w, value);
+  Pad::Run(img, 0, max_resize_h-resize_h, 0, max_resize_w - resize_w, value);
   return true;
 }
 
@@ -84,7 +85,7 @@ bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrDetectorResizeImage(mat, batch_det_img_info[i][2],batch_det_img_info[i][3],max_resize_w,max_resize_h);
-    NormalizeAndPermute(mat, mean_, scale_, is_scale_);
+    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
     /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);

@@ -51,13 +51,13 @@ bool PPOCRv2::Initialized() const {
 
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
-  BatchPredict({*img},{*result});
+  BatchPredict({*img},&{*result});
   return true;
 };
 
 bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
                            std::vector<fastdeploy::vision::OCRResult>* batch_result) {
-  batch_result->Clear();
+  batch_result->clear();
   batch_result->resize(images.size());
   std::vector<std::vector<std::array<int, 8>>> batch_boxes(images.size());
 
@@ -66,7 +66,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
   for(int i_batch = 0; i_batch < batch_boxes.size(); ++i_batch) {
-    vision::ocr::SortBoxes(&batch_boxes[i_batch]);
+    vision::ocr::SortBoxes(&(batch_boxes[i_batch]));
     (*batch_result)[i_batch].boxes = batch_boxes[i_batch];
   }
   
@@ -96,7 +96,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
       return false;
     }else{
       for (size_t i_img = 0; i_img < image_list.size(); ++i_img) {
-        if(cls_labels_ptr[i_img] % 2 == 1 && cls_scores_ptr[i_img] > classifier_->postprocessor_.cls_thresh_) {
+        if(*cls_labels_ptr[i_img] % 2 == 1 && *cls_scores_ptr[i_img] > classifier_->postprocessor_.cls_thresh_) {
           cv::rotate(image_list[i_img], image_list[i_img], 1);
         }
       }
