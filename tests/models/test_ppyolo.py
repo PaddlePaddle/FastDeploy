@@ -65,5 +65,56 @@ def test_detection_ppyolo():
 #    with open("ppyolo_baseline.pkl", "wb") as f:
 #        pickle.dump([np.array(result.boxes), np.array(result.scores), np.array(result.label_ids)], f)
 
+def test_detection_ppyolo1():
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/ppyolov2_r101vd_dcn_365e_coco.tgz"
+    input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
+    result_url = "https://bj.bcebos.com/fastdeploy/tests/data/ppyolo_baseline.pkl"
+    fd.download_and_decompress(model_url, "resources")
+    fd.download(input_url1, "resources")
+    fd.download(result_url, "resources")
+    model_path = "resources/ppyolov2_r101vd_dcn_365e_coco"
+
+    model_file = os.path.join(model_path, "model.pdmodel")
+    params_file = os.path.join(model_path, "model.pdiparams")
+    config_file = os.path.join(model_path, "infer_cfg.yml")
+
+    preprocessor = fd.vision.detection.PaddleDetPreprocessor(config_file)
+    postprocessor = fd.vision.detection.PaddleDetPostprocessor()
+    
+    option = rc.test_option
+    option.use_paddle_backend()
+    option.set_model_path(model_file, params_file)
+    runtime = fd.Runtime(option);
+
+    # compare diff
+    im1 = cv2.imread("./resources/000000014439.jpg")
+    for i in range(2):
+        input_tensors = preprocessor.run([im1])
+        output_tensors = runtime.infer({"image": input_tensors[0], "scale_factor": input_tensors[1], "im_shape": input_tensors[2]})
+        results = postprocessor.run(output_tensors)
+        result = results[0]
+        with open("resources/ppyolo_baseline.pkl", "rb") as f:
+            boxes, scores, label_ids = pickle.load(f)
+        pred_boxes = np.array(result.boxes)
+        pred_scores = np.array(result.scores)
+        pred_label_ids = np.array(result.label_ids)
+
+        diff_boxes = np.fabs(boxes - pred_boxes)
+        diff_scores = np.fabs(scores - pred_scores)
+        diff_label_ids = np.fabs(label_ids - pred_label_ids)
+
+        print(diff_boxes.max(), diff_scores.max(), diff_label_ids.max())
+        with open("resources/dump_result.pkl", "wb") as f:
+            pickle.dump([pred_boxes, pred_scores, pred_label_ids], f)
+
+        score_threshold = 0.0
+        assert diff_boxes[scores > score_threshold].max(
+        ) < 1e-01, "There's diff in boxes."
+        assert diff_scores[scores > score_threshold].max(
+        ) < 1e-03, "There's diff in scores."
+        assert diff_label_ids[scores > score_threshold].max(
+        ) < 1e-04, "There's diff in label_ids."
+
 if __name__ == "__main__":
     test_detection_ppyolo()
+    test_detection_ppyolo1()
