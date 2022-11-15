@@ -1,6 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -20,6 +19,7 @@ import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -68,9 +68,10 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
     public static final int ALBUM_SELECT = 1;
-    private static int TYPE = BTN_SHUTTER;
+    private static int TYPE = TYPE_UNKNOWN;
 
     private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
     private static final int INTENT_CODE_PICK_IMAGE = 100;
@@ -210,14 +211,22 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
         String savedImagePath = "";
         synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.png";
+            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
         }
-        shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888,true);
-        originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888,true);
+        if (TYPE == BTN_SHUTTER) {
+            shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+        } else {
+            // Only reference in detecting loops.
+            shutterBitmap = ARGB8888ImageBitmap;
+            originShutterBitmap = ARGB8888ImageBitmap;
+        }
+
         boolean modified = false;
         DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, savedImagePath, DetectionSettingsActivity.scoreThreshold);
+                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
         modified = result.initialized();
+
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 DetectionMainActivity.this.savedImagePath = "result.jpg";
@@ -392,7 +401,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
             option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
-            option.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }

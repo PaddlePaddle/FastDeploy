@@ -207,13 +207,11 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     public void checkAndUpdateSettings() {
         if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
             String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
-            // String detModelName = "ch_PP-OCRv2_det_infer";
-            String detModelName = "ch_PP-OCRv3_det_infer";
+            String detModelName = "ch_PP-OCRv2_det_infer";
             // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
             String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
             // String recModelName = "ch_ppocr_mobile_v2.0_rec_infer";
-            String recModelName = "ch_PP-OCRv3_rec_infer";
-            // String recModelName = "ch_PP-OCRv2_rec_infer";
+            String recModelName = "ch_PP-OCRv2_rec_infer";
             String realDetModelDir = realModelDir + "/" + detModelName;
             String realClsModelDir = realModelDir + "/" + clsModelName;
             String realRecModelDir = realModelDir + "/" + recModelName;
@@ -242,9 +240,6 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             detOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
             clsOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
             recOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            detOption.enableRecordTimeOfRuntime();
-            clsOption.enableRecordTimeOfRuntime();
-            recOption.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(OcrSettingsActivity.enableLiteFp16)) {
                 detOption.enableLiteFp16();
                 clsOption.enableLiteFp16();
