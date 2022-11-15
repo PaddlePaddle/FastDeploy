@@ -102,14 +102,14 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     const float* ptr = box_data + offset;
     (*results)[i].Reserve(num_boxes[i]);
     for (size_t j = 0; j < num_boxes[i]; ++j) {
-        (*results)[i].label_ids.push_back(ptr[j * 6]);
+        (*results)[i].label_ids.push_back(static_cast<int32_t>(round(ptr[j * 6])));
         (*results)[i].scores.push_back(ptr[j * 6 + 1]);
         (*results)[i].boxes.emplace_back(std::array<float, 4>({ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
     }
     if (contain_invalid_boxes) {
-      offset +=  (num_output_boxes / num_boxes.size());
+      offset +=  (num_output_boxes * 6 / num_boxes.size());
     } else {
-      offset += num_boxes[i];
+      offset += (num_boxes[i] * 6);
     }
   }
 
