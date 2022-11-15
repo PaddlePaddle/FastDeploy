@@ -14,6 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/detection/ppdet/preprocessor.h"
+#include "fastdeploy/vision/detection/ppdet/postprocessor.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
@@ -26,9 +28,9 @@ namespace vision {
  */
 namespace detection {
 
-/*! @brief PPYOLOE model object used when to load a PPYOLOE model exported by PaddleDetection
+/*! @brief Base model object used when to load a model exported by PaddleDetection
  */
-class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
+class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
@@ -38,49 +40,49 @@ class FASTDEPLOY_DECL PPYOLOE : public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
-  PPYOLOE(const std::string& model_file, const std::string& params_file,
+  PPDetBase(const std::string& model_file, const std::string& params_file,
           const std::string& config_file,
           const RuntimeOption& custom_option = RuntimeOption(),
           const ModelFormat& model_format = ModelFormat::PADDLE);
 
   /// Get model's name
-  virtual std::string ModelName() const { return "PaddleDetection/PPYOLOE"; }
+  virtual std::string ModelName() const { return "PaddleDetection/BaseModel"; }
 
-  /** \brief Predict the detection result for an input image
+  /** \brief DEPRECATED Predict the detection result for an input image
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
-   * \param[in] result The output detection result will be writen to this structure
+   * \param[in] result The output detection result
    * \return true if the prediction successed, otherwise false
    */
   virtual bool Predict(cv::Mat* im, DetectionResult* result);
 
+  /** \brief Predict the detection result for an input image
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output detection result
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool Predict(const cv::Mat& im, DetectionResult* result);
+
+  /** \brief Predict the detection result for an input image list
+   * \param[in] im The input image list, all the elements come from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] results The output detection result list
+   * \return true if the prediction successed, otherwise false
+   */
+  virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
+                            std::vector<DetectionResult>* results);
+
+  PaddleDetPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  PaddleDetPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
+
  protected:
-  PPYOLOE() {}
   virtual bool Initialize();
-  /// Build the preprocess pipeline from the loaded model
-  virtual bool BuildPreprocessPipelineFromConfig();
-  /// Preprocess an input image, and set the preprocessed results to `outputs`
-  virtual bool Preprocess(Mat* mat, std::vector<FDTensor>* outputs);
-
-  /// Postprocess the inferenced results, and set the final result to `result`
-  virtual bool Postprocess(std::vector<FDTensor>& infer_result,
-                           DetectionResult* result);
-
-  std::vector<std::shared_ptr<Processor>> processors_;
-  std::string config_file_;
-  // configuration for nms
-  int64_t background_label = -1;
-  int64_t keep_top_k = 300;
-  float nms_eta = 1.0;
-  float nms_threshold = 0.7;
-  float score_threshold = 0.01;
-  int64_t nms_top_k = 10000;
-  bool normalized = true;
-  bool has_nms_ = true;
-
-  // This function will used to check if this model contains multiclass_nms
-  // and get parameters from the operator
-  void GetNmsInfo();
+  PaddleDetPreprocessor preprocessor_;
+  PaddleDetPostprocessor postprocessor_;
 };
 
 }  // namespace detection
