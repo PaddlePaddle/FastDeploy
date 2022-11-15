@@ -53,7 +53,7 @@ bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   std::vector<fastdeploy::vision::OCRResult> batch_result(1);
   BatchPredict({*img},&batch_result);
-  *result = batch_result[0];
+  *result = std::move(batch_result[0]);
   return true;
 };
 
@@ -93,7 +93,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     std::vector<std::string>* text_ptr = &ocr_result.text;
     std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;
 
-    if (!classifier_->BatchPredict(images, cls_labels_ptr, cls_scores_ptr)) {
+    if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr)) {
       FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
       return false;
     }else{
@@ -104,7 +104,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
       }
     }
 
-    if (!recognizer_->BatchPredict(images, text_ptr, rec_scores_ptr)) {
+    if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr)) {
       FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
       return false;
     }
