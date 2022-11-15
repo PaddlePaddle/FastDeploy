@@ -47,6 +47,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.microedition.khronos.opengles.GL10;
+
 public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
     private static final String TAG = DetectionMainActivity.class.getSimpleName();
 
@@ -75,10 +77,12 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
     public static final int ALBUM_SELECT = 1;
-    private static int TYPE = TYPE_UNKNOWN;
+    public static final int REALTIME_DETECT = 2;
+    private static int TYPE = REALTIME_DETECT;
 
     private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
     private static final int INTENT_CODE_PICK_IMAGE = 100;
+    private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
     int lastFrameIndex = 0;
@@ -118,12 +122,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                svPreview.onPause();
-                cameraPageView.setVisibility(View.GONE);
-                resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                resultImage.setImageBitmap(shutterBitmap);
+                runOnShutterUiThread();
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
@@ -149,9 +148,49 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             case R.id.back_in_result:
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
+                TYPE = REALTIME_DETECT;
                 svPreview.onResume();
                 break;
+        }
+    }
 
+    private void runOnShutterUiThread() {
+        runOnUiThread(new Runnable() {
+            @SuppressLint("SetTextI18n")
+            public void run() {
+                try {
+                    Thread.sleep(TIME_SLEEP_INTERVAL);
+
+                    svPreview.onPause();
+                    cameraPageView.setVisibility(View.GONE);
+                    resultPageView.setVisibility(View.VISIBLE);
+                    seekbarText.setText(resultNum + "");
+                    confidenceSeekbar.setProgress((int) (resultNum * 100));
+                    if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                        resultImage.setImageBitmap(shutterBitmap);
+                    } else {
+                        new AlertDialog.Builder(DetectionMainActivity.this)
+                                .setTitle("Empty Result!")
+                                .setMessage("Current picture is empty, please shutting it again!")
+                                .setCancelable(true)
+                                .show();
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
+        if (ARGB8888ImageBitmap == null) {
+            return;
+        }
+        if (!ARGB8888ImageBitmap.isRecycled()) {
+            synchronized (this) {
+                shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            }
         }
     }
 
@@ -194,17 +233,16 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+        synchronized (this) {
+            if (TYPE == BTN_SHUTTER) {
+                copyBitmapFromCamera(ARGB8888ImageBitmap);
+                return false;
+            }
+        }
+
         String savedImagePath = "";
         synchronized (this) {
             savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
-        if (TYPE == BTN_SHUTTER) {
-            shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-        } else {
-            // Only reference in predict loops.
-            shutterBitmap = ARGB8888ImageBitmap;
-            originShutterBitmap = ARGB8888ImageBitmap;
         }
 
         boolean modified = false;
@@ -258,7 +296,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     }
 
     public void initView() {
-        TYPE = BTN_SHUTTER;
+        TYPE = REALTIME_DETECT;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
@@ -313,16 +351,20 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     @Override
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(500);
-                            predictor.predict(picBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(picBitmap);
-                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            if (!picBitmap.isRecycled()) {
+                                predictor.predict(picBitmap, true, resultNum);
+                                resultImage.setImageBitmap(picBitmap);
+                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         } else {
-                            SystemClock.sleep(500);
-                            predictor.predict(shutterBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(shutterBitmap);
-                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            if (!shutterBitmap.isRecycled()) {
+                                predictor.predict(shutterBitmap, true, resultNum);
+                                resultImage.setImageBitmap(shutterBitmap);
+                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         }
                     }
