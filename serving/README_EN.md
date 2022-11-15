@@ -41,3 +41,12 @@ Users can also compile the image by themselves according to their own needs, ref
 - [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md)
 - [Serving Deployment Demo](docs/zh_CN/demo.md)
   - [YOLOV5 - Detection Task](../examples/vision/detection/yolov5/serving/README.md)
+
+### Model List
+
+| Task | Model  |
+|---|---|
+| Classification | [PaddleClas](../examples/vision/classification/paddleclas/serving/README.md) |
+| Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md) |
+| NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
+| Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|
