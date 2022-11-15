@@ -16,7 +16,6 @@ cd FastDeploy
 mkdir build && cd build
 cmake .. -DBUILD_ON_JETSON=ON \
          -DENABLE_VISION=ON \
-         -DENABLE_TEXT=ON
          -DCMAKE_INSTALL_PREFIX=${PWD}/installed_fastdeploy
 make -j8
 make install
@@ -42,7 +41,6 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export BUILD_ON_JETSON=ON
 export ENABLE_VISION=ON
-export ENABLE_TEXT=ON
 
 python setup.py build
 python setup.py bdist_wheel
