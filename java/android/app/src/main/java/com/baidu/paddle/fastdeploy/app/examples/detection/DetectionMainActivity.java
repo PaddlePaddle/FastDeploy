@@ -202,7 +202,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
         } else {
-            // Only reference in detecting loops.
+            // Only reference in predict loops.
             shutterBitmap = ARGB8888ImageBitmap;
             originShutterBitmap = ARGB8888ImageBitmap;
         }

@@ -247,12 +247,6 @@ public class Utils {
         return hardware.equalsIgnoreCase("kirin810") || hardware.equalsIgnoreCase("kirin990");
     }
 
-    /**
-     * @param path
-     * @param displayWidth
-     * @param displayHeight
-     * @return Bitmap
-     */
     public static Bitmap decodeBitmap(String path, int displayWidth, int displayHeight) {
         BitmapFactory.Options op = new BitmapFactory.Options();
         op.inJustDecodeBounds = true;// Only the width and height information of Bitmap is read, not the pixels.

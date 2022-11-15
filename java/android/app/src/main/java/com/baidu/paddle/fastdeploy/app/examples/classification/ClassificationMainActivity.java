@@ -38,6 +38,7 @@ import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.ClassifyResult;
 import com.baidu.paddle.fastdeploy.vision.classification.PaddleClasModel;
 
+import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -131,9 +132,9 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 break;
             case R.id.albumSelect:
                 TYPE = ALBUM_SELECT;
-                // 判断是否已经赋予权限
+                // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    // 如果应用之前请求过此权限但用户拒绝了请求，此方法将返回 true。
+                    // If this permission was requested before the application but the user refused the request, this method will return true.
                     ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_PERMISSION_CODE_STORAGE);
                 } else {
                     Intent intent = new Intent(Intent.ACTION_PICK);
@@ -189,18 +190,27 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+        String savedImagePath = "";
+        synchronized (this) {
+            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
+        }
         if (TYPE == BTN_SHUTTER) {
             shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
         } else {
-            // Only reference in detection loops.
+            // Only reference in predict loops.
             shutterBitmap = ARGB8888ImageBitmap;
             originShutterBitmap = ARGB8888ImageBitmap;
         }
         boolean modified = false;
         ClassifyResult result = predictor.predict(
-                ARGB8888ImageBitmap, savedImagePath, ClassificationSettingsActivity.scoreThreshold);
+                ARGB8888ImageBitmap, true, ClassificationSettingsActivity.scoreThreshold);
         modified = result.initialized();
+        if (!savedImagePath.isEmpty()) {
+            synchronized (this) {
+                ClassificationMainActivity.this.savedImagePath = "result.jpg";
+            }
+        }
         lastFrameIndex++;
         if (lastFrameIndex >= 30) {
             final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
@@ -243,6 +253,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     }
 
     public void initView() {
+        TYPE = BTN_SHUTTER;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
