@@ -42,11 +42,11 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
     return false;
   }
   // Classifier have only 1 output tensor.
-  FDTensor& tensor = tensors[0];
+  const FDTensor& tensor = tensors[0];
 
   // For Classifier, the output tensor shape = [batch,2]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
 
   cls_labels->resize(batch);
   cls_scores->resize(batch);

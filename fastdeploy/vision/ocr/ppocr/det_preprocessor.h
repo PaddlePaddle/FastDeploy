@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
    */
   bool Run(std::vector<FDMat>* images,
            std::vector<FDTensor>* outputs,
-           std::vector<std::array<float, 4>>* batch_det_img_info_ptr);
+           std::vector<std::array<int, 4>>* batch_det_img_info_ptr);
 
   int max_side_len_ = 960;
   std::vector<float> mean_ = {0.485f, 0.456f, 0.406f};

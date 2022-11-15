@@ -331,7 +331,7 @@ class DBDetectorPreprocessor:
 
     def run(self, input_ims):
         """Preprocess input images for DBDetectorModel
-        :param: input_ims: (list of numpy.ndarray)The input image
+        :param: input_ims: (list of numpy.ndarray) The input image
         :return: pair(list of FDTensor, list of std::array<int, 4>)
         """
         return self._preprocessor.run(input_ims)

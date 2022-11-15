@@ -15,6 +15,7 @@
 #include "fastdeploy/vision/ocr/ppocr/cls_preprocessor.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
+#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -59,7 +60,7 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    NormalizeAndPermute(mat, mean_, scale_, is_scale_);
+    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
     /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
     HWC2CHW::Run(mat);

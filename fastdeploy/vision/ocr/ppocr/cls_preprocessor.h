@@ -40,7 +40,7 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
-  std::vector<int> cls_image_shape_ = = {3, 48, 192};
+  std::vector<int> cls_image_shape_ = {3, 48, 192};
 
  private:
   bool initialized_ = false;

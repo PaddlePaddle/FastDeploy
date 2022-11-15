@@ -61,7 +61,7 @@ bool OcrDetectorResizeImage(FDMat* img,
 
 bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
                                  std::vector<FDTensor>* outputs,
-                                 std::vector<std::array<float, 4>>* batch_det_img_info_ptr) {
+                                 std::vector<std::array<int, 4>>* batch_det_img_info_ptr) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
