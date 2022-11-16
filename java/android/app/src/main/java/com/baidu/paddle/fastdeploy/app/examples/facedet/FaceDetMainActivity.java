@@ -36,7 +36,6 @@ import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
-import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
 import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
 
@@ -84,8 +83,8 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
-    int lastFrameIndex = 0;
-    long lastFrameTime;
+    long timeElapsed = 0;
+    long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     SCRFD predictor = new SCRFD();
@@ -159,7 +158,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             public void run() {
                 try {
                     // Sleep some times to ensure picture has been correctly shut.
-                    Thread.sleep(TIME_SLEEP_INTERVAL * 2); // 100ms
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -251,25 +250,31 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         }
 
         boolean modified = false;
+
+        long tc = System.currentTimeMillis();
         FaceDetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, true, FaceDetSettingsActivity.scoreThreshold, 0.4f);
+
+        timeElapsed += (System.currentTimeMillis() - tc);
+        frameCounter++;
+
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 FaceDetMainActivity.this.savedImagePath = "result.jpg";
             }
         }
-        lastFrameIndex++;
-        if (lastFrameIndex >= 30) {
-            final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
+
+        if (frameCounter >= 30) {
+            final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
                 @SuppressLint("SetTextI18n")
                 public void run() {
                     tvStatus.setText(Integer.toString(fps) + "fps");
                 }
             });
-            lastFrameIndex = 0;
-            lastFrameTime = System.nanoTime();
+            frameCounter = 0;
+            timeElapsed = 0;
         }
         return modified;
     }
