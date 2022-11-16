@@ -14,13 +14,13 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 mv yolov5s.onnx models/runtime/1/model.onnx
 
 # 拉取fastdeploy镜像
-docker pull paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /yolov5_serving 目录
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10  bash
 
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
-CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=models --backend-config=python,shm-default-byte-size=10485760
+CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/yolov5_serving/models --backend-config=python,shm-default-byte-size=10485760
 ```
 >> **注意**: 当出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改yolov5_grpc_client.py中的请求端口号
 
