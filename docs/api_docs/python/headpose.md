@@ -1,4 +1,4 @@
-# Headpose API
+# Headpose(头部姿态)
 
 ## fastdeploy.vision.headpose.FSANet
 

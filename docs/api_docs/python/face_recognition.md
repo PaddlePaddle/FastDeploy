@@ -1,4 +1,4 @@
-# Face Recognition API
+# Face Recognition(人脸识别)
 
 ## fastdeploy.vision.faceid.AdaFace
 

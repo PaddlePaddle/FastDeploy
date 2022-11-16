@@ -8,7 +8,7 @@ FastDeploy
 * Contact Us: fastdeploy@baidu.com
 
 ..  toctree::
-    :caption: 文档目录
+    :caption: Vision Task Model API (视觉任务模型API)
     :maxdepth: 2
     :titlesonly:
 
@@ -22,6 +22,19 @@ FastDeploy
     face_detection.md
     face_alignment.md
     headpose.md
+
+
+..  toctree::
+    :caption: Predict Result Struct (预测结果结构体)
+    :maxdepth: 3
+    :titlesonly:
+
     vision_results_en.md
+
+..  toctree::
+    :caption: FastDeploy Runtime API (多后端推理引擎API)
+    :maxdepth: 2
+    :titlesonly:
+
     runtime.md
     runtime_option.md

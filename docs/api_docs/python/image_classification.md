@@ -1,4 +1,4 @@
-# Image Classification API
+# Image Classification(图像分类)
 
 ## fastdeploy.vision.classification.PaddleClasModel
 

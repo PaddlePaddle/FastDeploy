@@ -1,4 +1,4 @@
-# Matting API
+# Matting(图像抠图)
 
 ## fastdeploy.vision.matting.MODNet
 
