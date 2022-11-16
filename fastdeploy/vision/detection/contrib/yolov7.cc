@@ -134,7 +134,7 @@ bool YOLOv7::Preprocess(Mat* mat, FDTensor* output,
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
