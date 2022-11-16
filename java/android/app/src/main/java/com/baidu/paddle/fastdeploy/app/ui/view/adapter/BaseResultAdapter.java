@@ -15,14 +15,14 @@ import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import java.text.DecimalFormat;
 import java.util.List;
 
-public class DetectResultAdapter extends ArrayAdapter<BaseResultModel> {
+public class BaseResultAdapter extends ArrayAdapter<BaseResultModel> {
     private int resourceId;
 
-    public DetectResultAdapter(@NonNull Context context, int resource) {
+    public BaseResultAdapter(@NonNull Context context, int resource) {
         super(context, resource);
     }
 
-    public DetectResultAdapter(@NonNull Context context, int resource, @NonNull List<BaseResultModel> objects) {
+    public BaseResultAdapter(@NonNull Context context, int resource, @NonNull List<BaseResultModel> objects) {
         super(context, resource, objects);
         resourceId = resource;
     }

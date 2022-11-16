@@ -33,7 +33,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     public static final int EXPECTED_PREVIEW_WIDTH = 1280;
     public static final int EXPECTED_PREVIEW_HEIGHT = 720;
 
-
     protected int numberOfCameras;
     protected int selectedCameraId;
     protected boolean disableCamera = false;
@@ -45,6 +44,9 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     protected int surfaceHeight = 0;
     protected int textureWidth = 0;
     protected int textureHeight = 0;
+
+    protected Bitmap ARGB8888ImageBitmap;
+    protected boolean bitmapReleaseMode = true;
 
     // In order to manipulate the camera preview data and render the modified one
     // to the screen, three textures are created and the data flow is shown as following:
@@ -198,9 +200,12 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
             // Read pixels of FBO to a bitmap
             ByteBuffer pixelBuffer = ByteBuffer.allocate(textureWidth * textureHeight * 4);
             GLES20.glReadPixels(0, 0, textureWidth, textureHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixelBuffer);
-            Bitmap ARGB8888ImageBitmap = Bitmap.createBitmap(textureWidth, textureHeight, Bitmap.Config.ARGB_8888);
+
+            ARGB8888ImageBitmap = Bitmap.createBitmap(textureWidth, textureHeight, Bitmap.Config.ARGB_8888);
             ARGB8888ImageBitmap.copyPixelsFromBuffer(pixelBuffer);
+
             boolean modified = onTextureChangedListener.onTextureChanged(ARGB8888ImageBitmap);
+
             if (modified) {
                 targetTexureId = drawTexureId[0];
                 // Update a bitmap to the GL texture if modified
@@ -209,7 +214,9 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
                 GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, targetTexureId);
                 GLUtils.texImage2D(GL10.GL_TEXTURE_2D, 0, ARGB8888ImageBitmap, 0);
             }
-            ARGB8888ImageBitmap.recycle();
+            if (bitmapReleaseMode) {
+                ARGB8888ImageBitmap.recycle();
+            }
         }
 
         // fboTexureId/drawTexureId->Screen
@@ -227,6 +234,16 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         GLES20.glUniform1i(GLES20.glGetUniformLocation(progTex2Screen, "sTexture"), 0);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glFlush();
+    }
+
+    public void setBitmapReleaseMode(boolean mode) {
+        synchronized (this) {
+            bitmapReleaseMode = mode;
+        }
+    }
+
+    public Bitmap getBitmap() {
+        return ARGB8888ImageBitmap; // may null or recycled.
     }
 
     private float[] transformTextureCoordinates(float[] coords, float[] matrix) {

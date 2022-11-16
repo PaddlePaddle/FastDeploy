@@ -1,5 +1,8 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -34,7 +37,7 @@ import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.ui.view.adapter.DetectResultAdapter;
+import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
@@ -43,6 +46,8 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.microedition.khronos.opengles.GL10;
 
 public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
     private static final String TAG = DetectionMainActivity.class.getSimpleName();
@@ -56,8 +61,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     boolean isRealtimeStatusRunning = false;
     ImageView backInPreview;
     private ImageView albumSelectButton;
-    private View mCameraPageView;
-    private ViewGroup mResultPageView;
+    private View cameraPageView;
+    private ViewGroup resultPageView;
     private ImageView resultImage;
     private ImageView backInResult;
     private SeekBar confidenceSeekbar;
@@ -68,13 +73,16 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
     public static final int ALBUM_SELECT = 1;
-    private static int TYPE = TYPE_UNKNOWN;
+    public static final int REALTIME_DETECT = 2;
+    private static int TYPE = REALTIME_DETECT;
 
     private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
     private static final int INTENT_CODE_PICK_IMAGE = 100;
+    private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
     int lastFrameIndex = 0;
@@ -114,12 +122,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                svPreview.onPause();
-                mCameraPageView.setVisibility(View.GONE);
-                mResultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                resultImage.setImageBitmap(shutterBitmap);
+                runOnShutterUiThread();
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
@@ -132,9 +135,9 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 break;
             case R.id.albumSelect:
                 TYPE = ALBUM_SELECT;
-                // 判断是否已经赋予权限
+                // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    // 如果应用之前请求过此权限但用户拒绝了请求，此方法将返回 true。
+                    // If this permission was requested before the application but the user refused the request, this method will return true.
                     ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_PERMISSION_CODE_STORAGE);
                 } else {
                     Intent intent = new Intent(Intent.ACTION_PICK);
@@ -143,11 +146,51 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 }
                 break;
             case R.id.back_in_result:
-                mResultPageView.setVisibility(View.GONE);
-                mCameraPageView.setVisibility(View.VISIBLE);
+                resultPageView.setVisibility(View.GONE);
+                cameraPageView.setVisibility(View.VISIBLE);
+                TYPE = REALTIME_DETECT;
                 svPreview.onResume();
                 break;
+        }
+    }
 
+    private void runOnShutterUiThread() {
+        runOnUiThread(new Runnable() {
+            @SuppressLint("SetTextI18n")
+            public void run() {
+                try {
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 2);
+
+                    svPreview.onPause();
+                    cameraPageView.setVisibility(View.GONE);
+                    resultPageView.setVisibility(View.VISIBLE);
+                    seekbarText.setText(resultNum + "");
+                    confidenceSeekbar.setProgress((int) (resultNum * 100));
+                    if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                        resultImage.setImageBitmap(shutterBitmap);
+                    } else {
+                        new AlertDialog.Builder(DetectionMainActivity.this)
+                                .setTitle("Empty Result!")
+                                .setMessage("Current picture is empty, please shutting it again!")
+                                .setCancelable(true)
+                                .show();
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
+        if (ARGB8888ImageBitmap == null) {
+            return;
+        }
+        if (!ARGB8888ImageBitmap.isRecycled()) {
+            synchronized (this) {
+                shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            }
         }
     }
 
@@ -156,36 +199,17 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == INTENT_CODE_PICK_IMAGE) {
             if (resultCode == Activity.RESULT_OK) {
-                mCameraPageView.setVisibility(View.GONE);
-                mResultPageView.setVisibility(View.VISIBLE);
+                cameraPageView.setVisibility(View.GONE);
+                resultPageView.setVisibility(View.VISIBLE);
                 seekbarText.setText(resultNum + "");
                 confidenceSeekbar.setProgress((int) (resultNum * 100));
                 Uri uri = data.getData();
-                String path = getRealPathFromURI(uri);
+                String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
                 originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
-    }
-
-    private String getRealPathFromURI(Uri contentURI) {
-        String result;
-        Cursor cursor = null;
-        try {
-            cursor = getContentResolver().query(contentURI, null, null, null, null);
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-        if (cursor == null) {
-            result = contentURI.getPath();
-        } else {
-            cursor.moveToFirst();
-            int idx = cursor.getColumnIndex(MediaStore.Images.ImageColumns.DATA);
-            result = cursor.getString(idx);
-            cursor.close();
-        }
-        return result;
     }
 
     private void toggleRealtimeStyle() {
@@ -209,24 +233,22 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+        synchronized (this) {
+            if (TYPE == BTN_SHUTTER) {
+                copyBitmapFromCamera(ARGB8888ImageBitmap);
+                return false;
+            }
+        }
+
         String savedImagePath = "";
         synchronized (this) {
             savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
-        if (TYPE == BTN_SHUTTER) {
-            shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-        } else {
-            // Only reference in detecting loops.
-            shutterBitmap = ARGB8888ImageBitmap;
-            originShutterBitmap = ARGB8888ImageBitmap;
         }
 
         boolean modified = false;
         DetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
         modified = result.initialized();
-
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 DetectionMainActivity.this.savedImagePath = "result.jpg";
@@ -245,38 +267,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             lastFrameTime = System.nanoTime();
         }
         return modified;
-    }
-
-    /**
-     * @param path          路径
-     * @param displayWidth  需要显示的宽度
-     * @param displayHeight 需要显示的高度
-     * @return Bitmap
-     */
-    public static Bitmap decodeBitmap(String path, int displayWidth, int displayHeight) {
-        BitmapFactory.Options op = new BitmapFactory.Options();
-        op.inJustDecodeBounds = true;
-        // op.inJustDecodeBounds = true;表示我们只读取Bitmap的宽高等信息，不读取像素。
-        Bitmap bmp = BitmapFactory.decodeFile(path, op); // 获取尺寸信息
-        // op.outWidth表示的是图像真实的宽度
-        // op.inSamplySize 表示的是缩小的比例
-        // op.inSamplySize = 4,表示缩小1/4的宽和高，1/16的像素，android认为设置为2是最快的。
-        // 获取比例大小
-        int wRatio = (int) Math.ceil(op.outWidth / (float) displayWidth);
-        int hRatio = (int) Math.ceil(op.outHeight / (float) displayHeight);
-        // 如果超出指定大小，则缩小相应的比例
-        if (wRatio > 1 && hRatio > 1) {
-            if (wRatio > hRatio) {
-                // 如果太宽，我们就缩小宽度到需要的大小，注意，高度就会变得更加的小。
-                op.inSampleSize = wRatio;
-            } else {
-                op.inSampleSize = hRatio;
-            }
-        }
-        op.inJustDecodeBounds = false;
-        bmp = BitmapFactory.decodeFile(path, op);
-        // 从原Bitmap创建一个给定宽高的Bitmap
-        return Bitmap.createScaledBitmap(bmp, displayWidth, displayHeight, true);
     }
 
     @Override
@@ -306,6 +296,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     }
 
     public void initView() {
+        TYPE = REALTIME_DETECT;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
@@ -321,8 +312,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         backInPreview.setOnClickListener(this);
         albumSelectButton = findViewById(R.id.albumSelect);
         albumSelectButton.setOnClickListener(this);
-        mCameraPageView = findViewById(R.id.camera_page);
-        mResultPageView = findViewById(R.id.result_page);
+        cameraPageView = findViewById(R.id.camera_page);
+        resultPageView = findViewById(R.id.result_page);
         resultImage = findViewById(R.id.result_image);
         backInResult = findViewById(R.id.back_in_result);
         backInResult.setOnClickListener(this);
@@ -334,7 +325,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         results.add(new BaseResultModel(1, "cup", 0.4f));
         results.add(new BaseResultModel(2, "pen", 0.6f));
         results.add(new BaseResultModel(3, "tang", 1.0f));
-        final DetectResultAdapter adapter = new DetectResultAdapter(this, R.layout.detection_result_page_item, results);
+        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.detection_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
@@ -360,16 +351,20 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     @Override
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(500);
-                            predictor.predict(picBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(picBitmap);
-                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            if (!picBitmap.isRecycled()) {
+                                predictor.predict(picBitmap, true, resultNum);
+                                resultImage.setImageBitmap(picBitmap);
+                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         } else {
-                            SystemClock.sleep(500);
-                            predictor.predict(shutterBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(shutterBitmap);
-                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            if (!shutterBitmap.isRecycled()) {
+                                predictor.predict(shutterBitmap, true, resultNum);
+                                resultImage.setImageBitmap(shutterBitmap);
+                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         }
                     }
