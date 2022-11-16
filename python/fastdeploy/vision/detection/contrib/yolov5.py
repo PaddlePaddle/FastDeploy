@@ -41,8 +41,18 @@ class YOLOv5Preprocessor:
 
     @property
     def padding_value(self):
+        """
+        padding value for preprocessing, default [114.0, 114.0, 114.0]
+        """
         #  padding value, size should be the same as channels
         return self._preprocessor.padding_value
+
+    @property
+    def resize_after_load(self):
+        """
+        resize_after_load for preprocessing, may have an impact on map, default false
+        """
+        return self._preprocessor.resize_after_load
 
     @size.setter
     def size(self, wh):
@@ -59,6 +69,13 @@ class YOLOv5Preprocessor:
             value,
             list), "The value to set `padding_value` must be type of list."
         self._preprocessor.padding_value = value
+
+    @resize_after_load.setter
+    def resize_after_load(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `resize_after_load` must be type of bool."
+        self._preprocessor.resize_after_load = value
 
 
 class YOLOv5Postprocessor:
@@ -93,7 +110,7 @@ class YOLOv5Postprocessor:
     @property
     def multi_label(self):
         """
-        multi_label for postprocessing, default is true
+        multi_label for postprocessing, set true for eval, default is false
         """
         return self._postprocessor.multi_label
 

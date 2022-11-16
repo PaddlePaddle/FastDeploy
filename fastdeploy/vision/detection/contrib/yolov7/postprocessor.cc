@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/contrib/yolov5/postprocessor.h"
+#include "fastdeploy/vision/detection/contrib/yolov7/postprocessor.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-YOLOv5Postprocessor::YOLOv5Postprocessor() {
+YOLOv7Postprocessor::YOLOv7Postprocessor() {
   conf_threshold_ = 0.25;
   nms_threshold_ = 0.5;
-  multi_label_ = false;
   max_wh_ = 7680.0;
 }
 
-bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
+bool YOLOv7Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<DetectionResult>* results,
                               const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
   int batch = tensors[0].shape[0];
  
@@ -34,11 +33,7 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
 
   for (size_t bs = 0; bs < batch; ++bs) {
     (*results)[bs].Clear();
-    if (multi_label_) {
-      (*results)[bs].Reserve(tensors[0].shape[1] * (tensors[0].shape[2] - 5));
-    } else {
-      (*results)[bs].Reserve(tensors[0].shape[1]);
-    }
+    (*results)[bs].Reserve(tensors[0].shape[1]);
     if (tensors[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
@@ -47,44 +42,22 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     for (size_t i = 0; i < tensors[0].shape[1]; ++i) {
       int s = i * tensors[0].shape[2];
       float confidence = data[s + 4];
-      if (multi_label_) {
-        for (size_t j = 5; j < tensors[0].shape[2]; ++j) {
-          confidence = data[s + 4];
-          const float* class_score = data + s + j;
-          confidence *= (*class_score);
-          // filter boxes by conf_threshold
-          if (confidence <= conf_threshold_) {
-            continue;
-          }
-          int32_t label_id = std::distance(data + s + 5, class_score);
-
-          // convert from [x, y, w, h] to [x1, y1, x2, y2]
-          (*results)[bs].boxes.emplace_back(std::array<float, 4>{
-              data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
-              data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
-              data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
-              data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-          (*results)[bs].label_ids.push_back(label_id);
-          (*results)[bs].scores.push_back(confidence);
-        }
-      } else {
-        const float* max_class_score =
-            std::max_element(data + s + 5, data + s + tensors[0].shape[2]);
-        confidence *= (*max_class_score);
-        // filter boxes by conf_threshold
-        if (confidence <= conf_threshold_) {
-          continue;
-        }
-        int32_t label_id = std::distance(data + s + 5, max_class_score);
-        // convert from [x, y, w, h] to [x1, y1, x2, y2]
-        (*results)[bs].boxes.emplace_back(std::array<float, 4>{
-            data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
-            data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
-            data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
-            data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-        (*results)[bs].label_ids.push_back(label_id);
-        (*results)[bs].scores.push_back(confidence);
+      const float* max_class_score =
+          std::max_element(data + s + 5, data + s + tensors[0].shape[2]);
+      confidence *= (*max_class_score);
+      // filter boxes by conf_threshold
+      if (confidence <= conf_threshold_) {
+        continue;
       }
+      int32_t label_id = std::distance(data + s + 5, max_class_score);
+      // convert from [x, y, w, h] to [x1, y1, x2, y2]
+      (*results)[bs].boxes.emplace_back(std::array<float, 4>{
+          data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
+          data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
+          data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
+          data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
+      (*results)[bs].label_ids.push_back(label_id);
+      (*results)[bs].scores.push_back(confidence);
     }
 
     if ((*results)[bs].boxes.size() == 0) {
@@ -116,10 +89,10 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
       (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) / scale, 0.0f);
       (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2] - pad_w) / scale, 0.0f);
       (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3] - pad_h) / scale, 0.0f);
-      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
-      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
-      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
-      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
+      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w - 1.0f);
+      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h - 1.0f);
+      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w - 1.0f);
+      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h - 1.0f);
     }
   }
   return true;

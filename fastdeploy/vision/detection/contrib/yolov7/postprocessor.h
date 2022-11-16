@@ -20,13 +20,13 @@ namespace fastdeploy {
 namespace vision {
 
 namespace detection {
-/*! @brief Postprocessor object for YOLOv5 serials model.
+/*! @brief Postprocessor object for YOLOv7 serials model.
  */
-class FASTDEPLOY_DECL YOLOv5Postprocessor {
+class FASTDEPLOY_DECL YOLOv7Postprocessor {
  public:
-  /** \brief Create a postprocessor instance for YOLOv5 serials model
+  /** \brief Create a postprocessor instance for YOLOv7 serials model
    */
-  YOLOv5Postprocessor();
+  YOLOv7Postprocessor();
 
   /** \brief Process the result of runtime and fill to DetectionResult structure
    *
@@ -55,18 +55,9 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   /// Get nms_threshold, default 0.5
   float GetNMSThreshold() const { return nms_threshold_; }
 
-  /// Set multi_label, set true for eval, default false
-  void SetMultiLabel(bool multi_label) {
-    multi_label_ = multi_label;
-  }
-
-  /// Get multi_label, default false
-  bool GetMultiLabel() const { return multi_label_; }
-
  protected:
   float conf_threshold_;
   float nms_threshold_;
-  bool multi_label_;
   float max_wh_;
 };
 
