@@ -188,9 +188,10 @@ public boolean init(String modelFile, String paramsFile, RuntimeOption option);
 ```java
 // 直接预测：不保存图片以及不渲染结果到Bitmap上
 public FaceDetectionResult predict(Bitmap ARGB8888Bitmap)；
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, float confThreshold, float nmsIouThreshold)； // 设置置信度阈值和NMS阈值
 // 预测并且可视化：预测结果以及可视化，并将可视化后的图片保存到指定的途径，以及将可视化结果渲染在Bitmap上
-public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, String savedImagePath, float scoreThreshold);
-public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, boolean rendering, float scoreThreshold); // 只渲染 不保存图片
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, String savedImagePath, float confThreshold, float nmsIouThreshold);
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, boolean rendering, float confThreshold, float nmsIouThreshold); // 只渲染 不保存图片
 ```
 - 模型资源释放 API：调用 release() API 可以释放模型资源，返回true表示释放成功，false表示失败；调用 initialized() 可以判断模型是否初始化成功，true表示初始化成功，false表示失败。
 ```java
@@ -216,9 +217,10 @@ public boolean init(String modelFile, String paramsFile, RuntimeOption option);
 ```java
 // 直接预测：不保存图片以及不渲染结果到Bitmap上
 public FaceDetectionResult predict(Bitmap ARGB8888Bitmap)；
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, float confThreshold, float nmsIouThreshold)； // 设置置信度阈值和NMS阈值
 // 预测并且可视化：预测结果以及可视化，并将可视化后的图片保存到指定的途径，以及将可视化结果渲染在Bitmap上
-public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, String savedImagePath, float scoreThreshold);
-public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, boolean rendering, float scoreThreshold); // 只渲染 不保存图片
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, String savedImagePath, float confThreshold, float nmsIouThreshold);
+public FaceDetectionResult predict(Bitmap ARGB8888Bitmap, boolean rendering, float confThreshold, float nmsIouThreshold); // 只渲染 不保存图片
 ```
 - 模型资源释放 API：调用 release() API 可以释放模型资源，返回true表示释放成功，false表示失败；调用 initialized() 可以判断模型是否初始化成功，true表示初始化成功，false表示失败。
 ```java
