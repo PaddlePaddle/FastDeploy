@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import fastdeploy as fd
-import fastdeploy.utils.hub_env as hubenv
+from . import hub_env
 
 
 def get_detection_test_image(path=None):
     if path is None:
-        path = hubenv.RESOURCE_HOME
+        path = hub_env.RESOURCE_HOME
     fullpath = fd.download(
         url='https://bj.bcebos.com/paddlehub/fastdeploy/example/detection_test_image.jpg',
         path=path)
