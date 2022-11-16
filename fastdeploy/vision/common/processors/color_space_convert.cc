@@ -16,7 +16,7 @@
 
 namespace fastdeploy {
 namespace vision {
-bool BGR2RGB::ImplByOpenCV(Mat* mat) {
+bool BGR2RGB::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im;
   cv::cvtColor(*im, new_im, cv::COLOR_BGR2RGB);
@@ -25,7 +25,7 @@ bool BGR2RGB::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool BGR2RGB::ImplByFlyCV(Mat* mat) {
+bool BGR2RGB::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   if (im->channels() != 3) {
     FDERROR << "[BGR2RGB] The channel of input image must be 3, but not it's "
@@ -39,7 +39,7 @@ bool BGR2RGB::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
-bool RGB2BGR::ImplByOpenCV(Mat* mat) {
+bool RGB2BGR::ImplByOpenCV(FDMat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   cv::Mat new_im;
   cv::cvtColor(*im, new_im, cv::COLOR_RGB2BGR);
@@ -48,7 +48,7 @@ bool RGB2BGR::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool RGB2BGR::ImplByFlyCV(Mat* mat) {
+bool RGB2BGR::ImplByFlyCV(FDMat* mat) {
   fcv::Mat* im = mat->GetFlyCVMat();
   if (im->channels() != 3) {
     FDERROR << "[RGB2BGR] The channel of input image must be 3, but not it's "
@@ -62,15 +62,72 @@ bool RGB2BGR::ImplByFlyCV(Mat* mat) {
 }
 #endif
 
-bool BGR2RGB::Run(Mat* mat, ProcLib lib) {
+bool BGR2GRAY::ImplByOpenCV(FDMat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
+  cv::Mat new_im;
+  cv::cvtColor(*im, new_im, cv::COLOR_BGR2GRAY);
+  mat->SetMat(new_im);
+  mat->SetChannels(1);
+  return true;
+}
+
+#ifdef ENABLE_FLYCV
+bool BGR2GRAY::ImplByFalconCV(FDMat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (im->channels() != 3) {
+    FDERROR << "[BGR2GRAY] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    return false;
+  }
+  fcv::Mat new_im;
+  fcv::cvt_color(*im, new_im, fcv::ColorConvertType::CVT_PA_BGR2GRAY);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
+
+bool RGB2GRAY::ImplByOpenCV(FDMat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
+  cv::Mat new_im;
+  cv::cvtColor(*im, new_im, cv::COLOR_RGB2GRAY);
+  mat->SetMat(new_im);
+  return true;
+}
+
+#ifdef ENABLE_FLYCV
+bool RGB2GRAY::ImplByFalconCV(FDMat* mat) {
+  fcv::Mat* im = mat->GetFalconCVMat();
+  if (im->channels() != 3) {
+    FDERROR << "[RGB2GRAY] The channel of input image must be 3, but not it's " << im->channels() << "." << std::endl;
+    return false;
+  }
+  fcv::Mat new_im;
+  fcv::cvt_color(*im, new_im, fcv::ColorConvertType::CVT_PA_RGB2GRAY);
+  mat->SetMat(new_im);
+  return true;
+}
+#endif
+
+
+bool BGR2RGB::Run(FDMat* mat, ProcLib lib) {
   auto b = BGR2RGB();
   return b(mat, lib);
 }
 
-bool RGB2BGR::Run(Mat* mat, ProcLib lib) {
+bool RGB2BGR::Run(FDMat* mat, ProcLib lib) {
   auto r = RGB2BGR();
   return r(mat, lib);
 }
+
+bool BGR2GRAY::Run(FDMat* mat, ProcLib lib) {
+  auto b = BGR2GRAY();
+  return b(mat, lib);
+}
+
+bool RGB2GRAY::Run(FDMat* mat, ProcLib lib) {
+  auto r = RGB2GRAY();
+  return r(mat, lib);
+}
+
 
 }  // namespace vision
 }  // namespace fastdeploy
