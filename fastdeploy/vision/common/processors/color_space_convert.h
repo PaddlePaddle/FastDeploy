@@ -45,22 +45,22 @@ class FASTDEPLOY_DECL BGR2GRAY : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(FDMat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
   virtual std::string Name() { return "BGR2GRAY"; }
 
-  static bool Run(FDMat* mat, ProcLib lib = ProcLib::OPENCV);
+  static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
 class FASTDEPLOY_DECL RGB2GRAY : public Processor {
  public:
   bool ImplByOpenCV(FDMat* mat);
 #ifdef ENABLE_FLYCV
-  bool ImplByFalconCV(FDMat* mat);
+  bool ImplByFlyCV(FDMat* mat);
 #endif
   std::string Name() { return "RGB2GRAY"; }
 
-  static bool Run(FDMat* mat, ProcLib lib = ProcLib::OPENCV);
+  static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
 

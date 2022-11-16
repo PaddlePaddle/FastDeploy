@@ -153,7 +153,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
   }
-  
+
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};

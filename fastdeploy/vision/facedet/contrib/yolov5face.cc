@@ -149,6 +149,7 @@ bool YOLOv5Face::Preprocess(
 
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
+  
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
