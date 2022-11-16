@@ -51,12 +51,12 @@ class FASTDEPLOY_DECL FaceLandmark1000 : public FastDeployModel {
    *
    * \return Vector of int values, default {128,128}
    */
-  std::vector<int> GetSize() {return size_;}
+  std::vector<int> GetSize() { return size_; }
   /** \brief Set the input size of image
    *
    * \param[in] size Vector of int values which represents {width, height} of image
    */
-  void SetSize(const std::vector<int>& size) {size_ = size;}
+  void SetSize(const std::vector<int>& size) { size_ = size; }
 
  private:
   bool Initialize();

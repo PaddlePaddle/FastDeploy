@@ -50,22 +50,22 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    *
    * \return Integer type, default num_landmarks = 19
    */
-  int GetNumLandmarks() {return num_landmarks_;}
+  int GetNumLandmarks() {return num_landmarks_; }
   /** \brief Get the mean values for normalization
    *
    * \return Vector of float values, default mean_vals = {0.485f, 0.456f, 0.406f}
    */
-  std::vector<float> GetMeanVals() { return mean_vals_;}
+  std::vector<float> GetMeanVals() { return mean_vals_; }
   /** \brief Get the std values for normalization
    *
    * \return Vector of float values, default std_vals = {0.229f, 0.224f, 0.225f}
    */
-  std::vector<float> GetStdVals() { return std_vals_;}
+  std::vector<float> GetStdVals() { return std_vals_; }
   /** \brief Get the input size of image
    *
    * \return Vector of int values, default {256, 256}
    */
-  std::vector<int> GetSize() { return size_;}
+  std::vector<int> GetSize() { return size_; }
   /** \brief Set the number of landmarks
    *
    * \param[in] num_landmarks Integer value which represents number of landmarks
@@ -75,18 +75,19 @@ class FASTDEPLOY_DECL PIPNet : public FastDeployModel {
    *
    * \param[in] mean_vals Vector of float values whose length is equal to 3
    */
-  void SetMeanVals(const std::vector<float>& mean_vals)
-  { mean_vals_ = mean_vals;}
+  void SetMeanVals(const std::vector<float>& mean_vals) {
+       mean_vals_ = mean_vals;
+  }
   /** \brief Set the std values for normalization
    *
    * \param[in] std_vals Vector of float values whose length is equal to 3
    */
-  void SetStdVals(const std::vector<float>& std_vals) {std_vals_ = std_vals;}
+  void SetStdVals(const std::vector<float>& std_vals) { std_vals_ = std_vals; }
   /** \brief Set the input size of image
    *
    * \param[in] size Vector of int values which represents {width, height} of image
    */
-  void SetSize(const std::vector<int>& size) {size_ = size;}
+  void SetSize(const std::vector<int>& size) { size_ = size; }
 
  private:
   bool Initialize();
