@@ -30,7 +30,7 @@ if [ ! -d "./TensorRT-8.4.1.5/" ]; then
     rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
 fi
 
-nvidia-docker run -it --rm --name build_fd_vison \
+nvidia-docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
@@ -50,7 +50,8 @@ nvidia-docker run -it --rm --name build_fd_vison \
             export ENABLE_TEXT=ON;
             python setup.py build;
             python setup.py bdist_wheel;
-            cd ../;rm -rf build; mkdir -p build;cd build;
+            cd /workspace/fastdeploy;
+            rm -rf build; mkdir -p build;cd build;
             cmake .. -DENABLE_TRT_BACKEND=ON -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy_install -DWITH_GPU=ON -DTRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/ -DENABLE_PADDLE_BACKEND=ON -DENABLE_ORT_BACKEND=ON -DENABLE_OPENVINO_BACKEND=ON -DENABLE_VISION=OFF -DBUILD_FASTDEPLOY_PYTHON=OFF -DENABLE_PADDLE_FRONTEND=ON -DENABLE_TEXT=OFF -DLIBRARY_NAME=fastdeploy_runtime;
             make -j`nproc`;
             make install;
@@ -65,7 +66,7 @@ else
 
 echo "start build FD CPU library"
 
-docker run -it --rm --name build_fd_vison \
+docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
