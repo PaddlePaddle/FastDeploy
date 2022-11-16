@@ -1,4 +1,4 @@
-# OCR API
+# OCR(文字识别)
 
 ## fastdeploy.vision.ocr.DBDetector
 

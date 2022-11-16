@@ -54,7 +54,7 @@ public class SCRFD {
         }
         // Only support ARGB8888 bitmap in native now.
         FaceDetectionResult result = predictNative(mCxxContext, ARGB8888Bitmap,
-                false, "", false);
+                0.25f, 0.4f, false, "", false);
         if (result == null) {
             return new FaceDetectionResult();
         }
@@ -62,13 +62,30 @@ public class SCRFD {
     }
 
     public FaceDetectionResult predict(Bitmap ARGB8888Bitmap,
-                                       boolean rendering) {
+                                       float confThreshold,
+                                       float nmsIouThreshold) {
         if (mCxxContext == 0) {
             return new FaceDetectionResult();
         }
         // Only support ARGB8888 bitmap in native now.
         FaceDetectionResult result = predictNative(mCxxContext, ARGB8888Bitmap,
-                false, "", rendering);
+                confThreshold, nmsIouThreshold, false, "", false);
+        if (result == null) {
+            return new FaceDetectionResult();
+        }
+        return result;
+    }
+
+    public FaceDetectionResult predict(Bitmap ARGB8888Bitmap,
+                                       boolean rendering,
+                                       float confThreshold,
+                                       float nmsIouThreshold) {
+        if (mCxxContext == 0) {
+            return new FaceDetectionResult();
+        }
+        // Only support ARGB8888 bitmap in native now.
+        FaceDetectionResult result = predictNative(mCxxContext, ARGB8888Bitmap,
+                confThreshold, nmsIouThreshold, false, "", rendering);
         if (result == null) {
             return new FaceDetectionResult();
         }
@@ -77,15 +94,17 @@ public class SCRFD {
 
     // Predict with image saving and bitmap rendering (will cost more times)
     public FaceDetectionResult predict(Bitmap ARGB8888Bitmap,
-                                       String savedImagePath) {
+                                       String savedImagePath,
+                                       float confThreshold,
+                                       float nmsIouThreshold) {
         // scoreThreshold is for visualizing only.
         if (mCxxContext == 0) {
             return new FaceDetectionResult();
         }
         // Only support ARGB8888 bitmap in native now.
         FaceDetectionResult result = predictNative(
-                mCxxContext, ARGB8888Bitmap, true,
-                savedImagePath, true);
+                mCxxContext, ARGB8888Bitmap, confThreshold, nmsIouThreshold,
+                true, savedImagePath, true);
         if (result == null) {
             return new FaceDetectionResult();
         }
@@ -128,6 +147,8 @@ public class SCRFD {
     // Call prediction from native context with rendering.
     private native FaceDetectionResult predictNative(long CxxContext,
                                                      Bitmap ARGB8888Bitmap,
+                                                     float confThreshold,
+                                                     float nmsIouThreshold,
                                                      boolean saveImage,
                                                      String savePath,
                                                      boolean rendering);
