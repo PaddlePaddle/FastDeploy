@@ -97,7 +97,7 @@ std::string Str(const Backend& b) {
   }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
-    return "Backend::LITE";
+    return "Backend::PDLITE";
   }
   return "UNKNOWN-Backend";
 }
@@ -116,9 +116,10 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
   }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
-    out << "Backend::LITE";
+    out << "Backend::PDLITE";
+  } else {
+    out << "UNKNOWN-Backend";
   }
-  out << "UNKNOWN-Backend";
   return out;
 }
 
@@ -567,6 +568,11 @@ std::vector<TensorInfo> Runtime::GetOutputInfos() {
 
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
+  for (auto& tensor: input_tensors) {
+    FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
+             "Device id of input tensor(%d) and runtime(%d) are not same.",
+             tensor.device_id, option.device_id);
+  }
   return backend_->Infer(input_tensors, output_tensors);
 }
 
