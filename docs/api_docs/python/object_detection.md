@@ -1,4 +1,4 @@
-# Object Detection API
+# Object Detection(目标检测)
 
 ## fastdeploy.vision.detection.PPYOLOE
 
@@ -12,14 +12,6 @@
 
 ```{eval-rst}
 .. autoclass:: fastdeploy.vision.detection.PPYOLO
-    :members:
-    :inherited-members:
-```
-
-## fastdeploy.vision.detection.PPYOLOv2
-
-```{eval-rst}
-.. autoclass:: fastdeploy.vision.detection.PPYOLOv2
     :members:
     :inherited-members:
 ```
