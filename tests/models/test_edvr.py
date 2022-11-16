@@ -21,7 +21,7 @@ import runtime_config as rc
 
 
 def test_edvr():
-    model_url = "https://bj.bcebos.com/fastdeploy/tests/edvr.tgz"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/edvr.tgz"
     input_url = "https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4"
     fd.download_and_decompress(model_url, "resources")
     fd.download(input_url, "resources")

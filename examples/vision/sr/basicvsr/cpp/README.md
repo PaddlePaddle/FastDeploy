@@ -19,8 +19,8 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x
 make -j
 
 # 下载BasicVSR模型文件和测试视频
-wget https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tgz
-tar -xvf BasicVSR_reds_x4.tgz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tar
+tar -xvf BasicVSR_reds_x4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 
 
