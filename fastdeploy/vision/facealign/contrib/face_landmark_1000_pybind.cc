@@ -16,16 +16,19 @@
 
 namespace fastdeploy {
 void BindFaceLandmark1000(pybind11::module& m) {
-  pybind11::class_<vision::facealign::FaceLandmark1000, FastDeployModel>(m, "FaceLandmark1000")
+  pybind11::class_<vision::facealign::FaceLandmark1000, FastDeployModel>(
+      m, "FaceLandmark1000")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
-      .def("predict",
-           [](vision::facealign::FaceLandmark1000& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::FaceAlignmentResult res;
-             self.Predict(&mat, &res);
-             return res;
-           })
-      .def_property("size", &vision::facealign::FaceLandmark1000::GetSize, &vision::facealign::FaceLandmark1000::SetSize);
+      .def(
+          "predict",
+          [](vision::facealign::FaceLandmark1000& self, pybind11::array& data) {
+            auto mat = PyArrayToCvMat(data);
+            vision::FaceAlignmentResult res;
+            self.Predict(&mat, &res);
+            return res;
+          })
+      .def_property("size", &vision::facealign::FaceLandmark1000::GetSize,
+                    &vision::facealign::FaceLandmark1000::SetSize);
 }
 }  // namespace fastdeploy

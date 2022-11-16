@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/facealign/contrib/face_landmark_1000.h"
+
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -23,12 +24,12 @@ namespace vision {
 namespace facealign {
 
 FaceLandmark1000::FaceLandmark1000(const std::string& model_file,
-           const std::string& params_file,
-           const RuntimeOption& custom_option,
-           const ModelFormat& model_format) {
+                                   const std::string& params_file,
+                                   const RuntimeOption& custom_option,
+                                   const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -51,8 +52,9 @@ bool FaceLandmark1000::Initialize() {
   return true;
 }
 
-bool FaceLandmark1000::Preprocess(Mat* mat, FDTensor* output,
-                      std::map<std::string, std::array<int, 2>>* im_info) {
+bool FaceLandmark1000::Preprocess(
+    Mat* mat, FDTensor* output,
+    std::map<std::string, std::array<int, 2>>* im_info) {
   // Resize
   int resize_w = size_[0];
   int resize_h = size_[1];
@@ -72,8 +74,9 @@ bool FaceLandmark1000::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool FaceLandmark1000::Postprocess(FDTensor& infer_result, FaceAlignmentResult* result,
-                       const std::map<std::string, std::array<int, 2>>& im_info) {
+bool FaceLandmark1000::Postprocess(
+    FDTensor& infer_result, FaceAlignmentResult* result,
+    const std::map<std::string, std::array<int, 2>>& im_info) {
   FDASSERT(infer_result.shape[0] == 1, "Only support batch = 1 now.");
   if (infer_result.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
@@ -81,8 +84,7 @@ bool FaceLandmark1000::Postprocess(FDTensor& infer_result, FaceAlignmentResult* 
   }
 
   auto iter_in = im_info.find("input_shape");
-  FDASSERT(iter_in != im_info.end(),
-           "Cannot find input_shape from im_info.");
+  FDASSERT(iter_in != im_info.end(), "Cannot find input_shape from im_info.");
   int in_h = iter_in->second[0];
   int in_w = iter_in->second[1];
 
@@ -94,8 +96,7 @@ bool FaceLandmark1000::Postprocess(FDTensor& infer_result, FaceAlignmentResult* 
     x = std::min(std::max(0.f, x), 1.0f);
     y = std::min(std::max(0.f, y), 1.0f);
     // decode landmarks (default 106 landmarks)
-    result->landmarks.emplace_back(
-        std::array<float, 2>{x * in_w, y * in_h});
+    result->landmarks.emplace_back(std::array<float, 2>{x * in_w, y * in_h});
   }
 
   return true;

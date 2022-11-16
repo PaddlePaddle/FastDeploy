@@ -26,9 +26,14 @@ void BindPIPNet(pybind11::module& m) {
              self.Predict(&mat, &res);
              return res;
            })
-      .def_property("size", &vision::facealign::PIPNet::GetSize, &vision::facealign::PIPNet::SetSize)
-      .def_property("mean_vals", &vision::facealign::PIPNet::GetMeanVals, &vision::facealign::PIPNet::SetMeanVals)
-      .def_property("std_vals", &vision::facealign::PIPNet::GetStdVals, &vision::facealign::PIPNet::SetStdVals)
-      .def_property("num_landmarks", &vision::facealign::PIPNet::GetNumLandmarks, &vision::facealign::PIPNet::SetNumLandmarks);
+      .def_property("size", &vision::facealign::PIPNet::GetSize,
+                    &vision::facealign::PIPNet::SetSize)
+      .def_property("mean_vals", &vision::facealign::PIPNet::GetMeanVals,
+                    &vision::facealign::PIPNet::SetMeanVals)
+      .def_property("std_vals", &vision::facealign::PIPNet::GetStdVals,
+                    &vision::facealign::PIPNet::SetStdVals)
+      .def_property("num_landmarks",
+                    &vision::facealign::PIPNet::GetNumLandmarks,
+                    &vision::facealign::PIPNet::SetNumLandmarks);
 }
 }  // namespace fastdeploy
