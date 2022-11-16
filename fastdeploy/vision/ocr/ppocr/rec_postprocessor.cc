@@ -98,7 +98,9 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   rec_scores->resize(batch);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
     for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, tensor.shape, &texts->at(i_batch), &rec_scores->at(i_batch)))return false;
+    if(!SingleBatchPostprocessor(tensor_data, tensor.shape, &texts->at(i_batch), &rec_scores->at(i_batch))) {
+      return false;
+    }
     tensor_data = tensor_data + length;
   }
 
