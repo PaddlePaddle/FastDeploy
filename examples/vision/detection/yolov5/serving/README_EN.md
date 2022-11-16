@@ -10,10 +10,10 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 mv yolov5s.onnx models/infer/1/
 
 # Pull fastdeploy image
-docker pull paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 
 # Run the docker. The docker name is fd_serving, and the current directory is mounted as the docker's /yolov5_serving directory
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10  bash
 
 # Start the service (Without setting the CUDA_VISIBLE_DEVICES environment variable, it will have scheduling privileges for all GPU cards)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=models --backend-config=python,shm-default-byte-size=10485760
