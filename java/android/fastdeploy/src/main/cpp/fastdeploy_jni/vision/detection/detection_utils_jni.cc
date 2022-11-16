@@ -30,10 +30,10 @@ void RenderingDetection(JNIEnv *env, const cv::Mat &c_bgr,
     if (AssetsLoader::IsDetectionLabelsLoaded()) {
       c_vis_im = vision::VisDetection(c_bgr, c_result,
                                       AssetsLoader::GetDetectionLabels(),
-                                      score_threshold, 2, 1.0f);
+                                      score_threshold, 2, 0.5f);
     } else {
       c_vis_im =
-          vision::VisDetection(c_bgr, c_result, score_threshold, 2, 1.0f);
+          vision::VisDetection(c_bgr, c_result, score_threshold, 2, 0.5f);
     }
     LOGD("Visualize from native costs %f ms", GetElapsedTime(t));
 

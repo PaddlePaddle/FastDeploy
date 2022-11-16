@@ -4,7 +4,22 @@ FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别
 - 调用`predict`接口  
 - 可视化验证（可选）
 
-## 图像分类
+## 目录
+
+- [图像分类API](#Classification)  
+- [目标检测API](#Detection)  
+- [语义分割API](#Segmentation)  
+- [OCR文字识别API](#OCR)  
+- [人脸检测API](#FaceDetection)  
+- [识别结果说明](#VisionResults)
+- [RuntimeOption说明](#RuntimeOption)  
+- [可视化接口API](#Visualize)
+- [模型使用示例](#Demo)
+
+## 图像分类  
+
+<div id="Classification"></div>  
+
 ### PaddleClasModel Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PaddleClasModel初始化参数说明如下：  
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
@@ -12,6 +27,7 @@ FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别
   - configFile: String, 模型推理的预处理配置文件，如 infer_cfg.yml  
   - labelFile: String, 可选参数，表示label标签文件所在路径，用于可视化，如 imagenet1k_label_list.txt，每一行包含一个label  
   - option: RuntimeOption，可选参数，模型初始化option。如果不传入该参数则会使用默认的运行时选项。  
+
 
 ```java
 // 构造函数: constructor w/o label file
@@ -39,6 +55,9 @@ public boolean initialized(); // 检查是否初始化成功
 ```
 
 ## 目标检测
+
+<div id="Detection"></div>  
+
 ### PicoDet Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PicoDet初始化参数说明如下：  
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
@@ -73,6 +92,9 @@ public boolean initialized(); // 检查是否初始化成功
 ```
 
 ## OCR文字识别  
+
+<div id="OCR"></div>  
+
 ### PP-OCRv2 & PP-OCRv3 Java API 说明
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。 PP-OCR初始化参数说明如下：
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
@@ -112,6 +134,9 @@ public boolean initialized(); // 检查是否初始化成功
 ```
 
 ## 语义分割  
+
+<div id="Segmentation"></div>  
+
 ### PaddleSegModel Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PaddleSegModel初始化参数说明如下：  
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
@@ -142,6 +167,9 @@ public boolean initialized(); // 检查是否初始化成功
 ```
 
 ## 人脸检测  
+
+<div id="FaceDetection"></div>  
+
 ### SCRFD Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PaddleSegModel初始化参数说明如下：  
   - modelFile: String, paddle格式的模型文件路径，如 model.pdmodel
@@ -198,7 +226,10 @@ public boolean release(); // 释放native资源
 public boolean initialized(); // 检查是否初始化成功
 ```
 
-## 结果说明  
+## 识别结果说明  
+
+<div id="VisionResults"></div>  
+
 - 图像分类ClassifyResult说明  
 ```java
 public class ClassifyResult {
@@ -207,7 +238,7 @@ public class ClassifyResult {
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
-其他参考：C++/Python对应的ClassifyResult说明 [api/vision_results/classification_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result.md)
+其他参考：C++/Python对应的ClassifyResult说明: [api/vision_results/classification_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/classification_result.md)
 
 - 目标检测DetectionResult说明  
 ```java
@@ -218,7 +249,7 @@ public class DetectionResult {
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
-其他参考：C++/Python对应的DetectionResult说明 [api/vision_results/detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/detection_result.md)
+其他参考：C++/Python对应的DetectionResult说明: [api/vision_results/detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/detection_result.md)
 
 - OCR文字识别OCRResult说明  
 ```java
@@ -231,7 +262,7 @@ public class OCRResult {
   public boolean initialized(); // 检测结果是否有效
 }
 ```  
-其他参考：C++/Python对应的OCRResult说明 [api/vision_results/ocr_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/ocr_result.md)
+其他参考：C++/Python对应的OCRResult说明: [api/vision_results/ocr_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/ocr_result.md)
 
 - 语义分割SegmentationResult结果说明  
 ```java
@@ -243,7 +274,7 @@ public class SegmentationResult {
   public boolean initialized(); // 检测结果是否有效
 }  
 ```
-其他参考：C++/Python对应的SegmentationResult说明 [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
+其他参考：C++/Python对应的SegmentationResult说明: [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
 
 - 人脸检测FaceDetectionResult结果说明  
 ```java
@@ -255,9 +286,12 @@ public class FaceDetectionResult {
   public boolean initialized(); // 检测结果是否有效
 }  
 ```
-其他参考：C++/Python对应的FaceDetectionResult说明 [api/vision_results/face_detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/face_detection_result.md)
+其他参考：C++/Python对应的FaceDetectionResult说明: [api/vision_results/face_detection_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/face_detection_result.md)
 
-## RuntimeOption说明
+## RuntimeOption说明  
+
+<div id="RuntimeOption"></div>  
+
 - RuntimeOption设置说明  
 ```java
 public class RuntimeOption {
@@ -270,15 +304,33 @@ public class RuntimeOption {
 ```
 
 ## 可视化接口  
+
+<div id="Visualize"></div>  
+
 FastDeploy Android SDK同时提供一些可视化接口，可用于快速验证推理结果。以下接口均把结果result渲染在输入的Bitmap上。具体的可视化API接口如下：
 
 ```java  
 public class Visualize {
+  // 默认参数接口
   public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result);
   public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result);
   public static boolean visFaceDetection(Bitmap ARGB8888Bitmap, FaceDetectionResult result);
   public static boolean visOcr(Bitmap ARGB8888Bitmap, OCRResult result);
   public static boolean visSegmentation(Bitmap ARGB8888Bitmap, SegmentationResult result);
+  // 有可设置参数的可视化接口  
+  // visDetection: 可设置阈值（大于该阈值的框进行绘制）、框线大小、字体大小、类别labels等
+  public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result, float scoreThreshold);
+  public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result, float scoreThreshold, int lineSize, float fontSize);
+  public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result, String[] labels);
+  public static boolean visDetection(Bitmap ARGB8888Bitmap, DetectionResult result, String[] labels, float scoreThreshold, int lineSize, float fontSize);
+  // visClassification: 可设置阈值（大于该阈值的框进行绘制）、字体大小、类别labels等
+  public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result, float scoreThreshold,float fontSize);
+  public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result, String[] labels);
+  public static boolean visClassification(Bitmap ARGB8888Bitmap, ClassifyResult result, String[] labels, float scoreThreshold,float fontSize);
+  // visSegmentation: weight背景权重
+  public static boolean visSegmentation(Bitmap ARGB8888Bitmap, SegmentationResult result, float weight);
+  // visFaceDetection: 线大小、字体大小等
+  public static boolean visFaceDetection(Bitmap ARGB8888Bitmap, FaceDetectionResult result, int lineSize, float fontSize);
 }
 ```  
 对应的可视化类型为：  
@@ -286,7 +338,10 @@ public class Visualize {
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 ```
 
-## 使用示例  
+## 模型使用示例  
+
+<div id="Demo"></div>  
+
 - 模型调用示例1：使用构造函数以及默认的RuntimeOption
 ```java  
 import java.nio.ByteBuffer;

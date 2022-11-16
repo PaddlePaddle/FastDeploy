@@ -33,7 +33,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     public static final int EXPECTED_PREVIEW_WIDTH = 1280;
     public static final int EXPECTED_PREVIEW_HEIGHT = 720;
 
-
     protected int numberOfCameras;
     protected int selectedCameraId;
     protected boolean disableCamera = false;

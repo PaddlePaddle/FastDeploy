@@ -159,7 +159,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             @SuppressLint("SetTextI18n")
             public void run() {
                 try {
-                    Thread.sleep(TIME_SLEEP_INTERVAL);
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 2);
 
                     svPreview.onPause();
                     cameraPageView.setVisibility(View.GONE);
