@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.detection;
+package com.baidu.paddle.fastdeploy.app.examples.facedet;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -31,14 +31,14 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.examples.facedet.FaceDetMainActivity;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
-import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
+import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
@@ -48,8 +48,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = DetectionMainActivity.class.getSimpleName();
+public class FaceDetMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = FaceDetMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -66,7 +66,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private ImageView backInResult;
     private SeekBar confidenceSeekbar;
     private TextView seekbarText;
-    private float resultNum = 1.0f;
+    private float resultConfThreshold = 1.0f;
     private ResultListView detectResultView;
     private Bitmap shutterBitmap;
     private Bitmap originShutterBitmap;
@@ -88,7 +88,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     long lastFrameTime;
 
     // Call 'init' and 'release' manually later
-    PicoDet predictor = new PicoDet();
+    SCRFD predictor = new SCRFD();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,7 +98,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.detection_activity_main);
+        setContentView(R.layout.facedet_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -124,7 +124,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterAndPauseCamera();
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
+                startActivity(new Intent(FaceDetMainActivity.this, FaceDetSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -132,7 +132,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             case R.id.back_in_preview:
                 finish();
                 break;
-            case R.id.albumSelect:
+            case R.id.album_select:
                 TYPE = ALBUM_SELECT;
                 // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -166,16 +166,16 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 runOnUiThread(new Runnable() {
                     @SuppressLint("SetTextI18n")
                     public void run() {
-                        // These code will run in main thread.
+                        // These codes will run in main thread.
                         svPreview.onPause();
                         cameraPageView.setVisibility(View.GONE);
                         resultPageView.setVisibility(View.VISIBLE);
-                        seekbarText.setText(resultNum + "");
-                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        seekbarText.setText(resultConfThreshold + "");
+                        confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
                             resultImage.setImageBitmap(shutterBitmap);
                         } else {
-                            new AlertDialog.Builder(DetectionMainActivity.this)
+                            new AlertDialog.Builder(FaceDetMainActivity.this)
                                     .setTitle("Empty Result!")
                                     .setMessage("Current picture is empty, please shutting it again!")
                                     .setCancelable(true)
@@ -197,7 +197,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
-            SystemClock.sleep(TIME_SLEEP_INTERVAL); // 50ms
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
         }
     }
 
@@ -208,8 +208,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             if (resultCode == Activity.RESULT_OK) {
                 cameraPageView.setVisibility(View.GONE);
                 resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
+                seekbarText.setText(resultConfThreshold + "");
+                confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
@@ -251,12 +251,12 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         }
 
         boolean modified = false;
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
+        FaceDetectionResult result = predictor.predict(
+                ARGB8888ImageBitmap, true, FaceDetSettingsActivity.scoreThreshold, 0.4f);
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
-                DetectionMainActivity.this.savedImagePath = "result.jpg";
+                FaceDetMainActivity.this.savedImagePath = "result.jpg";
             }
         }
         lastFrameIndex++;
@@ -315,7 +315,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
-        albumSelectButton = findViewById(R.id.albumSelect);
+        albumSelectButton = findViewById(R.id.album_select);
         albumSelectButton.setOnClickListener(this);
         cameraPageView = findViewById(R.id.camera_page);
         resultPageView = findViewById(R.id.result_page);
@@ -327,10 +327,11 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         detectResultView = findViewById(R.id.result_list_view);
 
         List<BaseResultModel> results = new ArrayList<>();
-        results.add(new BaseResultModel(1, "cup", 0.4f));
-        results.add(new BaseResultModel(2, "pen", 0.6f));
-        results.add(new BaseResultModel(3, "tang", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.detection_result_page_item, results);
+        // TODO: add model results from FaceDetectionResult instead of using fake data.
+        results.add(new BaseResultModel(1, "face", 0.4f));
+        results.add(new BaseResultModel(2, "face", 0.6f));
+        results.add(new BaseResultModel(3, "face", 1.0f));
+        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.facedet_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
@@ -340,9 +341,9 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 float resultConfidence = seekBar.getProgress() / 100f;
                 BigDecimal bd = new BigDecimal(resultConfidence);
-                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
+                resultConfThreshold = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
+                seekbarText.setText(resultConfThreshold + "");
+                confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
             }
 
             @Override
@@ -356,21 +357,21 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     @Override
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                             if (!picBitmap.isRecycled()) {
-                                predictor.predict(picBitmap, true, resultNum);
+                                predictor.predict(picBitmap, true, resultConfThreshold, 0.4f);
                                 resultImage.setImageBitmap(picBitmap);
                                 picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                             }
-                            resultNum = 1.0f;
+                            resultConfThreshold = 1.0f;
                         } else {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                             if (!shutterBitmap.isRecycled()) {
-                                predictor.predict(shutterBitmap, true, resultNum);
+                                predictor.predict(shutterBitmap, true, resultConfThreshold, 0.4f);
                                 resultImage.setImageBitmap(shutterBitmap);
                                 shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                             }
-                            resultNum = 1.0f;
+                            resultConfThreshold = 1.0f;
                         }
                     }
                 });
@@ -384,27 +385,23 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        DetectionSettingsActivity.resetSettings();
+        FaceDetSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (DetectionSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + DetectionSettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, DetectionSettingsActivity.modelDir, realModelDir);
-            String realLabelPath = getCacheDir() + "/" + DetectionSettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, DetectionSettingsActivity.labelPath, realLabelPath);
+        if (FaceDetSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + FaceDetSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, FaceDetSettingsActivity.modelDir, realModelDir);
 
             String modelFile = realModelDir + "/" + "model.pdmodel";
             String paramsFile = realModelDir + "/" + "model.pdiparams";
-            String configFile = realModelDir + "/" + "infer_cfg.yml";
-            String labelFile = realLabelPath;
             RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(DetectionSettingsActivity.enableLiteFp16)) {
+            option.setCpuThreadNum(FaceDetSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(FaceDetSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(FaceDetSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
-            predictor.init(modelFile, paramsFile, configFile, labelFile, option);
+            predictor.init(modelFile, paramsFile, option);
         }
     }
 
@@ -413,7 +410,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(DetectionMainActivity.this)
+            new AlertDialog.Builder(FaceDetMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -421,7 +418,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            DetectionMainActivity.this.finish();
+                            FaceDetMainActivity.this.finish();
                         }
                     }).show();
         }
@@ -436,4 +433,33 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
