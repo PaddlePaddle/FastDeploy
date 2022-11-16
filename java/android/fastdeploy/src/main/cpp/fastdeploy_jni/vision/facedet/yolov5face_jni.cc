@@ -57,7 +57,8 @@ Java_com_baidu_paddle_fastdeploy_vision_facedet_YOLOv5Face_bindNative(
 JNIEXPORT jobject JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_facedet_YOLOv5Face_predictNative(
     JNIEnv *env, jobject thiz, jlong cxx_context,
-    jobject argb8888_bitmap, jboolean save_image,
+    jobject argb8888_bitmap, jfloat conf_threshold,
+    jfloat nms_iou_threshold, jboolean save_image,
     jstring save_path, jboolean rendering) {
   if (cxx_context == 0) {
     return NULL;
@@ -69,7 +70,7 @@ Java_com_baidu_paddle_fastdeploy_vision_facedet_YOLOv5Face_predictNative(
   auto c_model_ptr = reinterpret_cast<facedet::YOLOv5Face *>(cxx_context);
   vision::FaceDetectionResult c_result;
   auto t = fni::GetCurrentTime();
-  c_model_ptr->Predict(&c_bgr, &c_result);
+  c_model_ptr->Predict(&c_bgr, &c_result, conf_threshold, nms_iou_threshold);
   PERF_TIME_OF_RUNTIME(c_model_ptr, t)
   if (rendering) {
     fni::RenderingFaceDetection(env, c_bgr, c_result, argb8888_bitmap,
