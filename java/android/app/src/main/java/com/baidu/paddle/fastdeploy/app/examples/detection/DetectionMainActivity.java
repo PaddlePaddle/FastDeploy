@@ -1,8 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -34,6 +31,7 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.examples.facedet.FaceDetMainActivity;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
@@ -42,12 +40,13 @@ import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.microedition.khronos.opengles.GL10;
 
 public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
     private static final String TAG = DetectionMainActivity.class.getSimpleName();
@@ -122,7 +121,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                runOnShutterUiThread();
+                shutterAndPauseCamera();
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
@@ -154,32 +153,39 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         }
     }
 
-    private void runOnShutterUiThread() {
-        runOnUiThread(new Runnable() {
-            @SuppressLint("SetTextI18n")
+    private void shutterAndPauseCamera() {
+        new Thread(new Runnable() {
+            @Override
             public void run() {
                 try {
-                    Thread.sleep(TIME_SLEEP_INTERVAL * 2);
-
-                    svPreview.onPause();
-                    cameraPageView.setVisibility(View.GONE);
-                    resultPageView.setVisibility(View.VISIBLE);
-                    seekbarText.setText(resultNum + "");
-                    confidenceSeekbar.setProgress((int) (resultNum * 100));
-                    if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
-                        resultImage.setImageBitmap(shutterBitmap);
-                    } else {
-                        new AlertDialog.Builder(DetectionMainActivity.this)
-                                .setTitle("Empty Result!")
-                                .setMessage("Current picture is empty, please shutting it again!")
-                                .setCancelable(true)
-                                .show();
-                    }
+                    // Sleep some times to ensure picture has been correctly shut.
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 2); // 100ms
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+                runOnUiThread(new Runnable() {
+                    @SuppressLint("SetTextI18n")
+                    public void run() {
+                        // These code will run in main thread.
+                        svPreview.onPause();
+                        cameraPageView.setVisibility(View.GONE);
+                        resultPageView.setVisibility(View.VISIBLE);
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                            resultImage.setImageBitmap(shutterBitmap);
+                        } else {
+                            new AlertDialog.Builder(DetectionMainActivity.this)
+                                    .setTitle("Empty Result!")
+                                    .setMessage("Current picture is empty, please shutting it again!")
+                                    .setCancelable(true)
+                                    .show();
+                        }
+                    }
+                });
+
             }
-        });
+        }).start();
     }
 
     private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
@@ -191,6 +197,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
+            SystemClock.sleep(TIME_SLEEP_INTERVAL); // 50ms
         }
     }
 
@@ -233,11 +240,9 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
-        synchronized (this) {
-            if (TYPE == BTN_SHUTTER) {
-                copyBitmapFromCamera(ARGB8888ImageBitmap);
-                return false;
-            }
+        if (TYPE == BTN_SHUTTER) {
+            copyBitmapFromCamera(ARGB8888ImageBitmap);
+            return false;
         }
 
         String savedImagePath = "";
