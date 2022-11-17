@@ -81,7 +81,6 @@ public class PaddleSegModel {
     public SegmentationResult predict(Bitmap ARGB8888Bitmap,
                                       String savedImagePath,
                                       float weight) {
-        // scoreThreshold is for visualizing only.
         if (mCxxContext == 0) {
             return new SegmentationResult();
         }
