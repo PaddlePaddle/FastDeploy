@@ -97,13 +97,13 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -253,12 +253,16 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
         SegmentationResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
+
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -302,8 +306,12 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
     public void initView() {
         TYPE = REALTIME_DETECT;
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 360;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
+        svPreview.switchCamera(); // Front camera for HumanSeg
+
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
         btnSwitch.setOnClickListener(this);
