@@ -16,25 +16,12 @@ import fastdeploy as fd
 import cv2
 import os
 import numpy as np
-import pynvml
-import psutil
-import GPUtil
 import time
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() == 'true':
-        return True
-    elif v.lower() == 'false':
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def parse_arguments():
     import argparse
+    import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model", required=True, help="Path of PaddleClas model.")
@@ -64,12 +51,12 @@ def parse_arguments():
         help="inference backend, default, ort, ov, trt, paddle, paddle_trt.")
     parser.add_argument(
         "--enable_trt_fp16",
-        type=str2bool,
+        type=ast.literal_eval,
         default=False,
         help="whether enable fp16 in trt backend")
     parser.add_argument(
         "--enable_collect_memory_info",
-        type=str2bool,
+        type=ast.literal_eval,
         default=False,
         help="whether enable collect memory info")
     args = parser.parse_args()
@@ -122,6 +109,8 @@ def build_option(args):
 
 
 def get_current_memory_mb(gpu_id=None):
+    import pynvml
+    import psutil
     pid = os.getpid()
     p = psutil.Process(pid)
     info = p.memory_full_info()
@@ -136,6 +125,7 @@ def get_current_memory_mb(gpu_id=None):
 
 
 def get_current_gputil(gpu_id):
+    import GPUtil
     GPUs = GPUtil.getGPUs()
     gpu_load = GPUs[gpu_id].load
     return gpu_load

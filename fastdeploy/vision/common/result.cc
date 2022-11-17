@@ -35,6 +35,14 @@ std::string ClassifyResult::Str() {
   return out;
 }
 
+ClassifyResult& ClassifyResult::operator=(ClassifyResult&& other) {
+  if (&other != this) {
+    label_ids = std::move(other.label_ids);
+    scores = std::move(other.scores);
+  }
+  return *this;
+}
+
 void Mask::Reserve(int size) { data.reserve(size); }
 
 void Mask::Resize(int size) { data.resize(size); }
@@ -251,7 +259,10 @@ std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  for (size_t i = 0; i < landmarks.size(); ++i) {
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  int landmarks_size = landmarks.size();
+  size_t result_length = std::min(10, landmarks_size);
+  for (size_t i = 0; i < result_length; ++i) {
     out = out + std::to_string(landmarks[i][0]) + "," +
           std::to_string(landmarks[i][1]) + "\n";
   }
@@ -364,7 +375,7 @@ void MattingResult::Reserve(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Reserve.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.reserve(size * c);
   }
 }
@@ -374,7 +385,7 @@ void MattingResult::Resize(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Resize.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.resize(size * c);
   }
 }
@@ -484,6 +495,29 @@ std::string OCRResult::Str() {
   no_result = no_result + "No Results!";
   return no_result;
 }
+
+void HeadPoseResult::Clear() {
+  std::vector<float>().swap(euler_angles);
+}
+
+void HeadPoseResult::Reserve(int size) {
+  euler_angles.resize(size);
+}
+
+void HeadPoseResult::Resize(int size) {
+  euler_angles.resize(size);
+}
+
+std::string HeadPoseResult::Str() {
+  std::string out;
+
+  out = "HeadPoseResult: [yaw, pitch, roll]\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  return out;
+}
+
 
 }  // namespace vision
 }  // namespace fastdeploy

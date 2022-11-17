@@ -76,7 +76,7 @@ bool PadToSize::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool PadToSize::ImplByFalconCV(Mat* mat) {
+bool PadToSize::ImplByFlyCV(Mat* mat) {
   if (width_ == -1 || height_ == -1) {
     return true;
   }
@@ -115,7 +115,7 @@ bool PadToSize::ImplByFalconCV(Mat* mat) {
     return true;
   }
 
-  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat* im = mat->GetFlyCVMat();
   fcv::Scalar value;
   if (value_.size() == 1) {
     value = fcv::Scalar(value_[0]);
@@ -128,8 +128,9 @@ bool PadToSize::ImplByFalconCV(Mat* mat) {
   }
   fcv::Mat new_im;
   // top, bottom, left, right
-  fcv::copy_make_border(*im, new_im, 0, height_ - origin_h, 0, width_ - origin_w,
-                    fcv::BorderTypes::BORDER_CONSTANT, value);
+  fcv::copy_make_border(*im, new_im, 0, height_ - origin_h, 0,
+                        width_ - origin_w, fcv::BorderTypes::BORDER_CONSTANT,
+                        value);
   mat->SetMat(new_im);
   mat->SetHeight(height_);
   mat->SetWidth(width_);

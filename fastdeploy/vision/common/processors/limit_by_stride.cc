@@ -38,8 +38,8 @@ bool LimitByStride::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool LimitByStride::ImplByFalconCV(Mat* mat) {
-  fcv::Mat* im = mat->GetFalconCVMat();
+bool LimitByStride::ImplByFlyCV(Mat* mat) {
+  fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
   int rw = origin_w - origin_w % stride_;
@@ -58,17 +58,17 @@ bool LimitByStride::ImplByFalconCV(Mat* mat) {
       interp_method = fcv::InterpolationType::INTER_LINEAR;
     } else if (interp_ == 2) {
       interp_method = fcv::InterpolationType::INTER_CUBIC;
+    } else if (interp_ == 3) {
+      interp_method = fcv::InterpolationType::INTER_AREA; 
     } else {
-      FDERROR << "LimitByStride: Only support interp_ be 0/1/2 with FalconCV, but "
+      FDERROR << "LimitByStride: Only support interp_ be 0/1/2/3 with FlyCV, but "
                  "now it's "
               << interp_ << "." << std::endl;
       return false;
     }
 
     fcv::Mat new_im;
-    FDERROR << "Before " << im->width() << " " << im->height() << std::endl;
     fcv::resize(*im, new_im, fcv::Size(rw, rh), 0, 0, interp_method);
-    FDERROR << "After " << new_im.width() << " " << new_im.height() << std::endl;
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());

@@ -55,12 +55,12 @@ bool Resize::ImplByOpenCV(Mat* mat) {
 }
 
 #ifdef ENABLE_FLYCV
-bool Resize::ImplByFalconCV(Mat* mat) {
+bool Resize::ImplByFlyCV(Mat* mat) {
   if (mat->layout != Layout::HWC) {
     FDERROR << "Resize: The format of input is not HWC." << std::endl;
     return false;
   }
-  fcv::Mat* im = mat->GetFalconCVMat();
+  fcv::Mat* im = mat->GetFlyCVMat();
   int origin_w = im->width();
   int origin_h = im->height();
 
@@ -78,8 +78,10 @@ bool Resize::ImplByFalconCV(Mat* mat) {
     interp_method = fcv::InterpolationType::INTER_LINEAR;
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
+  } else if (interp_ == 3) {
+    interp_method = fcv::InterpolationType::INTER_AREA;  
   } else {
-    FDERROR << "LimitLong: Only support interp_ be 0/1/2 with FalconCV, but "
+    FDERROR << "Resize: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
             << interp_ << "." << std::endl;
     return false;
@@ -99,7 +101,8 @@ bool Resize::ImplByFalconCV(Mat* mat) {
     mat->SetHeight(new_im.height());
   } else if (scale_w_ > 0 && scale_h_ > 0) {
     fcv::Mat new_im;
-    fcv::resize(*im, new_im, fcv::Size(0, 0), scale_w_, scale_h_, interp_method);
+    fcv::resize(*im, new_im, fcv::Size(0, 0), scale_w_, scale_h_,
+                interp_method);
     mat->SetMat(new_im);
     mat->SetWidth(new_im.width());
     mat->SetHeight(new_im.height());
@@ -122,5 +125,5 @@ bool Resize::Run(Mat* mat, int width, int height, float scale_w, float scale_h,
   return r(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

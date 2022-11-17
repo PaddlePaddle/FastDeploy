@@ -97,22 +97,9 @@ std::string Str(const Backend& b) {
   }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
-    return "Backend::LITE";
+    return "Backend::PDLITE";
   }
   return "UNKNOWN-Backend";
-}
-
-std::string Str(const ModelFormat& f) {
-  if (f == ModelFormat::PADDLE) {
-    return "ModelFormat::PADDLE";
-  } else if (f == ModelFormat::ONNX) {
-    return "ModelFormat::ONNX";
-  }else if (f == ModelFormat::RKNN) {
-    return "ModelFormat::RKNN";
-  } else if (f == ModelFormat::TORCHSCRIPT) {
-    return "ModelFormat::TORCHSCRIPT";
-  }
-  return "UNKNOWN-ModelFormat";
 }
 
 std::ostream& operator<<(std::ostream& out, const Backend& backend) {
@@ -129,23 +116,10 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
   }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
-    out << "Backend::LITE";
+    out << "Backend::PDLITE";
+  } else {
+    out << "UNKNOWN-Backend";
   }
-  out << "UNKNOWN-Backend";
-  return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
-  if (format == ModelFormat::PADDLE) {
-    out << "ModelFormat::PADDLE";
-  } else if (format == ModelFormat::ONNX) {
-    out << "ModelFormat::ONNX";
-  } else if (format == ModelFormat::RKNN) {
-    out << "ModelFormat::RKNN";
-  } else if (format == ModelFormat::TORCHSCRIPT) {
-    out << "ModelFormat::TORCHSCRIPT";
-  }
-  out << "UNKNOWN-ModelFormat";
   return out;
 }
 
@@ -255,6 +229,12 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
   rknpu2_cpu_name_ = rknpu2_name;
   rknpu2_core_mask_ = rknpu2_core;
   device = Device::RKNPU;
+}
+
+void RuntimeOption::UseTimVX() {
+  enable_timvx = true;
+  device = Device::TIMVX;
+  UseLiteBackend();
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -379,6 +359,11 @@ void RuntimeOption::SetLiteOptimizedModelDir(
   lite_optimized_model_dir = optimized_model_dir;
 }
 
+void RuntimeOption::SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path) {
+  lite_nnadapter_subgraph_partition_config_path = nnadapter_subgraph_partition_config_path;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -402,6 +387,9 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   trt_max_workspace_size = max_workspace_size;
 }
+void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size){
+  trt_max_batch_size = max_batch_size; 
+}
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
 
@@ -413,6 +401,10 @@ void RuntimeOption::DisablePinnedMemory() { enable_pinned_memory = false; }
 
 void RuntimeOption::SetTrtCacheFile(const std::string& cache_file_path) {
   trt_serialize_file = cache_file_path;
+}
+
+void RuntimeOption::SetOpenVINOStreams(int num_streams) {
+  ov_num_streams = num_streams;
 }
 
 bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
@@ -540,8 +532,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU,
-             "Backend::LITE only supports Device::CPU");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -580,12 +572,19 @@ std::vector<TensorInfo> Runtime::GetOutputInfos() {
 
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
+  for (auto& tensor: input_tensors) {
+    FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
+             "Device id of input tensor(%d) and runtime(%d) are not same.",
+             tensor.device_id, option.device_id);
+  }
   return backend_->Infer(input_tensors, output_tensors);
 }
 
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();
+  pd_option.model_file = option.model_file;
+  pd_option.params_file = option.params_file;
   pd_option.enable_mkldnn = option.pd_enable_mkldnn;
   pd_option.enable_log_info = option.pd_enable_log_info;
   pd_option.mkldnn_cache_size = option.pd_mkldnn_cache_size;
@@ -647,6 +646,7 @@ void Runtime::CreateOpenVINOBackend() {
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
   ov_option.device = option.openvino_device;
+  ov_option.ov_num_streams = option.ov_num_streams;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OpenVINOBackend only support model format of ModelFormat::PADDLE / "
@@ -680,10 +680,6 @@ void Runtime::CreateOrtBackend() {
   ort_option.gpu_id = option.device_id;
   ort_option.external_stream_ = option.external_stream_;
 
-  // TODO(jiangjiajun): inside usage, maybe remove this later
-  ort_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
-  ort_option.custom_op_info_ = option.custom_op_info_;
-
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OrtBackend only support model format of ModelFormat::PADDLE / "
@@ -708,6 +704,9 @@ void Runtime::CreateOrtBackend() {
 void Runtime::CreateTrtBackend() {
 #ifdef ENABLE_TRT_BACKEND
   auto trt_option = TrtBackendOption();
+  trt_option.model_file = option.model_file;
+  trt_option.params_file = option.params_file;
+  trt_option.model_format = option.model_format;
   trt_option.gpu_id = option.device_id;
   trt_option.enable_fp16 = option.trt_enable_fp16;
   trt_option.enable_int8 = option.trt_enable_int8;
@@ -719,10 +718,6 @@ void Runtime::CreateTrtBackend() {
   trt_option.serialize_file = option.trt_serialize_file;
   trt_option.enable_pinned_memory = option.enable_pinned_memory;
   trt_option.external_stream_ = option.external_stream_;
-
-  // TODO(jiangjiajun): inside usage, maybe remove this later
-  trt_option.remove_multiclass_nms_ = option.remove_multiclass_nms_;
-  trt_option.custom_op_info_ = option.custom_op_info_;
 
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
@@ -753,6 +748,8 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.enable_timvx = option.enable_timvx;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
@@ -782,6 +779,28 @@ void Runtime::CreateRKNPU2Backend() {
   FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
                   "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
+}
+
+Runtime* Runtime::Clone(void* stream, int device_id) {
+  Runtime* runtime = new Runtime();
+  if (option.backend != Backend::OPENVINO
+      && option.backend != Backend::PDINFER
+      && option.backend != Backend::TRT
+      ) {
+    runtime->Init(option);
+    FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
+                  clone engine to  reduce CPU/GPU memory usage now. For "
+              << option.backend
+              << ", FastDeploy will create a new engine which \
+                  will not share memory  with the current runtime."
+              << std::endl;
+    return runtime;
+  }
+  FDINFO << "Runtime Clone with Backend:: " << Str(option.backend) << " in " << Str(option.device)
+         << "." << std::endl;
+  runtime->option = option;
+  runtime->backend_ = backend_->Clone(stream, device_id);
+  return runtime;
 }
 
 }  // namespace fastdeploy

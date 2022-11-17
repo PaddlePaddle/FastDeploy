@@ -20,18 +20,21 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/utils/unique_ptr.h"
 #include "openvino/openvino.hpp"
 
 namespace fastdeploy {
 
 struct OpenVINOBackendOption {
-  int cpu_thread_num = 8;
   std::string device = "CPU";
+  int cpu_thread_num = -1;
+  int ov_num_streams = 1;
   std::map<std::string, std::vector<int64_t>> shape_infos;
 };
 
 class OpenVINOBackend : public BaseBackend {
  public:
+  static ov::Core core_;
   OpenVINOBackend() {}
   virtual ~OpenVINOBackend() = default;
 
@@ -55,10 +58,13 @@ class OpenVINOBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
+
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
                       std::map<std::string, TensorInfo>* tensor_infos);
-  ov::Core core_;
+
   ov::CompiledModel compiled_model_;
   ov::InferRequest request_;
   OpenVINOBackendOption option_;
