@@ -407,3 +407,7 @@ class ClassifierPostprocessor:
         :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
         return self._postprocessor.run(runtime_results)
+
+
+def sort_boxes(boxes):
+    return C.vision.ocr.sort_boxes(boxes)

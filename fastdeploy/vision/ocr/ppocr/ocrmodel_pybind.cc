@@ -16,6 +16,10 @@
 
 namespace fastdeploy {
 void BindPPOCRModel(pybind11::module& m) {
+  m.def("sort_boxes", [](std::vector<std::array<int, 8>>& boxes) {
+       vision::ocr::SortBoxes(&boxes);
+       return boxes;
+  });
   // DBDetector
   pybind11::class_<vision::ocr::DBDetector, FastDeployModel>(m, "DBDetector")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
