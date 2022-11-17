@@ -16,6 +16,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -64,8 +65,10 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private TextView seekbarText;
     private float resultNum = 1.0f;
     private ResultListView resultView;
-    private Bitmap shutterBitmap;
     private Bitmap picBitmap;
+    private Bitmap shutterBitmap;
+    private Bitmap originPicBitmap;
+    private Bitmap originShutterBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -103,13 +106,13 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -215,6 +218,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -233,6 +237,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
+                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -263,12 +268,16 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
         DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
+
         Visualize.visDetection(ARGB8888ImageBitmap, result, DetectionSettingsActivity.scoreThreshold);
         modified = result.initialized();
+
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -361,10 +370,12 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
                             detail(picBitmap);
+                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            svPreview.onPause();
+                            // svPreview.onPause();
                             detail(shutterBitmap);
+                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         }
                     }
                 });
@@ -373,27 +384,24 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     }
 
     private void detail(Bitmap bitmap) {
-        DetectionResult result = predictor.predict(
-                bitmap, true, DetectionSettingsActivity.scoreThreshold);
-        if (scores == null) {
-            scores = result.mScores;
-        }
-        if (labelId == null) {
-            labelId = result.mLabelIds;
-        }
+
+        DetectionResult result = predictor.predict(bitmap, true, resultNum);
+
+        scores = result.mScores;
+        labelId = result.mLabelIds;
+
         initialized = result.initialized();
         if (initialized) {
             for (int i = 0; i < labelId.length; i++) {
-                for (int j = 0; j < labelText.size(); j++) {
-                    if (scores[i] > resultNum) {
-                        if (labelId[i] == j) {
-                            results.add(new BaseResultModel(labelId[i], labelText.get(j), scores[i]));
-                        }
-                    }
+                if (scores[i] > resultNum) {
+                    Log.d(TAG, "[fastdeploy] detail: scores[i]: " + scores[i]);
+                    int idx = labelId[i];
+                    String text = labelText.get(idx);
+                    results.add(new BaseResultModel(idx, text, scores[i]));
                 }
             }
         }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.detection_result_page_item, results);
         resultView.setAdapter(adapter);
         resultView.invalidate();
 
