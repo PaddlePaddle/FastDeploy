@@ -38,6 +38,7 @@ import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
@@ -72,6 +73,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
@@ -148,6 +150,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
                 TYPE = REALTIME_DETECT;
+                isShutterBitmapCopied = false;
                 svPreview.onResume();
                 break;
         }
@@ -189,7 +192,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     }
 
     private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
-        if (ARGB8888ImageBitmap == null) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
             return;
         }
         if (!ARGB8888ImageBitmap.isRecycled()) {
@@ -197,7 +200,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
-            SystemClock.sleep(TIME_SLEEP_INTERVAL); // 50ms
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -253,10 +257,10 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
+        DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
-        frameCounter++;
+
+        Visualize.visDetection(ARGB8888ImageBitmap, result, DetectionSettingsActivity.scoreThreshold);
 
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
@@ -265,6 +269,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             }
         }
 
+        frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
