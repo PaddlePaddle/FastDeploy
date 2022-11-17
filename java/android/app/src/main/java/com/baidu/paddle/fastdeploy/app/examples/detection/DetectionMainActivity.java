@@ -253,9 +253,13 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -394,7 +398,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         if (initialized) {
             for (int i = 0; i < labelId.length; i++) {
                 if (scores[i] > resultNum) {
-                    Log.d(TAG, "[fastdeploy] detail: scores[i]: " + scores[i]);
                     int idx = labelId[i];
                     String text = labelText.get(idx);
                     results.add(new BaseResultModel(idx, text, scores[i]));
