@@ -3,7 +3,7 @@
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
 </p>
-
+             
 <p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/FastDeploy?color=ffa"></a>
@@ -14,6 +14,14 @@
     <a href="https://pypi.org/project/FastDeploy-python/"><img src="https://img.shields.io/pypi/dm/FastDeploy-python?color=9cf"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/issues"><img src="https://img.shields.io/github/issues/PaddlePaddle/FastDeploy?color=9cc"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
+</p>
+
+<p align="center">
+    <a href="docs/README_CN.md"> 使用文档 </a>
+    |
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"> API文档 </a>
+    |
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"> 更新日志 </a>
 </p>
 
 **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署套件。提供📦**开箱即用**的**云边端**部署体验, 支持超过 🔥150+ **Text**, **Vision**, **Speech**和**跨模态**模型，并实现🔚**端到端**的推理性能优化。包括图像分类、物体检测、图像分割、人脸检测、人脸识别、关键点检测、抠图、OCR、NLP、TTS等任务，满足开发者**多场景、多硬件、多平台**的产业部署需求。
