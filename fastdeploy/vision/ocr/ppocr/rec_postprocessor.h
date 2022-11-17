@@ -35,7 +35,8 @@ class FASTDEPLOY_DECL RecognizerPostprocessor {
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
    * \param[in] tensors The inference result from runtime
-   * \param[in] results The output result of classification
+   * \param[in] texts The output result of recognizer
+   * \param[in] rec_scores The output result of recognizer
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,

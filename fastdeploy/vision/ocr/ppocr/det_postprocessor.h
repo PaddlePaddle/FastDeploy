@@ -34,6 +34,7 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
    *
    * \param[in] tensors The inference result from runtime
    * \param[in] results The output result of detector
+   * \param[in] batch_det_img_info The detector_preprocess result
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,

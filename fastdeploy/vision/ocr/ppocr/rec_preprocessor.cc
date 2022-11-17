@@ -36,11 +36,11 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
 
   float ratio = float(mat->Width()) / float(mat->Height());
   int resize_w;
-  if (ceilf(imgH * ratio) > imgW)
+  if (ceilf(imgH * ratio) > imgW) {
     resize_w = imgW;
-  else
+  }else{
     resize_w = int(ceilf(imgH * ratio));
-
+  }
   Resize::Run(mat, resize_w, imgH);
 
   std::vector<float> value = {0, 0, 0};
