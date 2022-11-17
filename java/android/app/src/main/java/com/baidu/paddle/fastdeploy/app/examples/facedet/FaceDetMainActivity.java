@@ -1,7 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.classification;
-
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+package com.baidu.paddle.fastdeploy.app.examples.facedet;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -11,14 +8,18 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -35,16 +36,20 @@ import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
-import com.baidu.paddle.fastdeploy.vision.ClassifyResult;
-import com.baidu.paddle.fastdeploy.vision.classification.PaddleClasModel;
+import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
+import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
+
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClassificationMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = ClassificationMainActivity.class.getSimpleName();
+public class FaceDetMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = FaceDetMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -67,21 +72,24 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
     public static final int ALBUM_SELECT = 1;
-    private static int TYPE = TYPE_UNKNOWN;
+    public static final int REALTIME_DETECT = 2;
+    private static int TYPE = REALTIME_DETECT;
 
     private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
     private static final int INTENT_CODE_PICK_IMAGE = 100;
+    private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
     long timeElapsed = 0;
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
-    PaddleClasModel predictor = new PaddleClasModel();
+    SCRFD predictor = new SCRFD();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,7 +99,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.classification_activity_main);
+        setContentView(R.layout.facedet_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -114,15 +122,10 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                svPreview.onPause();
-                cameraPageView.setVisibility(View.GONE);
-                resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                resultImage.setImageBitmap(shutterBitmap);
+                shutterAndPauseCamera();
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(ClassificationMainActivity.this, ClassificationSettingsActivity.class));
+                startActivity(new Intent(FaceDetMainActivity.this, FaceDetSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -130,7 +133,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             case R.id.back_in_preview:
                 finish();
                 break;
-            case R.id.albumSelect:
+            case R.id.album_select:
                 TYPE = ALBUM_SELECT;
                 // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -145,9 +148,59 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             case R.id.back_in_result:
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
+                TYPE = REALTIME_DETECT;
+                isShutterBitmapCopied = false;
                 svPreview.onResume();
                 break;
+        }
+    }
 
+    private void shutterAndPauseCamera() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Sleep some times to ensure picture has been correctly shut.
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                runOnUiThread(new Runnable() {
+                    @SuppressLint("SetTextI18n")
+                    public void run() {
+                        // These codes will run in main thread.
+                        svPreview.onPause();
+                        cameraPageView.setVisibility(View.GONE);
+                        resultPageView.setVisibility(View.VISIBLE);
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                            resultImage.setImageBitmap(shutterBitmap);
+                        } else {
+                            new AlertDialog.Builder(FaceDetMainActivity.this)
+                                    .setTitle("Empty Result!")
+                                    .setMessage("Current picture is empty, please shutting it again!")
+                                    .setCancelable(true)
+                                    .show();
+                        }
+                    }
+                });
+
+            }
+        }).start();
+    }
+
+    private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
+            return;
+        }
+        if (!ARGB8888ImageBitmap.isRecycled()) {
+            synchronized (this) {
+                shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            }
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -179,6 +232,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
@@ -190,34 +244,34 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+        if (TYPE == BTN_SHUTTER) {
+            copyBitmapFromCamera(ARGB8888ImageBitmap);
+            return false;
+        }
+
         String savedImagePath = "";
         synchronized (this) {
             savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
         }
-        if (TYPE == BTN_SHUTTER) {
-            shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-        } else {
-            // Only reference in predict loops.
-            shutterBitmap = ARGB8888ImageBitmap;
-            originShutterBitmap = ARGB8888ImageBitmap;
-        }
+
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
-        ClassifyResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, ClassificationSettingsActivity.scoreThreshold);
+        FaceDetectionResult result = predictor.predict(
+                ARGB8888ImageBitmap, FaceDetSettingsActivity.scoreThreshold, 0.4f);
 
         timeElapsed += (System.currentTimeMillis() - tc);
-        frameCounter++;
+
+        Visualize.visFaceDetection(ARGB8888ImageBitmap, result);
 
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
-                ClassificationMainActivity.this.savedImagePath = "result.jpg";
+                FaceDetMainActivity.this.savedImagePath = "result.jpg";
             }
         }
 
+        frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
@@ -259,7 +313,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     }
 
     public void initView() {
-        TYPE = BTN_SHUTTER;
+        TYPE = REALTIME_DETECT;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
@@ -273,7 +327,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
-        albumSelectButton = findViewById(R.id.albumSelect);
+        albumSelectButton = findViewById(R.id.album_select);
         albumSelectButton.setOnClickListener(this);
         cameraPageView = findViewById(R.id.camera_page);
         resultPageView = findViewById(R.id.result_page);
@@ -285,10 +339,11 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         detectResultView = findViewById(R.id.result_list_view);
 
         List<BaseResultModel> results = new ArrayList<>();
-        results.add(new BaseResultModel(1, "cup", 0.4f));
-        results.add(new BaseResultModel(2, "pen", 0.6f));
-        results.add(new BaseResultModel(3, "tang", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.classification_result_page_item, results);
+        // TODO: add model results from FaceDetectionResult instead of using fake data.
+        results.add(new BaseResultModel(1, "face", 0.4f));
+        results.add(new BaseResultModel(2, "face", 0.6f));
+        results.add(new BaseResultModel(3, "face", 1.0f));
+        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.facedet_result_page_item, results);
         detectResultView.setAdapter(adapter);
         detectResultView.invalidate();
 
@@ -314,16 +369,20 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                     @Override
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(500);
-                            predictor.predict(picBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(picBitmap);
-                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                            if (!picBitmap.isRecycled()) {
+                                predictor.predict(picBitmap, true, resultNum, 0.4f);
+                                resultImage.setImageBitmap(picBitmap);
+                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         } else {
-                            SystemClock.sleep(500);
-                            predictor.predict(shutterBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(shutterBitmap);
-                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                            if (!shutterBitmap.isRecycled()) {
+                                predictor.predict(shutterBitmap, true, resultNum, 0.4f);
+                                resultImage.setImageBitmap(shutterBitmap);
+                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                            }
                             resultNum = 1.0f;
                         }
                     }
@@ -338,27 +397,23 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        ClassificationSettingsActivity.resetSettings();
+        FaceDetSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (ClassificationSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + ClassificationSettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, ClassificationSettingsActivity.modelDir, realModelDir);
-            String realLabelPath = getCacheDir() + "/" + ClassificationSettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, ClassificationSettingsActivity.labelPath, realLabelPath);
+        if (FaceDetSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + FaceDetSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, FaceDetSettingsActivity.modelDir, realModelDir);
 
-            String modelFile = realModelDir + "/" + "inference.pdmodel";
-            String paramsFile = realModelDir + "/" + "inference.pdiparams";
-            String configFile = realModelDir + "/" + "inference_cls.yaml";
-            String labelFile = realLabelPath;
+            String modelFile = realModelDir + "/" + "model.pdmodel";
+            String paramsFile = realModelDir + "/" + "model.pdiparams";
             RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(ClassificationSettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(ClassificationSettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(ClassificationSettingsActivity.enableLiteFp16)) {
+            option.setCpuThreadNum(FaceDetSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(FaceDetSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(FaceDetSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
-            predictor.init(modelFile, paramsFile, configFile, labelFile, option);
+            predictor.init(modelFile, paramsFile, option);
         }
     }
 
@@ -367,7 +422,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(ClassificationMainActivity.this)
+            new AlertDialog.Builder(FaceDetMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -375,7 +430,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            ClassificationMainActivity.this.finish();
+                            FaceDetMainActivity.this.finish();
                         }
                     }).show();
         }
@@ -390,4 +445,33 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

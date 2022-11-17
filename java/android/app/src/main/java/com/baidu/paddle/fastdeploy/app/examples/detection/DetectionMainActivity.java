@@ -1,8 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -34,20 +31,23 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.examples.facedet.FaceDetMainActivity;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.microedition.khronos.opengles.GL10;
 
 public class DetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
     private static final String TAG = DetectionMainActivity.class.getSimpleName();
@@ -73,6 +73,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
@@ -85,8 +86,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
-    int lastFrameIndex = 0;
-    long lastFrameTime;
+    long timeElapsed = 0;
+    long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PicoDet predictor = new PicoDet();
@@ -122,7 +123,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                runOnShutterUiThread();
+                shutterAndPauseCamera();
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
@@ -149,41 +150,49 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
                 TYPE = REALTIME_DETECT;
+                isShutterBitmapCopied = false;
                 svPreview.onResume();
                 break;
         }
     }
 
-    private void runOnShutterUiThread() {
-        runOnUiThread(new Runnable() {
-            @SuppressLint("SetTextI18n")
+    private void shutterAndPauseCamera() {
+        new Thread(new Runnable() {
+            @Override
             public void run() {
                 try {
-                    Thread.sleep(TIME_SLEEP_INTERVAL * 2);
-
-                    svPreview.onPause();
-                    cameraPageView.setVisibility(View.GONE);
-                    resultPageView.setVisibility(View.VISIBLE);
-                    seekbarText.setText(resultNum + "");
-                    confidenceSeekbar.setProgress((int) (resultNum * 100));
-                    if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
-                        resultImage.setImageBitmap(shutterBitmap);
-                    } else {
-                        new AlertDialog.Builder(DetectionMainActivity.this)
-                                .setTitle("Empty Result!")
-                                .setMessage("Current picture is empty, please shutting it again!")
-                                .setCancelable(true)
-                                .show();
-                    }
+                    // Sleep some times to ensure picture has been correctly shut.
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+                runOnUiThread(new Runnable() {
+                    @SuppressLint("SetTextI18n")
+                    public void run() {
+                        // These code will run in main thread.
+                        svPreview.onPause();
+                        cameraPageView.setVisibility(View.GONE);
+                        resultPageView.setVisibility(View.VISIBLE);
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                            resultImage.setImageBitmap(shutterBitmap);
+                        } else {
+                            new AlertDialog.Builder(DetectionMainActivity.this)
+                                    .setTitle("Empty Result!")
+                                    .setMessage("Current picture is empty, please shutting it again!")
+                                    .setCancelable(true)
+                                    .show();
+                        }
+                    }
+                });
+
             }
-        });
+        }).start();
     }
 
     private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
-        if (ARGB8888ImageBitmap == null) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
             return;
         }
         if (!ARGB8888ImageBitmap.isRecycled()) {
@@ -191,6 +200,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -233,11 +244,9 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
-        synchronized (this) {
-            if (TYPE == BTN_SHUTTER) {
-                copyBitmapFromCamera(ARGB8888ImageBitmap);
-                return false;
-            }
+        if (TYPE == BTN_SHUTTER) {
+            copyBitmapFromCamera(ARGB8888ImageBitmap);
+            return false;
         }
 
         String savedImagePath = "";
@@ -246,25 +255,31 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         }
 
         boolean modified = false;
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
+
+        long tc = System.currentTimeMillis();
+        DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
+        timeElapsed += (System.currentTimeMillis() - tc);
+
+        Visualize.visDetection(ARGB8888ImageBitmap, result, DetectionSettingsActivity.scoreThreshold);
+
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 DetectionMainActivity.this.savedImagePath = "result.jpg";
             }
         }
-        lastFrameIndex++;
-        if (lastFrameIndex >= 30) {
-            final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
+
+        frameCounter++;
+        if (frameCounter >= 30) {
+            final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
                 @SuppressLint("SetTextI18n")
                 public void run() {
                     tvStatus.setText(Integer.toString(fps) + "fps");
                 }
             });
-            lastFrameIndex = 0;
-            lastFrameTime = System.nanoTime();
+            frameCounter = 0;
+            timeElapsed = 0;
         }
         return modified;
     }
