@@ -38,6 +38,7 @@ import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
@@ -72,6 +73,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
@@ -84,8 +86,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
     String savedImagePath = "result.jpg";
-    int lastFrameIndex = 0;
-    long lastFrameTime;
+    long timeElapsed = 0;
+    long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PicoDet predictor = new PicoDet();
@@ -148,6 +150,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
                 TYPE = REALTIME_DETECT;
+                isShutterBitmapCopied = false;
                 svPreview.onResume();
                 break;
         }
@@ -159,7 +162,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             public void run() {
                 try {
                     // Sleep some times to ensure picture has been correctly shut.
-                    Thread.sleep(TIME_SLEEP_INTERVAL * 2); // 100ms
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -189,7 +192,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     }
 
     private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
-        if (ARGB8888ImageBitmap == null) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
             return;
         }
         if (!ARGB8888ImageBitmap.isRecycled()) {
@@ -197,7 +200,8 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
-            SystemClock.sleep(TIME_SLEEP_INTERVAL); // 50ms
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -251,25 +255,31 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         }
 
         boolean modified = false;
-        DetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, DetectionSettingsActivity.scoreThreshold);
+
+        long tc = System.currentTimeMillis();
+        DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
+        timeElapsed += (System.currentTimeMillis() - tc);
+
+        Visualize.visDetection(ARGB8888ImageBitmap, result, DetectionSettingsActivity.scoreThreshold);
+
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 DetectionMainActivity.this.savedImagePath = "result.jpg";
             }
         }
-        lastFrameIndex++;
-        if (lastFrameIndex >= 30) {
-            final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
+
+        frameCounter++;
+        if (frameCounter >= 30) {
+            final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
                 @SuppressLint("SetTextI18n")
                 public void run() {
                     tvStatus.setText(Integer.toString(fps) + "fps");
                 }
             });
-            lastFrameIndex = 0;
-            lastFrameTime = System.nanoTime();
+            frameCounter = 0;
+            timeElapsed = 0;
         }
         return modified;
     }
