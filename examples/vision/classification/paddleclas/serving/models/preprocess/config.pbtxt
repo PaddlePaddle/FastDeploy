@@ -20,7 +20,11 @@ output [
 
 instance_group [
   {
-      count: 1
-      kind: KIND_CPU
+    # The number of instances is 1
+    count: 1
+    # Use CPU, GPU inference option is:KIND_GPU
+    kind: KIND_CPU
+    # The instance is deployed on the 0th GPU card
+    # gpus: [0]
   }
 ]
