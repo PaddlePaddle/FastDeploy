@@ -385,7 +385,7 @@ class ClassifierPreprocessor:
     def __init__(self):
         """Create a preprocessor for ClassifierModel
         """
-        self._preprocessor = C.vision.classification.ClassifierPreprocessor()
+        self._preprocessor = C.vision.ocr.ClassifierPreprocessor()
 
     def run(self, input_ims):
         """Preprocess input images for ClassifierModel
@@ -399,7 +399,7 @@ class ClassifierPostprocessor:
     def __init__(self):
         """Create a postprocessor for ClassifierModel
         """
-        self._postprocessor = C.vision.classification.ClassifierPostprocessor()
+        self._postprocessor = C.vision.ocr.ClassifierPostprocessor()
 
     def run(self, runtime_results):
         """Postprocess the runtime results for ClassifierModel

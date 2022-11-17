@@ -37,7 +37,7 @@ void BindPPOCRModel(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         std::vector<std::array<int, 4>> batch_det_img_info;
-        self.Run(&images, &outputs,&batch_det_img_info);
+        self.Run(&images, &outputs, &batch_det_img_info);
         for(size_t i = 0; i< outputs.size(); ++i){
           outputs[i].StopSharing();
         }
