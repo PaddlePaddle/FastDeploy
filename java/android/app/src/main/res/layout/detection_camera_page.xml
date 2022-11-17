@@ -15,7 +15,7 @@
         <com.baidu.paddle.fastdeploy.app.ui.layout.ActionBarLayout
             android:id="@+id/action_bar_main"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"/>
 
             <ImageView
                 android:id="@+id/back_in_preview"
@@ -42,19 +42,17 @@
                     android:layout_height="wrap_content"
                     android:text="@string/action_bar_take_photo"
                     android:textAlignment="center"
-                    android:visibility="gone"/>
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/action_realtime_btn"
                     style="@style/action_btn"
-                    android:layout_width="300px"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/action_bar_realtime"
                     android:textAlignment="center" />
             </LinearLayout>
-        </com.baidu.paddle.fastdeploy.app.ui.layout.ActionBarLayout>
 
-        <!--        实时-->
         <com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView
             android:id="@+id/sv_preview"
             android:layout_width="match_parent"
@@ -64,7 +62,7 @@
             android:layout_centerInParent="true" />
 
         <ImageView
-            android:id="@+id/albumSelect"
+            android:id="@+id/iv_select"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:layout_alignParentRight="true"

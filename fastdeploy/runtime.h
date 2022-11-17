@@ -115,6 +115,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
 
+  /// Wrapper function of UsePaddleBackend()
+  void UsePaddleInferBackend() {
+    return UsePaddleBackend();
+  }
+
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
 
@@ -129,6 +134,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
+
+  /// Wrapper function of UseLiteBackend()
+  void UsePaddleLiteBackend() {
+    return UseLiteBackend();
+  }
 
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
@@ -157,6 +167,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set shape cache size while using Paddle Inference with mkldnn, by default it will cache all the difference shape
    */
   void SetPaddleMKLDNNCacheSize(int size);
+
+  /**
+   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+   */
+   void SetOpenVINODevice(const std::string& name = "CPU");
 
   /**
    * @brief Set optimzed model dir for Paddle Lite backend.
@@ -333,6 +348,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+
+  // ======Only for OpenVINO Backend======
+  std::string openvino_device = "CPU";
 
   // ======Only for Poros Backend=======
   bool is_dynamic = false;

@@ -172,8 +172,7 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `long_to_int` must be type of bool."
+            value, bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -230,6 +229,11 @@ class RuntimeOption:
         """
         return self._option.use_paddle_backend()
 
+    def use_paddle_infer_backend(self):
+        """Wrapper function of use_paddle_backend(), use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
+        """
+        return self.use_paddle_backend()
+
     def use_poros_backend(self):
         """Use Poros backend, support inference TorchScript model on CPU/Nvidia GPU.
         """
@@ -255,10 +259,20 @@ class RuntimeOption:
         """
         return self._option.use_lite_backend()
 
+    def use_paddle_lite_backend(self):
+        """Wrapper function of use_lite_backend(), use Paddle Lite backend, support inference Paddle model on ARM CPU.
+        """
+        return self.use_lite_backend()
+
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
         """
         return self._option.set_paddle_mkldnn(use_mkldnn)
+
+    def set_openvino_device(self, name="CPU"):
+        """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+        """
+        return self._option.set_openvino_device(name)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
@@ -383,8 +397,7 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr,
-                                              getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message
