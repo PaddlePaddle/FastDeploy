@@ -8,18 +8,14 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -31,7 +27,6 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.examples.facedet.FaceDetMainActivity;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
@@ -43,8 +38,8 @@ import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.readTxt;
 
-import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,11 +63,9 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private SeekBar confidenceSeekbar;
     private TextView seekbarText;
     private float resultNum = 1.0f;
-    private ResultListView detectResultView;
+    private ResultListView resultView;
     private Bitmap shutterBitmap;
-    private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
-    private Bitmap originPicBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -85,12 +78,17 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
     private static final int INTENT_CODE_PICK_IMAGE = 100;
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
-    String savedImagePath = "result.jpg";
     long timeElapsed = 0;
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PicoDet predictor = new PicoDet();
+
+    private float[] scores;
+    private int[] labelId;
+    private boolean initialized;
+    private List<String> labelText;
+    private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -124,6 +122,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
                 shutterAndPauseCamera();
+                resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(DetectionMainActivity.this, DetectionSettingsActivity.class));
@@ -134,7 +133,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             case R.id.back_in_preview:
                 finish();
                 break;
-            case R.id.albumSelect:
+            case R.id.iv_select:
                 TYPE = ALBUM_SELECT;
                 // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -145,14 +144,32 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     intent.setType("image/*");
                     startActivityForResult(intent, INTENT_CODE_PICK_IMAGE);
                 }
+                resultView.setAdapter(null);
                 break;
             case R.id.back_in_result:
-                resultPageView.setVisibility(View.GONE);
-                cameraPageView.setVisibility(View.VISIBLE);
-                TYPE = REALTIME_DETECT;
-                isShutterBitmapCopied = false;
-                svPreview.onResume();
+                back();
                 break;
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        back();
+    }
+
+    private void back() {
+        resultPageView.setVisibility(View.GONE);
+        cameraPageView.setVisibility(View.VISIBLE);
+        TYPE = REALTIME_DETECT;
+        isShutterBitmapCopied = false;
+        svPreview.onResume();
+        results.clear();
+        if (scores != null) {
+            scores = null;
+        }
+        if (labelId != null) {
+            labelId = null;
         }
     }
 
@@ -198,7 +215,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -217,7 +233,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
-                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -248,27 +263,12 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
-
-        String savedImagePath = "";
-        synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
-
         boolean modified = false;
-
         long tc = System.currentTimeMillis();
         DetectionResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
-
         Visualize.visDetection(ARGB8888ImageBitmap, result, DetectionSettingsActivity.scoreThreshold);
-
         modified = result.initialized();
-        if (!savedImagePath.isEmpty()) {
-            synchronized (this) {
-                DetectionMainActivity.this.savedImagePath = "result.jpg";
-            }
-        }
-
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -325,7 +325,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
-        albumSelectButton = findViewById(R.id.albumSelect);
+        albumSelectButton = findViewById(R.id.iv_select);
         albumSelectButton.setOnClickListener(this);
         cameraPageView = findViewById(R.id.camera_page);
         resultPageView = findViewById(R.id.result_page);
@@ -334,15 +334,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         backInResult.setOnClickListener(this);
         confidenceSeekbar = findViewById(R.id.confidence_seekbar);
         seekbarText = findViewById(R.id.seekbar_text);
-        detectResultView = findViewById(R.id.result_list_view);
-
-        List<BaseResultModel> results = new ArrayList<>();
-        results.add(new BaseResultModel(1, "cup", 0.4f));
-        results.add(new BaseResultModel(2, "pen", 0.6f));
-        results.add(new BaseResultModel(3, "tang", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.detection_result_page_item, results);
-        detectResultView.setAdapter(adapter);
-        detectResultView.invalidate();
+        resultView = findViewById(R.id.result_list_view);
 
         confidenceSeekbar.setMax(100);
         confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -353,6 +345,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
                 seekbarText.setText(resultNum + "");
                 confidenceSeekbar.setProgress((int) (resultNum * 100));
+                results.clear();
             }
 
             @Override
@@ -367,25 +360,45 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            if (!picBitmap.isRecycled()) {
-                                predictor.predict(picBitmap, true, resultNum);
-                                resultImage.setImageBitmap(picBitmap);
-                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
+                            detail(picBitmap);
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            if (!shutterBitmap.isRecycled()) {
-                                predictor.predict(shutterBitmap, true, resultNum);
-                                resultImage.setImageBitmap(shutterBitmap);
-                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
+                            svPreview.onPause();
+                            detail(shutterBitmap);
                         }
                     }
                 });
             }
         });
+    }
+
+    private void detail(Bitmap bitmap) {
+        DetectionResult result = predictor.predict(
+                bitmap, true, DetectionSettingsActivity.scoreThreshold);
+        if (scores == null) {
+            scores = result.mScores;
+        }
+        if (labelId == null) {
+            labelId = result.mLabelIds;
+        }
+        initialized = result.initialized();
+        if (initialized) {
+            for (int i = 0; i < labelId.length; i++) {
+                for (int j = 0; j < labelText.size(); j++) {
+                    if (scores[i] > resultNum) {
+                        if (labelId[i] == j) {
+                            results.add(new BaseResultModel(labelId[i], labelText.get(j), scores[i]));
+                        }
+                    }
+                }
+            }
+        }
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        resultView.setAdapter(adapter);
+        resultView.invalidate();
+
+        resultImage.setImageBitmap(bitmap);
+        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
@@ -408,6 +421,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
             String paramsFile = realModelDir + "/" + "model.pdiparams";
             String configFile = realModelDir + "/" + "infer_cfg.yml";
             String labelFile = realLabelPath;
+            labelText = readTxt(labelFile);
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(DetectionSettingsActivity.cpuThreadNum);
             option.setLitePowerMode(DetectionSettingsActivity.cpuPowerMode);
