@@ -50,7 +50,7 @@ void YOLOv5Preprocessor::LetterBox(FDMat* mat) {
     resize_h = size_[1];
     resize_w = size_[0];
   }
-  if (resize_h != mat->Height() || resize_w != mat->Width()) {
+  if (std::fabs(scale - 1.0f) > 1e-06) {
     Resize::Run(mat, resize_w, resize_h);
   }
   if (pad_h > 0 || pad_w > 0) {
