@@ -73,7 +73,6 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
                                res.ptr() + i * origin_h * origin_w * 4),
                        0);
   }
-
   mat->SetMat(res);
   mat->layout = Layout::CHW;
   return true;

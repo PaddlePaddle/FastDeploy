@@ -17,7 +17,7 @@ FROM paddlepaddle/fastdeploy:22.09-cpu-only-min
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 \
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
     && python3 -m pip install paddlepaddle paddlenlp faster_tokenizer 
 

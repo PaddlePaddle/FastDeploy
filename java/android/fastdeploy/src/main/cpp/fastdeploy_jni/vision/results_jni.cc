@@ -30,6 +30,7 @@ bool AllocateJavaClassifyResultFromCxx(
   // (1) mScores float[]  shape (n):   [F
   // (2) mLabelIds int[]  shape (n):   [I
   // (3) mInitialized boolean:         Z
+  // Docs: docs/api/vision_results/classification_result.md
   if (cxx_result == nullptr) {
     return false;
   }
@@ -85,6 +86,7 @@ bool AllocateJavaDetectionResultFromCxx(
   // (2) mScores float[]  shape (n):   [F
   // (3) mLabelIds int[]  shape (n):   [I
   // (4) mInitialized boolean:         Z
+  // Docs: docs/api/vision_results/detection_result.md
   if (cxx_result == nullptr) {
     return false;
   }
@@ -138,7 +140,7 @@ bool AllocateJavaDetectionResultFromCxx(
   env->SetObjectField(j_det_result_obj, j_det_label_ids_id, j_det_label_ids_int_arr);
   env->SetBooleanField(j_det_result_obj, j_det_initialized_id, JNI_TRUE);
 
-  // Release non static local Refs
+  // Release local Refs
   env->DeleteLocalRef(j_det_boxes_float_arr);
   env->DeleteLocalRef(j_det_scores_float_arr);
   env->DeleteLocalRef(j_det_label_ids_int_arr);
@@ -158,6 +160,7 @@ bool AllocateJavaOCRResultFromCxx(
   // (4) mClsScores float[]  shape (n):   [F
   // (5) mClsLabels int[]  shape (n):     [I
   // (6) mInitialized boolean:            Z
+  // Docs: docs/api/vision_results/ocr_result.md
   if (cxx_result == nullptr) {
     return false;
   }
@@ -212,30 +215,35 @@ bool AllocateJavaOCRResultFromCxx(
   jfloatArray j_ocr_rec_scores_float_arr = env->NewFloatArray(len);
   env->SetFloatArrayRegion(j_ocr_rec_scores_float_arr, 0, len, rec_scores.data());
 
-  // mClsScores float[]  shape (n):   [F
-  const auto &cls_scores = c_result_ptr->cls_scores;
-  jfloatArray j_ocr_cls_scores_float_arr = env->NewFloatArray(len);
-  env->SetFloatArrayRegion(j_ocr_cls_scores_float_arr, 0, len, cls_scores.data());
+  const int cls_len = static_cast<int>(c_result_ptr->cls_scores.size());
+  if (cls_len > 0) {
+    // mClsScores float[]  shape (n):   [F
+    const auto &cls_scores = c_result_ptr->cls_scores;
+    jfloatArray j_ocr_cls_scores_float_arr = env->NewFloatArray(cls_len);
+    env->SetFloatArrayRegion(j_ocr_cls_scores_float_arr, 0, cls_len, cls_scores.data());
 
-  // mClsLabels int[]  shape (n):     [I
-  const auto &cls_labels = c_result_ptr->cls_labels;
-  jintArray j_ocr_cls_labels_int_arr = env->NewIntArray(len);
-  env->SetIntArrayRegion(j_ocr_cls_labels_int_arr, 0, len, cls_labels.data());
+    // mClsLabels int[]  shape (n):     [I
+    const auto &cls_labels = c_result_ptr->cls_labels;
+    jintArray j_ocr_cls_labels_int_arr = env->NewIntArray(cls_len);
+    env->SetIntArrayRegion(j_ocr_cls_labels_int_arr, 0, cls_len, cls_labels.data());
+
+    env->SetObjectField(j_ocr_result_obj, j_ocr_cls_scores_id, j_ocr_cls_scores_float_arr);
+    env->SetObjectField(j_ocr_result_obj, j_ocr_cls_labels_id, j_ocr_cls_labels_int_arr);
+
+    env->DeleteLocalRef(j_ocr_cls_scores_float_arr);
+    env->DeleteLocalRef(j_ocr_cls_labels_int_arr);
+  }
 
   // Set object fields
   env->SetObjectField(j_ocr_result_obj, j_ocr_boxes_id, j_ocr_boxes_int_arr);
   env->SetObjectField(j_ocr_result_obj, j_ocr_text_id, j_ocr_text_arr);
   env->SetObjectField(j_ocr_result_obj, j_ocr_rec_scores_id, j_ocr_rec_scores_float_arr);
-  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_scores_id, j_ocr_cls_scores_float_arr);
-  env->SetObjectField(j_ocr_result_obj, j_ocr_cls_labels_id, j_ocr_cls_labels_int_arr);
   env->SetBooleanField(j_ocr_result_obj, j_ocr_initialized_id, JNI_TRUE);
 
-  // Release non static local Refs
+  // Release local Refs
   env->DeleteLocalRef(j_ocr_boxes_int_arr);
   env->DeleteLocalRef(j_ocr_text_arr);
   env->DeleteLocalRef(j_ocr_rec_scores_float_arr);
-  env->DeleteLocalRef(j_ocr_cls_scores_float_arr);
-  env->DeleteLocalRef(j_ocr_cls_labels_int_arr);
   env->DeleteLocalRef(j_ocr_result_clazz);
   env->DeleteLocalRef(j_ocr_int_arr_clazz);
   env->DeleteLocalRef(j_ocr_str_clazz);
@@ -253,6 +261,7 @@ bool AllocateJavaSegmentationResultFromCxx(
   // (3) mContainScoreMap boolean:         Z
   // (4) mScoreMap float[]  shape (n):     [F
   // (5) mInitialized boolean:             Z
+  // Docs: docs/api/vision_results/segmentation_result.md
   if (cxx_result == nullptr) {
     return false;
   }
@@ -267,7 +276,7 @@ bool AllocateJavaSegmentationResultFromCxx(
   const jclass j_seg_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   const jfieldID j_seg_label_map_id = env->GetFieldID(
-      j_seg_result_clazz, "mLabelMap", "[I");
+      j_seg_result_clazz, "mLabelMap", "[B");
   const jfieldID j_seg_shape_id = env->GetFieldID(
       j_seg_result_clazz, "mShape", "[J");
   const jfieldID j_seg_contain_shape_map_id = env->GetFieldID(
@@ -283,10 +292,10 @@ bool AllocateJavaSegmentationResultFromCxx(
 
   // mLabelMap int[] shape (n):        [I
   const auto &label_map_uint8 = c_result_ptr->label_map;
-  std::vector<int> label_map;  // cast uint8 -> int32
-  label_map.assign(label_map_uint8.begin(), label_map_uint8.end());
-  jintArray j_seg_label_map_int_arr = env->NewIntArray(len);
-  env->SetIntArrayRegion(j_seg_label_map_int_arr, 0, len, label_map.data());
+  jbyteArray j_seg_label_map_byte_arr = env->NewByteArray(len);
+  env->SetByteArrayRegion(j_seg_label_map_byte_arr, 0, len,
+                          reinterpret_cast<jbyte*>(const_cast<uint8_t*>(
+                              label_map_uint8.data())));
 
   // mShape long[]  shape (2) (H,W):   [J
   const auto &shape = c_result_ptr->shape;
@@ -310,12 +319,13 @@ bool AllocateJavaSegmentationResultFromCxx(
   }
 
   // Set object fields
-  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_int_arr);
+  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_byte_arr);
   env->SetObjectField(j_seg_result_obj, j_seg_shape_id, j_seg_shape_long_arr);
   env->SetBooleanField(j_seg_result_obj, j_seg_initialized_id, JNI_TRUE);
 
-  // Release non static local Refs
-  env->DeleteLocalRef(j_seg_label_map_int_arr);
+  // Release local Refs
+  // env->DeleteLocalRef(j_seg_label_map_int_arr);
+  env->DeleteLocalRef(j_seg_label_map_byte_arr);
   env->DeleteLocalRef(j_seg_shape_long_arr);
   env->DeleteLocalRef(j_seg_result_clazz);
 
@@ -332,6 +342,7 @@ bool AllocateJavaFaceDetectionResultFromCxx(
   // (3) mLandmarks float[][] shape (n,2): [[F
   // (4) mLandmarksPerFace int:            I
   // (5) mInitialized boolean:             Z
+  // Docs: docs/api/vision_results/face_detection_result.md
   if (cxx_result == nullptr) {
     return false;
   }
@@ -410,7 +421,6 @@ bool AllocateJavaFaceDetectionResultFromCxx(
 
   return true;
 }
-
 
 bool AllocateJavaResultFromCxx(
     JNIEnv *env, jobject j_result_obj, void *cxx_result,
@@ -521,6 +531,7 @@ bool AllocateClassifyResultFromJava(
   // (1) mScores float[]  shape (n):   [F
   // (2) mLabelIds int[]  shape (n):   [I
   // (3) mInitialized boolean:         Z
+  // Docs: docs/api/vision_results/classification_result.md
   if (cxx_result == nullptr || j_cls_result_obj == nullptr) {
     return false;
   }
@@ -573,6 +584,7 @@ bool AllocateClassifyResultFromJava(
   std::memcpy(c_result_ptr->label_ids.data(), j_cls_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(j_cls_label_ids_int_arr, j_cls_label_ids_ptr, 0);
 
+  // Release local Refs
   env->DeleteLocalRef(j_cls_result_clazz_cc);
 
   return true;
@@ -587,6 +599,7 @@ bool AllocateDetectionResultFromJava(
   // (2) mScores float[]  shape (n):   [F
   // (3) mLabelIds int[]  shape (n):   [I
   // (4) mInitialized boolean:         Z
+  // Docs: docs/api/vision_results/detection_result.md
   if (cxx_result == nullptr || j_det_result_obj == nullptr) {
     return false;
   }
@@ -662,6 +675,7 @@ bool AllocateDetectionResultFromJava(
   std::memcpy(c_result_ptr->label_ids.data(), j_det_label_ids_ptr, len * sizeof(int));
   env->ReleaseIntArrayElements(j_det_label_ids_int_arr, j_det_label_ids_ptr, 0);
 
+  // Release local Refs
   env->DeleteLocalRef(j_det_result_clazz_cc);
 
   return true;
@@ -677,6 +691,7 @@ bool AllocateOCRResultFromJava(
   // (4) mClsScores float[]  shape (n):   [F
   // (5) mClsLabels int[]  shape (n):     [I
   // (6) mInitialized boolean:            Z
+  // Docs: docs/api/vision_results/ocr_result.md
   if (cxx_result == nullptr || j_ocr_result_obj == nullptr) {
     return false;
   }
@@ -721,9 +736,12 @@ bool AllocateOCRResultFromJava(
 
   const int len = env->GetArrayLength(j_ocr_boxes_arr);
   if ((len == 0) || (len != env->GetArrayLength(j_ocr_text_arr)) ||
-      (len != env->GetArrayLength(j_ocr_rec_scores_float_arr)) ||
-      (len != env->GetArrayLength(j_ocr_cls_scores_float_arr)) ||
-      (len != env->GetArrayLength(j_ocr_cls_labels_int_arr))) {
+      (len != env->GetArrayLength(j_ocr_rec_scores_float_arr))){
+    return false;
+  }
+
+  const int cls_len = env->GetArrayLength(j_ocr_cls_scores_float_arr);
+  if (cls_len != env->GetArrayLength(j_ocr_cls_labels_int_arr)) {
     return false;
   }
 
@@ -731,8 +749,11 @@ bool AllocateOCRResultFromJava(
   c_result_ptr->Clear();
   c_result_ptr->boxes.resize(len);
   c_result_ptr->rec_scores.resize(len);
-  c_result_ptr->cls_scores.resize(len);
-  c_result_ptr->cls_labels.resize(len);
+
+  if (cls_len > 0) {
+    c_result_ptr->cls_scores.resize(cls_len);
+    c_result_ptr->cls_labels.resize(cls_len);
+  }
 
   // mBoxes int[][] shape (n,8):      [[I
   bool c_check_validation = true;
@@ -765,18 +786,21 @@ bool AllocateOCRResultFromJava(
   std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_rec_scores_ptr, len * sizeof(float));
   env->ReleaseFloatArrayElements(j_ocr_rec_scores_float_arr, j_ocr_rec_scores_ptr, 0);
 
-  // mClsScores float[]  shape (n):   [F
-  jfloat *j_ocr_cls_scores_ptr =
-      env->GetFloatArrayElements(j_ocr_cls_scores_float_arr, nullptr);
-  std::memcpy(c_result_ptr->rec_scores.data(), j_ocr_cls_scores_ptr, len * sizeof(float));
-  env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr, j_ocr_cls_scores_ptr, 0);
+  if (cls_len > 0) {
+    // mClsScores float[]  shape (n):   [F
+    jfloat *j_ocr_cls_scores_ptr =
+        env->GetFloatArrayElements(j_ocr_cls_scores_float_arr, nullptr);
+    std::memcpy(c_result_ptr->cls_scores.data(), j_ocr_cls_scores_ptr, cls_len * sizeof(float));
+    env->ReleaseFloatArrayElements(j_ocr_cls_scores_float_arr, j_ocr_cls_scores_ptr, 0);
 
-  //  mClsLabels int[]  shape (n):     [I
-  jint *j_ocr_cls_labels_ptr =
-      env->GetIntArrayElements(j_ocr_cls_labels_int_arr, nullptr);
-  std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr, len * sizeof(int));
-  env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr,0);
+    //  mClsLabels int[]  shape (n):     [I
+    jint *j_ocr_cls_labels_ptr =
+        env->GetIntArrayElements(j_ocr_cls_labels_int_arr, nullptr);
+    std::memcpy(c_result_ptr->cls_labels.data(), j_ocr_cls_labels_ptr, cls_len * sizeof(int));
+    env->ReleaseIntArrayElements(j_ocr_cls_labels_int_arr, j_ocr_cls_labels_ptr,0);
+  }
 
+  // Release local Refs
   env->DeleteLocalRef(j_ocr_result_clazz_cc);
 
   return true;
@@ -791,6 +815,7 @@ bool AllocateSegmentationResultFromJava(
   // (3) mContainScoreMap boolean:         Z
   // (4) mScoreMap float[]  shape (n):     [F
   // (5) mInitialized boolean:             Z
+  // Docs: docs/api/vision_results/segmentation_result.md
   if (cxx_result == nullptr || j_seg_result_obj == nullptr) {
     return false;
   }
@@ -800,7 +825,7 @@ bool AllocateSegmentationResultFromJava(
   const jclass j_seg_result_clazz_cc = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   const jfieldID j_seg_label_map_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mLabelMap", "[I");
+      j_seg_result_clazz_cc, "mLabelMap", "[B");
   const jfieldID j_seg_shape_id_cc = env->GetFieldID(
       j_seg_result_clazz_cc, "mShape", "[J");
   const jfieldID j_seg_contain_shape_map_id_cc = env->GetFieldID(
@@ -821,34 +846,25 @@ bool AllocateSegmentationResultFromJava(
     return false;
   }
 
-  jintArray j_seg_label_map_int_arr = reinterpret_cast<jintArray>(
+  jbyteArray j_seg_label_map_byte_arr = reinterpret_cast<jbyteArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_label_map_id_cc));
   jlongArray j_seg_shape_long_arr = reinterpret_cast<jlongArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_shape_id_cc));
   jboolean j_seg_contain_score_map =
       env->GetBooleanField(j_seg_result_obj, j_seg_contain_shape_map_id_cc);
-  jfloatArray j_seg_score_map_float_arr = reinterpret_cast<jfloatArray>(
-      env->GetObjectField(j_seg_result_obj, j_seg_score_map_id_cc));
 
   // Init cxx result
   c_result_ptr->Clear();
-  const int label_len = env->GetArrayLength(j_seg_label_map_int_arr);  // HxW
+  const int label_len = env->GetArrayLength(j_seg_label_map_byte_arr);  // HxW
   const int shape_len = env->GetArrayLength(j_seg_shape_long_arr);     // 2
-  const int score_len = env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
   c_result_ptr->label_map.resize(label_len);
   c_result_ptr->shape.resize(shape_len);
-  if (j_seg_contain_score_map) {
-    c_result_ptr->contain_score_map = true;
-    c_result_ptr->score_map.resize(score_len);
-  }
 
   // mLabelMap int[] shape (n):        [I
-  std::vector<uint8_t> label_map_int8;  // cast int32 -> uint8_t
-  jint *j_seg_label_map_int_ptr =
-      env->GetIntArrayElements(j_seg_label_map_int_arr, nullptr);
-  label_map_int8.assign(j_seg_label_map_int_ptr,j_seg_label_map_int_ptr + label_len);
-  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(), label_len * sizeof(int));
-  env->ReleaseIntArrayElements(j_seg_label_map_int_arr, j_seg_label_map_int_ptr,0);
+  jbyte *j_seg_label_map_byte_ptr =
+      env->GetByteArrayElements(j_seg_label_map_byte_arr, nullptr);
+  std::memcpy(c_result_ptr->label_map.data(), j_seg_label_map_byte_ptr, label_len * sizeof(jbyte));
+  env->ReleaseByteArrayElements(j_seg_label_map_byte_arr, j_seg_label_map_byte_ptr,0);
 
   // mShape long[]  shape (2) (H,W):   [J
   jlong *j_seg_shape_long_ptr =
@@ -858,12 +874,22 @@ bool AllocateSegmentationResultFromJava(
 
   //  mScoreMap float[]  shape (n):     [F
   if (j_seg_contain_score_map) {
-    jfloat *j_seg_score_map_float_ptr =
-        env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
-    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
-    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
+    jfloatArray j_seg_score_map_float_arr = reinterpret_cast<jfloatArray>(
+        env->GetObjectField(j_seg_result_obj, j_seg_score_map_id_cc));
+
+    if (j_seg_score_map_float_arr != NULL) {
+      const int score_len = env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
+
+      c_result_ptr->contain_score_map = true;
+      c_result_ptr->score_map.resize(score_len);
+      jfloat *j_seg_score_map_float_ptr =
+          env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
+      std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
+      env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
+    }
   }
 
+  // Release local Refs
   env->DeleteLocalRef(j_seg_result_clazz_cc);
 
   return true;
@@ -878,6 +904,7 @@ bool AllocateFaceDetectionResultFromJava(
   // (3) mLandmarks float[][] shape (n,2): [[F
   // (4) mLandmarksPerFace int:            I
   // (5) mInitialized boolean:             Z
+  // Docs: docs/api/vision_results/face_detection_result.md
   if (cxx_result == nullptr || j_face_det_result_obj == nullptr) {
     return false;
   }
@@ -973,11 +1000,11 @@ bool AllocateFaceDetectionResultFromJava(
     return false;
   }
 
+  // Release local Refs
   env->DeleteLocalRef(j_face_det_result_clazz_cc);
 
   return true;
 }
-
 
 bool AllocateCxxResultFromJava(
     JNIEnv *env, jobject j_result_obj, void *cxx_result,
