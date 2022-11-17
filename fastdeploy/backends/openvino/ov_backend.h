@@ -26,6 +26,7 @@
 namespace fastdeploy {
 
 struct OpenVINOBackendOption {
+  std::string device = "CPU";
   int cpu_thread_num = -1;
   int ov_num_streams = 1;
   std::map<std::string, std::vector<int64_t>> shape_infos;
