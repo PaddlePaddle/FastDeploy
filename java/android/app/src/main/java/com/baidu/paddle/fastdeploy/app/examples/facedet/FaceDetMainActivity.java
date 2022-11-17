@@ -64,8 +64,10 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     private TextView seekbarText;
     private float resultNum = 1.0f;
     private ResultListView resultView;
-    private Bitmap shutterBitmap;
     private Bitmap picBitmap;
+    private Bitmap shutterBitmap;
+    private Bitmap originPicBitmap;
+    private Bitmap originShutterBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -101,13 +103,13 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -210,6 +212,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -228,6 +231,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
+                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -243,10 +247,14 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -259,12 +267,14 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
-        SystemClock.sleep(TIME_SLEEP_INTERVAL);
         FaceDetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, FaceDetSettingsActivity.scoreThreshold, 0.4f);
         timeElapsed += (System.currentTimeMillis() - tc);
+
         Visualize.visFaceDetection(ARGB8888ImageBitmap, result);
         modified = result.initialized();
         frameCounter++;
@@ -310,8 +320,12 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
 
     public void initView() {
         TYPE = REALTIME_DETECT;
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 360;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
+        svPreview.switchCamera(); // Front camera for HumanSeg
+
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
         btnSwitch.setOnClickListener(this);
@@ -359,10 +373,11 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                             detail(picBitmap);
+                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-                            svPreview.onPause();
                             detail(shutterBitmap);
+                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         }
                     }
                 });
@@ -371,12 +386,11 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     }
 
     private void detail(Bitmap bitmap) {
-        FaceDetectionResult result = predictor.predict(bitmap, true, FaceDetSettingsActivity.scoreThreshold, 0.4f);
-        if (scores == null) {
-            scores = result.mScores;
-        }
+        FaceDetectionResult result = predictor.predict(bitmap, true, resultNum, 0.4f);
+
+        scores = result.mScores;
+
         initialized = result.initialized();
-        Log.e("GBD", initialized + "---initialized");
         if (initialized) {
             for (int i = 0; i < scores.length; i++) {
                 if (scores[i] > resultNum) {
@@ -384,7 +398,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 }
             }
         }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.facedet_result_page_item, results);
         resultView.setAdapter(adapter);
         resultView.invalidate();
 

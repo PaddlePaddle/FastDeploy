@@ -20,6 +20,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -64,8 +65,10 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     private TextView seekbarText;
     private float resultNum = 1.0f;
     private ResultListView resultView;
-    private Bitmap shutterBitmap;
     private Bitmap picBitmap;
+    private Bitmap shutterBitmap;
+    private Bitmap originPicBitmap;
+    private Bitmap originShutterBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -103,13 +106,13 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -216,6 +219,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -234,6 +238,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
+                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -249,9 +254,13 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -264,12 +273,16 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
-        ClassifyResult result = predictor.predict(ARGB8888ImageBitmap);
+        ClassifyResult result = predictor.predict(ARGB8888ImageBitmap,
+                true, ClassificationSettingsActivity.scoreThreshold);
         timeElapsed += (System.currentTimeMillis() - tc);
-        Visualize.visClassification(ARGB8888ImageBitmap, result, resultNum, 12);
+
         modified = result.initialized();
+
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -362,10 +375,11 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(500);
                             detail(picBitmap);
+                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         } else {
                             SystemClock.sleep(500);
-                            svPreview.onPause();
                             detail(shutterBitmap);
+                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         }
                     }
                 });
@@ -374,26 +388,24 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     }
 
     private void detail(Bitmap bitmap) {
-        ClassifyResult result = predictor.predict(bitmap, true, ClassificationSettingsActivity.scoreThreshold);
-        if (scores == null) {
-            scores = result.mScores;
-        }
-        if (labelId == null) {
-            labelId = result.mLabelIds;
-        }
+
+        ClassifyResult result = predictor.predict(bitmap, true, resultNum);
+
+        scores = result.mScores;
+        labelId = result.mLabelIds;
+
         initialized = result.initialized();
         if (initialized) {
             for (int i = 0; i < labelId.length; i++) {
-                for (int j = 0; j < labelText.size(); j++) {
-                    if (scores[i] > resultNum) {
-                        if (labelId[i] == Integer.parseInt(labelText.get(j).substring(0, labelText.get(j).indexOf(" ")))) {
-                            results.add(new BaseResultModel(labelId[i], labelText.get(j), scores[i]));
-                        }
-                    }
+                if (scores[i] > resultNum) {
+                    int idx = labelId[i];
+                    String text = labelText.get(idx);
+                    text = text.substring(text.indexOf(" "));
+                    results.add(new BaseResultModel(idx, text, scores[i]));
                 }
             }
         }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.classification_result_page_item, results);
         resultView.setAdapter(adapter);
         resultView.invalidate();
 
