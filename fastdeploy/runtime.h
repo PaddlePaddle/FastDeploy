@@ -169,11 +169,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetPaddleMKLDNNCacheSize(int size);
 
   /**
-   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
-   */
-   void SetOpenVINODevice(const std::string& name = "CPU");
-
-  /**
    * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
@@ -265,6 +260,19 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetOpenVINOStreams(int num_streams);
 
+  /**
+   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+   */
+  void SetOpenVINODevice(const std::string& name = "CPU");
+
+   /**
+    * @brief Set shape info for OpenVINO
+    */
+  void SetOpenVINOShapeInfo(
+    const std::map<std::string, std::vector<int64_t>>& shape_info) {
+    ov_shape_infos = shape_info;
+  }
+
   /** \Use Graphcore IPU to inference.
    *
    * \param[in] device_num the number of IPUs.
@@ -351,6 +359,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   // ======Only for OpenVINO Backend======
   std::string openvino_device = "CPU";
+  std::map<std::string, std::vector<int64_t>> ov_shape_infos;
 
   // ======Only for Poros Backend=======
   bool is_dynamic = false;
