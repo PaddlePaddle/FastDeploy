@@ -68,6 +68,9 @@ class TritonPythonModel:
             __file__)) + "/inference_cls.yaml"
         self.preprocess_ = fd.vision.classification.PaddleClasPreprocessor(
             yaml_path)
+        if args['model_instance_kind'] == 'GPU':
+            device_id = int(args['model_instance_device_id'])
+            self.preprocess_.use_gpu(device_id)
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`

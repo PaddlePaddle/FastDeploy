@@ -44,6 +44,8 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
    */
   void UseGpu(int gpu_id = -1);
 
+  bool WithGpu() { return use_cuda_; }
+
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
   std::vector<std::shared_ptr<Processor>> processors_;

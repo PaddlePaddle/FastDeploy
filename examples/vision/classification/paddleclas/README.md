@@ -54,3 +54,4 @@ PaddleClas模型导出，请参考其文档说明[模型导出](https://github.c
 
 - [Python部署](python)
 - [C++部署](cpp)
+- [服务化部署](serving)
