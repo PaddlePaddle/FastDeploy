@@ -16,7 +16,6 @@ cd FastDeploy
 mkdir build && cd build
 cmake .. -DBUILD_ON_JETSON=ON \
          -DENABLE_VISION=ON \
-         -DENABLE_TEXT=ON
          -DCMAKE_INSTALL_PREFIX=${PWD}/installed_fastdeploy
 make -j8
 make install
@@ -33,6 +32,8 @@ make install
 - jetpack >= 4.6.1
 - python >= 3.6
 
+Python打包依赖`wheel`，编译前请先执行`pip install wheel`
+
 所有编译选项通过环境变量导入
 
 ```bash
@@ -40,7 +41,6 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export BUILD_ON_JETSON=ON
 export ENABLE_VISION=ON
-export ENABLE_TEXT=ON
 
 python setup.py build
 python setup.py bdist_wheel

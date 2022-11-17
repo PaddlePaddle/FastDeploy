@@ -1,4 +1,4 @@
-# Semantic Segmentation API
+# Semantic Segmentation(语义分割)
 
 ## fastdeploy.vision.segmentation.PaddleSegModel
 

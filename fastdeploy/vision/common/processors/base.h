@@ -18,6 +18,7 @@
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <unordered_map>
 
 namespace fastdeploy {
 namespace vision {
@@ -31,8 +32,7 @@ FASTDEPLOY_DECL void EnableFlyCV();
 /// Disable using FlyCV to process image while deploy vision models.
 FASTDEPLOY_DECL void DisableFlyCV();
 
-/*! @brief Set the cpu num threads of ProcLib. The cpu num threads
- *  of FlyCV and OpenCV is 2 by default.
+/*! @brief Set the cpu num threads of ProcLib.
  */
 FASTDEPLOY_DECL void SetProcLibCpuNumThreads(int threads);
 
@@ -55,7 +55,20 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mat);
   }
 
+  virtual bool ImplByCuda(Mat* mat) {
+    return ImplByOpenCV(mat);
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
+
+ protected:
+  FDTensor* UpdateAndGetReusedBuffer(
+      const std::vector<int64_t>& new_shape, const int& opencv_dtype,
+      const std::string& buffer_name, const Device& new_device = Device::CPU,
+      const bool& use_pinned_memory = false);
+
+ private:
+  std::unordered_map<std::string, FDTensor> reused_buffers_;
 };
 
 }  // namespace vision
