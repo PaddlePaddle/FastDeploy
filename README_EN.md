@@ -16,7 +16,13 @@ English | [简体中文](README_CN.md)
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
-
+<p align="center">
+    <a href="docs/README_EN.md"> Documents </a>
+    |
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"> API Docs </a>
+    |
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"> Release Notes </a>
+</p>
 
 **⚡️FastDeploy** is an **Easy-to-use** and **High Performance** AI model deployment toolkit for Cloud, Mobile and Edge with 📦**out-of-the-box and unified experience**, 🔚**end-to-end optimization** for over **🔥150+ Text, Vision, Speech and Cross-modal AI models**.
 Including image classification, object detection, image segmentation, face detection, face recognition, keypoint detection, matting, OCR, NLP, TTS and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
