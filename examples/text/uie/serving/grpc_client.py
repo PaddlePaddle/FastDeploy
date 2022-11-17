@@ -60,8 +60,6 @@ class SyncGRPCTritonRunner:
         LOGGER.info(f"Model config {model_config}")
         LOGGER.info(f"Model metadata {model_metadata}")
 
-        # for tm in model_metadata.inputs:
-        #     print("tm:", tm)
         self._inputs = {tm.name: tm for tm in model_metadata.inputs}
         self._input_names = list(self._inputs)
         self._outputs = {tm.name: tm for tm in model_metadata.outputs}
