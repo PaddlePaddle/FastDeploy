@@ -37,6 +37,7 @@ import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
@@ -65,12 +66,13 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     private ImageView backInResult;
     private SeekBar confidenceSeekbar;
     private TextView seekbarText;
-    private float resultConfThreshold = 1.0f;
+    private float resultNum = 1.0f;
     private ResultListView detectResultView;
     private Bitmap shutterBitmap;
     private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
     private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
@@ -147,6 +149,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 resultPageView.setVisibility(View.GONE);
                 cameraPageView.setVisibility(View.VISIBLE);
                 TYPE = REALTIME_DETECT;
+                isShutterBitmapCopied = false;
                 svPreview.onResume();
                 break;
         }
@@ -169,8 +172,8 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                         svPreview.onPause();
                         cameraPageView.setVisibility(View.GONE);
                         resultPageView.setVisibility(View.VISIBLE);
-                        seekbarText.setText(resultConfThreshold + "");
-                        confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
                             resultImage.setImageBitmap(shutterBitmap);
                         } else {
@@ -188,7 +191,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     }
 
     private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
-        if (ARGB8888ImageBitmap == null) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
             return;
         }
         if (!ARGB8888ImageBitmap.isRecycled()) {
@@ -197,6 +200,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -207,8 +211,8 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             if (resultCode == Activity.RESULT_OK) {
                 cameraPageView.setVisibility(View.GONE);
                 resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultConfThreshold + "");
-                confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
+                seekbarText.setText(resultNum + "");
+                confidenceSeekbar.setProgress((int) (resultNum * 100));
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
@@ -228,6 +232,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
@@ -253,10 +258,11 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
 
         long tc = System.currentTimeMillis();
         FaceDetectionResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, FaceDetSettingsActivity.scoreThreshold, 0.4f);
+                ARGB8888ImageBitmap, FaceDetSettingsActivity.scoreThreshold, 0.4f);
 
         timeElapsed += (System.currentTimeMillis() - tc);
-        frameCounter++;
+
+        Visualize.visFaceDetection(ARGB8888ImageBitmap, result);
 
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
@@ -265,6 +271,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             }
         }
 
+        frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
@@ -346,9 +353,9 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 float resultConfidence = seekBar.getProgress() / 100f;
                 BigDecimal bd = new BigDecimal(resultConfidence);
-                resultConfThreshold = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
-                seekbarText.setText(resultConfThreshold + "");
-                confidenceSeekbar.setProgress((int) (resultConfThreshold * 100));
+                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
+                seekbarText.setText(resultNum + "");
+                confidenceSeekbar.setProgress((int) (resultNum * 100));
             }
 
             @Override
@@ -364,19 +371,19 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                             if (!picBitmap.isRecycled()) {
-                                predictor.predict(picBitmap, true, resultConfThreshold, 0.4f);
+                                predictor.predict(picBitmap, true, resultNum, 0.4f);
                                 resultImage.setImageBitmap(picBitmap);
                                 picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                             }
-                            resultConfThreshold = 1.0f;
+                            resultNum = 1.0f;
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
                             if (!shutterBitmap.isRecycled()) {
-                                predictor.predict(shutterBitmap, true, resultConfThreshold, 0.4f);
+                                predictor.predict(shutterBitmap, true, resultNum, 0.4f);
                                 resultImage.setImageBitmap(shutterBitmap);
                                 shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                             }
-                            resultConfThreshold = 1.0f;
+                            resultNum = 1.0f;
                         }
                     }
                 });

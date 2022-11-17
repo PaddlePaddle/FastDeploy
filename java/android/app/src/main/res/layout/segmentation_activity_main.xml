@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-</android.support.constraint.ConstraintLayout>
+    <include
+        layout="@layout/segmentation_camera_page"
+        android:id="@+id/camera_page"></include>
+
+    <include
+        layout="@layout/segmentation_result_page"
+        android:id="@+id/result_page"
+        android:visibility="gone"></include>
+</FrameLayout>
