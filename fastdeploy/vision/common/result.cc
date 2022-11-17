@@ -259,7 +259,10 @@ std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  for (size_t i = 0; i < landmarks.size(); ++i) {
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  int landmarks_size = landmarks.size();
+  size_t result_length = std::min(10, landmarks_size);
+  for (size_t i = 0; i < result_length; ++i) {
     out = out + std::to_string(landmarks[i][0]) + "," +
           std::to_string(landmarks[i][1]) + "\n";
   }
@@ -372,7 +375,7 @@ void MattingResult::Reserve(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Reserve.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.reserve(size * c);
   }
 }
@@ -382,7 +385,7 @@ void MattingResult::Resize(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Resize.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.resize(size * c);
   }
 }
