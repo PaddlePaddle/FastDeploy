@@ -8,14 +8,11 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
-import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -43,7 +40,6 @@ import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
-import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,11 +63,9 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     private SeekBar confidenceSeekbar;
     private TextView seekbarText;
     private float resultNum = 1.0f;
-    private ResultListView detectResultView;
+    private ResultListView resultView;
     private Bitmap shutterBitmap;
-    private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
-    private Bitmap originPicBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -84,12 +78,15 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     private static final int INTENT_CODE_PICK_IMAGE = 100;
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
-    String savedImagePath = "result.jpg";
     long timeElapsed = 0;
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     SCRFD predictor = new SCRFD();
+
+    public float[] scores;  // [n]
+    public boolean initialized = false;
+    private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,6 +120,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
                 shutterAndPauseCamera();
+                resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(FaceDetMainActivity.this, FaceDetSettingsActivity.class));
@@ -144,14 +142,29 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                     intent.setType("image/*");
                     startActivityForResult(intent, INTENT_CODE_PICK_IMAGE);
                 }
+                resultView.setAdapter(null);
                 break;
             case R.id.back_in_result:
-                resultPageView.setVisibility(View.GONE);
-                cameraPageView.setVisibility(View.VISIBLE);
-                TYPE = REALTIME_DETECT;
-                isShutterBitmapCopied = false;
-                svPreview.onResume();
+                back();
                 break;
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        back();
+    }
+
+    private void back() {
+        resultPageView.setVisibility(View.GONE);
+        cameraPageView.setVisibility(View.VISIBLE);
+        TYPE = REALTIME_DETECT;
+        isShutterBitmapCopied = false;
+        svPreview.onResume();
+        results.clear();
+        if (scores != null) {
+            scores = null;
         }
     }
 
@@ -197,7 +210,6 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -216,7 +228,6 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
-                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -248,29 +259,14 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
-
-        String savedImagePath = "";
-        synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
-
         boolean modified = false;
-
         long tc = System.currentTimeMillis();
+        SystemClock.sleep(TIME_SLEEP_INTERVAL);
         FaceDetectionResult result = predictor.predict(
                 ARGB8888ImageBitmap, FaceDetSettingsActivity.scoreThreshold, 0.4f);
-
         timeElapsed += (System.currentTimeMillis() - tc);
-
         Visualize.visFaceDetection(ARGB8888ImageBitmap, result);
-
         modified = result.initialized();
-        if (!savedImagePath.isEmpty()) {
-            synchronized (this) {
-                FaceDetMainActivity.this.savedImagePath = "result.jpg";
-            }
-        }
-
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -336,16 +332,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         backInResult.setOnClickListener(this);
         confidenceSeekbar = findViewById(R.id.confidence_seekbar);
         seekbarText = findViewById(R.id.seekbar_text);
-        detectResultView = findViewById(R.id.result_list_view);
-
-        List<BaseResultModel> results = new ArrayList<>();
-        // TODO: add model results from FaceDetectionResult instead of using fake data.
-        results.add(new BaseResultModel(1, "face", 0.4f));
-        results.add(new BaseResultModel(2, "face", 0.6f));
-        results.add(new BaseResultModel(3, "face", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.facedet_result_page_item, results);
-        detectResultView.setAdapter(adapter);
-        detectResultView.invalidate();
+        resultView = findViewById(R.id.result_list_view);
 
         confidenceSeekbar.setMax(100);
         confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -356,6 +343,7 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                 resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
                 seekbarText.setText(resultNum + "");
                 confidenceSeekbar.setProgress((int) (resultNum * 100));
+                results.clear();
             }
 
             @Override
@@ -370,25 +358,38 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-                            if (!picBitmap.isRecycled()) {
-                                predictor.predict(picBitmap, true, resultNum, 0.4f);
-                                resultImage.setImageBitmap(picBitmap);
-                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
+                            detail(picBitmap);
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-                            if (!shutterBitmap.isRecycled()) {
-                                predictor.predict(shutterBitmap, true, resultNum, 0.4f);
-                                resultImage.setImageBitmap(shutterBitmap);
-                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
+                            svPreview.onPause();
+                            detail(shutterBitmap);
                         }
                     }
                 });
             }
         });
+    }
+
+    private void detail(Bitmap bitmap) {
+        FaceDetectionResult result = predictor.predict(bitmap, true, FaceDetSettingsActivity.scoreThreshold, 0.4f);
+        if (scores == null) {
+            scores = result.mScores;
+        }
+        initialized = result.initialized();
+        Log.e("GBD", initialized + "---initialized");
+        if (initialized) {
+            for (int i = 0; i < scores.length; i++) {
+                if (scores[i] > resultNum) {
+                    results.add(new BaseResultModel(i + 1, "face", scores[i]));
+                }
+            }
+        }
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        resultView.setAdapter(adapter);
+        resultView.invalidate();
+
+        resultImage.setImageBitmap(bitmap);
+        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
