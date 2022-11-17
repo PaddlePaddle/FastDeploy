@@ -50,6 +50,17 @@ class PPTinyPose(FastDeployModel):
         assert input_image is not None, "The input image data is None."
         return self._model.predict(input_image)
 
+    def predict_with_detection_result(self, input_image, detection_result):
+        """Detect keypoints in an input image with detection result
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param im: Fastdeploy DetectionResult
+        :return: KeyPointDetectionResult
+        """
+        assert input_image is not None, "The input image data is None."
+        assert detection_result is not None, "The detection_result data is None"
+        return self._model.predict(input_image, detection_result)
+
     @property
     def use_dark(self):
         """Atrribute of PPTinyPose model. Stating whether using Distribution-Aware Coordinate Representation for Human Pose Estimation(DARK for short) in postprocess, default is True
