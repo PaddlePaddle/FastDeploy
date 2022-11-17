@@ -24,7 +24,7 @@ class ResNet(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a image classification model exported by ResNet.
+        """Load a image classification model exported by torchvision.ResNet.
 
         :param model_file: (str)Path of model file, e.g resnet/resnet50.onnx
         :param params_file: (str)Path of parameters file, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
