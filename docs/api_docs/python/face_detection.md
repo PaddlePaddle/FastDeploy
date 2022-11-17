@@ -1,4 +1,4 @@
-# Face Detection API
+# Face Detection(人脸检测)
 
 ## fastdeploy.vision.facedet.RetinaFace
 

@@ -44,13 +44,13 @@ Install the released version（Latest 0.6.0）
 | Platform    | File                                                                                                                  | Description                                               |
 |:----------- |:--------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------- |
 | Linux x64   | [fastdeploy-linux-x64-gpu-0.6.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz) | Compiled from g++ 8.2, CUDA 11.2, cuDNN 8.2               |
-| Windows x64 | [fastdeploy-win-x64-gpu-0.5.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.6.0.zip)     | Compiled from Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
+| Windows x64 | [fastdeploy-win-x64-gpu-0.6.0.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-0.6.0.zip)     | Compiled from Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
 
 Install the Develop version（Nightly build）
 
 | Platform    | File                                                                                                                  | Description                                               |
 |:----------- |:--------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------- |
-| Linux x64   | [fastdeploy-linux-x64-gpu-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-gpu-0.0.0.tgz | Compiled from g++ 8.2, CUDA 11.2, cuDNN 8.2               |
+| Linux x64   | [fastdeploy-linux-x64-gpu-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-gpu-0.0.0.tgz) | Compiled from g++ 8.2, CUDA 11.2, cuDNN 8.2               |
 | Windows x64 | [fastdeploy-win-x64-gpu-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-gpu-0.0.0.zip)     | Compiled from Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
 
 ## CPU Deployment Environment
@@ -93,7 +93,7 @@ Install the Develop version（Nightly build）
 
 | Platform      | File                                                                                                                  | Description                    |
 |:------------- |:--------------------------------------------------------------------------------------------------------------------- |:------------------------------ |
-| Linux x64     | [fastdeploy-linux-x64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-0.0.0.tgz)         | Compiled from g++ 8.2          |
+| Linux x64     | [fastdeploy-linux-x64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-0.0.0.tgz)   | Compiled from g++ 8.2          |
 | Windows x64   | [fastdeploy-win-x64-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-0.0.0.zip)             | Compiled from Visual Studio 16 |
 | Mac OSX x64   | -       | -                              |
 | Mac OSX arm64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz)         | -                              |
