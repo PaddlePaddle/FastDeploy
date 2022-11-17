@@ -77,8 +77,8 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     private static final int INTENT_CODE_PICK_IMAGE = 100;
 
     String savedImagePath = "result.jpg";
-    int lastFrameIndex = 0;
-    long lastFrameTime;
+    long timeElapsed = 0;
+    long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PaddleClasModel predictor = new PaddleClasModel();
@@ -203,25 +203,31 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             originShutterBitmap = ARGB8888ImageBitmap;
         }
         boolean modified = false;
+
+        long tc = System.currentTimeMillis();
         ClassifyResult result = predictor.predict(
                 ARGB8888ImageBitmap, true, ClassificationSettingsActivity.scoreThreshold);
+
+        timeElapsed += (System.currentTimeMillis() - tc);
+        frameCounter++;
+
         modified = result.initialized();
         if (!savedImagePath.isEmpty()) {
             synchronized (this) {
                 ClassificationMainActivity.this.savedImagePath = "result.jpg";
             }
         }
-        lastFrameIndex++;
-        if (lastFrameIndex >= 30) {
-            final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
+
+        if (frameCounter >= 30) {
+            final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
                 @SuppressLint("SetTextI18n")
                 public void run() {
                     tvStatus.setText(Integer.toString(fps) + "fps");
                 }
             });
-            lastFrameIndex = 0;
-            lastFrameTime = System.nanoTime();
+            frameCounter = 0;
+            timeElapsed = 0;
         }
         return modified;
     }
