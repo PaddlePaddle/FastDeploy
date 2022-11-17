@@ -48,11 +48,11 @@ class YOLOv7Preprocessor:
         return self._preprocessor.padding_value
 
     @property
-    def resize_after_load(self):
+    def is_scale_up(self):
         """
-        resize_after_load for preprocessing, may have an impact on map, default false
+        is_scale_up for preprocessing, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0, default true
         """
-        return self._preprocessor.resize_after_load
+        return self._preprocessor.is_scale_up
 
     @size.setter
     def size(self, wh):
@@ -70,12 +70,12 @@ class YOLOv7Preprocessor:
             list), "The value to set `padding_value` must be type of list."
         self._preprocessor.padding_value = value
 
-    @resize_after_load.setter
-    def resize_after_load(self, value):
+    @is_scale_up.setter
+    def is_scale_up(self, value):
         assert isinstance(
             value,
-            bool), "The value to set `resize_after_load` must be type of bool."
-        self._preprocessor.resize_after_load = value
+            bool), "The value to set `is_scale_up` must be type of bool."
+        self._preprocessor.is_scale_up = value
 
 
 class YOLOv7Postprocessor:

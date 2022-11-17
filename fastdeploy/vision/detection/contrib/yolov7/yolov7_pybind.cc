@@ -36,7 +36,7 @@ void BindYOLOv7(pybind11::module& m) {
       })
       .def_property("size", &vision::detection::YOLOv7Preprocessor::GetSize, &vision::detection::YOLOv7Preprocessor::SetSize)
       .def_property("padding_value", &vision::detection::YOLOv7Preprocessor::GetPaddingValue, &vision::detection::YOLOv7Preprocessor::SetPaddingValue)
-      .def_property("resize_after_load", &vision::detection::YOLOv7Preprocessor::GetResizeAfterLoad, &vision::detection::YOLOv7Preprocessor::SetResizeAfterLoad);
+      .def_property("is_scale_up", &vision::detection::YOLOv7Preprocessor::GetScaleUp, &vision::detection::YOLOv7Preprocessor::SetScaleUp);
 
   pybind11::class_<vision::detection::YOLOv7Postprocessor>(
       m, "YOLOv7Postprocessor")

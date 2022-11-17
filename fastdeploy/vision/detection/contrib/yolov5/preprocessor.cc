@@ -20,12 +20,11 @@ namespace vision {
 namespace detection {
 
 YOLOv5Preprocessor::YOLOv5Preprocessor() {
-  resize_after_load_ = false;
   size_ = {640, 640};
   padding_value_ = {114.0, 114.0, 114.0};
   is_mini_pad_ = false;
   is_no_pad_ = false;
-  is_scale_up_ = false;
+  is_scale_up_ = true;
   stride_ = 32;
   max_wh_ = 7680.0;
 }
@@ -70,20 +69,6 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
-  // process after image load
-  if (resize_after_load_) {
-    double ratio = (size_[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
-                                              static_cast<float>(mat->Width()));
-    if (std::fabs(ratio - 1.0f) > 1e-06) {
-      int interp = cv::INTER_AREA;
-      if (ratio > 1.0) {
-        interp = cv::INTER_LINEAR;
-      }
-      int resize_h = int(mat->Height() * ratio);
-      int resize_w = int(mat->Width() * ratio);
-      Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
-    }
-  }
   // yolov5's preprocess steps
   // 1. letterbox
   // 2. convert_and_permute(swap_rb=true)

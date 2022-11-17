@@ -52,22 +52,20 @@ class FASTDEPLOY_DECL YOLOv7Preprocessor {
   /// Get padding value, size should be the same as channels
   std::vector<float> GetPaddingValue() const { return padding_value_; }
 
-  /// Set resize_after_load, may have an impact on map, default false
-  void SetResizeAfterLoad(bool resize_after_load) {
-    resize_after_load_ = resize_after_load;
+  /// Set is_scale_up, if is_scale_up is false, the input image only
+  /// can be zoom out, the maximum resize scale cannot exceed 1.0, default true
+  void SetScaleUp(bool is_scale_up) {
+    is_scale_up_ = is_scale_up;
   }
 
-  /// Get resize_after_load, default false
-  bool GetResizeAfterLoad() const { return resize_after_load_; }
+  /// Get is_scale_up, default true
+  bool GetScaleUp() const { return is_scale_up_; }
 
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
   void LetterBox(FDMat* mat);
-
-  // whether resize after image load, may have an impact on map, default false
-  bool resize_after_load_;
 
   // target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> size_;
