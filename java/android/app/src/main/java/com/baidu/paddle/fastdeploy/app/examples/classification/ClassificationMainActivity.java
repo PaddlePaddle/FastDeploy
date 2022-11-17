@@ -2,6 +2,7 @@ package com.baidu.paddle.fastdeploy.app.examples.classification;
 
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.readTxt;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -36,9 +37,9 @@ import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.ClassifyResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.classification.PaddleClasModel;
 
-import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,26 +63,32 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     private SeekBar confidenceSeekbar;
     private TextView seekbarText;
     private float resultNum = 1.0f;
-    private ResultListView detectResultView;
+    private ResultListView resultView;
     private Bitmap shutterBitmap;
-    private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
-    private Bitmap originPicBitmap;
+    private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
     public static final int BTN_SHUTTER = 0;
     public static final int ALBUM_SELECT = 1;
-    private static int TYPE = TYPE_UNKNOWN;
+    public static final int REALTIME_DETECT = 2;
+    private static int TYPE = REALTIME_DETECT;
 
     private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
     private static final int INTENT_CODE_PICK_IMAGE = 100;
+    private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
-    String savedImagePath = "result.jpg";
     long timeElapsed = 0;
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PaddleClasModel predictor = new PaddleClasModel();
+
+    private float[] scores;
+    private int[] labelId;
+    private boolean initialized;
+    private List<String> labelText;
+    private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,12 +121,8 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 break;
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
-                svPreview.onPause();
-                cameraPageView.setVisibility(View.GONE);
-                resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                resultImage.setImageBitmap(shutterBitmap);
+                shutterAndPauseCamera();
+                resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(ClassificationMainActivity.this, ClassificationSettingsActivity.class));
@@ -130,7 +133,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             case R.id.back_in_preview:
                 finish();
                 break;
-            case R.id.albumSelect:
+            case R.id.iv_select:
                 TYPE = ALBUM_SELECT;
                 // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -141,13 +144,81 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                     intent.setType("image/*");
                     startActivityForResult(intent, INTENT_CODE_PICK_IMAGE);
                 }
+                resultView.setAdapter(null);
                 break;
             case R.id.back_in_result:
-                resultPageView.setVisibility(View.GONE);
-                cameraPageView.setVisibility(View.VISIBLE);
-                svPreview.onResume();
+                back();
                 break;
 
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        back();
+    }
+
+    private void back() {
+        resultPageView.setVisibility(View.GONE);
+        cameraPageView.setVisibility(View.VISIBLE);
+        TYPE = REALTIME_DETECT;
+        isShutterBitmapCopied = false;
+        svPreview.onResume();
+        results.clear();
+        if (scores != null) {
+            scores = null;
+        }
+        if (labelId != null) {
+            labelId = null;
+        }
+    }
+
+    private void shutterAndPauseCamera() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Sleep some times to ensure picture has been correctly shut.
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                runOnUiThread(new Runnable() {
+                    @SuppressLint("SetTextI18n")
+                    public void run() {
+                        // These code will run in main thread.
+                        svPreview.onPause();
+                        cameraPageView.setVisibility(View.GONE);
+                        resultPageView.setVisibility(View.VISIBLE);
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                            resultImage.setImageBitmap(shutterBitmap);
+                        } else {
+                            new AlertDialog.Builder(ClassificationMainActivity.this)
+                                    .setTitle("Empty Result!")
+                                    .setMessage("Current picture is empty, please shutting it again!")
+                                    .setCancelable(true)
+                                    .show();
+                        }
+                    }
+                });
+
+            }
+        }).start();
+    }
+
+    private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
+            return;
+        }
+        if (!ARGB8888ImageBitmap.isRecycled()) {
+            synchronized (this) {
+                shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            }
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
         }
     }
 
@@ -163,7 +234,6 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
-                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -190,34 +260,17 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
-        String savedImagePath = "";
-        synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
         if (TYPE == BTN_SHUTTER) {
-            shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-            originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-        } else {
-            // Only reference in predict loops.
-            shutterBitmap = ARGB8888ImageBitmap;
-            originShutterBitmap = ARGB8888ImageBitmap;
+            copyBitmapFromCamera(ARGB8888ImageBitmap);
+            return false;
         }
         boolean modified = false;
-
         long tc = System.currentTimeMillis();
-        ClassifyResult result = predictor.predict(
-                ARGB8888ImageBitmap, true, ClassificationSettingsActivity.scoreThreshold);
-
+        ClassifyResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
-        frameCounter++;
-
+        Visualize.visClassification(ARGB8888ImageBitmap, result, resultNum, 12);
         modified = result.initialized();
-        if (!savedImagePath.isEmpty()) {
-            synchronized (this) {
-                ClassificationMainActivity.this.savedImagePath = "result.jpg";
-            }
-        }
-
+        frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
@@ -259,7 +312,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
     }
 
     public void initView() {
-        TYPE = BTN_SHUTTER;
+        TYPE = REALTIME_DETECT;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
@@ -273,7 +326,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
-        albumSelectButton = findViewById(R.id.albumSelect);
+        albumSelectButton = findViewById(R.id.iv_select);
         albumSelectButton.setOnClickListener(this);
         cameraPageView = findViewById(R.id.camera_page);
         resultPageView = findViewById(R.id.result_page);
@@ -282,15 +335,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         backInResult.setOnClickListener(this);
         confidenceSeekbar = findViewById(R.id.confidence_seekbar);
         seekbarText = findViewById(R.id.seekbar_text);
-        detectResultView = findViewById(R.id.result_list_view);
-
-        List<BaseResultModel> results = new ArrayList<>();
-        results.add(new BaseResultModel(1, "cup", 0.4f));
-        results.add(new BaseResultModel(2, "pen", 0.6f));
-        results.add(new BaseResultModel(3, "tang", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.classification_result_page_item, results);
-        detectResultView.setAdapter(adapter);
-        detectResultView.invalidate();
+        resultView = findViewById(R.id.result_list_view);
 
         confidenceSeekbar.setMax(100);
         confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -301,6 +346,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                 resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
                 seekbarText.setText(resultNum + "");
                 confidenceSeekbar.setProgress((int) (resultNum * 100));
+                results.clear();
             }
 
             @Override
@@ -315,21 +361,44 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
                     public void run() {
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(500);
-                            predictor.predict(picBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(picBitmap);
-                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            resultNum = 1.0f;
+                            detail(picBitmap);
                         } else {
                             SystemClock.sleep(500);
-                            predictor.predict(shutterBitmap, savedImagePath, resultNum);
-                            resultImage.setImageBitmap(shutterBitmap);
-                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            resultNum = 1.0f;
+                            svPreview.onPause();
+                            detail(shutterBitmap);
                         }
                     }
                 });
             }
         });
+    }
+
+    private void detail(Bitmap bitmap) {
+        ClassifyResult result = predictor.predict(bitmap, true, ClassificationSettingsActivity.scoreThreshold);
+        if (scores == null) {
+            scores = result.mScores;
+        }
+        if (labelId == null) {
+            labelId = result.mLabelIds;
+        }
+        initialized = result.initialized();
+        if (initialized) {
+            for (int i = 0; i < labelId.length; i++) {
+                for (int j = 0; j < labelText.size(); j++) {
+                    if (scores[i] > resultNum) {
+                        if (labelId[i] == Integer.parseInt(labelText.get(j).substring(0, labelText.get(j).indexOf(" ")))) {
+                            results.add(new BaseResultModel(labelId[i], labelText.get(j), scores[i]));
+                        }
+                    }
+                }
+            }
+        }
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        resultView.setAdapter(adapter);
+        resultView.invalidate();
+
+        resultImage.setImageBitmap(bitmap);
+        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
@@ -352,6 +421,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             String paramsFile = realModelDir + "/" + "inference.pdiparams";
             String configFile = realModelDir + "/" + "inference_cls.yaml";
             String labelFile = realLabelPath;
+            labelText = readTxt(labelFile);
             RuntimeOption option = new RuntimeOption();
             option.setCpuThreadNum(ClassificationSettingsActivity.cpuThreadNum);
             option.setLitePowerMode(ClassificationSettingsActivity.cpuPowerMode);
