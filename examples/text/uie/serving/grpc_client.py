@@ -92,7 +92,7 @@ class SyncGRPCTritonRunner:
             inputs=infer_inputs,
             outputs=self._outputs_req,
             client_timeout=self._response_wait_t, )
-        # results = {name: results.as_numpy(name) for name in self._output_names}
+        # only one output
         results = results.as_numpy(self._output_names[0])
         return results
 

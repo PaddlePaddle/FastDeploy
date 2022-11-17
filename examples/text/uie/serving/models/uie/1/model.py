@@ -141,8 +141,7 @@ class TritonPythonModel:
                 self.uie_model_.set_schema(schema)
             results = self.uie_model_.predict(texts, return_dict=True)
 
-            results = json.dumps(results)
-            # results = np.array(results, dtype=np.object)
+            results = np.array(results, dtype=np.object)
             out_tensor = pb_utils.Tensor(self.output_names[0], results)
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])
