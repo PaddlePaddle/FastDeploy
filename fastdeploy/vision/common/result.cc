@@ -80,6 +80,20 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
   }
 }
 
+DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
+  if (&other != this) {
+    boxes = std::move(other.boxes);
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    contain_masks = std::move(other.contain_masks);
+    if (contain_masks) {
+      masks.clear();
+      masks = std::move(other.masks);
+    }
+  }
+  return *this;
+}
+
 void DetectionResult::Clear() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);
@@ -259,7 +273,10 @@ std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  for (size_t i = 0; i < landmarks.size(); ++i) {
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  int landmarks_size = landmarks.size();
+  size_t result_length = std::min(10, landmarks_size);
+  for (size_t i = 0; i < result_length; ++i) {
     out = out + std::to_string(landmarks[i][0]) + "," +
           std::to_string(landmarks[i][1]) + "\n";
   }
