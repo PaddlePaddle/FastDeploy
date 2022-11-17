@@ -55,12 +55,12 @@ class FASTDEPLOY_DECL YOLOv5Postprocessor {
   /// Get nms_threshold, default 0.5
   float GetNMSThreshold() const { return nms_threshold_; }
 
-  /// Set multi_label, set true for eval, default false
+  /// Set multi_label, set true for eval, default true
   void SetMultiLabel(bool multi_label) {
     multi_label_ = multi_label;
   }
 
-  /// Get multi_label, default false
+  /// Get multi_label, default true
   bool GetMultiLabel() const { return multi_label_; }
 
  protected:

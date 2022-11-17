@@ -110,7 +110,7 @@ class YOLOv5Postprocessor:
     @property
     def multi_label(self):
         """
-        multi_label for postprocessing, set true for eval, default is false
+        multi_label for postprocessing, set true for eval, default is True
         """
         return self._postprocessor.multi_label
 

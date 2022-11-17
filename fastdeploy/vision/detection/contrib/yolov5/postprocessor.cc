@@ -22,7 +22,7 @@ namespace detection {
 YOLOv5Postprocessor::YOLOv5Postprocessor() {
   conf_threshold_ = 0.25;
   nms_threshold_ = 0.5;
-  multi_label_ = false;
+  multi_label_ = true;
   max_wh_ = 7680.0;
 }
 
