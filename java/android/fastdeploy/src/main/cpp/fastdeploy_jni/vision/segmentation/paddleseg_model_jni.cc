@@ -66,7 +66,6 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_predictNativ
     fni::RenderingSegmentation(env, c_bgr, c_result, argb8888_bitmap,
                                save_image, weight, save_path);
   }
-
   return fni::NewJavaResultFromCxx(env, reinterpret_cast<void *>(&c_result),
                                    vision::ResultType::SEGMENTATION);
 }
