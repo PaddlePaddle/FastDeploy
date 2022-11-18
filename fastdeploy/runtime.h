@@ -169,6 +169,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetPaddleMKLDNNCacheSize(int size);
 
   /**
+   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+   */
+   void SetOpenVINODevice(const std::string& name = "CPU");
+
+  /**
    * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
@@ -343,6 +348,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool trt_enable_int8 = false;
   size_t trt_max_batch_size = 32;
   size_t trt_max_workspace_size = 1 << 30;
+
+  // ======Only for OpenVINO Backend======
+  std::string openvino_device = "CPU";
 
   // ======Only for Poros Backend=======
   bool is_dynamic = false;
