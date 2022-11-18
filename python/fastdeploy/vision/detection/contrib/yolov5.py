@@ -41,8 +41,18 @@ class YOLOv5Preprocessor:
 
     @property
     def padding_value(self):
+        """
+        padding value for preprocessing, default [114.0, 114.0, 114.0]
+        """
         #  padding value, size should be the same as channels
         return self._preprocessor.padding_value
+
+    @property
+    def is_scale_up(self):
+        """
+        is_scale_up for preprocessing, the input image only can be zoom out, the maximum resize scale cannot exceed 1.0, default true
+        """
+        return self._preprocessor.is_scale_up
 
     @size.setter
     def size(self, wh):
@@ -59,6 +69,13 @@ class YOLOv5Preprocessor:
             value,
             list), "The value to set `padding_value` must be type of list."
         self._preprocessor.padding_value = value
+
+    @is_scale_up.setter
+    def is_scale_up(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_scale_up` must be type of bool."
+        self._preprocessor.is_scale_up = value
 
 
 class YOLOv5Postprocessor:
@@ -93,7 +110,7 @@ class YOLOv5Postprocessor:
     @property
     def multi_label(self):
         """
-        multi_label for postprocessing, default is true
+        multi_label for postprocessing, set true for eval, default is True
         """
         return self._postprocessor.multi_label
 

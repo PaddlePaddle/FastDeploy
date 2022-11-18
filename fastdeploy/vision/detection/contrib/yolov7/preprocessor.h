@@ -20,13 +20,13 @@ namespace fastdeploy {
 namespace vision {
 
 namespace detection {
-/*! @brief Preprocessor object for YOLOv5 serials model.
+/*! @brief Preprocessor object for YOLOv7 serials model.
  */
-class FASTDEPLOY_DECL YOLOv5Preprocessor {
+class FASTDEPLOY_DECL YOLOv7Preprocessor {
  public:
-  /** \brief Create a preprocessor instance for YOLOv5 serials model
+  /** \brief Create a preprocessor instance for YOLOv7 serials model
    */
-  YOLOv5Preprocessor();
+  YOLOv7Preprocessor();
 
   /** \brief Process the input image and prepare input tensors for runtime
    *
