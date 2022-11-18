@@ -352,30 +352,16 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-
             }
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-//                runOnUiThread(new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        if (TYPE == ALBUM_SELECT) {
-//                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-//                            detail(picBitmap);
-//                        } else {
-//                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-//                            svPreview.onPause();
-//                            detail(shutterBitmap);
-//                        }
-//                    }
-//                });
             }
         });
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.6f);
+        predictor.predict(bitmap, true, 0.4f);
         resultImage.setImageBitmap(bitmap);
         resultNum = 1.0f;
     }
