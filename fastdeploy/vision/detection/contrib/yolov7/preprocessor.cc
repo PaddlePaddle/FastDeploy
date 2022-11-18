@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/detection/contrib/yolov5/preprocessor.h"
+#include "fastdeploy/vision/detection/contrib/yolov7/preprocessor.h"
 #include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-YOLOv5Preprocessor::YOLOv5Preprocessor() {
+YOLOv7Preprocessor::YOLOv7Preprocessor() {
   size_ = {640, 640};
   padding_value_ = {114.0, 114.0, 114.0};
   is_mini_pad_ = false;
@@ -29,7 +29,7 @@ YOLOv5Preprocessor::YOLOv5Preprocessor() {
   max_wh_ = 7680.0;
 }
 
-void YOLOv5Preprocessor::LetterBox(FDMat* mat) {
+void YOLOv7Preprocessor::LetterBox(FDMat* mat) {
   float scale =
       std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width());
   if (!is_scale_up_) {
@@ -64,12 +64,12 @@ void YOLOv5Preprocessor::LetterBox(FDMat* mat) {
   }
 }
 
-bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
+bool YOLOv7Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
             std::map<std::string, std::array<float, 2>>* im_info) {
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
-  // yolov5's preprocess steps
+  // yolov7's preprocess steps
   // 1. letterbox
   // 2. convert_and_permute(swap_rb=true)
   LetterBox(mat);
@@ -86,7 +86,7 @@ bool YOLOv5Preprocessor::Preprocess(FDMat* mat, FDTensor* output,
   return true;
 }
 
-bool YOLOv5Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
+bool YOLOv7Preprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
                              std::vector<std::map<std::string, std::array<float, 2>>>* ims_info) {
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
