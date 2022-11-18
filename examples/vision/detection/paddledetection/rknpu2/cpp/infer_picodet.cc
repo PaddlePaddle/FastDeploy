@@ -14,73 +14,52 @@
 #include <iostream>
 #include <string>
 #include "fastdeploy/vision.h"
+#include <sys/time.h>
+double __get_us(struct timeval t) { return (t.tv_sec * 1000000 + t.tv_usec); }
+void InferPicodet(const std::string& model_dir, const std::string& image_file);
 
-void InferPicodet(const std::string& device = "cpu");
+int main(int argc, char* argv[]) {
+  if (argc < 3) {
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
+        << std::endl;
+    return -1;
+  }
 
-int main() {
-  InferPicodet("npu");
+  InferPicodet(argv[1], argv[2]);
+
   return 0;
 }
 
-fastdeploy::RuntimeOption GetOption(const std::string& device) {
+void InferPicodet(const std::string& model_dir, const std::string& image_file) {
+  struct timeval start_time, stop_time;
+  auto model_file = model_dir + "/model.pdmodel";
+  auto params_file = "";
+  auto config_file = model_dir + "/infer_cfg.yml";
+
   auto option = fastdeploy::RuntimeOption();
-  if (device == "npu") {
-    option.UseRKNPU2();
-  } else {
-    option.UseCpu();
-  }
-  return option;
-}
+  option.UseRKNPU2();
 
-fastdeploy::ModelFormat GetFormat(const std::string& device) {
-  auto format = fastdeploy::ModelFormat::ONNX;
-  if (device == "npu") {
-    format = fastdeploy::ModelFormat::RKNN;
-  } else {
-    format = fastdeploy::ModelFormat::ONNX;
-  }
-  return format;
-}
+  auto format = fastdeploy::ModelFormat::RKNN;
 
-std::string GetModelPath(std::string& model_path, const std::string& device) {
-  if (device == "npu") {
-    model_path += "rknn";
-  } else {
-    model_path += "onnx";
-  }
-  return model_path;
-}
-
-void InferPicodet(const std::string &device) {
-  std::string model_file = "./model/picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3588.";
-  std::string params_file;
-  std::string config_file = "./model/picodet_s_416_coco_lcnet/infer_cfg.yml";
-
-  fastdeploy::RuntimeOption option = GetOption(device);
-  fastdeploy::ModelFormat format = GetFormat(device);
-  model_file = GetModelPath(model_file, device);
-  auto model = fastdeploy::vision::detection::RKPicoDet(
+  auto model = fastdeploy::vision::detection::PicoDet(
       model_file, params_file, config_file,option,format);
+  model.ApplyDecodeAndNMS();
 
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
-  auto image_file = "./images/000000014439.jpg";
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
-  clock_t start = clock();
+  gettimeofday(&start_time, NULL);
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  clock_t end = clock();
-  auto dur = static_cast<double>(end - start);
-  printf("picodet_npu use time:%f\n", (dur / CLOCKS_PER_SEC));
+  gettimeofday(&stop_time, NULL);
+  printf("infer use %f ms\n", (__get_us(stop_time) - __get_us(start_time)) / 1000);
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
-  cv::imwrite("picodet_npu_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./picodet_npu_result.jpg" << std::endl;
+  cv::imwrite("picodet_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./picodet_result.jpg" << std::endl;
 }
