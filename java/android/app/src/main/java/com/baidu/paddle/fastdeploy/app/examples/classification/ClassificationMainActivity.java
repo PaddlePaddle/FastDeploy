@@ -254,9 +254,13 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -394,7 +398,6 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         if (initialized) {
             for (int i = 0; i < labelId.length; i++) {
                 if (scores[i] > resultNum) {
-                    Log.d(TAG, "[fastdeploy] detail: scores[i]: " + scores[i]);
                     int idx = labelId[i];
                     String text = labelText.get(idx);
                     text = text.substring(text.indexOf(" "));
