@@ -66,8 +66,10 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     private TextView seekbarText;
     private float resultNum = 1.0f;
     private ResultListView resultView;
-    private Bitmap shutterBitmap;
     private Bitmap picBitmap;
+    private Bitmap shutterBitmap;
+    private Bitmap originPicBitmap;
+    private Bitmap originShutterBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -104,13 +106,13 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -216,6 +218,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -235,6 +238,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 picBitmap = decodeBitmap(path, 720, 1280);
+                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
                 resultImage.setImageBitmap(picBitmap);
             }
         }
@@ -250,9 +254,13 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -265,12 +273,16 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
-        OCRResult result = predictor.predict(ARGB8888ImageBitmap, true);
+        OCRResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
+
         Visualize.visOcr(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -363,10 +375,11 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                         if (TYPE == ALBUM_SELECT) {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
                             detail(picBitmap);
+                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         } else {
                             SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            svPreview.onPause();
                             detail(shutterBitmap);
+                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
                         }
                     }
                 });
@@ -376,12 +389,10 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
 
     private void detail(Bitmap bitmap) {
         OCRResult result = predictor.predict(bitmap, true);
-        if (texts == null) {
-            texts = result.mText;
-        }
-        if (recScores == null) {
-            recScores = result.mRecScores;
-        }
+
+        texts = result.mText;
+        recScores = result.mRecScores;
+
         initialized = result.initialized();
         if (initialized) {
             for (int i = 0; i < texts.length; i++) {
