@@ -64,9 +64,10 @@ bool PaddleDetPostprocessor::ProcessMask(
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
-  if(apply_decode_and_nms_){
-    FDASSERT(tensors.size() == 2, "ProcessUnDecodeResults only support tensors.size() = 2");
-    return ProcessUnDecodeResults(tensors,results);
+  if (apply_decode_and_nms_) {
+    FDASSERT(tensors.size() == 2,
+             "ProcessUnDecodeResults only support tensors.size() = 2");
+    return ProcessUnDecodeResults(tensors, results);
   }
 
   if (tensors[0].shape[0] == 0) {
@@ -98,7 +99,9 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     if (num_output_boxes % num_boxes.size() == 0) {
       contain_invalid_boxes = true;
     } else {
-      FDERROR << "Cannot handle the output data for this model, unexpected situation." << std::endl;
+      FDERROR << "Cannot handle the output data for this model, unexpected "
+                 "situation."
+              << std::endl;
       return false;
     }
   }
@@ -111,19 +114,24 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     const float* ptr = box_data + offset;
     (*results)[i].Reserve(num_boxes[i]);
     for (size_t j = 0; j < num_boxes[i]; ++j) {
-      (*results)[i].label_ids.push_back(static_cast<int32_t>(round(ptr[j * 6])));
+      (*results)[i].label_ids.push_back(
+          static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
-      (*results)[i].boxes.emplace_back(std::array<float, 4>({ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+      (*results)[i].boxes.emplace_back(std::array<float, 4>(
+          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
     }
     if (contain_invalid_boxes) {
-      offset +=  static_cast<int>(num_output_boxes * 6 / num_boxes.size());
+      offset += static_cast<int>(num_output_boxes * 6 / num_boxes.size());
     } else {
       offset += static_cast<int>(num_boxes[i] * 6);
     }
   }
 
   if (tensors[2].Shape()[0] != num_output_boxes) {
-    FDERROR << "The first dimension of output mask tensor:"  << tensors[2].Shape()[0] << " is not equal to the first dimension of output boxes tensor:" << num_output_boxes << "." << std::endl;
+    FDERROR << "The first dimension of output mask tensor:"
+            << tensors[2].Shape()[0]
+            << " is not equal to the first dimension of output boxes tensor:"
+            << num_output_boxes << "." << std::endl;
     return false;
   }
 
@@ -135,9 +143,10 @@ void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
   apply_decode_and_nms_ = true;
 }
 
-bool PaddleDetPostprocessor::ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
-                                                    std::vector<DetectionResult>* results) {
-  if(tensors.size() != 2){
+bool PaddleDetPostprocessor::ProcessUnDecodeResults(
+    const std::vector<FDTensor>& tensors,
+    std::vector<DetectionResult>* results) {
+  if (tensors.size() != 2) {
     return false;
   }
 
@@ -181,7 +190,10 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(const std::vector<FDTensor>&
           static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
       (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+          {ptr[j * 6 + 2] / scale_factor[1],
+           ptr[j * 6 + 3] / scale_factor[0],
+           ptr[j * 6 + 4] / scale_factor[1],
+           ptr[j * 6 + 5] / scale_factor[0]}));
     }
     offset += (num_boxes[i] * 6);
   }

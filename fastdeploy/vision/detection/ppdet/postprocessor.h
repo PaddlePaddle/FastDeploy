@@ -32,15 +32,18 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-          std::vector<DetectionResult>* result);
+           std::vector<DetectionResult>* result);
+
   /// This function will enable decode and nms in postprocess step.
   void ApplyDecodeAndNMS();
+
+  /// This value to recode scale_factor
+  std::vector<float> scale_factor{1.0, 1.0};
 
  private:
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
-            std::vector<DetectionResult>* results);
-
+                   std::vector<DetectionResult>* results);
 
   bool apply_decode_and_nms_ = false;
   bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
