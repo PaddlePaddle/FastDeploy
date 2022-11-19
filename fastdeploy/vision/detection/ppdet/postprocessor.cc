@@ -131,10 +131,7 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
                 static_cast<const float*>(tensors[scores_index].Data()),
                 tensors[boxes_index].shape, tensors[scores_index].shape);
-    std::cout << "nms.out_num_rois_data.size() is "
-              << nms.out_num_rois_data.size() << std::endl;
     num_boxes = nms.out_num_rois_data;
-    std::cout << "num_boxes is " << num_boxes[0] << std::endl;
     box_data = static_cast<const float*>(nms.out_box_data.data());
   }
 

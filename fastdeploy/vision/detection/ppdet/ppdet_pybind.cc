@@ -73,6 +73,10 @@ void BindPPDet(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
+      .def("apply_decode_and_nms",
+            [](vision::detection::PPDetBase& self){
+                self.ApplyDecodeAndNMS();
+            })
       .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
