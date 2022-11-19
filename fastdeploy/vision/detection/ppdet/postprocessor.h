@@ -40,7 +40,11 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
             std::vector<DetectionResult>* results);
+
+
   bool apply_decode_and_nms_ = false;
+  bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
+                              std::vector<DetectionResult>* results);
 };
 
 }  // namespace detection

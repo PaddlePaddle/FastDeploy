@@ -64,77 +64,112 @@ bool PaddleDetPostprocessor::ProcessMask(
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
-  std::vector<int> num_boxes(tensors[1].shape[0]);
-  int num_output_boxes = 0;
-  bool contain_invalid_boxes = false;
-  const float* box_data = nullptr;
-  if (!apply_decode_and_nms_) {
-    num_output_boxes = static_cast<int>(tensors[0].Shape()[0]);
-    if (tensors[0].shape[0] == 0) {
-      // No detected boxes
-      return true;
-    }
-
-    // Get number of boxes for each input image
-    int total_num_boxes = 0;
-    if (tensors[1].dtype == FDDataType::INT32) {
-      const auto* data = static_cast<const int32_t*>(tensors[1].CpuData());
-      for (size_t i = 0; i < tensors[1].shape[0]; ++i) {
-        num_boxes[i] = static_cast<int>(data[i]);
-        total_num_boxes += num_boxes[i];
-      }
-    } else if (tensors[1].dtype == FDDataType::INT64) {
-      const auto* data = static_cast<const int64_t*>(tensors[1].CpuData());
-      for (size_t i = 0; i < tensors[1].shape[0]; ++i) {
-        num_boxes[i] = static_cast<int>(data[i]);
-      }
-    }
-
-    // Special case for TensorRT, it has fixed output shape of NMS
-    // So there's invalid boxes in its' output boxes
-    if (total_num_boxes != num_output_boxes) {
-      if (num_output_boxes % num_boxes.size() == 0) {
-        contain_invalid_boxes = true;
-      } else {
-        FDERROR << "Cannot handle the output data for this model, unexpected "
-                   "situation."
-                << std::endl;
-        return false;
-      }
-    }
-
-    box_data = static_cast<const float*>(tensors[0].CpuData());
-  } else {
-    int boxes_index = 0;
-    int scores_index = 1;
-    if (tensors[0].shape[1] == tensors[1].shape[2]) {
-      boxes_index = 0;
-      scores_index = 1;
-    } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
-      boxes_index = 1;
-      scores_index = 0;
-    } else {
-      FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
-                 "4], [batch, classes_num, boxes_num]"
-              << std::endl;
-      return false;
-    }
-
-    backend::MultiClassNMS nms;
-    nms.background_label = -1;
-    nms.keep_top_k = 100;
-    nms.nms_eta = 1.0;
-    nms.nms_threshold = 0.5;
-    nms.score_threshold = 0.3;
-    nms.nms_top_k = 1000;
-    nms.normalized = true;
-    nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
-                static_cast<const float*>(tensors[scores_index].Data()),
-                tensors[boxes_index].shape, tensors[scores_index].shape);
-    num_boxes = nms.out_num_rois_data;
-    box_data = static_cast<const float*>(nms.out_box_data.data());
+  if(apply_decode_and_nms_){
+    FDASSERT(tensors.size() == 2, "ProcessUnDecodeResults only support tensors.size() = 2");
+    return ProcessUnDecodeResults(tensors,results);
   }
 
+  if (tensors[0].shape[0] == 0) {
+    // No detected boxes
+    return true;
+  }
+
+  // Get number of boxes for each input image
+  std::vector<int> num_boxes(tensors[1].shape[0]);
+  int total_num_boxes = 0;
+  if (tensors[1].dtype == FDDataType::INT32) {
+    const auto* data = static_cast<const int32_t*>(tensors[1].CpuData());
+    for (size_t i = 0; i < tensors[1].shape[0]; ++i) {
+      num_boxes[i] = static_cast<int>(data[i]);
+      total_num_boxes += num_boxes[i];
+    }
+  } else if (tensors[1].dtype == FDDataType::INT64) {
+    const auto* data = static_cast<const int64_t*>(tensors[1].CpuData());
+    for (size_t i = 0; i < tensors[1].shape[0]; ++i) {
+      num_boxes[i] = static_cast<int>(data[i]);
+    }
+  }
+
+  // Special case for TensorRT, it has fixed output shape of NMS
+  // So there's invalid boxes in its' output boxes
+  int num_output_boxes = static_cast<int>(tensors[0].Shape()[0]);
+  bool contain_invalid_boxes = false;
+  if (total_num_boxes != num_output_boxes) {
+    if (num_output_boxes % num_boxes.size() == 0) {
+      contain_invalid_boxes = true;
+    } else {
+      FDERROR << "Cannot handle the output data for this model, unexpected situation." << std::endl;
+      return false;
+    }
+  }
+
+  // Get boxes for each input image
+  results->resize(num_boxes.size());
+  const auto* box_data = static_cast<const float*>(tensors[0].CpuData());
+  int offset = 0;
+  for (size_t i = 0; i < num_boxes.size(); ++i) {
+    const float* ptr = box_data + offset;
+    (*results)[i].Reserve(num_boxes[i]);
+    for (size_t j = 0; j < num_boxes[i]; ++j) {
+      (*results)[i].label_ids.push_back(static_cast<int32_t>(round(ptr[j * 6])));
+      (*results)[i].scores.push_back(ptr[j * 6 + 1]);
+      (*results)[i].boxes.emplace_back(std::array<float, 4>({ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
+    }
+    if (contain_invalid_boxes) {
+      offset +=  static_cast<int>(num_output_boxes * 6 / num_boxes.size());
+    } else {
+      offset += static_cast<int>(num_boxes[i] * 6);
+    }
+  }
+
+  if (tensors[2].Shape()[0] != num_output_boxes) {
+    FDERROR << "The first dimension of output mask tensor:"  << tensors[2].Shape()[0] << " is not equal to the first dimension of output boxes tensor:" << num_output_boxes << "." << std::endl;
+    return false;
+  }
+
+  // process for maskrcnn
+  return ProcessMask(tensors[2], results);
+}
+
+void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
+  apply_decode_and_nms_ = true;
+}
+
+bool PaddleDetPostprocessor::ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
+                                                    std::vector<DetectionResult>* results) {
+  if(tensors.size() != 2){
+    return false;
+  }
+
+  int boxes_index = 0;
+  int scores_index = 1;
+  if (tensors[0].shape[1] == tensors[1].shape[2]) {
+    boxes_index = 0;
+    scores_index = 1;
+  } else if (tensors[0].shape[2] == tensors[1].shape[1]) {
+    boxes_index = 1;
+    scores_index = 0;
+  } else {
+    FDERROR << "The shape of boxes and scores should be [batch, boxes_num, "
+               "4], [batch, classes_num, boxes_num]"
+            << std::endl;
+    return false;
+  }
+
+  backend::MultiClassNMS nms;
+  nms.background_label = -1;
+  nms.keep_top_k = 100;
+  nms.nms_eta = 1.0;
+  nms.nms_threshold = 0.5;
+  nms.score_threshold = 0.3;
+  nms.nms_top_k = 1000;
+  nms.normalized = true;
+  nms.Compute(static_cast<const float*>(tensors[boxes_index].Data()),
+              static_cast<const float*>(tensors[scores_index].Data()),
+              tensors[boxes_index].shape, tensors[scores_index].shape);
+
+  auto num_boxes = nms.out_num_rois_data;
+  auto box_data = static_cast<const float*>(nms.out_box_data.data());
   // Get boxes for each input image
   results->resize(num_boxes.size());
   int offset = 0;
@@ -148,33 +183,11 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
       (*results)[i].boxes.emplace_back(std::array<float, 4>(
           {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
     }
-    if (contain_invalid_boxes) {
-      offset += static_cast<int>(num_output_boxes * 6 / num_boxes.size());
-    } else {
-      offset += (num_boxes[i] * 6);
-    }
+    offset += (num_boxes[i] * 6);
   }
-
-  // Only detection
-  if (tensors.size() <= 2) {
-    return true;
-  }
-
-  if (tensors[2].Shape()[0] != num_output_boxes) {
-    FDERROR << "The first dimension of output mask tensor:"
-            << tensors[2].Shape()[0]
-            << " is not equal to the first dimension of output boxes tensor:"
-            << num_output_boxes << "." << std::endl;
-    return false;
-  }
-
-  // process for maskrcnn
-  return ProcessMask(tensors[2], results);
+  return true;
 }
 
-void PaddleDetPostprocessor::ApplyDecodeAndNMS() {
-  apply_decode_and_nms_ = true;
-}
 } // namespace detection
 } // namespace vision
 } // namespace fastdeploy
