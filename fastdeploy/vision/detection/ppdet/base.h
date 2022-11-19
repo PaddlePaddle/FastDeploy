@@ -79,9 +79,6 @@ class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
     return postprocessor_;
   }
 
-  /// This function will enable decode and nms in postprocess step.
-  void ApplyDecodeAndNMS();
-
  protected:
   virtual bool Initialize();
   PaddleDetPreprocessor preprocessor_;

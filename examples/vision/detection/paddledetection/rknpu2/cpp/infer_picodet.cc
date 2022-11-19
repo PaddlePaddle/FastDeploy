@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
 
 void InferPicodet(const std::string& model_dir, const std::string& image_file) {
   struct timeval start_time, stop_time;
-  auto model_file = model_dir + "/model.pdmodel";
+  auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3568.rknn";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
@@ -45,7 +45,8 @@ void InferPicodet(const std::string& model_dir, const std::string& image_file) {
 
   auto model = fastdeploy::vision::detection::PicoDet(
       model_file, params_file, config_file,option,format);
-  model.ApplyDecodeAndNMS();
+
+  model.GetPostprocessor().ApplyDecodeAndNMS();
 
   auto im = cv::imread(image_file);
 

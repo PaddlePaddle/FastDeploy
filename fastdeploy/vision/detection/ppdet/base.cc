@@ -67,7 +67,6 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
   return true;
 }
 
-void PPDetBase::ApplyDecodeAndNMS() { postprocessor_.ApplyDecodeAndNMS(); }
 } // namespace detection
 } // namespace vision
 } // namespace fastdeploy
