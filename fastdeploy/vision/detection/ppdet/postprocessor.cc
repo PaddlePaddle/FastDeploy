@@ -127,6 +127,11 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
     }
   }
 
+  // Only detection
+  if (tensors.size() <= 2) {
+    return true;
+  }
+
   if (tensors[2].Shape()[0] != num_output_boxes) {
     FDERROR << "The first dimension of output mask tensor:"
             << tensors[2].Shape()[0]
