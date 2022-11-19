@@ -52,6 +52,11 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
+    def apply_decode_and_nms(self):
+        """This function will enable decode and nms in postprocess step.
+        """
+        return self._postprocessor.apply_decode_and_nms()
+
 
 class PPYOLOE(FastDeployModel):
     def __init__(self,
@@ -84,11 +89,6 @@ class PPYOLOE(FastDeployModel):
 
         assert im is not None, "The input image data is None."
         return self._model.predict(im)
-
-    def apply_decode_and_nms(self):
-        """This function will enable decode and nms in postprocess step.
-        """
-        return self._model.apply_decode_and_nms()
 
     def batch_predict(self, images):
         """Detect a batch of input image list

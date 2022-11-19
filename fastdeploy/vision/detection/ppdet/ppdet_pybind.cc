@@ -43,6 +43,10 @@ void BindPPDet(pybind11::module& m) {
         }
         return results;
       })
+      .def("apply_decode_and_nms",
+           [](vision::detection::PaddleDetPostprocessor& self){
+             self.ApplyDecodeAndNMS();
+           })
       .def("run", [](vision::detection::PaddleDetPostprocessor& self, std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
         std::vector<FDTensor> inputs;
@@ -73,10 +77,6 @@ void BindPPDet(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
-      .def("apply_decode_and_nms",
-            [](vision::detection::PPDetBase& self){
-                self.ApplyDecodeAndNMS();
-            })
       .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
