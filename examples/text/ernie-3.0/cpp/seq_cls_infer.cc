@@ -124,10 +124,10 @@ struct SeqClsResult {
 
 struct ErnieForSequenceClassificationPredictor {
   fastdeploy::Runtime runtime_;
-  ErnieFasterTokenizer tokenizer_;
+  ErnieFastTokenizer tokenizer_;
   ErnieForSequenceClassificationPredictor(
       const fastdeploy::RuntimeOption& option,
-      const ErnieFasterTokenizer& tokenizer)
+      const ErnieFastTokenizer& tokenizer)
       : tokenizer_(tokenizer) {
     runtime_.Init(option);
   }
@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
   }
-  ErnieFasterTokenizer tokenizer(vocab_path);
+  ErnieFastTokenizer tokenizer(vocab_path);
 
   ErnieForSequenceClassificationPredictor predictor(option, tokenizer);
 
