@@ -32,8 +32,8 @@ if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/opencv ]; then
 fi
 
 if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/lib:${LD_LIBRARY_PATH}
-	echo "OpenVINO Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/lib"
+	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/runtime/lib:${LD_LIBRARY_PATH}
+	echo "OpenVINO Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/runtime/lib"
 fi
 
 if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/tensorrt ]; then
@@ -60,5 +60,9 @@ if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite ]; th
 	echo "Paddle Lite Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib"
 fi
 
+if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer ]; then
+        export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer/lib:${LD_LIBRARY_PATH}
+	echo "Faster Tokenizer Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer/lib"
+fi
 
 cd ${CURRENT_EXE_DIR}
