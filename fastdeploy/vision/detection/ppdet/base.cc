@@ -50,9 +50,8 @@ bool PPDetBase::BatchPredict(const std::vector<cv::Mat>& imgs,
   reused_input_tensors_[1].name = "scale_factor";
   reused_input_tensors_[2].name = "im_shape";
 
-  for (int i = 0; i < 2; ++i) {
-    postprocessor_.scale_factor[i] =
-        static_cast<float*>(reused_input_tensors_[1].Data())[i];
+  if(postprocessor_.DecodeAndNMSApplied()){
+    postprocessor_.SetScaleFactor(static_cast<float*>(reused_input_tensors_[1].Data()));
   }
 
   // Some models don't need scale_factor and im_shape as input

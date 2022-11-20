@@ -64,9 +64,15 @@ bool PaddleDetPostprocessor::ProcessMask(
 
 bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  std::vector<DetectionResult>* results) {
-  if (apply_decode_and_nms_) {
+  if (DecodeAndNMSApplied()) {
     FDASSERT(tensors.size() == 2,
-             "ProcessUnDecodeResults only support tensors.size() = 2");
+             "While postprocessing with ApplyDecodeAndNMS, "
+             "there should be 2 outputs for this model, but now it's %zu.",
+             tensors.size());
+    FDASSERT(tensors[0].shape.size() == 3,
+             "While postprocessing with ApplyDecodeAndNMS, "
+             "the rank of the first outputs should be 3, but now it's %zu",
+             tensors[0].shape.size());
     return ProcessUnDecodeResults(tensors, results);
   }
 
@@ -195,16 +201,29 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
           static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
       (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2] / scale_factor[1],
-           ptr[j * 6 + 3] / scale_factor[0],
-           ptr[j * 6 + 4] / scale_factor[1],
-           ptr[j * 6 + 5] / scale_factor[0]}));
+          {ptr[j * 6 + 2] / GetScaleFactor()[1],
+           ptr[j * 6 + 3] / GetScaleFactor()[0],
+           ptr[j * 6 + 4] / GetScaleFactor()[1],
+           ptr[j * 6 + 5] / GetScaleFactor()[0]}));
     }
     offset += (num_boxes[i] * 6);
   }
   return true;
 }
 
+std::vector<float> PaddleDetPostprocessor::GetScaleFactor(){
+  return scale_factor_;
+}
+
+void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
+  for (int i = 0; i < scale_factor_.size(); ++i) {
+    scale_factor_[i] = scale_factor_value[i];
+  }
+}
+
+bool PaddleDetPostprocessor::DecodeAndNMSApplied() {
+  return apply_decode_and_nms_;
+}
 } // namespace detection
 } // namespace vision
 } // namespace fastdeploy
