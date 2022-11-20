@@ -47,9 +47,7 @@ Based on X2Paddle, FastDeploy provides users with a model conversion tool. Users
 
 ### Environmental Preparation
 
-1. Install PaddlePaddle
-
-Refer to the following documents for quick installation
+1. Install PaddlePaddle, refer to the following documents for quick installation
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```

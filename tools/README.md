@@ -48,9 +48,7 @@ FastDeploy 基于 X2Paddle 为用户提供了模型转换的工具, 用户可以
 
 ### 环境准备
 
-1. PaddlePaddle 安装
-
-参考如下文档快速安装
+1. PaddlePaddle 安装，可参考如下文档快速安装
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
