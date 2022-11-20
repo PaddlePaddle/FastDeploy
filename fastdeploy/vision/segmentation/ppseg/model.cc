@@ -236,7 +236,9 @@ bool PaddleSegModel::Postprocess(
   // for resize mat below
   FDTensor new_infer_result;
   Mat* mat = nullptr;
-  std::vector<float_t>* fp32_result_buffer = nullptr;
+  // std::vector<float_t>* fp32_result_buffer = nullptr;
+  std::vector<uint8_t>* uint8_result_buffer = nullptr;
+
   if (is_resized) {
     if (infer_result->dtype == FDDataType::INT64 ||
         infer_result->dtype == FDDataType::INT32) {
@@ -246,8 +248,10 @@ bool PaddleSegModel::Postprocess(
         // cv::resize don't support `CV_8S` or `CV_32S`
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
-        fp32_result_buffer = new std::vector<float_t>(
-            infer_result_buffer, infer_result_buffer + infer_chw);
+        // fp32_result_buffer = new std::vector<float_t>(
+        //     infer_result_buffer, infer_result_buffer + infer_chw);
+        uint8_result_buffer = new std::vector<uint8_t>(
+            infer_result_buffer, infer_result_buffer + infer_chw);    
       }
       if (infer_result->dtype == FDDataType::INT32) {
         int32_t* infer_result_buffer =
@@ -255,13 +259,20 @@ bool PaddleSegModel::Postprocess(
         // cv::resize don't support `CV_8S` or `CV_32S`
         // refer to https://github.com/opencv/opencv/issues/20991
         // https://github.com/opencv/opencv/issues/7862
-        fp32_result_buffer = new std::vector<float_t>(
-            infer_result_buffer, infer_result_buffer + infer_chw);
+        // fp32_result_buffer = new std::vector<float_t>(
+        //     infer_result_buffer, infer_result_buffer + infer_chw);
+        uint8_result_buffer = new std::vector<uint8_t>(
+          infer_result_buffer, infer_result_buffer + infer_chw);    
       }
-      infer_result->Resize(infer_result->shape, FDDataType::FP32);
+      // infer_result->Resize(infer_result->shape, FDDataType::FP32);
+      // infer_result->SetExternalData(
+      //     infer_result->shape, FDDataType::FP32,
+      //     static_cast<void*>(fp32_result_buffer->data()));
+
+      infer_result->Resize(infer_result->shape, FDDataType::UINT8);
       infer_result->SetExternalData(
-          infer_result->shape, FDDataType::FP32,
-          static_cast<void*>(fp32_result_buffer->data()));
+          infer_result->shape, FDDataType::UINT8,
+          static_cast<void*>(uint8_result_buffer->data()));    
     }
     mat = new Mat(Mat::Create(*infer_result, ProcLib::OPENCV));
     Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1, false, ProcLib::OPENCV);
@@ -303,10 +314,13 @@ bool PaddleSegModel::Postprocess(
   } else {
     // output only with label_map
     if (is_resized) {
-      float_t* infer_result_buffer =
-          static_cast<float_t*>(new_infer_result.Data());
+      // float_t* infer_result_buffer =
+      //     static_cast<float_t*>(new_infer_result.Data());
+      uint8_t* infer_result_buffer =
+          static_cast<uint8_t*>(new_infer_result.Data());
       for (int i = 0; i < out_num; i++) {
-        result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+        // result->label_map[i] = static_cast<uint8_t>(*(infer_result_buffer + i));
+        result->label_map[i] = *(infer_result_buffer + i);
       }
     } else {
       if (infer_result->dtype == FDDataType::INT64) {
@@ -329,7 +343,8 @@ bool PaddleSegModel::Postprocess(
   }
   // HWC remove C
   result->shape.erase(result->shape.begin() + 2);
-  delete fp32_result_buffer;
+  // delete fp32_result_buffer;
+  delete uint8_result_buffer;
   delete mat;
   mat = nullptr;
   return true;
