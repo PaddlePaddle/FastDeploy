@@ -60,7 +60,7 @@ if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite ]; th
 	echo "Paddle Lite Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib"
 fi
 
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster-tokenizer ]; then
+if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer ]; then
         export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer/lib:${LD_LIBRARY_PATH}
 	echo "Faster Tokenizer Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/faster_tokenizer/lib"
 fi
