@@ -3,8 +3,10 @@
 FastDeploy provides pre-built libraries for developers to download and install directly. Meanwhile, FastDeploy also offers easy access to compile so that developers can compile FastDeploy according to their own needs.
 
 This article is divided into two parts:
-- [1.GPU Deployment Environment](#gpu-deployment-environment)
-- [2.CPU Deployment Environment](#cpu-deployment-environment)
+- [1.GPU Deployment Environment](#1)
+- [2.CPU Deployment Environment](#2)
+
+<p id="1"></p>
 
 ## GPU Deployment Environment
 
@@ -52,6 +54,8 @@ Install the Develop version（Nightly build）
 |:----------- |:--------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------- |
 | Linux x64 | [fastdeploy-linux-x64-gpu-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-gpu-0.0.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2 |
 | Windows x64 | [fastdeploy-win-x64-gpu-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-gpu-0.0.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
+
+<p id="2"></p>
 
 ## CPU Deployment Environment
 
