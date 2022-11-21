@@ -10,7 +10,7 @@ def cosine_similarity(a, b):
     mul_a = np.linalg.norm(a, ord=2)
     mul_b = np.linalg.norm(b, ord=2)
     mul_ab = np.dot(a, b)
-    return mul_ab / (np.sqrt(mul_a) * np.sqrt(mul_b))
+    return mul_ab / (mul_a * mul_b)
 
 
 def parse_arguments():
