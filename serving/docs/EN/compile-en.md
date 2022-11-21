@@ -13,7 +13,7 @@ bash scripts/build.sh
 
 # Exit to the FastDeploy home directory and create the image
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
+docker build -t paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
 ```
 
 ## CPU Image
@@ -26,7 +26,7 @@ bash scripts/build.sh OFF
 
 # Exit to the FastDeploy home directory and create the image
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10 -f serving/Dockerfile_cpu .
+docker build -t paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
 
 ## IPU Image
@@ -38,5 +38,5 @@ bash scripts/build_fd_ipu.sh
 
 # Exit to the FastDeploy home directory and create the image
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.3.0-ipu-only-21.10 -f serving/Dockerfile_ipu .
+docker build -t paddlepaddle/fastdeploy:0.6.0-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```

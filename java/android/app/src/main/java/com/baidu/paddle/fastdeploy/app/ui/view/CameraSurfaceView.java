@@ -30,9 +30,8 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         SurfaceTexture.OnFrameAvailableListener {
     private static final String TAG = CameraSurfaceView.class.getSimpleName();
 
-    public static final int EXPECTED_PREVIEW_WIDTH = 1280;
-    public static final int EXPECTED_PREVIEW_HEIGHT = 720;
-
+    public static int EXPECTED_PREVIEW_WIDTH = 1280;
+    public static int EXPECTED_PREVIEW_HEIGHT = 720;
 
     protected int numberOfCameras;
     protected int selectedCameraId;
