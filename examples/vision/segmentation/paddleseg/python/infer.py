@@ -46,12 +46,22 @@ params_file = os.path.join(args.model, "model.pdiparams")
 config_file = os.path.join(args.model, "deploy.yaml")
 model = fd.vision.segmentation.PaddleSegModel(
     model_file, params_file, config_file, runtime_option=runtime_option)
+model.postprocessor.is_store_score_map = True
 
 # 预测图片分割结果
 im = cv2.imread(args.image)
+im2 = cv2.imread(
+    "/huangjianhui/fastdeploy_pp_seg/official/FastDeploy/examples/vision/segmentation/paddleseg/python/portrait_shu.jpg"
+)
 result = model.predict(im.copy())
+#result = model.batch_predict([im, im2])
 print(result)
+print(result.score_map)
 
 # 可视化结果
 vis_im = fd.vision.vis_segmentation(im, result, weight=0.5)
 cv2.imwrite("vis_img.png", vis_im)
+#vis_im = fd.vision.vis_segmentation(im, result[0], weight=0.5)
+#cv2.imwrite("vis_img.png", vis_im)
+#vis_im = fd.vision.vis_segmentation(im2, result[1], weight=0.5)
+#cv2.imwrite("vis_img_2.png", vis_im)

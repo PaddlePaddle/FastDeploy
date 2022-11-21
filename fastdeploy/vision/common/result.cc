@@ -332,6 +332,18 @@ std::string SegmentationResult::Str() {
   return out;
 }
 
+SegmentationResult& SegmentationResult::operator=(SegmentationResult&& other) {
+  if (&other != this) {
+    label_map = std::move(other.label_map);
+    shape = std::move(other.shape);
+    contain_score_map = std::move(contain_score_map);
+    if (contain_score_map) {
+      score_map.clear();
+      score_map = std::move(other.score_map);
+    }
+  }
+  return *this;
+}
 FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
   embedding.assign(res.embedding.begin(), res.embedding.end());
 }

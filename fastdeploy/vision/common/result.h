@@ -247,6 +247,7 @@ struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
 /*! @brief Segmentation result structure for all the segmentation models
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  SegmentationResult() = default;
   /** \brief
    * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
   */
@@ -258,6 +259,11 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   /// The output shape, means [H, W]
   std::vector<int64_t> shape;
   bool contain_score_map = false;
+
+  /// Copy constructor
+  SegmentationResult(const SegmentationResult& other) = default;
+  /// Move assignment
+  SegmentationResult& operator=(SegmentationResult&& other);
 
   ResultType type = ResultType::SEGMENTATION;
   /// Clear detection result
