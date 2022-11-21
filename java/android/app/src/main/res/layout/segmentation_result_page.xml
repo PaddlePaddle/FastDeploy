@@ -67,7 +67,7 @@
             android:layout_marginRight="@dimen/result_list_padding_lr"
             android:layout_marginBottom="@dimen/result_list_gap_width"
             android:background="@drawable/result_page_border_section_bk"
-            android:visibility="visible">
+            android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
