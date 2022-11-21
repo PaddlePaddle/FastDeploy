@@ -258,6 +258,7 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   std::vector<float> score_map;
   /// The output shape, means [H, W]
   std::vector<int64_t> shape;
+  /// SegmentationResult whether containing score_map
   bool contain_score_map = false;
 
   /// Copy constructor

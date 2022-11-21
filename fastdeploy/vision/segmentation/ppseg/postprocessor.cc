@@ -53,48 +53,52 @@ bool PaddleSegPostprocessor::ReadFromConfig(const std::string& config_file) {
   return true;
 }
 
-bool PaddleSegPostprocessor::CopyFromInferResults(FDTensor& infer_results,
+bool PaddleSegPostprocessor::CopyFromInferResults(const FDTensor& infer_results,
                                                   FDTensor* infer_result,
+                                                  const std::vector<int64_t>& infer_result_shape,
                                                   const int64_t start_idx,
                                                   const int64_t offset,
                                                   std::vector<int32_t>* int32_copy_result_buffer,
                                                   std::vector<int64_t>* int64_copy_result_buffer,
                                                   std::vector<float_t>* fp32_copy_result_buffer) {
   int64_t infer_batch = infer_results.shape[0];
-  int64_t infer_channel = infer_results.shape[1];
-  int64_t infer_height = infer_results.shape[2];
-  int64_t infer_width = infer_results.shape[3];
-  if (infer_results.dtype == FDDataType::FP32) {
-    const float_t* infer_results_buffer =
-        static_cast<float_t*>(infer_results.Data()) + start_idx;
-    fp32_copy_result_buffer = new std::vector<float_t>(
-          infer_results_buffer, infer_results_buffer + offset);
-    infer_result->Resize({infer_channel, infer_height, infer_width}, FDDataType::FP32);
-    infer_result->SetExternalData(
-        infer_result->shape, FDDataType::FP32,
-        static_cast<void*>(fp32_copy_result_buffer->data()));
-  }
-  else if (infer_results.dtype == FDDataType::INT64) {
-    const int64_t* infer_results_buffer =
-        static_cast<const int64_t*>(infer_results.Data()) + start_idx;
-    int64_copy_result_buffer = new std::vector<int64_t>(
-          infer_results_buffer, infer_results_buffer + offset);
-    infer_result->Resize({infer_channel, infer_height, infer_width}, FDDataType::INT64);
-    infer_result->SetExternalData(
-        infer_result->shape, FDDataType::INT64,
-        static_cast<void*>(int64_copy_result_buffer->data()));
-  }else if (infer_results.dtype == FDDataType::INT32) {
-    const int32_t* infer_results_buffer =
-        static_cast<const int32_t*>(infer_results.Data()) + start_idx;
-    int32_copy_result_buffer = new std::vector<int32_t>(
-          infer_results_buffer, infer_results_buffer + offset);
-    infer_result->Resize({infer_channel, infer_height, infer_width}, FDDataType::INT32);
-    infer_result->SetExternalData(
-        infer_result->shape, FDDataType::INT32,
-        static_cast<void*>(int32_copy_result_buffer->data()));
+  if(infer_batch == 1) {
+    *infer_result = infer_results;
+    // batch is 1, so ignore
+    infer_result->shape = infer_result_shape;
   } else {
-    FDERROR << "Don't support infer_results FDDataType." << std::endl;
-    return false;
+    if (infer_results.dtype == FDDataType::FP32) {
+      const float_t* infer_results_buffer =
+          static_cast<const float_t*>(infer_results.Data()) + start_idx;
+      fp32_copy_result_buffer = new std::vector<float_t>(
+            infer_results_buffer, infer_results_buffer + offset);
+      infer_result->Resize(infer_result_shape, FDDataType::FP32);
+      infer_result->SetExternalData(
+          infer_result->shape, FDDataType::FP32,
+          static_cast<void*>(fp32_copy_result_buffer->data()));
+    }
+    else if (infer_results.dtype == FDDataType::INT64) {
+      const int64_t* infer_results_buffer =
+          static_cast<const int64_t*>(infer_results.Data()) + start_idx;
+      int64_copy_result_buffer = new std::vector<int64_t>(
+            infer_results_buffer, infer_results_buffer + offset);
+      infer_result->Resize(infer_result_shape, FDDataType::INT64);
+      infer_result->SetExternalData(
+          infer_result->shape, FDDataType::INT64,
+          static_cast<void*>(int64_copy_result_buffer->data()));
+    }else if (infer_results.dtype == FDDataType::INT32) {
+      const int32_t* infer_results_buffer =
+          static_cast<const int32_t*>(infer_results.Data()) + start_idx;
+      int32_copy_result_buffer = new std::vector<int32_t>(
+            infer_results_buffer, infer_results_buffer + offset);
+      infer_result->Resize(infer_result_shape, FDDataType::INT32);
+      infer_result->SetExternalData(
+          infer_result->shape, FDDataType::INT32,
+          static_cast<void*>(int32_copy_result_buffer->data()));
+    } else {
+      FDERROR << "Don't support infer_results FDDataType." << std::endl;
+      return false;
+    }
   }
   return true;
 }
@@ -102,24 +106,27 @@ bool PaddleSegPostprocessor::CopyFromInferResults(FDTensor& infer_results,
 bool PaddleSegPostprocessor::ProcessWithScoreResult(const FDTensor& infer_result,
                                                     const int64_t out_num,
                                                     SegmentationResult* result) {
-  // output with label_map and score_map
-  result->contain_score_map = true;
   int32_t* argmax_infer_result_buffer = nullptr;
   float_t* score_infer_result_buffer = nullptr;
   FDTensor argmax_infer_result;
   FDTensor max_score_result;
   std::vector<int64_t> reduce_dim{-1};
   function::ArgMax(infer_result, &argmax_infer_result, -1, FDDataType::INT32);
-  function::Max(infer_result, &max_score_result, reduce_dim);
+  if (is_store_score_map_) {
+    function::Max(infer_result, &max_score_result, reduce_dim);
+    score_infer_result_buffer = static_cast<float_t*>(max_score_result.Data());
+    std::memcpy(result->score_map.data(), score_infer_result_buffer,
+              out_num * sizeof(float_t));
+  }
+  
   argmax_infer_result_buffer =
       static_cast<int32_t*>(argmax_infer_result.Data());
-  score_infer_result_buffer = static_cast<float_t*>(max_score_result.Data());
+  
   for (int i = 0; i < out_num; i++) {
     result->label_map[i] =
         static_cast<uint8_t>(*(argmax_infer_result_buffer + i));
   }
-  std::memcpy(result->score_map.data(), score_infer_result_buffer,
-              out_num * sizeof(float_t));
+  
   return true;
 }
 
@@ -158,22 +165,20 @@ bool PaddleSegPostprocessor::ProcessWithLabelResult(FDTensor& infer_result,
   return true;
 }
 
-bool PaddleSegPostprocessor::Transform2ArgmaxResults(FDTensor* infer_result) {
-  FDTensor argmax_infer_result;
-  function::ArgMax(*infer_result, &argmax_infer_result, 1, FDDataType::INT32);
-  *infer_result = argmax_infer_result;
-  return true;
-}
-
 bool PaddleSegPostprocessor::ResizeInferResult(FDTensor& infer_result,
                                                const int64_t offset, 
                                                const std::array<int, 2> resize_info,
 		                                           FDTensor* new_infer_result,
                                                std::vector<uint8_t>* uint8_result_buffer, 
 					                                     Mat* mat) {
-  // FDTensor tmp_fd_tensor;
+  FDDataType infer_results_dtype = infer_result.dtype;
+  FDASSERT(infer_results_dtype == FDDataType::INT64 ||
+           infer_results_dtype == FDDataType::FP32 ||
+           infer_results_dtype == FDDataType::INT32,
+           "Don't support FDDataType : %s for resizing operation in PaddleSeg.",
+           Str(infer_results_dtype).c_str());
   if (infer_result.dtype == FDDataType::INT64 ||
-      infer_result.dtype == FDDataType::INT32) {
+      infer_result.dtype == FDDataType::INT32 ) {
     if (infer_result.dtype == FDDataType::INT64) {
       int64_t* infer_result_buffer =
           static_cast<int64_t*>(infer_result.Data());
@@ -197,10 +202,7 @@ bool PaddleSegPostprocessor::ResizeInferResult(FDTensor& infer_result,
     infer_result.SetExternalData(
         infer_result.shape, FDDataType::UINT8,
         static_cast<void*>(uint8_result_buffer->data()));
-  } else {
-    FDERROR << "Don't support FDDataType for resizing shape in PaddleSeg." << std::endl; 
-    return false;
-  }
+  } 
   mat = new Mat(Mat::Create(infer_result, ProcLib::OPENCV));
   Resize::Run(mat, resize_info[1], resize_info[0], -1.0f, -1.0f, 1, false, ProcLib::OPENCV);
   mat->ShareWithTensor(new_infer_result);
@@ -208,7 +210,7 @@ bool PaddleSegPostprocessor::ResizeInferResult(FDTensor& infer_result,
 }
 
 bool PaddleSegPostprocessor::Run(
-    std::vector<FDTensor>& infer_results,
+    const std::vector<FDTensor>& infer_results,
     std::vector<SegmentationResult>* results,
     const std::map<std::string, std::vector<std::array<int, 2>>>& imgs_info) {
   // PaddleSeg has three types of inference output:
@@ -239,6 +241,9 @@ bool PaddleSegPostprocessor::Run(
   auto iter_input_imgs_shape_list = imgs_info.find("shape_info");
   FDASSERT(iter_input_imgs_shape_list != imgs_info.end(), "Cannot find shape_info from imgs_info.");
 
+  // For Argmax Softmax function below
+  FDTensor transform_infer_results;
+  bool is_transform = false;
   int64_t infer_batch = infer_results[0].shape[0];
   int64_t infer_channel = 0;
   int64_t infer_height = 0;
@@ -253,20 +258,19 @@ bool PaddleSegPostprocessor::Run(
     infer_channel = 1;
     infer_height = infer_results[0].shape[2];
     infer_width = infer_results[0].shape[3];
+    is_transform = true;
     if(is_store_score_map_) {
       infer_channel = infer_results[0].shape[1];
       std::vector<int64_t> dim{0, 2, 3, 1};
-      function::Transpose(infer_results[0], &infer_results[0], dim);
+      function::Transpose(infer_results[0], &transform_infer_results, dim);
       if (!is_with_softmax_ && apply_softmax_) {
-        function::Softmax(infer_results[0], &infer_results[0], -1);
+        function::Softmax(transform_infer_results, &transform_infer_results, 1);
       }
     } else {
-      Transform2ArgmaxResults(&infer_results[0]);
-      infer_results_dtype = infer_results[0].dtype;
+      function::ArgMax(infer_results[0], &transform_infer_results, 1, FDDataType::INT32);
+      infer_results_dtype = transform_infer_results.dtype;
     }
   }
-
-  infer_results[0].shape = {infer_batch, infer_height, infer_width, infer_channel};
 
   int64_t infer_chw = infer_channel * infer_height * infer_width;
 
@@ -277,17 +281,24 @@ bool PaddleSegPostprocessor::Run(
     int64_t start_idx = i * infer_chw;
 
     FDTensor infer_result;
+    std::vector<int64_t> infer_result_shape = {infer_height, infer_width, infer_channel};
     std::vector<int32_t>* int32_copy_result_buffer = nullptr;
     std::vector<int64_t>* int64_copy_result_buffer = nullptr;
     std::vector<float_t>* fp32_copy_result_buffer = nullptr;
     
-    if (infer_batch == 1) {
-      infer_result = infer_results[0];
-      // batch is 1, so ignore
-      infer_result.shape = {infer_height, infer_width, infer_channel};
+    if (is_transform) {
+      CopyFromInferResults(transform_infer_results, 
+                           &infer_result,
+                           infer_result_shape,
+                           start_idx, 
+                           infer_chw,
+                           int32_copy_result_buffer,
+                           int64_copy_result_buffer,
+                           fp32_copy_result_buffer);
     } else {
       CopyFromInferResults(infer_results[0], 
                            &infer_result,
+                           infer_result_shape,
                            start_idx, 
                            infer_chw,
                            int32_copy_result_buffer,
@@ -314,14 +325,18 @@ bool PaddleSegPostprocessor::Run(
     int out_num =
         std::accumulate(result->shape.begin(), result->shape.begin() + 2, 1,
                         std::multiplies<int>());
-    result->Resize(out_num);
+  
     if (!is_with_argmax_ && is_store_score_map_) {
+      // output with label_map and score_map
+      result->contain_score_map = true;
+      result->Resize(out_num);
       if (is_resized) {
         ProcessWithScoreResult(new_infer_result, out_num, result);
       } else {
         ProcessWithScoreResult(infer_result, out_num, result);
       }
     } else {
+      result->Resize(out_num);
       // output only with label_map
       if (is_resized) {
         ProcessWithLabelResult(new_infer_result, out_num, result);

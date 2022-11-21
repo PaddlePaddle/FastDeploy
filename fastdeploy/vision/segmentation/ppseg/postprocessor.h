@@ -36,10 +36,10 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
    * \param[in] imgs_info The original input images shape info map, key is "shape_info", value is vector<array<int, 2>> a{{height, width}}
    * \return true if the postprocess successed, otherwise false
    */
-  virtual bool Run(std::vector<FDTensor>& infer_results,
-                   std::vector<SegmentationResult>* results,
-                   const std::map<std::string,
-                                  std::vector<std::array<int, 2>>>& imgs_info);
+  virtual bool Run(
+    const std::vector<FDTensor>& infer_results,
+    std::vector<SegmentationResult>* results,
+    const std::map<std::string, std::vector<std::array<int, 2>>>& imgs_info);
 
   /** \brief Get apply_softmax property of PaddleSeg model, default is false
    */
@@ -66,8 +66,9 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
   virtual bool ReadFromConfig(const std::string& config_file);
 
   virtual bool CopyFromInferResults(
-                  FDTensor& infer_results,
+                  const FDTensor& infer_results,
                   FDTensor* infer_result,
+                  const std::vector<int64_t>& infer_result_shape,
                   const int64_t start_idx,
                   const int64_t offset,
                   std::vector<int32_t>* int32_copy_result_buffer,
@@ -81,8 +82,6 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
   virtual bool ProcessWithLabelResult(FDTensor& infer_result,
                                       const int64_t out_num,
                                       SegmentationResult* result);
-
-  virtual bool Transform2ArgmaxResults(FDTensor* infer_result);
 
   virtual bool ResizeInferResult(FDTensor& infer_result,
                                  const int64_t offset,

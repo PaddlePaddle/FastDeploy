@@ -293,7 +293,7 @@ void SegmentationResult::Clear() {
 
 void SegmentationResult::Reserve(int size) {
   label_map.reserve(size);
-  if (contain_score_map > 0) {
+  if (contain_score_map) {
     score_map.reserve(size);
   }
 }
@@ -336,7 +336,7 @@ SegmentationResult& SegmentationResult::operator=(SegmentationResult&& other) {
   if (&other != this) {
     label_map = std::move(other.label_map);
     shape = std::move(other.shape);
-    contain_score_map = std::move(contain_score_map);
+    contain_score_map = std::move(other.contain_score_map);
     if (contain_score_map) {
       score_map.clear();
       score_map = std::move(other.score_map);
