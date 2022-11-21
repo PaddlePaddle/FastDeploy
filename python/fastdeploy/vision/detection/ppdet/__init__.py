@@ -52,6 +52,11 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
+    def apply_decode_and_nms(self):
+        """This function will enable decode and nms in postprocess step.
+        """
+        return self._postprocessor.apply_decode_and_nms()
+
 
 class PPYOLOE(FastDeployModel):
     def __init__(self,
@@ -70,7 +75,6 @@ class PPYOLOE(FastDeployModel):
         """
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PPYOLOE model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PPYOLOE(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -179,7 +183,6 @@ class PicoDet(PPYOLOE):
 
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PicoDet model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PicoDet(
             model_file, params_file, config_file, self._runtime_option,
             model_format)

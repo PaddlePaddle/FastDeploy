@@ -22,11 +22,13 @@ namespace vision {
 namespace detection {
 
 PaddleDetPreprocessor::PaddleDetPreprocessor(const std::string& config_file) {
-  FDASSERT(BuildPreprocessPipelineFromConfig(config_file), "Failed to create PaddleDetPreprocessor.");
+  FDASSERT(BuildPreprocessPipelineFromConfig(config_file),
+           "Failed to create PaddleDetPreprocessor.");
   initialized_ = true;
 }
 
-bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(const std::string& config_file) {
+bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(
+    const std::string& config_file) {
   processors_.clear();
   YAML::Node cfg;
   try {
@@ -106,8 +108,6 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
     // permute = cast<float> + HWC2CHW
     processors_.push_back(std::make_shared<Cast>("float"));
     processors_.push_back(std::make_shared<HWC2CHW>());
-  } else {
-    processors_.push_back(std::make_shared<HWC2CHW>());
   }
 
   // Fusion will improve performance
@@ -116,13 +116,15 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(const std::string&
   return true;
 }
 
-bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
+                                std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
 
@@ -140,8 +142,9 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   // All the tensor will pad to the max size to compose a batched tensor
   std::vector<int> max_hw({-1, -1});
 
-  float* scale_factor_ptr = reinterpret_cast<float*>((*outputs)[1].MutableData());
-  float* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData()); 
+  float* scale_factor_ptr =
+      reinterpret_cast<float*>((*outputs)[1].MutableData());
+  float* im_shape_ptr = reinterpret_cast<float*>((*outputs)[2].MutableData());
   for (size_t i = 0; i < images->size(); ++i) {
     int origin_w = (*images)[i].Width();
     int origin_h = (*images)[i].Height();
@@ -149,7 +152,8 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     scale_factor_ptr[2 * i + 1] = 1.0;
     for (size_t j = 0; j < processors_.size(); ++j) {
       if (!(*(processors_[j].get()))(&((*images)[i]))) {
-        FDERROR << "Failed to processs image:" << i << " in " << processors_[i]->Name() << "." << std::endl;
+        FDERROR << "Failed to processs image:" << i << " in "
+                << processors_[i]->Name() << "." << std::endl;
         return false;
       }
       if (processors_[j]->Name().find("Resize") != std::string::npos) {
@@ -166,15 +170,18 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
     im_shape_ptr[2 * i] = max_hw[0];
     im_shape_ptr[2 * i + 1] = max_hw[1];
   }
-   
+
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> im_tensors(images->size()); 
+  std::vector<FDTensor> im_tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     if ((*images)[i].Height() < max_hw[0] || (*images)[i].Width() < max_hw[1]) {
       // if the size of image less than max_hw, pad to max_hw
       FDTensor tensor;
       (*images)[i].ShareWithTensor(&tensor);
-      function::Pad(tensor, &(im_tensors[i]), {0, 0, max_hw[0] - (*images)[i].Height(), max_hw[1] - (*images)[i].Width()}, 0);
+      function::Pad(tensor, &(im_tensors[i]),
+                    {0, 0, max_hw[0] - (*images)[i].Height(),
+                     max_hw[1] - (*images)[i].Width()},
+                    0);
     } else {
       // No need pad
       (*images)[i].ShareWithTensor(&(im_tensors[i]));
@@ -196,6 +203,6 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   return true;
 }
 
-}  // namespace detection
-}  // namespace vision
-}  // namespace fastdeploy
+} // namespace detection
+} // namespace vision
+} // namespace fastdeploy

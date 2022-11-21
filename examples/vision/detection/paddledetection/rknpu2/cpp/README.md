@@ -62,7 +62,7 @@ make install
 
 ```bash
 cd ./build/install
-./rknpu_test
+./infer_picodet model/picodet_s_416_coco_lcnet images/000000014439.jpg
 ```
 
 
