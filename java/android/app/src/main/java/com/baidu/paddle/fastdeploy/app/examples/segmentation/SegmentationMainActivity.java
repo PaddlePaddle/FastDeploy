@@ -310,8 +310,13 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
     public void initView() {
         TYPE = REALTIME_DETECT;
-        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
-        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 360;
+        // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
+        // should mean 'width' if the camera display orientation is 90 | 270 degree
+        // (Hold the phone upright to record video)
+        // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
+        // So, we set this preview size (480,480) here.
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         svPreview.switchCamera(); // Front camera for HumanSeg
