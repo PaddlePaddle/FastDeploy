@@ -126,7 +126,7 @@ public class Utils {
     }
 
     public static Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
-        final double ASPECT_TOLERANCE = 0.1;
+        final double ASPECT_TOLERANCE = 0.3;
         double targetRatio = (double) w / h;
         if (sizes == null) return null;
 
