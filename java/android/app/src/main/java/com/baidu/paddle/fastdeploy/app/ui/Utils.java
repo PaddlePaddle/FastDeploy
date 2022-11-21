@@ -16,12 +16,16 @@ import android.view.WindowManager;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Utils {
@@ -122,7 +126,7 @@ public class Utils {
     }
 
     public static Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
-        final double ASPECT_TOLERANCE = 0.1;
+        final double ASPECT_TOLERANCE = 0.3;
         double targetRatio = (double) w / h;
         if (sizes == null) return null;
 
@@ -285,5 +289,25 @@ public class Utils {
             cursor.close();
         }
         return result;
+    }
+
+    public static List<String> readTxt(String txtPath) {
+        File file = new File(txtPath);
+        if (file.isFile() && file.exists()) {
+            try {
+                FileInputStream fileInputStream = new FileInputStream(file);
+                InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+                BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+                String text;
+                List<String> labels = new ArrayList<>();
+                while ((text = bufferedReader.readLine()) != null) {
+                    labels.add(text);
+                }
+                return labels;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
     }
 }

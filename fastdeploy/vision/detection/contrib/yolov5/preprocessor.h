@@ -52,6 +52,15 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   /// Get padding value, size should be the same as channels
   std::vector<float> GetPaddingValue() const { return padding_value_; }
 
+  /// Set is_scale_up, if is_scale_up is false, the input image only
+  /// can be zoom out, the maximum resize scale cannot exceed 1.0, default true
+  void SetScaleUp(bool is_scale_up) {
+    is_scale_up_ = is_scale_up;
+  }
+
+  /// Get is_scale_up, default true
+  bool GetScaleUp() const { return is_scale_up_; }
+
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);

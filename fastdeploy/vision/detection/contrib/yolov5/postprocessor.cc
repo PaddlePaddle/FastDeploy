@@ -103,9 +103,9 @@ bool YOLOv5Postprocessor::Run(const std::vector<FDTensor>& tensors, std::vector<
     float ipt_h = iter_ipt->second[0];
     float ipt_w = iter_ipt->second[1];
     float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+    float pad_h = (out_h - ipt_h * scale) / 2;
+    float pad_w = (out_w - ipt_w * scale) / 2;
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
-      float pad_h = (out_h - ipt_h * scale) / 2;
-      float pad_w = (out_w - ipt_w * scale) / 2;
       int32_t label_id = ((*results)[bs].label_ids)[i];
       // clip box
       (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh_ * label_id;

@@ -30,8 +30,8 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         SurfaceTexture.OnFrameAvailableListener {
     private static final String TAG = CameraSurfaceView.class.getSimpleName();
 
-    public static final int EXPECTED_PREVIEW_WIDTH = 1280;
-    public static final int EXPECTED_PREVIEW_HEIGHT = 720;
+    public static int EXPECTED_PREVIEW_WIDTH = 1280;  // 1920
+    public static int EXPECTED_PREVIEW_HEIGHT = 720;  // 960
 
     protected int numberOfCameras;
     protected int selectedCameraId;
@@ -98,6 +98,16 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     private int tcCam2FBO;
     private int vcTex2Screen;
     private int tcTex2Screen;
+
+    public void setBitmapReleaseMode(boolean mode) {
+        synchronized (this) {
+            bitmapReleaseMode = mode;
+        }
+    }
+
+    public Bitmap getBitmap() {
+        return ARGB8888ImageBitmap; // may null or recycled.
+    }
 
     public interface OnTextureChangedListener {
         boolean onTextureChanged(Bitmap ARGB8888ImageBitmap);
@@ -236,16 +246,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         GLES20.glFlush();
     }
 
-    public void setBitmapReleaseMode(boolean mode) {
-        synchronized (this) {
-            bitmapReleaseMode = mode;
-        }
-    }
-
-    public Bitmap getBitmap() {
-        return ARGB8888ImageBitmap; // may null or recycled.
-    }
-
     private float[] transformTextureCoordinates(float[] coords, float[] matrix) {
         float[] result = new float[coords.length];
         float[] vt = new float[4];
@@ -287,20 +287,28 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     public void openCamera() {
         if (disableCamera) return;
         camera = Camera.open(selectedCameraId);
-        List<Size> supportedPreviewSizes = camera.getParameters().getSupportedPreviewSizes();
-        Size previewSize = Utils.getOptimalPreviewSize(supportedPreviewSizes, EXPECTED_PREVIEW_WIDTH,
-                EXPECTED_PREVIEW_HEIGHT);
         Camera.Parameters parameters = camera.getParameters();
-        parameters.setPreviewSize(previewSize.width, previewSize.height);
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-        }
-        camera.setParameters(parameters);
         int degree = Utils.getCameraDisplayOrientation(context, selectedCameraId);
         camera.setDisplayOrientation(degree);
         boolean rotate = degree == 90 || degree == 270;
-        textureWidth = rotate ? previewSize.height : previewSize.width;
-        textureHeight = rotate ? previewSize.width : previewSize.height;
+        int adjusted_width = rotate ? EXPECTED_PREVIEW_HEIGHT : EXPECTED_PREVIEW_WIDTH;
+        int adjusted_height = rotate ? EXPECTED_PREVIEW_WIDTH : EXPECTED_PREVIEW_HEIGHT;
+
+        List<Size> supportedPreviewSizes = camera.getParameters().getSupportedPreviewSizes();
+
+        Size previewSize = Utils.getOptimalPreviewSize(
+                supportedPreviewSizes, adjusted_width, adjusted_height);
+
+        textureWidth = previewSize.width;
+        textureHeight = previewSize.height;
+
+        parameters.setPreviewSize(previewSize.width, previewSize.height);
+        camera.setParameters(parameters);
+
+        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+        }
+
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);

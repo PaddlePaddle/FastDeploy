@@ -7,3 +7,19 @@
     :members:
     :inherited-members:
 ```
+
+## fastdeploy.vision.facealign.FaceLandmark1000
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.facealign.FaceLandmark1000
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.facealign.PIPNet
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.facealign.PIPNet
+    :members:
+    :inherited-members:
+```

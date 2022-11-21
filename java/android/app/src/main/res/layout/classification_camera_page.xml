@@ -64,7 +64,7 @@
             android:layout_centerInParent="true" />
 
         <ImageView
-            android:id="@+id/albumSelect"
+            android:id="@+id/iv_select"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:layout_alignParentRight="true"
