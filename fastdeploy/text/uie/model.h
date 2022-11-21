@@ -21,7 +21,7 @@
 #include <vector>
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/utils/unique_ptr.h"
-#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
+#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 
 using namespace paddlenlp;
 
@@ -133,11 +133,11 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
       std::vector<std::vector<size_t>>* input_mapping_with_short_text);
   void Preprocess(const std::vector<std::string>& input_texts,
                   const std::vector<std::string>& prompts,
-                  std::vector<faster_tokenizer::core::Encoding>* encodings,
+                  std::vector<fast_tokenizer::core::Encoding>* encodings,
                   std::vector<fastdeploy::FDTensor>* inputs);
   void Postprocess(
       const std::vector<fastdeploy::FDTensor>& outputs,
-      const std::vector<faster_tokenizer::core::Encoding>& encodings,
+      const std::vector<fast_tokenizer::core::Encoding>& encodings,
       const std::vector<std::string>& short_input_texts,
       const std::vector<std::string>& short_prompts,
       const std::vector<std::vector<size_t>>& input_mapping_with_short_text,
@@ -167,7 +167,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   };
   using SPAN_SET = std::set<std::pair<IDX_PROB, IDX_PROB>, IdxProbCmp>;
   struct SpanIdx {
-    faster_tokenizer::core::Offset offset_;
+    fast_tokenizer::core::Offset offset_;
     bool is_prompt_;
   };
   void SetValidBackend();
@@ -188,7 +188,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
                SPAN_SET* span_set) const;
   void GetSpanIdxAndProbs(
       const SPAN_SET& span_set,
-      const std::vector<faster_tokenizer::core::Offset>& offset_mapping,
+      const std::vector<fast_tokenizer::core::Offset>& offset_mapping,
       std::vector<SpanIdx>* span_idxs, std::vector<float>* probs) const;
   void ConvertSpanToUIEResult(
       const std::vector<std::string>& texts,
@@ -200,7 +200,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   size_t max_length_;
   float position_prob_;
   SchemaLanguage schema_language_;
-  faster_tokenizer::tokenizers_impl::ErnieFasterTokenizer tokenizer_;
+  fast_tokenizer::tokenizers_impl::ErnieFastTokenizer tokenizer_;
 };
 
 }  // namespace text

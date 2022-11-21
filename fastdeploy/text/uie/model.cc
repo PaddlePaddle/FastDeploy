@@ -19,8 +19,8 @@
 #include <queue>
 #include <sstream>
 
-#include "faster_tokenizer/pretokenizers/pretokenizer.h"
-#include "faster_tokenizer/utils/utf8.h"
+#include "fast_tokenizer/pretokenizers/pretokenizer.h"
+#include "fast_tokenizer/utils/utf8.h"
 
 namespace fastdeploy {
 namespace text {
@@ -30,9 +30,9 @@ static std::string DBC2SBC(const std::string& content) {
   size_t content_utf8_len = 0;
   while (content_utf8_len < content.length()) {
     uint32_t content_char;
-    auto content_char_width = faster_tokenizer::utils::UTF8ToUInt32(
+    auto content_char_width = fast_tokenizer::utils::UTF8ToUInt32(
         content.data() + content_utf8_len, &content_char);
-    content_char = faster_tokenizer::utils::UTF8ToUnicode(content_char);
+    content_char = fast_tokenizer::utils::UTF8ToUnicode(content_char);
     if (content_char == 0x3000) {
       content_char = 0x0020;
     } else {
@@ -43,9 +43,9 @@ static std::string DBC2SBC(const std::string& content) {
     } else {
       char dst_char[5] = {0};
       uint32_t utf8_uint32 =
-          faster_tokenizer::utils::UnicodeToUTF8(content_char);
+          fast_tokenizer::utils::UnicodeToUTF8(content_char);
       uint32_t utf8_char_count =
-          faster_tokenizer::utils::UnicodeToUTF8Char(utf8_uint32, dst_char);
+          fast_tokenizer::utils::UnicodeToUTF8Char(utf8_uint32, dst_char);
       result.append(dst_char, utf8_char_count);
     }
     content_utf8_len += content_char_width;
@@ -177,8 +177,8 @@ UIEModel::UIEModel(const std::string& model_file,
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
-      max_length, 0, faster_tokenizer::core::Direction::RIGHT,
-      faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+      max_length, 0, fast_tokenizer::core::Direction::RIGHT,
+      fast_tokenizer::core::TruncStrategy::LONGEST_FIRST);
 }
 
 UIEModel::UIEModel(const std::string& model_file,
@@ -198,8 +198,8 @@ UIEModel::UIEModel(const std::string& model_file,
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
-      max_length, 0, faster_tokenizer::core::Direction::RIGHT,
-      faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+      max_length, 0, fast_tokenizer::core::Direction::RIGHT,
+      fast_tokenizer::core::TruncStrategy::LONGEST_FIRST);
 }
 
 UIEModel::UIEModel(const std::string& model_file,
@@ -219,8 +219,8 @@ UIEModel::UIEModel(const std::string& model_file,
   initialized = Initialize();
   SetSchema(schema);
   tokenizer_.EnableTruncMethod(
-      max_length, 0, faster_tokenizer::core::Direction::RIGHT,
-      faster_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+      max_length, 0, fast_tokenizer::core::Direction::RIGHT,
+      fast_tokenizer::core::TruncStrategy::LONGEST_FIRST);
 }
 
 bool UIEModel::Initialize() {
@@ -253,7 +253,7 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
   size_t cnt_org = 0;
   size_t cnt_short = 0;
   for (auto& text : texts) {
-    auto text_len = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+    auto text_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
         text.c_str(), text.length());
     if (text_len <= max_length) {
       short_texts->push_back(text);
@@ -264,14 +264,14 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
       }
       cnt_short += 1;
     } else {
-      faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
           text);
       for (size_t start = 0; start < text_len; start += max_length) {
         size_t end = start + max_length;
         if (end > text_len) {
           end = text_len;
         }
-        faster_tokenizer::core::Offset byte_offset;
+        fast_tokenizer::core::Offset byte_offset;
         converter.convert({start, end}, &byte_offset);
         short_texts->emplace_back(text.data() + byte_offset.first,
                                   byte_offset.second - byte_offset.first);
@@ -344,12 +344,12 @@ void UIEModel::GetSpan(const std::vector<IDX_PROB>& start_idx_prob,
 }
 void UIEModel::GetSpanIdxAndProbs(
     const SPAN_SET& span_set,
-    const std::vector<faster_tokenizer::core::Offset>& offset_mapping,
+    const std::vector<fast_tokenizer::core::Offset>& offset_mapping,
     std::vector<SpanIdx>* span_idxs, std::vector<float>* probs) const {
   auto first_sep_idx =
       std::find_if(offset_mapping.begin() + 1, offset_mapping.end(),
-                   [](const faster_tokenizer::core::Offset& offset) {
-                     return offset == faster_tokenizer::core::Offset(0, 0);
+                   [](const fast_tokenizer::core::Offset& offset) {
+                     return offset == fast_tokenizer::core::Offset(0, 0);
                    });
   auto prompt_end_token_id =
       std::distance(offset_mapping.begin(), first_sep_idx) - 1;
@@ -384,9 +384,9 @@ void UIEModel::ConvertSpanToUIEResult(
       std::string span_text;
       std::vector<uint32_t> offset_mapping;
       if (span_idxs[i][j].is_prompt_) {
-        faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+        fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
             prompt);
-        faster_tokenizer::core::Offset byte_offset;
+        fast_tokenizer::core::Offset byte_offset;
         converter.convert({start, end}, &byte_offset);
         span_text = prompt.substr(byte_offset.first,
                                   byte_offset.second - byte_offset.first);
@@ -394,9 +394,9 @@ void UIEModel::ConvertSpanToUIEResult(
         start = 0;
         end = 0;
       } else {
-        faster_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
+        fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
             text);
-        faster_tokenizer::core::Offset byte_offset;
+        fast_tokenizer::core::Offset byte_offset;
         converter.convert({start, end}, &byte_offset);
         span_text = text.substr(byte_offset.first,
                                 byte_offset.second - byte_offset.first);
@@ -461,14 +461,14 @@ void UIEModel::AutoJoiner(const std::vector<std::string>& short_texts,
       for (auto&& result_idx : input_mapping_item) {
         if (result_idx == 0) {
           result_list = std::move((*results)[result_idx]);
-          offset += faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+          offset += fast_tokenizer::utils::GetUnicodeLenFromUTF8(
               short_texts[result_idx].c_str(), short_texts[result_idx].size());
         } else {
           for (auto&& curr_result : (*results)[result_idx]) {
             curr_result.start_ += offset;
             curr_result.end_ += offset;
           }
-          offset += faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+          offset += fast_tokenizer::utils::GetUnicodeLenFromUTF8(
               short_texts[result_idx].c_str(), short_texts[result_idx].size());
           result_list.insert(result_list.end(), (*results)[result_idx].begin(),
                              (*results)[result_idx].end());
@@ -521,13 +521,13 @@ bool UIEModel::ConstructTextsAndPrompts(
   auto max_prompt_iter = std::max_element(
       prompts->begin(), prompts->end(),
       [](const std::string& lhs, const std::string& rhs) {
-        auto lhs_ulen = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+        auto lhs_ulen = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
             lhs.c_str(), lhs.length());
-        auto rhs_ulen = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+        auto rhs_ulen = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
             rhs.c_str(), rhs.length());
         return lhs_ulen < rhs_ulen;
       });
-  auto max_prompt_len = faster_tokenizer::utils::GetUnicodeLenFromUTF8(
+  auto max_prompt_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
       max_prompt_iter->c_str(), max_prompt_iter->length());
   auto max_predict_len = max_length_ - 3 - max_prompt_len;
 
@@ -547,10 +547,10 @@ bool UIEModel::ConstructTextsAndPrompts(
 void UIEModel::Preprocess(
     const std::vector<std::string>& input_texts,
     const std::vector<std::string>& prompts,
-    std::vector<faster_tokenizer::core::Encoding>* encodings,
+    std::vector<fast_tokenizer::core::Encoding>* encodings,
     std::vector<fastdeploy::FDTensor>* inputs) {
   // 1. Tokenize the short texts and short prompts
-  std::vector<faster_tokenizer::core::EncodeInput> text_pair_input;
+  std::vector<fast_tokenizer::core::EncodeInput> text_pair_input;
   for (int i = 0; i < input_texts.size(); ++i) {
     text_pair_input.emplace_back(
         std::pair<std::string, std::string>(prompts[i], input_texts[i]));
@@ -596,7 +596,7 @@ void UIEModel::Preprocess(
 
 void UIEModel::Postprocess(
     const std::vector<fastdeploy::FDTensor>& outputs,
-    const std::vector<faster_tokenizer::core::Encoding>& encodings,
+    const std::vector<fast_tokenizer::core::Encoding>& encodings,
     const std::vector<std::string>& short_input_texts,
     const std::vector<std::string>& short_prompts,
     const std::vector<std::vector<size_t>>& input_mapping_with_short_text,
@@ -611,7 +611,7 @@ void UIEModel::Postprocess(
   GetCandidateIdx(end_prob, outputs[1].shape[0], outputs[1].shape[1],
                   &end_candidate_idx_prob, position_prob_);
 
-  std::vector<std::vector<faster_tokenizer::core::Offset>> offset_mapping;
+  std::vector<std::vector<fast_tokenizer::core::Offset>> offset_mapping;
   for (int i = 0; i < encodings.size(); ++i) {
     auto&& curr_offsets = encodings[i].GetOffsets();
     offset_mapping.push_back(curr_offsets);
@@ -739,7 +739,7 @@ void UIEModel::Predict(
     if (has_prompt) {
       // 2. Convert texts and prompts to FDTensor
       std::vector<FDTensor> inputs;
-      std::vector<faster_tokenizer::core::Encoding> encodings;
+      std::vector<fast_tokenizer::core::Encoding> encodings;
       Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
 
       // 3. Infer

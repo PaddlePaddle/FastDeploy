@@ -35,7 +35,7 @@ RUN apt-get update \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle-gpu paddlenlp faster_tokenizer
+    && python3 -m pip install paddlepaddle-gpu paddlenlp fast-tokenizer-python
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \

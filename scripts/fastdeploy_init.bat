@@ -46,8 +46,8 @@ if "%__script_action_type%" == "show" (
         echo !__3rd_lib_file! | findstr "opencv">nul && set __3rd_needed_flag=true
         echo !__3rd_lib_file! | findstr "opencv">nul && set __api_tag=!__api_tag!::vision
         if "!__3rd_needed_flag!"=="true" (echo !__3rd_lib_file! | findstr d\.lib>nul && set __3rd_needed_flag=false)
-        echo !__3rd_lib_file! | findstr "faster_tokenizer">nul && set __3rd_needed_flag=true
-        echo !__3rd_lib_file! | findstr "faster_tokenizer">nul && set __api_tag=!__api_tag!::text
+        echo !__3rd_lib_file! | findstr "fast_tokenizer">nul && set __3rd_needed_flag=true
+        echo !__3rd_lib_file! | findstr "fast_tokenizer">nul && set __api_tag=!__api_tag!::text
         if "!__3rd_needed_flag!"=="true" (echo [Lib] !__3rd_lib_file! **[NEEDED][!__api_tag!]**) else (echo [Lib] !__3rd_lib_file!)
     )
 
@@ -58,8 +58,8 @@ if "%__script_action_type%" == "show" (
         set __3rd_include_dir=%%a && set __3rd_needed_flag=false && set __api_tag=fastdeploy
         echo !__3rd_include_dir! | findstr "opencv">nul && set __3rd_needed_flag=true
         echo !__3rd_include_dir! | findstr "opencv">nul && set __api_tag=!__api_tag!::vision
-        echo !__3rd_include_dir! | findstr "faster_tokenizer">nul && set __3rd_needed_flag=true
-        echo !__3rd_include_dir! | findstr "faster_tokenizer">nul && set __api_tag=!__api_tag!::text
+        echo !__3rd_include_dir! | findstr "fast_tokenizer">nul && set __3rd_needed_flag=true
+        echo !__3rd_include_dir! | findstr "fast_tokenizer">nul && set __api_tag=!__api_tag!::text
         if "!__3rd_needed_flag!"=="true" (echo [Include] !__3rd_include_dir! **[NEEDED][!__api_tag!]**) else (echo [Include] !__3rd_include_dir!)
     )
 
