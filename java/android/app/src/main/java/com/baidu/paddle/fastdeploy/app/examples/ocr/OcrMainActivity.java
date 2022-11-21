@@ -1,5 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.ocr;
 
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -10,32 +12,39 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.vision.OCRResult;
+import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
+import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
+import com.baidu.paddle.fastdeploy.vision.OCRResult;
+import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
 import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
 import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 public class OcrMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
     private static final String TAG = OcrMainActivity.class.getSimpleName();
@@ -48,13 +57,41 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     ImageView realtimeToggleButton;
     boolean isRealtimeStatusRunning = false;
     ImageView backInPreview;
+    private ImageView albumSelectButton;
+    private View cameraPageView;
+    private ViewGroup resultPageView;
+    private ImageView resultImage;
+    private ImageView backInResult;
+    private SeekBar confidenceSeekbar;
+    private TextView seekbarText;
+    private float resultNum = 1.0f;
+    private ResultListView resultView;
+    private Bitmap picBitmap;
+    private Bitmap shutterBitmap;
+    private Bitmap originPicBitmap;
+    private Bitmap originShutterBitmap;
+    private boolean isShutterBitmapCopied = false;
 
-    String savedImagePath = "result.jpg";
-    int lastFrameIndex = 0;
-    long lastFrameTime;
+    public static final int TYPE_UNKNOWN = -1;
+    public static final int BTN_SHUTTER = 0;
+    public static final int ALBUM_SELECT = 1;
+    public static final int REALTIME_DETECT = 2;
+    private static int TYPE = REALTIME_DETECT;
+
+    private static final int REQUEST_PERMISSION_CODE_STORAGE = 101;
+    private static final int INTENT_CODE_PICK_IMAGE = 100;
+    private static final int TIME_SLEEP_INTERVAL = 50; // ms
+
+    long timeElapsed = 0;
+    long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PPOCRv2 predictor = new PPOCRv2();
+
+    private String[] texts;
+    private float[] recScores;
+    private boolean initialized;
+    private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,13 +106,13 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -86,12 +123,9 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 svPreview.switchCamera();
                 break;
             case R.id.btn_shutter:
-                @SuppressLint("SimpleDateFormat")
-                SimpleDateFormat date = new SimpleDateFormat("yyyy_MM_dd_HH_mm_ss");
-                synchronized (this) {
-                    savedImagePath = Utils.getDCIMDirectory() + File.separator + date.format(new Date()).toString() + ".png";
-                }
-                Toast.makeText(OcrMainActivity.this, "Save snapshot to " + savedImagePath, Toast.LENGTH_SHORT).show();
+                TYPE = BTN_SHUTTER;
+                shutterAndPauseCamera();
+                resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(OcrMainActivity.this, OcrSettingsActivity.class));
@@ -102,6 +136,111 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             case R.id.back_in_preview:
                 finish();
                 break;
+            case R.id.iv_select:
+                TYPE = ALBUM_SELECT;
+                // Judge whether authority has been granted.
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    // If this permission was requested before the application but the user refused the request, this method will return true.
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_PERMISSION_CODE_STORAGE);
+                } else {
+                    Intent intent = new Intent(Intent.ACTION_PICK);
+                    intent.setType("image/*");
+                    startActivityForResult(intent, INTENT_CODE_PICK_IMAGE);
+                }
+                resultView.setAdapter(null);
+                break;
+            case R.id.back_in_result:
+                back();
+                break;
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        back();
+    }
+
+    private void back() {
+        resultPageView.setVisibility(View.GONE);
+        cameraPageView.setVisibility(View.VISIBLE);
+        TYPE = REALTIME_DETECT;
+        isShutterBitmapCopied = false;
+        svPreview.onResume();
+        results.clear();
+        if (texts != null) {
+            texts = null;
+        }
+        if (recScores != null) {
+            recScores = null;
+        }
+    }
+
+    private void shutterAndPauseCamera() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Sleep some times to ensure picture has been correctly shut.
+                    Thread.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                runOnUiThread(new Runnable() {
+                    @SuppressLint("SetTextI18n")
+                    public void run() {
+                        // These code will run in main thread.
+                        svPreview.onPause();
+                        cameraPageView.setVisibility(View.GONE);
+                        resultPageView.setVisibility(View.VISIBLE);
+                        seekbarText.setText(resultNum + "");
+                        confidenceSeekbar.setProgress((int) (resultNum * 100));
+                        if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
+                            resultImage.setImageBitmap(shutterBitmap);
+                        } else {
+                            new AlertDialog.Builder(OcrMainActivity.this)
+                                    .setTitle("Empty Result!")
+                                    .setMessage("Current picture is empty, please shutting it again!")
+                                    .setCancelable(true)
+                                    .show();
+                        }
+                    }
+                });
+
+            }
+        }).start();
+    }
+
+    private void copyBitmapFromCamera(Bitmap ARGB8888ImageBitmap) {
+        if (isShutterBitmapCopied || ARGB8888ImageBitmap == null) {
+            return;
+        }
+        if (!ARGB8888ImageBitmap.isRecycled()) {
+            synchronized (this) {
+                shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
+            }
+            SystemClock.sleep(TIME_SLEEP_INTERVAL);
+            isShutterBitmapCopied = true;
+        }
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == INTENT_CODE_PICK_IMAGE) {
+            if (resultCode == Activity.RESULT_OK) {
+                cameraPageView.setVisibility(View.GONE);
+                resultPageView.setVisibility(View.VISIBLE);
+                seekbarText.setText(resultNum + "");
+                confidenceSeekbar.setProgress((int) (resultNum * 100));
+                Uri uri = data.getData();
+                String path = getRealPathFromURI(this, uri);
+                picBitmap = decodeBitmap(path, 720, 1280);
+                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                resultImage.setImageBitmap(picBitmap);
+            }
         }
     }
 
@@ -115,9 +254,13 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -126,29 +269,31 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
 
     @Override
     public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
-        String savedImagePath = "";
-        synchronized (this) {
-            savedImagePath = OcrMainActivity.this.savedImagePath;
+        if (TYPE == BTN_SHUTTER) {
+            copyBitmapFromCamera(ARGB8888ImageBitmap);
+            return false;
         }
+
         boolean modified = false;
-        OCRResult result = predictor.predict(ARGB8888ImageBitmap, savedImagePath);
+
+        long tc = System.currentTimeMillis();
+        OCRResult result = predictor.predict(ARGB8888ImageBitmap);
+        timeElapsed += (System.currentTimeMillis() - tc);
+
+        Visualize.visOcr(ARGB8888ImageBitmap, result);
         modified = result.initialized();
-        if (!savedImagePath.isEmpty()) {
-            synchronized (this) {
-                OcrMainActivity.this.savedImagePath = "result.jpg";
-            }
-        }
-        lastFrameIndex++;
-        if (lastFrameIndex >= 30) {
-            final int fps = (int) (lastFrameIndex * 1e9 / (System.nanoTime() - lastFrameTime));
+
+        frameCounter++;
+        if (frameCounter >= 30) {
+            final int fps = (int) (1000 / (timeElapsed / 30));
             runOnUiThread(new Runnable() {
                 @SuppressLint("SetTextI18n")
                 public void run() {
                     tvStatus.setText(Integer.toString(fps) + "fps");
                 }
             });
-            lastFrameIndex = 0;
-            lastFrameTime = System.nanoTime();
+            frameCounter = 0;
+            timeElapsed = 0;
         }
         return modified;
     }
@@ -180,6 +325,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     }
 
     public void initView() {
+        TYPE = REALTIME_DETECT;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         tvStatus = (TextView) findViewById(R.id.tv_status);
@@ -193,6 +339,74 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
+        albumSelectButton = findViewById(R.id.iv_select);
+        albumSelectButton.setOnClickListener(this);
+        cameraPageView = findViewById(R.id.camera_page);
+        resultPageView = findViewById(R.id.result_page);
+        resultImage = findViewById(R.id.result_image);
+        backInResult = findViewById(R.id.back_in_result);
+        backInResult.setOnClickListener(this);
+        confidenceSeekbar = findViewById(R.id.confidence_seekbar);
+        seekbarText = findViewById(R.id.seekbar_text);
+        resultView = findViewById(R.id.result_list_view);
+
+        confidenceSeekbar.setMax(100);
+        confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float resultConfidence = seekBar.getProgress() / 100f;
+                BigDecimal bd = new BigDecimal(resultConfidence);
+                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
+                seekbarText.setText(resultNum + "");
+                confidenceSeekbar.setProgress((int) (resultNum * 100));
+                results.clear();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (TYPE == ALBUM_SELECT) {
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            detail(picBitmap);
+                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                        } else {
+                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
+                            detail(shutterBitmap);
+                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void detail(Bitmap bitmap) {
+        OCRResult result = predictor.predict(bitmap, true);
+
+        texts = result.mText;
+        recScores = result.mRecScores;
+
+        initialized = result.initialized();
+        if (initialized) {
+            for (int i = 0; i < texts.length; i++) {
+                if (recScores[i] > resultNum) {
+                    results.add(new BaseResultModel(i + 1, texts[i], recScores[i]));
+                }
+            }
+        }
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        resultView.setAdapter(adapter);
+        resultView.invalidate();
+
+        resultImage.setImageBitmap(bitmap);
+        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
@@ -207,19 +421,17 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     public void checkAndUpdateSettings() {
         if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
             String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
-            // String detModelName = "ch_PP-OCRv2_det_infer";
-            String detModelName = "ch_PP-OCRv3_det_infer";
+            String detModelName = "ch_PP-OCRv2_det_infer";
             // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
             String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
             // String recModelName = "ch_ppocr_mobile_v2.0_rec_infer";
-            String recModelName = "ch_PP-OCRv3_rec_infer";
-            // String recModelName = "ch_PP-OCRv2_rec_infer";
+            String recModelName = "ch_PP-OCRv2_rec_infer";
             String realDetModelDir = realModelDir + "/" + detModelName;
             String realClsModelDir = realModelDir + "/" + clsModelName;
             String realRecModelDir = realModelDir + "/" + recModelName;
-            String srcDetModelDir =  OcrSettingsActivity.modelDir + "/" + detModelName;
-            String srcClsModelDir =  OcrSettingsActivity.modelDir + "/" + clsModelName;
-            String srcRecModelDir =  OcrSettingsActivity.modelDir + "/" + recModelName;
+            String srcDetModelDir = OcrSettingsActivity.modelDir + "/" + detModelName;
+            String srcClsModelDir = OcrSettingsActivity.modelDir + "/" + clsModelName;
+            String srcRecModelDir = OcrSettingsActivity.modelDir + "/" + recModelName;
             Utils.copyDirectoryFromAssets(this, srcDetModelDir, realDetModelDir);
             Utils.copyDirectoryFromAssets(this, srcClsModelDir, realClsModelDir);
             Utils.copyDirectoryFromAssets(this, srcRecModelDir, realRecModelDir);
@@ -242,9 +454,6 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             detOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
             clsOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
             recOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            detOption.enableRecordTimeOfRuntime();
-            clsOption.enableRecordTimeOfRuntime();
-            recOption.enableRecordTimeOfRuntime();
             if (Boolean.parseBoolean(OcrSettingsActivity.enableLiteFp16)) {
                 detOption.enableLiteFp16();
                 clsOption.enableLiteFp16();

@@ -23,10 +23,16 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
                                  const ModelFormat& model_format) : preprocessor_(config_file) {
-  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
-                        Backend::LITE};
-  valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-  valid_timvx_backends = {Backend::LITE};
+  if (model_format == ModelFormat::PADDLE) {
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
+                          Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_timvx_backends = {Backend::LITE};
+    valid_ipu_backends = {Backend::PDINFER};
+  } else if (model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  }
   
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -66,7 +72,6 @@ bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vect
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
-
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;

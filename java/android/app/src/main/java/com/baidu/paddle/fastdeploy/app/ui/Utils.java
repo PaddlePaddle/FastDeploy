@@ -2,21 +2,30 @@ package com.baidu.paddle.fastdeploy.app.ui;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Camera;
+import android.net.Uri;
 import android.opengl.GLES20;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Utils {
@@ -117,7 +126,7 @@ public class Utils {
     }
 
     public static Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
-        final double ASPECT_TOLERANCE = 0.1;
+        final double ASPECT_TOLERANCE = 0.3;
         double targetRatio = (double) w / h;
         if (sizes == null) return null;
 
@@ -240,5 +249,65 @@ public class Utils {
     public static boolean isSupportedNPU() {
         String hardware = android.os.Build.HARDWARE;
         return hardware.equalsIgnoreCase("kirin810") || hardware.equalsIgnoreCase("kirin990");
+    }
+
+    public static Bitmap decodeBitmap(String path, int displayWidth, int displayHeight) {
+        BitmapFactory.Options op = new BitmapFactory.Options();
+        op.inJustDecodeBounds = true;// Only the width and height information of Bitmap is read, not the pixels.
+        Bitmap bmp = BitmapFactory.decodeFile(path, op); // Get size information.
+        int wRatio = (int) Math.ceil(op.outWidth / (float) displayWidth);// Get Scale Size.
+        int hRatio = (int) Math.ceil(op.outHeight / (float) displayHeight);
+        // If the specified size is exceeded, reduce the corresponding scale.
+        if (wRatio > 1 && hRatio > 1) {
+            if (wRatio > hRatio) {
+                // If it is too wide, we will reduce the width to the required size. Note that the height will become smaller.
+                op.inSampleSize = wRatio;
+            } else {
+                op.inSampleSize = hRatio;
+            }
+        }
+        op.inJustDecodeBounds = false;
+        bmp = BitmapFactory.decodeFile(path, op);
+        // Create a Bitmap with a given width and height from the original Bitmap.
+        return Bitmap.createScaledBitmap(bmp, displayWidth, displayHeight, true);
+    }
+
+    public static String getRealPathFromURI(Context context, Uri contentURI) {
+        String result;
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(contentURI, null, null, null, null);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        if (cursor == null) {
+            result = contentURI.getPath();
+        } else {
+            cursor.moveToFirst();
+            int idx = cursor.getColumnIndex(MediaStore.Images.ImageColumns.DATA);
+            result = cursor.getString(idx);
+            cursor.close();
+        }
+        return result;
+    }
+
+    public static List<String> readTxt(String txtPath) {
+        File file = new File(txtPath);
+        if (file.isFile() && file.exists()) {
+            try {
+                FileInputStream fileInputStream = new FileInputStream(file);
+                InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+                BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+                String text;
+                List<String> labels = new ArrayList<>();
+                while ((text = bufferedReader.readLine()) != null) {
+                    labels.add(text);
+                }
+                return labels;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
     }
 }

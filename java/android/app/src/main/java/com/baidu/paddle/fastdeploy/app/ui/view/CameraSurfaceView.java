@@ -30,9 +30,8 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         SurfaceTexture.OnFrameAvailableListener {
     private static final String TAG = CameraSurfaceView.class.getSimpleName();
 
-    public static final int EXPECTED_PREVIEW_WIDTH = 1280;
-    public static final int EXPECTED_PREVIEW_HEIGHT = 720;
-
+    public static int EXPECTED_PREVIEW_WIDTH = 1280;  // 1920
+    public static int EXPECTED_PREVIEW_HEIGHT = 720;  // 960
 
     protected int numberOfCameras;
     protected int selectedCameraId;
@@ -45,6 +44,9 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     protected int surfaceHeight = 0;
     protected int textureWidth = 0;
     protected int textureHeight = 0;
+
+    protected Bitmap ARGB8888ImageBitmap;
+    protected boolean bitmapReleaseMode = true;
 
     // In order to manipulate the camera preview data and render the modified one
     // to the screen, three textures are created and the data flow is shown as following:
@@ -96,6 +98,16 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     private int tcCam2FBO;
     private int vcTex2Screen;
     private int tcTex2Screen;
+
+    public void setBitmapReleaseMode(boolean mode) {
+        synchronized (this) {
+            bitmapReleaseMode = mode;
+        }
+    }
+
+    public Bitmap getBitmap() {
+        return ARGB8888ImageBitmap; // may null or recycled.
+    }
 
     public interface OnTextureChangedListener {
         boolean onTextureChanged(Bitmap ARGB8888ImageBitmap);
@@ -198,9 +210,12 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
             // Read pixels of FBO to a bitmap
             ByteBuffer pixelBuffer = ByteBuffer.allocate(textureWidth * textureHeight * 4);
             GLES20.glReadPixels(0, 0, textureWidth, textureHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixelBuffer);
-            Bitmap ARGB8888ImageBitmap = Bitmap.createBitmap(textureWidth, textureHeight, Bitmap.Config.ARGB_8888);
+
+            ARGB8888ImageBitmap = Bitmap.createBitmap(textureWidth, textureHeight, Bitmap.Config.ARGB_8888);
             ARGB8888ImageBitmap.copyPixelsFromBuffer(pixelBuffer);
+
             boolean modified = onTextureChangedListener.onTextureChanged(ARGB8888ImageBitmap);
+
             if (modified) {
                 targetTexureId = drawTexureId[0];
                 // Update a bitmap to the GL texture if modified
@@ -209,7 +224,9 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
                 GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, targetTexureId);
                 GLUtils.texImage2D(GL10.GL_TEXTURE_2D, 0, ARGB8888ImageBitmap, 0);
             }
-            ARGB8888ImageBitmap.recycle();
+            if (bitmapReleaseMode) {
+                ARGB8888ImageBitmap.recycle();
+            }
         }
 
         // fboTexureId/drawTexureId->Screen
@@ -270,20 +287,28 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     public void openCamera() {
         if (disableCamera) return;
         camera = Camera.open(selectedCameraId);
-        List<Size> supportedPreviewSizes = camera.getParameters().getSupportedPreviewSizes();
-        Size previewSize = Utils.getOptimalPreviewSize(supportedPreviewSizes, EXPECTED_PREVIEW_WIDTH,
-                EXPECTED_PREVIEW_HEIGHT);
         Camera.Parameters parameters = camera.getParameters();
-        parameters.setPreviewSize(previewSize.width, previewSize.height);
-        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-        }
-        camera.setParameters(parameters);
         int degree = Utils.getCameraDisplayOrientation(context, selectedCameraId);
         camera.setDisplayOrientation(degree);
         boolean rotate = degree == 90 || degree == 270;
-        textureWidth = rotate ? previewSize.height : previewSize.width;
-        textureHeight = rotate ? previewSize.width : previewSize.height;
+        int adjusted_width = rotate ? EXPECTED_PREVIEW_HEIGHT : EXPECTED_PREVIEW_WIDTH;
+        int adjusted_height = rotate ? EXPECTED_PREVIEW_WIDTH : EXPECTED_PREVIEW_HEIGHT;
+
+        List<Size> supportedPreviewSizes = camera.getParameters().getSupportedPreviewSizes();
+
+        Size previewSize = Utils.getOptimalPreviewSize(
+                supportedPreviewSizes, adjusted_width, adjusted_height);
+
+        textureWidth = previewSize.width;
+        textureHeight = previewSize.height;
+
+        parameters.setPreviewSize(previewSize.width, previewSize.height);
+        camera.setParameters(parameters);
+
+        if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+        }
+
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);

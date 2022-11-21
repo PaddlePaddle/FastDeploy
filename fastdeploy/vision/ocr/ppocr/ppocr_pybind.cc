@@ -31,6 +31,15 @@ void BindPPOCRv3(pybind11::module& m) {
         vision::OCRResult res;
         self.Predict(&mat, &res);
         return res;
+      })
+      .def("batch_predict", [](pipeline::PPOCRv3& self, std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<vision::OCRResult> results;
+        self.BatchPredict(images, &results);
+        return results;
       });
 }
 
@@ -49,6 +58,15 @@ void BindPPOCRv2(pybind11::module& m) {
         vision::OCRResult res;
         self.Predict(&mat, &res);
         return res;
+      })
+      .def("batch_predict", [](pipeline::PPOCRv2& self, std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<vision::OCRResult> results;
+        self.BatchPredict(images, &results);
+        return results;
       });
 }
 

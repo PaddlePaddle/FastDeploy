@@ -39,6 +39,8 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
 }
 
 bool PaddleSegModel::Initialize() {
+  reused_input_tensors_.resize(1);
+  reused_output_tensors_.resize(1);
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -103,16 +105,11 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
     int input_height = input_shape[2].as<int>();
     int input_width = input_shape[3].as<int>();
     if (input_height == -1 || input_width == -1) {
-      FDWARNING << "The exported PaddleSeg model is with dynamic shape input, "
-                << "which is not supported by ONNX Runtime and Tensorrt. "
-                << "Only OpenVINO and Paddle Inference are available now. "
-                << "For using ONNX Runtime or Tensorrt, "
-                << "Please refer to "
-                   "https://github.com/PaddlePaddle/PaddleSeg/blob/develop/"
-                   "docs/model_export.md"
-                << " to export model with fixed input shape." << std::endl;
-      valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
-      valid_gpu_backends = {Backend::PDINFER};
+      FDWARNING << "Some exportd PaddleSeg models with dynamic shape may "
+                "not be able inference with ONNX Runtime/TensorRT, if error "
+                "happend, please try to change to use Paddle "
+                "Inference/OpenVINO backends instead, or export model with "
+                "fixed input shape." << std::endl;
     }
     if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
       processors_.push_back(
@@ -138,6 +135,9 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
   if (!(this->disable_normalize_and_permute)) {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
+
+  // Fusion will improve performance
+  FuseTransforms(&processors_);
   return true;
 }
 
@@ -263,8 +263,8 @@ bool PaddleSegModel::Postprocess(
           infer_result->shape, FDDataType::FP32,
           static_cast<void*>(fp32_result_buffer->data()));
     }
-    mat = new Mat(Mat::Create(*infer_result));
-    Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1);
+    mat = new Mat(Mat::Create(*infer_result, ProcLib::OPENCV));
+    Resize::Run(mat, ipt_w, ipt_h, -1.0f, -1.0f, 1, false, ProcLib::OPENCV);
     mat->ShareWithTensor(&new_infer_result);
     result->shape = new_infer_result.shape;
   } else {
@@ -337,7 +337,6 @@ bool PaddleSegModel::Postprocess(
 
 bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   Mat mat(*im);
-  std::vector<FDTensor> processed_data(1);
 
   std::map<std::string, std::array<int, 2>> im_info;
 
@@ -345,18 +344,18 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   im_info["input_shape"] = {static_cast<int>(mat.Height()),
                             static_cast<int>(mat.Width())};
 
-  if (!Preprocess(&mat, &(processed_data[0]))) {
+  if (!Preprocess(&mat, &(reused_input_tensors_[0]))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
   }
-  std::vector<FDTensor> infer_result(1);
-  if (!Infer(processed_data, &infer_result)) {
+
+  if (!Infer()) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
-  if (!Postprocess(&infer_result[0], result, im_info)) {
+  if (!Postprocess(&reused_output_tensors_[0], result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

@@ -63,14 +63,11 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
+option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
-option(WITH_LITE_FULL_API "Use Paddle Lite full API lib for Android." ON)
-option(WITH_LITE_FP16 "Use Paddle Lite lib with fp16 enabled for Android." OFF)
-
-option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
@@ -418,14 +415,14 @@ endif()
 if(ANDROID OR IOS)
   if(ENABLE_TEXT)
     set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
-    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support faster_tokenizer with Android/IOS now.")
+    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support fast_tokenizer with Android/IOS now.")
   endif()
 endif()
 
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
-  include(${PROJECT_SOURCE_DIR}/cmake/faster_tokenizer.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/fast_tokenizer.cmake)
 endif()
 
 if(ENABLE_PADDLE_FRONTEND)

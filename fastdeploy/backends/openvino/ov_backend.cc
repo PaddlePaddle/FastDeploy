@@ -158,7 +158,8 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   } else if (option_.ov_num_streams > 0) {
     properties["NUM_STREAMS"] = option_.ov_num_streams;
   }
-  compiled_model_ = core_.compile_model(model, "CPU", properties);
+  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
+  compiled_model_ = core_.compile_model(model, option.device, properties);
 
   request_ = compiled_model_.create_infer_request();
   initialized_ = true;
@@ -255,7 +256,8 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   } else if (option_.ov_num_streams > 0) {
     properties["NUM_STREAMS"] = option_.ov_num_streams;
   }
-  compiled_model_ = core_.compile_model(model, "CPU", properties);
+  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
+  compiled_model_ = core_.compile_model(model, option.device, properties);
 
   request_ = compiled_model_.create_infer_request();
   
