@@ -3,8 +3,10 @@
 FastDeploy提供各平台预编译库，供开发者直接下载安装使用。当然FastDeploy编译也非常容易，开发者也可根据自身需求编译FastDeploy。
 
 本文分为两部分：
-- [1.GPU部署环境](##GPU部署环境)
-- [2.CPU部署环境](##CPU部署环境)
+- [1.GPU部署环境](#1)
+- [2.CPU部署环境](#2)
+
+<p id="1"></p>
 
 ## GPU部署环境
 
@@ -48,6 +50,8 @@ Develop版本（Nightly build）
 | :--- | :--- | :---- |
 | Linux x64 | [fastdeploy-linux-x64-gpu-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-gpu-0.0.0.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2编译产出 |
 | Windows x64 | [fastdeploy-win-x64-gpu-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-gpu-0.0.0.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2编译产出 |
+
+<p id="2"></p>
 
 ## CPU部署环境
 
