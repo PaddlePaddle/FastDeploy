@@ -18,7 +18,7 @@
 - [A Quick Start on Runtime Python](en/quick_start/runtime/python.md)
 - [A Quick Start on Runtime C++](en/quick_start/runtime/cpp.md)
 
-## API (To be continued)
+## API 
 
 - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
 - [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
@@ -31,9 +31,9 @@
 
 - [1. How to Change Inference Backends](en/faq/how_to_change_backend.md)
 - [2. How to Use FastDeploy C++ SDK on Windows Platform](en/faq/use_sdk_on_windows.md)
-- [3. How to Use FastDeploy C++ SDK on Android Platform](en/faq/use_sdk_on_android.md)(To be Continued)
+- [3. How to Use FastDeploy C++ SDK on Android Platform](en/faq/use_sdk_on_android.md)
 - [4. Tricks of TensorRT](en/faq/tensorrt_tricks.md)
-- [5. How to Develop a New Model](en/faq/develop_a_new_model.md)(To be Continued)
+- [5. How to Develop a New Model](en/faq/develop_a_new_model.md)
 
 ## More FastDeploy Deployment Module
 

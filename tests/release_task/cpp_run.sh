@@ -4,6 +4,11 @@ CURRENT_DIR=$(cd $(dirname $0); pwd)
 PLATFORM=$1
 DEVICE=$2
 VERSION=$3
+if [ "$VERSION" = "0.0.0" ];then
+       DOWNLOAD_DIR=dev
+else
+       DOWNLOAD_DIR=rel_tmp
+fi
 if [ "$DEVICE" = "gpu" ];then
        CPP_FASTDEPLOY_PACKAGE=fastdeploy-$PLATFORM-$DEVICE-$VERSION
 else
@@ -42,7 +47,7 @@ fi
 
 case_number=${#RUN_CASE[@]}
 
-wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
+wget -q  https://fastdeploy.bj.bcebos.com/$DOWNLOAD_DIR/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
 
 tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
 mkdir build && cd build
