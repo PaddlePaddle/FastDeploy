@@ -3,7 +3,7 @@
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
 </p>
-
+             
 <p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/FastDeploy?color=ffa"></a>
@@ -14,6 +14,14 @@
     <a href="https://pypi.org/project/FastDeploy-python/"><img src="https://img.shields.io/pypi/dm/FastDeploy-python?color=9cf"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/issues"><img src="https://img.shields.io/github/issues/PaddlePaddle/FastDeploy?color=9cc"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
+</p>
+
+<p align="center">
+    <a href="docs/README_CN.md"> 使用文档 </a>
+    |
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"> API文档 </a>
+    |
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"> 更新日志 </a>
 </p>
 
 **⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署套件。提供📦**开箱即用**的**云边端**部署体验, 支持超过 🔥150+ **Text**, **Vision**, **Speech**和**跨模态**模型，并实现🔚**端到端**的推理性能优化。包括图像分类、物体检测、图像分割、人脸检测、人脸识别、关键点检测、抠图、OCR、NLP、TTS等任务，满足开发者**多场景、多硬件、多平台**的产业部署需求。
@@ -38,22 +46,24 @@
       <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
       </div>
 
-- 🔥 **2022.11.8：Release FastDeploy [release v0.6.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.6.0)**
-    -  **🖥️ 服务端部署：支持推理速度更快的后端，支持更多的模型**   
-        -  优化 YOLO系列、PaddleClas、PaddleDetection 前后处理内存创建逻辑；
-        -  融合视觉预处理操作，优化PaddleClas、PaddleDetection预处理性能，提升端到端推理性能；
-        -  服务化部署新增Clone接口支持，降低Paddle Inference/TensorRT/OpenVINO后端在多实例下内存/显存的使用；
-        -  增加[FSANet头部姿态识别](./examples/vision/headpose)、[PFLD人脸对齐](./examples/vision/facealign)、[ERNIE文本分类](./examples/text/ernie-3.0)等模型。
-    -  **📲 移动端和端侧部署：移动端后端能力升级，支持更多的CV模型**
-        -  集成 RKNPU2 后端，并提供与 Paddle Inference、Paddle Inference TensorRT、TensorRT、OpenVINO、ONNX Runtime、Paddle Lite 等推理后端一致的开发体验；
-        -  支持 [PP-HumanSeg](./examples/vision/segmentation/paddleseg/rknpu2)、[Unet](./examples/vision/segmentation/paddleseg/rknpu2)、[PicoDet](examples/vision/detection/paddledetection/rknpu2)、[SCRFD](./examples/vision/facedet/scrfd/rknpu2) 等在NPU高需求的特色模型。
-        
+- 🔥 **2022.11.15：Release FastDeploy [release v0.7.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.7)**
+    -  **🖥️ 服务端部署：支持更多的模型，推理性能进一步提升**  
+        -  新增 [PaddleClas](./examples/vision/classification/paddleclas/serving) 模型服务化部署示例；
+        -  新增 [Stable Diffusion](./examples/multimodal/stable_diffusion) 模型部署示例；
+        -  PaddleClas、PaddleDetection、YOLOv5 部署代码升级，支持 predict 及 batch_predict；
+        -  针对 FDTensor 增加 Pad function 操作符，支持在batch预测时，对输入进行 Padding；
+        -  针对 FDTensor 增加 Python API to_dlpack 接口，支持 FDTensor 在不同框架间的无拷贝传输；
+    -  **📲 移动端和端侧部署：端侧能力升级，支持更多硬件**
+        -  集成 Paddle Lite TIM-VX 后端，用于支持瑞芯微RV1109、RV1126、RK1808、晶晨A311D等硬件，并提供与 Paddle Inference、Paddle Inference TensorRT、TensorRT、OpenVINO、ONNX Runtime、Paddle Lite、RKNPU2等推理后端一致的开发体验；
+        -  在瑞芯微 RV1126 硬件上，支持 图像分类模型 [ResNet50_vd](./examples/vision/classification/paddleclas/rk1126/cpp)；
+        -  在瑞芯微 RK3588、RK3568 等硬件上，支持 人脸检测模型 [SCRFD](./examples/vision/facedet/scrfd/rknpu2).
+
 - [**more releases information**](./releases)
 
 ## 目录
 
 * <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
-    
+
    - 安装文档
         - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
         - [GPU部署环境编译安装](docs/cn/build_and_install/gpu.md)
@@ -112,7 +122,7 @@
 ```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
-##### [Conda安装(推荐)](docs/quick_start/Python_prebuilt_wheels.md)
+##### [Conda安装(推荐)](docs/cn/build_and_install/download_prebuilt_libraries.md)
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
@@ -155,7 +165,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 <details>
 <summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
-    
+
 
 #### 安装
 
@@ -211,7 +221,7 @@ int main(int argc, char* argv[]) {
 |:----------------------:|:--------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------:|:-------:|:----------:|:-------:|:----------:|:-------:|:-------:|:-----------:|:-------------:|:-------------:|:-------:|
 | ---                    | ---                                                                                          | ---                                                                                                                                       | X86 CPU | NVIDIA GPU | X86 CPU | NVIDIA GPU | X86 CPU | Arm CPU | AArch64 CPU | NVIDIA Jetson | Graphcore IPU | Serving |
 | Classification         | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas)                           | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
-| Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | [Python](./examples/vision/classification/resnet/python)/[C++](./examples/vision/classification/resnet/python/cpp)                        | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | [Python](./examples/vision/classification/resnet/python)/[C++](./examples/vision/classification/resnet/cpp)                        | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Classification         | [ltralytics/YOLOv5Cls](examples/vision/classification/yolov5cls)                             | [Python](./examples/vision/classification/yolov5cls/python)/[C++](./examples/vision/classification/yolov5cls/cpp)                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Classification         | [PaddleClas/PP-LCNet](./examples/vision/classification/paddleclas)                           | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
 | Classification         | [PaddleClas/PP-LCNetv2](./examples/vision/classification/paddleclas)                         | [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp)                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ✅             | ❔       |
@@ -243,9 +253,9 @@ int main(int argc, char* argv[]) {
 | Detection              | [WongKinYiu/ScaledYOLOv4](./examples/vision/detection/scaledyolov4)                          | [Python](./examples/vision/detection/scaledyolov4/python)/[C++](./examples/vision/detection/scaledyolov4/cpp)                             | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Detection              | [ppogg/YOLOv5Lite](./examples/vision/detection/yolov5lite)                                   | [Python](./examples/vision/detection/yolov5lite/python)/[C++](./examples/vision/detection/yolov5lite/cpp)                                 | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Detection              | [RangiLyu/NanoDetPlus](./examples/vision/detection/nanodet_plus)                             | [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/detection/nanodet_plus/cpp)                             | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
-| KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | [Python](./examples/vision/keypointdetection/tiny_pose/python)/[C++](./examples/vision/keypointdetection/tiny_pose/python/cpp)            | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | [Python](./examples/vision/keypointdetection/tiny_pose/python)/[C++](./examples/vision/keypointdetection/tiny_pose/cpp)            | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | KeyPoint               | [PaddleDetection/PicoDet + TinyPose](./examples/vision/keypointdetection/det_keypoint_unite) | [Python](./examples/vision/keypointdetection/det_keypoint_unite/python)/[C++](./examples/vision/keypointdetection/det_keypoint_unite/cpp) | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
-| HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | [Python](./xamples/vision/headpose/fsanet/python)/[C++](./xamples/vision/headpose/fsanet/cpp/cpp)                                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
+| HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | [Python](./examples/vision/headpose/fsanet/python)/[C++](./examples/vision/headpose/fsanet/cpp)                                         | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | Tracking               | [PaddleDetection/PP-Tracking](examples/vision/tracking/pptracking)                           | [Python](examples/vision/tracking/pptracking/python)/[C++](examples/vision/tracking/pptracking/cpp)                                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | OCR                    | [PaddleOCR/PP-OCRv2](./examples/vision/ocr)                                                  | [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp)                                       | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
 | OCR                    | [PaddleOCR/PP-OCRv3](./examples/vision/ocr)                                                  | [Python](./examples/vision/ocr/PP-OCRv3/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp)                                                 | ✅       | ✅          | ✅       | ✅          | ✅       | ✅       | ✅           | ✅             | ❔             | ❔       |
@@ -331,12 +341,12 @@ int main(int argc, char* argv[]) {
 | OCR                | [PaddleOCR/PP-OCRv2](examples/vision/ocr/PP-OCRv2)                                        | 2.3+4.4  | ✅       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
 | OCR                | [PaddleOCR/PP-OCRv3](examples/vision/ocr/PP-OCRv3)                                        | 2.4+10.6 | ✅       | ❔       | ❔       | ❔                          | ❔                                    | ❔                                 | ❔                        | --      |
 | OCR                | PaddleOCR/PP-OCRv3-tiny                                                                   | 2.4+10.7 | ❔       | ❔       | ❔       | ❔                          | --                                   | --                                | --                       | --      |
-    
-    
+
+
 ## 🌐 Web和小程序部署
 
 <div id="fastdeploy-web-models"></div>
-    
+
 | 任务场景               | 模型                                                                                          | [web_demo](examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
 | ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
@@ -346,7 +356,7 @@ int main(int argc, char* argv[]) {
 | Object Recognition | [GestureRecognition](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
 | Object Recognition | [ItemIdentification](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
- 
+
 <div id="fastdeploy-community"></div>
 
 ## 社区交流

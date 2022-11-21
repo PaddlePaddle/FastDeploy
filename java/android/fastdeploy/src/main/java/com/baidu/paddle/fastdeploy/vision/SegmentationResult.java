@@ -4,7 +4,7 @@ import android.support.annotation.NonNull;
 
 public class SegmentationResult {
     // Init from native
-    public int[] mLabelMap;
+    public byte[] mLabelMap;
     public float[] mScoreMap;
     public long[] mShape;
     public boolean mContainScoreMap = false;
@@ -18,7 +18,7 @@ public class SegmentationResult {
         return mInitialized;
     }
 
-    public void setLabelMap(@NonNull int[] labelMapBuffer) {
+    public void setLabelMap(@NonNull byte[] labelMapBuffer) {
         if (labelMapBuffer.length > 0) {
             mLabelMap = labelMapBuffer.clone();
         }
