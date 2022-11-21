@@ -47,15 +47,15 @@ Including image classification, object detection, image segmentation, face detec
 
 - 🔥 **2022.11.15：Release FastDeploy [release v0.7.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.7.0)** <br>
     -  **🖥️ Server-side and Cloud Deployment: Support more CV models, improve deployment performance**
-        -  Support [PaddleClas](./examples/vision/classification/paddleclas/serving) model service-based deployment；
-        -  Support [Stable Diffusion](./examples/multimodal/stable_diffusion) model deployment；
+        -  Support [PaddleClas](./examples/vision/classification/paddleclas/serving) model service-based deployment;
+        -  Support [Stable Diffusion](./examples/multimodal/stable_diffusion) model deployment;
         -  Upgrade PaddleClas、PaddleDetection、YOLOv5 deployment code to support predict and batch_predict;
         -  Add the Pad function operator for the FDTensor to support Padding of the input during batch prediction;
-        -  Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.;
+        -  Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.
     -  **📱 Mobile and Edge Device Deployment: support new backend，support more CV model**
         -  Support Paddle Lite TIM-VX for supporting hardware such as Rockchip RV1109,RV1126, RK1808, Amlogic A311D, etc. And provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Inference TensorRT、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime、RKNPU2;
-        -  support Image classification model [ResNet50_vd](./examples/vision/classification/paddleclas/rk1126/cpp) on Rockchip RV1126;
-        -  support Face detection model [SCRFD](./examples/vision/facedet/scrfd/rknpu2) on Rockchip RK3588, RK3568 and other hardware;
+        -  Support Image classification model [ResNet50_vd](./examples/vision/classification/paddleclas/rk1126/cpp) on Rockchip RV1126;
+        -  Support Face detection model [SCRFD](./examples/vision/facedet/scrfd/rknpu2) on Rockchip RK3588, RK3568 and other hardware.
 
 - [**more releases information**](./releases)
 
