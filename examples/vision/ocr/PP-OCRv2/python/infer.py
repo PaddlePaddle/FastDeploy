@@ -96,6 +96,10 @@ rec_model_file = os.path.join(args.rec_model, "inference.pdmodel")
 rec_params_file = os.path.join(args.rec_model, "inference.pdiparams")
 rec_label_file = args.rec_label_file
 
+# 对于三个模型，均采用同样的部署配置
+# 用户也可根据自行需求分别配置
+runtime_option = build_option(args)
+
 det_option = runtime_option
 cls_option = runtime_option
 rec_option = runtime_option
