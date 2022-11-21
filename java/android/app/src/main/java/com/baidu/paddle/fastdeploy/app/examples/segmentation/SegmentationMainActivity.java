@@ -91,13 +91,13 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -227,10 +227,14 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -243,12 +247,16 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             copyBitmapFromCamera(ARGB8888ImageBitmap);
             return false;
         }
+
         boolean modified = false;
+
         long tc = System.currentTimeMillis();
         SegmentationResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
+
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
         frameCounter++;
         if (frameCounter >= 30) {
             final int fps = (int) (1000 / (timeElapsed / 30));
@@ -292,8 +300,17 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
     public void initView() {
         TYPE = REALTIME_DETECT;
+        // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
+        // should mean 'width' if the camera display orientation is 90 | 270 degree
+        // (Hold the phone upright to record video)
+        // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
+        // So, we set this preview size (480,480) here.
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
+        svPreview.switchCamera(); // Front camera for HumanSeg
+
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
         btnSwitch.setOnClickListener(this);
@@ -316,7 +333,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.6f);
+        predictor.predict(bitmap, true, 0.4f);
         resultImage.setImageBitmap(bitmap);
     }
 
