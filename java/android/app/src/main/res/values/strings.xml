@@ -35,7 +35,7 @@
     <!-- facedet values ... -->
     <string name="FACEDET_MODEL_DIR_DEFAULT">models/scrfd_500m_bnkps_shape320x320_pd</string>
     <!-- segmentation values ... -->
-    <string name="SEGMENTATION_MODEL_DIR_DEFAULT">models/portrait_pp_humansegv2_lite_256x144_inference_model</string>
+    <string name="SEGMENTATION_MODEL_DIR_DEFAULT">models/human_pp_humansegv1_lite_192x192_inference_model</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">实时识别</string>
