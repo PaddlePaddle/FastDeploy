@@ -30,6 +30,8 @@ def build_option(args):
         option.use_gpu()
     if args.use_trt:
         option.use_trt_backend()
+        option.enable_paddle_trt_collect_shape()
+        option.set_trt_input_shape("lqs", [1,2,3,180,320])
         option.enable_paddle_to_trt()
     return option
 

@@ -176,8 +176,10 @@ void TrtInfer(const std::string& model_dir,
   auto params_file = model_dir + sep + "model.pdiparams";
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  option.UseTrtBackend();
   // use paddle-TRT
+  option.UseTrtBackend();
+  option.EnablePaddleTrtCollectShape();
+  option.SetTrtInputShape("x", {1, 5, 3, 180, 320});
   option.EnablePaddleToTrt();
   auto model = fastdeploy::vision::sr::EDVR(
       model_file, params_file, option);
@@ -256,7 +258,7 @@ int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout
         << "Usage: infer_demo path/to/model_dir path/to/video frame number run_option, "
-           "e.g ./infer_model ./vsr_model_dir ./person.mp4 0 2"
+           "e.g ./infer_model ./vsr_model_dir ./vsr_src.mp4 0 5"
         << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."

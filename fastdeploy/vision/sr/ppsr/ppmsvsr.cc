@@ -23,8 +23,8 @@ PPMSVSR::PPMSVSR(const std::string& model_file,
                  const RuntimeOption& custom_option,
                  const ModelFormat& model_format){
   // unsupported ORT backend
-  valid_cpu_backends = {Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+  valid_gpu_backends = {Backend::PDINFER, Backend::TRT, Backend::ORT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
