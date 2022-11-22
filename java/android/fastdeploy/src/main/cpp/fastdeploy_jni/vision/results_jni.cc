@@ -982,7 +982,9 @@ bool AllocateFaceDetectionResultFromJava(
   if (j_landmarks_per_face > 0) {
     jobjectArray j_face_det_landmarks_float_arr = reinterpret_cast<jobjectArray>(
         env->GetObjectField(j_face_det_result_obj, j_face_det_landmarks_id_cc));
-    for (int i = 0; i < len; ++i) {
+    const int landmarks_len = env->GetArrayLength(j_face_det_landmarks_float_arr);
+
+    for (int i = 0; i < landmarks_len; ++i) {
       auto j_landmark = reinterpret_cast<jfloatArray>(
           env->GetObjectArrayElement(j_face_det_landmarks_float_arr, i));
       if (env->GetArrayLength(j_landmark) == 2) {
