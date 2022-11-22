@@ -43,11 +43,11 @@ nvidia-docker run -it --rm --name build_fd \
             ln -s /usr/bin/python3 /usr/bin/python;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
-            export ENABLE_TRT_BACKEND=ON;
+            export ENABLE_TRT_BACKEND=OFF;
             export TRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/;
-            export ENABLE_ORT_BACKEND=ON;
-            export ENABLE_PADDLE_BACKEND=ON;
-            export ENABLE_OPENVINO_BACKEND=ON;
+            export ENABLE_ORT_BACKEND=OFF;
+            export ENABLE_PADDLE_BACKEND=OFF;
+            export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
@@ -78,9 +78,9 @@ docker run -it --rm --name build_fd \
             rm -rf .setuptools-cmake-build dist;
             ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
-            export ENABLE_ORT_BACKEND=ON;
-            export ENABLE_PADDLE_BACKEND=ON;
-            export ENABLE_OPENVINO_BACKEND=ON;
+            export ENABLE_ORT_BACKEND=OFF;
+            export ENABLE_PADDLE_BACKEND=OFF;
+            export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
