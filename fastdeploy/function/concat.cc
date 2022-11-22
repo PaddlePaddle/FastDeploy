@@ -23,8 +23,8 @@
 namespace fastdeploy {
 namespace function {
 
-std::vector<int64_t> ComputeAndCheckConcatOutputShape(
-    const std::vector<FDTensor> &input, int axis) {
+std::vector<int64_t>
+ComputeAndCheckConcatOutputShape(const std::vector<FDTensor> &input, int axis) {
   const size_t n = input.size();
   auto out_dims = input[0].shape;
   size_t in_zero_dims_size = out_dims.size();
@@ -49,8 +49,7 @@ std::vector<int64_t> ComputeAndCheckConcatOutputShape(
   return out_dims;
 }
 
-template <typename T>
-struct ConcatFunctor {
+template <typename T> struct ConcatFunctor {
   void operator()(const std::vector<FDTensor> &input, int axis,
                   FDTensor *output) {
     size_t num = input.size();
@@ -113,5 +112,5 @@ void Concat(const std::vector<FDTensor> &x, FDTensor *out, int axis) {
                      ([&] { ConcatKernel<data_t>(x, out, axis); }));
 }
 
-}  // namespace function
-}  // namespace fastdeploy
+} // namespace function
+} // namespace fastdeploy

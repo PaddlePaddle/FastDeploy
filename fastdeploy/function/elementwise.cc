@@ -71,5 +71,5 @@ FDTensor operator/(const FDTensor &x, const FDTensor &y) {
   return out;
 }
 
-}  // namespace function
-}  // namespace fastdeploy
+} // namespace function
+} // namespace fastdeploy

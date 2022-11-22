@@ -22,16 +22,14 @@
 namespace fastdeploy {
 namespace function {
 
-template <typename Functor>
-struct SameDimsElementwiseCompute {
+template <typename Functor> struct SameDimsElementwiseCompute {
   void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
     z->Allocate(x.Shape(), x.Dtype());
     Functor()(x, y, z);
   }
 };
 
-template <typename T>
-struct SameDimsAddFunctor {
+template <typename T> struct SameDimsAddFunctor {
   void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
     const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
@@ -41,8 +39,7 @@ struct SameDimsAddFunctor {
   }
 };
 
-template <typename T>
-struct SameDimsSubtractFunctor {
+template <typename T> struct SameDimsSubtractFunctor {
   void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
     const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
@@ -52,8 +49,7 @@ struct SameDimsSubtractFunctor {
   }
 };
 
-template <typename T>
-struct SameDimsMultiplyFunctor {
+template <typename T> struct SameDimsMultiplyFunctor {
   void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
     const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
@@ -63,8 +59,7 @@ struct SameDimsMultiplyFunctor {
   }
 };
 
-template <typename T>
-struct SameDimsDivideFunctor {
+template <typename T> struct SameDimsDivideFunctor {
   void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
     const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
@@ -75,50 +70,41 @@ struct SameDimsDivideFunctor {
 };
 
 // Add
-template <typename T>
-struct AddFunctor {
+template <typename T> struct AddFunctor {
   inline T operator()(const T a, const T b) const { return a + b; }
 };
-template <typename T>
-struct InverseAddFunctor {
+template <typename T> struct InverseAddFunctor {
   inline T operator()(const T a, const T b) const { return b + a; }
 };
 
 // Subtract
-template <typename T>
-struct SubtractFunctor {
+template <typename T> struct SubtractFunctor {
   inline T operator()(const T a, const T b) const { return a - b; }
 };
-template <typename T>
-struct InverseSubtractFunctor {
+template <typename T> struct InverseSubtractFunctor {
   inline T operator()(const T a, const T b) const { return b - a; }
 };
 
 // Multiply
-template <typename T>
-struct MultiplyFunctor {
+template <typename T> struct MultiplyFunctor {
   inline T operator()(const T a, const T b) const { return a * b; }
 };
-template <>
-struct MultiplyFunctor<bool> {
+template <> struct MultiplyFunctor<bool> {
   inline bool operator()(const bool a, const bool b) const { return a && b; }
 };
-template <typename T>
-struct InverseMultiplyFunctor {
+template <typename T> struct InverseMultiplyFunctor {
   inline T operator()(const T a, const T b) const { return b * a; }
 };
-template <>
-struct InverseMultiplyFunctor<bool> {
+template <> struct InverseMultiplyFunctor<bool> {
   inline bool operator()(const bool a, const bool b) const { return b && a; }
 };
 
 // Divide
-#define DIV_ERROR_INFO                                             \
-  "InvalidArgumentError: Integer division by zero encountered in " \
+#define DIV_ERROR_INFO                                                         \
+  "InvalidArgumentError: Integer division by zero encountered in "             \
   "(floor) divide. Please check the input value."
 
-template <typename T, typename Enable = void>
-struct DivideFunctor {
+template <typename T, typename Enable = void> struct DivideFunctor {
   inline T operator()(const T a, const T b) const { return a / b; }
 };
 
@@ -132,8 +118,7 @@ struct DivideFunctor<
   }
 };
 
-template <typename T, typename Enable = void>
-struct InverseDivideFunctor {
+template <typename T, typename Enable = void> struct InverseDivideFunctor {
   inline T operator()(const T a, const T b) const { return b / a; }
 };
 

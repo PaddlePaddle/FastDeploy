@@ -66,4 +66,4 @@ std::string Str(const std::vector<int64_t> &shape) {
   return oss.str();
 }
 
-}  // namespace fastdeploy
+} // namespace fastdeploy

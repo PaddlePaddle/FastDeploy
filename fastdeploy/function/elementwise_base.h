@@ -22,25 +22,24 @@
 namespace fastdeploy {
 namespace function {
 
-#define DEFINE_ELEMENTWISE_OP(name)                                           \
-  template <typename T>                                                       \
-  struct name##RawKernel {                                                    \
-    void operator()(const FDTensor &x, const FDTensor &y, int axis,           \
-                    FDTensor *out) {                                          \
-      if (x.Shape() == y.Shape()) {                                           \
-        SameDimsElementwiseCompute<SameDims##name##Functor<T> >()(x, y, out); \
-      } else {                                                                \
-        auto x_dims = x.Shape();                                              \
-        auto y_dims = y.Shape();                                              \
-        if (x_dims.size() >= y_dims.size()) {                                 \
-          ElementwiseCompute<name##Functor<T>, T>(x, y, axis,                 \
-                                                  name##Functor<T>(), out);   \
-        } else {                                                              \
-          ElementwiseCompute<Inverse##name##Functor<T>, T>(                   \
-              x, y, axis, Inverse##name##Functor<T>(), out);                  \
-        }                                                                     \
-      }                                                                       \
-    }                                                                         \
+#define DEFINE_ELEMENTWISE_OP(name)                                            \
+  template <typename T> struct name##RawKernel {                               \
+    void operator()(const FDTensor &x, const FDTensor &y, int axis,            \
+                    FDTensor *out) {                                           \
+      if (x.Shape() == y.Shape()) {                                            \
+        SameDimsElementwiseCompute<SameDims##name##Functor<T> >()(x, y, out);  \
+      } else {                                                                 \
+        auto x_dims = x.Shape();                                               \
+        auto y_dims = y.Shape();                                               \
+        if (x_dims.size() >= y_dims.size()) {                                  \
+          ElementwiseCompute<name##Functor<T>, T>(x, y, axis,                  \
+                                                  name##Functor<T>(), out);    \
+        } else {                                                               \
+          ElementwiseCompute<Inverse##name##Functor<T>, T>(                    \
+              x, y, axis, Inverse##name##Functor<T>(), out);                   \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
   }
 
 inline void GetMidDims(const std::vector<int64_t> &x_dims,
@@ -73,14 +72,16 @@ inline void GetMidDims(const std::vector<int64_t> &x_dims,
   }
 }
 
-inline std::vector<int64_t> TrimTrailingSingularDims(
-    const std::vector<int64_t> &dims) {
+inline std::vector<int64_t>
+TrimTrailingSingularDims(const std::vector<int64_t> &dims) {
   // Remove trailing dimensions of size 1 for y
   auto actual_dims_size = dims.size();
   for (; actual_dims_size != 0; --actual_dims_size) {
-    if (dims[actual_dims_size - 1] != 1) break;
+    if (dims[actual_dims_size - 1] != 1)
+      break;
   }
-  if (actual_dims_size == dims.size()) return dims;
+  if (actual_dims_size == dims.size())
+    return dims;
   std::vector<int64_t> trim_dims;
   trim_dims.resize(actual_dims_size);
   for (int i = 0; i < actual_dims_size; ++i) {
