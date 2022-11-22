@@ -357,6 +357,8 @@ if(ENABLE_TRT_BACKEND)
   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR} NO_DEFAULT_PATH)
   find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR} NO_DEFAULT_PATH)
   list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
+  file(GLOB_RECURSE TENSORRT_OPS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/ops/*.cu)
+  list(APPEND ALL_DEPLOY_SRCS ${TENSORRT_OPS_SRCS})
 
   if(NOT BUILD_ON_JETSON)
     if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
