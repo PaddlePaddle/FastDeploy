@@ -44,7 +44,7 @@ dependencies {
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 }
 
-def archives = [
+def FD_CXX_LIB = [
         [
                 'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-latest-shared-dev.tgz',
                 'dest': 'libs'
@@ -53,7 +53,7 @@ def archives = [
 
 task downloadAndExtractLibs(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting archives including libs ..."
+        println "Downloading and extracting fastdeploy android c++ lib ..."
     }
     doLast {
         // Prepare cache folder for archives
@@ -61,24 +61,26 @@ task downloadAndExtractLibs(type: DefaultTask) {
         if (!file("${cachePath}").exists()) {
             mkdir "${cachePath}"
         }
-        archives.eachWithIndex { archive, index ->
+        FD_CXX_LIB.eachWithIndex { lib, index ->
             MessageDigest messageDigest = MessageDigest.getInstance('MD5')
-            messageDigest.update(archive.src.bytes)
+            messageDigest.update(lib.src.bytes)
             String cacheName = new BigInteger(1, messageDigest.digest()).toString(32)
             // Download the target archive if not exists
-            boolean copyFiles = !file("${archive.dest}").exists()
+            boolean copyFiles = !file("${lib.dest}").exists()
             if (!file("${cachePath}/${cacheName}.tgz").exists()) {
-                ant.get(src: archive.src, dest: file("${cachePath}/${cacheName}.tgz"))
-                copyFiles = true // force to copy files from the latest archive files
+                ant.get(src: lib.src, dest: file("${cachePath}/${cacheName}.tgz"))
+                copyFiles = true
+                // force to copy files from the latest archive files
             }
             // Extract the target archive if its dest path does not exists
             if (copyFiles) {
                 copy {
                     from tarTree("${cachePath}/${cacheName}.tgz")
-                    into "${archive.dest}"
+                    into "${lib.dest}"
                 }
             }
         }
     }
 }
+
 preBuild.dependsOn downloadAndExtractLibs
