@@ -32,6 +32,8 @@ fi
 
 nvidia-docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
+           -e "http_proxy=${http_proxy}" \
+           -e "https_proxy=${https_proxy}" \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;
@@ -41,11 +43,11 @@ nvidia-docker run -it --rm --name build_fd \
             ln -s /usr/bin/python3 /usr/bin/python;
             export PATH=/workspace/fastdeploy/serving/cmake-3.18.6-Linux-x86_64/bin:$PATH;
             export WITH_GPU=ON;
-            export ENABLE_TRT_BACKEND=ON;
+            export ENABLE_TRT_BACKEND=OFF;
             export TRT_DIRECTORY=/workspace/fastdeploy/serving/TensorRT-8.4.1.5/;
-            export ENABLE_ORT_BACKEND=ON;
-            export ENABLE_PADDLE_BACKEND=ON;
-            export ENABLE_OPENVINO_BACKEND=ON;
+            export ENABLE_ORT_BACKEND=OFF;
+            export ENABLE_PADDLE_BACKEND=OFF;
+            export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
@@ -68,15 +70,17 @@ echo "start build FD CPU library"
 
 docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
+           -e "http_proxy=${http_proxy}" \
+           -e "https_proxy=${https_proxy}" \
            paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
             rm -rf .setuptools-cmake-build dist;
             ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
-            export ENABLE_ORT_BACKEND=ON;
-            export ENABLE_PADDLE_BACKEND=ON;
-            export ENABLE_OPENVINO_BACKEND=ON;
+            export ENABLE_ORT_BACKEND=OFF;
+            export ENABLE_PADDLE_BACKEND=OFF;
+            export ENABLE_OPENVINO_BACKEND=OFF;
             export ENABLE_VISION=ON;
             export ENABLE_TEXT=ON;
             python setup.py build;
