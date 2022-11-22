@@ -12,18 +12,16 @@
 
 ### 快速开始
 
-以下示例展示如何基于FastDeploy库完成ERNIE 3.0 Medium模型在CLUE Benchmark的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的C++预测部署。
+以下示例展示如何基于FastDeploy库完成ERNIE 3.0 Medium模型在CLUE Benchmark的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的C++预测部署。支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+
 
 ```bash
-# 下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.6.0.tgz
-
-cd fastdeploy-linux-x64-gpu-0.6.0/examples/text/ernie-3.0/cpp
 mkdir build
 cd build
-# 执行cmake，需要指定FASTDEPLOY_INSTALL_DIR为FastDeploy SDK的目录。
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.6.0
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # 下载AFQMC数据集的微调后的ERNIE 3.0模型以及词表

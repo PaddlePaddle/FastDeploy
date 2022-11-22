@@ -276,7 +276,7 @@ bool AllocateJavaSegmentationResultFromCxx(
   const jclass j_seg_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   const jfieldID j_seg_label_map_id = env->GetFieldID(
-      j_seg_result_clazz, "mLabelMap", "[I");
+      j_seg_result_clazz, "mLabelMap", "[B");
   const jfieldID j_seg_shape_id = env->GetFieldID(
       j_seg_result_clazz, "mShape", "[J");
   const jfieldID j_seg_contain_shape_map_id = env->GetFieldID(
@@ -292,10 +292,10 @@ bool AllocateJavaSegmentationResultFromCxx(
 
   // mLabelMap int[] shape (n):        [I
   const auto &label_map_uint8 = c_result_ptr->label_map;
-  std::vector<int> label_map;  // cast uint8 -> int32
-  label_map.assign(label_map_uint8.begin(), label_map_uint8.end());
-  jintArray j_seg_label_map_int_arr = env->NewIntArray(len);
-  env->SetIntArrayRegion(j_seg_label_map_int_arr, 0, len, label_map.data());
+  jbyteArray j_seg_label_map_byte_arr = env->NewByteArray(len);
+  env->SetByteArrayRegion(j_seg_label_map_byte_arr, 0, len,
+                          reinterpret_cast<jbyte*>(const_cast<uint8_t*>(
+                              label_map_uint8.data())));
 
   // mShape long[]  shape (2) (H,W):   [J
   const auto &shape = c_result_ptr->shape;
@@ -319,12 +319,13 @@ bool AllocateJavaSegmentationResultFromCxx(
   }
 
   // Set object fields
-  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_int_arr);
+  env->SetObjectField(j_seg_result_obj, j_seg_label_map_id, j_seg_label_map_byte_arr);
   env->SetObjectField(j_seg_result_obj, j_seg_shape_id, j_seg_shape_long_arr);
   env->SetBooleanField(j_seg_result_obj, j_seg_initialized_id, JNI_TRUE);
 
   // Release local Refs
-  env->DeleteLocalRef(j_seg_label_map_int_arr);
+  // env->DeleteLocalRef(j_seg_label_map_int_arr);
+  env->DeleteLocalRef(j_seg_label_map_byte_arr);
   env->DeleteLocalRef(j_seg_shape_long_arr);
   env->DeleteLocalRef(j_seg_result_clazz);
 
@@ -420,7 +421,6 @@ bool AllocateJavaFaceDetectionResultFromCxx(
 
   return true;
 }
-
 
 bool AllocateJavaResultFromCxx(
     JNIEnv *env, jobject j_result_obj, void *cxx_result,
@@ -825,7 +825,7 @@ bool AllocateSegmentationResultFromJava(
   const jclass j_seg_result_clazz_cc = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   const jfieldID j_seg_label_map_id_cc = env->GetFieldID(
-      j_seg_result_clazz_cc, "mLabelMap", "[I");
+      j_seg_result_clazz_cc, "mLabelMap", "[B");
   const jfieldID j_seg_shape_id_cc = env->GetFieldID(
       j_seg_result_clazz_cc, "mShape", "[J");
   const jfieldID j_seg_contain_shape_map_id_cc = env->GetFieldID(
@@ -846,34 +846,25 @@ bool AllocateSegmentationResultFromJava(
     return false;
   }
 
-  jintArray j_seg_label_map_int_arr = reinterpret_cast<jintArray>(
+  jbyteArray j_seg_label_map_byte_arr = reinterpret_cast<jbyteArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_label_map_id_cc));
   jlongArray j_seg_shape_long_arr = reinterpret_cast<jlongArray>(
       env->GetObjectField(j_seg_result_obj, j_seg_shape_id_cc));
   jboolean j_seg_contain_score_map =
       env->GetBooleanField(j_seg_result_obj, j_seg_contain_shape_map_id_cc);
-  jfloatArray j_seg_score_map_float_arr = reinterpret_cast<jfloatArray>(
-      env->GetObjectField(j_seg_result_obj, j_seg_score_map_id_cc));
 
   // Init cxx result
   c_result_ptr->Clear();
-  const int label_len = env->GetArrayLength(j_seg_label_map_int_arr);  // HxW
+  const int label_len = env->GetArrayLength(j_seg_label_map_byte_arr);  // HxW
   const int shape_len = env->GetArrayLength(j_seg_shape_long_arr);     // 2
-  const int score_len = env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
   c_result_ptr->label_map.resize(label_len);
   c_result_ptr->shape.resize(shape_len);
-  if (j_seg_contain_score_map) {
-    c_result_ptr->contain_score_map = true;
-    c_result_ptr->score_map.resize(score_len);
-  }
 
   // mLabelMap int[] shape (n):        [I
-  std::vector<uint8_t> label_map_int8;  // cast int32 -> uint8_t
-  jint *j_seg_label_map_int_ptr =
-      env->GetIntArrayElements(j_seg_label_map_int_arr, nullptr);
-  label_map_int8.assign(j_seg_label_map_int_ptr,j_seg_label_map_int_ptr + label_len);
-  std::memcpy(c_result_ptr->label_map.data(), label_map_int8.data(), label_len * sizeof(int));
-  env->ReleaseIntArrayElements(j_seg_label_map_int_arr, j_seg_label_map_int_ptr,0);
+  jbyte *j_seg_label_map_byte_ptr =
+      env->GetByteArrayElements(j_seg_label_map_byte_arr, nullptr);
+  std::memcpy(c_result_ptr->label_map.data(), j_seg_label_map_byte_ptr, label_len * sizeof(jbyte));
+  env->ReleaseByteArrayElements(j_seg_label_map_byte_arr, j_seg_label_map_byte_ptr,0);
 
   // mShape long[]  shape (2) (H,W):   [J
   jlong *j_seg_shape_long_ptr =
@@ -883,10 +874,19 @@ bool AllocateSegmentationResultFromJava(
 
   //  mScoreMap float[]  shape (n):     [F
   if (j_seg_contain_score_map) {
-    jfloat *j_seg_score_map_float_ptr =
-        env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
-    std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
-    env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
+    jfloatArray j_seg_score_map_float_arr = reinterpret_cast<jfloatArray>(
+        env->GetObjectField(j_seg_result_obj, j_seg_score_map_id_cc));
+
+    if (j_seg_score_map_float_arr != NULL) {
+      const int score_len = env->GetArrayLength(j_seg_score_map_float_arr);  // 0 | HxW
+
+      c_result_ptr->contain_score_map = true;
+      c_result_ptr->score_map.resize(score_len);
+      jfloat *j_seg_score_map_float_ptr =
+          env->GetFloatArrayElements(j_seg_score_map_float_arr, nullptr);
+      std::memcpy(c_result_ptr->score_map.data(), j_seg_score_map_float_ptr, score_len * sizeof(float));
+      env->ReleaseFloatArrayElements(j_seg_score_map_float_arr, j_seg_score_map_float_ptr, 0);
+    }
   }
 
   // Release local Refs
@@ -982,7 +982,9 @@ bool AllocateFaceDetectionResultFromJava(
   if (j_landmarks_per_face > 0) {
     jobjectArray j_face_det_landmarks_float_arr = reinterpret_cast<jobjectArray>(
         env->GetObjectField(j_face_det_result_obj, j_face_det_landmarks_id_cc));
-    for (int i = 0; i < len; ++i) {
+    const int landmarks_len = env->GetArrayLength(j_face_det_landmarks_float_arr);
+
+    for (int i = 0; i < landmarks_len; ++i) {
       auto j_landmark = reinterpret_cast<jfloatArray>(
           env->GetObjectArrayElement(j_face_det_landmarks_float_arr, i));
       if (env->GetArrayLength(j_landmark) == 2) {

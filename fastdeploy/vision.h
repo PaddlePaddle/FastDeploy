@@ -24,7 +24,7 @@
 #include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
 #include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
-#include "fastdeploy/vision/detection/contrib/yolov7.h"
+#include "fastdeploy/vision/detection/contrib/yolov7/yolov7.h"
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_ort.h"
 #include "fastdeploy/vision/detection/contrib/yolov7end2end_trt.h"
 #include "fastdeploy/vision/detection/contrib/yolox.h"
@@ -48,12 +48,14 @@
 #include "fastdeploy/vision/matting/ppmatting/ppmatting.h"
 #include "fastdeploy/vision/ocr/ppocr/classifier.h"
 #include "fastdeploy/vision/ocr/ppocr/dbdetector.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v2.h"
 #include "fastdeploy/vision/ocr/ppocr/ppocr_v3.h"
 #include "fastdeploy/vision/ocr/ppocr/recognizer.h"
 #include "fastdeploy/vision/segmentation/ppseg/model.h"
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 #include "fastdeploy/vision/headpose/contrib/fsanet.h"
+#include "fastdeploy/vision/sr/ppsr/model.h"
 #endif
 
 #include "fastdeploy/vision/visualize/visualize.h"
