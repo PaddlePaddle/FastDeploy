@@ -26,6 +26,8 @@ namespace function {
 */
 FASTDEPLOY_DECL void Add(const FDTensor &x, const FDTensor &y, FDTensor *out);
 
+FASTDEPLOY_DECL FDTensor operator+(const FDTensor &x, const FDTensor &y);
+
 /** Excute the subtract operation for input FDTensors.  *out = x - y.
     @param x The input tensor.
     @param y The input tensor.
@@ -33,6 +35,8 @@ FASTDEPLOY_DECL void Add(const FDTensor &x, const FDTensor &y, FDTensor *out);
 */
 FASTDEPLOY_DECL void Subtract(const FDTensor &x, const FDTensor &y,
                               FDTensor *out);
+
+FASTDEPLOY_DECL FDTensor operator-(const FDTensor &x, const FDTensor &y);
 
 /** Excute the multiply operation for input FDTensors.  *out = x * y.
     @param x The input tensor.
@@ -42,6 +46,7 @@ FASTDEPLOY_DECL void Subtract(const FDTensor &x, const FDTensor &y,
 FASTDEPLOY_DECL void Multiply(const FDTensor &x, const FDTensor &y,
                               FDTensor *out);
 
+FASTDEPLOY_DECL FDTensor operator*(const FDTensor &x, const FDTensor &y);
 /** Excute the divide operation for input FDTensors.  *out = x / y.
     @param x The input tensor.
     @param y The input tensor.
@@ -49,6 +54,7 @@ FASTDEPLOY_DECL void Multiply(const FDTensor &x, const FDTensor &y,
 */
 FASTDEPLOY_DECL void Divide(const FDTensor &x, const FDTensor &y,
                             FDTensor *out);
+FASTDEPLOY_DECL FDTensor operator/(const FDTensor &x, const FDTensor &y);
 
 }  // namespace function
 }  // namespace fastdeploy
