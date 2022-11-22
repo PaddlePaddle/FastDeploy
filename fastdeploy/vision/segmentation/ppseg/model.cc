@@ -60,14 +60,7 @@ bool PaddleSegModel::BatchPredict(const std::vector<cv::Mat>& imgs,
   std::vector<FDMat> fd_images = WrapMat(imgs);
   // Record the shape of input images
   std::map<std::string, std::vector<std::array<int, 2>>> imgs_info;
-  std::vector<std::array<int, 2>> shape_info;
-  for (auto fd_image : fd_images) {
-    shape_info.push_back({static_cast<int>(fd_image.Height()),
-                          static_cast<int>(fd_image.Width())});
-  }
-  imgs_info["shape_info"] = shape_info;
-  FDASSERT(imgs_info.find("shape_info") != imgs_info.end(), "Cannot find input_shape from imgs_info.");
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &imgs_info)) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;

@@ -33,7 +33,10 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
    * \param[in] outputs The output tensors which will feed in runtime, include image
    * \return true if the preprocess successed, otherwise false
    */
-  virtual bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
+  virtual bool Run(
+    std::vector<FDMat>* images,
+    std::vector<FDTensor>* outputs,
+    std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info);
 
   /// Get is_vertical_screen property of PP-HumanSeg model, default is false
   bool GetIsVerticalScreen() {

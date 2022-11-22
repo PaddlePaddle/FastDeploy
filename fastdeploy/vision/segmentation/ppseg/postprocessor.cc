@@ -259,7 +259,7 @@ bool PaddleSegPostprocessor::Run(
     infer_height = infer_results[0].shape[2];
     infer_width = infer_results[0].shape[3];
     is_transform = true;
-    if(is_store_score_map_) {
+    if (is_store_score_map_) {
       infer_channel = infer_results[0].shape[1];
       std::vector<int64_t> dim{0, 2, 3, 1};
       function::Transpose(infer_results[0], &transform_infer_results, dim);

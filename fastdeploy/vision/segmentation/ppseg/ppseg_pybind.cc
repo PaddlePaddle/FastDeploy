@@ -24,15 +24,8 @@ void BindPPSeg(pybind11::module& m) {
              std::vector<vision::FDMat> images;
              // Record the shape of input images
              std::map<std::string, std::vector<std::array<int, 2>>> imgs_info;
-             std::vector<std::array<int, 2>> shape_info;
-             for (size_t i = 0; i < im_list.size(); ++i) {
-               images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
-               shape_info.push_back({static_cast<int>(images[i].Height()),
-                                     static_cast<int>(images[i].Width())});
-             }
-             imgs_info["shape_info"] = shape_info;
              std::vector<FDTensor> outputs;
-             if (!self.Run(&images, &outputs)) {
+             if (!self.Run(&images, &outputs, &imgs_info)) {
                pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleDetPreprocessor.')");
              }
              for (size_t i = 0; i < outputs.size(); ++i) {
