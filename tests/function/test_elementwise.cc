@@ -417,5 +417,35 @@ TEST(fastdeploy, check_broadcast_dim4) {
              div_result.size());
 }
 
+TEST(fastdeploy, mixed_operation) {
+  CheckShape check_shape;
+  CheckData check_data;
+  FDTensor a, b, c, d, e, output;
+
+  auto test_data = CreateSameDimeData();
+  auto a_data = std::get<0>(test_data);
+  auto b_data = std::get<1>(test_data);
+  auto c_data = std::get<1>(CreateBroadcastDim1Data());
+  auto d_data = std::get<1>(CreateBroadcastDim2Data());
+  auto e_data = std::get<1>(CreateBroadcastDim3Data());
+
+  a.SetExternalData({2, 3, 4}, FDDataType::FP32, a_data.data());
+  b.SetExternalData({2, 3, 4}, FDDataType::FP32, b_data.data());
+  c.SetExternalData({2, 1, 1}, FDDataType::FP32, c_data.data());
+  d.SetExternalData({1, 3, 1}, FDDataType::FP32, d_data.data());
+  e.SetExternalData({1, 1, 4}, FDDataType::FP32, e_data.data());
+
+  std::vector<float> result = {
+      3.238058,  3.004797,  2.278015,  2.881238,  1.822084,  2.073209,
+      1.524921,  2.619779,  1.196421,  1.318079,  1.59565,   1.538118,
+      -0.215903, -0.052794, -0.434044, 0.195022,  -0.165874, 0.022943,
+      -0.130613, 0.527984,  -0.046946, -0.176592, -0.583538, 0.348473};
+
+  output = a * b + c / d - e;
+  check_shape(output.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(output.Data()), result.data(),
+             result.size());
+}
+
 }  // namespace function
 }  // namespace fastdeploy
