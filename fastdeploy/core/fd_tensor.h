@@ -25,15 +25,15 @@ namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
   // std::vector<int8_t> data;
-  void* buffer_ = nullptr;
-  std::vector<int64_t> shape = {0};
+  void *buffer_ = nullptr;
+  std::vector<int64_t> shape = { 0 };
   std::string name = "";
   FDDataType dtype = FDDataType::INT8;
 
   // This use to skip memory copy step
   // the external_data_ptr will point to the user allocated memory
   // user has to maintain the memory, allocate and release
-  void* external_data_ptr = nullptr;
+  void *external_data_ptr = nullptr;
   // The internal data will be on CPU
   // Some times, the external data is on the GPU, and we are going to use
   // GPU to inference the model
@@ -53,17 +53,15 @@ struct FASTDEPLOY_DECL FDTensor {
   std::vector<int8_t> temporary_cpu_buffer;
 
   // Get data buffer pointer
-  void* MutableData();
+  void *MutableData();
 
-  void* Data();
+  void *Data();
 
-  bool IsShared() {
-    return external_data_ptr != nullptr;
-  }
+  bool IsShared() { return external_data_ptr != nullptr; }
 
   void StopSharing();
 
-  const void* Data() const;
+  const void *Data() const;
 
   // Use this data to get the tensor data to process
   // Since the most senario is process data in CPU
@@ -71,14 +69,14 @@ struct FASTDEPLOY_DECL FDTensor {
   // buffer.
   // If the original data is on other device, the data
   // will copy to cpu store in `temporary_cpu_buffer`
-  const void* CpuData() const;
+  const void *CpuData() const;
 
   // Set user memory buffer for Tensor, the memory is managed by
   // the user it self, but the Tensor will share the memory with user
   // So take care with the user buffer
-  void SetExternalData(const std::vector<int64_t>& new_shape,
-                       const FDDataType& data_type, void* data_buffer,
-                       const Device& new_device = Device::CPU);
+  void SetExternalData(const std::vector<int64_t> &new_shape,
+                       const FDDataType &data_type, void *data_buffer,
+                       const Device &new_device = Device::CPU);
 
   // Expand the shape of a Tensor. Insert a new axis that will appear
   // at the `axis` position in the expanded Tensor shape.
@@ -91,10 +89,10 @@ struct FASTDEPLOY_DECL FDTensor {
   // Initialize Tensor
   // Include setting attribute for tensor
   // and allocate cpu memory buffer
-  void Allocate(const std::vector<int64_t>& new_shape,
-                const FDDataType& data_type,
-                const std::string& tensor_name = "",
-                const Device& new_device = Device::CPU);
+  void Allocate(const std::vector<int64_t> &new_shape,
+                const FDDataType &data_type,
+                const std::string &tensor_name = "",
+                const Device &new_device = Device::CPU);
 
   // Total size of tensor memory buffer in bytes
   int Nbytes() const;
@@ -110,38 +108,39 @@ struct FASTDEPLOY_DECL FDTensor {
 
   void Resize(size_t nbytes);
 
-  void Resize(const std::vector<int64_t>& new_shape);
+  void Resize(const std::vector<int64_t> &new_shape);
 
-  void Resize(const std::vector<int64_t>& new_shape,
-              const FDDataType& data_type, const std::string& tensor_name = "",
-              const Device& new_device = Device::CPU);
+  void Resize(const std::vector<int64_t> &new_shape,
+              const FDDataType &data_type, const std::string &tensor_name = "",
+              const Device &new_device = Device::CPU);
 
+  bool Reshape(const std::vector<int64_t> &new_shape);
   // Debug function
   // Use this function to print shape, dtype, mean, max, min
   // prefix will also be printed as tag
-  void PrintInfo(const std::string& prefix = "TensorInfo: ") const;
+  void PrintInfo(const std::string &prefix = "TensorInfo: ") const;
 
   bool ReallocFn(size_t nbytes);
 
   void FreeFn();
 
   FDTensor() {}
-  explicit FDTensor(const std::string& tensor_name);
+  explicit FDTensor(const std::string &tensor_name);
   // Deep copy
-  FDTensor(const FDTensor& other);
+  FDTensor(const FDTensor &other);
   // Move constructor
-  FDTensor(FDTensor&& other);
+  FDTensor(FDTensor &&other);
 
   // Deep copy assignment
-  FDTensor& operator=(const FDTensor& other);
+  FDTensor &operator=(const FDTensor &other);
   // Move assignment
-  FDTensor& operator=(FDTensor&& other);
+  FDTensor &operator=(FDTensor &&other);
 
   ~FDTensor() { FreeFn(); }
 
-  static void CopyBuffer(void* dst, const void* src, size_t nbytes,
-                         const Device& device = Device::CPU,
-                        bool is_pinned_memory = false);
+  static void CopyBuffer(void *dst, const void *src, size_t nbytes,
+                         const Device &device = Device::CPU,
+                         bool is_pinned_memory = false);
 };
 
 }  // namespace fastdeploy
