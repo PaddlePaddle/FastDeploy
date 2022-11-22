@@ -32,6 +32,8 @@ fi
 
 nvidia-docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
+           -e "http_proxy=${http_proxy}" \
+           -e "https_proxy=${https_proxy}" \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;
@@ -68,6 +70,8 @@ echo "start build FD CPU library"
 
 docker run -it --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
+           -e "http_proxy=${http_proxy}" \
+           -e "https_proxy=${https_proxy}" \
            paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
