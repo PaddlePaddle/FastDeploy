@@ -25,33 +25,40 @@ android {
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation fileTree(include: ['*.aar'], dir: 'libs')
     implementation 'com.android.support:appcompat-v7:28.0.0'
     //noinspection GradleDependency
     implementation 'com.android.support.constraint:constraint-layout:1.1.3'
     implementation 'com.android.support:design:28.0.0'
     implementation 'org.jetbrains:annotations:15.0'
-    implementation project(path: ':fastdeploy')
+    // implementation project(path: ':fastdeploy')
     //noinspection GradleDependency
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 }
 
-def archives = [
+def FD_MODEL = [
         [
-                'src': 'https://bj.bcebos.com/paddlehub/fastdeploy/picodet_s_320_coco_lcnet.tgz',
-                'dest' : 'src/main/assets/models'
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/picodet_s_320_coco_lcnet.tgz',
+                'dest': 'src/main/assets/models'
         ],
         [
-                'src': 'https://bj.bcebos.com/paddlehub/fastdeploy/picodet_l_320_coco_lcnet.tgz',
-                'dest' : 'src/main/assets/models'
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/picodet_l_320_coco_lcnet.tgz',
+                'dest': 'src/main/assets/models'
         ]
 ]
 
-task downloadAndExtractArchives(type: DefaultTask) {
+def FD_JAVA_SDK = [
+        [
+                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-sdk-latest-dev.aar',
+                'dest': 'libs'
+        ]
+]
+
+task downloadAndExtractModels(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting archives including models ..."
+        println "Downloading and extracting fastdeploy models ..."
     }
     doLast {
         // Prepare cache folder for archives
@@ -59,24 +66,63 @@ task downloadAndExtractArchives(type: DefaultTask) {
         if (!file("${cachePath}").exists()) {
             mkdir "${cachePath}"
         }
-        archives.eachWithIndex { archive, index ->
+        FD_MODEL.eachWithIndex { model, index ->
             MessageDigest messageDigest = MessageDigest.getInstance('MD5')
-            messageDigest.update(archive.src.bytes)
+            messageDigest.update(model.src.bytes)
             String cacheName = new BigInteger(1, messageDigest.digest()).toString(32)
             // Download the target archive if not exists
-            boolean copyFiles = !file("${archive.dest}").exists()
+            boolean copyFiles = !file("${model.dest}").exists()
             if (!file("${cachePath}/${cacheName}.tgz").exists()) {
-                ant.get(src: archive.src, dest: file("${cachePath}/${cacheName}.tgz"))
-                copyFiles = true // force to copy files from the latest archive files
+                println "Downloading ${model.src} -> ${cachePath}/${cacheName}.tgz"
+                ant.get(src: model.src, dest: file("${cachePath}/${cacheName}.tgz"))
+                copyFiles = true
+                // force to copy files from the latest archive files
             }
             // Extract the target archive if its dest path does not exists
             if (copyFiles) {
+                println "Coping ${cachePath}/${cacheName}.aar -> ${model.dest}"
                 copy {
                     from tarTree("${cachePath}/${cacheName}.tgz")
-                    into "${archive.dest}"
+                    into "${model.dest}"
                 }
             }
         }
     }
 }
-preBuild.dependsOn downloadAndExtractArchives
+
+task downloadAndExtractSDKs(type: DefaultTask) {
+    doFirst {
+        println "Downloading and extracting fastdeploy android java sdk ..."
+    }
+    doLast {
+        // Prepare cache folder for archives
+        String cachePath = "cache"
+        if (!file("${cachePath}").exists()) {
+            mkdir "${cachePath}"
+        }
+        FD_JAVA_SDK.eachWithIndex { sdk, index ->
+            String[] sdkPaths = sdk.src.split("/")
+            // e.g fastdeploy-android-sdk-latest-dev.aar
+            String sdkName = sdkPaths[sdkPaths.length - 1]
+            // Download the target SDK if not exists
+            boolean copyFiles = !file("${sdk.dest}/${sdkName}").exists()
+            if (!file("${cachePath}/${sdkName}").exists()) {
+                println "Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
+                ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+                copyFiles = true
+                // force to copy files from the latest downloaded sdk
+            }
+            // Copy the target archive if its dest path does not exists
+            if (copyFiles) {
+                println "Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
+                copy {
+                    from "${cachePath}/${sdkName}"
+                    into "${sdk.dest}"
+                }
+            }
+        }
+    }
+}
+
+preBuild.dependsOn downloadAndExtractSDKs
+preBuild.dependsOn downloadAndExtractModels
