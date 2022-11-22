@@ -19,14 +19,12 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
@@ -34,14 +32,11 @@ import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
 
-import java.io.File;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,14 +56,9 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     private ViewGroup resultPageView;
     private ImageView resultImage;
     private ImageView backInResult;
-    private SeekBar confidenceSeekbar;
-    private TextView seekbarText;
-    private float resultNum = 1.0f;
-    private ResultListView detectResultView;
+    private ResultListView resultView;
     private Bitmap shutterBitmap;
-    private Bitmap originShutterBitmap;
     private Bitmap picBitmap;
-    private Bitmap originPicBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -81,12 +71,12 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     private static final int INTENT_CODE_PICK_IMAGE = 100;
     private static final int TIME_SLEEP_INTERVAL = 50; // ms
 
-    String savedImagePath = "result.jpg";
     long timeElapsed = 0;
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
     PaddleSegModel predictor = new PaddleSegModel();
+    private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,13 +91,13 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
 
-        // Init the camera preview and UI components
-        initView();
-
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
             requestAllPermissions();
         }
+
+        // Init the camera preview and UI components
+        initView();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -120,6 +110,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             case R.id.btn_shutter:
                 TYPE = BTN_SHUTTER;
                 shutterAndPauseCamera();
+                resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
                 startActivity(new Intent(SegmentationMainActivity.this, SegmentationSettingsActivity.class));
@@ -141,15 +132,27 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                     intent.setType("image/*");
                     startActivityForResult(intent, INTENT_CODE_PICK_IMAGE);
                 }
+                resultView.setAdapter(null);
                 break;
             case R.id.back_in_result:
-                resultPageView.setVisibility(View.GONE);
-                cameraPageView.setVisibility(View.VISIBLE);
-                TYPE = REALTIME_DETECT;
-                isShutterBitmapCopied = false;
-                svPreview.onResume();
+                back();
                 break;
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        back();
+    }
+
+    private void back() {
+        resultPageView.setVisibility(View.GONE);
+        cameraPageView.setVisibility(View.VISIBLE);
+        TYPE = REALTIME_DETECT;
+        isShutterBitmapCopied = false;
+        svPreview.onResume();
+        results.clear();
     }
 
     private void shutterAndPauseCamera() {
@@ -169,10 +172,8 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                         svPreview.onPause();
                         cameraPageView.setVisibility(View.GONE);
                         resultPageView.setVisibility(View.VISIBLE);
-                        seekbarText.setText(resultNum + "");
-                        confidenceSeekbar.setProgress((int) (resultNum * 100));
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
-                            resultImage.setImageBitmap(shutterBitmap);
+                            detail(shutterBitmap);
                         } else {
                             new AlertDialog.Builder(SegmentationMainActivity.this)
                                     .setTitle("Empty Result!")
@@ -193,7 +194,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
@@ -207,13 +207,12 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (resultCode == Activity.RESULT_OK) {
                 cameraPageView.setVisibility(View.GONE);
                 resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
-                picBitmap = decodeBitmap(path, 720, 1280);
-                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                resultImage.setImageBitmap(picBitmap);
+                Bitmap bitmap = decodeBitmap(path, 720, 1280);
+                picBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                detail(picBitmap);
             }
         }
     }
@@ -228,10 +227,14 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             isRealtimeStatusRunning = true;
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
+            isShutterBitmapCopied = false;
             // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
+                    if (TYPE == BTN_SHUTTER) {
+                        copyBitmapFromCamera(ARGB8888ImageBitmap);
+                    }
                     return false;
                 }
             });
@@ -245,11 +248,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             return false;
         }
 
-        String savedImagePath = "";
-        synchronized (this) {
-            savedImagePath = Utils.getDCIMDirectory() + File.separator + "result.jpg";
-        }
-
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
@@ -257,13 +255,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         timeElapsed += (System.currentTimeMillis() - tc);
 
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
-
         modified = result.initialized();
-        if (!savedImagePath.isEmpty()) {
-            synchronized (this) {
-                SegmentationMainActivity.this.savedImagePath = "result.jpg";
-            }
-        }
 
         frameCounter++;
         if (frameCounter >= 30) {
@@ -308,16 +300,17 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
     public void initView() {
         TYPE = REALTIME_DETECT;
-        // For front face camera and human seg, the smaller width and height
-        // may get both better result and performance. EXPECTED_PREVIEW_HEIGHT
-        // should be 'width' and EXPECTED_PREVIEW_WIDTH should be 'height' if
-        // your camera display orientation is rotate (degree == 90 || degree == 270).
-        // The transformation will auto process in camera.
-        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 360;
-        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
+        // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
+        // should mean 'width' if the camera display orientation is 90 | 270 degree
+        // (Hold the phone upright to record video)
+        // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
+        // So, we set this preview size (480,480) here.
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
-        svPreview.switchCamera();  // switch to front camera for human seg
+        svPreview.switchCamera(); // Front camera for HumanSeg
+
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
         btnSwitch.setOnClickListener(this);
@@ -336,61 +329,12 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         resultImage = findViewById(R.id.result_image);
         backInResult = findViewById(R.id.back_in_result);
         backInResult.setOnClickListener(this);
-        confidenceSeekbar = findViewById(R.id.confidence_seekbar);
-        seekbarText = findViewById(R.id.seekbar_text);
-        detectResultView = findViewById(R.id.result_list_view);
+        resultView = findViewById(R.id.result_list_view);
+    }
 
-        List<BaseResultModel> results = new ArrayList<>();
-        // TODO: add model results from SegmentationResult instead of using fake data.
-        results.add(new BaseResultModel(1, "human", 1.0f));
-        results.add(new BaseResultModel(2, "human", 1.0f));
-        results.add(new BaseResultModel(3, "human", 1.0f));
-        final BaseResultAdapter adapter = new BaseResultAdapter(this, R.layout.facedet_result_page_item, results);
-        detectResultView.setAdapter(adapter);
-        detectResultView.invalidate();
-
-        confidenceSeekbar.setMax(100);
-        confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                float resultConfidence = seekBar.getProgress() / 100f;
-                BigDecimal bd = new BigDecimal(resultConfidence);
-                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-                            if (!picBitmap.isRecycled()) {
-                                predictor.predict(picBitmap, true, resultNum);
-                                resultImage.setImageBitmap(picBitmap);
-                                picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
-                        } else {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
-                            if (!shutterBitmap.isRecycled()) {
-                                predictor.predict(shutterBitmap, true, resultNum);
-                                resultImage.setImageBitmap(shutterBitmap);
-                                shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                            }
-                            resultNum = 1.0f;
-                        }
-                    }
-                });
-            }
-        });
+    private void detail(Bitmap bitmap) {
+        predictor.predict(bitmap, true, 0.4f);
+        resultImage.setImageBitmap(bitmap);
     }
 
     @SuppressLint("ApplySharedPref")
@@ -448,32 +392,5 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

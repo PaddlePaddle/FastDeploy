@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <numeric>
 
 #if defined(_WIN32)
 #ifdef FASTDEPLOY_LIB
