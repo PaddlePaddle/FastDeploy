@@ -53,6 +53,8 @@ config_file = os.path.join(model_dir, "infer_cfg.yml")
 runtime_option = build_option(args)
 model = fd.vision.detection.PPYOLOE(
     model_file, params_file, config_file, runtime_option=runtime_option)
+print(model._model.input_info_of_runtime(0))
+print(model._model.output_info_of_runtime(0))
 
 # 预测图片检测结果
 if args.image is None:
