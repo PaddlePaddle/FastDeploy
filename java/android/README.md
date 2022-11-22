@@ -420,7 +420,6 @@ String configFile = "picodet_s_320_coco_lcnet/infer_cfg.yml";
 RuntimeOption option = new RuntimeOption();
 option.setCpuThreadNum(2);
 option.setLitePowerMode(LitePowerMode.LITE_POWER_HIGH);
-option.enableRecordTimeOfRuntime();
 option.enableLiteFp16();
 // 使用init函数初始化  
 model.init(modelFile, paramFile, configFile, option);
@@ -489,7 +488,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 目标检测  
+- 目标检测场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -503,7 +502,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- OCR文字识别
+- OCR文字识别场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -517,7 +516,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 人像分割  
+- 人像分割场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -531,7 +530,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 人脸检测
+- 人脸检测场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
