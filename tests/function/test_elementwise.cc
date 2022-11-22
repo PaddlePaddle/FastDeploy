@@ -52,6 +52,18 @@ std::tuple<std::vector<float>, std::vector<float>> CreateBroadcastDim1Data() {
   return std::make_tuple(x_data, y_data);
 }
 
+std::tuple<std::vector<float>, std::vector<float>> CreateBroadcastDim2Data() {
+  // Shape: [2, 3, 4]
+  std::vector<float> x_data = {
+      0.8428625,  0.6461913, 0.13740455, 0.11430702, 0.659926,  0.535816,
+      0.7429162,  0.8456049, 0.21228176, 0.29970083, 0.8621713, 0.40894133,
+      0.12684688, 0.1566195, 0.42884097, 0.8476526,  0.2458633, 0.669046,
+      0.87888306, 0.6762589, 0.666453,   0.32523027, 0.4139388, 0.8341406};
+  // Shape: [1, 3, 1]
+  std::vector<float> y_data = {0.30803263, 0.41172066, 0.5588573};
+  return std::make_tuple(x_data, y_data);
+}
+
 TEST(fastdeploy, check_same_dim) {
   CheckShape check_shape;
   CheckData check_data;
@@ -162,6 +174,63 @@ TEST(fastdeploy, check_broadcast_dim1) {
       0.762942, 0.868399, 0.218004, 0.30778,  0.885412, 0.419965,
       1.081139, 1.334897, 3.65509,  7.224699, 2.095538, 5.702402,
       7.490881, 5.763879, 5.680301, 2.771997, 3.528076, 7.109533};
+  Divide(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
+             div_result.size());
+}
+
+TEST(fastdeploy, check_broadcast_dim2) {
+  CheckShape check_shape;
+  CheckData check_data;
+  FDTensor x, y, z;
+
+  auto test_data = CreateBroadcastDim2Data();
+  auto x_data = std::get<0>(test_data);
+  auto y_data = std::get<1>(test_data);
+  x.SetExternalData({2, 3, 4}, FDDataType::FP32, x_data.data());
+  y.SetExternalData({1, 3, 1}, FDDataType::FP32, y_data.data());
+
+  // Test Add functions
+  std::vector<float> add_result = {
+      1.150895, 0.954224, 0.445437, 0.42234,  1.071647, 0.947537,
+      1.154637, 1.257326, 0.771139, 0.858558, 1.421029, 0.967799,
+      0.43488,  0.464652, 0.736874, 1.155685, 0.657584, 1.080767,
+      1.290604, 1.08798,  1.22531,  0.884088, 0.972796, 1.392998};
+
+  Add(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), add_result.data(),
+             add_result.size());
+
+  // Test subtract
+  std::vector<float> sub_result = {
+      0.53483,   0.338159,  -0.170628, -0.193726, 0.248205,  0.124095,
+      0.331196,  0.433884,  -0.346576, -0.259156, 0.303314,  -0.149916,
+      -0.181186, -0.151413, 0.120808,  0.53962,   -0.165857, 0.257325,
+      0.467162,  0.264538,  0.107596,  -0.233627, -0.144919, 0.275283};
+  Subtract(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), sub_result.data(),
+             sub_result.size());
+
+  // Test multiply
+  std::vector<float> mul_result = {
+      0.259629, 0.199048, 0.042325, 0.03521,  0.271705, 0.220607,
+      0.305874, 0.348153, 0.118635, 0.16749,  0.481831, 0.22854,
+      0.039073, 0.048244, 0.132097, 0.261105, 0.101227, 0.27546,
+      0.361854, 0.27843,  0.372452, 0.181757, 0.231333, 0.466166};
+  Multiply(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), mul_result.data(),
+             mul_result.size());
+
+  // Test divide
+  std::vector<float> div_result = {
+      2.736277, 2.097801, 0.446071, 0.371087, 1.602849, 1.301407,
+      1.804418, 2.053832, 0.37985,  0.536274, 1.54274,  0.731745,
+      0.411797, 0.508451, 1.392193, 2.751827, 0.59716,  1.625,
+      2.134659, 1.642519, 1.192528, 0.581956, 0.740688, 1.492582};
   Divide(x, y, &z);
   check_shape(z.shape, {2, 3, 4});
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
