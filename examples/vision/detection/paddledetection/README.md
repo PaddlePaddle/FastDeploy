@@ -49,3 +49,4 @@
 
 - [Python部署](python)
 - [C++部署](cpp)
+- [服务化部署](serving)
