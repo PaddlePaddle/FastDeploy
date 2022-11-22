@@ -1,5 +1,21 @@
 # Object Detection(目标检测)
 
+## fastdeploy.vision.detection.PaddleDetPreprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.PaddleDetPreprocessor
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.detection.PaddleDetPostprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.PaddleDetPostprocessor
+    :members:
+    :inherited-members:
+```
+
 ## fastdeploy.vision.detection.PPYOLOE
 
 ```{eval-rst}
@@ -80,6 +96,22 @@
     :inherited-members:
 ```
 
+## fastdeploy.vision.detection.YOLOv5Preprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.YOLOv5Preprocessor
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.detection.YOLOv5Postprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.YOLOv5Postprocessor
+    :members:
+    :inherited-members:
+```
+
 ## fastdeploy.vision.detection.YOLOv5
 
 ```{eval-rst}
@@ -100,6 +132,22 @@
 
 ```{eval-rst}
 .. autoclass:: fastdeploy.vision.detection.YOLOv6
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.detection.YOLOv7Preprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.YOLOv7Preprocessor
+    :members:
+    :inherited-members:
+```
+
+## fastdeploy.vision.detection.YOLOv7Postprocessor
+
+```{eval-rst}
+.. autoclass:: fastdeploy.vision.detection.YOLOv7Postprocessor
     :members:
     :inherited-members:
 ```
