@@ -44,7 +44,31 @@ def FD_MODEL = [
                 'dest': 'src/main/assets/models'
         ],
         [
-                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/picodet_l_320_coco_lcnet.tgz',
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_x0_25_infer.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_det_infer.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/ch_ppocr_mobile_v2.0_cls_infer.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/ch_PP-OCRv2_rec_infer.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-n-0.5-320x320_pd.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape320x320_pd.tgz',
+                'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/portrait_pp_humansegv2_lite_256x144_inference_model.tgz',
                 'dest': 'src/main/assets/models'
         ]
 ]
@@ -61,7 +85,6 @@ task downloadAndExtractModels(type: DefaultTask) {
         println "Downloading and extracting fastdeploy models ..."
     }
     doLast {
-        // Prepare cache folder for archives
         String cachePath = "cache"
         if (!file("${cachePath}").exists()) {
             mkdir "${cachePath}"
@@ -69,20 +92,19 @@ task downloadAndExtractModels(type: DefaultTask) {
         FD_MODEL.eachWithIndex { model, index ->
             MessageDigest messageDigest = MessageDigest.getInstance('MD5')
             messageDigest.update(model.src.bytes)
-            String cacheName = new BigInteger(1, messageDigest.digest()).toString(32)
-            // Download the target archive if not exists
+            String[] modelPaths = model.src.split("/")
+            String modelName = modelPaths[modelPaths.length - 1]
+            // Download the target model if not exists
             boolean copyFiles = !file("${model.dest}").exists()
-            if (!file("${cachePath}/${cacheName}.tgz").exists()) {
-                println "Downloading ${model.src} -> ${cachePath}/${cacheName}.tgz"
-                ant.get(src: model.src, dest: file("${cachePath}/${cacheName}.tgz"))
+            if (!file("${cachePath}/${modelName}").exists()) {
+                println "Downloading ${model.src} -> ${cachePath}/${modelName}"
+                ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
                 copyFiles = true
-                // force to copy files from the latest archive files
             }
-            // Extract the target archive if its dest path does not exists
             if (copyFiles) {
-                println "Coping ${cachePath}/${cacheName}.aar -> ${model.dest}"
+                println "Coping ${cachePath}/${modelName} -> ${model.dest}"
                 copy {
-                    from tarTree("${cachePath}/${cacheName}.tgz")
+                    from tarTree("${cachePath}/${modelName}")
                     into "${model.dest}"
                 }
             }
@@ -95,14 +117,12 @@ task downloadAndExtractSDKs(type: DefaultTask) {
         println "Downloading and extracting fastdeploy android java sdk ..."
     }
     doLast {
-        // Prepare cache folder for archives
         String cachePath = "cache"
         if (!file("${cachePath}").exists()) {
             mkdir "${cachePath}"
         }
         FD_JAVA_SDK.eachWithIndex { sdk, index ->
             String[] sdkPaths = sdk.src.split("/")
-            // e.g fastdeploy-android-sdk-latest-dev.aar
             String sdkName = sdkPaths[sdkPaths.length - 1]
             // Download the target SDK if not exists
             boolean copyFiles = !file("${sdk.dest}/${sdkName}").exists()
@@ -110,9 +130,7 @@ task downloadAndExtractSDKs(type: DefaultTask) {
                 println "Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
                 ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
                 copyFiles = true
-                // force to copy files from the latest downloaded sdk
             }
-            // Copy the target archive if its dest path does not exists
             if (copyFiles) {
                 println "Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
                 copy {

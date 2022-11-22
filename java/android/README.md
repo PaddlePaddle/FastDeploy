@@ -4,8 +4,13 @@ FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别
 - 调用`predict`接口  
 - 可视化验证（可选）
 
-## 目录
+|图像分类|目标检测|OCR文字识别|人像分割|人脸检测|  
+|:---:|:---:|:---:|:---:|:---:|  
+|![classify](https://user-images.githubusercontent.com/31974251/203261658-600bcb09-282b-4cd3-a2f2-2c733a223b03.gif)|![detection](https://user-images.githubusercontent.com/31974251/203261763-a7513df7-e0ab-42e5-ad50-79ed7e8c8cd2.gif)|![ocr](https://user-images.githubusercontent.com/31974251/203261817-92cc4fcd-463e-4052-910c-040d586ff4e7.gif)|![seg](https://user-images.githubusercontent.com/31974251/203267867-7c51b695-65e6-402e-9826-5d6d5864da87.gif)|![face](https://user-images.githubusercontent.com/31974251/203261714-c74631dd-ec5b-4738-81a3-8dfc496f7547.gif)|
 
+## 内容目录
+
+- [下载及配置SDK](#SDK)
 - [图像分类API](#Classification)  
 - [目标检测API](#Detection)  
 - [语义分割API](#Segmentation)  
@@ -15,8 +20,41 @@ FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别
 - [RuntimeOption说明](#RuntimeOption)  
 - [可视化接口API](#Visualize)
 - [模型使用示例](#Demo)
+- [App示例工程使用方式](#App)  
 
-## 图像分类  
+## 下载及配置SDK  
+<div id="SDK"></div>  
+
+### 下载 FastDeploy Android SDK  
+Release版本（Java SDK 目前仅支持Android，当前版本为0.8.0 pre-release）  
+
+| 平台 | 文件 | 说明 |
+| :--- | :--- | :---- |
+| Android Java SDK | [fastdeploy-android-sdk-0.8.0.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-0.8.0.aar) | NDK 20 编译产出, minSdkVersion 15,targetSdkVersion 28 |
+
+更多预编译库信息，请参考: [download_prebuilt_libraries.md](../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+
+### 配置 FastDeploy Android SDK  
+
+首先，将fastdeploy-android-sdk-xxx.aar拷贝到您Android工程的libs目录下，其中`xxx`表示您所下载的SDK的版本号。
+```shell
+├── build.gradle
+├── libs
+│   └── fastdeploy-android-sdk-xxx.aar
+├── proguard-rules.pro
+└── src
+```
+
+然后，在您的Android工程中的build.gradble引入FastDeploy SDK，如下：
+```java  
+dependencies {
+    implementation fileTree(include: ['*.aar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    // ...
+}
+```
+
+## 图像分类API  
 
 <div id="Classification"></div>  
 
@@ -54,7 +92,7 @@ public boolean release(); // 释放native资源
 public boolean initialized(); // 检查是否初始化成功
 ```
 
-## 目标检测
+## 目标检测API
 
 <div id="Detection"></div>  
 
@@ -91,7 +129,7 @@ public boolean release(); // 释放native资源
 public boolean initialized(); // 检查是否初始化成功
 ```
 
-## OCR文字识别  
+## OCR文字识别API  
 
 <div id="OCR"></div>  
 
@@ -133,7 +171,7 @@ public boolean release(); // 释放native资源
 public boolean initialized(); // 检查是否初始化成功
 ```
 
-## 语义分割  
+## 语义分割API  
 
 <div id="Segmentation"></div>  
 
@@ -166,7 +204,7 @@ public boolean release(); // 释放native资源
 public boolean initialized(); // 检查是否初始化成功
 ```
 
-## 人脸检测  
+## 人脸检测API  
 
 <div id="FaceDetection"></div>  
 
@@ -387,4 +425,123 @@ option.enableLiteFp16();
 // 使用init函数初始化  
 model.init(modelFile, paramFile, configFile, option);
 // Bitmap读取、模型预测、资源释放 同上 ...
+```
+
+## App示例工程使用方式  
+<div id="App"></div>  
+
+FastDeploy在java/android/app目录下提供了一些示例工程，以下将介绍示例工程的使用方式。由于java/android目录下同时还包含JNI工程，因此想要使用示例工程的用户还需要配置NDK，如果您只关心Java API的使用，并且不想配置NDK，可以直接跳转到以下详细的案例链接。  
+
+- [图像分类App示例工程](../../examples/vision/classification/paddleclas/android)  
+- [目标检测App示例工程](../../examples/vision/detection/paddledetection/android)  
+- [OCR文字识别App示例工程](../../examples/vision/ocr/PP-OCRv2/android)  
+- [人像分割App示例工程](../../examples/vision/segmentation/paddleseg/android)  
+- [人脸检测App示例工程](../../examples/vision/facedet/scrfd/android)  
+
+### 环境准备
+
+1. 在本地环境安装好 Android Studio 工具，详细安装方法请见[Android Stuido 官网](https://developer.android.com/studio)。
+2. 准备一部 Android 手机，并开启 USB 调试模式。开启方法: `手机设置 -> 查找开发者选项 -> 打开开发者选项和 USB 调试模式`
+
+**注意**：如果您的 Android Studio 尚未配置 NDK ，请根据 Android Studio 用户指南中的[安装及配置 NDK 和 CMake ](https://developer.android.com/studio/projects/install-ndk)内容，预先配置好 NDK 。您可以选择最新的 NDK 版本，或者使用 FastDeploy Android 预测库版本一样的 NDK
+
+### 部署步骤
+
+1. App示例工程位于 `fastdeploy/java/android/app` 目录
+2. 用 Android Studio 打开 `fastdeploy/java/android` 工程，注意是`java/android`目录
+3. 手机连接电脑，打开 USB 调试和文件传输模式，并在 Android Studio 上连接自己的手机设备（手机需要开启允许从 USB 安装软件权限）
+
+<p align="center">
+<img width="1440" alt="image" src="https://user-images.githubusercontent.com/31974251/203257262-71b908ab-bb2b-47d3-9efb-67631687b774.png">
+</p>
+
+> **注意：**
+>> 如果您在导入项目、编译或者运行过程中遇到 NDK 配置错误的提示，请打开 ` File > Project Structure > SDK Location`，修改 `Andriod NDK location` 为您本机配置的 NDK 所在路径。本工程默认使用的NDK版本为20.
+>> 如果您是通过 Andriod Studio 的 SDK Tools 下载的 NDK (见本章节"环境准备")，可以直接点击下拉框选择默认路径。
+>> 还有一种 NDK 配置方法，你可以在 `java/android/local.properties` 文件中手动完成 NDK 路径配置，如下图所示
+>> 如果以上步骤仍旧无法解决 NDK 配置错误，请尝试根据 Andriod Studio 官方文档中的[更新 Android Gradle 插件](https://developer.android.com/studio/releases/gradle-plugin?hl=zh-cn#updating-plugin)章节，尝试更新Android Gradle plugin版本。
+
+4. 点击 Run 按钮，自动编译 APP 并安装到手机。(该过程会自动下载预编译的 FastDeploy Android 库 以及 模型文件，需要联网)
+成功后效果如下，图一：APP 安装到手机；图二： APP 打开后的效果，会自动识别图片中的物体并标记；图三：APP设置选项，点击右上角的设置图片，可以设置不同选项进行体验。
+
+  | APP 图标 | APP 效果 | APP设置项
+  | ---     | --- | --- |
+  | ![app_pic](https://user-images.githubusercontent.com/31974251/203268599-c94018d8-3683-490a-a5c7-a8136a4fa284.jpg)   | ![app_res](https://user-images.githubusercontent.com/31974251/197169609-bb214af3-d6e7-4433-bb96-1225cddd441c.jpg) |  ![app_setup](https://user-images.githubusercontent.com/31974251/197332983-afbfa6d5-4a3b-4c54-a528-4a3e58441be1.jpg) |  
+
+### 切换不同的场景  
+App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可编译不同场景的App进行体验。  
+
+<p align="center">
+<img width="788" alt="image" src="https://user-images.githubusercontent.com/31974251/203258255-b422d3e2-6004-465f-86b6-9fa61a27c6c2.png">
+</p>  
+
+- 图像分类场景  
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.baidu.paddle.fastdeploy.app.examples">
+    <!-- ... -->
+        <activity android:name=".classification.ClassificationMainActivity">
+           <!--  -->
+        </activity>
+        <activity
+            android:name=".classification.ClassificationSettingsActivity"
+        </activity>
+    </application>
+</manifest>
+```  
+- 目标检测  
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.baidu.paddle.fastdeploy.app.examples">
+    <!-- ... -->
+        <activity android:name=".detection.DetectionMainActivity">
+           <!--  -->
+        </activity>
+        <activity
+            android:name=".detection.DetectionSettingsActivity"
+        </activity>
+    </application>
+</manifest>
+```  
+- OCR文字识别
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.baidu.paddle.fastdeploy.app.examples">
+    <!-- ... -->
+        <activity android:name=".ocr.OcrMainActivity">
+            <!--  -->
+        </activity>
+        <activity
+            android:name=".ocr.OcrSettingsActivity"
+        </activity>
+    </application>
+</manifest>
+```  
+- 人像分割  
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.baidu.paddle.fastdeploy.app.examples">
+    <!-- ... -->
+        <activity android:name=".segmentation.SegmentationMainActivity">
+            <!--  -->
+        </activity>
+        <activity
+            android:name=".segmentation.SegmentationSettingsActivity"
+        </activity>
+    </application>
+</manifest>
+```  
+- 人脸检测
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.baidu.paddle.fastdeploy.app.examples">
+    <!-- ... -->
+        <activity android:name=".facedet.FaceDetMainActivity">
+            <!--  -->
+        </activity>
+        <activity
+            android:name=".facedet.FaceDetSettingsActivity"
+        </activity>
+    </application>
+</manifest>
 ```
