@@ -68,6 +68,8 @@ class FASTDEPLOY_DECL FastestDetPostprocessor {
   float nms_threshold_;
   bool multi_label_;
   float max_wh_;
+  float Sigmoid(float x);
+  float Tanh(float x);
 };
 
 }  // namespace detection

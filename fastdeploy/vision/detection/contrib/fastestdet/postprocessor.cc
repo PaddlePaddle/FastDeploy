@@ -52,8 +52,7 @@ public:
 bool FastestDetPostprocessor::Run(
     const std::vector<FDTensor> &tensors, std::vector<DetectionResult> *results,
     const std::vector<std::map<std::string, std::array<float, 2>>> &ims_info) {
-  int batch = tensors[0].shape[0];
-  // batch=1
+  int batch=1;
 
   results->resize(batch);
 
@@ -61,9 +60,20 @@ bool FastestDetPostprocessor::Run(
 
     (*results)[bs].Clear();
     // output (85,22,22) CHW
-    FDTensor output = tensors[0][0]
-    int output_h = tensors[0][0].shape[0];
-    int output_w = tensors[0][0].shape[1];
+    const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
+    int output_h = 22;
+    int output_w = 22;
+    auto iter_out = ims_info[bs].find("output_shape");
+    auto iter_ipt = ims_info[bs].find("input_shape");
+    FDASSERT(iter_out != ims_info[bs].end() && iter_ipt != ims_info[bs].end(),
+             "Cannot find input_shape or output_shape from im_info.");
+    float out_h = iter_out->second[0];
+    float out_w = iter_out->second[1];
+    float ipt_h = iter_ipt->second[0];
+    float ipt_w = iter_ipt->second[1];
+    float img_width=ipt_w;
+    float img_height=ipt_h;
+
     // handle output boxes
     for (int h = 0; h < output_h; h++) {
       for (int w = 0; w < output_h; w++) {
@@ -102,12 +112,11 @@ bool FastestDetPostprocessor::Run(
           float cx = (w + x_offset) / output_w;
           float cy = (h + y_offset) / output_h;
 
-          int x1 = (int)((cx - box_width * 0.5) * img_width);
-          int y1 = (int)((cy - box_height * 0.5) * img_height);
-          int x2 = (int)((cx + box_width * 0.5) * img_width);
-          int y2 = (int)((cy + box_height * 0.5) * img_height);
+          float x1 = (cx - box_width * 0.5) * img_width;
+          float y1 = (cy - box_height * 0.5) * img_height;
+          float x2 = (cx + box_width * 0.5) * img_width;
+          float y2 = (cy + box_height * 0.5) * img_height;
 
-          target_boxes.push_back(TargetBox{x1, y1, x2, y2, category, score});
           (*results)[bs].boxes.emplace_back(std::array<float, 4>{x1,y1,x2,y2});
           (*results)[bs].label_ids.push_back(category);
           (*results)[bs].scores.push_back(score);
@@ -117,45 +126,7 @@ bool FastestDetPostprocessor::Run(
     if ((*results)[bs].boxes.size() == 0) {
       return true;
     }
-
     utils::NMS(&((*results)[bs]), nms_threshold_);
-
-    // scale the boxes to the origin image shape
-    auto iter_out = ims_info[bs].find("output_shape");
-    auto iter_ipt = ims_info[bs].find("input_shape");
-    FDASSERT(iter_out != ims_info[bs].end() && iter_ipt != ims_info[bs].end(),
-             "Cannot find input_shape or output_shape from im_info.");
-    float out_h = iter_out->second[0];
-    float out_w = iter_out->second[1];
-    float ipt_h = iter_ipt->second[0];
-    float ipt_w = iter_ipt->second[1];
-    float scale = std::min(out_h / ipt_h, out_w / ipt_w);
-    for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
-      float pad_h = (out_h - ipt_h * scale) / 2;
-      float pad_w = (out_w - ipt_w * scale) / 2;
-      int32_t label_id = ((*results)[bs].label_ids)[i];
-      // clip box
-      (*results)[bs].boxes[i][0] =
-          (*results)[bs].boxes[i][0] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][1] =
-          (*results)[bs].boxes[i][1] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][2] =
-          (*results)[bs].boxes[i][2] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][3] =
-          (*results)[bs].boxes[i][3] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][0] =
-          std::max(((*results)[bs].boxes[i][0] - pad_w) / scale, 0.0f);
-      (*results)[bs].boxes[i][1] =
-          std::max(((*results)[bs].boxes[i][1] - pad_h) / scale, 0.0f);
-      (*results)[bs].boxes[i][2] =
-          std::max(((*results)[bs].boxes[i][2] - pad_w) / scale, 0.0f);
-      (*results)[bs].boxes[i][3] =
-          std::max(((*results)[bs].boxes[i][3] - pad_h) / scale, 0.0f);
-      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
-      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
-      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
-      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
-    }
   }
   return true;
 }
