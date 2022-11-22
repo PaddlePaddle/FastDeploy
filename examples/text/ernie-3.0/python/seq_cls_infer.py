@@ -15,7 +15,7 @@ import os
 import distutils.util
 
 import numpy as np
-import faster_tokenizer
+import fast_tokenizer
 from paddlenlp.transformers import AutoTokenizer
 import fastdeploy as fd
 
