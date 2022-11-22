@@ -15,7 +15,7 @@
 #include "fastdeploy/vision.h"
 
 void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::facedet::YOLOv5Face(model_file);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -39,7 +39,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
 void GpuInfer(const std::string& model_file, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model = fastdeploy::vision::facedet::YOLOv5Face(model_file, "", option);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -65,7 +65,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   option.UseGpu();
   option.UseTrtBackend();
   option.SetTrtInputShape("images", {1, 3, 640, 640});
-  auto model = fastdeploy::vision::facedet::YOLOv5Face(model_file, "", option);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
