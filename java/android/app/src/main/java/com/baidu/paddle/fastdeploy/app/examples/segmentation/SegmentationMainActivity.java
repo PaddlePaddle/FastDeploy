@@ -19,6 +19,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -251,11 +252,17 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
-        SegmentationResult result = predictor.predict(ARGB8888ImageBitmap);
+
+        SegmentationResult result = new SegmentationResult();
+        result.setCxxBufferFlag(true);
+
+        predictor.predict(ARGB8888ImageBitmap, result);
         timeElapsed += (System.currentTimeMillis() - tc);
 
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
+        result.releaseCxxBuffer();
 
         frameCounter++;
         if (frameCounter >= 30) {
@@ -304,7 +311,8 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // should mean 'width' if the camera display orientation is 90 | 270 degree
         // (Hold the phone upright to record video)
         // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
-        // So, we set this preview size (480,480) here.
+        // So, we set this preview size (480,480) here. Reference:
+        // https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README_cn.md
         CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
         CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
@@ -360,6 +368,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
+            predictor.setVerticalScreenFlag(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }
