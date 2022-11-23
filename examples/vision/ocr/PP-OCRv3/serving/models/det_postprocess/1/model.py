@@ -105,6 +105,7 @@ class TritonPythonModel:
         self.postprocessor = fd.vision.ocr.DBDetectorPostprocessor()
         self.cls_preprocessor = fd.vision.ocr.ClassifierPreprocessor()
         self.rec_preprocessor = fd.vision.ocr.RecognizerPreprocessor()
+        self.cls_threshold = 0.9
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -181,7 +182,7 @@ class TritonPythonModel:
                     cls_scores = cls_scores.as_numpy()
 
                 for index in range(len(image_list)):
-                    if cls_labels[index] == 1 and cls_scores[index] > 0.9:
+                    if cls_labels[index] == 1 and cls_scores[index] > self.cls_threshold:
                         image_list[index] = cv2.rotate(
                             image_list[index].astype(np.float32), 1)
                         image_list[index] = np.astype(np.uint8)
