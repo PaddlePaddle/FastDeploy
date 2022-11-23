@@ -15,7 +15,6 @@
 import fastdeploy as fd
 import cv2
 import os
-import copy
 
 
 def parse_arguments():
