@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # 模型名字
-MODEL_NAME=MobileNetV2_x0_25_infer
+MODEL_NAME=ResNet50_vd_infer
 # 预测的图片名字
-DATA_NAME="./ILSVRC2012_val_00000010.jpeg"
+DATA_NAME=ILSVRC2012_val_00000010.jpeg
 
-export GLOG_v=1
-# 设置本demo的环境变量 
+export GLOG_v=5
+# 设置本demo的环境变量
 export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
 
 # 设置昇腾相关环境变量
@@ -17,7 +17,7 @@ export PATH=$PATH:$HUAWEI_ASCEND_TOOLKIT_HOME/atc/ccec_compiler/bin:${HUAWEI_ASC
 export ASCEND_AICPU_PATH=$HUAWEI_ASCEND_TOOLKIT_HOME
 export ASCEND_OPP_PATH=$HUAWEI_ASCEND_TOOLKIT_HOME/opp
 export TOOLCHAIN_HOME=$HUAWEI_ASCEND_TOOLKIT_HOME/toolkit
-export ASCEND_SLOG_PRINT_TO_STDOUT=1
+export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=3
 
 # 本demo的可执行文件
@@ -26,4 +26,4 @@ BUILD_DIR="./infer_demo"
 chmod +x ./$BUILD_DIR
 
 # 运行本demo.
-./$BUILD_DIR ./assets/models/$MODEL_NAME ./assets/data/$DATA_NAME 
+./$BUILD_DIR ./models/$MODEL_NAME ./images/$DATA_NAME 

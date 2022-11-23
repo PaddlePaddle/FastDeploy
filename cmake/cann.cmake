@@ -1,4 +1,3 @@
-# 这里不需要交叉编译.
 if (NOT DEFINED TARGET_ABI)
     set(CMAKE_SYSTEM_NAME Linux)
     set(CMAKE_SYSTEM_PROCESSOR aarch64)
