@@ -43,7 +43,7 @@ bool ConvertAndPermute::ImplByOpenCV(FDMat* mat) {
   for (int i = 0; i < im->channels(); ++i) {
     cv::extractChannel(split_im[i],
                        cv::Mat(origin_h, origin_w, CV_32FC1,
-                               res.ptr() + i * origin_h * origin_w * 4),
+                               res.ptr() + i * origin_h * origin_w * FDDataTypeSize(mat->Type())),
                        0);
   }
 
