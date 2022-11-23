@@ -70,7 +70,7 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   for (int i = 0; i < im->channels(); ++i) {
     cv::extractChannel(split_im[i],
                        cv::Mat(origin_h, origin_w, CV_32FC1,
-                               res.ptr() + i * origin_h * origin_w * FDDataTypeSize(mat->Type())),
+                               res.ptr() + i * origin_h * origin_w * 4),
                        0);
   }
   mat->SetMat(res);
