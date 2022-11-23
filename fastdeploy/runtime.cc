@@ -646,7 +646,8 @@ void Runtime::CreateOpenVINOBackend() {
   auto ov_option = OpenVINOBackendOption();
   ov_option.cpu_thread_num = option.cpu_thread_num;
   ov_option.device = option.openvino_device;
-  ov_option.ov_num_streams = option.ov_num_streams;
+  ov_option.shape_infos = option.ov_shape_infos;
+  ov_option.num_streams = option.ov_num_streams;
   FDASSERT(option.model_format == ModelFormat::PADDLE ||
                option.model_format == ModelFormat::ONNX,
            "OpenVINOBackend only support model format of ModelFormat::PADDLE / "

@@ -279,6 +279,13 @@ class RuntimeOption:
         """
         return self._option.set_openvino_device(name)
 
+    def set_openvino_shape_info(self, shape_info):
+        """Set shape information of the models' inputs, used for GPU to fix the shape
+
+        :param shape_info: (dict{str, list of int})Shape information of model's inputs, e.g {"image": [1, 3, 640, 640], "scale_factor": [1, 2]}
+        """
+        return self._option.set_openvino_shape_info(shape_info)
+
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
         """

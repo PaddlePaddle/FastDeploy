@@ -32,6 +32,15 @@ std::vector<int64_t> PartialShapeToVec(const ov::PartialShape& shape) {
   return res;
 }
 
+
+ov::PartialShape VecToPartialShape(const std::vector<int64_t>& shape) {
+  std::vector<ov::Dimension> dims;
+  for (size_t i = 0; i < shape.size(); ++i) {
+    dims.emplace_back(ov::Dimension(shape[i]));
+  }
+  return ov::PartialShape(dims);
+}
+
 FDDataType OpenVINODataTypeToFD(const ov::element::Type& type) {
   if (type == ov::element::f32) {
     return FDDataType::FP32;
@@ -100,6 +109,13 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   option_ = option;
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file, params_file);
+  if (option_.shape_infos.size() > 0) {
+    std::map<std::string, ov::PartialShape> shape_infos;
+    for (const auto& item : option_.shape_infos) {
+      shape_infos[item.first] = VecToPartialShape(item.second);
+    }
+    model->reshape(shape_infos);
+  }
 
   // Get inputs/outputs information from loaded model
   const std::vector<ov::Output<ov::Node>> inputs = model->inputs();
@@ -151,13 +167,20 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   if (option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
-  if (option_.ov_num_streams ==  -1) {
-    properties["NUM_STREAMS"] = ov::streams::AUTO;
-  } else if (option_.ov_num_streams ==  -2) {
-    properties["NUM_STREAMS"] = ov::streams::NUMA;
-  } else if (option_.ov_num_streams > 0) {
-    properties["NUM_STREAMS"] = option_.ov_num_streams;
+  if (option_.device == "CPU") {
+    if (option_.num_streams ==  -1) {
+      properties["NUM_STREAMS"] = ov::streams::AUTO;
+    } else if (option_.num_streams ==  -2) {
+      properties["NUM_STREAMS"] = ov::streams::NUMA;
+    } else if (option_.num_streams > 0) {
+      properties["NUM_STREAMS"] = option_.num_streams;
+    }
+  } else {
+    if (option_.num_streams != 0) {
+      FDWARNING << "NUM_STREAMS only available on device CPU, currently the device is set as " << option_.device << ", the NUM_STREAMS will be ignored." << std::endl;
+    }
   }
+
   FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
 
@@ -249,12 +272,12 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   if (option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
-  if (option_.ov_num_streams ==  -1) {
+  if (option_.num_streams ==  -1) {
     properties["NUM_STREAMS"] = ov::streams::AUTO;
-  } else if (option_.ov_num_streams ==  -2) {
+  } else if (option_.num_streams ==  -2) {
     properties["NUM_STREAMS"] = ov::streams::NUMA;
-  } else if (option_.ov_num_streams > 0) {
-    properties["NUM_STREAMS"] = option_.ov_num_streams;
+  } else if (option_.num_streams > 0) {
+    properties["NUM_STREAMS"] = option_.num_streams;
   }
   FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
