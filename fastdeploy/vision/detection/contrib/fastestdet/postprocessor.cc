@@ -76,12 +76,12 @@ bool FastestDetPostprocessor::Run(
 
     // handle output boxes
     for (int h = 0; h < output_h; h++) {
-      for (int w = 0; w < output_h; w++) {
-        // 前景概率
+      for (int w = 0; w < output_w; w++) {
+        // object score
         int obj_score_index = (0 * output_h * output_w) + (h * output_w) + w;
         float obj_score = output[obj_score_index];
 
-        // 解析类别
+        // find max class
         int category = 0;
         float max_score = 0.0f;
         int class_num = 80;
@@ -96,9 +96,9 @@ bool FastestDetPostprocessor::Run(
         }
         float score = pow(max_score, 0.4) * pow(obj_score, 0.6);
 
-        // 阈值筛选
+        // score threshold
         if (score > conf_threshold_) {
-          // 解析坐标
+          // handle box x y w h
           int x_offset_index = (1 * output_h * output_w) + (h * output_w) + w;
           int y_offset_index = (2 * output_h * output_w) + (h * output_w) + w;
           int box_width_index = (3 * output_h * output_w) + (h * output_w) + w;

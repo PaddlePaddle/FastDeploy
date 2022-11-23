@@ -21,11 +21,11 @@ namespace detection {
 
 FastestDetPreprocessor::FastestDetPreprocessor() {
   size_ = {352, 352}; //{h,w}
-  padding_value_ = {114.0, 114.0, 114.0}; //padding区域的颜色{B,G,R}
+  padding_value_ = {114.0, 114.0, 114.0}; //padding area color {B,G,R}
   is_mini_pad_ = false;
   is_no_pad_ = false;
   is_scale_up_ = false;
-  stride_ = 32; //步长
+  stride_ = 32; //conv stride
   max_wh_ = 7680.0;
 }
 
@@ -39,7 +39,7 @@ void FastestDetPreprocessor::LetterBox(FDMat* mat) {
   int resize_h = int(round(mat->Height() * scale));
   int resize_w = int(round(mat->Width() * scale));
 
-  int pad_w = size_[0] - resize_w;  //缩放后需要padding
+  int pad_w = size_[0] - resize_w;  // after resize need padding
   int pad_h = size_[1] - resize_h;
   if (is_mini_pad_) {
     pad_h = pad_h % stride_;
@@ -50,7 +50,7 @@ void FastestDetPreprocessor::LetterBox(FDMat* mat) {
     resize_h = size_[1];
     resize_w = size_[0];
   }
-  Resize::Run(mat, resize_w, resize_h); //缩放
+  Resize::Run(mat, resize_w, resize_h); //resize
   if (pad_h > 0 || pad_w > 0) { //padding
     float half_h = pad_h * 1.0 / 2;
     int top = int(round(half_h - 0.1));
@@ -86,7 +86,7 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   LetterBox(mat);
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  ConvertAndPermute::Run(mat, alpha, beta, true); //convert转化为浮点型 HWC2CHW
+  ConvertAndPermute::Run(mat, alpha, beta, true); //convert to float HWC2CHW
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
