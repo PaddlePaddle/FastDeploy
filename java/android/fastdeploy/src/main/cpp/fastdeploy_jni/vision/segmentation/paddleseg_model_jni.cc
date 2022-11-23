@@ -41,6 +41,17 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_bindNative(
 #ifdef ENABLE_RUNTIME_PERF
   c_model_ptr->EnableRecordTimeOfRuntime();
 #endif
+
+  // Setup is_vertical_screen param
+  const jclass j_ppseg_clazz = env->GetObjectClass(thiz);
+  const jfieldID j_is_vertical_screen_id = env->GetFieldID(
+      j_ppseg_clazz, "mIsVerticalScreen", "Z");
+  jboolean j_is_vertical_screen = env->GetBooleanField(
+      thiz, j_is_vertical_screen_id);
+  bool c_is_vertical_screen = static_cast<jboolean>(j_is_vertical_screen);
+  c_model_ptr->is_vertical_screen = c_is_vertical_screen;
+  env->DeleteLocalRef(j_ppseg_clazz);
+
   vision::EnableFlyCV();
   return reinterpret_cast<jlong>(c_model_ptr);
 }
@@ -71,6 +82,48 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_predictNativ
 }
 
 JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_predictNativeV2(
+    JNIEnv *env, jobject thiz, jlong cxx_context, jobject argb8888_bitmap,
+    jobject result, jboolean save_image, jstring save_path, jboolean rendering,
+    jfloat weight) {
+  if (cxx_context == 0) {
+    return JNI_FALSE;
+  }
+  cv::Mat c_bgr;
+  if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
+    return JNI_FALSE;
+  }
+  auto c_model_ptr = reinterpret_cast<segmentation::PaddleSegModel *>(cxx_context);
+  const jclass j_seg_result_clazz = env->GetObjectClass(result);
+  const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mEnableCxxBuffer", "Z");
+  jboolean j_enable_cxx_buffer =
+      env->GetBooleanField(result, j_enable_cxx_buffer_id);
+
+  auto c_result_ptr = new vision::SegmentationResult();
+  auto t = fni::GetCurrentTime();
+  c_model_ptr->Predict(&c_bgr, c_result_ptr);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, t)
+
+  if (rendering) {
+    fni::RenderingSegmentation(env, c_bgr, *c_result_ptr, argb8888_bitmap,
+                               save_image, weight, save_path);
+  }
+  if (!fni::AllocateJavaResultFromCxx(
+      env, result, reinterpret_cast<void *>(c_result_ptr),
+      vision::ResultType::SEGMENTATION)) {
+    delete c_result_ptr;
+    return JNI_FALSE;
+  }
+  // Users need to release cxx result buffer manually
+  // if mEnableCxxBuffer is set as true.
+  if (j_enable_cxx_buffer == JNI_FALSE) {
+    delete c_result_ptr;
+  }
+  return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_releaseNative(
     JNIEnv *env, jobject thiz, jlong cxx_context) {
   if (cxx_context == 0) {
@@ -87,3 +140,4 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_releaseNativ
 #ifdef __cplusplus
 }
 #endif
+

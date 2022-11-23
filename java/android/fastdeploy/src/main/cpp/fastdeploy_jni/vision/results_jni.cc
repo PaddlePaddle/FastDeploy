@@ -283,11 +283,27 @@ bool AllocateJavaSegmentationResultFromCxx(
       j_seg_result_clazz, "mContainScoreMap", "Z");
   const jfieldID j_seg_score_map_id = env->GetFieldID(
       j_seg_result_clazz, "mScoreMap", "[F");
+  const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mEnableCxxBuffer", "Z");
+  const jfieldID  j_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mCxxBuffer", "J");
   const jfieldID j_seg_initialized_id = env->GetFieldID(
       j_seg_result_clazz, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_seg_result_obj, j_seg_result_clazz)) {
     return false;
+  }
+
+  // If 'mEnableCxxBuffer' set as true, then, we only setup the cxx result
+  // pointer to the value of 'mCxxBuffer' field. Some users may want
+  // to use this method to boost the performance of segmentation.
+  jboolean j_enable_cxx_buffer =
+      env->GetBooleanField(j_seg_result_obj, j_enable_cxx_buffer_id);
+  if (j_enable_cxx_buffer == JNI_TRUE) {
+    jlong j_cxx_buffer = reinterpret_cast<jlong>(c_result_ptr);
+    env->SetLongField(j_seg_result_obj, j_cxx_buffer_id, j_cxx_buffer);
+    env->SetBooleanField(j_seg_result_obj, j_seg_initialized_id, JNI_TRUE);
+    return true;
   }
 
   // mLabelMap int[] shape (n):        [I
@@ -832,11 +848,47 @@ bool AllocateSegmentationResultFromJava(
       j_seg_result_clazz_cc, "mContainScoreMap", "Z");
   const jfieldID j_seg_score_map_id_cc = env->GetFieldID(
       j_seg_result_clazz_cc, "mScoreMap", "[F");
+  const jfieldID j_enable_cxx_buffer_id_cc = env->GetFieldID(
+      j_seg_result_clazz_cc, "mEnableCxxBuffer", "Z");
+  const jfieldID  j_cxx_buffer_id_cc = env->GetFieldID(
+      j_seg_result_clazz_cc, "mCxxBuffer", "J");
   const jfieldID j_seg_initialized_id_cc = env->GetFieldID(
       j_seg_result_clazz_cc, "mInitialized", "Z");
 
   if (!env->IsInstanceOf(j_seg_result_obj, j_seg_result_clazz_cc)) {
     return false;
+  }
+
+  // If 'mEnableCxxBuffer' set as true, then, we only Allocate from
+  // cxx context to cxx result. Some users may want to use this
+  // method to boost the performance of segmentation.
+  jboolean j_enable_cxx_buffer =
+      env->GetBooleanField(j_seg_result_obj, j_enable_cxx_buffer_id_cc);
+
+  if (j_enable_cxx_buffer == JNI_TRUE) {
+    jlong j_cxx_buffer = env->GetLongField(j_seg_result_obj, j_cxx_buffer_id_cc);
+    if (j_cxx_buffer == 0) {
+      return false;
+    }
+    // Allocate from cxx context to cxx result
+    auto c_cxx_buffer = reinterpret_cast<vision::SegmentationResult *>(j_cxx_buffer);
+    // TODO: May use 'swap' to exchange the administrative privileges ?
+    // c_result_ptr->shape.swap(c_cxx_buffer->shape);
+    // c_result_ptr->label_map.swap(c_cxx_buffer->label_map);
+    // c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
+    // if (c_cxx_buffer->contain_score_map) {
+    //   c_result_ptr->score_map.swap(c_cxx_buffer->score_map);
+    // }
+    c_result_ptr->shape.assign(
+        c_cxx_buffer->shape.begin(), c_cxx_buffer->shape.end());
+    c_result_ptr->label_map.assign(
+        c_cxx_buffer->label_map.begin(), c_cxx_buffer->label_map.end());
+    c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
+    if (c_cxx_buffer->contain_score_map) {
+      c_result_ptr->score_map.assign(
+          c_cxx_buffer->score_map.begin(), c_cxx_buffer->score_map.end());
+    }
+    return true;
   }
 
   // mInitialized boolean:         Z
@@ -1030,3 +1082,43 @@ bool AllocateCxxResultFromJava(
 
 }  // namespace jni
 }  // namespace fastdeploy
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_SegmentationResult_releaseCxxBufferNative(
+    JNIEnv *env, jobject thiz) {
+  const jclass j_seg_result_clazz = env->GetObjectClass(thiz);
+  const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mEnableCxxBuffer", "Z");
+  const jfieldID  j_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mCxxBuffer", "J");
+  const jfieldID j_seg_initialized_id = env->GetFieldID(
+      j_seg_result_clazz, "mInitialized", "Z");
+
+  jboolean j_enable_cxx_buffer =
+      env->GetBooleanField(thiz, j_enable_cxx_buffer_id);
+  if (j_enable_cxx_buffer == JNI_FALSE) {
+    return JNI_FALSE;
+  }
+  jlong j_cxx_buffer = env->GetLongField(thiz, j_cxx_buffer_id);
+  if (j_cxx_buffer == 0) {
+    return JNI_FALSE;
+  }
+  auto c_result_ptr = reinterpret_cast<
+      fastdeploy::vision::SegmentationResult *>(j_cxx_buffer);
+  delete c_result_ptr;
+  LOGD("[End] Release SegmentationResult in native !");
+
+  env->SetBooleanField(thiz, j_seg_initialized_id, JNI_FALSE);
+  env->DeleteLocalRef(j_seg_result_clazz);
+
+  return JNI_TRUE;
+}
+
+#ifdef __cplusplus
+}
+#endif
