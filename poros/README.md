@@ -2,11 +2,8 @@
 
 ## Description
 
-Poros is an AI Inference Accelerator based on Pytorch and TensorRT. It can provide a lower inference latency comparing
-with original TensorRT. Poros mainly works on the IR layer (torchscript), that means it supports the models from Pytorch
-, ONNX, TensorFLow and any other framework that can be converted to torchscript.  
-For now, Poros supports GPU and XPU1 and XPU2(
-BAIDU-Kunlun) Device, It's welcomed to add additional devices.
+Poros is an AI Inference Accelerator for pytorch. It can provide a lower inference latency comparing with original model. Poros mainly works on the IR layer (torchscript), that means it supports the models from Pytorch, ONNX, TensorFLow and any other framework that can be converted to torchscript.
+For now, Poros supports GPU and XPU1 and XPU2(BAIDU-Kunlun) Device, It's welcomed to add additional devices.
 
 ## How It Works
 
