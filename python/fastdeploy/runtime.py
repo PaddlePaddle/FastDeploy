@@ -35,7 +35,7 @@ class Runtime:
             self.runtime_option._option), "Initialize Runtime Failed!"
 
     def forward(self, *inputs):
-        """Inference with input data for poros
+        """[Only for Poros backend] Inference with input data for poros
 
         :param data: (list[str : numpy.ndarray])The input data list
         :return list of numpy.ndarray
@@ -60,7 +60,7 @@ class Runtime:
         return self._runtime.infer(data)
 
     def compile(self, warm_datas):
-        """compile with prewarm data for poros
+        """[Only for Poros backend] compile with prewarm data for poros
 
         :param data: (list[str : numpy.ndarray])The prewarm data list
         :return TorchScript Model
@@ -122,6 +122,9 @@ class RuntimeOption:
     """
 
     def __init__(self):
+        """Initialize a FastDeploy RuntimeOption object.
+        """
+
         self._option = C.RuntimeOption()
 
     @property
@@ -210,8 +213,6 @@ class RuntimeOption:
     def use_rknpu2(self,
                    rknpu2_name=rknpu2.CpuName.RK3588,
                    rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
-        """Inference with CPU
-        """
         return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
     def set_cpu_thread_num(self, thread_num=-1):
@@ -222,6 +223,10 @@ class RuntimeOption:
         return self._option.set_cpu_thread_num(thread_num)
 
     def set_ort_graph_opt_level(self, level=-1):
+        """Set graph optimization level for ONNX Runtime backend
+
+        :param level: (int)Optimization level, -1 means the default setting
+        """
         return self._option.set_ort_graph_opt_level(level)
 
     def use_paddle_backend(self):
@@ -367,9 +372,13 @@ class RuntimeOption:
         return self._option.set_trt_max_batch_size(trt_max_batch_size)
 
     def enable_paddle_trt_collect_shape(self):
+        """Enable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.enable_paddle_trt_collect_shape()
 
     def disable_paddle_trt_collect_shape(self):
+        """Disable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.disable_paddle_trt_collect_shape()
 
     def use_ipu(self,
