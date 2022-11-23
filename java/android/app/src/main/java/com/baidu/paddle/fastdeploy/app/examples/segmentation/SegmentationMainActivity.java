@@ -1,5 +1,8 @@
 package com.baidu.paddle.fastdeploy.app.examples.segmentation;
 
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -23,23 +26,18 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
-
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,9 +57,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     private ViewGroup resultPageView;
     private ImageView resultImage;
     private ImageView backInResult;
-    private SeekBar confidenceSeekbar;
-    private TextView seekbarText;
-    private float resultNum = 1.0f;
     private ResultListView resultView;
     private Bitmap shutterBitmap;
     private Bitmap picBitmap;
@@ -178,8 +173,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                         svPreview.onPause();
                         cameraPageView.setVisibility(View.GONE);
                         resultPageView.setVisibility(View.VISIBLE);
-                        seekbarText.setText(resultNum + "");
-                        confidenceSeekbar.setProgress((int) (resultNum * 100));
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
                             detail(shutterBitmap);
                         } else {
@@ -215,8 +208,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (resultCode == Activity.RESULT_OK) {
                 cameraPageView.setVisibility(View.GONE);
                 resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
                 Bitmap bitmap = decodeBitmap(path, 720, 1280);
@@ -261,11 +252,17 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
-        SegmentationResult result = predictor.predict(ARGB8888ImageBitmap);
+
+        SegmentationResult result = new SegmentationResult();
+        result.setCxxBufferFlag(true);
+
+        predictor.predict(ARGB8888ImageBitmap, result);
         timeElapsed += (System.currentTimeMillis() - tc);
 
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
+        result.releaseCxxBuffer();
 
         frameCounter++;
         if (frameCounter >= 30) {
@@ -310,8 +307,14 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
 
     public void initView() {
         TYPE = REALTIME_DETECT;
-        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
-        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 360;
+        // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
+        // should mean 'width' if the camera display orientation is 90 | 270 degree
+        // (Hold the phone upright to record video)
+        // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
+        // So, we set this preview size (480,480) here. Reference:
+        // https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README_cn.md
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
         svPreview.switchCamera(); // Front camera for HumanSeg
@@ -334,36 +337,12 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         resultImage = findViewById(R.id.result_image);
         backInResult = findViewById(R.id.back_in_result);
         backInResult.setOnClickListener(this);
-        confidenceSeekbar = findViewById(R.id.confidence_seekbar);
-        seekbarText = findViewById(R.id.seekbar_text);
         resultView = findViewById(R.id.result_list_view);
-
-        confidenceSeekbar.setMax(100);
-        confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                float resultConfidence = seekBar.getProgress() / 100f;
-                BigDecimal bd = new BigDecimal(resultConfidence);
-                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                results.clear();
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
     }
 
     private void detail(Bitmap bitmap) {
         predictor.predict(bitmap, true, 0.4f);
         resultImage.setImageBitmap(bitmap);
-        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
@@ -389,6 +368,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
+            predictor.setVerticalScreenFlag(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }
