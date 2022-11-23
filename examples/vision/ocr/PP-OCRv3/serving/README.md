@@ -59,6 +59,7 @@ fastdeployserver --model-repository=/ocr_serving/models
   - `grpc-port`(optional): GRPC服务的端口号. 默认: `8001`.
   - `metrics-port`(optional): 服务端指标的端口号. 默认: `8002`. 本示例中未使用该端口.
 
+
 ### 2. 客户端
 #### 2.1 安装
 ```bash
@@ -69,3 +70,7 @@ pip3 install tritonclient[all]
 ```bash
 python3 client.py
 ```
+
+## 配置修改
+
+当前默认配置在GPU上运行， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
