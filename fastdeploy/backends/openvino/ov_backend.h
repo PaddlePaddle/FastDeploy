@@ -30,6 +30,7 @@ struct OpenVINOBackendOption {
   int cpu_thread_num = -1;
   int num_streams = 0;
   std::map<std::string, std::vector<int64_t>> shape_infos;
+  std::set<std::string> cpu_operators{"MulticlassNms"};
 };
 
 class OpenVINOBackend : public BaseBackend {

@@ -117,6 +117,19 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     model->reshape(shape_infos);
   }
 
+  if (option_.device.find("HETERO") != std::string::npos) {
+    auto supported_ops = core_.query_model(model, option_.device);
+    for (auto&& op : model->get_ops()) {
+      auto& affinity = supported_ops[op->get_friendly_name()];
+      if (option_.cpu_operators.find(op->description()) != option_.cpu_operators.end()) {
+        FDINFO << op->get_name() << " " << op->get_friendly_name() << std::endl;
+        op->get_rt_info()["affinity"] = "CPU";
+      } else {
+        op->get_rt_info()["affinity"] = affinity;
+      }
+    }
+  }
+
   // Get inputs/outputs information from loaded model
   const std::vector<ov::Output<ov::Node>> inputs = model->inputs();
   std::map<std::string, TensorInfo> input_infos;
