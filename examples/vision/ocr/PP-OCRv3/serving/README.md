@@ -7,12 +7,15 @@
 
 **本文所在路径($PWD)下的models里包含模型的配置和代码(服务端会加载模型和代码以启动服务), 需要将其映射到docker中使用.**
 
-OCR由det(检测)、cls(分类)和rec(识别)三个模型组成。
+OCR由det(检测)、cls(分类)和rec(识别)三个模型组成.
 
-服务化部署串联的示意图如下图所示, 其中`pp_ocr`串联了`det_preprocess`、`det_runtime`和`det_postprocess`, `cls_pp`串联了`cls_runtime`和`cls_postprocess`, `rec_pp`串联了`rec_runtime`和`rec_postprocess`. `det_postprocess`中会多次调用`cls_pp`和`rec_pp`服务，来实现对检测结果的分类和识别，最后返回给用户最终的识别结果。
+服务化部署串联的示意图如下图所示,其中`pp_ocr`串联了`det_preprocess`、`det_runtime`和`det_postprocess`,`cls_pp`串联了`cls_runtime`和`cls_postprocess`,`rec_pp`串联了`rec_runtime`和`rec_postprocess`. 
+
+特别的是,在`det_postprocess`中会多次调用`cls_pp`和`rec_pp`服务,来实现对检测结果(多个框)进行分类和识别,,最后返回给用户最终的识别结果。
+
 <p align="center">
     <br>
-<img src='./ocr_pipeline.png'">
+<img src='./ppocr.png'">
     <br>
 <p>
 
