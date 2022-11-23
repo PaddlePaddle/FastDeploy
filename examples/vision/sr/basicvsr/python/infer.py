@@ -58,7 +58,7 @@ print(f"fps: {video_fps}\tframe_count: {video_frame_count}")
 # Create VideoWriter for output
 video_out_dir = "./"
 video_out_path = os.path.join(video_out_dir, video_out_name)
-fucc = cv2.VideoWriter_fourcc(*"mp4v")
+fucc = cv2.VideoWriter_fourcc(* "mp4v")
 video_out = cv2.VideoWriter(video_out_path, fucc, video_fps,
                             (out_width, out_height), True)
 if not video_out.isOpened():
