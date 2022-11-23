@@ -197,6 +197,14 @@ public SegmentationResult predict(Bitmap ARGB8888Bitmap)；
 // 预测并且可视化：预测结果以及可视化，并将可视化后的图片保存到指定的途径，以及将可视化结果渲染在Bitmap上
 public SegmentationResult predict(Bitmap ARGB8888Bitmap, String savedImagePath, float weight);
 public SegmentationResult predict(Bitmap ARGB8888Bitmap, boolean rendering, float weight); // 只渲染 不保存图片
+// 修改result，而非返回result，关注性能的用户可以将以下接口与SegmentationResult的CxxBuffer一起使用
+public boolean predict(Bitmap ARGB8888Bitmap, SegmentationResult result)；
+public boolean predict(Bitmap ARGB8888Bitmap, SegmentationResult result, String savedImagePath, float weight);
+public boolean predict(Bitmap ARGB8888Bitmap, SegmentationResult result, boolean rendering, float weight);
+```
+- 设置竖屏或横屏模式: 对于 PP-HumanSeg系列模型，必须要调用该方法设置竖屏模式为true.
+```java  
+public void setVerticalScreenFlag(boolean flag);
 ```
 - 模型资源释放 API：调用 release() API 可以释放模型资源，返回true表示释放成功，false表示失败；调用 initialized() 可以判断模型是否初始化成功，true表示初始化成功，false表示失败。
 ```java
@@ -311,6 +319,10 @@ public class SegmentationResult {
   public float[] mScoreMap; // 预测到的得分 map 每个像素位置对应一个score HxW
   public long[] mShape; // label map实际的shape (H,W)
   public boolean mContainScoreMap = false; // 是否包含 score map
+  // 用户可以选择直接使用CxxBuffer，而非通过JNI拷贝到Java层，
+  // 该方式可以一定程度上提升性能
+  public void setCxxBufferFlag(boolean flag); // 设置是否为CxxBuffer模式
+  public boolean releaseCxxBuffer(); // 手动释放CxxBuffer!!!
   public boolean initialized(); // 检测结果是否有效
 }  
 ```
@@ -420,7 +432,6 @@ String configFile = "picodet_s_320_coco_lcnet/infer_cfg.yml";
 RuntimeOption option = new RuntimeOption();
 option.setCpuThreadNum(2);
 option.setLitePowerMode(LitePowerMode.LITE_POWER_HIGH);
-option.enableRecordTimeOfRuntime();
 option.enableLiteFp16();
 // 使用init函数初始化  
 model.init(modelFile, paramFile, configFile, option);
@@ -489,7 +500,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 目标检测  
+- 目标检测场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -503,7 +514,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- OCR文字识别
+- OCR文字识别场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -517,7 +528,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 人像分割  
+- 人像分割场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
@@ -531,7 +542,7 @@ App示例工程只需要在AndroidManifest.xml中切换不同的Activity即可�
     </application>
 </manifest>
 ```  
-- 人脸检测
+- 人脸检测场景  
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.baidu.paddle.fastdeploy.app.examples">
