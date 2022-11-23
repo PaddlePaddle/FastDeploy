@@ -21,16 +21,8 @@ python setup.py install
 ```
 
 ### Install Fastdeploy Auto Compression Toolkit
+FastDeploy One-Click Model Automation compression does not require a separate installation, users only need to properly install the [FastDeploy Toolkit](../../README.md)
 
-Run the following command to install
-
-```
-# Install fd-auto-compress package using pip
-pip install fd-auto-compress
-
-# Execute the following command in the previous directory (not in the current directory)
-python setup.py install
-```
 
 ## 2. How to Use
 
