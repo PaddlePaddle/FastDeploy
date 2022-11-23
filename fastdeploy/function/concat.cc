@@ -14,17 +14,17 @@
 
 #include "fastdeploy/function/concat.h"
 
+#include "fastdeploy/utils/utils.h"
 #include <cstring>
 #include <limits>
 #include <set>
 #include <sstream>
-#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace function {
 
 std::vector<int64_t>
-ComputeAndCheckConcatOutputShape(const std::vector<FDTensor> &input, int axis) {
+ComputeAndCheckConcatOutputShape(const std::vector<FDTensor>& input, int axis) {
   const size_t n = input.size();
   auto out_dims = input[0].shape;
   size_t in_zero_dims_size = out_dims.size();
@@ -50,8 +50,8 @@ ComputeAndCheckConcatOutputShape(const std::vector<FDTensor> &input, int axis) {
 }
 
 template <typename T> struct ConcatFunctor {
-  void operator()(const std::vector<FDTensor> &input, int axis,
-                  FDTensor *output) {
+  void operator()(const std::vector<FDTensor>& input, int axis,
+                  FDTensor* output) {
     size_t num = input.size();
 
     int64_t rows = 1;
@@ -69,11 +69,11 @@ template <typename T> struct ConcatFunctor {
     }
 
     // computation
-    T *output_data = reinterpret_cast<T *>(output->Data());
+    T* output_data = reinterpret_cast<T*>(output->Data());
     int64_t col_idx = 0;
     for (size_t j = 0; j < num; ++j) {
       int64_t col_len = input_cols[j];
-      const T *input_data = reinterpret_cast<const T *>(input[j].Data());
+      const T* input_data = reinterpret_cast<const T*>(input[j].Data());
       for (int64_t k = 0; k < out_rows; ++k) {
         FDTensor::CopyBuffer(output_data + k * out_cols + col_idx,
                              input_data + k * col_len, sizeof(T) * col_len,
@@ -85,7 +85,7 @@ template <typename T> struct ConcatFunctor {
 };
 
 template <typename T>
-void ConcatKernel(const std::vector<FDTensor> &input, FDTensor *output,
+void ConcatKernel(const std::vector<FDTensor>& input, FDTensor* output,
                   int axis) {
   auto output_shape = ComputeAndCheckConcatOutputShape(input, axis);
   output->Resize(output_shape, TypeToDataType<T>::dtype, output->name,
@@ -95,7 +95,7 @@ void ConcatKernel(const std::vector<FDTensor> &input, FDTensor *output,
   functor(input, axis, output);
 }
 
-void Concat(const std::vector<FDTensor> &x, FDTensor *out, int axis) {
+void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {
   FDASSERT(x.size() > 0,
            "The number of FDTensor array should be larger than 0, but the size "
            "of input is %d",
@@ -112,5 +112,5 @@ void Concat(const std::vector<FDTensor> &x, FDTensor *out, int axis) {
                      ([&] { ConcatKernel<data_t>(x, out, axis); }));
 }
 
-} // namespace function
-} // namespace fastdeploy
+}  // namespace function
+}  // namespace fastdeploy

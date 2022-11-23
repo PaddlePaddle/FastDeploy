@@ -14,24 +14,24 @@
 
 #pragma once
 
-#include <algorithm>
+#include "fastdeploy/function/eigen.h"
 #include "fastdeploy/function/elementwise.h"
 #include "fastdeploy/function/elementwise_base.h"
-#include "fastdeploy/function/eigen.h"
+#include <algorithm>
 
 namespace fastdeploy {
 namespace function {
 
 template <typename Functor> struct SameDimsElementwiseCompute {
-  void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
+  void operator()(const FDTensor& x, const FDTensor& y, FDTensor* z) {
     z->Allocate(x.Shape(), x.Dtype());
     Functor()(x, y, z);
   }
 };
 
 template <typename T> struct SameDimsAddFunctor {
-  void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
-    const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
+  void operator()(const FDTensor& x, const FDTensor& y, FDTensor* z) {
+    const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
     auto eigen_y = EigenVector<T>::Flatten(y);
     auto eigen_z = EigenVector<T>::Flatten(*z);
@@ -40,8 +40,8 @@ template <typename T> struct SameDimsAddFunctor {
 };
 
 template <typename T> struct SameDimsSubtractFunctor {
-  void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
-    const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
+  void operator()(const FDTensor& x, const FDTensor& y, FDTensor* z) {
+    const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
     auto eigen_y = EigenVector<T>::Flatten(y);
     auto eigen_z = EigenVector<T>::Flatten(*z);
@@ -50,8 +50,8 @@ template <typename T> struct SameDimsSubtractFunctor {
 };
 
 template <typename T> struct SameDimsMultiplyFunctor {
-  void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
-    const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
+  void operator()(const FDTensor& x, const FDTensor& y, FDTensor* z) {
+    const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
     auto eigen_y = EigenVector<T>::Flatten(y);
     auto eigen_z = EigenVector<T>::Flatten(*z);
@@ -60,8 +60,8 @@ template <typename T> struct SameDimsMultiplyFunctor {
 };
 
 template <typename T> struct SameDimsDivideFunctor {
-  void operator()(const FDTensor &x, const FDTensor &y, FDTensor *z) {
-    const auto &dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
+  void operator()(const FDTensor& x, const FDTensor& y, FDTensor* z) {
+    const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
     auto eigen_x = EigenVector<T>::Flatten(x);
     auto eigen_y = EigenVector<T>::Flatten(y);
     auto eigen_z = EigenVector<T>::Flatten(*z);

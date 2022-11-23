@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/core/fd_tensor.h"
+#include "gtest_utils.h"
+#include "gtest/gtest.h"
 #include <array>
 #include <cstring>
 #include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "gtest/gtest.h"
-#include "gtest_utils.h"
 
 namespace fastdeploy {
 
@@ -26,39 +26,39 @@ TEST(fastdeploy, fd_tensor_constructor) {
   CheckData check_data;
 
   FDTensor tensor1;
-  check_shape(tensor1.shape, { 0 });
+  check_shape(tensor1.shape, {0});
   ASSERT_EQ(tensor1.name, "");
   ASSERT_EQ(tensor1.dtype, FDDataType::INT8);
   ASSERT_EQ(tensor1.device, Device::CPU);
 
-  std::vector<int> inputs = { 2, 4, 3, 7, 1, 5 };
-  tensor1.SetExternalData({ 2, 3 }, FDDataType::INT32, inputs.data());
+  std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
+  tensor1.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
   ASSERT_EQ(tensor1.dtype, FDDataType::INT32);
 
   FDTensor tensor2(tensor1);
-  check_shape(tensor1.shape, { 2, 3 });
+  check_shape(tensor1.shape, {2, 3});
   ASSERT_EQ(tensor2.name, "");
   ASSERT_EQ(tensor2.dtype, FDDataType::INT32);
   ASSERT_EQ(tensor2.device, Device::CPU);
 
   FDTensor tensor3;
-  tensor3.Resize({ 2, 3 }, FDDataType::INT32, "tensor3");
-  check_shape(tensor3.shape, { 2, 3 });
+  tensor3.Resize({2, 3}, FDDataType::INT32, "tensor3");
+  check_shape(tensor3.shape, {2, 3});
   ASSERT_EQ(tensor3.Nbytes(), 24);
 
   // Copy constructor
   FDTensor tensor4(tensor3);
-  check_shape(tensor4.shape, { 2, 3 });
+  check_shape(tensor4.shape, {2, 3});
   ASSERT_EQ(tensor3.Nbytes(), tensor4.Nbytes());
-  check_data(reinterpret_cast<int *>(tensor3.Data()),
-             reinterpret_cast<int *>(tensor4.Data()), tensor4.Numel());
+  check_data(reinterpret_cast<int*>(tensor3.Data()),
+             reinterpret_cast<int*>(tensor4.Data()), tensor4.Numel());
 
   // Move constructor
   ASSERT_NE(tensor1.external_data_ptr, nullptr);
   FDTensor tensor5(std::move(tensor1));
   ASSERT_EQ(tensor1.external_data_ptr, nullptr);
   ASSERT_EQ(tensor5.external_data_ptr, inputs.data());
-  check_shape(tensor5.shape, { 2, 3 });
+  check_shape(tensor5.shape, {2, 3});
 }
 
 TEST(fastdeploy, fd_tensor_assignment) {
@@ -66,8 +66,8 @@ TEST(fastdeploy, fd_tensor_assignment) {
   CheckData check_data;
 
   FDTensor tensor1("T1");
-  std::vector<int> inputs = { 2, 4, 3, 7, 1, 5 };
-  tensor1.SetExternalData({ 2, 3 }, FDDataType::INT32, inputs.data());
+  std::vector<int> inputs = {2, 4, 3, 7, 1, 5};
+  tensor1.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
 
   FDTensor tensor2;
   tensor2 = tensor1;
@@ -75,7 +75,7 @@ TEST(fastdeploy, fd_tensor_assignment) {
   ASSERT_EQ(tensor2.dtype, FDDataType::INT32);
   ASSERT_EQ(tensor2.device, Device::CPU);
   ASSERT_EQ(tensor2.Data(), inputs.data());
-  check_shape(tensor2.shape, { 2, 3 });
+  check_shape(tensor2.shape, {2, 3});
 
   FDTensor tensor3;
   tensor3 = std::move(tensor1);
@@ -89,15 +89,15 @@ TEST(fastdeploy, fd_tensor_assignment) {
 TEST(fastdeploy, fd_tensor_reshape) {
   CheckShape check_shape;
   FDTensor x;
-  x.Allocate({ 2, 3, 4, 5 }, FDDataType::FP32);
-  x.Reshape({ -1, 3, 2, 2, 5 });
-  check_shape(x.Shape(), { 2, 3, 2, 2, 5 });
+  x.Allocate({2, 3, 4, 5}, FDDataType::FP32);
+  x.Reshape({-1, 3, 2, 2, 5});
+  check_shape(x.Shape(), {2, 3, 2, 2, 5});
 
-  x.Reshape({ 0, -1, 5, 2 });
-  check_shape(x.Shape(), { 2, 6, 5, 2 });
+  x.Reshape({0, -1, 5, 2});
+  check_shape(x.Shape(), {2, 6, 5, 2});
 
-  x.Reshape({ 2, 3, 0, 0, 2 });
-  check_shape(x.Shape(), { 2, 3, 5, 2, 2 });
+  x.Reshape({2, 3, 0, 0, 2});
+  check_shape(x.Shape(), {2, 3, 5, 2, 2});
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

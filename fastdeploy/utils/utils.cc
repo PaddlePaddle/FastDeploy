@@ -17,13 +17,13 @@
 
 namespace fastdeploy {
 
-FDLogger::FDLogger(bool verbose, const std::string &prefix) {
+FDLogger::FDLogger(bool verbose, const std::string& prefix) {
   verbose_ = verbose;
   line_ = "";
   prefix_ = prefix;
 }
 
-FDLogger &FDLogger::operator<<(std::ostream &(*os)(std::ostream &)) {
+FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
   if (!verbose_) {
     return *this;
   }
@@ -32,7 +32,7 @@ FDLogger &FDLogger::operator<<(std::ostream &(*os)(std::ostream &)) {
   return *this;
 }
 
-bool ReadBinaryFromFile(const std::string &file, std::string *contents) {
+bool ReadBinaryFromFile(const std::string& file, std::string* contents) {
   std::ifstream fin(file, std::ios::in | std::ios::binary);
   if (!fin.is_open()) {
     FDERROR << "Failed to open file: " << file << " to read." << std::endl;
@@ -47,7 +47,7 @@ bool ReadBinaryFromFile(const std::string &file, std::string *contents) {
   return true;
 }
 
-std::vector<int64_t> GetStride(const std::vector<int64_t> &dims) {
+std::vector<int64_t> GetStride(const std::vector<int64_t>& dims) {
   auto dims_size = dims.size();
   std::vector<int64_t> result(dims_size, 1);
   for (int i = dims_size - 2; i >= 0; --i) {
@@ -56,7 +56,7 @@ std::vector<int64_t> GetStride(const std::vector<int64_t> &dims) {
   return result;
 }
 
-std::string Str(const std::vector<int64_t> &shape) {
+std::string Str(const std::vector<int64_t>& shape) {
   std::ostringstream oss;
   oss << "[ " << shape[0];
   for (int i = 1; i < shape.size(); ++i) {
@@ -66,4 +66,4 @@ std::string Str(const std::vector<int64_t> &shape) {
   return oss.str();
 }
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

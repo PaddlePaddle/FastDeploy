@@ -24,10 +24,10 @@ namespace function {
 
 #define DEFINE_ELEMENTWISE_OP(name)                                            \
   template <typename T> struct name##RawKernel {                               \
-    void operator()(const FDTensor &x, const FDTensor &y, int axis,            \
-                    FDTensor *out) {                                           \
+    void operator()(const FDTensor& x, const FDTensor& y, int axis,            \
+                    FDTensor* out) {                                           \
       if (x.Shape() == y.Shape()) {                                            \
-        SameDimsElementwiseCompute<SameDims##name##Functor<T> >()(x, y, out);  \
+        SameDimsElementwiseCompute<SameDims##name##Functor<T>>()(x, y, out);   \
       } else {                                                                 \
         auto x_dims = x.Shape();                                               \
         auto y_dims = y.Shape();                                               \
@@ -42,10 +42,10 @@ namespace function {
     }                                                                          \
   }
 
-inline void GetMidDims(const std::vector<int64_t> &x_dims,
-                       const std::vector<int64_t> &y_dims, const int axis,
-                       int *pre, int *n, int *post,
-                       int *is_run_common_broadcast) {
+inline void GetMidDims(const std::vector<int64_t>& x_dims,
+                       const std::vector<int64_t>& y_dims, const int axis,
+                       int* pre, int* n, int* post,
+                       int* is_run_common_broadcast) {
   *pre = 1;
   *n = 1;
   *post = 1;
@@ -73,7 +73,7 @@ inline void GetMidDims(const std::vector<int64_t> &x_dims,
 }
 
 inline std::vector<int64_t>
-TrimTrailingSingularDims(const std::vector<int64_t> &dims) {
+TrimTrailingSingularDims(const std::vector<int64_t>& dims) {
   // Remove trailing dimensions of size 1 for y
   auto actual_dims_size = dims.size();
   for (; actual_dims_size != 0; --actual_dims_size) {
@@ -90,8 +90,8 @@ TrimTrailingSingularDims(const std::vector<int64_t> &dims) {
   return trim_dims;
 }
 
-inline int GetElementwiseIndex(const int64_t *x_dims_array, const int max_dim,
-                               const int64_t *index_array) {
+inline int GetElementwiseIndex(const int64_t* x_dims_array, const int max_dim,
+                               const int64_t* index_array) {
   int index_ = 0;
   for (int i = 0; i < max_dim; i++) {
     if (x_dims_array[i] > 1) {
@@ -101,9 +101,9 @@ inline int GetElementwiseIndex(const int64_t *x_dims_array, const int max_dim,
   return index_;
 }
 
-inline void UpdateElementwiseIndexArray(const int64_t *out_dims_array,
+inline void UpdateElementwiseIndexArray(const int64_t* out_dims_array,
                                         const int max_dim,
-                                        int64_t *index_array) {
+                                        int64_t* index_array) {
   for (int i = max_dim - 1; i >= 0; --i) {
     ++index_array[i];
     if (index_array[i] >= out_dims_array[i]) {
@@ -114,10 +114,10 @@ inline void UpdateElementwiseIndexArray(const int64_t *out_dims_array,
   }
 }
 
-inline void GetBroadcastDimsArrays(const std::vector<int64_t> &x_dims,
-                                   const std::vector<int64_t> &y_dims,
-                                   int64_t *x_dims_array, int64_t *y_dims_array,
-                                   int64_t *out_dims_array, const int max_dim,
+inline void GetBroadcastDimsArrays(const std::vector<int64_t>& x_dims,
+                                   const std::vector<int64_t>& y_dims,
+                                   int64_t* x_dims_array, int64_t* y_dims_array,
+                                   int64_t* out_dims_array, const int max_dim,
                                    const int axis) {
   FDASSERT(axis >= 0,
            "Axis should be great than or equal to 0, but received axis is %d.",
@@ -162,17 +162,17 @@ inline void GetBroadcastDimsArrays(const std::vector<int64_t> &x_dims,
 }
 
 template <typename Functor, typename T, typename OutType = T>
-void CommonForwardBroadcastCPU(const FDTensor &x, const FDTensor &y,
-                               FDTensor *z, int64_t *x_dims_array,
-                               int64_t *y_dims_array, int64_t *out_dims_array,
+void CommonForwardBroadcastCPU(const FDTensor& x, const FDTensor& y,
+                               FDTensor* z, int64_t* x_dims_array,
+                               int64_t* y_dims_array, int64_t* out_dims_array,
                                int max_dim, Functor func,
                                const bool is_xsize_larger = true) {
   std::vector<int64_t> index_array(max_dim, 0);
-  const T *x_data = reinterpret_cast<const T *>(x.Data());
-  const T *y_data = reinterpret_cast<const T *>(y.Data());
+  const T* x_data = reinterpret_cast<const T*>(x.Data());
+  const T* y_data = reinterpret_cast<const T*>(y.Data());
   FDASSERT(x_data != nullptr, "The input X should not be empty.");
   FDASSERT(y_data != nullptr, "The input X should not be empty.");
-  OutType *out_data = reinterpret_cast<OutType *>(z->Data());
+  OutType* out_data = reinterpret_cast<OutType*>(z->Data());
 
   const int out_size = std::accumulate(out_dims_array, out_dims_array + max_dim,
                                        1, std::multiplies<int64_t>());
@@ -191,10 +191,10 @@ void CommonForwardBroadcastCPU(const FDTensor &x, const FDTensor &y,
 }
 
 template <typename Functor, typename T, typename OutType = T>
-void CommonElementwiseBroadcastForward(const FDTensor &x, const FDTensor &y,
-                                       FDTensor *z,
-                                       const std::vector<int64_t> &x_dims,
-                                       const std::vector<int64_t> &y_dims,
+void CommonElementwiseBroadcastForward(const FDTensor& x, const FDTensor& y,
+                                       FDTensor* z,
+                                       const std::vector<int64_t>& x_dims,
+                                       const std::vector<int64_t>& y_dims,
                                        Functor func, int axis,
                                        const bool is_xsize_larger = true) {
   int x_dims_size = x_dims.size();
@@ -220,8 +220,8 @@ void CommonElementwiseBroadcastForward(const FDTensor &x, const FDTensor &y,
 }
 
 template <typename Functor, typename T, typename OutType = T>
-void ElementwiseCompute(const FDTensor &x, const FDTensor &y, int axis,
-                        Functor func, FDTensor *z) {
+void ElementwiseCompute(const FDTensor& x, const FDTensor& y, int axis,
+                        Functor func, FDTensor* z) {
   auto x_dims = x.Shape();
   auto y_dims = y.Shape();
   bool is_xsize_larger = true;
