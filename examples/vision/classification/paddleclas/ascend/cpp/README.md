@@ -42,8 +42,8 @@ make install
 部署成功后输出结果如下：
 ```bash
 ClassifyResult(
-label_ids: 153, 
-scores: 0.685547, 
+label_ids: 153,
+scores: 0.685547,
 )
 #此结果出现后,还会出现一些华为昇腾自带的log信息,属正常现象.
 ```

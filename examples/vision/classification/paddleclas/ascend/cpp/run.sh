@@ -26,4 +26,4 @@ BUILD_DIR="./infer_demo"
 chmod +x ./$BUILD_DIR
 
 # 运行本demo.
-./$BUILD_DIR ./models/$MODEL_NAME ./images/$DATA_NAME 
+./$BUILD_DIR ./models/$MODEL_NAME ./images/$DATA_NAME
