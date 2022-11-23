@@ -102,6 +102,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  /// Use CANN to inference
+  void UseCANN();
+
   void SetExternalStream(void* external_stream);
 
   /*
@@ -171,7 +174,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /**
    * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
    */
-   void SetOpenVINODevice(const std::string& name = "CPU");
+  void SetOpenVINODevice(const std::string& name = "CPU");
 
   /**
    * @brief Set optimzed model dir for Paddle Lite backend.
@@ -338,6 +341,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
+  bool enable_cann = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
