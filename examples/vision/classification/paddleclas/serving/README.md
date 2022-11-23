@@ -13,7 +13,7 @@ tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # 将配置文件放入预处理目录
-mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/
+mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/inference_cls.yaml
 
 # 将模型放入 models/runtime/1目录下, 并重命名为model.pdmodel和model.pdiparams
 mv ResNet50_vd_infer/inference.pdmodel models/runtime/1/model.pdmodel
