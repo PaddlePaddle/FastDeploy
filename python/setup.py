@@ -79,7 +79,7 @@ setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
-if setup_configs["RKNN2_TARGET_SOC"] != "":
+if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs["BUILD_ON_JETSON"] != "OFF":
     REQUIRED_PACKAGES = REQUIRED_PACKAGES.replace("opencv-python", "")
 
 if setup_configs["WITH_GPU"] == "ON" or setup_configs[
