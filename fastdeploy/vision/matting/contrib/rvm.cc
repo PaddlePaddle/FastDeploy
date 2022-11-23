@@ -63,20 +63,16 @@ bool RobustVideoMatting::Preprocess(
   if (resize_h != mat->Height() || resize_w != mat->Width()) {
     Resize::Run(mat, resize_w, resize_h);
   }
-  BGR2RGB::Run(mat);
-
-  // Normalize
+  // Convert_and_permute(swap_rb=true)
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  Convert::Run(mat, alpha, beta);
+  ConvertAndPermute::Run(mat, alpha, beta, true);
+
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {mat->Height(), mat->Width()};
 
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
-
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 }
 
@@ -120,8 +116,6 @@ bool RobustVideoMatting::Postprocess(
 
   // for alpha
   float* alpha_ptr = static_cast<float*>(alpha.Data());
-  // cv::Mat alpha_zero_copy_ref(out_h, out_w, CV_32FC1, alpha_ptr);
-  // Mat alpha_resized(alpha_zero_copy_ref);  // ref-only, zero copy.
   Mat alpha_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
                                   alpha_ptr); // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
@@ -130,8 +124,6 @@ bool RobustVideoMatting::Postprocess(
 
   // for foreground
   float* fgr_ptr = static_cast<float*>(fgr.Data());
-  // cv::Mat fgr_zero_copy_ref(out_h, out_w, CV_32FC1, fgr_ptr);
-  // Mat fgr_resized(fgr_zero_copy_ref);  // ref-only, zero copy.
   Mat fgr_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
                                 fgr_ptr); // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
