@@ -17,14 +17,8 @@ git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
 python setup.py install
 ```
 
-### fastdeploy-auto-compression 一键模型自动化压缩工具安装方式
-```
-# 通过pip安装fd-auto-compress包
-pip install fd-auto-compress
-
-# 并在上一层目录(非本级目录)执行如下命令
-python setup.py install
-```
+### 一键模型自动化压缩工具安装方式
+FastDeploy一键模型自动化压缩不需要单独的安装, 用户只需要正确安装好[FastDeploy工具包](../../README.md)即可.
 
 ## 2.使用方式
 

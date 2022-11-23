@@ -78,7 +78,7 @@ def main():
     args = argsparser().parse_args()
     if args.auto_compress == True:
         try:
-            from fd_auto_compress.fd_auto_compress import auto_compress
+            from .auto_compression.fd_auto_compress.fd_auto_compress import auto_compress
             print("Welcome to use FastDeploy Auto Compression Toolkit!")
             auto_compress(args)
         except ImportError:
