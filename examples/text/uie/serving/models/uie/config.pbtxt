@@ -1,0 +1,46 @@
+name: "uie"
+backend: "python"
+max_batch_size: 1
+
+input [
+  {
+    name: "INPUT_0"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "INPUT_1"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "OUTPUT_0"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+      count: 1
+      # Use GPU, CPU inference option is:KIND_CPU
+      kind: KIND_GPU
+      # The instance is deployed on the 0th GPU card
+      gpus: [0]
+  }
+]
+
+optimization {
+  execution_accelerators {
+    gpu_execution_accelerator : [
+      {
+        # use paddle backend
+        name: "paddle"
+        parameters { key: "cpu_threads" value: "12" }
+      }
+    ]
+  }
+}

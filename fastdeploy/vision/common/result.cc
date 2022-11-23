@@ -80,6 +80,20 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
   }
 }
 
+DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
+  if (&other != this) {
+    boxes = std::move(other.boxes);
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    contain_masks = std::move(other.contain_masks);
+    if (contain_masks) {
+      masks.clear();
+      masks = std::move(other.masks);
+    }
+  }
+  return *this;
+}
+
 void DetectionResult::Clear() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);

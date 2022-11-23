@@ -19,7 +19,7 @@ ENV TZ=Asia/Shanghai \
 
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle paddlenlp faster_tokenizer 
+    && python3 -m pip install paddlepaddle paddlenlp fast-tokenizer-python
 
 COPY python/dist/*.whl *.whl /opt/fastdeploy/ 
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
