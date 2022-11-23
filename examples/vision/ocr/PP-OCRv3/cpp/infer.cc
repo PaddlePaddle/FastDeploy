@@ -33,12 +33,13 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto cls_option = option;
   auto rec_option = option;
 
-  // If use TRT backend, the dynamic shape will be set as follow. 
-  det_option.SetTrtInputShape("x", {1, 3, 50, 50}, {1, 3, 640, 640},
-                                {1, 3, 1536, 1536});
-  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320}, {1, 3, 48, 1024});
-  rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {1, 3, 48, 320},
-                                {1, 3, 48, 2304});
+  // If use TRT backend, the dynamic shape will be set as follow.
+  // We recommend that users set the length and height of the detection model to a multiple of 32.
+  det_option.SetTrtInputShape("x", {1, 3, 64,64}, {1, 3, 640, 640},
+                                {1, 3, 960, 960});
+  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {10, 3, 48, 320}, {64, 3, 48, 1024});
+  rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {10, 3, 48, 320},
+                                {64, 3, 48, 2304});
   
   // Users could save TRT cache file to disk as follow. 
   // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
@@ -103,6 +104,11 @@ int main(int argc, char* argv[]) {
   } else if (flag == 2) {
     option.UseGpu();
     option.UseTrtBackend();
+  } else if (flag == 3) {
+    option.UseGpu();
+    option.UseTrtBackend();
+    option.EnablePaddleTrtCollectShape();
+    option.EnablePaddleToTrt();
   }
 
   std::string det_model_dir = argv[1];
