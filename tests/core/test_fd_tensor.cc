@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/core/fd_tensor.h"
+#include "gtest_utils.h"
+#include "gtest/gtest.h"
 #include <array>
 #include <cstring>
 #include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "gtest/gtest.h"
-#include "gtest_utils.h"
 
 namespace fastdeploy {
 
@@ -84,6 +84,20 @@ TEST(fastdeploy, fd_tensor_assignment) {
   ASSERT_EQ(tensor3.device, Device::CPU);
   ASSERT_EQ(tensor3.Data(), inputs.data());
   ASSERT_EQ(tensor1.Data(), nullptr);
+}
+
+TEST(fastdeploy, fd_tensor_reshape) {
+  CheckShape check_shape;
+  FDTensor x;
+  x.Allocate({2, 3, 4, 5}, FDDataType::FP32);
+  x.Reshape({-1, 3, 2, 2, 5});
+  check_shape(x.Shape(), {2, 3, 2, 2, 5});
+
+  x.Reshape({0, -1, 5, 2});
+  check_shape(x.Shape(), {2, 6, 5, 2});
+
+  x.Reshape({2, 3, 0, 0, 2});
+  check_shape(x.Shape(), {2, 3, 5, 2, 2});
 }
 
 }  // namespace fastdeploy
