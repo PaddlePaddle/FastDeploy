@@ -122,5 +122,10 @@ template <typename T, typename Enable = void> struct InverseDivideFunctor {
   inline T operator()(const T a, const T b) const { return b / a; }
 };
 
+// Maximum
+template <typename T> struct MaximumFunctor {
+  inline T operator()(const T a, const T b) const { return a > b ? a : b; }
+};
+
 }  // namespace function
 }  // namespace fastdeploy

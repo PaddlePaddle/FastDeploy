@@ -153,6 +153,17 @@ TEST(fastdeploy, check_same_dim) {
   z = x / y;
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
              div_result.size());
+
+  // Test Maximum
+  std::vector<float> maximum_result = {
+      0.842862, 0.646191, 0.771018, 0.386742, 0.659926, 0.535816,
+      0.742916, 0.845605, 0.379472, 0.299701, 0.977038, 0.408941,
+      0.234426, 0.505406, 0.428841, 0.847653, 0.714584, 0.669046,
+      0.878883, 0.838706, 0.666453, 0.388368, 0.472637, 0.834141};
+  Maximum(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
+             maximum_result.size());
 }
 
 TEST(fastdeploy, check_broadcast_dim1) {
@@ -222,6 +233,17 @@ TEST(fastdeploy, check_broadcast_dim1) {
   z = x / y;
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
              div_result.size());
+
+  // Test Maximum
+  std::vector<float> maximum_result = {
+      0.973751, 0.973751, 0.973751, 0.973751, 0.973751, 0.973751,
+      0.973751, 0.973751, 0.973751, 0.973751, 0.973751, 0.973751,
+      0.126847, 0.15662,  0.428841, 0.847653, 0.245863, 0.669046,
+      0.878883, 0.676259, 0.666453, 0.32523,  0.413939, 0.834141};
+  Maximum(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
+             maximum_result.size());
 }
 
 TEST(fastdeploy, check_broadcast_dim2) {
@@ -284,6 +306,17 @@ TEST(fastdeploy, check_broadcast_dim2) {
   check_shape(z.shape, {2, 3, 4});
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
              div_result.size());
+
+  // Test Maximum
+  std::vector<float> maximum_result = {
+      0.842862, 0.646191, 0.308033, 0.308033, 0.659926, 0.535816,
+      0.742916, 0.845605, 0.558857, 0.558857, 0.862171, 0.558857,
+      0.308033, 0.308033, 0.428841, 0.847653, 0.411721, 0.669046,
+      0.878883, 0.676259, 0.666453, 0.558857, 0.558857, 0.834141};
+  Maximum(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
+             maximum_result.size());
 }
 
 TEST(fastdeploy, check_broadcast_dim3) {
@@ -351,6 +384,17 @@ TEST(fastdeploy, check_broadcast_dim3) {
   z = x / y;
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
              div_result.size());
+
+  // Test Maximum
+  std::vector<float> maximum_result = {
+      0.842862, 0.646191, 0.989122, 0.324165, 0.659926, 0.535816,
+      0.989122, 0.845605, 0.626531, 0.512842, 0.989122, 0.408941,
+      0.626531, 0.512842, 0.989122, 0.847653, 0.626531, 0.669046,
+      0.989122, 0.676259, 0.666453, 0.512842, 0.989122, 0.834141};
+  Maximum(x, y, &z);
+  check_shape(z.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
+             maximum_result.size());
 }
 
 TEST(fastdeploy, check_broadcast_dim4) {
@@ -415,6 +459,15 @@ TEST(fastdeploy, check_broadcast_dim4) {
   z = x / y;
   check_data(reinterpret_cast<const float*>(z.Data()), div_result.data(),
              div_result.size());
+  // Test Maximum
+  std::vector<float> maximum_result = {0.842862, 0.646191, 0.626531, 0.626531,
+                                       0.842862, 0.646191, 0.512842, 0.512842,
+                                       0.989122, 0.989122, 0.989122, 0.989122,
+                                       0.659926, 0.535816, 0.742916, 0.845605};
+  Maximum(x, y, &z);
+  check_shape(z.shape, {2, 2, 4});
+  check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
+             maximum_result.size());
 }
 
 TEST(fastdeploy, mixed_operation) {
