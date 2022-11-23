@@ -30,7 +30,7 @@
 
   | APP 图标 | APP 效果 | APP设置项
   | ---     | --- | --- |
-  | ![app_pic ](https://user-images.githubusercontent.com/31974251/197170082-a2bdd49d-60ea-4df0-af63-18ed898a746e.jpg)   | ![app_res](https://user-images.githubusercontent.com/14995488/203464075-f13e3f26-cc88-415d-8742-e7dd509e1190.jpg) |  ![app_setup](https://user-images.githubusercontent.com/31974251/197339378-bb30b108-2d77-4b30-981d-d687b6fca8f6.jpg) |
+  | ![app_pic ](https://user-images.githubusercontent.com/14995488/203484427-83de2316-fd60-4baf-93b6-3755f9b5559d.jpg)   | ![app_res](https://user-images.githubusercontent.com/14995488/203494666-16528cb3-0ce2-48fc-9f9e-37da17b2c2f6.jpg) |  ![app_setup](https://user-images.githubusercontent.com/14995488/203484436-57fdd041-7dcc-4e0e-b6cb-43e5ac1e729b.jpg) |
 
 ## PaddleClasModel Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PaddleClasModel初始化参数说明如下：  
