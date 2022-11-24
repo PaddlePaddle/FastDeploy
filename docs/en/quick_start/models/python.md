@@ -10,7 +10,7 @@ This document uses the PaddleDetection target detection model PPYOLOE as an exam
 import fastdeploy as fd
 
 model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz"
-image_url - "https://bj.bcebos.com/fastdeploy/tests/test_det.jpg"
+image_url = "https://bj.bcebos.com/fastdeploy/tests/test_det.jpg"
 fd.download_and_decompress(model_url, path=".")
 fd.download(image_url, path=".")
 ```
