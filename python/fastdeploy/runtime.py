@@ -57,6 +57,9 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
+        for k, v in data.items():
+            if not v.data.contiguous:
+                data[k] = np.ascontiguousarray(data[k])
         return self._runtime.infer(data)
 
     def compile(self, warm_datas):
