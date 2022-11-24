@@ -1,14 +1,23 @@
-/*******************************************************************************
+// Copyright (c) 2022 Baidu, Inc.  All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
- Copyright (c) 2022 Baidu, Inc.  All Rights Reserved.
-
- *******************************************************************************
-
- @file fuse_conv_bn.cpp
- @author Lin Xiao Chun (linxiaochun@baidu.com)
- @date 2022-03-31 16:11:19
- @brief
- */
+/**
+* @file fuse_conv_bn.cpp
+* @author Lin Xiao Chun (linxiaochun@baidu.com)
+* @date 2022-03-31 16:11:19
+* @brief
+**/
 
 #include "poros/lowering/fuse_conv_bn.h"
 
@@ -66,12 +75,35 @@ bool FuseConvBatchNorm::try_to_fuse_conv_batchnorm(torch::jit::Block *block) {
         auto all_users = node->inputs()[0]->uses();
         if (all_users.size() != 1 || ((node->inputs()[0])->node()->kind() != torch::jit::aten::conv1d &&
                 (node->inputs()[0])->node()->kind() != torch::jit::aten::conv2d &&
-                (node->inputs()[0])->node()->kind() != torch::jit::aten::conv3d)) {
+                (node->inputs()[0])->node()->kind() != torch::jit::aten::conv3d && 
+                (node->inputs()[0])->node()->kind() != torch::jit::aten::_convolution)) {
             continue;
         }
 
         auto bn = node;
         auto conv = (node->inputs()[0])->node();
+
+        // More parameters need to be checked when node is aten::_convolution.
+        if (conv->schema().operator_name() == torch::jit::parseSchema("aten::_convolution(Tensor input, Tensor weight, "
+        "Tensor? bias, int[] stride, int[] padding, int[] dilation, bool transposed, int[] output_padding, int groups, "
+        "bool benchmark, bool deterministic, bool cudnn_enabled, bool allow_tf32) -> Tensor ").operator_name()) {
+            bool transposed = toIValue(conv->input(6)).value().toBool();
+            // deconvolution is not supported.
+            if (transposed) {
+                LOG(INFO) << "It is found that the transposed of aten::_convolution is true, which is not support to fuse conv+bn currently.";
+                continue;
+            }
+            // output_padding is not supported.
+            std::vector<int64_t> output_padding = toIValue(conv->input(7)).value().toIntVector();
+            for (int64_t o : output_padding) {
+                if (o != 0) {
+                    LOG(INFO) << "It is found that the output_padding of aten::_convolution is not equal to zero, "
+                    "which is not support to fuse conv+bn currently.";
+                    continue;
+                }
+            }
+            // other parameters like benchmark, deterministic, cudnn_enabled and allow_tf do not need to be checked for now.
+        }
 
         ConvBNParameters params;
         // conv weights and bias

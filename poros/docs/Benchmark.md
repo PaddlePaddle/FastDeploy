@@ -1,6 +1,6 @@
 # Benchmark
 ## Environment
-This benchmark is tested on CentOS7 with GPU A10, and its environment is as follows:
+This benchmark is tested on CentOS7 with GPU `A10` and CPU `Intel(R) Xeon(R) Platinum 8350C CPU @ 2.60GHz`, and its environment is as follows:
 | Package  |  Version |
 |----------|----------|
 | CUDA     | 11.3     |
@@ -75,7 +75,7 @@ Input shape: bx128
 | 16         |   42.77      |  16.90      |
 | 32         |   85.99      |  32.21      |
 
-## 7. Vision Transformer (VIT)
+## 7. Vision Transformer (ViT)
 Input shape: bx3x224x224
 | Batch size | PyTorch (ms) |  Poros (ms) |
 |------------|--------------|-------------|

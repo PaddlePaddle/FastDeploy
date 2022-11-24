@@ -2,8 +2,9 @@
 
 ## Description
 
-Poros is an AI Inference Accelerator for pytorch. It can provide a lower inference latency comparing with original model. Poros mainly works on the IR layer (torchscript), that means it supports the models from Pytorch, ONNX, TensorFLow and any other framework that can be converted to torchscript.
-For now, Poros supports GPU and XPU1 and XPU2(BAIDU-Kunlun) Device, It's welcomed to add additional devices.
+Poros is an AI Inference Accelerator for deep learning framework. It can provide significantly lower inference latency comparing with original model, and provide much flexibility for dynamic graphs.
+Poros mainly works on the TorchScript IR currently, that means it supports the models from PyTorch, ONNX, TensorFlow and any other framework that can be converted to TorchScript. also, we are planting to support more IRs in the future.
+poros is designed to supports multiple hardware backends conveniently, For now, Poros supports GPU and XPU Device, It's welcomed to add additional devices.
 
 ## How It Works
 
@@ -11,27 +12,27 @@ Figure 1 is the architecture of Poros. The central part marked by the red dotted
 module of Poros. IR graphs are optimized by IR lowering, op fusing and op converting, and then segmented into engine
 related subgraph by maximize the op nums of each engine kernel and minimize the total count of engine kernels.
 
-![](docs/architecture_en.png)
+![image](https://user-images.githubusercontent.com/54064850/203691621-e75d7c17-320c-4dff-8abe-58c3c9db99a2.png)
 
-In order to achieve the above goals on GPU, we've rewritten nearly one hundred torchscript OPs with TensorRT API, which
+In order to achieve the above goals on GPU, we've rewritten nearly one hundred TorchScript OPs with TensorRT API, which
 reduced extra subgraphs caused by unsupported op during subgraph partitioning. Dozens of lowering strategy including op
 fusions were employed to reduce the actual calculating load of CUDA Kernels.
 
 ## Dependencies
 
-Poros is developed based on Pytorch, CUDA, TensorRT(TRT Engine), CuDNN. The minimum_required(recommended) versions of
+Poros is developed based on PyTorch, CUDA, TensorRT(TRT Engine), CuDNN. The minimum_required(recommended) versions of
 these packages are listed as below:
 
 | Package  | Minimum Version | Recommended Version |
 |----------|-----------------|---------------------|
-| Pytorch  | 1.9.0           | 1.12.1              |
+| PyTorch  | 1.9.0           | 1.12.1              |
 | CUDA     | 10.2            | 11.3                |
 | TensorRT | 8.2             | 8.4                 |
 | CuDNN    | 7.6.5           | 8.4                 |
 | Python   | 3.6.5           | 3.8                 |
 
-If you want to build for GPU Inference, it's better to align the CUDA version with the version that Pytorch built on.
-For example, we recommend you to use CUDA 11.1+ if the installed Pytorch version is 1.11.0+cu111, or some "undefined
+If you want to build for GPU Inference, it's better to align the CUDA version with the version that PyTorch built on.
+For example, we recommend you to use CUDA 11.1+ if the installed PyTorch version is 1.11.0+cu111, or some "undefined
 reference CUDA...." errors may appear during building.
 
 > There is a known cuBlas related issue of CUDA 10.2. If you are using CUDA 10.2, make sure these two patches have be installed. 
@@ -44,7 +45,8 @@ reference CUDA...." errors may appear during building.
 get poros source code:
 
 ```shell
-git clone https://github.com/xx/poros.git
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd poros
 git submodule update --init --recursive --jobs 0 -f
 ```
 
@@ -74,7 +76,7 @@ export PATH=$CUDAToolkit_ROOT/bin:$PATH
 export LD_LIBRARY_PATH=$CUDAToolkit_ROOT/lib64:$TENSORRT_ROOT/lib:$CUDNN_ROOT/lib:$LD_LIBRARY_PATH
 ```
 
-Additional dependency `mkl` is needed while building with Pytorch1.11 + CUDA11.1
+Additional dependency `mkl` is needed while building with PyTorch1.11 + CUDA11.1
 It can be added into cmake by installing, if not, you can try to add it by:
 ```shell
 conda install mkl
@@ -187,10 +189,10 @@ python3 python/example/test_resnet.py
 If the executable binary `poros-tool` is built, you can run the benchmark like this:
 
 ```shell
-./poros-tool --module_file_path ../../poros/tools/std_pretrained_resnet50_gpu.pt --test_mode=original #original pytorch model
+./poros-tool --module_file_path ../../poros/tools/std_pretrained_resnet50_gpu.pt --test_mode=original #original PyTorch model
 ./poros-tool --module_file_path ../../poros/tools/std_pretrained_resnet50_gpu.pt --test_mode=poros #poros compiled model
 ```
-> Pytorch has changed the packaging format of model since 1.4+, while the pretrained model of resnet50 is still using the old format(.tar).
+> PyTorch has changed the packaging format of model since 1.4+, while the pretrained model of resnet50 is still using the old format(.tar).
 > You may need to convert the format to the newer one (.zip) by your self. Convert command like this:
 > ```python
 > original_model = models.resnet50(pretrained=True).cuda().eval()
