@@ -20,7 +20,11 @@ namespace fastdeploy {
 FDLogger::FDLogger(bool verbose, const std::string& prefix) {
   verbose_ = verbose;
   line_ = "";
+#ifdef __ANDROID__  
+  prefix_ = std::string("[FastDeploy]") + prefix;
+#else
   prefix_ = prefix;
+#endif  
 }
 
 FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
@@ -28,6 +32,9 @@ FDLogger& FDLogger::operator<<(std::ostream& (*os)(std::ostream&)) {
     return *this;
   }
   std::cout << prefix_ << " " << line_ << std::endl;
+#ifdef __ANDROID__
+  __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s", line_.c_str());
+#endif
   line_ = "";
   return *this;
 }

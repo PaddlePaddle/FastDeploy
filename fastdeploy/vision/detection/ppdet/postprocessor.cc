@@ -75,12 +75,6 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
              tensors[0].shape.size());
     return ProcessUnDecodeResults(tensors, results);
   }
-
-  if (tensors[0].shape[0] == 0) {
-    // No detected boxes
-    return true;
-  }
-
   // Get number of boxes for each input image
   std::vector<int> num_boxes(tensors[1].shape[0]);
   int total_num_boxes = 0;
@@ -114,6 +108,12 @@ bool PaddleDetPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
   // Get boxes for each input image
   results->resize(num_boxes.size());
+
+  if (tensors[0].shape[0] == 0) {
+    // No detected boxes
+    return true;
+  }
+
   const auto* box_data = static_cast<const float*>(tensors[0].CpuData());
   int offset = 0;
   for (size_t i = 0; i < num_boxes.size(); ++i) {
