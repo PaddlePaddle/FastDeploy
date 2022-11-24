@@ -56,14 +56,4 @@ std::vector<int64_t> GetStride(const std::vector<int64_t>& dims) {
   return result;
 }
 
-std::string Str(const std::vector<int64_t>& shape) {
-  std::ostringstream oss;
-  oss << "[ " << shape[0];
-  for (int i = 1; i < shape.size(); ++i) {
-    oss << " ," << shape[i];
-  }
-  oss << " ]";
-  return oss.str();
-}
-
 }  // namespace fastdeploy
