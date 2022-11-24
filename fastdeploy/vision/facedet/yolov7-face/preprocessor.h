@@ -37,12 +37,12 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
   std::vector<int> GetSize() const { return size_; }
 
   /// Set padding value, size should be the same as channels
-  void SetPaddingValue(const std::vector<float>& padding_color_value) {
+  void SetPaddingColorValue(const std::vector<float>& padding_color_value) {
     padding_color_value_ = padding_color_value;
   }
 
   /// Get padding value, size should be the same as channels
-  std::vector<float> GetPaddingValue() const { return padding_value_; }
+  std::vector<float> GetPaddingColorValue() const { return padding_color_value_; }
 
   /// Set is_scale_up, if is_scale_up is false, the input image only
   /// can be zoom out, the maximum resize scale cannot exceed 1.0, default true

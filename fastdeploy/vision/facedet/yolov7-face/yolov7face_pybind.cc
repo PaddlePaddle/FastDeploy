@@ -35,7 +35,7 @@ void BindYOLOv7Face(pybind11::module& m) {
         return make_pair(outputs, ims_info);
       })
       .def_property("size", &vision::facedet::Yolov7FacePreprocessor::GetSize, &vision::facedet::Yolov7FacePreprocessor::SetSize)
-      .def_property("padding_value", &vision::facedet::Yolov7FacePreprocessor::GetPaddingValue, &vision::facedet::Yolov7FacePreprocessor::SetPaddingValue)
+      .def_property("padding_color_value", &vision::facedet::Yolov7FacePreprocessor::GetPaddingColorValue, &vision::facedet::Yolov7FacePreprocessor::SetPaddingColorValue)
       .def_property("is_scale_up", &vision::facedet::Yolov7FacePreprocessor::GetScaleUp, &vision::facedet::Yolov7FacePreprocessor::SetScaleUp);
 
   pybind11::class_<vision::facedet::Yolov7FacePostprocessor>(

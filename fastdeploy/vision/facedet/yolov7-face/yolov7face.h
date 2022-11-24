@@ -41,12 +41,12 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
                             std::vector<FaceDetectionResult>* results);
 
     /// Get preprocessor reference of YOLOv7
-  virtual YOLOv7Preprocessor& GetPreprocessor() {
+  virtual Yolov7FacePreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
   /// Get postprocessor reference of YOLOv7
-  virtual YOLOv7Postprocessor& GetPostprocessor() {
+  virtual Yolov7FacePostprocessor& GetPostprocessor() {
     return postprocessor_;
   }
 
