@@ -30,7 +30,7 @@ if [ ! -d "./TensorRT-8.4.1.5/" ]; then
     rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
 fi
 
-nvidia-docker run -it --rm --name build_fd \
+nvidia-docker run -i --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -68,7 +68,7 @@ else
 
 echo "start build FD CPU library"
 
-docker run -it --rm --name build_fd \
+docker run -i --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
