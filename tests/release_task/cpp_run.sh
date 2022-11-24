@@ -19,7 +19,7 @@ LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
 #LINUX_AARCH_CPU_CASE=('ort' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort')
-MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
+MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
