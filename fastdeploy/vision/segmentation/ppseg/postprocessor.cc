@@ -69,19 +69,24 @@ bool PaddleSegPostprocessor::SliceOneResultFromBatchInferResults(const FDTensor&
       infer_result->SetExternalData(
           infer_result_shape, FDDataType::FP32,
           reinterpret_cast<void*>(const_cast<float_t *>(infer_results_ptr)));
-    }
-    else if (infer_results.dtype == FDDataType::INT64) {
+    } else if (infer_results.dtype == FDDataType::INT64) {
       const int64_t* infer_results_ptr =
           reinterpret_cast<const int64_t*>(infer_results.CpuData()) + start_idx;
       infer_result->SetExternalData(
           infer_result_shape, FDDataType::INT64,
           reinterpret_cast<void*>(const_cast<int64_t *>(infer_results_ptr)));
-    }else if (infer_results.dtype == FDDataType::INT32) {
+    } else if (infer_results.dtype == FDDataType::INT32) {
       const int32_t* infer_results_ptr =
           reinterpret_cast<const int32_t*>(infer_results.CpuData()) + start_idx;
       infer_result->SetExternalData(
           infer_result_shape, FDDataType::INT32,
           reinterpret_cast<void*>(const_cast<int32_t *>(infer_results_ptr)));
+    }  else if (infer_results.dtype == FDDataType::UINT8) {
+      const uint8_t* infer_results_ptr =
+          reinterpret_cast<const uint8_t*>(infer_results.CpuData()) + start_idx;
+      infer_result->SetExternalData(
+          infer_result_shape, FDDataType::UINT8,
+          reinterpret_cast<void*>(const_cast<uint8_t *>(infer_results_ptr)));
     } else {
       FDASSERT(false, 
                "Require the data type for slicing is int64, fp32 or int32, but now "
