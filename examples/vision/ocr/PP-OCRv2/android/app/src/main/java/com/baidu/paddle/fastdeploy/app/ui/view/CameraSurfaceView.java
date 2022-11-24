@@ -279,7 +279,7 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         disableCamera = true;
     }
 
-    public void ableCamera() {
+    public void enableCamera() {
         disableCamera = false;
     }
 

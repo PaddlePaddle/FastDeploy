@@ -140,8 +140,8 @@ set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android
   - 修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：  
 ```xml
 <!-- 将这个路径指修改成您的模型，如 models/MobileNetV2_x0_25_infer -->
-<string name="MODEL_DIR_DEFAULT">models/MobileNetV1_x0_25_infer</string>  
-<string name="LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
+<string name="CLASSIFICATION_MODEL_DIR_DEFAULT">models/MobileNetV1_x0_25_infer</string>  
+<string name="CLASSIFICATION_LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
 ```  
 
 ## 更多参考文档

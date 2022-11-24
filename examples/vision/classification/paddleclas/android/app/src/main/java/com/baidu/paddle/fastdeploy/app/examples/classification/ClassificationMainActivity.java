@@ -307,7 +307,7 @@ public class ClassificationMainActivity extends Activity implements View.OnClick
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
         } else {
-            svPreview.ableCamera();
+            svPreview.enableCamera();
         }
         svPreview.onResume();
     }
