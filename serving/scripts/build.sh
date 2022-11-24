@@ -30,7 +30,7 @@ if [ ! -d "./TensorRT-8.4.1.5/" ]; then
     rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
 fi
 
-nvidia-docker run -it --rm --name build_fd \
+nvidia-docker run -i --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -62,13 +62,13 @@ nvidia-docker run -it --rm --name build_fd \
             cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`'
 
-echo "start build FD CPU library"
+echo "build FD GPU library done"
 
 else
 
 echo "start build FD CPU library"
 
-docker run -it --rm --name build_fd \
+docker run -i --rm --name build_fd \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
