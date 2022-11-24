@@ -22,7 +22,7 @@ namespace vision {
 namespace facedet {
 
 Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
-  conf_threshold_ = 0.25;
+  conf_threshold_ = 0.7;
   nms_threshold_ = 0.5;
   multi_label_ = true;
   max_wh_ = 7680.0;

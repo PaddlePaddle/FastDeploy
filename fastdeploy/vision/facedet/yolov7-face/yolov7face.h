@@ -40,6 +40,16 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             std::vector<FaceDetectionResult>* results);
 
+    /// Get preprocessor reference of YOLOv7
+  virtual YOLOv7Preprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of YOLOv7
+  virtual YOLOv7Postprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
+
   protected:
   bool Initialize();
   Yolov7FacePreprocessor preprocessor_;

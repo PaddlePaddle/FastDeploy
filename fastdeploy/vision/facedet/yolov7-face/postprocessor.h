@@ -30,6 +30,22 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
            std::vector<FaceDetectionResult>* results,
            const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info);
 
+  /// Set conf_threshold, default 0.25
+  void SetConfThreshold(const float& conf_threshold) {
+    conf_threshold_ = conf_threshold;
+  }
+
+  /// Get conf_threshold, default 0.25
+  float GetConfThreshold() const { return conf_threshold_; }
+
+  /// Set nms_threshold, default 0.5
+  void SetNMSThreshold(const float& nms_threshold) {
+    nms_threshold_ = nms_threshold;
+  }
+
+  /// Get nms_threshold, default 0.5
+  float GetNMSThreshold() const { return nms_threshold_; }
+
   protected:
   float conf_threshold_;
   float nms_threshold_;
