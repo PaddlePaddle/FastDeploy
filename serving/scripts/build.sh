@@ -62,7 +62,7 @@ nvidia-docker run -i --rm --name build_fd \
             cmake .. -DFASTDEPLOY_DIR=/workspace/fastdeploy/build/fastdeploy_install -DTRITON_COMMON_REPO_TAG=r21.10 -DTRITON_CORE_REPO_TAG=r21.10 -DTRITON_BACKEND_REPO_TAG=r21.10;
             make -j`nproc`'
 
-echo "start build FD CPU library"
+echo "build FD GPU library done"
 
 else
 
