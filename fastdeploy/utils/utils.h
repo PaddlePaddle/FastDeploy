@@ -22,6 +22,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #if defined(_WIN32)
@@ -186,6 +187,16 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 FASTDEPLOY_DECL std::vector<int64_t>
 GetStride(const std::vector<int64_t>& dims);
 
-FASTDEPLOY_DECL std::string Str(const std::vector<int64_t>& shape);
+template <typename T, typename std::enable_if<std::is_integral<T>::value,
+                                              bool>::type = true>
+std::string Str(const std::vector<T>& shape) {
+  std::ostringstream oss;
+  oss << "[ " << shape[0];
+  for (int i = 1; i < shape.size(); ++i) {
+    oss << " ," << shape[i];
+  }
+  oss << " ]";
+  return oss.str();
+}
 
 }  // namespace fastdeploy
