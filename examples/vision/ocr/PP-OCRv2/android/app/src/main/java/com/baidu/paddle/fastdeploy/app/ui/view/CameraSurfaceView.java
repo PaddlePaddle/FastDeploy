@@ -212,7 +212,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
             ByteBuffer pixelBuffer = ByteBuffer.allocate(textureWidth * textureHeight * 4);
             GLES20.glReadPixels(0, 0, textureWidth, textureHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixelBuffer);
 
-            // TODO: 2022/11/22 报错
             ARGB8888ImageBitmap = Bitmap.createBitmap(textureWidth, textureHeight, Bitmap.Config.ARGB_8888);
             ARGB8888ImageBitmap.copyPixelsFromBuffer(pixelBuffer);
 
@@ -280,6 +279,10 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         disableCamera = true;
     }
 
+    public void ableCamera() {
+        disableCamera = false;
+    }
+
     public void switchCamera() {
         releaseCamera();
         selectedCameraId = (selectedCameraId + 1) % numberOfCameras;
@@ -289,28 +292,20 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
     public void openCamera() {
         if (disableCamera) return;
         camera = Camera.open(selectedCameraId);
-        Camera.Parameters parameters = camera.getParameters();
-        int degree = Utils.getCameraDisplayOrientation(context, selectedCameraId);
-        camera.setDisplayOrientation(degree);
-        boolean rotate = degree == 90 || degree == 270;
-        int adjusted_width = rotate ? EXPECTED_PREVIEW_HEIGHT : EXPECTED_PREVIEW_WIDTH;
-        int adjusted_height = rotate ? EXPECTED_PREVIEW_WIDTH : EXPECTED_PREVIEW_HEIGHT;
-
         List<Size> supportedPreviewSizes = camera.getParameters().getSupportedPreviewSizes();
-
-        Size previewSize = Utils.getOptimalPreviewSize(
-                supportedPreviewSizes, adjusted_width, adjusted_height);
-
-        textureWidth = previewSize.width;
-        textureHeight = previewSize.height;
-
+        Size previewSize = Utils.getOptimalPreviewSize(supportedPreviewSizes, EXPECTED_PREVIEW_WIDTH,
+                EXPECTED_PREVIEW_HEIGHT);
+        Camera.Parameters parameters = camera.getParameters();
         parameters.setPreviewSize(previewSize.width, previewSize.height);
-        camera.setParameters(parameters);
-
         if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
             parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         }
-
+        camera.setParameters(parameters);
+        int degree = Utils.getCameraDisplayOrientation(context, selectedCameraId);
+        camera.setDisplayOrientation(degree);
+        boolean rotate = degree == 90 || degree == 270;
+        textureWidth = rotate ? previewSize.height : previewSize.width;
+        textureHeight = rotate ? previewSize.width : previewSize.height;
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);

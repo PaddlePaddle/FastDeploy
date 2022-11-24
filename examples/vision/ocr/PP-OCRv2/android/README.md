@@ -75,9 +75,9 @@ public boolean initialized(); // 检查是否初始化成功
   - 将您的OCR模型放在 `app/src/main/assets/models` 目录下；
   - 修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：
 ```xml
-<!-- 将这个路径指修改成您的模型，如 models/picodet_l_320_coco_lcnet -->
-<string name="DETECTION_MODEL_DIR_DEFAULT">models</string>  
-<string name="DETECTION_LABEL_PATH_DEFAULT">labels/ppocr_keys_v1.txt</string>
+<!-- 将这个路径修改成您的模型 -->
+<string name="OCR_MODEL_DIR_DEFAULT">models</string>  
+<string name="OCR_LABEL_PATH_DEFAULT">labels/ppocr_keys_v1.txt</string>
 ```  
 
 ## 更多参考文档
