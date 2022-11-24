@@ -15,11 +15,11 @@ cd FastDeploy/examples/vision/detection/paddledetection/rknpu2/python
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # copy model
-cp -r ./picodet_s_416_coco_npu /path/to/FastDeploy/examples/vision/detection/rknpu2detection/paddledetection/python
+cp -r ./picodet_s_416_coco_lcnet /path/to/FastDeploy/examples/vision/detection/rknpu2detection/paddledetection/python
 
 # 推理
-python3 infer.py --model_file ./picodet_s_416_coco_npu/picodet_s_416_coco_npu_3588.rknn  \
-                  --config_file ./picodet_s_416_coco_npu/infer_cfg.yml \
+python3 infer.py --model_file ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3568.rknn  \
+                  --config_file ./picodet_s_416_coco_lcnet/infer_cfg.yml \
                   --image 000000014439.jpg
 ```
 
