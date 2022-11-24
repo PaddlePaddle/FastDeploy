@@ -83,5 +83,18 @@ TEST(fastdeploy, exp_sqrt_round_log) {
              log_result.size());
 }
 
+TEST(fastdeploy, abs) {
+  CheckShape check_shape;
+  CheckData check_data;
+  FDTensor x, y;
+  std::vector<float> test_data = {-1, 2, 3, -5, -4, -6};
+  x.SetExternalData({2, 3}, FDDataType::FP32, test_data.data());
+  std::vector<float> result = {1, 2, 3, 5, 4, 6};
+  Abs(x, &y);
+  check_shape(y.shape, {2, 3});
+  check_data(reinterpret_cast<const float*>(y.Data()), result.data(),
+             result.size());
+}
+
 }  // namespace function
 }  // namespace fastdeploy
