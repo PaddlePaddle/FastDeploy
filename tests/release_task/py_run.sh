@@ -54,7 +54,7 @@ do
        echo "Python Backend:" $backend
        if [ "$backend" != "trt" ];then
                python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device cpu --backend $backend >> py_$backend\_cpu_result.txt
-               if [ "$PLATFORM" = "osx-arm64"]
+               if [ "$PLATFORM" = "osx-arm64"];then
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold 0.5
                        check_ret
                else
