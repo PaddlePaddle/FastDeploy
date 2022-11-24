@@ -24,6 +24,10 @@
 #include <string>
 #include <vector>
 
+#ifdef __ANDROID__
+#include <android/log.h>  // NOLINT
+#endif
+
 #if defined(_WIN32)
 #ifdef FASTDEPLOY_LIB
 #define FASTDEPLOY_DECL __declspec(dllexport)
@@ -54,10 +58,15 @@ class FASTDEPLOY_DECL FDLogger {
     line_ += ss.str();
     return *this;
   }
+
   FDLogger& operator<<(std::ostream& (*os)(std::ostream&));
+
   ~FDLogger() {
     if (!verbose_ && line_ != "") {
       std::cout << line_ << std::endl;
+#ifdef __ANDROID__
+      __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s", line_.c_str());
+#endif
     }
   }
 
