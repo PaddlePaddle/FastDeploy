@@ -267,8 +267,11 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   SegmentationResult& operator=(SegmentationResult&& other);
 
   ResultType type = ResultType::SEGMENTATION;
-  /// Clear detection result
+  /// Clear Segmentation result
   void Clear();
+
+  /// Clear Segmentation result and free the memory
+  void Free();
 
   void Reserve(int size);
 

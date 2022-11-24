@@ -147,20 +147,20 @@ class PaddleSegPostprocessor:
         self._postprocessor.apply_softmax = value
 
     @property
-    def is_store_score_map(self):
+    def store_score_map(self):
         """Atrribute of PaddleSeg model. Stating Whether storing score map in the SegmentationResult, default value is False
 
-        :return: value of is_store_score_map(bool)
+        :return: value of store_score_map(bool)
         """
-        return self._postprocessor.is_store_score_map
+        return self._postprocessor.store_score_map
 
-    @is_store_score_map.setter
-    def is_store_score_map(self, value):
-        """Set attribute is_store_score_map of PaddleSeg model.
+    @store_score_map.setter
+    def store_score_map(self, value):
+        """Set attribute store_score_map of PaddleSeg model.
 
-        :param value: (bool)The value to set is_store_score_map
+        :param value: (bool)The value to set store_score_map
         """
         assert isinstance(
             value,
-            bool), "The value to set `is_store_score_map` must be type of bool."
-        self._postprocessor.is_store_score_map = value
+            bool), "The value to set `store_score_map` must be type of bool."
+        self._postprocessor.store_score_map = value

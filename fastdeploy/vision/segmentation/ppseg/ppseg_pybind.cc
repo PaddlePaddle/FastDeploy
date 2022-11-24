@@ -93,8 +93,8 @@ void BindPPSeg(pybind11::module& m) {
       .def_property("apply_softmax",
                     &vision::segmentation::PaddleSegPostprocessor::GetApplySoftmax,
 		    &vision::segmentation::PaddleSegPostprocessor::SetApplySoftmax)
-      .def_property("is_store_score_map",
-                    &vision::segmentation::PaddleSegPostprocessor::GetIsStoreScoreMap,
-		    &vision::segmentation::PaddleSegPostprocessor::SetIsStoreScoreMap);
+      .def_property("store_score_map",
+                    &vision::segmentation::PaddleSegPostprocessor::GetStoreScoreMap,
+		    &vision::segmentation::PaddleSegPostprocessor::SetStoreScoreMap);
 }
 }  // namespace fastdeploy

@@ -36,7 +36,6 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
             << ", maybe you should check this file." << std::endl;
     return false;
   }   
-  bool yml_contain_resize_op = false;
 
   if (cfg["Deploy"]["transforms"]) {
     auto preprocess_cfg = cfg["Deploy"]["transforms"];
@@ -56,7 +55,7 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
           processors_.push_back(std::make_shared<Normalize>(mean, std));
         }
       } else if (op["type"].as<std::string>() == "Resize") {
-        yml_contain_resize_op = true;
+        is_contain_resize_op = true;
         const auto& target_size = op["target_size"];
         int resize_width = target_size[0].as<int>();
         int resize_height = target_size[1].as<int>();
@@ -74,8 +73,9 @@ bool PaddleSegPreprocessor::BuildPreprocessPipelineFromConfig() {
     auto input_shape = cfg["Deploy"]["input_shape"];
     int input_height = input_shape[2].as<int>();
     int input_width = input_shape[3].as<int>();
-    if (input_height != -1 && input_width != -1 && !yml_contain_resize_op) {
-      processors_.push_back(
+    if (input_height != -1 && input_width != -1 && !is_contain_resize_op) {
+      is_contain_resize_op = true;
+      processors_.insert(processors_.begin(),
           std::make_shared<Resize>(input_width, input_height));
     }
   }
@@ -104,10 +104,8 @@ bool PaddleSegPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
                           static_cast<int>(image.Width())});
   }
   (*imgs_info)["shape_info"] = shape_info;
-  bool contain_resize_op = false;
   for (size_t i = 0; i < processors_.size(); ++i) {
-    if (processors_[i]->Name().compare("Resize") == 0) {
-      contain_resize_op = true;
+    if (processors_[i]->Name() == "Resize") {
       auto processor = dynamic_cast<Resize*>(processors_[i].get());
       int resize_width = -1;
       int resize_height = -1;
@@ -123,15 +121,16 @@ bool PaddleSegPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor
   }
   size_t img_num = images->size();
   // Batch preprocess : resize all images to the largest image shape in batch
-  if (!contain_resize_op && img_num > 1) {
+  if (!is_contain_resize_op && img_num > 1) {
     int max_width = 0;
     int max_height = 0; 
     for (size_t i = 0; i < img_num; ++i) {
       max_width = std::max(max_width, ((*images)[i]).Width());
       max_height = std::max(max_height, ((*images)[i]).Height());
     }
-    processors_.insert(processors_.end(), 
-        std::make_shared<Resize>(max_height, max_height));
+    for (size_t i = 0; i < img_num; ++i) {
+      Resize::Run(&(*images)[i], max_width, max_height);
+    }
   }
   for (size_t i = 0; i < img_num; ++i) {
     for (size_t j = 0; j < processors_.size(); ++j) {

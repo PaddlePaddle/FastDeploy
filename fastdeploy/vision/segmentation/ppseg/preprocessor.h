@@ -39,12 +39,12 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
     std::map<std::string, std::vector<std::array<int, 2>>>* imgs_info);
 
   /// Get is_vertical_screen property of PP-HumanSeg model, default is false
-  bool GetIsVerticalScreen() {
+  bool GetIsVerticalScreen() const {
     return is_vertical_screen_;
   }
 
   /// Set is_vertical_screen value, bool type required
-  void SetIsVerticalScreen(const bool value) {
+  void SetIsVerticalScreen(bool value) {
     is_vertical_screen_ = value;
   }
 
@@ -62,6 +62,8 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
 
   // for recording the switch of normalize and hwc2chw
   bool disable_normalize_and_permute_ = false;
+
+  bool is_contain_resize_op = false;
 
   bool initialized_ = false;
 };

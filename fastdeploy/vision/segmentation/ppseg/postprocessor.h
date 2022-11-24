@@ -43,52 +43,45 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
 
   /** \brief Get apply_softmax property of PaddleSeg model, default is false
    */
-  bool GetApplySoftmax() {
+  bool GetApplySoftmax() const {
     return apply_softmax_;
   }
 
   /// Set apply_softmax value, bool type required
-  void SetApplySoftmax(const bool value) {
+  void SetApplySoftmax(bool value) {
     apply_softmax_ = value;
   }
 
-  /// Get is_store_score_map property of PaddleSeg model, default is false
-  bool GetIsStoreScoreMap() {
-    return is_store_score_map_;
+  /// Get store_score_map property of PaddleSeg model, default is false
+  bool GetStoreScoreMap() const {
+    return store_score_map_;
   }
 
-  /// Set is_store_score_map value, bool type required
-  void SetIsStoreScoreMap(const bool value) {
-    is_store_score_map_ = value;
+  /// Set store_score_map value, bool type required
+  void SetStoreScoreMap(bool value) {
+    store_score_map_ = value;
   }
 
  private:
   virtual bool ReadFromConfig(const std::string& config_file);
 
-  virtual bool CopyFromInferResults(
+  virtual bool SliceOneResultFromBatchInferResults(
                   const FDTensor& infer_results,
                   FDTensor* infer_result,
                   const std::vector<int64_t>& infer_result_shape,
-                  const int64_t start_idx,
-                  const int64_t offset,
-                  std::vector<int32_t>* int32_copy_result_buffer,
-                  std::vector<int64_t>* int64_copy_result_buffer,
-                  std::vector<float_t>* fp32_copy_result_buffer);
+                  const int64_t& start_idx);
 
   virtual bool ProcessWithScoreResult(const FDTensor& infer_result,
-                                      const int64_t out_num,
+                                      const int64_t& out_num,
                                       SegmentationResult* result);
 
-  virtual bool ProcessWithLabelResult(FDTensor& infer_result,
-                                      const int64_t out_num,
+  virtual bool ProcessWithLabelResult(const FDTensor& infer_result,
+                                      const int64_t& out_num,
                                       SegmentationResult* result);
 
-  virtual bool ResizeInferResult(FDTensor& infer_result,
-                                 const int64_t offset,
-                                 const std::array<int, 2> resize_info,
-                                 FDTensor* new_infer_result,
-                                 std::vector<uint8_t>* uint8_t_result_buffer,
-                                 Mat* mat);
+  virtual bool FDTensorCast2Uint8(FDTensor* infer_result,
+                                  const int64_t& offset,
+                                  std::vector<uint8_t>* uint8_result_buffer);
 
   bool is_with_softmax_ = false;
 
@@ -96,7 +89,7 @@ class FASTDEPLOY_DECL PaddleSegPostprocessor {
 
   bool apply_softmax_ = false;
 
-  bool is_store_score_map_ = false;
+  bool store_score_map_ = false;
 
   bool initialized_ = false;
 };

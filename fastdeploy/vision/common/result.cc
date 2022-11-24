@@ -285,6 +285,13 @@ std::string FaceAlignmentResult::Str() {
 }
 
 void SegmentationResult::Clear() {
+  std::vector<uint8_t>().clear();
+  std::vector<float>().clear();
+  std::vector<int64_t>().clear();
+  contain_score_map = false;
+}
+
+void SegmentationResult::Free() {
   std::vector<uint8_t>().swap(label_map);
   std::vector<float>().swap(score_map);
   std::vector<int64_t>().swap(shape);

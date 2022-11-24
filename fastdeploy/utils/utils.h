@@ -144,10 +144,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                            __VA_ARGS__)                                       \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP64, double,      \
                            __VA_ARGS__)                                       \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::UINT8, uint8_t,    \
+                           __VA_ARGS__)                                       \
       default:                                                                \
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
-                 "INT64, FP32, FP64, but receive type %s.",                   \
+                 "INT64, FP32, FP64, UINT8 but receive type %s.",             \
                  Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
@@ -176,10 +178,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                            __VA_ARGS__)                                       \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT64, int64_t,    \
                            __VA_ARGS__)                                       \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::UINT8, uint8_t,    \
+                           __VA_ARGS__)                                       \
       default:                                                                \
         FDASSERT(false,                                                       \
                  "Invalid enum data type. Expect to accept data type INT32, " \
-                 "INT64, but receive type %s.",                               \
+                 "INT64, UINT8 but receive type %s.",                         \
                  Str(__dtype__).c_str());                                     \
     }                                                                         \
   }()
