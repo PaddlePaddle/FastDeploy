@@ -1,5 +1,6 @@
 # PP-OCR服务化部署示例
 
+
 ## 介绍
 本文介绍了使用FastDeploy搭建OCR文字识别服务的方法.
 
@@ -9,7 +10,7 @@
 
 OCR由det(检测)、cls(分类)和rec(识别)三个模型组成.
 
-服务化部署串联的示意图如下图所示,其中`pp_ocr`串联了`det_preprocess`、`det_runtime`和`det_postprocess`,`cls_pp`串联了`cls_runtime`和`cls_postprocess`,`rec_pp`串联了`rec_runtime`和`rec_postprocess`. 
+服务化部署串联的示意图如下图所示,其中`pp_ocr`串联了`det_preprocess`、`det_runtime`和`det_postprocess`,`cls_pp`串联了`cls_runtime`和`cls_postprocess`,`rec_pp`串联了`rec_runtime`和`rec_postprocess`.
 
 特别的是,在`det_postprocess`中会多次调用`cls_pp`和`rec_pp`服务,来实现对检测结果(多个框)进行分类和识别,,最后返回给用户最终的识别结果。
 

@@ -182,7 +182,8 @@ class TritonPythonModel:
                     cls_scores = cls_scores.as_numpy()
 
                 for index in range(len(image_list)):
-                    if cls_labels[index] == 1 and cls_scores[index] > self.cls_threshold:
+                    if cls_labels[index] == 1 and cls_scores[
+                            index] > self.cls_threshold:
                         image_list[index] = cv2.rotate(
                             image_list[index].astype(np.float32), 1)
                         image_list[index] = np.astype(np.uint8)
