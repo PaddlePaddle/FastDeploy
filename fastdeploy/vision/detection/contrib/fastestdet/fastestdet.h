@@ -47,8 +47,8 @@ class FASTDEPLOY_DECL FastestDet : public FastDeployModel {
    * \return true if the prediction successed, otherwise false
    */
   virtual bool Predict(cv::Mat* im, DetectionResult* result,
-                       float conf_threshold = 0.25,
-                       float nms_threshold = 0.5);
+                       float conf_threshold = 0.65,
+                       float nms_threshold = 0.45);
 
   /** \brief Predict the detection result for an input image
    *

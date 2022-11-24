@@ -20,10 +20,10 @@ namespace vision {
 namespace detection {
 
 FastestDetPostprocessor::FastestDetPostprocessor() {
-  conf_threshold_ = 0.25;
-  nms_threshold_ = 0.5;
+  conf_threshold_ = 0.65;
+  nms_threshold_ = 0.45;
   multi_label_ = true;
-  max_wh_ = 7680.0;
+  max_wh_ = 4096.0;
 }
 float FastestDetPostprocessor::Sigmoid(float x) {
   return 1.0f / (1.0f + exp(-x));
@@ -32,27 +32,11 @@ float FastestDetPostprocessor::Sigmoid(float x) {
 float FastestDetPostprocessor::Tanh(float x) {
   return 2.0f / (1.0f + exp(-2 * x)) - 1;
 }
-class TargetBox {
-private:
-  float GetWidth() { return (x2 - x1); };
-  float GetHeight() { return (y2 - y1); };
-
-public:
-  int x1;
-  int y1;
-  int x2;
-  int y2;
-
-  int category;
-  float score;
-
-  float area() { return GetWidth() * GetHeight(); };
-};
 
 bool FastestDetPostprocessor::Run(
     const std::vector<FDTensor> &tensors, std::vector<DetectionResult> *results,
     const std::vector<std::map<std::string, std::array<float, 2>>> &ims_info) {
-  int batch=1;
+  int batch = 1;
 
   results->resize(batch);
 
@@ -61,8 +45,8 @@ bool FastestDetPostprocessor::Run(
     (*results)[bs].Clear();
     // output (85,22,22) CHW
     const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
-    int output_h = 22;
-    int output_w = 22;
+    int output_h = 22; // out map height
+    int output_w = 22; // out map weight
     auto iter_out = ims_info[bs].find("output_shape");
     auto iter_ipt = ims_info[bs].find("input_shape");
     FDASSERT(iter_out != ims_info[bs].end() && iter_ipt != ims_info[bs].end(),
@@ -74,7 +58,7 @@ bool FastestDetPostprocessor::Run(
     float img_width=ipt_w;
     float img_height=ipt_h;
 
-    // handle output boxes
+    // handle output boxes from out map
     for (int h = 0; h < output_h; h++) {
       for (int w = 0; w < output_w; w++) {
         // object score
@@ -97,6 +81,9 @@ bool FastestDetPostprocessor::Run(
         float score = pow(max_score, 0.4) * pow(obj_score, 0.6);
 
         // score threshold
+        if (score <= conf_threshold_) {
+          continue;
+        }
         if (score > conf_threshold_) {
           // handle box x y w h
           int x_offset_index = (1 * output_h * output_w) + (h * output_w) + w;
@@ -112,12 +99,12 @@ bool FastestDetPostprocessor::Run(
           float cx = (w + x_offset) / output_w;
           float cy = (h + y_offset) / output_h;
 
-          float x1 = (cx - box_width * 0.5) * img_width;
-          float y1 = (cy - box_height * 0.5) * img_height;
-          float x2 = (cx + box_width * 0.5) * img_width;
-          float y2 = (cy + box_height * 0.5) * img_height;
-
-          (*results)[bs].boxes.emplace_back(std::array<float, 4>{x1,y1,x2,y2});
+          // convert from [x, y, w, h] to [x1, y1, x2, y2]
+          (*results)[bs].boxes.emplace_back(std::array<float, 4>{
+            cx - box_width / 2.0f + category * max_wh_,
+            cy - box_height / 2.0f + category * max_wh_,
+            cx + box_width / 2.0f + category * max_wh_,
+            cy + box_height / 2.0f + category * max_wh_});
           (*results)[bs].label_ids.push_back(category);
           (*results)[bs].scores.push_back(score);
         }
@@ -126,7 +113,31 @@ bool FastestDetPostprocessor::Run(
     if ((*results)[bs].boxes.size() == 0) {
       return true;
     }
+
     utils::NMS(&((*results)[bs]), nms_threshold_);
+    FDINFO << "NMS done" << std::endl;
+    FDINFO << "boxes num:" << (*results)[bs].boxes.size() << std::endl;
+    FDINFO << "score thresh:" << conf_threshold_ << std::endl;
+    // scale boxes to origin shape
+    float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+    for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
+      float pad_h = 0.0f;
+      float pad_w = 0.0f;
+      int32_t label_id = ((*results)[bs].label_ids)[i];
+      // clip box
+      (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][1] = (*results)[bs].boxes[i][1] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][2] = (*results)[bs].boxes[i][2] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][3] = (*results)[bs].boxes[i][3] - max_wh_ * label_id;
+      (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0] - pad_w) * ipt_w, 0.0f);
+      (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) * ipt_h, 0.0f);
+      (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2] - pad_w) * ipt_w, 0.0f);
+      (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3] - pad_h) * ipt_h, 0.0f);
+      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
+      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
+      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
+      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
+    }
   }
   return true;
 }
