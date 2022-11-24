@@ -17,6 +17,7 @@
 #include <memory>
 
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
+#include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
 #include "fastdeploy/backends/ort/utils.h"
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
@@ -84,14 +85,17 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   int model_content_size = 0;
   bool save_external = false;
 #ifdef ENABLE_PADDLE_FRONTEND
-  paddle2onnx::CustomOp op;
-  strcpy(op.op_name, "multiclass_nms3");
-  strcpy(op.export_op_name, "MultiClassNMS");
-
+  std::vector<paddle2onnx::CustomOp> ops;
+  ops.resize(2);
+  strcpy(ops[0].op_name, "multiclass_nms3");
+  strcpy(ops[0].export_op_name, "MultiClassNMS");
+  strcpy(ops[1].op_name, "pool2d");
+  strcpy(ops[1].export_op_name, "AdaptivePool2d");
+  
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, &op,
-                           1, "onnxruntime", nullptr, 0, "", &save_external)) {
+                           verbose, true, true, true, ops.data(),
+                           2, "onnxruntime", nullptr, 0, "", &save_external)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -294,8 +298,15 @@ std::vector<TensorInfo> OrtBackend::GetOutputInfos() {
 void OrtBackend::InitCustomOperators() {
 #ifndef NON_64_PLATFORM
   if (custom_operators_.size() == 0) {
-    MultiClassNmsOp* custom_op = new MultiClassNmsOp{};
-    custom_operators_.push_back(custom_op);
+    MultiClassNmsOp* multiclass_nms = new MultiClassNmsOp{};
+    custom_operators_.push_back(multiclass_nms);
+    if(option_.use_gpu){
+      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CUDAExecutionProvider"};
+      custom_operators_.push_back(adaptive_pool2d);
+    }else{
+      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CPUExecutionProvider"};
+      custom_operators_.push_back(adaptive_pool2d);
+    }
   }
   for (size_t i = 0; i < custom_operators_.size(); ++i) {
     custom_op_domain_.Add(custom_operators_[i]);
