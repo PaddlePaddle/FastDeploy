@@ -54,7 +54,7 @@ Including image classification, object detection, image segmentation, face detec
         -  Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.
     -  **📱 Mobile and Edge Device Deployment: support new backend，support more CV model**
         -  Integrate  Paddle Lite TIM-VX for supporting hardware such as Rockchip RV1109,RV1126, RK1808, Amlogic A311D, etc. And provide a seamless deployment experience with other inference engines include Paddle Inference、Paddle Inference TensorRT、Paddle Lite、TensorRT、OpenVINO、ONNX Runtime、RKNPU2;
-        -  Support Image classification model [ResNet50_vd](./examples/vision/classification/paddleclas/rk1126/cpp) on Rockchip RV1126;
+        -  Support Image classification model [ResNet50_vd](./examples/vision/classification/paddleclas/rv1126) on Rockchip RV1126;
         -  Support Face detection model [SCRFD](./examples/vision/facedet/scrfd/rknpu2) on Rockchip RK3588, RK3568 and other hardware.
 
 - [**more releases information**](./releases)
@@ -299,7 +299,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 ### Paddle Lite NPU Deployment
 
-- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](./examples/vision/detection/paddledetection/rk1126)
+- [Rockchip-NPU / Amlogic-NPU / NXP-NPU](./examples/vision/detection/paddledetection/rv1126)
 
 <div id="fastdeploy-edge-models"></div>
 

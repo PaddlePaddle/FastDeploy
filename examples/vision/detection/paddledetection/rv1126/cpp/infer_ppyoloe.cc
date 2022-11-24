@@ -19,11 +19,15 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void InitAndInfer(const std::string& model_dir, const std::string& image_file,
-                  const fastdeploy::RuntimeOption& option) {
+void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
+  auto subgraph_file = model_dir + sep + "subgraph.txt";
+
+  fastdeploy::RuntimeOption option;
+  option.UseTimVX();
+  option.SetLiteSubgraphPartitionPath(subgraph_file);
 
   auto model = fastdeploy::vision::detection::PPYOLOE(model_file, params_file,
                                                       config_file, option);
@@ -60,12 +64,8 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  fastdeploy::RuntimeOption option;
-  option.UseTimVX();
-  option.SetLiteSubgraphPartitionPath("./models/subgraph.txt");
-
   std::string model_dir = argv[1];
   std::string test_image = argv[2];
-  InitAndInfer(model_dir, test_image, option);
+  InitAndInfer(model_dir, test_image);
   return 0;
 }

@@ -3,7 +3,7 @@
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
 </p>
-             
+
 <p align="center">
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://img.shields.io/github/v/release/PaddlePaddle/FastDeploy?color=ffa"></a>
@@ -55,7 +55,7 @@
         -  针对 FDTensor 增加 Python API to_dlpack 接口，支持 FDTensor 在不同框架间的无拷贝传输；
     -  **📲 移动端和端侧部署：端侧能力升级，支持更多硬件**
         -  集成 Paddle Lite TIM-VX 后端，用于支持瑞芯微RV1109、RV1126、RK1808、晶晨A311D等硬件，并提供与 Paddle Inference、Paddle Inference TensorRT、TensorRT、OpenVINO、ONNX Runtime、Paddle Lite、RKNPU2等推理后端一致的开发体验；
-        -  在瑞芯微 RV1126 硬件上，支持 图像分类模型 [ResNet50_vd](./examples/vision/classification/paddleclas/rk1126/cpp)；
+        -  在瑞芯微 RV1126 硬件上，支持 图像分类模型 [ResNet50_vd](./examples/vision/classification/paddleclas/rv1126/cpp)；
         -  在瑞芯微 RK3588、RK3568 等硬件上，支持 人脸检测模型 [SCRFD](./examples/vision/facedet/scrfd/rknpu2).
 
 - [**more releases information**](./releases)
@@ -293,7 +293,7 @@ int main(int argc, char* argv[]) {
 
 ### Paddle Lite NPU部署
 
-- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](./examples/vision/detection/paddledetection/rk1126)
+- [瑞芯微-NPU/晶晨-NPU/恩智浦-NPU](./examples/vision/detection/paddledetection/rv1126)
 
 <div id="fastdeploy-edge-models"></div>
 
