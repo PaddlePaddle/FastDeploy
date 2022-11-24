@@ -15,8 +15,8 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindYolov7Face(pybind11::module& m) {
-  pybind11::class_<vision::facedet::YOLOv7FacePreprocessor>(
+void BindYOLOv7Face(pybind11::module& m) {
+  pybind11::class_<vision::facedet::Yolov7FacePreprocessor>(
       m, "Yolov7FacePreprocessor")
       .def(pybind11::init<>())
       .def("run", [](vision::facedet::Yolov7FacePreprocessor& self, std::vector<pybind11::array>& im_list) {
@@ -38,31 +38,31 @@ void BindYolov7Face(pybind11::module& m) {
       .def_property("padding_value", &vision::facedet::Yolov7FacePreprocessor::GetPaddingValue, &vision::facedet::Yolov7FacePreprocessor::SetPaddingValue)
       .def_property("is_scale_up", &vision::facedet::Yolov7FacePreprocessor::GetScaleUp, &vision::facedet::Yolov7FacePreprocessor::SetScaleUp);
 
-  pybind11::class_<vision::facedet::YOLOv7FacePostprocessor>(
+  pybind11::class_<vision::facedet::Yolov7FacePostprocessor>(
       m, "YOLOv7FacePostprocessor")
       .def(pybind11::init<>())
-      .def("run", [](vision::facedet::YOLOv7FacePostprocessor& self, std::vector<FDTensor>& inputs,
+      .def("run", [](vision::facedet::Yolov7FacePostprocessor& self, std::vector<FDTensor>& inputs,
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
         std::vector<vision::FaceDetectionResult> results;
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv7FacePostprocessor.')");
+          pybind11::eval("raise Exception('Failed to postprocess the runtime result in Yolov7FacePostprocessor.')");
         }
         return results;
       })
-      .def("run", [](vision::facedet::YOLOv7FacePostprocessor& self, std::vector<pybind11::array>& input_array,
+      .def("run", [](vision::facedet::Yolov7FacePostprocessor& self, std::vector<pybind11::array>& input_array,
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
         std::vector<vision::FaceDetectionResult> results;
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv7FacePostprocessor.')");
+          pybind11::eval("raise Exception('Failed to postprocess the runtime result in Yolov7FacePostprocessor.')");
         }
         return results;
       })
-      .def_property("conf_threshold", &vision::facedet::YOLOv7FacePostprocessor::GetConfThreshold, &vision::facedet::YOLOv7FacePostprocessor::SetConfThreshold)
-      .def_property("nms_threshold", &vision::facedet::YOLOv7FacePostprocessor::GetNMSThreshold, &vision::facedet::YOLOv7FacePostprocessor::SetNMSThreshold)
+      .def_property("conf_threshold", &vision::facedet::Yolov7FacePostprocessor::GetConfThreshold, &vision::facedet::Yolov7FacePostprocessor::SetConfThreshold)
+      .def_property("nms_threshold", &vision::facedet::Yolov7FacePostprocessor::GetNMSThreshold, &vision::facedet::Yolov7FacePostprocessor::SetNMSThreshold)
     
-  pybind11::class_<vision::facedet::BindYolov7Face, FastDeployModel>(m, "YOLOv7Face")
+  pybind11::class_<vision::facedet::BindYOLOv7Face, FastDeployModel>(m, "YOLOv7Face")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
