@@ -53,7 +53,6 @@ def eval_segmentation(model, data_dir, batch_size=1):
         else:
             im_list.append(im)
             label_list.append(label)
-            print(image_label_path[1])
             # If the batch_size is not satisfied, the remaining pictures are formed into a batch
             if (i + 1) % batch_size != 0 and i != image_num - 1:
                 continue
