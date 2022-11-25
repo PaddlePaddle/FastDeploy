@@ -13,7 +13,7 @@ tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # 将配置文件放入预处理目录
-mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/
+mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/inference_cls.yaml
 
 # 将模型放入 models/runtime/1目录下, 并重命名为model.pdmodel和model.pdiparams
 mv ResNet50_vd_infer/inference.pdmodel models/runtime/1/model.pdmodel
@@ -21,12 +21,12 @@ mv ResNet50_vd_infer/inference.pdiparams models/runtime/1/model.pdiparams
 
 # 拉取fastdeploy镜像
 # GPU镜像
-docker pull paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 # CPU镜像
-docker pull paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /serving 目录
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10  bash
 
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760

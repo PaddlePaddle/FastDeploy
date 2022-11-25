@@ -124,7 +124,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   // we decided to hide this extra resize. It won't make much 
   // difference to the final result.
   if (std::fabs(ratio - 1.0f) > 1e-06) {
-    int interp = cv::INTER_AREA;
+    int interp = cv::INTER_LINEAR;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
     }
@@ -153,7 +153,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
   }
-  
+
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
@@ -224,6 +224,9 @@ bool SCRFD::Postprocess(
   float ipt_h = iter_ipt->second[0];
   float ipt_w = iter_ipt->second[1];
   float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+  if (!is_scale_up) {
+    scale = std::min(scale, 1.0f);
+  }
   float pad_h = (out_h - ipt_h * scale) / 2.0f;
   float pad_w = (out_w - ipt_w * scale) / 2.0f;
   if (is_mini_pad) {

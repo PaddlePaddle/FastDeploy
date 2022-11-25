@@ -7,6 +7,7 @@ import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 
 public class PaddleSegModel {
+    public boolean mIsVerticalScreen = false;
     protected long mCxxContext = 0; // Context from native.
     protected boolean mInitialized = false;
 
@@ -19,6 +20,12 @@ public class PaddleSegModel {
                           String paramsFile,
                           String configFile) {
         init_(modelFile, paramsFile, configFile, new RuntimeOption());
+    }
+
+    // Is vertical screen or not, for PP-HumanSeg on vertical screen,
+    // this flag must be 'true'.
+    public void setVerticalScreenFlag(boolean flag) {
+        mIsVerticalScreen = flag;
     }
 
     // Constructor with custom runtime option
@@ -81,19 +88,53 @@ public class PaddleSegModel {
     public SegmentationResult predict(Bitmap ARGB8888Bitmap,
                                       String savedImagePath,
                                       float weight) {
-        // scoreThreshold is for visualizing only.
         if (mCxxContext == 0) {
             return new SegmentationResult();
         }
         // Only support ARGB8888 bitmap in native now.
         SegmentationResult result = predictNative(
                 mCxxContext, ARGB8888Bitmap, true,
-                savedImagePath,true, weight);
+                savedImagePath, true, weight);
         if (result == null) {
             return new SegmentationResult();
         }
         return result;
     }
+
+    // Reset the values of input SegmentationResult directly instead of
+    // return a SegmentationResult from native.
+    public boolean predict(Bitmap ARGB8888Bitmap,
+                           SegmentationResult result) {
+        if (mCxxContext == 0) {
+            return false;
+        }
+        return predictNativeV2(mCxxContext, ARGB8888Bitmap, result,
+                false, "", false, 0.5f);
+    }
+
+    public boolean predict(Bitmap ARGB8888Bitmap,
+                           SegmentationResult result,
+                           boolean rendering,
+                           float weight) {
+        if (mCxxContext == 0) {
+            return false;
+        }
+        return predictNativeV2(mCxxContext, ARGB8888Bitmap, result,
+                false, "", rendering, weight);
+    }
+
+    public boolean predict(Bitmap ARGB8888Bitmap,
+                           SegmentationResult result,
+                           String savedImagePath,
+                           float weight) {
+        if (mCxxContext == 0) {
+            return false;
+        }
+        return predictNativeV2(
+                mCxxContext, ARGB8888Bitmap, result, true,
+                savedImagePath, true, weight);
+    }
+
 
     private boolean init_(String modelFile,
                           String paramsFile,
@@ -139,6 +180,15 @@ public class PaddleSegModel {
                                                     String savePath,
                                                     boolean rendering,
                                                     float weight);
+
+    // Get cxx result pointer from native
+    private native boolean predictNativeV2(long CxxContext,
+                                           Bitmap ARGB8888Bitmap,
+                                           SegmentationResult result,
+                                           boolean saveImage,
+                                           String savePath,
+                                           boolean rendering,
+                                           float weight);
 
     // Release buffers allocated in native context.
     private native boolean releaseNative(long CxxContext);
