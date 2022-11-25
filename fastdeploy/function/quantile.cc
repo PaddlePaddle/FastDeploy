@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "fastdeploy/function/quantile.h"
+#include "fastdeploy/function/isfinite.h"
+#include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/transpose.h"
 #include <algorithm>
 #include <cmath>
@@ -24,8 +26,8 @@ namespace function {
 template <typename T>
 void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
                     const std::vector<int>& axis, FDTensor* out) {
-  FDASSERT(q.size(), "q should not be empty.");
-  FDASSERT(axis.size(), "axis should not be empty.");
+  FDASSERT(q.size() > 0, "q should not be empty.");
+  FDASSERT(axis.size() > 0, "axis should not be empty.");
   std::vector<int64_t> axis_src;
   std::vector<int64_t> out_shape = x.Shape();
   int64_t rank = x.Shape().size();
@@ -52,6 +54,14 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   std::vector<int64_t> y_shape(rank - axis_src.size(), 0);
   y_shape.push_back(-1);
   y.Reshape({y_shape});
+
+  int64_t target_axis = rank - axis_src.size();
+  FDTensor mask, valid_counts;
+  IsNan(y, &mask);
+  bool* mask_data = reinterpret_cast<bool*>(mask.Data());
+  std::transform(mask_data, mask_data + mask.Numel(), mask_data,
+                 [](const bool& val) { return !val; });
+  
 }
 
 void Quantile(const FDTensor& x, const std::vector<double>& q,

@@ -22,20 +22,26 @@ namespace function {
 /** Return whether every element of input tensor is NaN or not.
     @param x The input tensor.
     @param out The output tensor which stores the result.
+    @param dtype The output data type
 */
-FASTDEPLOY_DECL void IsNan(const FDTensor& x, FDTensor* out);
+FASTDEPLOY_DECL void IsNan(const FDTensor& x, FDTensor* out,
+                           FDDataType dtype = FDDataType::BOOL);
 
 /** Return whether every element of input tensor is Inf or not.
     @param x The input tensor.
     @param out The output tensor which stores the result.
+    @param dtype The output data type
 */
-FASTDEPLOY_DECL void IsInf(const FDTensor& x, FDTensor* out);
+FASTDEPLOY_DECL void IsInf(const FDTensor& x, FDTensor* out,
+                           FDDataType dtype = FDDataType::BOOL);
 
 /** Return whether every element of input tensor is finite or not.
     @param x The input tensor.
     @param out The output tensor which stores the result.
+    @param dtype The output data type
 */
-FASTDEPLOY_DECL void IsFinite(const FDTensor& x, FDTensor* out);
+FASTDEPLOY_DECL void IsFinite(const FDTensor& x, FDTensor* out,
+                              FDDataType dtype = FDDataType::BOOL);
 
 }  // namespace function
 }  // namespace fastdeploy

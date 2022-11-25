@@ -40,24 +40,39 @@ TEST(fastdeploy, finite) {
 
   std::array<bool, 6> result = {false, true, false, false, false, false};
   IsNan(x, &y);
-
   check_shape(y.shape, {2, 3});
   check_data(reinterpret_cast<const bool*>(y.Data()), result.data(),
              result.size());
+
+  std::vector<int> int_result = {0, 1, 0, 0, 0, 0};
+  IsNan(x, &y, FDDataType::INT32);
+  check_shape(y.shape, {2, 3});
+  check_data(reinterpret_cast<const int*>(y.Data()), int_result.data(),
+             int_result.size());
 
   result = {false, false, true, false, false, false};
   IsInf(x, &y);
-
   check_shape(y.shape, {2, 3});
   check_data(reinterpret_cast<const bool*>(y.Data()), result.data(),
              result.size());
-  
+
+  int_result = {0, 0, 1, 0, 0, 0};
+  IsInf(x, &y, FDDataType::INT32);
+  check_shape(y.shape, {2, 3});
+  check_data(reinterpret_cast<const int*>(y.Data()), int_result.data(),
+             int_result.size());
+
   result = {true, false, false, true, true, true};
   IsFinite(x, &y);
-
   check_shape(y.shape, {2, 3});
   check_data(reinterpret_cast<const bool*>(y.Data()), result.data(),
              result.size());
+
+  int_result = {1, 0, 0, 1, 1, 1};
+  IsFinite(x, &y, FDDataType::INT32);
+  check_shape(y.shape, {2, 3});
+  check_data(reinterpret_cast<const int*>(y.Data()), int_result.data(),
+             int_result.size());
 }
 
 }  // namespace function
