@@ -43,5 +43,11 @@ FASTDEPLOY_DECL void Round(const FDTensor& x, FDTensor* out);
 */
 FASTDEPLOY_DECL void Exp(const FDTensor& x, FDTensor* out);
 
+/** This operator is used to perform elementwise abs for input X. Only for float type FDTensor
+    @param x The input tensor.
+    @param out The output tensor which stores the result.
+*/
+FASTDEPLOY_DECL void Abs(const FDTensor& x, FDTensor* out);
+
 }  // namespace function
 }  // namespace fastdeploy
