@@ -49,7 +49,8 @@ def eval_segmentation(model, data_dir, batch_size=1):
         im = cv2.imread(image_label_path[0])
         label = cv2.imread(image_label_path[1], cv2.IMREAD_GRAYSCALE)
         if batch_size == 1:
-            results = model.predict(im)
+            result = model.predict(im)
+            results = [result]
         else:
             im_list.append(im)
             label_list.append(label)
