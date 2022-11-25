@@ -604,11 +604,10 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
   }
 }
 
-std::unique_ptr<FDTensor> Runtime::GetOutputTensor(std::string name) {
+FDTensor* Runtime::GetOutputTensor(std::string name) {
   for (auto& t : output_tensors_) {
     if (t.name == name) {
-      std::unique_ptr<FDTensor> output_tensor(&t);
-      return output_tensor;
+      return &t;
     }
   }
   return nullptr;

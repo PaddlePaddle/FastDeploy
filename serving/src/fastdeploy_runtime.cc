@@ -1136,11 +1136,17 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
                 (std::string("output tensor '") + output_name + "' is not found")
                     .c_str()));
     }
+    TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+    int64_t memory_type_id = 0;
+    if(output_tensor->device == fastdeploy::Device::GPU) {
+      memory_type = TRITONSERVER_INSTANCEGROUPKIND_GPU;
+      memory_type_id = DeviceId();
+    }
     responder.ProcessTensor(
         output_tensor->name, ConvertFDType(output_tensor->dtype),
         output_tensor->shape,
         reinterpret_cast<char*>(output_tensor->MutableData()),
-        TRITONSERVER_MEMORY_CPU, 0);
+        memory_type, memory_type_id);
   }
 
   // Finalize and wait for any pending buffer copies.

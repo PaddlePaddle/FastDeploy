@@ -428,7 +428,7 @@ struct FASTDEPLOY_DECL Runtime {
   void BindInputTensor(const std::string& name, FDTensor& input);
   /** \brief Get output FDTensor by name
    */
-  std::unique_ptr<FDTensor> GetOutputTensor(std::string name);
+  FDTensor* GetOutputTensor(std::string name);
 
   /** \brief Clone new Runtime when multiple instances of the same model are created
    *
