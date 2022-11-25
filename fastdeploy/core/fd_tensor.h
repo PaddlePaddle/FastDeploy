@@ -136,6 +136,16 @@ struct FASTDEPLOY_DECL FDTensor {
   // Move assignment
   FDTensor& operator=(FDTensor&& other);
 
+  // Scalar to FDTensor
+  template <typename T,
+            typename Enable = typename std::enable_if<
+                std::is_same<bool, T>::value || std::is_integral<T>::value ||
+                std::is_floating_point<T>::value>::type>
+  explicit FDTensor(const T& val) {
+    Allocate({1}, TypeToDataType<T>::dtype);
+    (reinterpret_cast<T*>(Data()))[0] = val;
+  }
+
   ~FDTensor() { FreeFn(); }
 
   static void CopyBuffer(void* dst, const void* src, size_t nbytes,

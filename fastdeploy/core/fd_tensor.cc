@@ -408,4 +408,10 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
   return *this;
 }
 
+template FDTensor::FDTensor(const bool&);
+template FDTensor::FDTensor(const int&);
+template FDTensor::FDTensor(const uint8_t&);
+template FDTensor::FDTensor(const int64_t&);
+template FDTensor::FDTensor(const float&);
+template FDTensor::FDTensor(const double&);
 }  // namespace fastdeploy

@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include "fastdeploy/function/quantile.h"
+#include "fastdeploy/function/elementwise.h"
 #include "fastdeploy/function/isfinite.h"
 #include "fastdeploy/function/reduce.h"
+#include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/transpose.h"
 #include <algorithm>
 #include <cmath>
@@ -55,13 +57,40 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   y_shape.push_back(-1);
   y.Reshape({y_shape});
 
-  int64_t target_axis = rank - axis_src.size();
-  FDTensor mask, valid_counts;
-  IsNan(y, &mask);
-  bool* mask_data = reinterpret_cast<bool*>(mask.Data());
+  int64_t target_axis = rank - 1;
+  FDTensor mask, valid_counts, mask_any;
+  IsNan(y, &mask, FDDataType::FP64);
+  Min(mask, &mask_any, {target_axis}, true);
+  double* mask_data = reinterpret_cast<double*>(mask.Data());
   std::transform(mask_data, mask_data + mask.Numel(), mask_data,
-                 [](const bool& val) { return !val; });
-  
+                 [](const double& val) {
+                   if (std::abs(val) < 1e-8) {
+                     return 1;
+                   }
+                   return 0;
+                 });
+  Sum(mask, &valid_counts, {target_axis}, true);
+
+  FDTensor one_tensor(static_cast<double>(1.0));
+
+  std::vector<FDTensor> indices;
+  FDTensor last_index(static_cast<double>(x.Shape()[target_axis]));
+  for (auto q_num : q) {
+    FDASSERT(q_num >= 0 && q_num <= 1, "q should be in range [0, 1]");
+    FDTensor q_tensor, index;
+    q_tensor.Allocate({1}, FDDataType::FP64);
+    (reinterpret_cast<double*>(q_tensor.Data()))[0] = q_num;
+    index = q_tensor * (valid_counts - one_tensor);
+    index = mask_any * last_index + (one_tensor - mask_any) * index;
+    indices.push_back(index);
+  }
+
+  std::vector<FDTensor> output;
+  FDTensor sorted_tensor, sorted_indices_tensor;
+  Sort(y, &sorted_tensor, &sorted_indices_tensor, target_axis);
+
+  for (auto&& index : indices) {
+  }
 }
 
 void Quantile(const FDTensor& x, const std::vector<double>& q,
