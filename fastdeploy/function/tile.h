@@ -28,7 +28,8 @@ namespace function {
     @param repeat_times The lower bound
     @param out The output tensor which stores the result.
 */
-FASTDEPLOY_DECL void Tile(const FDTensor& x, std::vector<int64_t> repeat_times,
+FASTDEPLOY_DECL void Tile(const FDTensor& x,
+                          const std::vector<int64_t>& repeat_times,
                           FDTensor* out);
 
 }  // namespace function
