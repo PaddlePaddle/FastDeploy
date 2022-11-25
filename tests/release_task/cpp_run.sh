@@ -40,6 +40,7 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "linux-aarch64" ];then
 	RUN_CASE=(${LINUX_AARCH_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-x86_64" ];then
 	RUN_CASE=(${MACOS_INTEL_CPU_CASE[*]})
+	CONF_THRESHOLD=0.5
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
 	RUN_CASE=(${MACOS_ARM64_CPU_CASE[*]})
 	CONF_THRESHOLD=0.5
