@@ -27,6 +27,7 @@ def test_matting_rvm_cpu():
     fd.download(input_url, "resources")
     model_path = "resources/rvm/rvm_mobilenetv3_fp32.onnx"
     # use ORT
+    rc.test_option.use_ort_backend()
     model = fd.vision.matting.RobustVideoMatting(
         model_path, runtime_option=rc.test_option)
 
