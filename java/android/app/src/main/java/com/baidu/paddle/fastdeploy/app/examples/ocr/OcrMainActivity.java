@@ -306,6 +306,8 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
+        } else {
+            svPreview.enableCamera();
         }
         svPreview.onResume();
     }
