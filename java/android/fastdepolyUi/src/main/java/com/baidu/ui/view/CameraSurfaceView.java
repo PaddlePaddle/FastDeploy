@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.ui.view;
+package com.baidu.ui.view;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -15,7 +15,7 @@ import android.opengl.Matrix;
 import android.util.AttributeSet;
 import android.util.Log;
 
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.ui.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -305,6 +305,7 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         boolean rotate = degree == 90 || degree == 270;
         textureWidth = rotate ? previewSize.height : previewSize.width;
         textureHeight = rotate ? previewSize.width : previewSize.height;
+
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);

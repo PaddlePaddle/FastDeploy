@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.ui.view;
+package com.baidu.ui.view;
 
 import android.content.Context;
 import android.os.Handler;

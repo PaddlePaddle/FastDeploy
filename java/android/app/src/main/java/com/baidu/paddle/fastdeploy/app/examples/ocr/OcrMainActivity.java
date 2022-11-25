@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.ocr;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.ui.Utils.decodeBitmap;
+import static com.baidu.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -30,17 +30,17 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
-import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
 import com.baidu.paddle.fastdeploy.vision.OCRResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
 import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
 import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
+import com.baidu.ui.Utils;
+import com.baidu.ui.view.CameraSurfaceView;
+import com.baidu.ui.view.ResultListView;
+import com.baidu.ui.view.adapter.BaseResultAdapter;
+import com.baidu.ui.view.model.BaseResultModel;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -403,7 +403,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 }
             }
         }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.ocr_result_page_item, results);
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.base_result_page_item, results);
         resultView.setAdapter(adapter);
         resultView.invalidate();
 

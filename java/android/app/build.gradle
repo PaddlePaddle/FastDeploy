@@ -30,6 +30,7 @@ dependencies {
     implementation 'com.android.support:design:28.0.0'
     implementation 'org.jetbrains:annotations:15.0'
     // implementation project(path: ':fastdeploy')
+    implementation project(path: ':fastdepolyUi')
     //noinspection GradleDependency
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'

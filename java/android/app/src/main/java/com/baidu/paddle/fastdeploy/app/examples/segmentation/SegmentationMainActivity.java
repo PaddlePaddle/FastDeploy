@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.segmentation;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.ui.Utils.decodeBitmap;
+import static com.baidu.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -19,7 +19,6 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -30,13 +29,13 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
+import com.baidu.ui.Utils;
+import com.baidu.ui.view.CameraSurfaceView;
+import com.baidu.ui.view.ResultListView;
+import com.baidu.ui.view.model.BaseResultModel;
 
 import java.util.ArrayList;
 import java.util.List;
