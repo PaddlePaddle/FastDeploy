@@ -286,6 +286,13 @@ class RuntimeOption:
         """
         return self._option.set_openvino_shape_info(shape_info)
 
+    def set_openvino_cpu_operators(self, operators):
+        """While using OpenVINO backend and intel GPU, this interface specifies unsupported operators to run on CPU
+
+        :param operators: (list of string)list of operators' name, e.g ["MulticlasNms"]
+        """
+        return self._option.set_openvino_cpu_operators(operators)
+
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
         """
