@@ -13,7 +13,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/sr/basicvsr/python
 
 # 下载BasicVSR模型文件和测试视频
-wget https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tgz
+wget https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tar
 tar -xvf BasicVSR_reds_x4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 # CPU推理
