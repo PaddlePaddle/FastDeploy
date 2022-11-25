@@ -39,13 +39,13 @@ class OpenVINOBackend : public BaseBackend {
   OpenVINOBackend() {}
   virtual ~OpenVINOBackend() = default;
 
-  bool InitFromPaddle(
-      const std::string& model_file, const std::string& params_file,
-      const OpenVINOBackendOption& option = OpenVINOBackendOption());
+  bool
+  InitFromPaddle(const std::string& model_file, const std::string& params_file,
+                 const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
-  bool InitFromOnnx(
-      const std::string& model_file,
-      const OpenVINOBackendOption& option = OpenVINOBackendOption());
+  bool
+  InitFromOnnx(const std::string& model_file,
+               const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs,
              std::vector<FDTensor>* outputs) override;
@@ -59,7 +59,7 @@ class OpenVINOBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
-  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                      int device_id = -1) override;
 
  private:

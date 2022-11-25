@@ -32,7 +32,6 @@ std::vector<int64_t> PartialShapeToVec(const ov::PartialShape& shape) {
   return res;
 }
 
-
 ov::PartialShape VecToPartialShape(const std::vector<int64_t>& shape) {
   std::vector<ov::Dimension> dims;
   for (size_t i = 0; i < shape.size(); ++i) {
@@ -121,7 +120,8 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     auto supported_ops = core_.query_model(model, option_.device);
     for (auto&& op : model->get_ops()) {
       auto& affinity = supported_ops[op->get_friendly_name()];
-      if (option_.cpu_operators.find(op->description()) != option_.cpu_operators.end()) {
+      if (option_.cpu_operators.find(op->description()) !=
+          option_.cpu_operators.end()) {
         FDINFO << op->get_name() << " " << op->get_friendly_name() << std::endl;
         op->get_rt_info()["affinity"] = "CPU";
       } else {
@@ -181,20 +181,24 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
   if (option_.device == "CPU") {
-    if (option_.num_streams ==  -1) {
+    if (option_.num_streams == -1) {
       properties["NUM_STREAMS"] = ov::streams::AUTO;
-    } else if (option_.num_streams ==  -2) {
+    } else if (option_.num_streams == -2) {
       properties["NUM_STREAMS"] = ov::streams::NUMA;
     } else if (option_.num_streams > 0) {
       properties["NUM_STREAMS"] = option_.num_streams;
     }
   } else {
     if (option_.num_streams != 0) {
-      FDWARNING << "NUM_STREAMS only available on device CPU, currently the device is set as " << option_.device << ", the NUM_STREAMS will be ignored." << std::endl;
+      FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
+                   "device is set as "
+                << option_.device << ", the NUM_STREAMS will be ignored."
+                << std::endl;
     }
   }
 
-  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
+  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
+         << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
 
   request_ = compiled_model_.create_infer_request();
@@ -285,18 +289,19 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   if (option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
-  if (option_.num_streams ==  -1) {
+  if (option_.num_streams == -1) {
     properties["NUM_STREAMS"] = ov::streams::AUTO;
-  } else if (option_.num_streams ==  -2) {
+  } else if (option_.num_streams == -2) {
     properties["NUM_STREAMS"] = ov::streams::NUMA;
   } else if (option_.num_streams > 0) {
     properties["NUM_STREAMS"] = option_.num_streams;
   }
-  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "." << std::endl;
+  FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
+         << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
 
   request_ = compiled_model_.create_infer_request();
-  
+
   initialized_ = true;
   return true;
 }
@@ -338,13 +343,16 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
   return true;
 }
 
-std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void *stream, int device_id) {
-  std::unique_ptr<BaseBackend> new_backend = utils::make_unique<OpenVINOBackend>();
+std::unique_ptr<BaseBackend> OpenVINOBackend::Clone(void* stream,
+                                                    int device_id) {
+  std::unique_ptr<BaseBackend> new_backend =
+      utils::make_unique<OpenVINOBackend>();
   auto casted_backend = dynamic_cast<OpenVINOBackend*>(new_backend.get());
   casted_backend->option_ = option_;
   casted_backend->request_ = compiled_model_.create_infer_request();
   casted_backend->input_infos_.assign(input_infos_.begin(), input_infos_.end());
-  casted_backend->output_infos_.assign(output_infos_.begin(), output_infos_.end());
+  casted_backend->output_infos_.assign(output_infos_.begin(),
+                                       output_infos_.end());
   return new_backend;
 }
 
