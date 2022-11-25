@@ -18,7 +18,7 @@
 
 | 模型                                                                          | 参数大小   | 精度    | 备注 |
 |:----------------------------------------------------------------------------|:-------|:----- | :------ |
-| [BasicVSR](https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tgz) | 30.1MB | - |
+| [BasicVSR](https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tar) | 30.1MB | - |
 
 **注意**：非常不建议在没有独立显卡的设备上运行该模型
 

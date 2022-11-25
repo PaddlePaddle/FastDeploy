@@ -13,58 +13,67 @@
 // limitations under the License.
 #include "fastdeploy/pybind/main.h"
 
-namespace fastdeploy{
-void BindPPSR(pybind11::module &m) {
-    pybind11::class_<vision::sr::PPMSVSR, FastDeployModel>(m, "PPMSVSR")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
-      .def("predict", [](vision::sr::PPMSVSR& self, std::vector<pybind11::array>& datas){
-        std::vector<cv::Mat> inputs;
-        for (auto& data: datas){
-          auto mat = PyArrayToCvMat(data);
-          inputs.push_back(mat);
-        }
-        std::vector<cv::Mat> res;
-        std::vector<pybind11::array> res_pyarray;
-        self.Predict(inputs, res);
-        for (auto& img: res){
-          auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
-          res_pyarray.push_back(ret);
-        }
-        return res_pyarray;
-    });
-    pybind11::class_<vision::sr::EDVR, FastDeployModel>(m, "EDVR")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
-      .def("predict", [](vision::sr::EDVR& self, std::vector<pybind11::array>& datas){
-        std::vector<cv::Mat> inputs;
-        for (auto& data: datas){
-          auto mat = PyArrayToCvMat(data);
-          inputs.push_back(mat);
-        }
-        std::vector<cv::Mat> res;
-        std::vector<pybind11::array> res_pyarray;
-        self.Predict(inputs, res);
-        for (auto& img: res){
-          auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
-          res_pyarray.push_back(ret);
-        }
-        return res_pyarray;
-      });
-    pybind11::class_<vision::sr::BasicVSR, FastDeployModel>(m, "BasicVSR")
-      .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
-      .def("predict", [](vision::sr::BasicVSR& self, std::vector<pybind11::array>& datas){
-        std::vector<cv::Mat> inputs;
-        for (auto& data: datas){
-            auto mat = PyArrayToCvMat(data);
-            inputs.push_back(mat);
-        }
-        std::vector<cv::Mat> res;
-        std::vector<pybind11::array> res_pyarray;
-        self.Predict(inputs, res);
-        for (auto& img: res){
-            auto ret = pybind11::array_t<unsigned char>({img.rows, img.cols, img.channels()}, img.data);
-            res_pyarray.push_back(ret);
-        }
-        return res_pyarray;
-      });
+namespace fastdeploy {
+void BindPPSR(pybind11::module& m) {
+  pybind11::class_<vision::sr::PPMSVSR, FastDeployModel>(m, "PPMSVSR")
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::sr::PPMSVSR& self, std::vector<pybind11::array>& datas) {
+             std::vector<cv::Mat> inputs;
+             for (auto& data : datas) {
+               auto mat = PyArrayToCvMat(data);
+               inputs.push_back(mat);
+             }
+             std::vector<cv::Mat> res;
+             std::vector<pybind11::array> res_pyarray;
+             self.Predict(inputs, res);
+             for (auto& img : res) {
+               auto ret = pybind11::array_t<unsigned char>(
+                   {img.rows, img.cols, img.channels()}, img.data);
+               res_pyarray.push_back(ret);
+             }
+             return res_pyarray;
+           });
+  pybind11::class_<vision::sr::EDVR, FastDeployModel>(m, "EDVR")
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::sr::EDVR& self, std::vector<pybind11::array>& datas) {
+             std::vector<cv::Mat> inputs;
+             for (auto& data : datas) {
+               auto mat = PyArrayToCvMat(data);
+               inputs.push_back(mat);
+             }
+             std::vector<cv::Mat> res;
+             std::vector<pybind11::array> res_pyarray;
+             self.Predict(inputs, res);
+             for (auto& img : res) {
+               auto ret = pybind11::array_t<unsigned char>(
+                   {img.rows, img.cols, img.channels()}, img.data);
+               res_pyarray.push_back(ret);
+             }
+             return res_pyarray;
+           });
+  pybind11::class_<vision::sr::BasicVSR, FastDeployModel>(m, "BasicVSR")
+      .def(pybind11::init<std::string, std::string, RuntimeOption,
+                          ModelFormat>())
+      .def("predict",
+           [](vision::sr::BasicVSR& self, std::vector<pybind11::array>& datas) {
+             std::vector<cv::Mat> inputs;
+             for (auto& data : datas) {
+               auto mat = PyArrayToCvMat(data);
+               inputs.push_back(mat);
+             }
+             std::vector<cv::Mat> res;
+             std::vector<pybind11::array> res_pyarray;
+             self.Predict(inputs, res);
+             for (auto& img : res) {
+               auto ret = pybind11::array_t<unsigned char>(
+                   {img.rows, img.cols, img.channels()}, img.data);
+               res_pyarray.push_back(ret);
+             }
+             return res_pyarray;
+           });
 }
 }  // namespace fastdeploy

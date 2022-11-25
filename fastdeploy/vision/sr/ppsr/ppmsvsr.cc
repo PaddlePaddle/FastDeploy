@@ -18,13 +18,12 @@ namespace fastdeploy {
 namespace vision {
 namespace sr {
 
-PPMSVSR::PPMSVSR(const std::string& model_file,
-                 const std::string& params_file,
+PPMSVSR::PPMSVSR(const std::string& model_file, const std::string& params_file,
                  const RuntimeOption& custom_option,
-                 const ModelFormat& model_format){
+                 const ModelFormat& model_format) {
   // unsupported ORT backend
-  valid_cpu_backends = {Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+  valid_gpu_backends = {Backend::PDINFER, Backend::TRT, Backend::ORT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -34,10 +33,10 @@ PPMSVSR::PPMSVSR(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool PPMSVSR::Initialize(){
+bool PPMSVSR::Initialize() {
   if (!InitRuntime()) {
-      FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
-      return false;
+    FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
+    return false;
   }
   mean_ = {0., 0., 0.};
   scale_ = {1., 1., 1.};
@@ -45,21 +44,20 @@ bool PPMSVSR::Initialize(){
 }
 
 bool PPMSVSR::Preprocess(Mat* mat, std::vector<float>& output) {
-
   BGR2RGB::Run(mat);
   Normalize::Run(mat, mean_, scale_, true);
   HWC2CHW::Run(mat);
   // Csat float
-  float* ptr = static_cast<float *>(mat->Data());
+  float* ptr = static_cast<float*>(mat->Data());
   size_t size = mat->Width() * mat->Height() * mat->Channels();
   output = std::vector<float>(ptr, ptr + size);
   return true;
 }
 
-bool PPMSVSR::Predict(std::vector<cv::Mat>& imgs, std::vector<cv::Mat>& results) {
-
-  // Theoretically, the more frame nums there are, the better the result will be,
-  // but it will lead to a significant increase in memory
+bool PPMSVSR::Predict(std::vector<cv::Mat>& imgs,
+                      std::vector<cv::Mat>& results) {
+  // Theoretically, the more frame nums there are, the better the result will
+  // be, but it will lead to a significant increase in memory
   int frame_num = imgs.size();
   int rows = imgs[0].rows;
   int cols = imgs[0].cols;
@@ -71,11 +69,12 @@ bool PPMSVSR::Predict(std::vector<cv::Mat>& imgs, std::vector<cv::Mat>& results)
     Mat mat(imgs[i]);
     std::vector<float> data_temp;
     Preprocess(&mat, data_temp);
-    all_data_temp.insert(all_data_temp.end(), data_temp.begin(), data_temp.end());
+    all_data_temp.insert(all_data_temp.end(), data_temp.begin(),
+                         data_temp.end());
   }
   // share memory in order to avoid memory copy, data type must be float32
-  input_tensors[0].SetExternalData({1 ,frame_num , channels, rows, cols}, FDDataType::FP32,
-                                   all_data_temp.data());
+  input_tensors[0].SetExternalData({1, frame_num, channels, rows, cols},
+                                   FDDataType::FP32, all_data_temp.data());
   input_tensors[0].shape = {1, frame_num, channels, rows, cols};
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
@@ -90,11 +89,13 @@ bool PPMSVSR::Predict(std::vector<cv::Mat>& imgs, std::vector<cv::Mat>& results)
   return true;
 }
 
-bool PPMSVSR::Postprocess(std::vector<FDTensor>& infer_results, std::vector<cv::Mat>& results){
+bool PPMSVSR::Postprocess(std::vector<FDTensor>& infer_results,
+                          std::vector<cv::Mat>& results) {
   // group to image
   // output_shape is [b, n, c, h, w] n = frame_nums b=1(default)
   // b and n is dependence export model shape
-  // see https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md
+  // see
+  // https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md
   auto output_shape = infer_results[0].shape;
   // PP-MSVSR
   int h_ = output_shape[3];
@@ -102,17 +103,18 @@ bool PPMSVSR::Postprocess(std::vector<FDTensor>& infer_results, std::vector<cv::
   int c_ = output_shape[2];
   int frame_num = output_shape[1];
 
-  float *out_data = static_cast<float *>(infer_results[0].Data());
-  cv::Mat temp = cv::Mat::zeros(h_, w_, CV_32FC3); // RGB image
+  float* out_data = static_cast<float*>(infer_results[0].Data());
+  cv::Mat temp = cv::Mat::zeros(h_, w_, CV_32FC3);  // RGB image
   int pix_num = h_ * w_;
   int frame_pix_num = pix_num * c_;
   for (int frame = 0; frame < frame_num; frame++) {
     int index = 0;
     for (int h = 0; h < h_; ++h) {
       for (int w = 0; w < w_; ++w) {
-        temp.at<cv::Vec3f>(h, w) = {out_data[2 * pix_num + index + frame_pix_num * frame],
-                                    out_data[pix_num + index + frame_pix_num * frame],
-                                    out_data[index + frame_pix_num * frame]};
+        temp.at<cv::Vec3f>(h, w) = {
+            out_data[2 * pix_num + index + frame_pix_num * frame],
+            out_data[pix_num + index + frame_pix_num * frame],
+            out_data[index + frame_pix_num * frame]};
         index += 1;
       }
     }
@@ -123,6 +125,6 @@ bool PPMSVSR::Postprocess(std::vector<FDTensor>& infer_results, std::vector<cv::
   }
   return true;
 }
-} // namespace sr
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace sr
+}  // namespace vision
+}  // namespace fastdeploy

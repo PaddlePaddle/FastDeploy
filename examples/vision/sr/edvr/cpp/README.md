@@ -25,11 +25,11 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 
 
 # CPU推理
-./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 0 2
+./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 0 5
 # GPU推理
-./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 1 2
+./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 1 5
 # GPU上TensorRT推理
-./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 2 2
+./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 2 5
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
