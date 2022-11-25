@@ -28,10 +28,12 @@ void CastKernel(const FDTensor& x, FDTensor* out, FDDataType output_dtype) {
   FD_VISIT_ALL_TYPES(output_dtype, "CastOpTransformFunctor", ([&] {
                        auto* in_begin = reinterpret_cast<const InT*>(x.Data());
                        auto* in_end = in_begin + x.Numel();
-                       out->Allocate(x.Shape(), output_dtype);
-                       auto* out_begin = reinterpret_cast<data_t*>(out->Data());
+                       FDTensor out_tmp;
+                       out_tmp.Allocate(x.Shape(), output_dtype);
+                       auto* out_begin = reinterpret_cast<data_t*>(out_tmp.Data());
                        std::transform(in_begin, in_end, out_begin,
                                       CastOpTransformFunctor<InT, data_t>());
+                       *out = std::move(out_tmp);
                      }));
 }
 
