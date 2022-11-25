@@ -1,6 +1,6 @@
 ---
 name: 报告issue
-about: Describe this issue template's purpose here.
+about: 
 title: ''
 labels: ''
 assignees: ''
