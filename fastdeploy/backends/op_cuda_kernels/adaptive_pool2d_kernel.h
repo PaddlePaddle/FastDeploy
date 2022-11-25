@@ -1,3 +1,4 @@
+
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +14,22 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/sr/ppsr/basicvsr.h"
-#include "fastdeploy/vision/sr/ppsr/edvr.h"
-#include "fastdeploy/vision/sr/ppsr/ppmsvsr.h"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <cstdint>
+#include <iostream>
+#include <vector>
+#include <math.h>
+
+namespace fastdeploy {
+
+void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
+                      const std::vector<int64_t>& output_dims,
+                      float* output,
+                      const float* input,
+                      void* compute_stream,
+                      const std::string& pooling_type);
+
+
+}  // namespace fastdeploy
