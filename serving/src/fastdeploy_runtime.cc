@@ -1128,7 +1128,7 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   // }
 
   for (auto& output_name : output_names_) {
-    auto output_tensor = runtime_->GetOutputTensor(output_name);
+    auto* output_tensor = runtime_->GetOutputTensor(output_name);
     if (output_tensor == nullptr) {
         RETURN_IF_ERROR(
             TRITONSERVER_ErrorNew(
@@ -1139,7 +1139,7 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
     TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
     int64_t memory_type_id = 0;
     if(output_tensor->device == fastdeploy::Device::GPU) {
-      memory_type = TRITONSERVER_INSTANCEGROUPKIND_GPU;
+      memory_type = TRITONSERVER_MEMORY_GPU;
       memory_type_id = DeviceId();
     }
     responder.ProcessTensor(
