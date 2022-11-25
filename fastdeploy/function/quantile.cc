@@ -21,6 +21,7 @@
 #include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/transpose.h"
 #include "fastdeploy/function/concat.h"
+#include "fastdeploy/function/gather_scatter_along_axis.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -92,8 +93,10 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
     Ceil(index, &indices_upper);
     Cast(indices_below, &indices_below, FDDataType::INT32);
     Cast(indices_upper, &indices_upper, FDDataType::INT32);
-
     FDTensor tensor_below, tensor_upper;
+    GatherAlongAxis(sorted_tensor, indices_below, &tensor_below, target_axis);
+    GatherAlongAxis(sorted_tensor, indices_upper, &tensor_upper, target_axis);
+
     FDTensor weight = index - indices_below;
     FDTensor out = tensor_below + weight * (tensor_upper - tensor_below);
     out.Squeeze(target_axis);
