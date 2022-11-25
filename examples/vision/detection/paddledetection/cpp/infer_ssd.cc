@@ -44,7 +44,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -73,7 +73,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   }
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res, 0.5);
+  auto vis_im = fastdeploy::vision::VisDetection(im_bak, res, 0.5);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
