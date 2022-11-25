@@ -19,9 +19,11 @@ namespace fastdeploy {
 namespace function {
 
 template <typename T, int Rank>
-void TileFunctor(const FDTensor& x, std::vector<int64_t> repeat_times,
+void TileFunctor(const FDTensor& x,
+                 const std::vector<int64_t>& origin_repeat_times,
                  FDTensor* out) {
   auto x_shape = x.Shape();
+  auto repeat_times = origin_repeat_times;
   for (size_t i = 0; i < repeat_times.size(); ++i) {
     FDASSERT(repeat_times[i] > 0,
              "All elements of the input 'repeat_times' "
@@ -66,7 +68,7 @@ void TileFunctor(const FDTensor& x, std::vector<int64_t> repeat_times,
 }
 
 template <typename T>
-void TileKernel(const FDTensor& x, std::vector<int64_t> repeat_times,
+void TileKernel(const FDTensor& x, const std::vector<int64_t>& repeat_times,
                 FDTensor* out) {
   auto rank = x.Shape().size();
   auto repeat_times_size = repeat_times.size();
@@ -96,7 +98,8 @@ void TileKernel(const FDTensor& x, std::vector<int64_t> repeat_times,
   }
 }
 
-void Tile(const FDTensor& x, std::vector<int64_t> repeat_times, FDTensor* out) {
+void Tile(const FDTensor& x, const std::vector<int64_t>& repeat_times,
+          FDTensor* out) {
   FD_VISIT_ALL_TYPES(x.dtype, "TileKernel",
                      ([&] { TileKernel<data_t>(x, repeat_times, out); }));
 }
