@@ -63,7 +63,6 @@ do
                fi
        fi
        if [ "$DEVICE" = "gpu" ];then
-
 	       if [ "$backend" = "trt" ];then
                        python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_trt_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_trt_result.txt --platform $PLATFORM --device trt
