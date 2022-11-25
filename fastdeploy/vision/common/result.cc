@@ -395,16 +395,12 @@ void MattingResult::Reserve(int size) {
 }
 
 void MattingResult::Resize(int size) {
-  if (alpha.capacity() < size) {
-    alpha.resize(size);
-  }
+  alpha.resize(size);
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Resize.");
     int c = static_cast<int>(shape[2]);
-    if (foreground.capacity() < size * c) {
-      foreground.resize(size * c);
-    }
+    foreground.resize(size * c);
   }
 }
 
