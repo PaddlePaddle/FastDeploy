@@ -607,9 +607,6 @@ class ModelInstanceState : public BackendModelInstance {
   std::vector<std::string> output_names_;
   std::vector<fastdeploy::TensorInfo> input_tensor_infos_;
   std::vector<fastdeploy::TensorInfo> output_tensor_infos_;
-
-  std::vector<fastdeploy::FDTensor> input_tensors_;
-  std::vector<fastdeploy::FDTensor> output_tensors_;
 };
 
 TRITONSERVER_Error* ModelInstanceState::Create(
@@ -647,8 +644,6 @@ ModelInstanceState::~ModelInstanceState() { ReleaseRunResources(); }
 void ModelInstanceState::ReleaseRunResources() {
   input_names_.clear();
   output_names_.clear();
-  input_tensors_.clear();
-  output_tensors_.clear();
   input_tensor_infos_.clear();
   output_tensor_infos_.clear();
 }
@@ -671,9 +666,7 @@ TRITONSERVER_Error* ModelInstanceState::ValidateInputs() {
   input_tensor_infos_ = runtime_->GetInputInfos();
   std::vector<std::string> names;
   GetInfoNames(input_tensor_infos_, names);
-  input_tensors_.clear();
   input_names_.clear();
-  input_tensors_.reserve(input_tensor_infos_.size());
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
@@ -700,7 +693,6 @@ TRITONSERVER_Error* ModelInstanceState::ValidateInputs() {
       std::set<std::string> inames(names.begin(), names.end());
       RETURN_IF_ERROR(CheckAllowedModelInput(io, inames));
     }
-    input_tensors_.emplace_back(io_name);
 
     auto fd_data_type = ModelConfigDataTypeToFDType(io_dtype);
     if (fd_data_type == fastdeploy::FDDataType::UNKNOWN1) {
@@ -759,11 +751,8 @@ TRITONSERVER_Error* ModelInstanceState::ValidateInputs() {
 
 TRITONSERVER_Error* ModelInstanceState::ValidateOutputs() {
   output_tensor_infos_ = runtime_->GetOutputInfos();
-  output_tensors_.clear();
-  output_tensors_.reserve(output_tensor_infos_.size());
   std::set<std::string> out_names;
   for (const auto& info : output_tensor_infos_) {
-    output_tensors_.emplace_back(info.name);
     out_names.insert(info.name);
   }
   output_names_.clear();
@@ -793,7 +782,6 @@ TRITONSERVER_Error* ModelInstanceState::ValidateOutputs() {
     if (index < 0) {
       RETURN_IF_ERROR(CheckAllowedModelInput(io, out_names));
     }
-    // output_tensors_.emplace_back(io_name);
 
     auto fd_data_type = ModelConfigDataTypeToFDType(io_dtype);
     if (fd_data_type == fastdeploy::FDDataType::UNKNOWN1) {
@@ -1009,7 +997,7 @@ void ModelInstanceState::ProcessRequests(TRITONBACKEND_Request** requests,
 TRITONSERVER_Error* ModelInstanceState::Run(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count) {
-  runtime_->Infer(input_tensors_, &output_tensors_);
+  runtime_->Infer();
 #ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     cudaStreamSynchronize(CudaStream());
@@ -1042,18 +1030,7 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
 
-    int index = GetInfoIndex(std::string(input_name), input_tensor_infos_);
-    if (index < 0) {
-      auto err = TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL,
-          (std::string("Input name [") + input_name +
-           std::string("] is not one of the FD predictor input: ") +
-           input_tensors_[index].name)
-              .c_str());
-      // SendErrorForResponses(responses, request_count, err);
-      return err;
-    }
-
+    std::string in_name = std::string(input_name);
     std::vector<int64_t> batchn_shape;
     // For a ragged input tensor, the tensor shape should be
     // the flatten shape of the whole batch
@@ -1082,23 +1059,40 @@ TRITONSERVER_Error* ModelInstanceState::SetInputTensors(
       }
     }
 
+    const char* input_buffer;
+    size_t batchn_byte_size;
     TRITONSERVER_MemoryType memory_type;
-    int64_t device_id = 0;
-    fastdeploy::Device device;
+    int64_t memory_type_id;
+    std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
+        allowed_input_types;
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-      memory_type = TRITONSERVER_MEMORY_GPU;
+      allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
+                              {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                              {TRITONSERVER_MEMORY_CPU, 0}};
+    } else {
+      allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                              {TRITONSERVER_MEMORY_CPU, 0}};
+    }
+
+    RETURN_IF_ERROR(
+        collector->ProcessTensor(
+            input_name, nullptr, 0, allowed_input_types, &input_buffer,
+            &batchn_byte_size, &memory_type, &memory_type_id));
+
+    int32_t device_id = -1;
+    fastdeploy::Device device;
+    if (memory_type == TRITONSERVER_MEMORY_GPU) {
       device_id = DeviceId();
       device = fastdeploy::Device::GPU;
     } else {
-      memory_type = TRITONSERVER_MEMORY_CPU;
       device = fastdeploy::Device::CPU;
     }
-    input_tensors_[index].Resize(
-        batchn_shape, ConvertDataTypeToFD(input_datatype), input_name, device);
-    collector->ProcessTensor(
-        input_name,
-        reinterpret_cast<char*>(input_tensors_[index].MutableData()),
-        input_tensors_[index].Nbytes(), memory_type, device_id);
+
+    fastdeploy::FDTensor fdtensor(in_name);
+    fdtensor.SetExternalData(
+      batchn_shape, ConvertDataTypeToFD(input_datatype),
+      const_cast<char*>(input_buffer), device, device_id);
+    runtime_->BindInputTensor(in_name, fdtensor);
   }
 
   // Finalize...
@@ -1134,11 +1128,18 @@ TRITONSERVER_Error* ModelInstanceState::ReadOutputTensors(
   // }
 
   for (auto& output_name : output_names_) {
-    int idx = GetInfoIndex(output_name, output_tensor_infos_);
+    auto output_tensor = runtime_->GetOutputTensor(output_name);
+    if (output_tensor == nullptr) {
+        RETURN_IF_ERROR(
+            TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL,
+                (std::string("output tensor '") + output_name + "' is not found")
+                    .c_str()));
+    }
     responder.ProcessTensor(
-        output_tensors_[idx].name, ConvertFDType(output_tensors_[idx].dtype),
-        output_tensors_[idx].shape,
-        reinterpret_cast<char*>(output_tensors_[idx].MutableData()),
+        output_tensor->name, ConvertFDType(output_tensor->dtype),
+        output_tensor->shape,
+        reinterpret_cast<char*>(output_tensor->MutableData()),
         TRITONSERVER_MEMORY_CPU, 0);
   }
 

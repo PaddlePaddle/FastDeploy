@@ -79,11 +79,13 @@ const void* FDTensor::CpuData() const {
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,
-                               const Device& new_device) {
+                               const Device& new_device,
+                               int new_device_id) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
   device = new_device;
+  device_id = new_device_id;
 }
 
 void FDTensor::ExpandDim(int64_t axis) {
@@ -314,6 +316,8 @@ void FDTensor::FreeFn() {
   }
 }
 
+// TODO(liqi): no src_device and dst_device
+// should support copy from cpu or gpu  to cpu or gpu
 void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes,
                           const Device& device, bool is_pinned_memory) {
   if (device == Device::GPU) {
@@ -347,7 +351,8 @@ FDTensor::FDTensor(const std::string& tensor_name) { name = tensor_name; }
 
 FDTensor::FDTensor(const FDTensor& other)
     : shape(other.shape), name(other.name), dtype(other.dtype),
-      device(other.device), external_data_ptr(other.external_data_ptr) {
+      device(other.device), external_data_ptr(other.external_data_ptr),
+      device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
     buffer_ = nullptr;
@@ -362,7 +367,8 @@ FDTensor::FDTensor(const FDTensor& other)
 FDTensor::FDTensor(FDTensor&& other)
     : buffer_(other.buffer_), shape(std::move(other.shape)),
       name(std::move(other.name)), dtype(other.dtype),
-      external_data_ptr(other.external_data_ptr), device(other.device) {
+      external_data_ptr(other.external_data_ptr), device(other.device),
+      device_id(other.device_id) {
   other.name = "";
   // Note(zhoushunjie): Avoid double free.
   other.buffer_ = nullptr;
@@ -372,6 +378,7 @@ FDTensor::FDTensor(FDTensor&& other)
 FDTensor& FDTensor::operator=(const FDTensor& other) {
   if (&other != this) {
     // Copy buffer
+    device_id = other.device_id;
     if (other.buffer_ == nullptr) {
       FreeFn();
       buffer_ = nullptr;
@@ -399,6 +406,7 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     name = std::move(other.name);
     dtype = other.dtype;
     device = other.device;
+    device_id = other.device_id;
 
     other.name = "";
     // Note(zhoushunjie): Avoid double free.

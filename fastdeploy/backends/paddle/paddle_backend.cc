@@ -194,7 +194,8 @@ std::vector<TensorInfo> PaddleBackend::GetOutputInfos() {
 }
 
 bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs) {
+                          std::vector<FDTensor>* outputs,
+                          bool copy_to_fd) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[PaddleBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -208,11 +209,14 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
   }
 
   predictor_->Run();
+
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);
-    (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
-    CopyTensorToCpu(handle, &((*outputs)[i]));
+    if(copy_to_fd) {
+      (*outputs)[i].is_pinned_memory = option_.enable_pinned_memory;
+    }
+    PaddleTensorToFDTensor(handle, &((*outputs)[i]), copy_to_fd);
   }
   return true;
 }

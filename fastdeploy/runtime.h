@@ -171,7 +171,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /**
    * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
    */
-   void SetOpenVINODevice(const std::string& name = "CPU");
+  void SetOpenVINODevice(const std::string& name = "CPU");
 
   /**
    * @brief Set optimzed model dir for Paddle Lite backend.
@@ -390,6 +390,12 @@ struct FASTDEPLOY_DECL Runtime {
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
 
+  /** \brief No params inference the model.
+   *
+   *  the input and output data need to pass through the BindInputTensor and GetOutputTensor interfaces.
+   */
+  bool Infer();
+
   /** \brief Compile TorchScript Module, only for Poros backend
    *
    * \param[in] prewarm_tensors Prewarm datas for compile
@@ -417,6 +423,12 @@ struct FASTDEPLOY_DECL Runtime {
   /** \brief Get all the output information
    */
   std::vector<TensorInfo> GetOutputInfos();
+  /** \brief Bind FDTensor by name, no copy and share input memory
+   */
+  void BindInputTensor(const std::string& name, FDTensor& input);
+  /** \brief Get output FDTensor by name
+   */
+  std::unique_ptr<FDTensor> GetOutputTensor(std::string name);
 
   /** \brief Clone new Runtime when multiple instances of the same model are created
    *
@@ -436,5 +448,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
   std::unique_ptr<BaseBackend> backend_;
+  std::vector<FDTensor> input_tensors_;
+  std::vector<FDTensor> output_tensors_;
 };
 }  // namespace fastdeploy

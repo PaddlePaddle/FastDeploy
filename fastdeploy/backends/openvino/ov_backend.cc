@@ -270,7 +270,8 @@ int OpenVINOBackend::NumInputs() const { return input_infos_.size(); }
 int OpenVINOBackend::NumOutputs() const { return output_infos_.size(); }
 
 bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
-                            std::vector<FDTensor>* outputs) {
+                            std::vector<FDTensor>* outputs,
+                            bool copy_to_fd) {
   if (inputs.size() != input_infos_.size()) {
     FDERROR << "[OpenVINOBackend] Size of the inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -293,11 +294,20 @@ bool OpenVINOBackend::Infer(std::vector<FDTensor>& inputs,
     auto out_tensor_shape = out_tensor.get_shape();
     std::vector<int64_t> shape(out_tensor_shape.begin(),
                                out_tensor_shape.end());
-    (*outputs)[i].Allocate(shape,
+    if(copy_to_fd) {
+      (*outputs)[i].Resize(shape, 
                            OpenVINODataTypeToFD(out_tensor.get_element_type()),
-                           output_infos_[i].name);
-    memcpy((*outputs)[i].MutableData(), out_tensor.data(),
-           (*outputs)[i].Nbytes());
+                           output_infos_[i].name,
+                           Device::CPU);
+      memcpy((*outputs)[i].MutableData(), out_tensor.data(),
+            (*outputs)[i].Nbytes());
+    } else {
+      (*outputs)[i].name = output_infos_[i].name;
+      (*outputs)[i].SetExternalData(shape, 
+                  OpenVINODataTypeToFD(out_tensor.get_element_type()),
+                  out_tensor.data(),
+                  Device::CPU);
+    }
   }
   return true;
 }
