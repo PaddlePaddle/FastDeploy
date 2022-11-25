@@ -1,6 +1,6 @@
 ---
 name: 报告issue
-about: 
+about: 反馈使用中遇到的问题
 title: ''
 labels: ''
 assignees: ''
