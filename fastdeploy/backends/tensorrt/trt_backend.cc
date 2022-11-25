@@ -124,14 +124,18 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   option_ = option;
 
 #ifdef ENABLE_PADDLE_FRONTEND
+  std::vector<paddle2onnx::CustomOp> ops;
+  ops.resize(1);
+  strcpy(ops[0].op_name, "pool2d");
+  strcpy(ops[0].export_op_name, "AdaptivePool2d");
   char* model_content_ptr;
   int model_content_size = 0;
   char* calibration_cache_ptr;
   int calibration_cache_size = 0;
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, nullptr,
-                           0, "tensorrt",
+                           verbose, true, true, true, ops.data(),
+                           1, "tensorrt",
                            &calibration_cache_ptr, &calibration_cache_size, "", &save_external_)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;

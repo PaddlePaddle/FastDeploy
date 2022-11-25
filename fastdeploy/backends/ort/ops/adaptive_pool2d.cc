@@ -14,14 +14,9 @@
 
 #ifndef NON_64_PLATFORM
 
-#include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
-#include <algorithm>
-#include <cmath>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
+#include "adaptive_pool2d.h"
 
 namespace fastdeploy {
-
 struct OrtTensorDimensions : std::vector<int64_t> {
   OrtTensorDimensions(Ort::CustomOpApi ort, const OrtValue* value) {
     OrtTensorTypeAndShapeInfo* info = ort.GetTensorTypeAndShape(value);
