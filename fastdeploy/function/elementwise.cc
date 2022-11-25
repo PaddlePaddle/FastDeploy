@@ -71,5 +71,18 @@ FDTensor operator/(const FDTensor& x, const FDTensor& y) {
   return out;
 }
 
+template <typename T> struct MaximumRawKernel {
+  void operator()(const FDTensor& x, const FDTensor& y, int axis,
+                  FDTensor* out) {
+    ElementwiseCompute<MaximumFunctor<T>, T>(x, y, axis, MaximumFunctor<T>(),
+                                             out);
+  }
+};
+
+void Maximum(const FDTensor& x, const FDTensor& y, FDTensor* out) {
+  FD_VISIT_ALL_TYPES(x.dtype, "MaximumRawKernel",
+                     ([&] { MaximumRawKernel<data_t>()(x, y, -1, out); }));
+}
+
 }  // namespace function
 }  // namespace fastdeploy
