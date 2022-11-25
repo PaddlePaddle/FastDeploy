@@ -15,6 +15,7 @@
 #include "fastdeploy/function/quantile.h"
 #include "fastdeploy/function/elementwise.h"
 #include "fastdeploy/function/isfinite.h"
+#include "fastdeploy/function/math.h"
 #include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/transpose.h"
@@ -43,7 +44,6 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
     axis_src.push_back(axis_single);
     out_shape[axis_single] = 1;
   }
-  out->Allocate(out_shape, x.Dtype());
   std::vector<int64_t> axis_dst;
   for (int64_t i = 0; i < rank; ++i) {
     if (std::find(axis_src.begin(), axis_src.end(), i) == axis_src.end()) {
@@ -89,8 +89,15 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   FDTensor sorted_tensor, sorted_indices_tensor;
   Sort(y, &sorted_tensor, &sorted_indices_tensor, target_axis);
 
+  FDTensor indices_below, indices_upper;
   for (auto&& index : indices) {
+    Floor(index, &indices_below);
+    Ceil(index, &indices_upper);
+
+    FDTensor weight = index - indices_below;
   }
+
+  out->Allocate(out_shape, x.Dtype());
 }
 
 void Quantile(const FDTensor& x, const std::vector<double>& q,
