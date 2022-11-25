@@ -238,6 +238,27 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
 
   std::shared_ptr<ov::Model> model = core_.read_model(model_file);
 
+  if (option_.shape_infos.size() > 0) {
+    std::map<std::string, ov::PartialShape> shape_infos;
+    for (const auto& item : option_.shape_infos) {
+      shape_infos[item.first] = VecToPartialShape(item.second);
+    }
+    model->reshape(shape_infos);
+  }
+
+  if (option_.device.find("HETERO") != std::string::npos) {
+    auto supported_ops = core_.query_model(model, option_.device);
+    for (auto&& op : model->get_ops()) {
+      auto& affinity = supported_ops[op->get_friendly_name()];
+      if (option_.cpu_operators.find(op->description()) !=
+          option_.cpu_operators.end()) {
+        op->get_rt_info()["affinity"] = "CPU";
+      } else {
+        op->get_rt_info()["affinity"] = affinity;
+      }
+    }
+  }
+
   // Get inputs/outputs information from loaded model
   const std::vector<ov::Output<ov::Node>> inputs = model->inputs();
   std::map<std::string, TensorInfo> input_infos;
@@ -288,13 +309,23 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   if (option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
-  if (option_.num_streams == -1) {
-    properties["NUM_STREAMS"] = ov::streams::AUTO;
-  } else if (option_.num_streams == -2) {
-    properties["NUM_STREAMS"] = ov::streams::NUMA;
-  } else if (option_.num_streams > 0) {
-    properties["NUM_STREAMS"] = option_.num_streams;
+  if (option_.device == "CPU") {
+    if (option_.num_streams == -1) {
+      properties["NUM_STREAMS"] = ov::streams::AUTO;
+    } else if (option_.num_streams == -2) {
+      properties["NUM_STREAMS"] = ov::streams::NUMA;
+    } else if (option_.num_streams > 0) {
+      properties["NUM_STREAMS"] = option_.num_streams;
+    }
+  } else {
+    if (option_.num_streams != 0) {
+      FDWARNING << "NUM_STREAMS only available on device CPU, currently the "
+                   "device is set as "
+                << option_.device << ", the NUM_STREAMS will be ignored."
+                << std::endl;
+    }
   }
+
   FDINFO << "Compile OpenVINO model on device_name:" << option.device << "."
          << std::endl;
   compiled_model_ = core_.compile_model(model, option.device, properties);
