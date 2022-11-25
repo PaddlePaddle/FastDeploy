@@ -22,11 +22,14 @@ void BindPPSeg(pybind11::module& m) {
            [](vision::segmentation::PaddleSegPreprocessor& self,
               std::vector<pybind11::array>& im_list) {
              std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+                images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+              }
              // Record the shape of input images
              std::map<std::string, std::vector<std::array<int, 2>>> imgs_info;
              std::vector<FDTensor> outputs;
              if (!self.Run(&images, &outputs, &imgs_info)) {
-               pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleDetPreprocessor.')");
+              throw std::runtime_error("Failed to preprocess the input data in PaddleSegPreprocessor.");
              }
              for (size_t i = 0; i < outputs.size(); ++i) {
                outputs[i].StopSharing();
@@ -74,7 +77,7 @@ void BindPPSeg(pybind11::module& m) {
               const std::map<std::string, std::vector<std::array<int, 2>>>& imgs_info) {
         std::vector<vision::SegmentationResult> results;
         if (!self.Run(inputs, &results, imgs_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleSegPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleSegPostprocessor.");
         }
         return results;
       })
@@ -86,7 +89,7 @@ void BindPPSeg(pybind11::module& m) {
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results, imgs_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleSegPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleSegPostprocessor.");
         }
         return results;
       })

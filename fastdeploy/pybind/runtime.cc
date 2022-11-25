@@ -175,7 +175,7 @@ void BindRuntime(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Infer(inputs, &outputs)) {
-          pybind11::eval("raise Exception('Failed to inference with Runtime.')");
+          throw std::runtime_error("Failed to inference with Runtime.");
         }
         return outputs;
       })
