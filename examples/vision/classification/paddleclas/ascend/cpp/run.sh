@@ -4,10 +4,15 @@
 MODEL_NAME=ResNet50_vd_infer
 # 预测的图片名字
 DATA_NAME=ILSVRC2012_val_00000010.jpeg
+# 本demo的可执行文件
+DEMO_NAME=infer_demo
 
 export GLOG_v=5
 # 设置本demo的环境变量
-export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
+# 正确设置fastdeploy-cann的安装路径
+FASTDEPLOY_INSTALL_DIR="../../../../../../build/fastdeploy-cann/"
+# 设置fastdeploy,opencv和paddlelite相关的环境变量
+export LD_LIBRARY_PATH=$FASTDEPLOY_INSTALL_DIR/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/opencv/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/paddlelite/lib/:$LD_LIBRARY_PATH
 
 # 设置昇腾相关环境变量
 HUAWEI_ASCEND_TOOLKIT_HOME="/usr/local/Ascend/ascend-toolkit/latest"
@@ -20,10 +25,7 @@ export TOOLCHAIN_HOME=$HUAWEI_ASCEND_TOOLKIT_HOME/toolkit
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=3
 
-# 本demo的可执行文件
-BUILD_DIR="./infer_demo"
-
 chmod +x ./$BUILD_DIR
 
 # 运行本demo.
-./$BUILD_DIR ./models/$MODEL_NAME ./images/$DATA_NAME
+./build/$DEMO_NAME ./models/$MODEL_NAME ./images/$DATA_NAME
