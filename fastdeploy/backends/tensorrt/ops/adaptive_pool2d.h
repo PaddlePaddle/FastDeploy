@@ -13,16 +13,10 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/backends/op_cuda_kernels/adaptive_pool2d_kernel.h"
 #include "common.h" // NOLINT
 
 namespace fastdeploy {
-
-void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
-                      const std::vector<int64_t>& output_dims,
-                      float* output,
-                      const float* input,
-                      void* compute_stream,
-                      const std::string& pooling_type);
 
 class AdaptivePool2d : public BasePlugin {
  public:

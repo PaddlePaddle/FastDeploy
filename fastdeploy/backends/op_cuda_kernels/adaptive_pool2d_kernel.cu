@@ -1,11 +1,5 @@
-#include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
-#include "fastdeploy/backends/tensorrt/ops/adaptive_pool2d.h"
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <cstdint>
-#include <iostream>
-#include <vector>
-#include <math.h>
+#include "adaptive_pool2d_kernel.h"
+
 namespace fastdeploy {
 
 __global__ void CudaCastKernel(const float* in, float* out, int edge,  int out_bc_offset, int in_bc_offset, int ih, int iw, int oh, int ow, bool is_avg) {
