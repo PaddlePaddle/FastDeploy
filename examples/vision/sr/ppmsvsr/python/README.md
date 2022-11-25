@@ -13,7 +13,7 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/sr/ppmsvsr/python
 
 # 下载VSR模型文件和测试视频
-wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-MSVSR_reds_x4.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-MSVSR_reds_x4.tgz
 tar -xvf PP-MSVSR_reds_x4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 # CPU推理
