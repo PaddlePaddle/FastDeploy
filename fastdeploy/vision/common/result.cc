@@ -378,6 +378,13 @@ MattingResult::MattingResult(const MattingResult& res) {
 }
 
 void MattingResult::Clear() {
+  alpha.clear();
+  foreground.clear();
+  shape.clear();
+  contain_foreground = false;
+}
+
+void MattingResult::Free() {
   std::vector<float>().swap(alpha);
   std::vector<float>().swap(foreground);
   std::vector<int64_t>().swap(shape);

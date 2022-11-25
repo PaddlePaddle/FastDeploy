@@ -316,8 +316,11 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 
   MattingResult() {}
   MattingResult(const MattingResult& res);
-  /// Clear detection result
+  /// Clear matting result
   void Clear();
+
+  /// Free matting result
+  void Free();
 
   void Reserve(int size);
 
