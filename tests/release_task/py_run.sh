@@ -14,7 +14,7 @@ LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
 #LINUX_AARCH_CPU_CASE=('ort' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort')
-MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
+MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -54,8 +54,13 @@ do
        echo "Python Backend:" $backend
        if [ "$backend" != "trt" ];then
                python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device cpu --backend $backend >> py_$backend\_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu
-               check_ret
+               if [ "$PLATFORM" = "osx-arm64"]
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold 0.5
+                       check_ret
+               else
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_$backend\_cpu_result.txt --platform $PLATFORM --device cpu
+                       check_ret
+               fi
        fi
        if [ "$DEVICE" = "gpu" ];then
 
