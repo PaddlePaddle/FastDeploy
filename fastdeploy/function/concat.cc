@@ -14,26 +14,17 @@
 
 #include "fastdeploy/function/concat.h"
 
+#include "fastdeploy/utils/utils.h"
 #include <cstring>
 #include <limits>
 #include <set>
 #include <sstream>
-#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace function {
-std::string Str(const std::vector<int64_t>& shape) {
-  std::ostringstream oss;
-  oss << "[ " << shape[0];
-  for (int i = 1; i < shape.size(); ++i) {
-    oss << " ," << shape[i];
-  }
-  oss << " ]";
-  return oss.str();
-}
 
-std::vector<int64_t> ComputeAndCheckConcatOutputShape(
-    const std::vector<FDTensor>& input, int axis) {
+std::vector<int64_t>
+ComputeAndCheckConcatOutputShape(const std::vector<FDTensor>& input, int axis) {
   const size_t n = input.size();
   auto out_dims = input[0].shape;
   size_t in_zero_dims_size = out_dims.size();
@@ -58,8 +49,7 @@ std::vector<int64_t> ComputeAndCheckConcatOutputShape(
   return out_dims;
 }
 
-template <typename T>
-struct ConcatFunctor {
+template <typename T> struct ConcatFunctor {
   void operator()(const std::vector<FDTensor>& input, int axis,
                   FDTensor* output) {
     size_t num = input.size();
@@ -85,8 +75,9 @@ struct ConcatFunctor {
       int64_t col_len = input_cols[j];
       const T* input_data = reinterpret_cast<const T*>(input[j].Data());
       for (int64_t k = 0; k < out_rows; ++k) {
-        std::memcpy(output_data + k * out_cols + col_idx,
-                    input_data + k * col_len, sizeof(T) * col_len);
+        FDTensor::CopyBuffer(output_data + k * out_cols + col_idx,
+                             input_data + k * col_len, sizeof(T) * col_len,
+                             input[j].device, input[j].is_pinned_memory);
       }
       col_idx += col_len;
     }
@@ -97,7 +88,8 @@ template <typename T>
 void ConcatKernel(const std::vector<FDTensor>& input, FDTensor* output,
                   int axis) {
   auto output_shape = ComputeAndCheckConcatOutputShape(input, axis);
-  output->Allocate(output_shape, TypeToDataType<T>::dtype);
+  output->Resize(output_shape, TypeToDataType<T>::dtype, output->name,
+                 input[0].device);
 
   ConcatFunctor<T> functor;
   functor(input, axis, output);
@@ -115,10 +107,9 @@ void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {
   if (axis < 0) {
     axis += rank;
   }
-  FDTensor out_temp;
+
   FD_VISIT_ALL_TYPES(x[0].dtype, "Concat",
-                     ([&] { ConcatKernel<data_t>(x, &out_temp, axis); }));
-  *out = std::move(out_temp);
+                     ([&] { ConcatKernel<data_t>(x, out, axis); }));
 }
 
 }  // namespace function

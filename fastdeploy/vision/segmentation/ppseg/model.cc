@@ -39,6 +39,8 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
 }
 
 bool PaddleSegModel::Initialize() {
+  reused_input_tensors_.resize(1);
+  reused_output_tensors_.resize(1);
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file."
             << std::endl;
@@ -133,6 +135,9 @@ bool PaddleSegModel::BuildPreprocessPipelineFromConfig() {
   if (!(this->disable_normalize_and_permute)) {
     processors_.push_back(std::make_shared<HWC2CHW>());
   }
+
+  // Fusion will improve performance
+  FuseTransforms(&processors_);
   return true;
 }
 
@@ -332,7 +337,6 @@ bool PaddleSegModel::Postprocess(
 
 bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   Mat mat(*im);
-  std::vector<FDTensor> processed_data(1);
 
   std::map<std::string, std::array<int, 2>> im_info;
 
@@ -340,18 +344,18 @@ bool PaddleSegModel::Predict(cv::Mat* im, SegmentationResult* result) {
   im_info["input_shape"] = {static_cast<int>(mat.Height()),
                             static_cast<int>(mat.Width())};
 
-  if (!Preprocess(&mat, &(processed_data[0]))) {
+  if (!Preprocess(&mat, &(reused_input_tensors_[0]))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
   }
-  std::vector<FDTensor> infer_result(1);
-  if (!Infer(processed_data, &infer_result)) {
+
+  if (!Infer()) {
     FDERROR << "Failed to inference while using model:" << ModelName() << "."
             << std::endl;
     return false;
   }
-  if (!Postprocess(&infer_result[0], result, im_info)) {
+  if (!Postprocess(&reused_output_tensors_[0], result, im_info)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

@@ -46,8 +46,8 @@ endif()
 
 if(ANDROID)
   # To reduce the volume of the library
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Os -ffunction-sections -fdata-sections")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Os -ffunction-sections -fdata-sections")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0 -Ofast -ffunction-sections -fdata-sections")
 endif()
 
 ############################# Basic Options for FastDeploy ################################
@@ -164,6 +164,7 @@ configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
 file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
 file(GLOB_RECURSE FDTENSOR_FUNC_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cu)
+file(GLOB_RECURSE DEPLOY_ORT_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cu)
 file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
 file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
 file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/*.cc)
@@ -200,6 +201,9 @@ if(ENABLE_ORT_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/onnxruntime.cmake)
   list(APPEND DEPEND_LIBS external_onnxruntime)
+  if(WITH_GPU)
+    list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_ORT_CUDA_SRCS})
+  endif()
 endif()
 
 if(ENABLE_LITE_BACKEND)
@@ -368,6 +372,10 @@ if(ENABLE_TRT_BACKEND)
     find_package(Python COMPONENTS Interpreter Development REQUIRED)
     message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
     execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
+    file(GLOB_RECURSE TRT_STAIC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib/*.a)
+    if(TRT_STATIC_LIBS)
+      file(REMOVE ${TRT_STAIC_LIBS})
+    endif()
     if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
 	      COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
@@ -415,14 +423,14 @@ endif()
 if(ANDROID OR IOS)
   if(ENABLE_TEXT)
     set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
-    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support faster_tokenizer with Android/IOS now.")
+    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support fast_tokenizer with Android/IOS now.")
   endif()
 endif()
 
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
-  include(${PROJECT_SOURCE_DIR}/cmake/faster_tokenizer.cmake)
+  include(${PROJECT_SOURCE_DIR}/cmake/fast_tokenizer.cmake)
 endif()
 
 if(ENABLE_PADDLE_FRONTEND)
@@ -480,6 +488,12 @@ if(MSVC)
   # disable warnings for dll export
   target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
 endif()
+
+if (ANDROID)
+  find_library(log-lib log)
+  list(APPEND DEPEND_LIBS ${log-lib})
+endif()
+
 target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(WIN32)
