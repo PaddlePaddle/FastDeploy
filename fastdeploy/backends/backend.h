@@ -63,7 +63,7 @@ class BaseBackend {
   virtual std::vector<TensorInfo> GetInputInfos() = 0;
   virtual std::vector<TensorInfo> GetOutputInfos() = 0;
   // if copy_to_fd is true, copy memory data to FDTensor
-  /// else share memory to FDTensor(only Paddle、ORT、TRT、OpenVINO support it)
+  // else share memory to FDTensor(only Paddle、ORT、TRT、OpenVINO support it)
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs,
                      bool copy_to_fd = true) = 0;

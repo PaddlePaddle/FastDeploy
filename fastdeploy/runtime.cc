@@ -604,7 +604,7 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
   }
 }
 
-FDTensor* Runtime::GetOutputTensor(std::string name) {
+FDTensor* Runtime::GetOutputTensor(const std::string& name) {
   for (auto& t : output_tensors_) {
     if (t.name == name) {
       return &t;

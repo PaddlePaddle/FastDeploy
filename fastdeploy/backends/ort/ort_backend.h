@@ -93,7 +93,7 @@ class OrtBackend : public BaseBackend {
   Ort::CustomOpDomain custom_op_domain_ = Ort::CustomOpDomain("Paddle");
 #endif
   OrtBackendOption option_;
-  void OrtVlaueToFDTensor(const Ort::Value& value, FDTensor* tensor,
+  void OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
                           const std::string& name, bool copy_to_fd);
 };
 }  // namespace fastdeploy

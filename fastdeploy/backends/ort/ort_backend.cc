@@ -181,7 +181,7 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::OrtVlaueToFDTensor(const Ort::Value& value, FDTensor* tensor,
+void OrtBackend::OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
                            const std::string& name, bool copy_to_fd) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
@@ -256,7 +256,7 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    OrtVlaueToFDTensor(ort_outputs[i], &((*outputs)[i]),
+    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]),
                        outputs_desc_[i].name, copy_to_fd);
   }
 
