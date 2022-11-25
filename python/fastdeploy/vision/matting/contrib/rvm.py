@@ -59,6 +59,13 @@ class RobustVideoMatting(FastDeployModel):
         """
         return self._model.video_mode
 
+    @property
+    def swap_rb(self):
+        """
+        Whether convert to RGB, Set to false if you have converted YUV format images to RGB outside the model, dafault true
+        """
+        return self._model.swap_rb
+
     @size.setter
     def size(self, wh):
         """
@@ -79,3 +86,12 @@ class RobustVideoMatting(FastDeployModel):
         assert isinstance(
             value, bool), "The value to set `video_mode` must be type of bool."
         self._model.video_mode = value
+
+    @swap_rb.setter
+    def swap_rb(self, value):
+        """
+        Set swap_rb property, the default is true
+        """
+        assert isinstance(
+            value, bool), "The value to set `swap_rb` must be type of bool."
+        self._model.swap_rb = value
