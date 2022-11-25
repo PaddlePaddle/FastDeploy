@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include "fastdeploy/function/quantile.h"
+#include "fastdeploy/function/cast.h"
 #include "fastdeploy/function/elementwise.h"
 #include "fastdeploy/function/isfinite.h"
 #include "fastdeploy/function/math.h"
 #include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/transpose.h"
+#include "fastdeploy/function/concat.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -59,16 +61,13 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
 
   int64_t target_axis = rank - 1;
   FDTensor mask, valid_counts, mask_any;
-  IsNan(y, &mask, FDDataType::FP64);
-  Min(mask, &mask_any, {target_axis}, true);
-  double* mask_data = reinterpret_cast<double*>(mask.Data());
+  IsNan(y, &mask);
+  Any(mask, &mask_any, {target_axis}, true);
+  bool* mask_data = reinterpret_cast<bool*>(mask.Data());
   std::transform(mask_data, mask_data + mask.Numel(), mask_data,
-                 [](const double& val) {
-                   if (std::abs(val) < 1e-8) {
-                     return 1;
-                   }
-                   return 0;
-                 });
+                 [](const bool& val) { return !val; });
+  Cast(mask_any, &mask_any, FDDataType::FP64);
+  Cast(mask, &mask, FDDataType::FP64);
   Sum(mask, &valid_counts, {target_axis}, true);
 
   FDTensor one_tensor(static_cast<double>(1.0));
@@ -77,15 +76,13 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   FDTensor last_index(static_cast<double>(x.Shape()[target_axis]));
   for (auto q_num : q) {
     FDASSERT(q_num >= 0 && q_num <= 1, "q should be in range [0, 1]");
-    FDTensor q_tensor, index;
-    q_tensor.Allocate({1}, FDDataType::FP64);
-    (reinterpret_cast<double*>(q_tensor.Data()))[0] = q_num;
-    index = q_tensor * (valid_counts - one_tensor);
+    FDTensor q_tensor(static_cast<double>(q_num));
+    FDTensor index = q_tensor * (valid_counts - one_tensor);
     index = mask_any * last_index + (one_tensor - mask_any) * index;
     indices.push_back(index);
   }
 
-  std::vector<FDTensor> output;
+  std::vector<FDTensor> outputs;
   FDTensor sorted_tensor, sorted_indices_tensor;
   Sort(y, &sorted_tensor, &sorted_indices_tensor, target_axis);
 
@@ -93,11 +90,24 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   for (auto&& index : indices) {
     Floor(index, &indices_below);
     Ceil(index, &indices_upper);
+    Cast(indices_below, &indices_below, FDDataType::INT32);
+    Cast(indices_upper, &indices_upper, FDDataType::INT32);
 
+    FDTensor tensor_below, tensor_upper;
     FDTensor weight = index - indices_below;
+    FDTensor out = tensor_below + weight * (tensor_upper - tensor_below);
+    out.Squeeze(target_axis);
+    outputs.push_back(std::move(out));
   }
-
-  out->Allocate(out_shape, x.Dtype());
+  if (outputs.size() > 1) {
+    // Execute stack.
+    for (auto& output : outputs) {
+      output.ExpandDim(0);
+    }
+    Concat(outputs, out, 0);
+  } else {
+    *out = std::move(outputs[0]);
+  }
 }
 
 void Quantile(const FDTensor& x, const std::vector<double>& q,
