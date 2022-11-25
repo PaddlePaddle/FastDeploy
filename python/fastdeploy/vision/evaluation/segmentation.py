@@ -60,9 +60,9 @@ def eval_segmentation(model, data_dir, batch_size=1):
             results = model.batch_predict(im_list)
         if i == image_num - 1:
             end_time = time.time()
-        average_inference_time = round(
-            (end_time - start_time) / (image_num - twenty_percent_image_num),
-            4)
+            average_inference_time = round(
+                (end_time - start_time) /
+                (image_num - twenty_percent_image_num), 4)
         for result, label in zip(results, label_list):
             pred = np.array(result.label_map).reshape(result.shape[0],
                                                       result.shape[1])
