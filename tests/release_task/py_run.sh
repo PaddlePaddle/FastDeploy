@@ -85,5 +85,3 @@ else
        cat $res_file
        exit -1
 fi
-
-
