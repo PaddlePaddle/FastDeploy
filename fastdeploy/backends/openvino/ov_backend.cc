@@ -122,7 +122,6 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
       auto& affinity = supported_ops[op->get_friendly_name()];
       if (option_.cpu_operators.find(op->description()) !=
           option_.cpu_operators.end()) {
-        FDINFO << op->get_name() << " " << op->get_friendly_name() << std::endl;
         op->get_rt_info()["affinity"] = "CPU";
       } else {
         op->get_rt_info()["affinity"] = affinity;
