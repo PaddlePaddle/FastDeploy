@@ -93,17 +93,19 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     std::vector<std::string>* text_ptr = &ocr_result.text;
     std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;
 
-    if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr)) {
-      FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
-      return false;
-    }else{
-      for (size_t i_img = 0; i_img < image_list.size(); ++i_img) {
-        if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->postprocessor_.cls_thresh_) {
-          cv::rotate(image_list[i_img], image_list[i_img], 1);
+    if (nullptr != classifier_){
+      if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr)) {
+        FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
+        return false;
+      }else{
+        for (size_t i_img = 0; i_img < image_list.size(); ++i_img) {
+          if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->postprocessor_.cls_thresh_) {
+            cv::rotate(image_list[i_img], image_list[i_img], 1);
+          }
         }
       }
     }
-
+    
     if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr)) {
       FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
       return false;
