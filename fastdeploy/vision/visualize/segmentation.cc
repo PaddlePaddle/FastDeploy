@@ -17,12 +17,192 @@
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
 
 namespace fastdeploy {
 namespace vision {
 
+#ifdef __ARM_NEON  
+static inline void GetShiftAndMultiFactor(
+  float weight, uint8_t *shift_factor, 
+  uint8_t *old_multi_factor, uint8_t *new_multi_factor) {
+  if (weight > 0.00f && weight <= 0.25f) {
+    *shift_factor = 2;
+    *new_multi_factor = 1;
+    *old_multi_factor = 3;
+  } else if (weight > 0.25f && weight <= 0.50f) {
+    *shift_factor = 1;
+    *new_multi_factor = 1;
+    *old_multi_factor = 1;
+  } else if (weight > 0.50f && weight <= 0.75f) {
+    *shift_factor = 2;
+    *new_multi_factor = 3;
+    *old_multi_factor = 1;
+  } else {
+    *shift_factor = 3;
+    *new_multi_factor = 7;
+    *old_multi_factor = 1;
+  }
+}
+
+static cv::Mat FastVisSegmentationNEON(
+  const cv::Mat& im, const SegmentationResult& result,
+  float weight, bool quantize_weight = true) {
+  int64_t height = result.shape[0];
+  int64_t width = result.shape[1];
+  auto vis_img = cv::Mat(height, width, CV_8UC3);
+  
+  int64_t size = height * width;
+  uint8_t *vis_ptr = static_cast<uint8_t*>(vis_img.data);
+  const uint8_t *label_ptr = static_cast<const uint8_t*>(result.label_map.data());
+  const uint8_t *im_ptr = static_cast<const uint8_t*>(im.data);
+
+  if (!quantize_weight) {
+    uint8x16x3_t bgrx16x3;
+    int64_t i = 0;
+    for (; i < size - 15; i += 16) {
+      uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+      // e.g 0b00000001 << 7 -> 0b10000000 128;
+      bgrx16x3.val[0] = vshlq_n_u8(labelx16, 7); 
+      bgrx16x3.val[1] = vshlq_n_u8(labelx16, 6); 
+      bgrx16x3.val[2] = vshlq_n_u8(labelx16, 5); 
+      vst3q_u8(vis_ptr, bgrx16x3);
+      vis_ptr += 48;
+      label_ptr += 16;
+    }
+    for (; i < size; i++) {
+      uint8_t label = *(label_ptr++);
+      *(vis_ptr++) = (label << 7); 
+      *(vis_ptr++) = (label << 6);
+      *(vis_ptr++) = (label << 5);
+    }
+    // Blend colors use opencv
+    cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
+    return vis_img;
+  }
+  
+  // Quantize the weight to boost blending performance.
+  // if 0.00 < w <= 0.25, w ~ 1/4=1/(2^2) shift right 2 mul 1, 3
+  // if 0.25 < w <= 0.50, w ~ 1/2=1/(2^1) shift right 1 mul 1, 1
+  // if 0.50 < w <= 0.75, w ~ 3/4=3/(2^2) shift right 2 mul 3, 1
+  // if 0.75 < w <= 1.00, w ~ 7/8=7/(2^3) shift right 3 mul 7, 1
+  // if w ~ 15/16, 31/32 ...
+  // After that, we can directly use shift instruction to blending
+  // the colors from input im and mask.
+  uint8x16x3_t old_bgrx16x3;
+  uint8x16x3_t new_bgrx16x3;
+  uint8_t shift_factor, old_multi_factor, new_multi_factor;
+  GetShiftAndMultiFactor(weight, &shift_factor, &old_multi_factor,
+                         &new_multi_factor);
+  uint8x16_t old_multi_factorx16 = vdupq_n_u8(old_multi_factor);
+  uint8x16_t new_multi_factorx16 = vdupq_n_u8(new_multi_factor);
+
+  int64_t i = 0;
+  for (; i < size - 15; i += 16) {
+    old_bgrx16x3 = vld3q_u8(im_ptr);  // 48 bytes
+    uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+    // e.g 0b00000001 << 7 -> 0b10000000 128;
+    uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
+    uint8x16_t mgx16 = vshlq_n_u8(labelx16, 6); 
+    uint8x16_t mrx16 = vshlq_n_u8(labelx16, 5); 
+    // Blend color from input im and mask to vis img.
+    // We can apply shift right operator to 8 bits data 
+    // directly if the weight is 0.5 by defaut.
+    // TODO: keep the pixels of input im if mask = 0
+    uint8x16_t bx16_shift_mul;
+    uint8x16_t gx16_shift_mul;
+    uint8x16_t rx16_shift_mul;
+    uint8x16_t mbx16_shift_mul;
+    uint8x16_t mgx16_shift_mul;
+    uint8x16_t mrx16_shift_mul;
+    if (shift_factor == 1) {
+      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[0], 1), old_multi_factorx16);
+      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[1], 1), old_multi_factorx16);   
+      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[2], 1), old_multi_factorx16);
+      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mbx16, 1), new_multi_factorx16);
+      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mgx16, 1), new_multi_factorx16);
+      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mrx16, 1), new_multi_factorx16);    
+    } else if (shift_factor == 2) {
+      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[0], 2), old_multi_factorx16);
+      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[1], 2), old_multi_factorx16);   
+      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[2], 2), old_multi_factorx16);
+      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mbx16, 2), new_multi_factorx16);
+      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mgx16, 2), new_multi_factorx16);
+      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mrx16, 2), new_multi_factorx16);    
+    } else if (shift_factor == 3) {
+      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[0], 3), old_multi_factorx16);
+      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[1], 3), old_multi_factorx16);   
+      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        old_bgrx16x3.val[2], 3), old_multi_factorx16);
+      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mbx16, 3), new_multi_factorx16);
+      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mgx16, 3), new_multi_factorx16);
+      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
+        mrx16, 3), new_multi_factorx16);    
+    }
+    
+    new_bgrx16x3.val[0] = vqaddq_u8(bx16_shift_mul, mbx16_shift_mul);
+    new_bgrx16x3.val[1] = vqaddq_u8(gx16_shift_mul, mgx16_shift_mul);
+    new_bgrx16x3.val[2] = vqaddq_u8(rx16_shift_mul, mrx16_shift_mul);
+    // Store the fused pixels to vis img
+    vst3q_u8(vis_ptr, new_bgrx16x3);
+
+    im_ptr += 48;
+    vis_ptr += 48;
+    label_ptr += 16;
+  }
+  for (; i < size; i++) {
+    uint8_t label = *(label_ptr++);
+    // e.g << 7 & >> 1; 7 - 1 = 6
+    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
+      + ((label << 7) >> shift_factor) * new_multi_factor; 
+    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
+      + ((label << 6) >> shift_factor) * new_multi_factor; 
+    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
+      + ((label << 5) >> shift_factor) * new_multi_factor; 
+  }  
+  
+  return vis_img;
+}
+#endif
+
+static cv::Mat FastVisSegmentation(
+  const cv::Mat& im, const SegmentationResult& result,
+  float weight) {
+#ifdef __ARM_NEON
+  return FastVisSegmentationNEON(im, result, weight);
+#else
+  // TODO: Support SSE/AVX on x86_64 platforms
+  FDERROR << "Your device is not support NEON! " 
+          << "Please use VisualizeType::DEFAULT instead." 
+          << std::endl;
+#endif
+}
+
+
 cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
-                        float weight) {
+                        float weight, VisualizeType type) {
+  if (type == VisualizeType::FAST) {
+    return FastVisSegmentation(im, result, weight);
+  }                        
+  
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
@@ -46,7 +226,7 @@ cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
   FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisSegmentation is "
                "deprecated, please use fastdeploy::vision:VisSegmentation "
                "function instead."
-            << std::endl;
+            << std::endl;     
   auto color_map = GetColorMap();
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
