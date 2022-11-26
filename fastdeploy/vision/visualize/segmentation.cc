@@ -60,23 +60,23 @@ static cv::Mat FastVisSegmentationNEON(
   const uint8_t *im_ptr = static_cast<const uint8_t*>(im.data);
 
   if (!quantize_weight) {
-    uint8x16x3_t bgrx16x3;
     int64_t i = 0;
     for (; i < size - 15; i += 16) {
       uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
       // e.g 0b00000001 << 7 -> 0b10000000 128;
-      bgrx16x3.val[0] = vshlq_n_u8(labelx16, 7); 
-      bgrx16x3.val[1] = vshlq_n_u8(labelx16, 6); 
-      bgrx16x3.val[2] = vshlq_n_u8(labelx16, 5); 
-      vst3q_u8(vis_ptr, bgrx16x3);
+      uint8x16x3_t vbgrx16x3;
+      vbgrx16x3.val[0] = vshlq_n_u8(labelx16, 7); 
+      vbgrx16x3.val[1] = vshlq_n_u8(labelx16, 4); 
+      vbgrx16x3.val[2] = vshlq_n_u8(labelx16, 3); 
+      vst3q_u8(vis_ptr, vbgrx16x3);
       vis_ptr += 48;
       label_ptr += 16;
     }
     for (; i < size; i++) {
       uint8_t label = *(label_ptr++);
       *(vis_ptr++) = (label << 7); 
-      *(vis_ptr++) = (label << 6);
-      *(vis_ptr++) = (label << 5);
+      *(vis_ptr++) = (label << 4);
+      *(vis_ptr++) = (label << 3);
     }
     // Blend colors use opencv
     cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
@@ -91,79 +91,58 @@ static cv::Mat FastVisSegmentationNEON(
   // if w ~ 15/16, 31/32 ...
   // After that, we can directly use shift instruction to blending
   // the colors from input im and mask.
-  uint8x16x3_t old_bgrx16x3;
-  uint8x16x3_t new_bgrx16x3;
   uint8_t shift_factor, old_multi_factor, new_multi_factor;
   GetShiftAndMultiFactor(weight, &shift_factor, &old_multi_factor,
                          &new_multi_factor);
-  uint8x16_t old_multi_factorx16 = vdupq_n_u8(old_multi_factor);
-  uint8x16_t new_multi_factorx16 = vdupq_n_u8(new_multi_factor);
-
+  uint8x16_t old_mulx16 = vdupq_n_u8(old_multi_factor);
+  uint8x16_t new_mulx16 = vdupq_n_u8(new_multi_factor);
+  
   int64_t i = 0;
   for (; i < size - 15; i += 16) {
-    old_bgrx16x3 = vld3q_u8(im_ptr);  // 48 bytes
+    uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr);  // 48 bytes
     uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+    uint8x16_t ibx16 = bgrx16x3.val[0];
+    uint8x16_t igx16 = bgrx16x3.val[1];
+    uint8x16_t irx16 = bgrx16x3.val[2];
     // e.g 0b00000001 << 7 -> 0b10000000 128;
     uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
-    uint8x16_t mgx16 = vshlq_n_u8(labelx16, 6); 
-    uint8x16_t mrx16 = vshlq_n_u8(labelx16, 5); 
+    uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
+    uint8x16_t mrx16 = vshlq_n_u8(labelx16, 3); 
     // Blend color from input im and mask to vis img.
     // We can apply shift right operator to 8 bits data 
     // directly if the weight is 0.5 by defaut.
     // TODO: keep the pixels of input im if mask = 0
-    uint8x16_t bx16_shift_mul;
-    uint8x16_t gx16_shift_mul;
-    uint8x16_t rx16_shift_mul;
-    uint8x16_t mbx16_shift_mul;
-    uint8x16_t mgx16_shift_mul;
-    uint8x16_t mrx16_shift_mul;
+    uint8x16_t ibx16_mshr, igx16_mshr, irx16_mshr;
+    uint8x16_t mbx16_mshr, mgx16_mshr, mrx16_mshr;
     if (shift_factor == 1) {
-      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[0], 1), old_multi_factorx16);
-      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[1], 1), old_multi_factorx16);   
-      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[2], 1), old_multi_factorx16);
-      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mbx16, 1), new_multi_factorx16);
-      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mgx16, 1), new_multi_factorx16);
-      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mrx16, 1), new_multi_factorx16);    
+      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 1), old_mulx16);
+      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 1), old_mulx16);   
+      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 1), old_mulx16);
+      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 1), new_mulx16);
+      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 1), new_mulx16);
+      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 1), new_mulx16);    
     } else if (shift_factor == 2) {
-      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[0], 2), old_multi_factorx16);
-      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[1], 2), old_multi_factorx16);   
-      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[2], 2), old_multi_factorx16);
-      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mbx16, 2), new_multi_factorx16);
-      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mgx16, 2), new_multi_factorx16);
-      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mrx16, 2), new_multi_factorx16);    
-    } else if (shift_factor == 3) {
-      bx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[0], 3), old_multi_factorx16);
-      gx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[1], 3), old_multi_factorx16);   
-      rx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        old_bgrx16x3.val[2], 3), old_multi_factorx16);
-      mbx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mbx16, 3), new_multi_factorx16);
-      mgx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mgx16, 3), new_multi_factorx16);
-      mrx16_shift_mul = vmulq_u8(vshrq_n_u8(
-        mrx16, 3), new_multi_factorx16);    
+      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 2), old_mulx16);
+      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 2), old_mulx16);   
+      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 2), old_mulx16);
+      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 2), new_mulx16);
+      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 2), new_mulx16);
+      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 2), new_mulx16);    
+    } else { 
+      // shift_factor == 3
+      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_mulx16);
+      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_mulx16);   
+      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_mulx16);
+      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 3), new_mulx16);
+      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 3), new_mulx16);
+      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 3), new_mulx16);    
     }
-    
-    new_bgrx16x3.val[0] = vqaddq_u8(bx16_shift_mul, mbx16_shift_mul);
-    new_bgrx16x3.val[1] = vqaddq_u8(gx16_shift_mul, mgx16_shift_mul);
-    new_bgrx16x3.val[2] = vqaddq_u8(rx16_shift_mul, mrx16_shift_mul);
-    // Store the fused pixels to vis img
-    vst3q_u8(vis_ptr, new_bgrx16x3);
-
+    uint8x16x3_t vbgr16x3;
+    vbgr16x3.val[0] = vaddq_u8(ibx16_mshr, mbx16_mshr);
+    vbgr16x3.val[1] = vaddq_u8(igx16_mshr, mgx16_mshr);
+    vbgr16x3.val[2] = vaddq_u8(irx16_mshr, mrx16_mshr);
+    // Store the blended pixels to vis img
+    vst3q_u8(vis_ptr, vbgr16x3);
     im_ptr += 48;
     vis_ptr += 48;
     label_ptr += 16;
@@ -174,11 +153,10 @@ static cv::Mat FastVisSegmentationNEON(
     *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
       + ((label << 7) >> shift_factor) * new_multi_factor; 
     *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
-      + ((label << 6) >> shift_factor) * new_multi_factor; 
+      + ((label << 4) >> shift_factor) * new_multi_factor; 
     *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
-      + ((label << 5) >> shift_factor) * new_multi_factor; 
+      + ((label << 3) >> shift_factor) * new_multi_factor; 
   }  
-  
   return vis_img;
 }
 #endif
@@ -195,7 +173,6 @@ static cv::Mat FastVisSegmentation(
           << std::endl;
 #endif
 }
-
 
 cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
                         float weight, VisualizeType type) {
