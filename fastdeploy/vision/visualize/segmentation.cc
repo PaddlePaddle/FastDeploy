@@ -166,9 +166,8 @@ static inline cv::Mat FastVisSegmentation(
   return FastVisSegmentationNEON(im, result, weight);
 #else
   // TODO: Support SSE/AVX on x86_64 platforms
-  FDERROR << "Your device is not support NEON! " 
-          << "Please use VisualizeType::DEFAULT instead." 
-          << std::endl;
+  FDASSERT(false, "Your device is not support NEON! 
+           Please use VisualizeType::DEFAULT instead.");        
 #endif
 }
 
