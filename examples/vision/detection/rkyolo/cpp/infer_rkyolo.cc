@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-void InferPicodet(const std::string& model_dir, const std::string& image_file) {
+void InferRKYolo(const std::string& model_dir, const std::string& image_file) {
   struct timeval start_time, stop_time;
   auto model_file = model_dir + "/yolov5s_relu_tk2_RK3588_i8.rknn";
 
@@ -57,6 +57,6 @@ void InferPicodet(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
-  cv::imwrite("picodet_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./picodet_result.jpg" << std::endl;
+  cv::imwrite("rkyolo_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./rkyolo_result.jpg" << std::endl;
 }
