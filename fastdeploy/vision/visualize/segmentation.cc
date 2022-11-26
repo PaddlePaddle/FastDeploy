@@ -28,6 +28,12 @@ namespace vision {
 static inline void GetShiftAndMultiFactor(
   float weight, uint8_t *shift_factor, 
   uint8_t *old_multi_factor, uint8_t *new_multi_factor) {
+  // Quantize the weight to boost blending performance.
+  // if 0.00 < w <= 0.25, w ~ 1/4=1/(2^2) shift right 2 mul 1, 3
+  // if 0.25 < w <= 0.50, w ~ 1/2=1/(2^1) shift right 1 mul 1, 1
+  // if 0.50 < w <= 0.75, w ~ 3/4=3/(2^2) shift right 2 mul 3, 1
+  // if 0.75 < w <= 1.00, w ~ 7/8=7/(2^3) shift right 3 mul 7, 1
+  // if w ~ 15/16, 31/32 ...  
   if (weight > 0.00f && weight <= 0.25f) {
     *shift_factor = 2;
     *new_multi_factor = 1;
@@ -84,13 +90,9 @@ static cv::Mat FastVisSegmentationNEON(
   }
   
   // Quantize the weight to boost blending performance.
-  // if 0.00 < w <= 0.25, w ~ 1/4=1/(2^2) shift right 2 mul 1, 3
-  // if 0.25 < w <= 0.50, w ~ 1/2=1/(2^1) shift right 1 mul 1, 1
-  // if 0.50 < w <= 0.75, w ~ 3/4=3/(2^2) shift right 2 mul 3, 1
-  // if 0.75 < w <= 1.00, w ~ 7/8=7/(2^3) shift right 3 mul 7, 1
-  // if w ~ 15/16, 31/32 ...
-  // After that, we can directly use shift instruction to blending
-  // the colors from input im and mask.
+  // After that, we can directly use shift instructions
+  // to blend the colors from input im and mask. Please 
+  // check GetShiftAndMultiFactor for more details.
   uint8_t shift_factor, old_multi_factor, new_multi_factor;
   GetShiftAndMultiFactor(weight, &shift_factor, &old_multi_factor,
                          &new_multi_factor);
@@ -108,9 +110,6 @@ static cv::Mat FastVisSegmentationNEON(
     uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
     uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
     uint8x16_t mrx16 = vshlq_n_u8(labelx16, 3); 
-    // Blend color from input im and mask to vis img.
-    // We can apply shift right operator to 8 bits data 
-    // directly if the weight is 0.5 by defaut.
     // TODO: keep the pixels of input im if mask = 0
     uint8x16_t ibx16_mshr, igx16_mshr, irx16_mshr;
     uint8x16_t mbx16_mshr, mgx16_mshr, mrx16_mshr;
@@ -128,8 +127,7 @@ static cv::Mat FastVisSegmentationNEON(
       mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 2), new_mulx16);
       mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 2), new_mulx16);
       mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 2), new_mulx16);    
-    } else { 
-      // shift_factor == 3
+    } else { // shift_factor == 3
       ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_mulx16);
       igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_mulx16);   
       irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_mulx16);
@@ -161,7 +159,7 @@ static cv::Mat FastVisSegmentationNEON(
 }
 #endif
 
-static cv::Mat FastVisSegmentation(
+static inline cv::Mat FastVisSegmentation(
   const cv::Mat& im, const SegmentationResult& result,
   float weight) {
 #ifdef __ARM_NEON
