@@ -47,6 +47,8 @@ bool RobustVideoMatting::Initialize() {
 
   video_mode = true;
 
+  swap_rb = true;
+
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -66,7 +68,7 @@ bool RobustVideoMatting::Preprocess(
   // Convert_and_permute(swap_rb=true)
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  ConvertAndPermute::Run(mat, alpha, beta, true);
+  ConvertAndPermute::Run(mat, alpha, beta, swap_rb);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {mat->Height(), mat->Width()};
@@ -130,7 +132,6 @@ bool RobustVideoMatting::Postprocess(
     Resize::Run(&fgr_resized, in_w, in_h, -1, -1);
   }
 
-  result->Clear();
   result->contain_foreground = true;
   // if contain_foreground == true, shape must set to (h, w, c)
   result->shape = {static_cast<int64_t>(in_h), static_cast<int64_t>(in_w), 3};

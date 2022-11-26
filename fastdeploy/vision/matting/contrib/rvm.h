@@ -58,6 +58,9 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
   /// Whether to open the video mode, if there are some irrelevant pictures, set it to fasle, the default is true // NOLINT
   bool video_mode;
 
+  /// Whether convert to RGB, Set to false if you have converted YUV format images to RGB outside the model, dafault true // NOLINT
+  bool swap_rb;
+
  private:
   bool Initialize();
   /// Preprocess an input image, and set the preprocessed results to `outputs`

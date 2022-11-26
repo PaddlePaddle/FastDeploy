@@ -18,13 +18,12 @@ namespace fastdeploy {
 namespace vision {
 namespace sr {
 
-EDVR::EDVR(const std::string& model_file,
-           const std::string& params_file,
+EDVR::EDVR(const std::string& model_file, const std::string& params_file,
            const RuntimeOption& custom_option,
-           const ModelFormat& model_format){
+           const ModelFormat& model_format) {
   // unsupported ORT backend
-  valid_cpu_backends = {Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO};
+  valid_gpu_backends = {Backend::PDINFER, Backend::TRT, Backend::ORT};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -34,28 +33,31 @@ EDVR::EDVR(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool EDVR::Postprocess(std::vector<FDTensor>& infer_results, std::vector<cv::Mat>& results){
+bool EDVR::Postprocess(std::vector<FDTensor>& infer_results,
+                       std::vector<cv::Mat>& results) {
   // group to image
   // output_shape is [b, n, c, h, w] n = frame_nums b=1(default)
   // b and n is dependence export model shape
-  // see https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md
+  // see
+  // https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md
   auto output_shape = infer_results[0].shape;
   // EDVR
   int h_ = output_shape[2];
   int w_ = output_shape[3];
   int c_ = output_shape[1];
   int frame_num = 1;
-  float *out_data = static_cast<float *>(infer_results[0].Data());
-  cv::Mat temp = cv::Mat::zeros(h_, w_, CV_32FC3); // RGB image
+  float* out_data = static_cast<float*>(infer_results[0].Data());
+  cv::Mat temp = cv::Mat::zeros(h_, w_, CV_32FC3);  // RGB image
   int pix_num = h_ * w_;
   int frame_pix_num = pix_num * c_;
   for (int frame = 0; frame < frame_num; frame++) {
     int index = 0;
     for (int h = 0; h < h_; ++h) {
       for (int w = 0; w < w_; ++w) {
-        temp.at<cv::Vec3f>(h, w) = {out_data[2 * pix_num + index + frame_pix_num * frame],
-                                    out_data[pix_num + index + frame_pix_num * frame],
-                                    out_data[index + frame_pix_num * frame]};
+        temp.at<cv::Vec3f>(h, w) = {
+            out_data[2 * pix_num + index + frame_pix_num * frame],
+            out_data[pix_num + index + frame_pix_num * frame],
+            out_data[index + frame_pix_num * frame]};
         index += 1;
       }
     }
@@ -66,6 +68,6 @@ bool EDVR::Postprocess(std::vector<FDTensor>& infer_results, std::vector<cv::Mat
   }
   return true;
 }
-} // namespace sr
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace sr
+}  // namespace vision
+}  // namespace fastdeploy
