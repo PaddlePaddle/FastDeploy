@@ -136,6 +136,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   external_data_ptr = nullptr;
 }
 
+void FDTensor::SetZpAndScale(int32_t &zp,float &scale){
+  zp_ = zp;
+  scale_ = scale;
+}
+
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,

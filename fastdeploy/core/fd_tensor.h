@@ -24,6 +24,11 @@
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
+  // only for RKNPU2
+  int32_t zp_;
+  float scale_;
+  void SetZpAndScale(int32_t &zp, float &scale);
+
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
