@@ -67,8 +67,7 @@ int RKYOLOPostprocessor::PostProcess(const std::vector<FDTensor>& tensors,
       int grid_h = height_ / stride;
       int grid_w = width_ / stride;
       int* anchor = &(anchors_.data()[i * 2 * anchor_per_branch_]);
-      if (tensors[i].dtype == FDDataType::INT8 or
-          tensors[i].dtype == FDDataType::UINT8) {
+      if (tensors[i].dtype == FDDataType::INT8 || tensors[i].dtype == FDDataType::UINT8) {
         validCount = validCount +
                      ProcessInt8((int8_t*)tensors[i].Data() + skip_address,
                                  anchor, grid_h, grid_w, stride, filterBoxes,
