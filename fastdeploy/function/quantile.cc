@@ -14,14 +14,14 @@
 
 #include "fastdeploy/function/quantile.h"
 #include "fastdeploy/function/cast.h"
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/function/elementwise.h"
+#include "fastdeploy/function/gather_scatter_along_axis.h"
 #include "fastdeploy/function/isfinite.h"
 #include "fastdeploy/function/math.h"
 #include "fastdeploy/function/reduce.h"
 #include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/transpose.h"
-#include "fastdeploy/function/concat.h"
-#include "fastdeploy/function/gather_scatter_along_axis.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -86,6 +86,7 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   std::vector<FDTensor> outputs;
   FDTensor sorted_tensor, sorted_indices_tensor;
   Sort(y, &sorted_tensor, &sorted_indices_tensor, target_axis);
+  Cast(sorted_tensor, &sorted_tensor, FDDataType::FP64);
 
   FDTensor indices_below, indices_upper;
   for (auto&& index : indices) {
@@ -96,10 +97,14 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
     FDTensor tensor_below, tensor_upper;
     GatherAlongAxis(sorted_tensor, indices_below, &tensor_below, target_axis);
     GatherAlongAxis(sorted_tensor, indices_upper, &tensor_upper, target_axis);
+    Cast(indices_below, &indices_below, FDDataType::FP64);
 
     FDTensor weight = index - indices_below;
     FDTensor out = tensor_below + weight * (tensor_upper - tensor_below);
     out.Squeeze(target_axis);
+    if (out.Dtype() != x.Dtype()) {
+      Cast(out, &out, x.Dtype());
+    }
     outputs.push_back(std::move(out));
   }
   if (outputs.size() > 1) {
