@@ -26,6 +26,17 @@ void BindVisualize(pybind11::module& m) {
           vision::Mat(vis_im).ShareWithTensor(&out);
           return TensorToPyArray(out);
         })
+      .def("vis_detection_for_label",
+        [](pybind11::array& im_data, vision::DetectionResult& result,
+           std::vector<std::string>& labels,
+           float score_threshold, int line_size, float font_size) {
+          auto im = PyArrayToCvMat(im_data);
+          auto vis_im = vision::VisDetection(im, result, labels, score_threshold, 
+                                             line_size, font_size);
+          FDTensor out;
+          vision::Mat(vis_im).ShareWithTensor(&out);
+          return TensorToPyArray(out);
+        })
       .def("vis_face_detection",
            [](pybind11::array& im_data, vision::FaceDetectionResult& result,
               int line_size, float font_size) {
