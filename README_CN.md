@@ -17,6 +17,8 @@
 </p>
 
 <p align="center">
+    <a href="/docs/cn/build_and_install"> 安装 </a>
+    |
     <a href="docs/README_CN.md"> 使用文档 </a>
     |
     <a href="https://baidu-paddle.github.io/fastdeploy-api/"> API文档 </a>
