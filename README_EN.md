@@ -17,6 +17,8 @@ English | [简体中文](README_CN.md)
 </p>
 
 <p align="center">
+    <a href="/docs/en/build_and_install"> Installation </a>
+    |
     <a href="docs/README_EN.md"> Documents </a>
     |
     <a href="https://baidu-paddle.github.io/fastdeploy-api/"> API Docs </a>
