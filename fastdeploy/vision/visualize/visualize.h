@@ -39,7 +39,7 @@ struct FASTDEPLOY_DECL DefaultVisualizeType {
 /*! @brief Enable using VisualizeType::FAST mode to boost visulize
  * performance. In this mode, NEON/SSE/AVX optimizations will apply
  * to some visualize functions, such as VisSegmentation, VisMatting,
- * SwapBackground, SwapBackgroundSegmentation etc. On this mode,
+ * SwapBackground, SwapBackgroundSegmentation etc. In this mode,
  * visulize fuctions may run faster and some functions may casue a
  * little lower precision according to it's approximation algorithm.
  * Currently, these only available on ARM(Linux aarch64/Android),

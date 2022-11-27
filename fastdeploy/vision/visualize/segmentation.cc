@@ -185,7 +185,7 @@ cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
     return FastVisSegmentation(im, result, weight);
   }                        
   
-  // Use the native c++ version without any optimation.
+  // Use the native c++ version without any optimization.
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
