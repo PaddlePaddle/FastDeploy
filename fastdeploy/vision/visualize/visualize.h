@@ -78,10 +78,8 @@ FASTDEPLOY_DECL cv::Mat VisFaceAlignment(const cv::Mat& im,
                                          const FaceAlignmentResult& result,
                                          int line_size = 1);
 FASTDEPLOY_DECL cv::Mat VisSegmentation(
-  const cv::Mat& im,
-  const SegmentationResult& result,
-  float weight = 0.5,
-  VisualizeType type = VisualizeType::DEFAULT);
+  const cv::Mat& im, const SegmentationResult& result,
+  float weight = 0.5, VisualizeType type = VisualizeType::DEFAULT);
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
                                    bool remove_small_connected_area = false);
