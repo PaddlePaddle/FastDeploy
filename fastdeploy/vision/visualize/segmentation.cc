@@ -25,32 +25,19 @@ namespace fastdeploy {
 namespace vision {
 
 #ifdef __ARM_NEON  
-static inline void GetShiftAndMultiFactor(
-  float weight, uint8_t *shift_factor, 
-  uint8_t *old_multi_factor, uint8_t *new_multi_factor) {
+static inline void QuantizeBlendingWeight8(
+  float weight, uint8_t* old_multi_factor, uint8_t* new_multi_factor) {
   // Quantize the weight to boost blending performance.
-  // if 0.00 < w <= 0.25, w ~ 1/4=1/(2^2) shift right 2 mul 1, 3
-  // if 0.25 < w <= 0.50, w ~ 1/2=1/(2^1) shift right 1 mul 1, 1
-  // if 0.50 < w <= 0.75, w ~ 3/4=3/(2^2) shift right 2 mul 3, 1
-  // if 0.75 < w <= 1.00, w ~ 7/8=7/(2^3) shift right 3 mul 7, 1
-  // if w ~ 15/16, 31/32 ...  
-  if (weight > 0.00f && weight <= 0.25f) {
-    *shift_factor = 2;
-    *new_multi_factor = 1;
-    *old_multi_factor = 3;
-  } else if (weight > 0.25f && weight <= 0.50f) {
-    *shift_factor = 1;
-    *new_multi_factor = 1;
-    *old_multi_factor = 1;
-  } else if (weight > 0.50f && weight <= 0.75f) {
-    *shift_factor = 2;
-    *new_multi_factor = 3;
-    *old_multi_factor = 1;
-  } else {
-    *shift_factor = 3;
-    *new_multi_factor = 7;
-    *old_multi_factor = 1;
-  }
+  // if 0.0 < w <= 1/8, w ~ 1/8=1/(2^3) shift right 3 mul 1, 7
+  // if 1/8 < w <= 2/8, w ~ 2/8=1/(2^3) shift right 3 mul 2, 6
+  // if 2/8 < w <= 3/8, w ~ 3/8=1/(2^3) shift right 3 mul 3, 5
+  // if 3/8 < w <= 4/8, w ~ 4/8=1/(2^3) shift right 3 mul 4, 4
+  // Shift factor is always 3, but the mul factor is different.
+  // Moving 7 bits to the right tends to result in a zero value,
+  // So, We choose to shift 3 bits to get an approximation.
+  uint8_t weight_quantize = static_cast<uint8_t>(weight * 8.0f);
+  *new_multi_factor = weight_quantize;
+  *old_multi_factor = (8 - weight_quantize);
 }
 
 static cv::Mat FastVisSegmentationNEON(
@@ -93,13 +80,43 @@ static cv::Mat FastVisSegmentationNEON(
   // After that, we can directly use shift instructions
   // to blend the colors from input im and mask. Please 
   // check GetShiftAndMultiFactor for more details.
-  uint8_t shift_factor, old_multi_factor, new_multi_factor;
-  GetShiftAndMultiFactor(weight, &shift_factor, &old_multi_factor,
-                         &new_multi_factor);
-  uint8x16_t old_mulx16 = vdupq_n_u8(old_multi_factor);
-  uint8x16_t new_mulx16 = vdupq_n_u8(new_multi_factor);
+  uint8_t old_multi_factor, new_multi_factor;
+  QuantizeBlendingWeight8(weight, &old_multi_factor,
+                          &new_multi_factor);     
+  if (new_multi_factor == 0) {
+    return im; // Only keep origin image.
+  }                                            
+  
+  if (new_multi_factor == 8) {
+    int64_t i = 0;
+    // Only keep mask, no need to blending with origin image.
+    for (; i < size - 15; i += 16) {
+      uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+      // e.g 0b00000001 << 7 -> 0b10000000 128;
+      uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
+      uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
+      uint8x16_t mrx16 = vshlq_n_u8(labelx16, 3); 
+      uint8x16x3_t vbgr16x3;
+      vbgr16x3.val[0] = mbx16;
+      vbgr16x3.val[1] = mgx16;
+      vbgr16x3.val[2] = mrx16;
+      vst3q_u8(vis_ptr, vbgr16x3);
+      vis_ptr += 48;
+      label_ptr += 16;
+    }
+    for (; i < size; i++) {
+      uint8_t label = *(label_ptr++);
+      *(vis_ptr++) = (label << 7); 
+      *(vis_ptr++) = (label << 4);
+      *(vis_ptr++) = (label << 3);
+    }  
+    return vis_img;
+  }
   
   int64_t i = 0;
+  uint8x16_t old_mulx16 = vdupq_n_u8(old_multi_factor);
+  uint8x16_t new_mulx16 = vdupq_n_u8(new_multi_factor);
+  // Blend the two colors together with quantize 'weight'.
   for (; i < size - 15; i += 16) {
     uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr);  // 48 bytes
     uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
@@ -113,28 +130,14 @@ static cv::Mat FastVisSegmentationNEON(
     // TODO: keep the pixels of input im if mask = 0
     uint8x16_t ibx16_mshr, igx16_mshr, irx16_mshr;
     uint8x16_t mbx16_mshr, mgx16_mshr, mrx16_mshr;
-    if (shift_factor == 1) {
-      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 1), old_mulx16);
-      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 1), old_mulx16);   
-      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 1), old_mulx16);
-      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 1), new_mulx16);
-      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 1), new_mulx16);
-      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 1), new_mulx16);    
-    } else if (shift_factor == 2) {
-      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 2), old_mulx16);
-      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 2), old_mulx16);   
-      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 2), old_mulx16);
-      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 2), new_mulx16);
-      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 2), new_mulx16);
-      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 2), new_mulx16);    
-    } else { // shift_factor == 3
-      ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_mulx16);
-      igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_mulx16);   
-      irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_mulx16);
-      mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 3), new_mulx16);
-      mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 3), new_mulx16);
-      mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 3), new_mulx16);    
-    }
+    // Moving 7 bits to the right tends to result in zero,
+    // So, We choose to shift 3 bits to get an approximation 
+    ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_mulx16);
+    igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_mulx16);   
+    irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_mulx16);
+    mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 3), new_mulx16);
+    mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 3), new_mulx16);
+    mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 3), new_mulx16);  
     uint8x16x3_t vbgr16x3;
     vbgr16x3.val[0] = vaddq_u8(ibx16_mshr, mbx16_mshr);
     vbgr16x3.val[1] = vaddq_u8(igx16_mshr, mgx16_mshr);
@@ -148,12 +151,12 @@ static cv::Mat FastVisSegmentationNEON(
   for (; i < size; i++) {
     uint8_t label = *(label_ptr++);
     // e.g << 7 & >> 1; 7 - 1 = 6
-    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
-      + ((label << 7) >> shift_factor) * new_multi_factor; 
-    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
-      + ((label << 4) >> shift_factor) * new_multi_factor; 
-    *(vis_ptr++) = (*(im_ptr++) >> shift_factor) * old_multi_factor 
-      + ((label << 3) >> shift_factor) * new_multi_factor; 
+    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
+      + ((label << 7) >> 3) * new_multi_factor; 
+    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
+      + ((label << 4) >> 3) * new_multi_factor; 
+    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
+      + ((label << 3) >> 3) * new_multi_factor; 
   }  
   return vis_img;
 }
