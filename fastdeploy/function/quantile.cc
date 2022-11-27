@@ -97,6 +97,7 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
     FDTensor tensor_below, tensor_upper;
     GatherAlongAxis(sorted_tensor, indices_below, &tensor_below, target_axis);
     GatherAlongAxis(sorted_tensor, indices_upper, &tensor_upper, target_axis);
+    // Need to cast to FP64 to compute with index and tensor_upper
     Cast(indices_below, &indices_below, FDDataType::FP64);
 
     FDTensor weight = index - indices_below;
@@ -108,7 +109,7 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
     outputs.push_back(std::move(out));
   }
   if (outputs.size() > 1) {
-    // Execute stack.
+    // Execute stack operation
     for (auto& output : outputs) {
       output.ExpandDim(0);
     }
