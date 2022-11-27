@@ -176,10 +176,16 @@ static inline cv::Mat FastVisSegmentation(
 
 cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
                         float weight, VisualizeType type) {
-  if (type == VisualizeType::FAST) {
+  VisualizeType vtype = type;
+  if (type == VisualizeType::DEFAULT) {
+    vtype = DefaultVisualizeType::default_visualize_type_;
+  }      
+  // Try to use faster visulize fuction if 'vtype' is 'FAST'                 
+  if (vtype == VisualizeType::FAST) {
     return FastVisSegmentation(im, result, weight);
   }                        
   
+  // Use the native c++ version without any optimation.
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
