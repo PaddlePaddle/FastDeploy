@@ -14,18 +14,31 @@
 
 #pragma once
 
+#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 namespace function {
 
-/** Cast x to output data type element-wise. Only for float type FDTensor
-    @param x The input tensor.
+/** Fill the value to tensor
+    @param value The value to be filled in tensor
+    @param shape The shape of output tensor.
     @param out The output tensor which stores the result.
-    @param output_dtype The type of output tensor.
+    @param dtype The data type of output tensor. Default to float32
 */
-FASTDEPLOY_DECL void Cast(const FDTensor& x, FDTensor* out,
-                          FDDataType output_dtype);
+FASTDEPLOY_DECL void Full(const Scalar& value,
+                          const std::vector<int64_t>& shape, FDTensor* out,
+                          FDDataType dtype = FDDataType::FP32);
+
+/** Fill the value to tensor
+    @param x The input tensor.
+    @param value The value to be filled in tensor
+    @param out The output tensor which stores the result.
+    @param dtype The data type of output tensor. Default to float32
+*/
+FASTDEPLOY_DECL void FullLike(const FDTensor& x, const Scalar& value,
+                              FDTensor* out,
+                              FDDataType dtype = FDDataType::FP32);
 
 }  // namespace function
 }  // namespace fastdeploy
