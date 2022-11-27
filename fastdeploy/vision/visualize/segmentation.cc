@@ -79,7 +79,7 @@ static cv::Mat FastVisSegmentationNEON(
   // Quantize the weight to boost blending performance.
   // After that, we can directly use shift instructions
   // to blend the colors from input im and mask. Please 
-  // check GetShiftAndMultiFactor for more details.
+  // check QuantizeBlendingWeight8 for more details.
   uint8_t old_multi_factor, new_multi_factor;
   QuantizeBlendingWeight8(weight, &old_multi_factor,
                           &new_multi_factor);     
