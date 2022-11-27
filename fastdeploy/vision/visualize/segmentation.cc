@@ -162,12 +162,12 @@ static cv::Mat FastVisSegmentationNEON(
 static inline cv::Mat FastVisSegmentation(
   const cv::Mat& im, const SegmentationResult& result,
   float weight) {
-#ifdef __ARM_NEON
+#ifdef __ARM_NEON 
   return FastVisSegmentationNEON(im, result, weight);
 #else
   // TODO: Support SSE/AVX on x86_64 platforms
-  FDASSERT(false, "Your device is not support NEON! 
-           Please use VisualizeType::DEFAULT instead.");        
+  FDASSERT(false, "Your device is not support NEON!"
+          " Please use VisualizeType::DEFAULT instead."); 
 #endif
 }
 
