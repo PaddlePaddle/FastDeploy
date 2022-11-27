@@ -18,45 +18,6 @@
 namespace fastdeploy {
 namespace vision {
 
-// VisualizeType processing.
-VisualizeType DefaultVisualizeType::default_visualize_type_ = VisualizeType::DEFAULT;
-
-std::ostream& operator<<(std::ostream& out, const VisualizeType& t) {
-  switch (t) {
-    case VisualizeType::DEFAULT:
-      out << "VisualizeType::DEFAULT";
-      break;
-    case VisualizeType::FAST:
-      out << "VisualizeType::FAST";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of VisualizeType.");
-  }
-  return out;
-}
-
-void EnableFastVisualize() {
-#ifdef __ARM_NEON
-  DefaultVisualizeType::default_visualize_type_ = VisualizeType::FAST;
-  FDINFO << "Will change to visualize type "
-         << DefaultVisualizeType::default_visualize_type_ 
-         << std::endl;
-#else
-  // TODO: Support SSE/AVX on x86_64 platforms
-  FDWARNING << "Your lib is not support NEON! or not compiled with NEON!"
-               "Will fallback to use VisualizeType::DEFAULT instead."
-            << std::endl;
-#endif
-}
-
-void DisableFastVisualize() {
-  DefaultVisualizeType::default_visualize_type_ = VisualizeType::DEFAULT;
-  FDINFO << "Will change to visualize type "
-         << DefaultVisualizeType::default_visualize_type_ 
-         << std::endl;
-}
-
-// Other helpers.
 static std::vector<int> global_fd_vis_color_map = std::vector<int>();
 
 std::vector<int> GenerateColorMap(int num_classes) {

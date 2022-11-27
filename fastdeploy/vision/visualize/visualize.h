@@ -22,35 +22,6 @@
 namespace fastdeploy {
 namespace vision {
 
-enum class FASTDEPLOY_DECL VisualizeType {DEFAULT, FAST};
-
-FASTDEPLOY_DECL std::ostream& operator<<(
-  std::ostream& out, const VisualizeType& t);
-
-struct FASTDEPLOY_DECL DefaultVisualizeType {
-  // default_visualize_type_ has the highest priority
-  // all the visualize functions will force to use
-  // default_visualize_type_ if this flag is set.
-  // DEFAULT means this flag is not set
-  static VisualizeType default_visualize_type_;
-  // static int visualize_cpu_threads_num_;
-};
-
-/*! @brief Enable using VisualizeType::FAST mode to boost visulize
- * performance. In this mode, NEON/SSE/AVX optimizations will apply
- * to some visualize functions, such as VisSegmentation, VisMatting,
- * SwapBackground, SwapBackgroundSegmentation etc. In this mode,
- * visulize fuctions may run faster and some functions may casue a
- * little lower precision according to it's approximation algorithm.
- * Currently, these only available on ARM(Linux aarch64/Android),
- * so please don't use the this method to enable the FAST mode on
- * other platforms now, such as x86/x64 linux or windows.
- */
-FASTDEPLOY_DECL void EnableFastVisualize();
-
-/// Disable using VisualizeType::FAST mode.
-FASTDEPLOY_DECL void DisableFastVisualize();
-
 // This class will deprecated, please not use it
 class FASTDEPLOY_DECL Visualize {
  public:
@@ -104,9 +75,9 @@ FASTDEPLOY_DECL cv::Mat VisFaceDetection(const cv::Mat& im,
 FASTDEPLOY_DECL cv::Mat VisFaceAlignment(const cv::Mat& im,
                                          const FaceAlignmentResult& result,
                                          int line_size = 1);
-FASTDEPLOY_DECL cv::Mat VisSegmentation(
-  const cv::Mat& im, const SegmentationResult& result,
-  float weight = 0.5, VisualizeType type = VisualizeType::DEFAULT);
+FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
+                                        const SegmentationResult& result,
+                                        float weight = 0.5);
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
                                    bool remove_small_connected_area = false);

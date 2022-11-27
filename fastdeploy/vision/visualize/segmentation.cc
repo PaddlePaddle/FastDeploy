@@ -162,29 +162,9 @@ static cv::Mat FastVisSegmentationNEON(
 }
 #endif
 
-static inline cv::Mat FastVisSegmentation(
+static cv::Mat VisSegmentationCommonCpu(
   const cv::Mat& im, const SegmentationResult& result,
   float weight) {
-#ifdef __ARM_NEON 
-  return FastVisSegmentationNEON(im, result, weight);
-#else
-  // TODO: Support SSE/AVX on x86_64 platforms
-  FDASSERT(false, "Your device is not support NEON!"
-          " Please use VisualizeType::DEFAULT instead."); 
-#endif
-}
-
-cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
-                        float weight, VisualizeType type) {
-  VisualizeType vtype = type;
-  if (type == VisualizeType::DEFAULT) {
-    vtype = DefaultVisualizeType::default_visualize_type_;
-  }      
-  // Try to use faster visulize fuction if 'vtype' is 'FAST'                 
-  if (vtype == VisualizeType::FAST) {
-    return FastVisSegmentation(im, result, weight);
-  }                        
-  
   // Use the native c++ version without any optimization.
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
@@ -204,28 +184,27 @@ cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
   return vis_img;
 }
 
+cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
+                        float weight) {
+  // TODO: Support SSE/AVX on x86_64 platforms                        
+#ifdef __ARM_NEON 
+  return FastVisSegmentationNEON(im, result, weight, true);
+#else  
+  return VisSegmentationCommonCpu(im, result, weight);
+#endif  
+}
+
 cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
                                    const SegmentationResult& result) {
   FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisSegmentation is "
                "deprecated, please use fastdeploy::vision:VisSegmentation "
                "function instead."
             << std::endl;     
-  auto color_map = GetColorMap();
-  int64_t height = result.shape[0];
-  int64_t width = result.shape[1];
-  auto vis_img = cv::Mat(height, width, CV_8UC3);
-
-  int64_t index = 0;
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      int category_id = result.label_map[index++];
-      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
-    }
-  }
-  cv::addWeighted(im, .5, vis_img, .5, 0, vis_img);
-  return vis_img;
+#ifdef __ARM_NEON 
+  return FastVisSegmentationNEON(im, result, 0.5f, true);
+#else  
+  return VisSegmentationCommonCpu(im, result, 0.5f);
+#endif  
 }
 
 }  // namespace vision
