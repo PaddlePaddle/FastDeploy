@@ -47,29 +47,28 @@ static cv::Mat FastVisSegmentationNEON(
   int64_t width = result.shape[1];
   auto vis_img = cv::Mat(height, width, CV_8UC3);
   
-  int64_t size = height * width;
+  int32_t size = static_cast<int32_t>(height * width);
   uint8_t *vis_ptr = static_cast<uint8_t*>(vis_img.data);
   const uint8_t *label_ptr = static_cast<const uint8_t*>(result.label_map.data());
   const uint8_t *im_ptr = static_cast<const uint8_t*>(im.data);
 
   if (!quantize_weight) {
-    int64_t i = 0;
-    for (; i < size - 15; i += 16) {
-      uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+    // int32_t i = 0;
+    #pragma omp parallel for num_threads(2)
+    for (int i = 0; i < size - 15; i += 16) {
+      uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
       // e.g 0b00000001 << 7 -> 0b10000000 128;
       uint8x16x3_t vbgrx16x3;
       vbgrx16x3.val[0] = vshlq_n_u8(labelx16, 7); 
       vbgrx16x3.val[1] = vshlq_n_u8(labelx16, 4); 
       vbgrx16x3.val[2] = vshlq_n_u8(labelx16, 3); 
-      vst3q_u8(vis_ptr, vbgrx16x3);
-      vis_ptr += 48;
-      label_ptr += 16;
+      vst3q_u8(vis_ptr + i * 3, vbgrx16x3);
     }
-    for (; i < size; i++) {
-      uint8_t label = *(label_ptr++);
-      *(vis_ptr++) = (label << 7); 
-      *(vis_ptr++) = (label << 4);
-      *(vis_ptr++) = (label << 3);
+    for (int i = size - 15; i < size; i++) {
+      uint8_t label = label_ptr[i];
+      vis_ptr[i * 3 + 0] = (label << 7); 
+      vis_ptr[i * 3 + 1] = (label << 4); 
+      vis_ptr[i * 3 + 2] = (label << 3); 
     }
     // Blend colors use opencv
     cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
@@ -88,10 +87,10 @@ static cv::Mat FastVisSegmentationNEON(
   }                                            
   
   if (new_multi_factor == 8) {
-    int64_t i = 0;
     // Only keep mask, no need to blending with origin image.
-    for (; i < size - 15; i += 16) {
-      uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+    #pragma omp parallel for num_threads(2)
+    for (int i = 0; i < size - 15; i += 16) {
+      uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
       // e.g 0b00000001 << 7 -> 0b10000000 128;
       uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
       uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
@@ -100,26 +99,25 @@ static cv::Mat FastVisSegmentationNEON(
       vbgr16x3.val[0] = mbx16;
       vbgr16x3.val[1] = mgx16;
       vbgr16x3.val[2] = mrx16;
-      vst3q_u8(vis_ptr, vbgr16x3);
-      vis_ptr += 48;
-      label_ptr += 16;
+      vst3q_u8(vis_ptr + i * 3, vbgr16x3);
     }
-    for (; i < size; i++) {
-      uint8_t label = *(label_ptr++);
-      *(vis_ptr++) = (label << 7); 
-      *(vis_ptr++) = (label << 4);
-      *(vis_ptr++) = (label << 3);
+    for (int i = size - 15; i < size; i++) {
+      uint8_t label = label_ptr[i];
+      vis_ptr[i * 3 + 0] = (label << 7); 
+      vis_ptr[i * 3 + 1] = (label << 4); 
+      vis_ptr[i * 3 + 2] = (label << 3); 
     }  
     return vis_img;
   }
   
-  int64_t i = 0;
+  // int32_t i = 0;
   uint8x16_t old_mulx16 = vdupq_n_u8(old_multi_factor);
   uint8x16_t new_mulx16 = vdupq_n_u8(new_multi_factor);
   // Blend the two colors together with quantize 'weight'.
-  for (; i < size - 15; i += 16) {
-    uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr);  // 48 bytes
-    uint8x16_t labelx16 = vld1q_u8(label_ptr); // 16 bytes
+  #pragma omp parallel for num_threads(2)
+  for (int i = 0; i < size - 15; i += 16) {
+    uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr + i * 3);  // 48 bytes
+    uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
     uint8x16_t ibx16 = bgrx16x3.val[0];
     uint8x16_t igx16 = bgrx16x3.val[1];
     uint8x16_t irx16 = bgrx16x3.val[2];
@@ -143,20 +141,16 @@ static cv::Mat FastVisSegmentationNEON(
     vbgr16x3.val[1] = vaddq_u8(igx16_mshr, mgx16_mshr);
     vbgr16x3.val[2] = vaddq_u8(irx16_mshr, mrx16_mshr);
     // Store the blended pixels to vis img
-    vst3q_u8(vis_ptr, vbgr16x3);
-    im_ptr += 48;
-    vis_ptr += 48;
-    label_ptr += 16;
+    vst3q_u8(vis_ptr + i * 3, vbgr16x3);
   }
-  for (; i < size; i++) {
-    uint8_t label = *(label_ptr++);
-    // e.g << 7 & >> 1; 7 - 1 = 6
-    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
+  for (int i = size - 15; i < size; i++) {
+    uint8_t label = label_ptr[i];
+    vis_ptr[i * 3 + 0] = (im_ptr[i * 3 + 0] >> 3) * old_multi_factor 
       + ((label << 7) >> 3) * new_multi_factor; 
-    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
+    vis_ptr[i * 3 + 1] = (im_ptr[i * 3 + 1] >> 3) * old_multi_factor 
       + ((label << 4) >> 3) * new_multi_factor; 
-    *(vis_ptr++) = (*(im_ptr++) >> 3) * old_multi_factor 
-      + ((label << 3) >> 3) * new_multi_factor; 
+    vis_ptr[i * 3 + 2] = (im_ptr[i * 3 + 2] >> 3) * old_multi_factor 
+      + ((label << 3) >> 3) * new_multi_factor;   
   }  
   return vis_img;
 }
