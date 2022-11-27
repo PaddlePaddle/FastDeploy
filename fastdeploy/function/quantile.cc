@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/function/quantile.h"
+#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/function/cast.h"
 #include "fastdeploy/function/concat.h"
 #include "fastdeploy/function/elementwise.h"
@@ -71,10 +72,10 @@ void QuantileKernel(const FDTensor& x, const std::vector<double>& q,
   Cast(mask, &mask, FDDataType::FP64);
   Sum(mask, &valid_counts, {target_axis}, true);
 
-  FDTensor one_tensor(static_cast<double>(1.0));
+  FDTensor one_tensor(Scalar(static_cast<double>(1.0)));
 
   std::vector<FDTensor> indices;
-  FDTensor last_index(static_cast<double>(x.Shape()[target_axis]));
+  FDTensor last_index(Scalar(static_cast<double>(x.Shape()[target_axis])));
   for (auto q_num : q) {
     FDASSERT(q_num >= 0 && q_num <= 1, "q should be in range [0, 1]");
     FDTensor q_tensor(static_cast<double>(q_num));
