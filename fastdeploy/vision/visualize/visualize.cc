@@ -38,7 +38,7 @@ std::ostream& operator<<(std::ostream& out, const VisualizeType& t) {
 void EnableFastVisualize() {
 #ifdef __ARM_NEON
   DefaultVisualizeType::default_visualize_type_ = VisualizeType::FAST;
-  FDINFO << "Will change to VisualizeType:"
+  FDINFO << "Will change to visualize type "
          << DefaultVisualizeType::default_visualize_type_ 
          << std::endl;
 #else
@@ -51,7 +51,7 @@ void EnableFastVisualize() {
 
 void DisableFastVisualize() {
   DefaultVisualizeType::default_visualize_type_ = VisualizeType::DEFAULT;
-  FDINFO << "Will change to VisualizeType:"
+  FDINFO << "Will change to visualize type "
          << DefaultVisualizeType::default_visualize_type_ 
          << std::endl;
 }
