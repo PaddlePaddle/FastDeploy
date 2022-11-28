@@ -27,6 +27,7 @@
 #include "fastdeploy/function/pad.h"
 #include "fastdeploy/function/quantile.h"
 #include "fastdeploy/function/reduce.h"
+#include "fastdeploy/function/slice.h"
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/function/sort.h"
 #include "fastdeploy/function/split.h"
