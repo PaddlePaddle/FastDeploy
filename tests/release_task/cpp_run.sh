@@ -4,6 +4,11 @@ CURRENT_DIR=$(cd $(dirname $0); pwd)
 PLATFORM=$1
 DEVICE=$2
 VERSION=$3
+if [ "$VERSION" = "0.0.0" ];then
+       DOWNLOAD_DIR=dev
+else
+       DOWNLOAD_DIR=rel_tmp
+fi
 if [ "$DEVICE" = "gpu" ];then
        CPP_FASTDEPLOY_PACKAGE=fastdeploy-$PLATFORM-$DEVICE-$VERSION
 else
@@ -14,7 +19,7 @@ LINUX_X64_GPU_CASE=('ort' 'paddle' 'trt')
 LINUX_X64_CPU_CASE=('ort' 'paddle' 'openvino')
 #LINUX_AARCH_CPU_CASE=('ort' 'openvino')
 LINUX_AARCH_CPU_CASE=('ort')
-MACOS_INTEL_CPU_CASE=('ort' 'paddle' 'openvino')
+MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -35,6 +40,7 @@ elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "linux-aarch64" ];then
 	RUN_CASE=(${LINUX_AARCH_CPU_CASE[*]})
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-x86_64" ];then
 	RUN_CASE=(${MACOS_INTEL_CPU_CASE[*]})
+	CONF_THRESHOLD=0.5
 elif [ "$DEVICE" = "cpu" ] && [ "$PLATFORM" = "osx-arm64" ];then
 	RUN_CASE=(${MACOS_ARM64_CPU_CASE[*]})
 	CONF_THRESHOLD=0.5
@@ -42,20 +48,20 @@ fi
 
 case_number=${#RUN_CASE[@]}
 
-wget -q  https://fastdeploy.bj.bcebos.com/dev/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
+wget -q  https://fastdeploy.bj.bcebos.com/$DOWNLOAD_DIR/cpp/$CPP_FASTDEPLOY_PACKAGE.tgz
 
 tar xvf $CPP_FASTDEPLOY_PACKAGE.tgz
 mkdir build && cd build
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../$CPP_FASTDEPLOY_PACKAGE -DCMAKE_CXX_COMPILER=$CMAKE_CXX_COMPILER
 make -j
-
+ret=0
 for((i=0;i<case_number;i+=1))
 do
        backend=${RUN_CASE[i]}
        echo "Cpp Backend:" $backend
        if [ "$backend" != "trt" ];then
-               ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=cpu --backend=$backend >> cpp_cpu_result.txt
-               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold $CONF_THRESHOLD
+               ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=cpu --backend=$backend >> cpp_$backend\_cpu_result.txt
+               python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_$backend\_cpu_result.txt --platform $PLATFORM --device cpu --conf_threshold $CONF_THRESHOLD
        fi
        if [ "$DEVICE" = "gpu" ];then
 
@@ -63,13 +69,14 @@ do
                        ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_trt_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_trt_result.txt --platform $PLATFORM --device trt --conf_threshold $CONF_THRESHOLD
 	       else
-                       ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_gpu_result.txt
-                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
+                       ./infer_ppyoloe_demo --model_dir=$MODEL_PATH --image_file=$IMAGE_PATH --device=gpu --backend=$backend >> cpp_$backend\_gpu_result.txt
+                       python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path cpp_$backend\_gpu_result.txt --platform $PLATFORM --device gpu --conf_threshold $CONF_THRESHOLD
                fi
        fi
+       if [ $? -ne 0 ];then
+               ret=-1
+       fi
 done
-
-ret=$?
 
 res_file="result.txt"
 if [ ! -f $res_file ];then

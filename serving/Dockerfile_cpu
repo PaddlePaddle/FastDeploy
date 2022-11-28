@@ -17,16 +17,16 @@ FROM paddlepaddle/fastdeploy:22.09-cpu-only-min
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 \
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle paddlenlp faster_tokenizer 
+    && python3 -m pip install paddlepaddle paddlenlp fast-tokenizer-python
 
 COPY python/dist/*.whl *.whl /opt/fastdeploy/ 
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
-COPY build/fastdeploy-0.0.3 /opt/fastdeploy/
+COPY build/fastdeploy_install /opt/fastdeploy/
 
 RUN mv /opt/tritonserver/bin/tritonserver /opt/tritonserver/bin/fastdeployserver
 ENV LD_LIBRARY_PATH="/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"

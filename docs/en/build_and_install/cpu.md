@@ -2,13 +2,24 @@
 
 # How to Build CPU Deployment Environment
 
-FastDeploy currently supports the following backend engines on the CPU
+## Build Options
 
-| Backend               | Platform                                             | Supported model format | Description                                                                                      |
-|:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------------ |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64)                           | Paddle                 | The compilation switch `ENABLE_PADDLE_BACKEND` is controlled by ON or OFF. The default is OFF.   |
-| ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | The compilation switch `ENABLE_ORT_BACKEND` is controlled by ON or OFF. The default is OFF.      |
-| OpenVINO              | Windows(x64)<br>Linux(x64)<br>Mac(x86)               | Paddle/ONNX            | The compilation switch `ENABLE_OPENVINO_BACKEND` is controlled by ON or OFF. The default is OFF. |
+Please do not modify other cmake paramters exclude the following options.
+
+| Option                      | Supported Platform | Description                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate ONNX Runtime backend   |
+| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |               
+| ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate OpenVINO backend      |
+| ENABLE_VISION           | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate vision models |
+| ENABLE_TEXT             | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate text models |
+
+The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON, use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 ## How to Build and Install C++ SDK
 
@@ -66,6 +77,8 @@ Prerequisite for Compiling:
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 - python >= 3.6
+
+Notice the `wheel` is required if you need to pack a wheel, execute `pip install wheel` first.
 
 All compilation options are introduced via environment variables
 

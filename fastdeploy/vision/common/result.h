@@ -14,6 +14,7 @@
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
 #include "opencv2/core/core.hpp"
+#include <set>
 
 namespace fastdeploy {
 /** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
@@ -28,10 +29,12 @@ enum FASTDEPLOY_DECL ResultType {
   OCR,
   MOT,
   FACE_DETECTION,
+  FACE_ALIGNMENT,
   FACE_RECOGNITION,
   MATTING,
   MASK,
-  KEYPOINT_DETECTION
+  KEYPOINT_DETECTION,
+  HEADPOSE,
 };
 
 struct FASTDEPLOY_DECL BaseResult {
@@ -41,6 +44,7 @@ struct FASTDEPLOY_DECL BaseResult {
 /*! @brief Classify result structure for all the image classify models
  */
 struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
+  ClassifyResult() = default;
   /// Classify result for an image
   std::vector<int32_t> label_ids;
   /// The confidence for each classify result
@@ -49,6 +53,11 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
 
   /// Clear result
   void Clear();
+
+  /// Copy constructor
+  ClassifyResult(const ClassifyResult& other) = default;
+  /// Move assignment
+  ClassifyResult& operator=(ClassifyResult&& other);
 
   /// Debug function, convert the result to string to print
   std::string Str();
@@ -86,6 +95,7 @@ struct FASTDEPLOY_DECL Mask : public BaseResult {
 /*! @brief Detection result structure for all the object detection models and instance segmentation models
  */
 struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
+  DetectionResult() = default;
   /** \brief All the detected object boxes for an input image, the size of `boxes` is the number of detected objects, and the element of `boxes` is a array of 4 float values, means [xmin, ymin, xmax, ymax]
    */
   std::vector<std::array<float, 4>> boxes;
@@ -102,8 +112,10 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
 
   ResultType type = ResultType::DETECTION;
 
-  DetectionResult() {}
+  /// Copy constructor
   DetectionResult(const DetectionResult& res);
+  /// Move assignment
+  DetectionResult& operator=(DetectionResult&& other);
 
   /// Clear detection result
   void Clear();
@@ -170,6 +182,7 @@ struct FASTDEPLOY_DECL MOTResult : public BaseResult {
   /** \brief The classify label id for all the tracking object
    */
   std::vector<int> class_ids;
+
   ResultType type = ResultType::MOT;
   /// Clear MOT result
   void Clear();
@@ -212,9 +225,29 @@ struct FASTDEPLOY_DECL FaceDetectionResult : public BaseResult {
   std::string Str();
 };
 
+/*! @brief Face Alignment result structure for all the face alignment models
+ */
+struct FASTDEPLOY_DECL FaceAlignmentResult : public BaseResult {
+  /** \brief All the coordinates of detected landmarks for an input image, and the element of `landmarks` is a array of 2 float values, means [x, y]
+   */
+  std::vector<std::array<float, 2>> landmarks;
+
+  ResultType type = ResultType::FACE_ALIGNMENT;
+  /// Clear facealignment result
+  void Clear();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
 /*! @brief Segmentation result structure for all the segmentation models
  */
 struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
+  SegmentationResult() = default;
   /** \brief
    * `label_map` stores the pixel-level category labels for input image. the number of pixels is equal to label_map.size()
   */
@@ -225,15 +258,25 @@ struct FASTDEPLOY_DECL SegmentationResult : public BaseResult {
   std::vector<float> score_map;
   /// The output shape, means [H, W]
   std::vector<int64_t> shape;
+  /// SegmentationResult whether containing score_map
   bool contain_score_map = false;
 
+  /// Copy constructor
+  SegmentationResult(const SegmentationResult& other) = default;
+  /// Move assignment
+  SegmentationResult& operator=(SegmentationResult&& other);
+
   ResultType type = ResultType::SEGMENTATION;
-  /// Clear detection result
+  /// Clear Segmentation result
   void Clear();
+
+  /// Clear Segmentation result and free the memory
+  void Free();
 
   void Reserve(int size);
 
   void Resize(int size);
+
   /// Debug function, convert the result to string to print
   std::string Str();
 };
@@ -283,12 +326,34 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
 
   MattingResult() {}
   MattingResult(const MattingResult& res);
-  /// Clear detection result
+  /// Clear matting result
+  void Clear();
+
+  /// Free matting result
+  void Free();
+
+  void Reserve(int size);
+
+  void Resize(int size);
+  /// Debug function, convert the result to string to print
+  std::string Str();
+};
+
+/*! @brief HeadPose result structure for all the headpose models
+ */
+struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
+  /** \brief EulerAngles for an input image, and the element of `euler_angles` is a vector, contains {yaw, pitch, roll}
+   */
+  std::vector<float> euler_angles;
+
+  ResultType type = ResultType::HEADPOSE;
+  /// Clear headpose result
   void Clear();
 
   void Reserve(int size);
 
   void Resize(int size);
+
   /// Debug function, convert the result to string to print
   std::string Str();
 };

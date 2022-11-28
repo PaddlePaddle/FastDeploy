@@ -20,30 +20,36 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/utils/unique_ptr.h"
 #include "openvino/openvino.hpp"
 
 namespace fastdeploy {
 
 struct OpenVINOBackendOption {
-  int cpu_thread_num = 8;
+  std::string device = "CPU";
+  int cpu_thread_num = -1;
+  int num_streams = 0;
   std::map<std::string, std::vector<int64_t>> shape_infos;
+  std::set<std::string> cpu_operators{"MulticlassNms"};
 };
 
 class OpenVINOBackend : public BaseBackend {
  public:
+  static ov::Core core_;
   OpenVINOBackend() {}
   virtual ~OpenVINOBackend() = default;
 
-  bool InitFromPaddle(
-      const std::string& model_file, const std::string& params_file,
-      const OpenVINOBackendOption& option = OpenVINOBackendOption());
+  bool
+  InitFromPaddle(const std::string& model_file, const std::string& params_file,
+                 const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
-  bool InitFromOnnx(
-      const std::string& model_file,
-      const OpenVINOBackendOption& option = OpenVINOBackendOption());
+  bool
+  InitFromOnnx(const std::string& model_file,
+               const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs) override;
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
 
   int NumInputs() const override;
 
@@ -54,14 +60,18 @@ class OpenVINOBackend : public BaseBackend {
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
 
+  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
+                                     int device_id = -1) override;
+
  private:
   void InitTensorInfo(const std::vector<ov::Output<ov::Node>>& ov_outputs,
                       std::map<std::string, TensorInfo>* tensor_infos);
-  ov::Core core_;
+
   ov::CompiledModel compiled_model_;
   ov::InferRequest request_;
   OpenVINOBackendOption option_;
   std::vector<TensorInfo> input_infos_;
   std::vector<TensorInfo> output_infos_;
 };
+
 }  // namespace fastdeploy

@@ -17,20 +17,30 @@ FastDeploy基于[Triton Inference Server](https://github.com/triton-inference-se
 #### CPU镜像
 CPU镜像仅支持Paddle/ONNX模型在CPU上进行服务化部署，支持的推理后端包括OpenVINO、Paddle Inference和ONNX Runtime
 ``` shell
-docker pull paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
 ```
 
 #### GPU镜像
 GPU镜像支持Paddle/ONNX模型在GPU/CPU上进行服务化部署，支持的推理后端包括OpenVINO、TensorRT、Paddle Inference和ONNX Runtime
 ```
-docker pull paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 ```
 
 用户也可根据自身需求，参考如下文档自行编译镜像
 - [FastDeploy服务化部署镜像编译说明](docs/zh_CN/compile.md)
 
 ## 其它文档
-- [服务化模型目录说明](docs/zh_CN/model_repository.md) (说明如何准备模型目录)
-- [服务化部署配置说明](docs/zh_CN/model_configuration.md)  (说明runtime的配置选项)
-- [服务化部署示例](docs/zh_CN/demo.md)
-  - [YOLOV5 检测任务](../examples/vision/detection/yolov5/serving/README.md)
+- [模型仓库目录说明](docs/zh_CN/model_repository.md) (说明如何准备模型仓库目录)
+- [模型配置说明](docs/zh_CN/model_configuration.md)  (说明runtime的配置选项)
+
+
+### 服务化部署示例
+
+| 任务场景 | 模型  |
+|---|---|
+| Classification | [PaddleClas](../examples/vision/classification/paddleclas/serving/README.md) |
+| Detection | [PaddleDetection](../examples/vision/detection/paddledetection/serving/README.md) |
+| Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md) |
+| NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
+| NLP |	[PaddleNLP/UIE](../examples/text/uie/serving/README.md)|
+| Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|

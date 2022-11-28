@@ -8,17 +8,15 @@
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ## 快速开始
-以Linux上uie-base模型推理为例，在本目录执行如下命令即可完成编译测试。
+以Linux上uie-base模型推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)。
 
 ```
-#下载SDK，编译模型examples代码（SDK中包含了examples代码）
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.4.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.4.0.tgz
-
-cd fastdeploy-linux-x64-gpu-0.4.0/examples/text/uie/cpp
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../fastdeploy-linux-x64-gpu-0.4.0
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # 下载uie-base模型以及词表
@@ -466,8 +464,7 @@ void Predict(
 **参数**
 
 > * **texts**(list(str)): 文本列表
-> * **results**(list(dict())): UIE模型抽取结果。UIEResult结构详细可见[UIEResult说明](../../../../docs/api/text_results/uie_result.md)。
-
+> * **results**(list(dict())): UIE模型抽取结果。
 ## 相关文档
 
 [UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)

@@ -18,6 +18,7 @@ from . import ModelFormat
 from . import c_lib_wrap as C
 from . import rknpu2
 
+
 class Runtime:
     """FastDeploy Runtime object.
     """
@@ -34,7 +35,7 @@ class Runtime:
             self.runtime_option._option), "Initialize Runtime Failed!"
 
     def forward(self, *inputs):
-        """Inference with input data for poros
+        """[Only for Poros backend] Inference with input data for poros
 
         :param data: (list[str : numpy.ndarray])The input data list
         :return list of numpy.ndarray
@@ -56,10 +57,13 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
+        for k, v in data.items():
+            if not v.data.contiguous:
+                data[k] = np.ascontiguousarray(data[k])
         return self._runtime.infer(data)
 
     def compile(self, warm_datas):
-        """compile with prewarm data for poros
+        """[Only for Poros backend] compile with prewarm data for poros
 
         :param data: (list[str : numpy.ndarray])The prewarm data list
         :return TorchScript Model
@@ -121,6 +125,9 @@ class RuntimeOption:
     """
 
     def __init__(self):
+        """Initialize a FastDeploy RuntimeOption object.
+        """
+
         self._option = C.RuntimeOption()
 
     @property
@@ -171,8 +178,7 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value,
-            bool), "The value to set `long_to_int` must be type of bool."
+            value, bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -200,6 +206,17 @@ class RuntimeOption:
 
         :param device_id: (int)The index of GPU will be used for inference, default 0
         """
+        if not C.is_built_with_gpu():
+            logging.warning(
+                "The installed fastdeploy-python package is not built with GPU, will force to use CPU. To use GPU, following the commands to install fastdeploy-gpu-python."
+            )
+            logging.warning(
+                "    ================= Install GPU FastDeploy===============")
+            logging.warning("    python -m pip uninstall fastdeploy-python")
+            logging.warning(
+                "    python -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html"
+            )
+            return
         return self._option.use_gpu(device_id)
 
     def use_cpu(self):
@@ -207,10 +224,10 @@ class RuntimeOption:
         """
         return self._option.use_cpu()
 
-    def use_rknpu2(self,rknpu2_name=rknpu2.CpuName.RK3588,rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
-        """Inference with CPU
-        """
-        return self._option.use_rknpu2(rknpu2_name,rknpu2_core)
+    def use_rknpu2(self,
+                   rknpu2_name=rknpu2.CpuName.RK3588,
+                   rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
+        return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
@@ -220,12 +237,21 @@ class RuntimeOption:
         return self._option.set_cpu_thread_num(thread_num)
 
     def set_ort_graph_opt_level(self, level=-1):
+        """Set graph optimization level for ONNX Runtime backend
+
+        :param level: (int)Optimization level, -1 means the default setting
+        """
         return self._option.set_ort_graph_opt_level(level)
 
     def use_paddle_backend(self):
         """Use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
         """
         return self._option.use_paddle_backend()
+
+    def use_paddle_infer_backend(self):
+        """Wrapper function of use_paddle_backend(), use Paddle Inference backend, support inference Paddle model on CPU/Nvidia GPU.
+        """
+        return self.use_paddle_backend()
 
     def use_poros_backend(self):
         """Use Poros backend, support inference TorchScript model on CPU/Nvidia GPU.
@@ -252,10 +278,34 @@ class RuntimeOption:
         """
         return self._option.use_lite_backend()
 
+    def use_paddle_lite_backend(self):
+        """Wrapper function of use_lite_backend(), use Paddle Lite backend, support inference Paddle model on ARM CPU.
+        """
+        return self.use_lite_backend()
+
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
         """
         return self._option.set_paddle_mkldnn(use_mkldnn)
+
+    def set_openvino_device(self, name="CPU"):
+        """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+        """
+        return self._option.set_openvino_device(name)
+
+    def set_openvino_shape_info(self, shape_info):
+        """Set shape information of the models' inputs, used for GPU to fix the shape
+
+        :param shape_info: (dict{str, list of int})Shape information of model's inputs, e.g {"image": [1, 3, 640, 640], "scale_factor": [1, 2]}
+        """
+        return self._option.set_openvino_shape_info(shape_info)
+
+    def set_openvino_cpu_operators(self, operators):
+        """While using OpenVINO backend and intel GPU, this interface specifies unsupported operators to run on CPU
+
+        :param operators: (list of string)list of operators' name, e.g ["MulticlasNms"]
+        """
+        return self._option.set_openvino_cpu_operators(operators)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
@@ -344,10 +394,19 @@ class RuntimeOption:
         """
         return self._option.set_trt_max_workspace_size(trt_max_workspace_size)
 
+    def set_trt_max_batch_size(self, trt_max_batch_size):
+        """Set max batch size while using TensorRT backend.
+        """
+        return self._option.set_trt_max_batch_size(trt_max_batch_size)
+
     def enable_paddle_trt_collect_shape(self):
+        """Enable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.enable_paddle_trt_collect_shape()
 
     def disable_paddle_trt_collect_shape(self):
+        """Disable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.disable_paddle_trt_collect_shape()
 
     def use_ipu(self,
@@ -375,8 +434,7 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr,
-                                              getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

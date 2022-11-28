@@ -28,6 +28,10 @@ class FASTDEPLOY_DECL FastDeployModel {
   virtual bool Infer(std::vector<FDTensor>& input_tensors,
                      std::vector<FDTensor>* output_tensors);
 
+  /** \brief Inference the model by the runtime. This interface is using class member reused_input_tensors_ to do inference and writing results to reused_output_tensors_
+  */
+  virtual bool Infer();
+
   RuntimeOption runtime_option;
   /** \brief Model's valid cpu backends. This member defined all the cpu backends have successfully tested for the model
    */
@@ -37,9 +41,10 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_gpu_backends = {Backend::ORT};
   /** Model's valid ipu backends. This member defined all the ipu backends have successfully tested for the model
    */
-  std::vector<Backend> valid_ipu_backends = {Backend::PDINFER};
-
-
+  std::vector<Backend> valid_ipu_backends = {};
+  /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_timvx_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
@@ -100,17 +105,31 @@ class FASTDEPLOY_DECL FastDeployModel {
     return enable_record_time_of_runtime_;
   }
 
+  /** \brief Release reused input/output buffers
+  */
+  virtual void ReleaseReusedBuffer() {
+    std::vector<FDTensor>().swap(reused_input_tensors_);
+    std::vector<FDTensor>().swap(reused_output_tensors_);
+  }
+
  protected:
   virtual bool InitRuntime();
-  virtual bool CreateCpuBackend();
-  virtual bool CreateGpuBackend();
-  virtual bool CreateIpuBackend();
-  virtual bool CreateRKNPUBackend();
 
   bool initialized = false;
-  std::vector<Backend> valid_external_backends;
+  // Reused input tensors
+  std::vector<FDTensor> reused_input_tensors_;
+  // Reused output tensors
+  std::vector<FDTensor> reused_output_tensors_;
 
  private:
+  bool InitRuntimeWithSpecifiedBackend();
+  bool InitRuntimeWithSpecifiedDevice();
+  bool CreateCpuBackend();
+  bool CreateGpuBackend();
+  bool CreateIpuBackend();
+  bool CreateRKNPUBackend();
+  bool CreateTimVXBackend();
+
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;
   // whether to record inference time

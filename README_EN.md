@@ -16,66 +16,141 @@ English | [简体中文](README_CN.md)
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
 
+<p align="center">
+    <a href="/docs/en/build_and_install"><b> Installation </b></a>
+    |
+    <a href="docs/README_EN.md"><b> Documents </b></a>
+    |
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API Docs </b></a>
+    |
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> Release Notes </b></a>
+</p>
 
+**⚡️FastDeploy** is an **Easy-to-use** and **High Performance** AI model deployment toolkit for Cloud, Mobile and Edge with 📦**out-of-the-box and unified experience**, 🔚**end-to-end optimization** for over **🔥150+ Text, Vision, Speech and Cross-modal AI models**.
+Including image classification, object detection, image segmentation, face detection, face recognition, keypoint detection, matting, OCR, NLP, TTS and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
 
-**⚡️FastDeploy** is an **accessible and efficient** deployment Development Toolkit. It covers 🔥**critical AI models** in the industry and provides 📦**out-of-the-box** deployment experience. It covers image classification, object detection, image segmentation, face detection, face recognition, human keypoint detection, OCR, semantic understanding and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform** .
-
-| Potrait Segmentation                                                                                                                           | Image Matting                                                                                                                                  | Semantic Segmentation                                                                                                                            | Real-Time Matting                                                                                                                              |
-|:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|
-| <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> |
-| **OCR**                                                                                                                                        | **Behavior Recognition**                                                                                                                       | **Object Detection**                                                                                                                             | **Pose Estimation**                                                                                                                            |
-| <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"  > | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> |
-| **Face Alignment**                                                                                                                             | **3D Object Detection**                                                                                                                        | **Face Editing**                                                                                                                                 | **Image Animation**                                                                                                                            |
-| <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188270227-1a4671b3-0123-46ab-8d0f-0e4132ae8ec0.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054663-b0c9c037-6d12-4e90-a7e4-e9abf4cf9b97.gif' height="126px" width="126px">   | <img src='https://user-images.githubusercontent.com/54695910/188056800-2190e05e-ad1f-40ef-bf71-df24c3407b2d.gif' height="126px" width="190px"> |
+| [Image Classification](examples/vision/classification)                                                                                         | [Object Detection](examples/vision/detection)                                                                                                  | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                  | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                                                                                                                                                             |
+|:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                                                                                                                                                             |
+| [**Image Matting**](examples/vision/matting)                                                                                                   | [**Real-Time Matting**](examples/vision/matting)                                                                                               | [**OCR**](examples/vision/ocr)                                                                                                                   | [**Face Alignment**](examples/vision/facealign)                                                                                                                                                                                                                                                                                                                                                                            |
+| <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  > | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">                                                                                                                                                                                                                                                                             |
+| [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                                                                        |
+| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p> |
 
 ## 📣 Recent Updates
 
-- 🔥 **2022.10.15：Release FastDeploy [release v0.3.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.3.0)** <br>
-  - **New server-side deployment upgrade: support more CV model and NLP model**
-       - Integrate OpenVINO and provide a seamless deployment experience with other inference engines include TensorRT、ONNX Runtime、Paddle Inference；
-       - Support [one-click model quantization](tools/quantization) to improve model inference speed by 1.5 to 2 times on CPU & GPU platform. The supported quantized model are YOLOv7, YOLOv6, YOLOv5, etc. 
-       - New CV models include PP-OCRv3, PP-OCRv2, PP-TinyPose, PP-Matting, etc. and provides [end-to-end deployment demos](examples/vision/detection/)
-       - New information extraction model is UIE, and provides [end-to-end deployment demos](examples/text/uie).
+- **Community**
+  
+  - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
+  
+  - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
+    
+    <div align="center">
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "100" height = "100" />
+    </div>
 
-- 🔥 **2022.8.18：Release FastDeploy [release v0.2.0](https://github.com/PaddlePaddle/FastDeploy/tree/release%2F0.2.0)** <br>
-  - **New server-side deployment upgrade: faster inference performance, support more CV model**
-    - Release high-performance inference engine SDK based on x86 CPUs and NVIDIA GPUs, with significant increase in inference speed
-    - Integrate Paddle Inference, ONNX Runtime, TensorRT and other inference engines and provide a seamless deployment experience
-    - Supports full range of object detection models such as YOLOv7, YOLOv6, YOLOv5, PP-YOLOE and provides [end-to-end deployment demos](examples/vision/detection/)
-    - Support over 40 key models and [demo examples](examples/vision/) including face detection, face recognition, real-time portrait matting, image segmentation.
-    - Support deployment in both Python and C++
-  - **Supports Rockchip, Amlogic, NXP and other NPU chip deployment capabilities on edge device deployment**
-    - Release Lightweight Object Detection [Picodet-NPU deployment demo](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection), providing the full quantized inference capability for INT8.
+- 🔥 **2022.11.23：Release FastDeploy [release v0.8.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.8.0)** <br>
+  
+  - **🖥️ Server-side and Cloud Deployment: Support more CV models, improve deployment performance**
+    
+    - Support [PIPNet](./examples/vision/facealign/pipnet), [FaceLandmark1000](./examples/vision/facealign/face_landmark_1000) face alignment models deployment;
+    - Support [Video Super-Resolution](./examples/vision/sr) series model PP-MSVSR、EDVR、BasicVSR;
+    - Upgrade YOLOv7 deployment code to add `batch_predict` deployment;
+    - Support [UIE service-based](./examples/text/uie) deployment;
+    - Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.
+  
+  - **📱 Mobile and Edge Device Deployment: support more CV model**
+    
+    - Support Android image classification, target detection, semantic segmentation, OCR, face detection APK projects and examples.
+      
+      | <font size=3>Image Classification</font>                                                                                                                                                  | <font size=3>Object Detection</font>                                                                                                                                                  | <font size=3>Semantic Segmentation</font>                                                                                                                                                              | <font size=3>OCR</font>                                                                                                                                                                 | <font size=3>Face Detection</font>                                                                                                                                                   |
+      |:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+      | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification)</font>        | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection)</font>         | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation)                              | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr)</font>                 | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/facedet)</font>          |
+      | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-MobileNetV1.apk)</font> | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PicoDet.apk)</font> | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-Portrait-HumanSegV2-Lite.apk)</font> | <font size=2> [Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PP-OCRv2.apk)</font> | <font size=2> [Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-SCRFD.apk)</font> |
+      | <img src=https://user-images.githubusercontent.com/54695910/203604502-991972a8-5a9c-49cd-9e58-ed8e2a942b9b.png height="100" width="110">                                                  | <img src=https://user-images.githubusercontent.com/54695910/203604475-724be708-27d6-4e56-9c2f-ae2eca24118c.png height="100" width="110">                                              | <img src=https://user-images.githubusercontent.com/54695910/203604459-9a2915bc-91dc-460c-bff6-a0e2584d2eff.png height="100" width="110">                                                               | <img src=https://user-images.githubusercontent.com/54695910/203604453-6ce0118e-7b93-4044-8a92-56f2ab65c26a.png height="100" width="110">                                                | <img src=https://user-images.githubusercontent.com/54695910/203604418-7c9703b5-1805-457e-966c-5a6625f212ff.png height="100" width="110">                                             |
+
+- [**more releases information**](./releases)
 
 ## Contents
 
-* **Data Center and Cloud Deployment**
+* <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
+  
+  - Install
+    
+    - [Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
+    - [Build and Install FastDeploy Library on GPU Platform](docs/en/build_and_install/gpu.md)
+    - [Build and Install FastDeploy Library on CPU Platform](docs/en/build_and_install/cpu.md)
+    - [Build and Install FastDeploy Library on IPU Platform](docs/en/build_and_install/ipu.md)
+    - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](docs/en/build_and_install/jetson.md)
+    - [Build and Install FastDeploy Library on Android Platform](docs/en/build_and_install/android.md)
+  
+  - A Quick Start - Demos
+    
+    - [Python Deployment Demo](docs/en/quick_start/models/python.md)
+    - [C++ Deployment Demo](docs/en/quick_start/models/cpp.md)
+    - [A Quick Start on Runtime Python](docs/en/quick_start/runtime/python.md)
+    - [A Quick Start on Runtime C++](docs/en/quick_start/runtime/cpp.md)
+  
+  - API (To be continued)
+    
+    - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
+    - [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
+  
+  - Performance Optimization
+    
+    - [Quantization Acceleration](docs/en/quantize.md)
+  
+  - Frequent Q&As
+    
+    - [1. How to Change Inference Backends](docs/en/faq/how_to_change_backend.md)
+    - [2. How to Use FastDeploy C++ SDK on Windows Platform](docs/en/faq/use_sdk_on_windows.md)
+    - [3. How to Use FastDeploy C++ SDK on Android Platform](docs/en/faq/use_sdk_on_android.md)(To be Continued)
+    - [4. Tricks of TensorRT](docs/en/faq/tensorrt_tricks.md)
+    - [5. How to Develop a New Model](docs/en/faq/develop_a_new_model.md)(To be Continued)
+  
+  - More FastDeploy Deployment Module
+    
+    - [deployment AI Model as a Service](./serving)
+    
+    - [Benchmark Testing](./benchmark)
+
+</div></details>
+
+* **🖥️ Server-side and Cloud Deployment**
+  
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
   * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
-  * [Supported Data Center and Cloud Model List](#fastdeploy-server-models)
-* **Mobile and Edge Device Deployment**
-  * [Paddle Lite NPU Deployment](#fastdeploy-edge-sdk-npu)
-  * [Supported Mobile and Edge Model List](#fastdeploy-edge-sdk)
-* [Community](#fastdeploy-community)
-* [Acknowledge](#fastdeploy-acknowledge)  
-* [License](#fastdeploy-license)
+  * [Supported Server-side and Cloud Model List](#fastdeploy-server-models)
 
-## Data Center and Web Deployment
+* **📱 Mobile and Edge Device Deployment**
+  
+  * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
 
-### A Quick Start for Python SDK
+* **🌐 Browser and Mini Program Deployment**
+  
+  * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
+
+* [**Community**](#fastdeploy-community)
+
+* [**Acknowledge**](#fastdeploy-acknowledge)  
+
+* [**License**](#fastdeploy-license)
+
+## 🖥️ Server-side and Cloud Deployment
 
 <div id="fastdeploy-quick-start-python"></div>
+
+<details close>
+<summary><b>A Quick Start for Python SDK（click to expand）</b></summary><div>
 
 #### Installation
 
 ##### Prerequisites
 
-- CUDA >= 11.2
-- cuDNN >= 8.0
-- python >= 3.6
+- CUDA >= 11.2 、cuDNN >= 8.0  、 Python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### Install Fastdeploy SDK with CPU&GPU support
+##### Install FastDeploy SDK with both CPU and GPU support
 
 ```bash
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -87,7 +162,7 @@ pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdep
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### Install Fastdeploy SDK with only CPU support
+##### Install FastDeploy SDK with only CPU support
 
 ```bash
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -95,7 +170,7 @@ pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.
 
 #### Python Inference Example
 
-* Prepare models and pictures
+* Prepare model and picture
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -110,20 +185,24 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 import cv2
 import fastdeploy.vision as vision
 
-
+im = cv2.imread("000000014439.jpg")
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
-im = cv2.imread("000000014439.jpg")
-result = model.predict(im.copy())
+
+result = model.predict(im)
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 ```
 
+</div></details>
+
+<div id="fastdeploy-quick-start-cpp"></div>
+
 <details>
-<summary>A Quick Start for C++ SDK</summary>
+<summary><b>A Quick Start for C++ SDK（click to expand）</b></summary><div>
 
 #### Installation
 
@@ -147,137 +226,170 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
+  auto im = cv::imread("000000014439.jpg");
   auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                           "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                           "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
-  auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
   model.Predict(&im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  auto vis_im = vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
  }
 ```
-</details>
+
+</div></details>
 
 For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
 
-
-
-### Supported Data Center and Web Model List🔥🔥🔥
-
 <div id="fastdeploy-server-models"></div>
 
-Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supported now;
+### Server-side and Cloud Model List🔥🔥🔥🔥🔥
 
+Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
 
+<details open><summary><b> Server-side and Cloud Model List（click to fold）</b></summary><div>
 
-| Task                          | Model                                                                                   | API                                                                                                                               | Linux                 | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux                       | Linux                       |   [web_demo](examples/application/js/web_demo)         |       [mini_program](examples/application/js/mini_program)         |
-|:-----------------------------:|:---------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:|:---------------------------:|:--------------------------:|:---------------------------:|:---------------------------:|
-| ---                           | ---                                                                                     | ---                                                                                                                               | <font size=2> X86 CPU | <font size=2> NVIDIA GPU | <font size=2> Intel  CPU | <font size=2> NVIDIA GPU | <font size=2> Intel CPU | <font size=2> Arm CPU | <font size=2>  AArch64 CPU | <font size=2> NVIDIA Jetson | <font size=2> Graphcore IPU |[Paddle.js](examples/application/js)| [Paddle.js](examples/application/js)|
-| <font size=2> Classification | <font size=2> [PaddleClas/ResNet50](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/PP-LCNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |   ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/PP-LCNetv2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/EfficientNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/GhostNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |✅|✅|
-| <font size=2> Classification | <font size=2> [PaddleClas/MobileNetV3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/ShuffleNetV2](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ✅ |❔|❔|
-| <font size=2> Classification | <font size=2> [PaddleClas/SwinTransformer](./examples/vision/classification/paddleclas) | <font size=2> [Python](./examples/vision/classification/paddleclas/python)/[C++](./examples/vision/classification/paddleclas/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ | ✅  | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ❌ | ❌ | ❌ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [PaddleDetection/FasterRCNN](./examples/vision/detection/paddledetection) | <font size=2> [Python](./examples/vision/detection/paddledetection/python)/[C++](./examples/vision/detection/paddledetection/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ | ❌ | ❌ | ❌ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox) | <font size=2> [Python](./examples/vision/detection/yolox/python)/[C++](./examples/vision/detection/yolox/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7) | <font size=2> [Python](./examples/vision/detection/yolov7/python)/[C++](./examples/vision/detection/yolov7/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [meituan/YOLOv6](./examples/vision/detection/yolov6) | <font size=2> [Python](./examples/vision/detection/yolov6/python)/[C++](./examples/vision/detection/yolov6/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [ultralytics/YOLOv5](./examples/vision/detection/yolov5) | <font size=2> [Python](./examples/vision/detection/yolov5/python)/[C++](./examples/vision/detection/yolov5/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [WongKinYiu/YOLOR](./examples/vision/detection/yolor) | <font size=2> [Python](./examples/vision/detection/yolor/python)/[C++](./examples/vision/detection/yolor/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [WongKinYiu/ScaledYOLOv4](./examples/vision/detection/scaledyolov4) | <font size=2> [Python](./examples/vision/detection/scaledyolov4/python)/[C++](./examples/vision/detection/scaledyolov4/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [ppogg/YOLOv5Lite](./examples/vision/detection/yolov5lite) | <font size=2> [Python](./examples/vision/detection/yolov5lite/python)/[C++](./examples/vision/detection/yolov5lite/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Detection | <font size=2> [RangiLyu/NanoDetPlus](./examples/vision/detection/nanodet_plus) | <font size=2> [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/detection/nanodet_plus/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> OCR | <font size=2> [PaddleOCR/PP-OCRv2](./examples/vision/ocr) | <font size=2> [Python](./examples/vision/detection/nanodet_plus/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp)|  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> OCR | <font size=2> [PaddleOCR/PP-OCRv3](./examples/vision/ocr) | <font size=2> [Python](./examples/vision/ocr/PP-OCRv3/python)/[C++](./examples/vision/ocr/PP-OCRv3/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |✅|✅|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/PP-LiteSeg](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/PP-HumanSegLite](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/HRNet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/PP-HumanSegServer](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |✅|✅|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Segmentation | <font size=2> [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg) | <font size=2> [Python](./examples/vision/segmentation/paddleseg/python)/[C++](./examples/vision/segmentation/paddleseg/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Detection | <font size=2> [biubug6/RetinaFace](./examples/vision/facedet/retinaface) | <font size=2> [Python](./examples/vision/facedet/retinaface/python)/[C++](./examples/vision/facedet/retinaface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Detection | <font size=2> [Linzaer/UltraFace](./examples/vision/facedet/ultraface) | [<font size=2> Python](./examples/vision/facedet/ultraface/python)/[C++](./examples/vision/facedet/ultraface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> FaceDetection | <font size=2> [deepcam-cn/YOLOv5Face](./examples/vision/facedet/yolov5face) | <font size=2> [Python](./examples/vision/facedet/yolov5face/python)/[C++](./examples/vision/facedet/yolov5face/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Detection | <font size=2> [insightface/SCRFD](./examples/vision/facedet/scrfd) | <font size=2> [Python](./examples/vision/facedet/scrfd/python)/[C++](./examples/vision/facedet/scrfd/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Recognition | <font size=2> [insightface/ArcFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Recognition | <font size=2> [insightface/CosFace](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Recognition | <font size=2> [insightface/PartialFC](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Face Recognition | <font size=2> [insightface/VPL](./examples/vision/faceid/insightface) | <font size=2> [Python](./examples/vision/faceid/insightface/python)/[C++](./examples/vision/faceid/insightface/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅ | ❌ |❔|❔|
-| <font size=2> Matting | <font size=2> [ZHKKKe/MODNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/modnet/python)/[C++](./examples/vision/matting/modnet/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> Matting | <font size=2> [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> Matting | <font size=2> [PaddleSeg/ModNet](./examples/vision/matting/modnet) | <font size=2> [Python](./examples/vision/matting/ppmatting/python)/[C++](./examples/vision/matting/ppmatting/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
-| <font size=2> Information Extraction | <font size=2> [PaddleNLP/UIE](./examples/text/uie) | <font size=2> [Python](./examples/text/uie/python)/[C++](./examples/text/uie/cpp) |  ✅       |  ✅    |  ✅     |  ✅    |  ✅ |  ✅ |  ✅ |  ✅| ❌ |❔|❔|
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+</div>
 
-## Edge-Side Deployment
+| Task                   | Model                                                                                        | Linux                                            | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux            | Linux                       | Linux                       | Linux   |
+|:----------------------:|:--------------------------------------------------------------------------------------------:|:------------------------------------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:| :----------------: |:---------------------------:|:---------------------------:|:-------:|
+| ---                    | ---                                                                                          | <font size=2> X86 CPU                            | <font size=2> NVIDIA GPU | <font size=2> Intel  CPU | <font size=2> NVIDIA GPU | <font size=2> Intel CPU | <font size=2> Arm CPU | <font size=2>  AArch64 CPU | Phytium D2000CPU | <font size=2> NVIDIA Jetson | <font size=2> Graphcore IPU | Serving |
+| Classification         | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas)                           | [✅](./examples/vision/classification/paddleclas) | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Classification         | [ltralytics/YOLOv5Cls](examples/vision/classification/yolov5cls)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Classification         | [PaddleClas/PP-LCNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/PP-LCNetv2](./examples/vision/classification/paddleclas)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/EfficientNet](./examples/vision/classification/paddleclas)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/GhostNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/MobileNetV1](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/MobileNetV2](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/MobileNetV3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/ShuffleNetV2](./examples/vision/classification/paddleclas)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Classification         | [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
+| Classification         | [PaddleClas/SwinTransformer](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Faster-RCNN](./examples/vision/detection/paddledetection)                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Mask-RCNN](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox)                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7)                                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [WongKinYiu/YOLOv7end2end_trt](./examples/vision/detection/yolov7end2end_trt)                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Detection              | [WongKinYiu/YOLOv7end2end_ort_](./examples/vision/detection/yolov7end2end_ort)               | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [meituan/YOLOv6](./examples/vision/detection/yolov6)                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [ultralytics/YOLOv5](./examples/vision/detection/yolov5)                                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [WongKinYiu/YOLOR](./examples/vision/detection/yolor)                                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Detection              | [WongKinYiu/ScaledYOLOv4](./examples/vision/detection/scaledyolov4)                          | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [ppogg/YOLOv5Lite](./examples/vision/detection/yolov5lite)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Detection              | [RangiLyu/NanoDetPlus](./examples/vision/detection/nanodet_plus)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| KeyPoint               | [PaddleDetection/TinyPose](./examples/vision/keypointdetection/tiny_pose)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| KeyPoint               | [PaddleDetection/PicoDet + TinyPose](./examples/vision/keypointdetection/det_keypoint_unite) | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| HeadPose               | [omasaht/headpose](examples/vision/headpose)                                                 | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Tracking               | [PaddleDetection/PP-Tracking](examples/vision/tracking/pptracking)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| OCR                    | [PaddleOCR/PP-OCRv2](./examples/vision/ocr)                                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| OCR                    | [PaddleOCR/PP-OCRv3](./examples/vision/ocr)                                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Segmentation           | [PaddleSeg/PP-LiteSeg](./examples/vision/segmentation/paddleseg)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Segmentation           | [PaddleSeg/PP-HumanSegLite](./examples/vision/segmentation/paddleseg)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Segmentation           | [PaddleSeg/HRNet](./examples/vision/segmentation/paddleseg)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Segmentation           | [PaddleSeg/PP-HumanSegServer](./examples/vision/segmentation/paddleseg)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Segmentation           | [PaddleSeg/Unet](./examples/vision/segmentation/paddleseg)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Segmentation           | [PaddleSeg/Deeplabv3](./examples/vision/segmentation/paddleseg)                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| FaceDetection          | [biubug6/RetinaFace](./examples/vision/facedet/retinaface)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceDetection          | [Linzaer/UltraFace](./examples/vision/facedet/ultraface)                                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceDetection          | [deepcam-cn/YOLOv5Face](./examples/vision/facedet/yolov5face)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceDetection          | [insightface/SCRFD](./examples/vision/facedet/scrfd)                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceAlign              | [Hsintao/PFLD](examples/vision/facealign/pfld)                                               | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceAlign              | [Single430FaceLandmark1000](./examples/vision/facealign/face_landmark_1000)                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| FaceAlign              | [jhb86253817/PIPNet](./examples/vision/facealign)                                            | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| FaceRecognition        | [insightface/ArcFace](./examples/vision/faceid/insightface)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceRecognition        | [insightface/CosFace](./examples/vision/faceid/insightface)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceRecognition        | [insightface/PartialFC](./examples/vision/faceid/insightface)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| FaceRecognition        | [insightface/VPL](./examples/vision/faceid/insightface)                                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Matting                | [ZHKKKe/MODNet](./examples/vision/matting/modnet)                                            | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Matting                | [PeterL1n/RobustVideoMatting]()                                                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Matting                | [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Matting                | [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Matting                | [PaddleSeg/ModNet](./examples/vision/matting/modnet)                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
+| Video Super-Resolution | [PaddleGAN/BasicVSR](./)                                                                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Video Super-Resolution | [PaddleGAN/EDVR](./examples/vision/sr/edvr)                                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Video Super-Resolution | [PaddleGAN/PP-MSVSR](./examples/vision/sr/ppmsvsr)                                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Information Extraction | [PaddleNLP/UIE](./examples/text/uie)                                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           |         |
+| NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | ❔                           | ✅       |
+| Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
+
+</div></details>
 
 <div id="fastdeploy-edge-doc"></div>
 
-### Paddle Lite NPU Deployment
+## 📱 Mobile and Edge Device Deployment
 
-<div id="fastdeploy-edge-sdk-npu"></div>
+<div id="fastdeploy-edge-models"></div>
 
-- [Rexchip-NPU / Amlogic-NPU / NXP-NPU](https://github.com/PaddlePaddle/Paddle-Lite-Demo/tree/develop/object_detection/linux/picodet_detection)
+### Mobile and Edge Model List 🔥🔥🔥🔥
 
-### Supported Edge-Side Model List
+<details open><summary><b> Mobile and Edge Model List（click to fold）</b></summary><div>
 
-<div id="fastdeploy-edge-sdk"></div>
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+</div>
 
-|                    | Model                        | Size (MB) | Linux   | Android | iOS     | Linux                                     | Linux                                   | Linux                    | TBD...  |
-|:------------------:|:----------------------------:|:---------:|:-------:|:-------:|:-------:|:-----------------------------------------:|:---------------------------------------:|:------------------------:|:-------:|
-| ---                | ---                          | ---       | ARM CPU | ARM CPU | ARM CPU | Rockchip-NPU<br>RV1109<br>RV1126<br>RK1808 | Amlogic-NPU <br>A311D<br>S905D<br>C308X | NXPNPU<br>  i.MX 8M Plus | TBD...｜ |
-| Classification     | PP-LCNet                     | 11.9      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | PP-LCNetv2                   | 26.6      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | EfficientNet                 | 31.4      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | GhostNet                     | 20.8      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | MobileNetV1                  | 17        | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | MobileNetV2                  | 14.2      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | MobileNetV3                  | 22        | ✅       | ✅       | ✅       | ❔                                         | ❔                                       | ❔                        | ❔       |
-| Classification     | ShuffleNetV2                 | 9.2       | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | SqueezeNetV1.1               | 5         | ✅       | ✅       | ✅       |                                           |                                         |                          |         |
-| Classification     | Inceptionv3                  | 95.5      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | PP-HGNet                     | 59        | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Classification     | SwinTransformer_224_win7     | 352.7     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-PicoDet_s_320_coco        | 4.1       | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-PicoDet_s_320_lcnet       | 4.9       | ✅       | ✅       | ✅       | ✅                                         | ✅                                       | ✅                        | ❔       |
-| Detection          | CenterNet                    | 4.8       | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | YOLOv3_MobileNetV3           | 94.6      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-YOLO_tiny_650e_coco       | 4.4       | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | SSD_MobileNetV1_300_120e_voc | 23.3      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-YOLO_ResNet50vd           | 188.5     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-YOLOv2_ResNet50vd         | 218.7     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | PP-YOLO_crn_l_300e_coco      | 209.1     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Detection          | YOLOv5s                      | 29.3      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Face Detection      | BlazeFace                    | 1.5       | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Face Detection      | RetinaFace                   | 1.7       | ✅       | ❌       | ❌       | --                                        | --                                      | --                       | --      |
-| Keypoint Detection | PP-TinyPose                  | 5.5       | ✅       | ✅       | ✅       | ❔                                         | ❔                                       | ❔                        | ❔       |
-| Segmentation       | PP-LiteSeg(STDC1)            | 32.2      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Segmentation       | PP-HumanSeg-Lite             | 0.556     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Segmentation       | HRNet-w18                    | 38.7      | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Segmentation       | PP-HumanSeg-Server           | 107.2     | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| Segmentation       | Unet                         | 53.7      | ❌       | ✅       | ❌       | --                                        | --                                      | --                       | --      |
-| OCR                | PP-OCRv1                     | 2.3+4.4   | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| OCR                | PP-OCRv2                     | 2.3+4.4   | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
-| OCR                | PP-OCRv3                     | 2.4+10.6  | ✅       | ✅       | ✅       | ❔                                         | ❔                                       | ❔                        | ❔       |
-| OCR                | PP-OCRv3-tiny                | 2.4+10.7  | ✅       | ✅       | ✅       | --                                        | --                                      | --                       | --      |
+| Task               | Model                                                                                    | Size (MB) | Linux   | Android | Linux                         | Linux                                | Linux                             | Linux                             | TBD...  |
+|:------------------:|:----------------------------------------------------------------------------------------:|:---------:|:-------:|:-------:|:-----------------------------:|:------------------------------------:|:---------------------------------:|:---------------------------------:|:-------:|
+| ---                | ---                                                                                      | ---       | ARM CPU | ARM CPU | Rockchip-NPU<br>RK3568/RK3588 | Rockchip-NPU<br>RV1109/RV1126/RK1808 | Amlogic-NPU <br>A311D/S905D/C308X | NXP-NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD...｜ |
+| Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |                               |      ✅                                |                                   |                                   |         |
+| Classification     | [PaddleClas/PP-LCNet](examples/vision/classification/paddleclas)                         | 11.9      | ✅       | ✅       | ❔                             | ✅                                 | --                                | --                                | --      |
+| Classification     | [PaddleClas/PP-LCNetv2](examples/vision/classification/paddleclas)                       | 26.6      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/EfficientNet](examples/vision/classification/paddleclas)                     | 31.4      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/GhostNet](examples/vision/classification/paddleclas)                         | 20.8      | ✅       | ✅       | ❔                             | ✅                                  | --                                | --                                | --      |
+| Classification     | [PaddleClas/MobileNetV1](examples/vision/classification/paddleclas)                      | 17        | ✅       | ✅       | ❔                             | ✅                                  | --                                | --                                | --      |
+| Classification     | [PaddleClas/MobileNetV2](examples/vision/classification/paddleclas)                      | 14.2      | ✅       | ✅       | ❔                             | ✅                                  | --                                | --                                | --      |
+| Classification     | [PaddleClas/MobileNetV3](examples/vision/classification/paddleclas)                      | 22        | ✅       | ✅       | ❔                             | ✅                                    | ❔                                 | ❔                                 | --      |
+| Classification     | [PaddleClas/ShuffleNetV2](examples/vision/classification/paddleclas)                     | 9.2       | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/SqueezeNetV1.1](examples/vision/classification/paddleclas)                   | 5         | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/Inceptionv3](examples/vision/classification/paddleclas)                      | 95.5      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/PP-HGNet](examples/vision/classification/paddleclas)                         | 59        | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Classification     | [PaddleClas/SwinTransformer_224_win7](examples/vision/classification/paddleclas)         | 352.7     | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
+| Detection          | [PaddleDetection/PP-PicoDet_s_320_coco_lcnet](examples/vision/detection/paddledetection) | 4.9       | ✅       | ✅       | ✅                             | ✅                                    | ✅                                 | ✅                                 | --      |
+| Face Detection     | [deepinsight/SCRFD](./examples/vision/facedet/scrfd)                                     | 2.5       | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Keypoint Detection | [PaddleDetection/PP-TinyPose](examples/vision/keypointdetection/tiny_pose)               | 5.5       | ✅       | ✅       | ❔                             | ❔                                    | ❔                                 | ❔                                 | --      |
+| Segmentation       | [PaddleSeg/PP-LiteSeg(STDC1)](examples/vision/segmentation/paddleseg)                    | 32.2      | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Segmentation       | [PaddleSeg/PP-HumanSeg-Lite](examples/vision/segmentation/paddleseg)                     | 0.556     | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Segmentation       | [PaddleSeg/HRNet-w18](examples/vision/segmentation/paddleseg)                            | 38.7      | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Segmentation       | [PaddleSeg/PP-HumanSeg](examples/vision/segmentation/paddleseg)                          | 107.2     | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Segmentation       | [PaddleSeg/Unet](examples/vision/segmentation/paddleseg)                                 | 53.7      | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
+| Segmentation       | [PaddleSeg/Deeplabv3](examples/vision/segmentation/paddleseg)                            | 150       | ❔       | ✅       | ✅                             |                                      |                                   |                                   |         |
+| OCR                | [PaddleOCR/PP-OCRv2](examples/vision/ocr/PP-OCRv2)                                       | 2.3+4.4   | ✅       | ✅       | ❔                             | --                                   | --                                | --                                | --      |
+| OCR                | [PaddleOCR/PP-OCRv3](examples/vision/ocr/PP-OCRv3)                                       | 2.4+10.6  | ✅       | ❔       | ❔                             | ❔                                    | ❔                                 | ❔                                 | --      |
+
+</div></details>
+
+## 🌐 Browser-based Model List
+
+<div id="fastdeploy-web-models"></div>
+
+<details open><summary><b> Browser-based Model List（click to fold）</b></summary><div>
+
+| Task               | Model                                                                                       | [web_demo](examples/application/js/web_demo) |
+|:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
+| ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
+| Detection          | [FaceDetection](examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
+| Detection          | [ScrewDetection](examples/application/js/web_demo/src/pages/cv/detection)                   | ✅                                            |
+| Segmentation       | [PaddleSeg/HumanSeg](./examples/application/js/web_demo/src/pages/cv/segmentation/HumanSeg) | ✅                                            |
+| Object Recognition | [GestureRecognition](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
+| Object Recognition | [ItemIdentification](examples/application/js/web_demo/src/pages/cv/recognition)             | ✅                                            |
+| OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
+
+</div></details>
 
 ## Community
 
@@ -285,14 +397,12 @@ Notes: ✅: already supported; ❔: to be supported in the future; ❌: not supp
 
 - If you have any question or suggestion, please give us your valuable input via GitHub Issues
 - **Join Us👬：**
-    - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
-    - **WeChat**：join our **WeChat community** and chat with other community members about ideas
+  - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
+  - **WeChat**：join our **WeChat community** and chat with other community members about ideas
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/198922678-7f401024-9caf-4d18-bcdc-1298c9e80453.png"  width = "225" height = "225" />
+<img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
 </div>
-
-
 
 ## Acknowledge
 

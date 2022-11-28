@@ -84,6 +84,7 @@ bool ScaledYOLOv4::Initialize() {
   is_scale_up = false;
   stride = 32;
   max_wh = 7680.0;
+  reused_input_tensors_.resize(1);
 
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -113,7 +114,7 @@ bool ScaledYOLOv4::Preprocess(
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {
+  if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_AREA;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
@@ -220,7 +221,6 @@ bool ScaledYOLOv4::Postprocess(
 bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
                            float conf_threshold, float nms_iou_threshold) {
   Mat mat(*im);
-  std::vector<FDTensor> input_tensors(1);
 
   std::map<std::string, std::array<float, 2>> im_info;
 
@@ -230,18 +230,17 @@ bool ScaledYOLOv4::Predict(cv::Mat* im, DetectionResult* result,
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
 
-  if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
+  if (!Preprocess(&mat, &reused_input_tensors_[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
-  std::vector<FDTensor> output_tensors;
-  if (!Infer(input_tensors, &output_tensors)) {
+  reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
+  if (!Infer()) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-  if (!Postprocess(output_tensors[0], result, im_info, conf_threshold,
+  if (!Postprocess(reused_output_tensors_[0], result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;

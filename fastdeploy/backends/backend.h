@@ -21,6 +21,7 @@
 
 #include "fastdeploy/backends/common/multiclass_nms.h"
 #include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
 
@@ -61,8 +62,16 @@ class BaseBackend {
   virtual TensorInfo GetOutputInfo(int index) = 0;
   virtual std::vector<TensorInfo> GetInputInfos() = 0;
   virtual std::vector<TensorInfo> GetOutputInfos() = 0;
+  // if copy_to_fd is true, copy memory data to FDTensor
+  // else share memory to FDTensor(only Paddle、ORT、TRT、OpenVINO support it)
   virtual bool Infer(std::vector<FDTensor>& inputs,
-                     std::vector<FDTensor>* outputs) = 0;
+                     std::vector<FDTensor>* outputs,
+                     bool copy_to_fd = true) = 0;
+  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                             int device_id = -1) {
+    FDERROR << "Clone no support" << std::endl;
+    return nullptr;
+  }
 };
 
 }  // namespace fastdeploy

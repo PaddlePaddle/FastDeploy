@@ -17,6 +17,7 @@
 #include <memory>
 
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
+#include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
 #include "fastdeploy/backends/ort/utils.h"
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
@@ -80,21 +81,21 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
             << std::endl;
     return false;
   }
-#ifdef ENABLE_PADDLE_FRONTEND
   char* model_content_ptr;
   int model_content_size = 0;
-
-  std::vector<paddle2onnx::CustomOp> custom_ops;
-  for (auto& item : option.custom_op_info_) {
-    paddle2onnx::CustomOp op;
-    strcpy(op.op_name, item.first.c_str());
-    strcpy(op.export_op_name, item.second.c_str());
-    custom_ops.emplace_back(op);
-  }
+  bool save_external = false;
+#ifdef ENABLE_PADDLE_FRONTEND
+  std::vector<paddle2onnx::CustomOp> ops;
+  ops.resize(2);
+  strcpy(ops[0].op_name, "multiclass_nms3");
+  strcpy(ops[0].export_op_name, "MultiClassNMS");
+  strcpy(ops[1].op_name, "pool2d");
+  strcpy(ops[1].export_op_name, "AdaptivePool2d");
+  
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, custom_ops.data(),
-                           custom_ops.size())) {
+                           verbose, true, true, true, ops.data(),
+                           2, "onnxruntime", nullptr, 0, "", &save_external)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -104,9 +105,18 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
+  if(save_external){
+    std::string model_file_name = "model.onnx";
+    std::fstream f(model_file_name, std::ios::out);
+    FDASSERT(f.is_open(), "Can not open file: %s to save model.",
+                        model_file_name.c_str());
+    f << onnx_model_proto;
+    f.close();
+    return InitFromOnnx(model_file_name, option, false);
+  }
   return InitFromOnnx(onnx_model_proto, option, true);
 #else
-  FDERROR << "Didn't compile with PaddlePaddle frontend, you can try to "
+  FDERROR << "Didn't compile with PaddlePaddle Frontend, you can try to "
              "call `InitFromOnnx` instead."
           << std::endl;
 #endif
@@ -171,8 +181,8 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
-                           const std::string& name) {
+void OrtBackend::OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
+                           const std::string& name, bool copy_to_fd) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
@@ -200,12 +210,21 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
         "Unrecognized data type of %d while calling OrtBackend::CopyToCpu().",
         data_type);
   }
-  tensor->Resize(shape, dtype, name);
-  memcpy(tensor->MutableData(), value.GetTensorData<void*>(), numel);
+  const void* value_ptr = value.GetTensorData<void*>();
+  if (copy_to_fd) {
+    tensor->Resize(shape, dtype, name);
+    memcpy(tensor->MutableData(), value_ptr, numel);
+  } else {
+    tensor->name = name;
+    tensor->SetExternalData(
+      shape, dtype,
+      const_cast<void*>(value_ptr), Device::CPU);
+  }
 }
 
 bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
-                       std::vector<FDTensor>* outputs) {
+                       std::vector<FDTensor>* outputs,
+                       bool copy_to_fd) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[OrtBackend] Size of the inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -233,11 +252,12 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  // Copy result after inference
+  // Convert result after inference
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    CopyToCpu(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name);
+    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]),
+                       outputs_desc_[i].name, copy_to_fd);
   }
 
   return true;
@@ -288,8 +308,15 @@ std::vector<TensorInfo> OrtBackend::GetOutputInfos() {
 void OrtBackend::InitCustomOperators() {
 #ifndef NON_64_PLATFORM
   if (custom_operators_.size() == 0) {
-    MultiClassNmsOp* custom_op = new MultiClassNmsOp{};
-    custom_operators_.push_back(custom_op);
+    MultiClassNmsOp* multiclass_nms = new MultiClassNmsOp{};
+    custom_operators_.push_back(multiclass_nms);
+    if(option_.use_gpu){
+      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CUDAExecutionProvider"};
+      custom_operators_.push_back(adaptive_pool2d);
+    }else{
+      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CPUExecutionProvider"};
+      custom_operators_.push_back(adaptive_pool2d);
+    }
   }
   for (size_t i = 0; i < custom_operators_.size(); ++i) {
     custom_op_domain_.Add(custom_operators_[i]);

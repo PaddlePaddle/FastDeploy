@@ -59,6 +59,9 @@ std::string Str(const Device& d) {
     case Device::IPU:
       out = "Device::IPU";
       break;
+    case Device::TIMVX:
+      out = "Device::TIMVX";
+      break;
     default:
       out = "Device::UNKOWN";
   }
@@ -75,6 +78,9 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
     break;
   case Device::RKNPU:
     out << "Device::RKNPU";
+    break;
+  case Device::TIMVX:
+    out << "Device::TIMVX";
     break;
   default:
     out << "Device::UNKOWN";
@@ -181,5 +187,32 @@ const FDDataType TypeToDataType<uint8_t>::dtype = UINT8;
 
 template <>
 const FDDataType TypeToDataType<int8_t>::dtype = INT8;
+
+std::string Str(const ModelFormat& f) {
+  if (f == ModelFormat::PADDLE) {
+    return "ModelFormat::PADDLE";
+  } else if (f == ModelFormat::ONNX) {
+    return "ModelFormat::ONNX";
+  }else if (f == ModelFormat::RKNN) {
+    return "ModelFormat::RKNN";
+  } else if (f == ModelFormat::TORCHSCRIPT) {
+    return "ModelFormat::TORCHSCRIPT";
+  }
+  return "UNKNOWN-ModelFormat";
+}
+
+std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
+    out << "ModelFormat::PADDLE";
+  } else if (format == ModelFormat::ONNX) {
+    out << "ModelFormat::ONNX";
+  } else if (format == ModelFormat::RKNN) {
+    out << "ModelFormat::RKNN";
+  } else if (format == ModelFormat::TORCHSCRIPT) {
+    out << "ModelFormat::TORCHSCRIPT";
+  }
+  out << "UNKNOWN-ModelFormat";
+  return out;
+}
 
 }  // namespace fastdeploy

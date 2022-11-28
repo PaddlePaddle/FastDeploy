@@ -67,7 +67,7 @@ YOLOv5Face::YOLOv5Face(const std::string& model_file,
     valid_cpu_backends = {Backend::ORT}; 
     valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
   runtime_option = custom_option;
@@ -115,8 +115,12 @@ bool YOLOv5Face::Preprocess(
   // process after image load
   float ratio = std::min(size[1] * 1.0f / static_cast<float>(mat->Height()),
                          size[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (ratio != 1.0) {  // always true
-    int interp = cv::INTER_AREA;
+#ifndef __ANDROID__     
+  // Because of the low CPU performance on the Android device, 
+  // we decided to hide this extra resize. It won't make much 
+  // difference to the final result.
+  if (std::fabs(ratio - 1.0f) > 1e-06) {  
+    int interp = cv::INTER_LINEAR;
     if (ratio > 1.0) {
       interp = cv::INTER_LINEAR;
     }
@@ -124,6 +128,7 @@ bool YOLOv5Face::Preprocess(
     int resize_w = int(round(static_cast<float>(mat->Width()) * ratio));
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+#endif  
   // yolov5face's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -144,6 +149,7 @@ bool YOLOv5Face::Preprocess(
 
   HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
+  
   mat->ShareWithTensor(output);
   output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
   return true;
@@ -210,6 +216,9 @@ bool YOLOv5Face::Postprocess(
   float ipt_h = iter_ipt->second[0];
   float ipt_w = iter_ipt->second[1];
   float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+  if (!is_scale_up) {
+    scale = std::min(scale, 1.0f);
+  }
   float pad_h = (out_h - ipt_h * scale) / 2.f;
   float pad_w = (out_w - ipt_w * scale) / 2.f;
   if (is_mini_pad) {

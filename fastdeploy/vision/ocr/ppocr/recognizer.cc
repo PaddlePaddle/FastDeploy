@@ -20,29 +20,13 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-std::vector<std::string> ReadDict(const std::string& path) {
-  std::ifstream in(path);
-  std::string line;
-  std::vector<std::string> m_vec;
-  if (in) {
-    while (getline(in, line)) {
-      m_vec.push_back(line);
-    }
-  } else {
-    std::cout << "no such label file: " << path << ", exit the program..."
-              << std::endl;
-    exit(1);
-  }
-  return m_vec;
-}
-
 Recognizer::Recognizer() {}
 
 Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& label_path,
                        const RuntimeOption& custom_option,
-                       const ModelFormat& model_format) {
+                       const ModelFormat& model_format):postprocessor_(label_path) {
   if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT,
                           Backend::OPENVINO};  
@@ -56,27 +40,11 @@ Recognizer::Recognizer(const std::string& model_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-
   initialized = Initialize();
-
-  // init label_lsit
-  label_list = ReadDict(label_path);
-  label_list.insert(label_list.begin(), "#");  // blank char for ctc
-  label_list.push_back(" ");
 }
 
 // Init
 bool Recognizer::Initialize() {
-  // pre&post process parameters
-  rec_batch_num = 1;
-  rec_img_h = 48;
-  rec_img_w = 320;
-  rec_image_shape = {3, rec_img_h, rec_img_w};
-
-  mean = {0.5f, 0.5f, 0.5f};
-  scale = {0.5f, 0.5f, 0.5f};
-  is_scale = true;
-
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -85,117 +53,23 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-void OcrRecognizerResizeImage(Mat* mat, const float& wh_ratio,
-                              const std::vector<int>& rec_image_shape) {
-  int imgC, imgH, imgW;
-  imgC = rec_image_shape[0];
-  imgH = rec_image_shape[1];
-  imgW = rec_image_shape[2];
-
-  imgW = int(imgH * wh_ratio);
-
-  float ratio = float(mat->Width()) / float(mat->Height());
-  int resize_w;
-  if (ceilf(imgH * ratio) > imgW)
-    resize_w = imgW;
-  else
-    resize_w = int(ceilf(imgH * ratio));
-
-  Resize::Run(mat, resize_w, imgH);
-
-  std::vector<float> value = {127, 127, 127};
-  Pad::Run(mat, 0, 0, 0, int(imgW - mat->Width()), value);
-}
-
-bool Recognizer::Preprocess(Mat* mat, FDTensor* output,
-                            const std::vector<int>& rec_image_shape) {
-  int imgH = rec_image_shape[1];
-  int imgW = rec_image_shape[2];
-  float wh_ratio = imgW * 1.0 / imgH;
-
-  float ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
-  wh_ratio = std::max(wh_ratio, ori_wh_ratio);
-
-  OcrRecognizerResizeImage(mat, wh_ratio, rec_image_shape);
-
-  Normalize::Run(mat, mean, scale, true);
-
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
-
-  mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);
-
-  return true;
-}
-
-bool Recognizer::Postprocess(FDTensor& infer_result,
-                             std::tuple<std::string, float>* rec_result) {
-  std::vector<int64_t> output_shape = infer_result.shape;
-  FDASSERT(output_shape[0] == 1, "Only support batch =1 now.");
-
-  float* out_data = static_cast<float*>(infer_result.Data());
-
-  std::string str_res;
-  int argmax_idx;
-  int last_index = 0;
-  float score = 0.f;
-  int count = 0;
-  float max_value = 0.0f;
-
-  for (int n = 0; n < output_shape[1]; n++) {
-    argmax_idx = int(
-        std::distance(&out_data[n * output_shape[2]],
-                      std::max_element(&out_data[n * output_shape[2]],
-                                       &out_data[(n + 1) * output_shape[2]])));
-
-    max_value = float(*std::max_element(&out_data[n * output_shape[2]],
-                                        &out_data[(n + 1) * output_shape[2]]));
-
-    if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
-      score += max_value;
-      count += 1;
-      if(argmax_idx > label_list.size()){
-        FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "
-        << label_list.size() << ". Please check the label file!" << std::endl;
-        return false; 
-      }
-      str_res += label_list[argmax_idx];
-    }
-    last_index = argmax_idx;
+bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+  std::vector<FDMat> fd_images = WrapMat(images);
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+    FDERROR << "Failed to preprocess the input image." << std::endl;
+    return false;
   }
-  score /= count;
-
-  std::get<0>(*rec_result) = str_res;
-  std::get<1>(*rec_result) = score;
-
-  return true;
-}
-
-bool Recognizer::Predict(cv::Mat* img,
-                         std::tuple<std::string, float>* rec_result) {
-  Mat mat(*img);
-
-  std::vector<FDTensor> input_tensors(1);
-
-  if (!Preprocess(&mat, &input_tensors[0], rec_image_shape)) {
-    FDERROR << "Failed to preprocess input image." << std::endl;
+  reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
+  if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
+    FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
 
-  input_tensors[0].name = InputInfoOfRuntime(0).name;
-  std::vector<FDTensor> output_tensors;
-
-  if (!Infer(input_tensors, &output_tensors)) {
-    FDERROR << "Failed to inference." << std::endl;
+  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores)) {
+    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
     return false;
   }
-
-  if (!Postprocess(output_tensors[0], rec_result)) {
-    FDERROR << "Failed to post process." << std::endl;
-    return false;
-  }
-
   return true;
 }
 

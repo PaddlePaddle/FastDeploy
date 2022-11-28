@@ -16,89 +16,78 @@
 
 namespace fastdeploy {
 
-bool FastDeployModel::InitRuntime() {
-  FDASSERT(
-      CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
-      "ModelFormatCheck Failed.");
-  if (runtime_initialized_) {
-    FDERROR << "The model is already initialized, cannot be initliazed again."
+std::string Str(const std::vector<Backend>& backends) {
+  std::ostringstream oss;
+  if (backends.size() == 0) {
+    oss << "[]";
+    return oss.str();
+  }
+  oss << "[ " << backends[0];
+  for (int i = 1; i < backends.size(); ++i) {
+    oss << " ," << backends[i];
+  }
+  oss << " ]";
+  return oss.str();
+}
+
+bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
+  for (size_t i = 0; i < backends.size(); ++i) {
+    if (backends[i] == backend) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
+  if (!IsBackendAvailable(runtime_option.backend)) {
+    FDERROR << runtime_option.backend
+            << " is not compiled with current FastDeploy library."
             << std::endl;
     return false;
   }
-  if (runtime_option.backend != Backend::UNKNOWN) {
-    if (!IsBackendAvailable(runtime_option.backend)) {
-      FDERROR << Str(runtime_option.backend)
-              << " is not compiled with current FastDeploy library."
-              << std::endl;
+
+  bool use_gpu = (runtime_option.device == Device::GPU);
+  bool use_ipu = (runtime_option.device == Device::IPU);
+  bool use_rknpu = (runtime_option.device == Device::RKNPU);
+  bool use_timvx = (runtime_option.device == Device::TIMVX);
+
+  if (use_gpu) {
+    if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid gpu backends of model " << ModelName() << " are " << Str(valid_gpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
-
-    bool use_gpu = (runtime_option.device == Device::GPU);
-    bool use_ipu = (runtime_option.device == Device::IPU);
-#ifndef WITH_GPU
-    use_gpu = false;
-#endif
-#ifndef WITH_IPU
-    use_ipu = false;
-#endif
-    bool use_rknpu = (runtime_option.device == Device::RKNPU);
-
-    // whether the model is supported by the setted backend
-    bool is_supported = false;
-    if (use_gpu) {
-      for (auto& item : valid_gpu_backends) {
-        if (item == runtime_option.backend) {
-          is_supported = true;
-          break;
-        }
-      }
-    } else if (use_rknpu) {
-      for (auto& item : valid_rknpu_backends) {
-        if (item == runtime_option.backend) {
-          is_supported = true;
-          break;
-        }
-      }
-    } else if(use_ipu) {
-      for (auto& item : valid_ipu_backends) {
-        if (item == runtime_option.backend) {
-          is_supported = true;
-          break;
-        }
-      }
-    } else {
-      for (auto& item : valid_cpu_backends) {
-        if (item == runtime_option.backend) {
-          is_supported = true;
-          break;
-        }
-      }
+  } else if (use_rknpu) {
+    if (!IsSupported(valid_rknpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid rknpu backends of model " << ModelName() << " are " << Str(valid_rknpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
     }
-
-    if (is_supported) {
-      runtime_ = std::shared_ptr<Runtime>(new Runtime());
-      if (!runtime_->Init(runtime_option)) {
-        return false;
-      }
-      runtime_initialized_ = true;
-      return true;
-    } else {
-      FDWARNING << ModelName() << " is not supported with backend "
-                << Str(runtime_option.backend) << "." << std::endl;
-      if (use_gpu) {
-        FDASSERT(valid_gpu_backends.size() > 0,
-                 "There's no valid gpu backend for %s.", ModelName().c_str());
-        FDWARNING << "FastDeploy will choose " << Str(valid_gpu_backends[0])
-                  << " for model inference." << std::endl;
-      } else {
-        FDASSERT(valid_cpu_backends.size() > 0,
-                 "There's no valid cpu backend for %s.", ModelName().c_str());
-        FDWARNING << "FastDeploy will choose " << Str(valid_cpu_backends[0])
-                  << " for model inference." << std::endl;
-      }
+  } else if (use_timvx) {
+    if (!IsSupported(valid_timvx_backends, runtime_option.backend)) {
+      FDERROR << "The valid timvx backends of model " << ModelName() << " are " << Str(valid_timvx_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+    }
+  } else if(use_ipu) {
+    if (!IsSupported(valid_ipu_backends, runtime_option.backend)) {
+      FDERROR << "The valid ipu backends of model " << ModelName() << " are " << Str(valid_ipu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+    }
+  } else {
+    if (!IsSupported(valid_cpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid cpu backends of model " << ModelName() << " are " << Str(valid_cpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
     }
   }
 
+  runtime_ = std::shared_ptr<Runtime>(new Runtime());
+  if (!runtime_->Init(runtime_option)) {
+    return false;
+  }
+  runtime_initialized_ = true;
+  return true;
+}
+
+bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
   if (runtime_option.device == Device::CPU) {
     return CreateCpuBackend();
   } else if (runtime_option.device == Device::GPU) {
@@ -111,6 +100,8 @@ bool FastDeployModel::InitRuntime() {
 #endif
   } else if (runtime_option.device == Device::RKNPU) {
     return CreateRKNPUBackend();
+  } else if (runtime_option.device == Device::TIMVX) {
+    return CreateTimVXBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -120,8 +111,24 @@ bool FastDeployModel::InitRuntime() {
     return false;
 #endif
   }
-  FDERROR << "Only support CPU/GPU/NPU now." << std::endl;
+  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX now." << std::endl;
   return false;
+}
+
+bool FastDeployModel::InitRuntime() {
+  FDASSERT(
+      CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
+      "ModelFormatCheck Failed.");
+  if (runtime_initialized_) {
+    FDERROR << "The model is already initialized, cannot be initliazed again."
+            << std::endl;
+    return false;
+  }
+  if (runtime_option.backend != Backend::UNKNOWN) {
+    return InitRuntimeWithSpecifiedBackend();
+  }
+
+  return InitRuntimeWithSpecifiedDevice();
 }
 
 bool FastDeployModel::CreateCpuBackend() {
@@ -195,6 +202,29 @@ bool FastDeployModel::CreateRKNPUBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateTimVXBackend() {
+  if (valid_timvx_backends.size() == 0) {
+    FDERROR << "There's no valid timvx backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_timvx_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_timvx_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_timvx_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
 bool FastDeployModel::CreateIpuBackend() {
   if (valid_ipu_backends.size() == 0) {
     FDERROR << "There's no valid ipu backends for model: " << ModelName()
@@ -236,6 +266,10 @@ bool FastDeployModel::Infer(std::vector<FDTensor>& input_tensors,
     time_of_runtime_.push_back(tc.Duration());
   }
   return ret;
+}
+
+bool FastDeployModel::Infer() {
+  return Infer(reused_input_tensors_, &reused_output_tensors_);
 }
 
 std::map<std::string, float> FastDeployModel::PrintStatisInfoOfRuntime() {

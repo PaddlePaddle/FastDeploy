@@ -25,6 +25,7 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
  public:
@@ -45,7 +46,7 @@ class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 
   void writeCalibrationCache(const void* cache,
                              size_t length) noexcept override {
-    std::cout << "NOT IMPLEMENT." << std::endl;
+    fastdeploy::FDERROR << "NOT IMPLEMENT." << std::endl;
   }
 
  private:
@@ -62,6 +63,11 @@ struct TrtValueInfo {
 };
 
 struct TrtBackendOption {
+  std::string model_file = "";   // Path of model file
+  std::string params_file = "";  // Path of parameters file, can be empty
+  // format of input model
+  ModelFormat model_format = ModelFormat::AUTOREC;
+
   int gpu_id = 0;
   bool enable_fp16 = false;
   bool enable_int8 = false;
@@ -73,10 +79,6 @@ struct TrtBackendOption {
   std::string serialize_file = "";
   bool enable_pinned_memory = false;
   void* external_stream_ = nullptr;
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);
@@ -95,7 +97,9 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
 
   int NumInputs() const { return inputs_desc_.size(); }
   int NumOutputs() const { return outputs_desc_.size(); }
@@ -103,6 +107,8 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
+  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+                                     int device_id = -1) override;
 
   ~TrtBackend() {
     if (parser_) {
@@ -123,8 +129,11 @@ class TrtBackend : public BaseBackend {
   std::vector<TrtValueInfo> outputs_desc_;
   std::map<std::string, FDDeviceBuffer> inputs_device_buffer_;
   std::map<std::string, FDDeviceBuffer> outputs_device_buffer_;
+  std::map<std::string, int> io_name_index_;
 
   std::string calibration_str_;
+  bool save_external_ = false;
+  std::string model_file_name_ = "";
 
   // Sometimes while the number of outputs > 1
   // the output order of tensorrt may not be same
@@ -155,7 +164,8 @@ class TrtBackend : public BaseBackend {
   bool LoadTrtCache(const std::string& trt_engine_file);
   int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
   void SetInputs(const std::vector<FDTensor>& inputs);
-  void AllocateOutputsBuffer(std::vector<FDTensor>* outputs);
+  void AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
+                             bool copy_to_fd = true);
 };
 
 }  // namespace fastdeploy

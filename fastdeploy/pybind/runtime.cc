@@ -33,6 +33,9 @@ void BindRuntime(pybind11::module& m) {
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
+      .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
+      .def("set_openvino_shape_info", &RuntimeOption::SetOpenVINOShapeInfo)
+      .def("set_openvino_cpu_operators", &RuntimeOption::SetOpenVINOCpuOperators)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
       .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",
@@ -42,6 +45,7 @@ void BindRuntime(pybind11::module& m) {
       .def("set_lite_power_mode", &RuntimeOption::SetLitePowerMode)
       .def("set_trt_input_shape", &RuntimeOption::SetTrtInputShape)
       .def("set_trt_max_workspace_size", &RuntimeOption::SetTrtMaxWorkspaceSize)
+      .def("set_trt_max_batch_size", &RuntimeOption::SetTrtMaxBatchSize)
       .def("enable_paddle_to_trt", &RuntimeOption::EnablePaddleToTrt)
       .def("enable_trt_fp16", &RuntimeOption::EnableTrtFP16)
       .def("disable_trt_fp16", &RuntimeOption::DisableTrtFP16)
@@ -162,6 +166,25 @@ void BindRuntime(pybind11::module& m) {
              }
              return results;
            })
+      .def("infer", [](Runtime& self, std::map<std::string, FDTensor>& data) {
+        std::vector<FDTensor> inputs;
+        inputs.reserve(data.size());
+        for (auto iter = data.begin(); iter != data.end(); ++iter) {
+          FDTensor tensor;
+          tensor.SetExternalData(iter->second.Shape(), iter->second.Dtype(), iter->second.Data(), iter->second.device);
+          tensor.name = iter->first;
+          inputs.push_back(tensor);
+        }
+        std::vector<FDTensor> outputs;
+        if (!self.Infer(inputs, &outputs)) {
+          throw std::runtime_error("Failed to inference with Runtime.");
+        }
+        return outputs;
+      })
+      .def("infer", [](Runtime& self, std::vector<FDTensor>& inputs) {
+        std::vector<FDTensor> outputs;
+        return self.Infer(inputs, &outputs);
+      })
       .def("num_inputs", &Runtime::NumInputs)
       .def("num_outputs", &Runtime::NumOutputs)
       .def("get_input_info", &Runtime::GetInputInfo)
@@ -201,33 +224,6 @@ void BindRuntime(pybind11::module& m) {
       .value("FP32", FDDataType::FP32)
       .value("FP64", FDDataType::FP64)
       .value("UINT8", FDDataType::UINT8);
-
-  pybind11::class_<FDTensor>(m, "FDTensor", pybind11::buffer_protocol())
-      .def(pybind11::init())
-      .def("cpu_data",
-           [](FDTensor& self) {
-             auto ptr = self.CpuData();
-             auto numel = self.Numel();
-             auto dtype = FDDataTypeToNumpyDataType(self.dtype);
-             auto base = pybind11::array(dtype, self.shape);
-             return pybind11::array(dtype, self.shape, ptr, base);
-           })
-      .def("resize", static_cast<void (FDTensor::*)(size_t)>(&FDTensor::Resize))
-      .def("resize",
-           static_cast<void (FDTensor::*)(const std::vector<int64_t>&)>(
-               &FDTensor::Resize))
-      .def(
-          "resize",
-          [](FDTensor& self, const std::vector<int64_t>& shape,
-             const FDDataType& dtype, const std::string& name,
-             const Device& device) { self.Resize(shape, dtype, name, device); })
-      .def("numel", &FDTensor::Numel)
-      .def("nbytes", &FDTensor::Nbytes)
-      .def_readwrite("name", &FDTensor::name)
-      .def_readwrite("is_pinned_memory", &FDTensor::is_pinned_memory)
-      .def_readonly("shape", &FDTensor::shape)
-      .def_readonly("dtype", &FDTensor::dtype)
-      .def_readonly("device", &FDTensor::device);
 
   m.def("get_available_backends", []() { return GetAvailableBackends(); });
 }

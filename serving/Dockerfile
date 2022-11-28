@@ -20,7 +20,7 @@ COPY --from=full /opt/tritonserver/lib /opt/tritonserver/lib
 COPY --from=full /opt/tritonserver/include /opt/tritonserver/include
 COPY --from=full /opt/tritonserver/backends/python /opt/tritonserver/backends/python
 
-COPY serving/TensorRT-8.4.1.5 /opt/
+COPY serving/TensorRT-8.4.1.5 /opt/TensorRT-8.4.1.5
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \
@@ -33,16 +33,16 @@ RUN apt-get update \
     && apt-get update && apt-get install -y --no-install-recommends datacenter-gpu-manager=1:2.2.9
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev \
+    && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle-gpu paddlenlp faster_tokenizer
+    && python3 -m pip install paddlepaddle-gpu paddlenlp fast-tokenizer-python
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
 COPY serving/build/libtriton_fastdeploy.so /opt/tritonserver/backends/fastdeploy/
-COPY build/fastdeploy-0.0.3 /opt/fastdeploy/
+COPY build/fastdeploy_install /opt/fastdeploy/
 
 ENV LD_LIBRARY_PATH="/opt/TensorRT-8.4.1.5/lib/:/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/tensorrt/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
 ENV PATH="/opt/tritonserver/bin:$PATH"

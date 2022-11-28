@@ -35,38 +35,27 @@ namespace fastdeploy {
 
 /*! Inference backend supported in FastDeploy */
 enum Backend {
-  UNKNOWN, ///< Unknown inference backend
+  UNKNOWN,   ///< Unknown inference backend
   ORT,     ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
-  TRT,     ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
-  PDINFER, ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
-  POROS,   ///< Poros, support TorchScript format model, CPU / Nvidia GPU
-  OPENVINO, ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
+  TRT,      ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
+  PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
+  POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
+  OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,     ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,   ///< RKNPU2, support RKNN format model, Rockchip NPU only
 };
 
-/*! Deep learning model format */
-enum ModelFormat {
-  AUTOREC,     ///< Auto recognize the model format by model file name
-  PADDLE,      ///< Model with paddlepaddle format
-  ONNX,        ///< Model with ONNX format
-  RKNN,        ///< Model with RKNN format
-  TORCHSCRIPT, ///< Model with TorchScript format
-};
-
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const Backend& backend);
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const ModelFormat& format);
 
 /*! Paddle Lite power mode for mobile device. */
 enum LitePowerMode {
-  LITE_POWER_HIGH = 0,      ///< Use Lite Backend with high power mode
-  LITE_POWER_LOW = 1,       ///< Use Lite Backend with low power mode
-  LITE_POWER_FULL = 2,      ///< Use Lite Backend with full power mode
-  LITE_POWER_NO_BIND = 3,   ///< Use Lite Backend with no bind power mode
-  LITE_POWER_RAND_HIGH = 4, ///< Use Lite Backend with rand high mode
-  LITE_POWER_RAND_LOW = 5   ///< Use Lite Backend with rand low power mode
+  LITE_POWER_HIGH = 0,       ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,        ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,       ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,    ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
 };
 
 FASTDEPLOY_DECL std::string Str(const Backend& b);
@@ -105,8 +94,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name = fastdeploy::rknpu2::CpuName::RK3588,
-                 fastdeploy::rknpu2::CoreMask rknpu2_core = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
+  void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name
+                             = fastdeploy::rknpu2::CpuName::RK3588,
+                 fastdeploy::rknpu2::CoreMask rknpu2_core
+                             = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
+
+  /// Use TimVX to inference
+  void UseTimVX();
 
   void SetExternalStream(void* external_stream);
 
@@ -120,6 +114,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Inference as inference backend, support CPU/GPU
   void UsePaddleBackend();
+
+  /// Wrapper function of UsePaddleBackend()
+  void UsePaddleInferBackend() {
+    return UsePaddleBackend();
+  }
 
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
@@ -135,6 +134,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set Paddle Lite as inference backend, only support arm cpu
   void UseLiteBackend();
+
+  /// Wrapper function of UseLiteBackend()
+  void UsePaddleLiteBackend() {
+    return UseLiteBackend();
+  }
 
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
@@ -165,9 +169,35 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetPaddleMKLDNNCacheSize(int size);
 
   /**
+   * @brief Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+   */
+  void SetOpenVINODevice(const std::string& name = "CPU");
+
+  /**
+   * @brief Set shape info for OpenVINO
+   */
+  void SetOpenVINOShapeInfo(
+    const std::map<std::string, std::vector<int64_t>>& shape_info) {
+    ov_shape_infos = shape_info;
+  }
+
+  /**
+   * @brief While use OpenVINO backend with intel GPU, use this interface to specify operators run on CPU
+   */
+  void SetOpenVINOCpuOperators(const std::vector<std::string>& operators) {
+    ov_cpu_operators = operators;
+  }
+
+  /**
    * @brief Set optimzed model dir for Paddle Lite backend.
    */
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
+
+  /**
+   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionPath(
+    const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -209,6 +239,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Set max_workspace_size for TensorRT, default 1<<30
   void SetTrtMaxWorkspaceSize(size_t trt_max_workspace_size);
 
+  /// Set max_batch_size for TensorRT, default 32
+  void SetTrtMaxBatchSize(size_t max_batch_size);
+
   /**
    * @brief Enable FP16 inference while using TensorRT backend. Notice: not all the GPU device support FP16, on those device doesn't support FP16, FastDeploy will fallback to FP32 automaticly
    */
@@ -241,6 +274,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Disable to collect shape in paddle trt backend
    */
   void DisablePaddleTrtCollectShape();
+
+  /*
+   * @brief Set number of streams by the OpenVINO backends
+   */
+  void SetOpenVINOStreams(int num_streams);
 
   /** \Use Graphcore IPU to inference.
    *
@@ -313,6 +351,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   bool lite_enable_fp16 = false;
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
+  std::string lite_nnadapter_subgraph_partition_config_path = "";
+  bool enable_timvx = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
@@ -331,19 +371,22 @@ struct FASTDEPLOY_DECL RuntimeOption {
   int unconst_ops_thres = -1;
   std::string poros_file = "";
 
+  // ======Only for OpenVINO Backend=======
+  int ov_num_streams = 0;
+  std::string openvino_device = "CPU";
+  std::map<std::string, std::vector<int64_t>> ov_shape_infos;
+  std::vector<std::string> ov_cpu_operators;
+
   // ======Only for RKNPU2 Backend=======
-  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ = fastdeploy::rknpu2::CpuName::RK3588;
-  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
+  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_
+            = fastdeploy::rknpu2::CpuName::RK3588;
+  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_
+            = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
   std::string model_file = "";  // Path of model file
-  std::string params_file = ""; // Path of parameters file, can be empty
-  ModelFormat model_format = ModelFormat::AUTOREC; // format of input model
-
-  // inside parameters, only for inside usage
-  // remove multiclass_nms in Paddle2ONNX
-  bool remove_multiclass_nms_ = false;
-  // for Paddle2ONNX to export custom operators
-  std::map<std::string, std::string> custom_op_info_;
+  std::string params_file = "";  // Path of parameters file, can be empty
+  // format of input model
+  ModelFormat model_format = ModelFormat::AUTOREC;
 };
 
 /*! @brief Runtime object used to inference the loaded model on different devices
@@ -361,6 +404,12 @@ struct FASTDEPLOY_DECL Runtime {
    */
   bool Infer(std::vector<FDTensor>& input_tensors,
              std::vector<FDTensor>* output_tensors);
+
+  /** \brief No params inference the model.
+   *
+   *  the input and output data need to pass through the BindInputTensor and GetOutputTensor interfaces.
+   */
+  bool Infer();
 
   /** \brief Compile TorchScript Module, only for Poros backend
    *
@@ -389,6 +438,20 @@ struct FASTDEPLOY_DECL Runtime {
   /** \brief Get all the output information
    */
   std::vector<TensorInfo> GetOutputInfos();
+  /** \brief Bind FDTensor by name, no copy and share input memory
+   */
+  void BindInputTensor(const std::string& name, FDTensor& input);
+  /** \brief Get output FDTensor by name, no copy and share backend output memory
+   */
+  FDTensor* GetOutputTensor(const std::string& name);
+
+  /** \brief Clone new Runtime when multiple instances of the same model are created
+   *
+   * \param[in] stream CUDA Stream, defualt param is nullptr
+   * \return new Runtime* by this clone
+   */
+  Runtime* Clone(void* stream = nullptr,
+                 int device_id = -1);
 
   RuntimeOption option;
 
@@ -400,5 +463,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
   std::unique_ptr<BaseBackend> backend_;
+  std::vector<FDTensor> input_tensors_;
+  std::vector<FDTensor> output_tensors_;
 };
-} // namespace fastdeploy
+}  // namespace fastdeploy

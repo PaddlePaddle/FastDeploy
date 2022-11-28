@@ -15,94 +15,98 @@
 
 namespace fastdeploy {
 void BindPPDet(pybind11::module& m) {
-  pybind11::class_<vision::detection::PPYOLOE, FastDeployModel>(m, "PPYOLOE")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::PPYOLOE& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+  pybind11::class_<vision::detection::PaddleDetPreprocessor>(
+      m, "PaddleDetPreprocessor")
+      .def(pybind11::init<std::string>())
+      .def("run", [](vision::detection::PaddleDetPreprocessor& self, std::vector<pybind11::array>& im_list) {
+        std::vector<vision::FDMat> images;
+        for (size_t i = 0; i < im_list.size(); ++i) {
+          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+        }
+        std::vector<FDTensor> outputs;
+        if (!self.Run(&images, &outputs)) {
+          throw std::runtime_error("Failed to preprocess the input data in PaddleDetPreprocessor.");
+        }
+        for (size_t i = 0; i < outputs.size(); ++i) {
+          outputs[i].StopSharing();
+        }
+        return outputs;
+      });
 
-  pybind11::class_<vision::detection::PPYOLO, FastDeployModel>(m, "PPYOLO")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::PPYOLO& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+  pybind11::class_<vision::detection::PaddleDetPostprocessor>(
+      m, "PaddleDetPostprocessor")
+      .def(pybind11::init<>())
+      .def("run", [](vision::detection::PaddleDetPostprocessor& self, std::vector<FDTensor>& inputs) {
+        std::vector<vision::DetectionResult> results;
+        if (!self.Run(inputs, &results)) {
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleDetPostprocessor.");
+        }
+        return results;
+      })
+      .def("apply_decode_and_nms",
+           [](vision::detection::PaddleDetPostprocessor& self){
+             self.ApplyDecodeAndNMS();
+           })
+      .def("run", [](vision::detection::PaddleDetPostprocessor& self, std::vector<pybind11::array>& input_array) {
+        std::vector<vision::DetectionResult> results;
+        std::vector<FDTensor> inputs;
+        PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
+        if (!self.Run(inputs, &results)) {
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleDetPostprocessor.");
+        }
+        return results;
+      });
 
-  pybind11::class_<vision::detection::PPYOLOv2, FastDeployModel>(m, "PPYOLOv2")
+  pybind11::class_<vision::detection::PPDetBase, FastDeployModel>(m, "PPDetBase")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
-           [](vision::detection::PPYOLOv2& self, pybind11::array& data) {
+           [](vision::detection::PPDetBase& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              vision::DetectionResult res;
              self.Predict(&mat, &res);
              return res;
-           });
+           })
+      .def("batch_predict",
+           [](vision::detection::PPDetBase& self, std::vector<pybind11::array>& data) {
+             std::vector<cv::Mat> images;
+             for (size_t i = 0; i < data.size(); ++i) {
+              images.push_back(PyArrayToCvMat(data[i]));
+             }
+             std::vector<vision::DetectionResult> results;
+             self.BatchPredict(images, &results);
+             return results;
+           })
+      .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
+      .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
-  pybind11::class_<vision::detection::PicoDet, FastDeployModel>(m, "PicoDet")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::PicoDet& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
 
-  pybind11::class_<vision::detection::PaddleYOLOX, FastDeployModel>(
-      m, "PaddleYOLOX")
+  pybind11::class_<vision::detection::PPYOLO, vision::detection::PPDetBase>(m, "PPYOLO")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::PaddleYOLOX& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+                          ModelFormat>());
 
-  pybind11::class_<vision::detection::FasterRCNN, FastDeployModel>(m,
-                                                                   "FasterRCNN")
+  pybind11::class_<vision::detection::PPYOLOE, vision::detection::PPDetBase>(m, "PPYOLOE")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::FasterRCNN& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+                          ModelFormat>());
 
-  pybind11::class_<vision::detection::YOLOv3, FastDeployModel>(m, "YOLOv3")
+  pybind11::class_<vision::detection::PicoDet, vision::detection::PPDetBase>(m, "PicoDet")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::YOLOv3& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+                          ModelFormat>());
 
-  pybind11::class_<vision::detection::MaskRCNN, FastDeployModel>(m, "MaskRCNN")
+  pybind11::class_<vision::detection::PaddleYOLOX, vision::detection::PPDetBase>(m, "PaddleYOLOX")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>())
-      .def("predict",
-           [](vision::detection::MaskRCNN& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::DetectionResult res;
-             self.Predict(&mat, &res);
-             return res;
-           });
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::FasterRCNN, vision::detection::PPDetBase>(m, "FasterRCNN")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::YOLOv3, vision::detection::PPDetBase>(m, "YOLOv3")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::MaskRCNN, vision::detection::PPDetBase>(m, "MaskRCNN")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
 }
 }  // namespace fastdeploy

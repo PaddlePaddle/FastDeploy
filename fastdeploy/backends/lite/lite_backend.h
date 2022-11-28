@@ -43,6 +43,8 @@ struct LiteBackendOption {
   std::string optimized_model_dir = "";
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
+  std::string nnadapter_subgraph_partition_config_path = "";
+  bool enable_timvx = false;
 };
 
 // Convert data type from paddle lite to fastdeploy
@@ -58,7 +60,9 @@ class LiteBackend : public BaseBackend {
                       const std::string& params_file,
                       const LiteBackendOption& option = LiteBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override; // NOLINT
+  bool Infer(std::vector<FDTensor>& inputs,
+            std::vector<FDTensor>* outputs,
+            bool copy_to_fd = true) override; // NOLINT
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
@@ -77,5 +81,8 @@ class LiteBackend : public BaseBackend {
   std::map<std::string, int> inputs_order_;
   LiteBackendOption option_;
   bool supported_fp16_ = false;
+  bool ReadFile(const std::string& filename,
+               std::vector<char>* contents,
+               const bool binary = true);
 };
 }  // namespace fastdeploy

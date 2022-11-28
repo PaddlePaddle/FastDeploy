@@ -35,6 +35,14 @@ std::string ClassifyResult::Str() {
   return out;
 }
 
+ClassifyResult& ClassifyResult::operator=(ClassifyResult&& other) {
+  if (&other != this) {
+    label_ids = std::move(other.label_ids);
+    scores = std::move(other.scores);
+  }
+  return *this;
+}
+
 void Mask::Reserve(int size) { data.reserve(size); }
 
 void Mask::Resize(int size) { data.resize(size); }
@@ -70,6 +78,20 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
       masks.emplace_back(res.masks[i]);
     }
   }
+}
+
+DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
+  if (&other != this) {
+    boxes = std::move(other.boxes);
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    contain_masks = std::move(other.contain_masks);
+    if (contain_masks) {
+      masks.clear();
+      masks = std::move(other.masks);
+    }
+  }
+  return *this;
 }
 
 void DetectionResult::Clear() {
@@ -235,7 +257,41 @@ std::string FaceDetectionResult::Str() {
   return out;
 }
 
+void FaceAlignmentResult::Clear() {
+  std::vector<std::array<float, 2>>().swap(landmarks);
+}
+
+void FaceAlignmentResult::Reserve(int size) {
+  landmarks.resize(size);
+}
+
+void FaceAlignmentResult::Resize(int size) {
+  landmarks.resize(size);
+}
+
+std::string FaceAlignmentResult::Str() {
+  std::string out;
+
+  out = "FaceAlignmentResult: [x, y]\n";
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  int landmarks_size = landmarks.size();
+  size_t result_length = std::min(10, landmarks_size);
+  for (size_t i = 0; i < result_length; ++i) {
+    out = out + std::to_string(landmarks[i][0]) + "," +
+          std::to_string(landmarks[i][1]) + "\n";
+  }
+  out += "num_landmarks:" + std::to_string(landmarks.size()) + "\n";
+  return out;
+}
+
 void SegmentationResult::Clear() {
+  label_map.clear();
+  score_map.clear();
+  shape.clear();
+  contain_score_map = false;
+}
+
+void SegmentationResult::Free() {
   std::vector<uint8_t>().swap(label_map);
   std::vector<float>().swap(score_map);
   std::vector<int64_t>().swap(shape);
@@ -244,7 +300,7 @@ void SegmentationResult::Clear() {
 
 void SegmentationResult::Reserve(int size) {
   label_map.reserve(size);
-  if (contain_score_map > 0) {
+  if (contain_score_map) {
     score_map.reserve(size);
   }
 }
@@ -283,6 +339,18 @@ std::string SegmentationResult::Str() {
   return out;
 }
 
+SegmentationResult& SegmentationResult::operator=(SegmentationResult&& other) {
+  if (&other != this) {
+    label_map = std::move(other.label_map);
+    shape = std::move(other.shape);
+    contain_score_map = std::move(other.contain_score_map);
+    if (contain_score_map) {
+      score_map.clear();
+      score_map = std::move(other.score_map);
+    }
+  }
+  return *this;
+}
 FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
   embedding.assign(res.embedding.begin(), res.embedding.end());
 }
@@ -329,6 +397,13 @@ MattingResult::MattingResult(const MattingResult& res) {
 }
 
 void MattingResult::Clear() {
+  alpha.clear();
+  foreground.clear();
+  shape.clear();
+  contain_foreground = false;
+}
+
+void MattingResult::Free() {
   std::vector<float>().swap(alpha);
   std::vector<float>().swap(foreground);
   std::vector<int64_t>().swap(shape);
@@ -340,7 +415,7 @@ void MattingResult::Reserve(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Reserve.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.reserve(size * c);
   }
 }
@@ -350,7 +425,7 @@ void MattingResult::Resize(int size) {
   if (contain_foreground) {
     FDASSERT((shape.size() == 3),
              "Please initial shape (h,w,c) before call Resize.");
-    int c = static_cast<int>(shape[3]);
+    int c = static_cast<int>(shape[2]);
     foreground.resize(size * c);
   }
 }
@@ -460,6 +535,29 @@ std::string OCRResult::Str() {
   no_result = no_result + "No Results!";
   return no_result;
 }
+
+void HeadPoseResult::Clear() {
+  std::vector<float>().swap(euler_angles);
+}
+
+void HeadPoseResult::Reserve(int size) {
+  euler_angles.resize(size);
+}
+
+void HeadPoseResult::Resize(int size) {
+  euler_angles.resize(size);
+}
+
+std::string HeadPoseResult::Str() {
+  std::string out;
+
+  out = "HeadPoseResult: [yaw, pitch, roll]\n";
+  out = out + "yaw: " + std::to_string(euler_angles[0]) + "\n" +
+        "pitch: " + std::to_string(euler_angles[1]) + "\n" +
+        "roll: " + std::to_string(euler_angles[2]) + "\n";
+  return out;
+}
+
 
 }  // namespace vision
 }  // namespace fastdeploy

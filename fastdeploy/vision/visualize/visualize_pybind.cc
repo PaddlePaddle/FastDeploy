@@ -18,10 +18,17 @@ namespace fastdeploy {
 void BindVisualize(pybind11::module& m) {
   m.def("vis_detection",
         [](pybind11::array& im_data, vision::DetectionResult& result,
-           float score_threshold, int line_size, float font_size) {
+           std::vector<std::string>& labels, float score_threshold,
+           int line_size, float font_size) {
           auto im = PyArrayToCvMat(im_data);
-          auto vis_im = vision::VisDetection(im, result, score_threshold,
-                                             line_size, font_size);
+          cv::Mat vis_im;
+          if (labels.empty()) {
+            vis_im = vision::VisDetection(im, result, score_threshold,
+                                          line_size, font_size);
+          } else {
+            vis_im = vision::VisDetection(im, result, labels, score_threshold,
+                                          line_size, font_size);
+          }
           FDTensor out;
           vision::Mat(vis_im).ShareWithTensor(&out);
           return TensorToPyArray(out);
@@ -32,6 +39,15 @@ void BindVisualize(pybind11::module& m) {
              auto im = PyArrayToCvMat(im_data);
              auto vis_im =
                  vision::VisFaceDetection(im, result, line_size, font_size);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
+           })
+      .def("vis_face_alignment",
+           [](pybind11::array& im_data, vision::FaceAlignmentResult& result,
+              int line_size) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im = vision::VisFaceAlignment(im, result, line_size);
              FDTensor out;
              vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);
@@ -76,12 +92,13 @@ void BindVisualize(pybind11::module& m) {
              return TensorToPyArray(out);
            })
       .def("vis_mot",
-           [](pybind11::array& im_data, vision::MOTResult& result,float fps, int frame_id) {
-               auto im = PyArrayToCvMat(im_data);
-               auto vis_im = vision::VisMOT(im, result,fps,frame_id);
-               FDTensor out;
-               vision::Mat(vis_im).ShareWithTensor(&out);
-               return TensorToPyArray(out);
+           [](pybind11::array& im_data, vision::MOTResult& result,
+              float score_threshold, vision::tracking::TrailRecorder record) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im = vision::VisMOT(im, result, score_threshold, &record);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
            })
       .def("vis_matting",
            [](pybind11::array& im_data, vision::MattingResult& result,
@@ -89,6 +106,15 @@ void BindVisualize(pybind11::module& m) {
              cv::Mat im = PyArrayToCvMat(im_data);
              auto vis_im =
                  vision::VisMatting(im, result, remove_small_connected_area);
+             FDTensor out;
+             vision::Mat(vis_im).ShareWithTensor(&out);
+             return TensorToPyArray(out);
+           })
+      .def("vis_headpose",
+           [](pybind11::array& im_data, vision::HeadPoseResult& result,
+              int size, int line_size) {
+             auto im = PyArrayToCvMat(im_data);
+             auto vis_im = vision::VisHeadPose(im, result, size, line_size);
              FDTensor out;
              vision::Mat(vis_im).ShareWithTensor(&out);
              return TensorToPyArray(out);
@@ -111,8 +137,8 @@ void BindVisualize(pybind11::module& m) {
           [](pybind11::array& im_data, vision::KeyPointDetectionResult& result,
              float conf_threshold) {
             auto im = PyArrayToCvMat(im_data);
-            auto vis_im = vision::VisKeypointDetection(
-                im, result, conf_threshold);
+            auto vis_im =
+                vision::VisKeypointDetection(im, result, conf_threshold);
             FDTensor out;
             vision::Mat(vis_im).ShareWithTensor(&out);
             return TensorToPyArray(out);
@@ -174,14 +200,16 @@ void BindVisualize(pybind11::module& m) {
                     vision::Mat(vis_im).ShareWithTensor(&out);
                     return TensorToPyArray(out);
                   })
-      .def_static("vis_mot",
-                   [](pybind11::array& im_data, vision::MOTResult& result,float fps, int frame_id) {
-                       auto im = PyArrayToCvMat(im_data);
-                       auto vis_im = vision::VisMOT(im, result,fps,frame_id);
-                       FDTensor out;
-                       vision::Mat(vis_im).ShareWithTensor(&out);
-                       return TensorToPyArray(out);
-                   })
+      .def_static(
+          "vis_mot",
+          [](pybind11::array& im_data, vision::MOTResult& result,
+             float score_threshold, vision::tracking::TrailRecorder* record) {
+            auto im = PyArrayToCvMat(im_data);
+            auto vis_im = vision::VisMOT(im, result, score_threshold, record);
+            FDTensor out;
+            vision::Mat(vis_im).ShareWithTensor(&out);
+            return TensorToPyArray(out);
+          })
       .def_static("vis_matting_alpha",
                   [](pybind11::array& im_data, vision::MattingResult& result,
                      bool remove_small_connected_area) {
