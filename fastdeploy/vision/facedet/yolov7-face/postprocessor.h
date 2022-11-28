@@ -24,8 +24,17 @@ namespace facedet{
 
 class FASTDEPLOY_DECL Yolov7FacePostprocessor{
   public:
+/*! @brief Postprocessor object for YOLOv7Face serials model.
+ */
   Yolov7FacePostprocessor();
 
+  /** \brief Process the result of runtime and fill to DetectionResult structure
+   *
+   * \param[in] tensors The inference result from runtime
+   * \param[in] result The output result of detection
+   * \param[in] ims_info The shape info list, record input_shape and output_shape
+   * \return true if the postprocess successed, otherwise false
+   */
   bool Run(const std::vector<FDTensor>& infer_result,
            std::vector<FaceDetectionResult>* results,
            const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info);
@@ -53,8 +62,8 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
   float max_wh_;
 };
 
-}//facedet
+} //facedet
 
-}//vision
+} //vision
 
-}//fastdeploy
+} //fastdeploy

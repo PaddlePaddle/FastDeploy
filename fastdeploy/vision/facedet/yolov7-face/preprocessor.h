@@ -25,8 +25,17 @@ namespace facedet{
 class FASTDEPLOY_DECL Yolov7FacePreprocessor{
 
   public:
+  /** \brief Create a preprocessor instance for YOLOv7Face serials model
+   */
   explicit Yolov7FacePreprocessor();
 
+  /** \brief Process the input image and prepare input tensors for runtime
+   *
+   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] outputs The output tensors which will feed in runtime
+   * \param[in] ims_info The shape info list, record input_shape and output_shape
+   * \ret
+   */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::map<std::string, std::array<float, 2>>>* ims_info);
   
@@ -79,6 +88,7 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
   // padding stride, for is_mini_pad
   int stride_;
 
+  // for offseting the boxes by classes when using NMS
   float max_wh_;
 
 };

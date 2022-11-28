@@ -24,30 +24,56 @@ namespace fastdeploy{
 namespace vision{
 
 namespace facedet{
-
+/*! @brief YOLOv7Face model object used when to load a YOLOv5Face model exported by YOLOv5Face.
+ */
 class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
   public:
+  /** \brief  Set path of model file and the configuration of runtime.
+   *
+   * \param[in] model_file Path of model file, e.g ./yolov7face.onnx
+   * \param[in] params_file Path of parameter file, e.g ppyoloe/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
+   * \param[in] model_format Model format of the loaded model, default is ONNX format
+   */
   YOLOv7Face(const std::string& model_file, const std::string& params_file = "",
               const RuntimeOption& custom_option = RuntimeOption(),
               const ModelFormat& model_format = ModelFormat::ONNX);
   
   std::string ModelName(){return "yolov7-face";}
-
+  /** \brief Predict the face detection result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output face detection result will be writen to this structure
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.25
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.5
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25,
                        float nms_threshold = 0.5);
-
+  /** \brief Predict the detection result for an input image
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output detection result will be writen to this structure
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool Predict(const cv::Mat& im, FaceDetectionResult* result);
 
+  /** \brief Predict the detection results for a batch of input images
+   *
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] results The output detection result list
+   * \return true if the prediction successed, otherwise false
+   */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                             std::vector<FaceDetectionResult>* results);
 
-    /// Get preprocessor reference of YOLOv7
+    /// Get preprocessor reference of YOLOv7Face
   virtual Yolov7FacePreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
-  /// Get postprocessor reference of YOLOv7
+  /// Get postprocessor reference of YOLOv7Face
   virtual Yolov7FacePostprocessor& GetPostprocessor() {
     return postprocessor_;
   }
