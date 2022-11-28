@@ -17,7 +17,6 @@
 #include "fastdeploy/function/cast.h"
 #include "fastdeploy/function/clip.h"
 #include "fastdeploy/function/concat.h"
-#include "fastdeploy/function/cuda_cast.h"
 #include "fastdeploy/function/cumprod.h"
 #include "fastdeploy/function/elementwise.h"
 #include "fastdeploy/function/full.h"
