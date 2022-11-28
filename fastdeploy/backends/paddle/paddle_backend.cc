@@ -210,6 +210,10 @@ bool PaddleBackend::Infer(std::vector<FDTensor>& inputs,
 
   predictor_->Run();
 
+  // output share backend memory only support CPU or GPU
+  if(option_.use_ipu) {
+    copy_to_fd = true;
+  }
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto handle = predictor_->GetOutputHandle(outputs_desc_[i].name);

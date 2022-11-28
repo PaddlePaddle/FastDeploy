@@ -64,10 +64,6 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
 void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
                             FDTensor* fd_tensor,
                             bool copy_to_fd) {
-  // output share backend memory only support CPU or GPU 
-  if(option_.use_ipu) {
-    copy_to_fd = true;
-  }
   auto fd_dtype = PaddleDataTypeToFD(tensor->type());
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
