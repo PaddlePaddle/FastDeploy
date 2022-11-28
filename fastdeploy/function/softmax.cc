@@ -22,16 +22,14 @@
 
 namespace fastdeploy {
 namespace function {
-template <typename T>
-struct ValueClip {
+template <typename T> struct ValueClip {
   T operator()(const T& x) const {
     const T kThreshold = static_cast<T>(-64.);
     return x < kThreshold ? kThreshold : x;
   }
 };
 
-template <typename T>
-struct SoftmaxEigen {
+template <typename T> struct SoftmaxEigen {
   void operator()(const FDTensor& x, FDTensor* out, int axis_dim) {
     constexpr int kBatchDim = 0;
     constexpr int kClassDim = 1;
@@ -58,32 +56,30 @@ struct SoftmaxEigen {
     if (num_remain == 1) {
       // axis == -1, axis and class in same dimension, calculate along
       // class dimension directly for higher performance
-      softmax.device(dev) = (logits -
-                             logits.maximum(along_axis)
-                                 .eval()
-                                 .reshape(batch_by_one)
-                                 .broadcast(one_by_class))
+      softmax.device(dev) = (logits - logits.maximum(along_axis)
+                                          .eval()
+                                          .reshape(batch_by_one)
+                                          .broadcast(one_by_class))
                                 .unaryExpr(ValueClip<T>());
     } else {
       // axis != -1, class dimension split into (axis, remain), max and sum
       // should be calculated along axis dimension
-      softmax.device(dev) = (logits.reshape(batch_axis_remain) -
-                             logits.reshape(batch_axis_remain)
-                                 .maximum(along_axis)
-                                 .eval()
-                                 .reshape(batch_one_remain)
-                                 .broadcast(one_axis_one)
-                                 .reshape(batch_axis_remain))
-                                .reshape(batch_classes)
-                                .unaryExpr(ValueClip<T>());
+      softmax.device(dev) =
+          (logits.reshape(batch_axis_remain) - logits.reshape(batch_axis_remain)
+                                                   .maximum(along_axis)
+                                                   .eval()
+                                                   .reshape(batch_one_remain)
+                                                   .broadcast(one_axis_one)
+                                                   .reshape(batch_axis_remain))
+              .reshape(batch_classes)
+              .unaryExpr(ValueClip<T>());
     }
     softmax.device(dev) = softmax.exp();
-    softmax.device(dev) = (softmax *
-                           softmax.reshape(batch_axis_remain)
-                               .sum(along_axis)
-                               .inverse()
-                               .eval()
-                               .broadcast(one_axis));
+    softmax.device(dev) = (softmax * softmax.reshape(batch_axis_remain)
+                                         .sum(along_axis)
+                                         .inverse()
+                                         .eval()
+                                         .broadcast(one_axis));
   }
 };
 

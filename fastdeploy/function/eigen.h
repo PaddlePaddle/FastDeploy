@@ -14,18 +14,17 @@
 
 #pragma once
 
-#include <algorithm>
-#include <memory>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/axis_utils.h"
 #include "unsupported/Eigen/CXX11/Tensor"
+#include <algorithm>
+#include <memory>
+#include <vector>
 
 namespace fastdeploy {
 namespace function {
 // EigenDim converts shape into Eigen::DSizes.
-template <int D>
-struct EigenDim {
+template <int D> struct EigenDim {
   using Type = Eigen::DSizes<Eigen::DenseIndex, D>;
 
   static Type From(const std::vector<int64_t>& dims) {
@@ -92,8 +91,8 @@ struct EigenVector : public EigenTensor<T, 1, MajorType, IndexType> {
     return EigenVector::From(tensor, {tensor.Numel()});
   }
 
-  static typename EigenVector::ConstType Flatten(
-      const FDTensor& tensor) {  // NOLINT
+  static typename EigenVector::ConstType
+  Flatten(const FDTensor& tensor) {  // NOLINT
     return EigenVector::From(tensor, {tensor.Numel()});
   }
 };

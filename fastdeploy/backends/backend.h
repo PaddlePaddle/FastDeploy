@@ -67,7 +67,7 @@ class BaseBackend {
   virtual bool Infer(std::vector<FDTensor>& inputs,
                      std::vector<FDTensor>* outputs,
                      bool copy_to_fd = true) = 0;
-  virtual std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  virtual std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                              int device_id = -1) {
     FDERROR << "Clone no support" << std::endl;
     return nullptr;

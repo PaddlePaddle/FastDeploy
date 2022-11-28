@@ -18,8 +18,7 @@
 
 namespace fastdeploy {
 namespace function {
-template <typename T>
-struct TransposeNormalKernel {
+template <typename T> struct TransposeNormalKernel {
   void operator()(const FDTensor& in, FDTensor* out,
                   const std::vector<int64_t>& axis) {
     const int rank = axis.size();
@@ -45,8 +44,7 @@ struct TransposeNormalKernel {
   }
 };
 
-template <typename T, int Rank>
-struct TransposeKernelImpl {
+template <typename T, int Rank> struct TransposeKernelImpl {
   void operator()(const FDTensor& in, FDTensor* out,
                   const std::vector<int64_t>& axis) {
     Eigen::array<int, Rank> permute;
@@ -66,26 +64,26 @@ void TransposeKernel(const FDTensor& x, FDTensor* out,
                      const std::vector<int64_t>& axis) {
   int rank = axis.size();
   switch (rank) {
-    case 1:
-      TransposeKernelImpl<T, 1> trans1;
-      trans1(x, out, axis);
-      break;
-    case 2:
-      TransposeKernelImpl<T, 2> trans2;
-      trans2(x, out, axis);
-      break;
-    case 3:
-      TransposeKernelImpl<T, 3> trans3;
-      trans3(x, out, axis);
-      break;
-    case 4:
-      TransposeKernelImpl<T, 4> trans4;
-      trans4(x, out, axis);
-      break;
-    default:
-      // for rank >= 4 situation
-      TransposeNormalKernel<T> trans_normal;
-      trans_normal(x, out, axis);
+  case 1:
+    TransposeKernelImpl<T, 1> trans1;
+    trans1(x, out, axis);
+    break;
+  case 2:
+    TransposeKernelImpl<T, 2> trans2;
+    trans2(x, out, axis);
+    break;
+  case 3:
+    TransposeKernelImpl<T, 3> trans3;
+    trans3(x, out, axis);
+    break;
+  case 4:
+    TransposeKernelImpl<T, 4> trans4;
+    trans4(x, out, axis);
+    break;
+  default:
+    // for rank >= 4 situation
+    TransposeNormalKernel<T> trans_normal;
+    trans_normal(x, out, axis);
   }
 }
 

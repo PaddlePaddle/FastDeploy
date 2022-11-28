@@ -29,5 +29,5 @@ const Eigen::DefaultDevice* EigenDeviceWrapper::GetDevice() const {
   return &device_;
 }
 
-}
+}  // namespace function
 }  // namespace fastdeploy

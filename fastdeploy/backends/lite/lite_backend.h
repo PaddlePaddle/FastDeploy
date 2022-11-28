@@ -60,9 +60,8 @@ class LiteBackend : public BaseBackend {
                       const std::string& params_file,
                       const LiteBackendOption& option = LiteBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs,
-            std::vector<FDTensor>* outputs,
-            bool copy_to_fd = true) override; // NOLINT
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;  // NOLINT
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
@@ -81,8 +80,7 @@ class LiteBackend : public BaseBackend {
   std::map<std::string, int> inputs_order_;
   LiteBackendOption option_;
   bool supported_fp16_ = false;
-  bool ReadFile(const std::string& filename,
-               std::vector<char>* contents,
-               const bool binary = true);
+  bool ReadFile(const std::string& filename, std::vector<char>* contents,
+                const bool binary = true);
 };
 }  // namespace fastdeploy

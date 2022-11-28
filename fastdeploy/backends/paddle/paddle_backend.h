@@ -23,8 +23,8 @@
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
-#include "paddle_inference_api.h"  // NOLINT
 #include "fastdeploy/utils/unique_ptr.h"
+#include "paddle_inference_api.h"  // NOLINT
 
 #ifdef ENABLE_TRT_BACKEND
 #include "fastdeploy/backends/tensorrt/trt_backend.h"
@@ -91,8 +91,7 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
 // if copy_to_fd is true, copy memory data to FDTensor
 /// else share memory to FDTensor
 void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
-                            FDTensor* fd_tensor,
-                            bool copy_to_fd);
+                            FDTensor* fd_tensor, bool copy_to_fd);
 
 // Convert data type from paddle inference to fastdeploy
 FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype);
@@ -106,20 +105,18 @@ class PaddleBackend : public BaseBackend {
   virtual ~PaddleBackend() = default;
   void BuildOption(const PaddleBackendOption& option);
 
-  bool InitFromPaddle(
-      const std::string& model_file, const std::string& params_file,
-      const PaddleBackendOption& option = PaddleBackendOption());
+  bool
+  InitFromPaddle(const std::string& model_file, const std::string& params_file,
+                 const PaddleBackendOption& option = PaddleBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
-
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
   int NumOutputs() const override { return outputs_desc_.size(); }
 
-  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                      int device_id = -1) override;
 
   TensorInfo GetInputInfo(int index) override;
@@ -129,9 +126,11 @@ class PaddleBackend : public BaseBackend {
 
  private:
 #ifdef ENABLE_TRT_BACKEND
-  void CollectShapeRun(paddle_infer::Predictor* predictor,
-          const std::map<std::string, std::vector<int>>& shape) const;
-  void GetDynamicShapeFromOption(const PaddleBackendOption& option,
+  void
+  CollectShapeRun(paddle_infer::Predictor* predictor,
+                  const std::map<std::string, std::vector<int>>& shape) const;
+  void GetDynamicShapeFromOption(
+      const PaddleBackendOption& option,
       std::map<std::string, std::vector<int>>* max_shape,
       std::map<std::string, std::vector<int>>* min_shape,
       std::map<std::string, std::vector<int>>* opt_shape) const;

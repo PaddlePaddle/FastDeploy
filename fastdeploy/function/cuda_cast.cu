@@ -19,7 +19,8 @@ namespace function {
 template <typename T_IN, typename T_OUT>
 __global__ void CudaCastKernel(const T_IN* in, T_OUT* out, int edge) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
-  if (position >= edge) return;
+  if (position >= edge)
+    return;
   out[position] = (T_OUT)in[position];
 }
 
@@ -30,13 +31,11 @@ void CudaCast(const FDTensor& in, FDTensor* out, cudaStream_t stream) {
   if (in.dtype == FDDataType::INT64 && out->dtype == FDDataType::INT32) {
     CudaCastKernel<int64_t, int32_t><<<blocks, threads, 0, stream>>>(
         reinterpret_cast<int64_t*>(const_cast<void*>(in.Data())),
-        reinterpret_cast<int32_t*>(out->MutableData()),
-        jobs);
+        reinterpret_cast<int32_t*>(out->MutableData()), jobs);
   } else if (in.dtype == FDDataType::INT32 && out->dtype == FDDataType::INT64) {
     CudaCastKernel<int32_t, int64_t><<<blocks, threads, 0, stream>>>(
         reinterpret_cast<int32_t*>(const_cast<void*>(in.Data())),
-        reinterpret_cast<int64_t*>(out->MutableData()),
-        jobs);
+        reinterpret_cast<int64_t*>(out->MutableData()), jobs);
   } else {
     FDASSERT(false, "CudaCast only support input INT64, output INT32.");
   }

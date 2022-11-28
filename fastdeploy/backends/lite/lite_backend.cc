@@ -46,7 +46,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
     FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
-           << "inference with int8 precision!" << std::endl;    
+           << "inference with int8 precision!" << std::endl;
   }
   if (option_.enable_fp16) {
     paddle::lite_api::MobileConfig check_fp16_config;
@@ -58,24 +58,28 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
       FDINFO << "Your device is supported fp16 ! Lite::Backend will "
-             << "inference with fp16 precision!" << std::endl;    
+             << "inference with fp16 precision!" << std::endl;
     } else {
       FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
   }
   if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
     std::vector<char> nnadapter_subgraph_partition_config_buffer;
-    if (ReadFile(option_.nnadapter_subgraph_partition_config_path, &nnadapter_subgraph_partition_config_buffer, false)) {
+    if (ReadFile(option_.nnadapter_subgraph_partition_config_path,
+                 &nnadapter_subgraph_partition_config_buffer, false)) {
       if (!nnadapter_subgraph_partition_config_buffer.empty()) {
-        std::string nnadapter_subgraph_partition_config_string(nnadapter_subgraph_partition_config_buffer.data(), nnadapter_subgraph_partition_config_buffer.size());
-        config_.set_nnadapter_subgraph_partition_config_buffer(nnadapter_subgraph_partition_config_string);
+        std::string nnadapter_subgraph_partition_config_string(
+            nnadapter_subgraph_partition_config_buffer.data(),
+            nnadapter_subgraph_partition_config_buffer.size());
+        config_.set_nnadapter_subgraph_partition_config_buffer(
+            nnadapter_subgraph_partition_config_string);
       }
     }
   }
-  if(option_.enable_timvx){
+  if (option_.enable_timvx) {
     config_.set_nnadapter_device_names({"verisilicon_timvx"});
     valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
     valid_places.push_back(
@@ -94,20 +98,19 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
 }
 
 bool LiteBackend::ReadFile(const std::string& filename,
-               std::vector<char>* contents,
-               const bool binary) {
-  FILE *fp = fopen(filename.c_str(), binary ? "rb" : "r");
-  if (!fp){
-     FDERROR << "Cannot open file " << filename << "." << std::endl;
-     return false;
-  } 
+                           std::vector<char>* contents, const bool binary) {
+  FILE* fp = fopen(filename.c_str(), binary ? "rb" : "r");
+  if (!fp) {
+    FDERROR << "Cannot open file " << filename << "." << std::endl;
+    return false;
+  }
   fseek(fp, 0, SEEK_END);
   size_t size = ftell(fp);
   fseek(fp, 0, SEEK_SET);
   contents->clear();
   contents->resize(size);
   size_t offset = 0;
-  char *ptr = reinterpret_cast<char *>(&(contents->at(0)));
+  char* ptr = reinterpret_cast<char*>(&(contents->at(0)));
   while (offset < size) {
     size_t already_read = fread(ptr, 1, size - offset, fp);
     offset += already_read;
@@ -135,8 +138,9 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
   if (option_.optimized_model_dir != "") {
     FDINFO << "Optimzed model dir is not empty, will save optimized model to: "
            << option_.optimized_model_dir << std::endl;
-    predictor_->SaveOptimizedModel(option_.optimized_model_dir,
-                                   paddle::lite_api::LiteModelType::kNaiveBuffer);
+    predictor_->SaveOptimizedModel(
+        option_.optimized_model_dir,
+        paddle::lite_api::LiteModelType::kNaiveBuffer);
   }
 
   inputs_desc_.clear();
@@ -187,8 +191,7 @@ TensorInfo LiteBackend::GetOutputInfo(int index) {
 std::vector<TensorInfo> LiteBackend::GetOutputInfos() { return outputs_desc_; }
 
 bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
-                        std::vector<FDTensor>* outputs,
-                        bool copy_to_fd) {                                                
+                        std::vector<FDTensor>* outputs, bool copy_to_fd) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -203,29 +206,28 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
     auto tensor = predictor_->GetInput(iter->second);
-    // Adjust dims only, allocate lazy. 
-    tensor->Resize(inputs[i].shape); 
+    // Adjust dims only, allocate lazy.
+    tensor->Resize(inputs[i].shape);
     if (inputs[i].dtype == FDDataType::FP32) {
       tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
-        reinterpret_cast<const float*>(const_cast<void*>(
-        inputs[i].CpuData())));
+          reinterpret_cast<const float*>(
+              const_cast<void*>(inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT32) {
       tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(
-        reinterpret_cast<const int*>(const_cast<void*>(
-        inputs[i].CpuData())));
+          reinterpret_cast<const int*>(const_cast<void*>(inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT8) {
       tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kARM>(
-        reinterpret_cast<const int8_t*>(const_cast<void*>(
-        inputs[i].CpuData())));
+          reinterpret_cast<const int8_t*>(
+              const_cast<void*>(inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::UINT8) {
       tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
-        reinterpret_cast<const uint8_t*>(const_cast<void*>(
-        inputs[i].CpuData())));
+          reinterpret_cast<const uint8_t*>(
+              const_cast<void*>(inputs[i].CpuData())));
     } else {
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
     }
   }
-  
+
   predictor_->Run();
 
   outputs->resize(outputs_desc_.size());

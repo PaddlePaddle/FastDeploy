@@ -21,8 +21,7 @@
 
 namespace fastdeploy {
 namespace function {
-template <typename T, int Rank>
-struct PadEigen {
+template <typename T, int Rank> struct PadEigen {
   using Array = std::array<std::pair<int64_t, int64_t>, Rank>;
   using Array32Bit = std::array<std::pair<int, int>, Rank>;
   using InType = Eigen::TensorMap<
@@ -36,27 +35,20 @@ struct PadEigen {
       Eigen::TensorMap<Eigen::Tensor<T, Rank, Eigen::RowMajor, int>,
                        Eigen::Aligned>;
 
-  static void Eval(const Eigen::DefaultDevice& dev,
-                   OutType out,
-                   const InType& in,
-                   const Array& padding,
-                   const T value) {
+  static void Eval(const Eigen::DefaultDevice& dev, OutType out,
+                   const InType& in, const Array& padding, const T value) {
     out.device(dev) = in.pad(padding, value);
   }
 
-  static void Eval32(const Eigen::DefaultDevice& dev,
-                     OutType32BitIndex out,
-                     const InType32BitIndex& in,
-                     const Array32Bit& padding,
+  static void Eval32(const Eigen::DefaultDevice& dev, OutType32BitIndex out,
+                     const InType32BitIndex& in, const Array32Bit& padding,
                      const T value) {
     out.device(dev) = in.pad(padding, value);
   }
 };
 
 template <typename T, size_t D>
-void PadFunction(const std::vector<int>& pads,
-                 const FDTensor& src,
-                 T pad_value,
+void PadFunction(const std::vector<int>& pads, const FDTensor& src, T pad_value,
                  FDTensor* out) {
   std::array<std::pair<int64_t, int64_t>, D> paddings;
 
@@ -69,42 +61,41 @@ void PadFunction(const std::vector<int>& pads,
   auto out_tensor = EigenTensor<T, D>::From(*out);
 
   const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
-  PadEigen<T, D>::Eval(
-      dev, out_tensor, src_tensor, paddings, pad_value);
+  PadEigen<T, D>::Eval(dev, out_tensor, src_tensor, paddings, pad_value);
 }
 
-
 template <typename T>
-void PaddingFunctor(int rank, const std::vector<int>& pads, T pad_value, const FDTensor& src, FDTensor* out) {
+void PaddingFunctor(int rank, const std::vector<int>& pads, T pad_value,
+                    const FDTensor& src, FDTensor* out) {
   switch (rank) {
-    case 1:
-      PadFunction<T, 1>(pads, src, pad_value, out);
-      break;
-    case 2:
-      PadFunction<T, 2>(pads, src, pad_value, out);
-      break;
-    case 3:
-      PadFunction<T, 3>(pads, src, pad_value, out);
-      break;
-    case 4:
-      PadFunction<T, 4>(pads, src, pad_value, out);
-      break;
-    case 5:
-      PadFunction<T, 5>(pads, src, pad_value, out);
-      break;
-    case 6:
-      PadFunction<T, 6>(pads, src, pad_value, out);
-      break;
-    default:
-      FDASSERT(false, "Pad only support tensors with no more than 6 dimensions currently.");
+  case 1:
+    PadFunction<T, 1>(pads, src, pad_value, out);
+    break;
+  case 2:
+    PadFunction<T, 2>(pads, src, pad_value, out);
+    break;
+  case 3:
+    PadFunction<T, 3>(pads, src, pad_value, out);
+    break;
+  case 4:
+    PadFunction<T, 4>(pads, src, pad_value, out);
+    break;
+  case 5:
+    PadFunction<T, 5>(pads, src, pad_value, out);
+    break;
+  case 6:
+    PadFunction<T, 6>(pads, src, pad_value, out);
+    break;
+  default:
+    FDASSERT(
+        false,
+        "Pad only support tensors with no more than 6 dimensions currently.");
   }
 }
 
 template <typename T>
-void PadKernel(const FDTensor& x,
-               const std::vector<int>& paddings,
-               const T& pad_value,
-               FDTensor* out) {
+void PadKernel(const FDTensor& x, const std::vector<int>& paddings,
+               const T& pad_value, FDTensor* out) {
   std::vector<int64_t> new_shape(x.shape.size());
   for (size_t i = 0; i < x.shape.size(); ++i) {
     new_shape[i] = x.shape[i] + paddings[2 * i] + paddings[2 * i + 1];
@@ -113,15 +104,16 @@ void PadKernel(const FDTensor& x,
   PaddingFunctor<T>(x.shape.size(), paddings, pad_value, x, out);
 }
 
-void Pad(const FDTensor& x, FDTensor* out, const std::vector<int>& pads, float value) {
-  FDASSERT(pads.size() == x.shape.size() * 2, "Size of pads:%zu must be 2 times of rank:%zu.", pads.size(), x.shape.size());
+void Pad(const FDTensor& x, FDTensor* out, const std::vector<int>& pads,
+         float value) {
+  FDASSERT(pads.size() == x.shape.size() * 2,
+           "Size of pads:%zu must be 2 times of rank:%zu.", pads.size(),
+           x.shape.size());
   FDTensor out_tmp;
   FD_VISIT_ALL_TYPES(x.dtype, "PadKernel",
-                       ([&] { PadKernel<data_t>(x, pads, value, &out_tmp); }));
+                     ([&] { PadKernel<data_t>(x, pads, value, &out_tmp); }));
   *out = std::move(out_tmp);
 }
-
-
 
 }  // namespace function
 }  // namespace fastdeploy
