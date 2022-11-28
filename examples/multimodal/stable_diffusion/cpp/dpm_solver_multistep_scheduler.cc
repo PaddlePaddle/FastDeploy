@@ -149,7 +149,39 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
 
 void DPMSolverMultistepScheduler::DPMSolverFirstOrderUpdate(
     const FDTensor& model_output, int timestep, int prev_timestep,
-    const FDTensor& sample, FDTensor* out) {}
+    const FDTensor& sample, FDTensor* out) {
+  FDTensor lambda_t, lambda_s;
+  function::Slice(lambda_t_, {0}, {prev_timestep}, {prev_timestep + 1},
+                  &lambda_t);
+  function::Slice(lambda_t_, {0}, {timestep}, {timestep + 1}, &lambda_s);
+  lambda_t.Squeeze();
+  lambda_s.Squeeze();
+
+  FDTensor alpha_t, alpha_s;
+  function::Slice(alpha_t_, {0}, {prev_timestep}, {prev_timestep + 1},
+                  &alpha_t);
+  function::Slice(alpha_t_, {0}, {timestep}, {timestep + 1}, &alpha_s);
+  alpha_t.Squeeze();
+  alpha_s.Squeeze();
+
+  FDTensor sigma_t, sigma_s;
+  function::Slice(sigma_t_, {0}, {prev_timestep}, {prev_timestep + 1},
+                  &sigma_t);
+  function::Slice(sigma_t_, {0}, {timestep}, {timestep + 1}, &sigma_s);
+  sigma_t.Squeeze();
+  sigma_s.Squeeze();
+
+  FDTensor h = lambda_t - lambda_s;
+  FDTensor one(Scalar(1.0f));
+  FDTensor zero(Scalar(0.0f));
+  if (algorithm_type_ == "dpmsolver++") {
+    functions::Exp(zero - h, &h);
+    *out = (sigma_t / sigma_s) * sample - (alpha_t * (h - one)) * model_output;
+  } else if (algorithm_type_ == "dpmsolver") {
+    functions::Exp(h, &h);
+    *out = (alpha_t / alpha_s) * sample - (sigma_t * (h - one)) * model_output;
+  }
+}
 
 void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {
   num_inference_steps_ = num_inference_steps;
