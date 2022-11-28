@@ -44,9 +44,9 @@ public class PicoDet {
     }
 }
 ```
-这些被标记为native的接口是需要通过JNI的方式实现，并在Java层供PicoDet类调用。完整的PicoDet Java代码请参考 [PicoDet.java](../../../examples/vision/detection/paddledetection/android/app/src/main/java/com/baidu/paddle/fastdeploy/vision/detection/PicoDet.java) 。各个函数说明如下：  
+这些被标记为native的接口是需要通过JNI的方式实现，并在Java层供PicoDet类调用。完整的PicoDet Java代码请参考 [PicoDet.java](../../../java/android/fastdeploy/src/main/java/com/baidu/paddle/fastdeploy/vision/detection/PicoDet.java) 。各个函数说明如下：  
 - `bindNative`: C++层初始化模型资源，如果成功初始化，则返回指向该模型的指针(long类型)，否则返回0指针  
-- `predictNative`: 通过已经初始化好的模型指针，在C++层执行预测代码，如果预测成功则返回指向预测结果的指针，否则返回0指针。注意，该结果指针在当次预测使用完之后需要释放，具体操作请参考 [PicoDet.java](../../../examples/vision/detection/paddledetection/android/app/src/main/java/com/baidu/paddle/fastdeploy/vision/detection/PicoDet.java) 中的predict函数。  
+- `predictNative`: 通过已经初始化好的模型指针，在C++层执行预测代码，如果预测成功则返回指向预测结果的指针，否则返回0指针。注意，该结果指针在当次预测使用完之后需要释放，具体操作请参考 [PicoDet.java](../../../java/android/fastdeploy/src/main/java/com/baidu/paddle/fastdeploy/vision/detection/PicoDet.java) 中的predict函数。  
 - `releaseNative`: 根据传入的模型指针，在C++层释放模型资源。
 
 ## Android Studio 生成JNI函数定义  
@@ -70,89 +70,96 @@ Android Studio 生成 JNI 函数定义: 鼠标停留在Java中定义的native函
 
 以下为PicoDet JNI层实现的示例，相关的辅助函数不在此处赘述，完整的C++代码请参考 [android/app/src/main/cpp](../../../examples/vision/detection/paddledetection/android/app/src/main/cpp/).
 ```C++
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <jni.h>  // NOLINT
-#include "fastdeploy_jni.h"  // NOLINT
+#include "fastdeploy_jni/convert_jni.h"  // NOLINT
+#include "fastdeploy_jni/assets_loader_jni.h" // NOLINT
+#include "fastdeploy_jni/runtime_option_jni.h"  // NOLINT
+#include "fastdeploy_jni/vision/results_jni.h"  // NOLINT
+#include "fastdeploy_jni/vision/detection/detection_utils_jni.h"  // NOLINT
+
+namespace fni = fastdeploy::jni;
+namespace vision = fastdeploy::vision;
+namespace detection = fastdeploy::vision::detection;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// 绑定C++层的模型
 JNIEXPORT jlong JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_bindNative(
-    JNIEnv *env, jclass clazz, jstring model_file, jstring params_file,
-    jstring config_file, jint cpu_num_thread, jboolean enable_lite_fp16,
-    jint lite_power_mode, jstring lite_optimized_model_dir,
-    jboolean enable_record_time_of_runtime, jstring label_file) {
-  std::string c_model_file = fastdeploy::jni::ConvertTo<std::string>(env, model_file);
-  std::string c_params_file = fastdeploy::jni::ConvertTo<std::string>(env, params_file);
-  std::string c_config_file = astdeploy::jni::ConvertTo<std::string>(env, config_file);
-  std::string c_label_file = fastdeploy::jni::ConvertTo<std::string>(env, label_file);
-  std::string c_lite_optimized_model_dir = fastdeploy::jni::ConvertTo<std::string>(env, lite_optimized_model_dir);
-  auto c_cpu_num_thread = static_cast<int>(cpu_num_thread);
-  auto c_enable_lite_fp16 = static_cast<bool>(enable_lite_fp16);
-  auto c_lite_power_mode = static_cast<fastdeploy::LitePowerMode>(lite_power_mode);
-  fastdeploy::RuntimeOption c_option;
-  c_option.UseCpu();
-  c_option.UseLiteBackend();
-  c_option.SetCpuThreadNum(c_cpu_num_thread);
-  c_option.SetLitePowerMode(c_lite_power_mode);
-  c_option.SetLiteOptimizedModelDir(c_lite_optimized_model_dir);
-  if (c_enable_lite_fp16) {
-    c_option.EnableLiteFP16();
+    JNIEnv *env, jobject thiz, jstring model_file, jstring params_file,
+    jstring config_file, jobject runtime_option, jstring label_file) {
+  auto c_model_file = fni::ConvertTo<std::string>(env, model_file);
+  auto c_params_file = fni::ConvertTo<std::string>(env, params_file);
+  auto c_config_file = fni::ConvertTo<std::string>(env, config_file);
+  auto c_label_file = fni::ConvertTo<std::string>(env, label_file);
+  auto c_runtime_option = fni::NewCxxRuntimeOption(env, runtime_option);
+  auto c_model_ptr = new detection::PicoDet(
+      c_model_file, c_params_file, c_config_file, c_runtime_option);
+  INITIALIZED_OR_RETURN(c_model_ptr)
+
+#ifdef ENABLE_RUNTIME_PERF
+  c_model_ptr->EnableRecordTimeOfRuntime();
+#endif
+  if (!c_label_file.empty()) {
+    fni::AssetsLoader::LoadDetectionLabels(c_label_file);
   }
-  // 如果您实现的是其他模型，比如PPYOLOE，请注意修改此处绑定的C++类型
-  auto c_model_ptr = new fastdeploy::vision::detection::PicoDet(
-      c_model_file, c_params_file, c_config_file, c_option);
-  // Enable record Runtime time costs.
-  if (enable_record_time_of_runtime) {
-    c_model_ptr->EnableRecordTimeOfRuntime();
-  }
-  // Load detection labels if label path is not empty.
-  if ((!fastdeploy::jni::AssetsLoaderUtils::IsDetectionLabelsLoaded()) &&
-      (!c_label_file.empty())) {
-    fastdeploy::jni::AssetsLoaderUtils::LoadDetectionLabels(c_label_file);
-  }
-  // WARN: need to release manually in Java !
-  return reinterpret_cast<jlong>(c_model_ptr);  // native model context
+  vision::EnableFlyCV();
+  return reinterpret_cast<jlong>(c_model_ptr);
 }
 
-// 通过传入的模型指针在C++层进行预测
-JNIEXPORT jlong JNICALL
+JNIEXPORT jobject JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_predictNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context,
-    jobject argb8888_bitmap, jboolean saved, jstring saved_image_path,
-    jfloat score_threshold, jboolean rendering) {
-  if (native_model_context == 0) {
-    return 0;
+    JNIEnv *env, jobject thiz, jlong cxx_context, jobject argb8888_bitmap,
+    jboolean save_image, jstring save_path, jboolean rendering,
+    jfloat score_threshold) {
+  if (cxx_context == 0) {
+    return NULL;
   }
   cv::Mat c_bgr;
-  if (!fastdeploy::jni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
-    return 0;
+  if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
+    return NULL;
   }
-  auto c_model_ptr = reinterpret_cast<fastdeploy::vision::detection::PicoDet *>(
-      native_model_context);
-  auto c_result_ptr = new fastdeploy::vision::DetectionResult();
-  t = fastdeploy::jni::GetCurrentTime();
-  if (!c_model_ptr->Predict(&c_bgr, c_result_ptr)) {
-    delete c_result_ptr;
-    return 0;
+  auto c_model_ptr = reinterpret_cast<detection::PicoDet *>(cxx_context);
+  vision::DetectionResult c_result;
+  auto t = fni::GetCurrentTime();
+  c_model_ptr->Predict(&c_bgr, &c_result);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, t)
+
+  if (rendering) {
+    fni::RenderingDetection(env, c_bgr, c_result, argb8888_bitmap, save_image,
+                            score_threshold, save_path);
   }
-  // ...
-  return reinterpret_cast<jlong>(c_result_ptr);  // native result context
+
+  return fni::NewJavaResultFromCxx(env, reinterpret_cast<void *>(&c_result),
+                                   vision::ResultType::DETECTION);
 }
 
-// 在C++层释放模型资源
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_detection_PicoDet_releaseNative(
-    JNIEnv *env, jclass clazz, jlong native_model_context) {
-  if (native_model_context == 0) {
+    JNIEnv *env, jobject thiz, jlong cxx_context) {
+  if (cxx_context == 0) {
     return JNI_FALSE;
   }
-  auto c_model_ptr = reinterpret_cast<fastdeploy::vision::detection::PicoDet *>(
-      native_model_context);
-  // ...
+  auto c_model_ptr = reinterpret_cast<detection::PicoDet *>(cxx_context);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, -1)
+
   delete c_model_ptr;
+  LOGD("[End] Release PicoDet in native !");
   return JNI_TRUE;
 }
 
@@ -184,6 +191,11 @@ android {
             version '3.10.2'
         }
     }
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['libs']
+        }
+    }
     ndkVersion '20.1.5948944'
 }
 ```  
@@ -192,7 +204,8 @@ android {
 cmake_minimum_required(VERSION 3.10.2)
 project("fastdeploy_jni")
 
-set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-0.4.0-shared")
+# 其中 xxx 表示对应C++ SDK的版本号
+set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android-xxx-shared")
 
 find_package(FastDeploy REQUIRED)
 
@@ -221,7 +234,7 @@ target_link_libraries(
         ${log-lib}
 )
 ```
-完整的工程示例，请参考 [android/app/src/main/cpp/CMakelists.txt](../../../examples/vision/detection/paddledetection/android/app/src/main/cpp/) 以及 [android/app/build.gradle](../../../examples/vision/detection/paddledetection/android/app/build.gradle).
+完整的工程示例，请参考 [CMakelists.txt](../../../java/android/fastdeploy/src/main/cpp/CMakeLists.txt) 以及 [build.gradle](../../../java/android/fastdeploy/build.gradle).
 
 ## 更多FastDeploy Android 使用案例  
 <div id="Examples"></div>  
