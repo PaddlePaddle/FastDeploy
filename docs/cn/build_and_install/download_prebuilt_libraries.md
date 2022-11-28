@@ -37,7 +37,7 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 
 ### C++ SDK安装
 
-Release版本（当前最新0.7.0）
+Release版本
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
@@ -75,7 +75,7 @@ pip install fastdeploy-python==0.0.0 -f https://www.paddlepaddle.org.cn/whl/fast
 
 ## C++ SDK安装
 
-Release版本（当前最新0.7.0，Android为1.0.0 pre-release）
+Release版本
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
