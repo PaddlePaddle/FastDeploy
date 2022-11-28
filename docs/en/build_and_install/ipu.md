@@ -1,7 +1,24 @@
 
 # How to Build IPU Deployment Environment
 
-FastDeploy only supports Paddle Inference in the IPU environment.
+## Build Options
+
+Please do not modify other cmake paramters exclude the following options.
+
+| Option                      | Supported Platform | Description                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| ENABLE_ORT_BACKEND      | Linux(x64) | Default OFF, whether to intergrate ONNX Runtime backend(Only support CPU)   |
+| ENABLE_PADDLE_BACKEND   | Linux(x64) | Default OFF, whether to intergrate Paddle Inference backend(Support IPU & CPU)             |               
+| ENABLE_OPENVINO_BACKEND | Linux(x64) | Default OFF, whether to intergrate OpenVINO backend(Only support CPU)      |
+| ENABLE_VISION           | Linux(x64) | Default OFF, whether to intergrate vision models |
+| ENABLE_TEXT             | Linux(x64) | Default OFF, whether to intergrate text models |
+
+The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON, use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 ## How to Build and Install C++ SDK
 

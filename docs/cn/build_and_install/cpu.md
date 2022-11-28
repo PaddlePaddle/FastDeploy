@@ -1,13 +1,23 @@
 
 # CPU部署库编译
 
-FastDeploy当前在CPU支持后端引擎如下
+## 编译选项说明
 
-| 后端 | 平台  | 支持模型格式 | 说明 |
-| :--- | :---- | :----------- | :--- |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64) | Paddle | 编译开关`ENABLE_PADDLE_BACKEND`为ON或OFF控制, 默认OFF |
-| ONNX&nbsp;Runtime | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF |
-| OpenVINO | Windows(x64)<br>Linux(x64)<br>Mac(x86) | Paddle/ONNX | 编译开关`ENABLE_OPENVINO_BACKEND`为ON或OFF控制，默认OFF |
+无论是在何平台编译，编译时仅根据需求修改如下选项，勿修改其它参数
+| 选项                      | 支持平台 | 说明                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | 默认OFF, 是否编译集成ONNX Runtime后端    |
+| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | 默认OFF，是否编译集成Paddle Inference后端                             |  
+| ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成OpenVINO后端       |
+| ENABLE_VISION           | Linux(x64)/Windows(x64)/Mac OSX(x86) |  默认OFF，是否编译集成视觉模型的部署模块                                                    |
+| ENABLE_TEXT             | Linux(x64)/Windows(x64)/Mac OSX(x86) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
+
+第三方库依赖指定（不设定如下参数，会自动下载预编译库）
+| 选项                     | 说明                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | 当开启ONNX Runtime后端时，用于指定用户本地的ONNX Runtime库路径；如果不指定，编译过程会自动下载ONNX Runtime库  |
+| OPENCV_DIRECTORY        | 当ENABLE_VISION=ON时，用于指定用户本地的OpenCV库路径；如果不指定，编译过程会自动下载OpenCV库              |
+| OPENVINO_DIRECTORY      | 当开启OpenVINO后端时, 用于指定用户本地的OpenVINO库路径；如果不指定，编译过程会自动下载OpenVINO库             |
 
 ## C++ SDK编译安装
 
