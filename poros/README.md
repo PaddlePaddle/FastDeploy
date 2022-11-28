@@ -8,15 +8,11 @@ Poros is designed to supports multiple hardware backends conveniently, For now, 
 
 ## How It Works
 
-Figure 1 is the architecture of Poros. The central part marked by the red dotted line is Model Optimizer, the main
-module of Poros. IR graphs are optimized by IR lowering, op fusing and op converting, and then segmented into engine
-related subgraph by maximize the op nums of each engine kernel and minimize the total count of engine kernels.
+Figure 1 is the architecture of Poros. The central part marked by the red dotted line is Model Optimizer, the main module of Poros. IR graphs are optimized by IR lowering, op fusing, op converting and auto-tuning, and then segmented into engine related subgraph by maximize the op nums of each engine kernel and minimize the total count of engine kernels.
 
 ![image](https://user-images.githubusercontent.com/54064850/203691621-e75d7c17-320c-4dff-8abe-58c3c9db99a2.png)
 
-In order to achieve the above goals on GPU, we've rewritten nearly one hundred TorchScript OPs with TensorRT API, which
-reduced extra subgraphs caused by unsupported op during subgraph partitioning. Dozens of lowering strategy including op
-fusions were employed to reduce the actual calculating load of CUDA Kernels.
+In order to achieve the above goals on GPU, we've rewritten hundreds of TorchScript OPs, which reduced extra subgraphs caused by unsupported op during subgraph partitioning. Dozens of lowering strategy including op fusions were employed to reduce the actual calculating load of CUDA Kernels.
 
 ## Dependencies
 
@@ -204,4 +200,4 @@ If the executable binary `poros-tool` is built, you can run the benchmark like t
 Take a look at the [Benchmark](docs/Benchmark.md).
 
 ## Acknowledgement
-Poros has been incubated for more than 2 years. In this project, NVIDIA helped us a lot (especially  Gary Ji, Vincent Zhang, Jie Fang). They answered lots of technical questions about GPU and gave us many suggestions. Appreciate for their great support.
+Poros has been incubated for more than 2 years. In this project, NVIDIA helped us a lot (especially  Gary Ji, Vincent Zhang, Jie Fang). They answered lots of technical questions about GPU and gave us many suggestions. Appreciate their great support.

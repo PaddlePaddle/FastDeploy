@@ -61,8 +61,6 @@ def convert_prewarm_inputs(prewarm_inputs):
     else:
         raise TypeError("prewarm_inputs for poros should be torch.Tensor or wraped as tuple or inputs-lists, fix it")
     return wraped_prewarm_inputs     
-    # info = poros._C.PreWarmDatas()
-    # info.set_data(prewarm_inputs)
 
 def convert_poros_option(poros_option):
     # type: Dict[str, Any] -> poros._C.PorosOptions
