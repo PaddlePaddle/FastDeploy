@@ -29,7 +29,7 @@
 ## Python-Triton-Model简介
 我们以[yolov5前处理](../../../examples/vision/detection/yolov5/serving/models/preprocess/1/model.py)为例，简单介绍一下编写Python-Triton-Model中的注意事项。
 
-Python-Triton-Model代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自定义的代码。
+Python-Triton-Model代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自行编写代码。
 
 `initialize`中一般放置初始化的一些操作，该函数只在Python-Triton-Model被加载的时候执行1次。
 
