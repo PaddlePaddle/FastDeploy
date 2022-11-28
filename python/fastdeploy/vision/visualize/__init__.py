@@ -20,16 +20,12 @@ import cv2
 
 def vis_detection(im_data,
                   det_result,
-                  labels=None,
+                  labels=[],
                   score_threshold=0.0,
                   line_size=1,
                   font_size=0.5):
-    if labels:
-        return C.vision.vis_detection_for_label(
-            im_data, det_result, labels, score_threshold, line_size, font_size)
-    else:
-        return C.vision.vis_detection(im_data, det_result, score_threshold,
-                                      line_size, font_size)
+    return C.vision.vis_detection(im_data, det_result, labels, score_threshold,
+                                  line_size, font_size)
 
 
 def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
