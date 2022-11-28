@@ -18,7 +18,7 @@ The configuration for third libraries(Optional, if the following option is not d
 | Option                     | Description                                                                                           |
 | :---------------------- | :--------------------------------------------------------------------------------------------- |
 | ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
-| OPENCV_DIRECTORY        | While ENABLE_VISION=ON， use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
 | OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON时， use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 ## How to Build and Install C++ SDK
