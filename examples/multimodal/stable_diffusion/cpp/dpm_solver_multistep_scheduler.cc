@@ -89,8 +89,9 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
 
   function::Linspace(0, num_train_timesteps_ - 1, num_train_timesteps_,
                      &timesteps_);
+  function::Cast(timesteps_, &timesteps_, FDDataType::INT64);
   // Reverse timesteps
-  float* timesteps_data = reinterpret_cast<float*>(timesteps_.Data());
+  int64_t* timesteps_data = reinterpret_cast<int64_t*>(timesteps_.Data());
   std::reverse(timesteps_data, timesteps_data + timesteps_.Numel());
 
   model_outputs_.resize(solver_order_);
@@ -304,6 +305,53 @@ void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {
 
 void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
                                        int timestep, const FDTensor& sample,
-                                       FDTensor* prev_sample) {}
+                                       FDTensor* prev_sample) {
+  FDASSERT(num_inference_steps_ > -1,
+           "Number of inference steps is -1, you need to run SetTimesteps "
+           "after creating the scheduler");
+  int64_t step_index = timesteps_.Numel() - 1;
+  int64_t* timesteps_data = reinterpret_cast<int64_t*>(timesteps_.Data());
+  int64_t* timesteps_iter =
+      std::find(timesteps_data, timesteps_data + timesteps_.Numel(), timestep);
+  if (timesteps_iter - timesteps_data < timesteps_.Numel()) {
+    step_index = timesteps_iter - timesteps_data;
+  }
+
+  int64_t prev_timestep = 0;
+  if (step_index != timesteps_.Numel() - 1) {
+    prev_timestep = timesteps_data[step_index + 1];
+  }
+  bool lower_order_final = (step_index == timesteps_.Numel() - 1) &&
+                           lower_order_final_ && (timesteps_.Numel() < 15);
+  bool lower_order_second = (step_index == timesteps_.Numel() - 2) &&
+                            lower_order_final_ && (timesteps_.Numel() < 15);
+  FDTensor model_out;
+  ConvertModelOutput(model_output, timestep, sample, &model_out);
+  for (int i = 0; i < solver_order_ - 1; ++i) {
+    model_outputs_[i] = std::move(model_outputs_[i + 1]);
+  }
+  model_outputs_[solver_order_ - 1] = std::move(model_out);
+
+  if (solver_order_ == 1 || lower_order_nums_ < 1 || lower_order_final) {
+    DPMSolverFirstOrderUpdate(model_out, timestep, prev_timestep, sample,
+                              prev_sample);
+  } else if (solver_order_ == 2 || lower_order_nums_ < 2 ||
+             lower_order_second) {
+    int t0 = reinterpret_cast<int64_t*>(timesteps_.Data())[step_index - 1];
+    std::vector<int> timestep_list = {t0, timestep};
+    MultiStepDPMSolverSecondOrderUpdate(model_outputs_, timestep_list,
+                                        prev_timestep, sample, prev_sample);
+  } else {
+    int t0 = reinterpret_cast<int64_t*>(timesteps_.Data())[step_index - 1];
+    int t1 = reinterpret_cast<int64_t*>(timesteps_.Data())[step_index - 2];
+    std::vector<int> timestep_list = {t1, t0, timestep};
+    MultiStepDPMSolverThirdOrderUpdate(model_outputs_, timestep_list,
+                                       prev_timestep, sample, prev_sample);
+  }
+
+  if (lower_order_nums_ < solver_order_) {
+    lower_order_nums_ += 1;
+  }
+}
 
 }  // namespace fastdeploy
