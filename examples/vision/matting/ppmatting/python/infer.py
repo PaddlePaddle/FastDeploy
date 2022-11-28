@@ -34,7 +34,7 @@ def build_option(args):
     option = fd.RuntimeOption()
     if args.device.lower() == "gpu":
         option.use_gpu()
-        option.use_paddle_backend()
+        option.use_paddle_infer_backend()
 
     if args.use_trt:
         option.use_trt_backend()
