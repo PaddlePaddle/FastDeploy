@@ -40,6 +40,8 @@ DEFINE_ACTIVATION_KERNEL(Log, LogFunctor)
 DEFINE_ACTIVATION_KERNEL(Round, RoundFunctor)
 DEFINE_ACTIVATION_KERNEL(Exp, ExpFunctor)
 DEFINE_ACTIVATION_KERNEL(Abs, AbsFunctor)
+DEFINE_ACTIVATION_KERNEL(Ceil, CeilFunctor)
+DEFINE_ACTIVATION_KERNEL(Floor, FloorFunctor)
 
 void Sqrt(const FDTensor& x, FDTensor* out) {
   FD_VISIT_FLOAT_TYPES(x.dtype, "SqrtKernel",
@@ -64,6 +66,16 @@ void Exp(const FDTensor& x, FDTensor* out) {
 void Abs(const FDTensor& x, FDTensor* out) {
   FD_VISIT_FLOAT_TYPES(x.dtype, "AbsKernel",
                        ([&] { AbsKernel<data_t>(x, out); }));
+}
+
+void Ceil(const FDTensor& x, FDTensor* out) {
+  FD_VISIT_FLOAT_TYPES(x.dtype, "CeilKernel",
+                       ([&] { CeilKernel<data_t>(x, out); }));
+}
+
+void Floor(const FDTensor& x, FDTensor* out) {
+  FD_VISIT_FLOAT_TYPES(x.dtype, "FloorKernel",
+                       ([&] { FloorKernel<data_t>(x, out); }));
 }
 
 }  // namespace function

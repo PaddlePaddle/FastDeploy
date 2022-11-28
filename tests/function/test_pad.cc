@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <numeric>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/pad.h"
+#include <numeric>
+#include <vector>
 
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gtest_utils.h"
+#include "gtest/gtest.h"
 
 namespace fastdeploy {
 namespace function {
@@ -29,12 +29,10 @@ TEST(fastdeploy, pad_2d) {
   CheckData check_data;
   CheckType check_type;
 
-  std::vector<float> inputs = {2, 4, 3, 
-                                7, 1, 5};
-  std::vector<float> expected_result = {2.2, 2.2, 2.2, 2.2, 2.2,
-                                        2.2, 2,   4,   3,   2.2,
-                                        2.2, 7,   1,   5,   2.2,
-                                        2.2, 2.2, 2.2, 2.2, 2.2};
+  std::vector<float> inputs = {2, 4, 3, 7, 1, 5};
+  std::vector<float> expected_result = {2.2, 2.2, 2.2, 2.2, 2.2, 2.2, 2,
+                                        4,   3,   2.2, 2.2, 7,   1,   5,
+                                        2.2, 2.2, 2.2, 2.2, 2.2, 2.2};
   input.SetExternalData({2, 3}, FDDataType::FP32, inputs.data());
 
   Pad(input, &output, {1, 1, 1, 1}, 2.2);
@@ -50,12 +48,9 @@ TEST(fastdeploy, pad_2d_int32_t) {
   CheckData check_data;
   CheckType check_type;
 
-  std::vector<int32_t> inputs = {2, 4, 3, 
-                                7, 1, 5};
-  std::vector<int32_t> expected_result = {2, 2, 2, 2, 2,
-                                        2, 2,   4,   3,   2,
-                                        2, 7,   1,   5,   2,
-                                        2, 2, 2, 2, 2};
+  std::vector<int32_t> inputs = {2, 4, 3, 7, 1, 5};
+  std::vector<int32_t> expected_result = {2, 2, 2, 2, 2, 2, 2, 4, 3, 2,
+                                          2, 7, 1, 5, 2, 2, 2, 2, 2, 2};
   input.SetExternalData({2, 3}, FDDataType::INT32, inputs.data());
 
   Pad(input, &output, {1, 1, 1, 1}, 2.2);
