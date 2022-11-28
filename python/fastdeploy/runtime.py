@@ -57,6 +57,9 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
+        for k, v in data.items():
+            if not v.data.contiguous:
+                data[k] = np.ascontiguousarray(data[k])
         return self._runtime.infer(data)
 
     def compile(self, warm_datas):
@@ -203,6 +206,17 @@ class RuntimeOption:
 
         :param device_id: (int)The index of GPU will be used for inference, default 0
         """
+        if not C.is_built_with_gpu():
+            logging.warning(
+                "The installed fastdeploy-python package is not built with GPU, will force to use CPU. To use GPU, following the commands to install fastdeploy-gpu-python."
+            )
+            logging.warning(
+                "    ================= Install GPU FastDeploy===============")
+            logging.warning("    python -m pip uninstall fastdeploy-python")
+            logging.warning(
+                "    python -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html"
+            )
+            return
         return self._option.use_gpu(device_id)
 
     def use_cpu(self):
