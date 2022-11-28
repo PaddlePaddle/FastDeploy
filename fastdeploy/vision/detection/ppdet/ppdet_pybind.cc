@@ -108,5 +108,9 @@ void BindPPDet(pybind11::module& m) {
   pybind11::class_<vision::detection::MaskRCNN, vision::detection::PPDetBase>(m, "MaskRCNN")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+
+  pybind11::class_<vision::detection::SSD, vision::detection::PPDetBase>(m, "SSD")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
 }
 }  // namespace fastdeploy

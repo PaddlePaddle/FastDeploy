@@ -51,3 +51,4 @@ Users can also compile the image by themselves according to their own needs, ref
 | NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
 | NLP |	[PaddleNLP/UIE](../examples/text/uie/serving/README.md)|
 | Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|
+| OCR |	[PaddleOCR/PP-OCRv3](../examples/vision/ocr/PP-OCRv3/serving/README.md)|

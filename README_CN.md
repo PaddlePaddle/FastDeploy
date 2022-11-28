@@ -41,29 +41,29 @@
 - 🔥 [**【三日部署直播课回放】**](https://aistudio.baidu.com/aistudio/course/introduce/27800)
 
 - **社区交流**
-  
+
   - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
-  
+
   - **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
-    
+
     <div align="center">
     <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
     </div>
 
 - 🔥 **2022.11.23：Release FastDeploy [release v0.8.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.8)**
-  
+
   - **🖥️ 服务端部署：支持更多的模型，推理性能进一步提升**  
-    
+
     - 新增 PIPNet、FaceLandmark1000 [人脸对齐模型](./examples/vision/facealign)的部署支持；
     - 新增[视频超分系列模型](./examples/vision/sr) PP-MSVSR、EDVR、BasicVSR 部署示例；
     - 升级[YOLOv7部署代码](https://github.com/PaddlePaddle/FastDeploy/pull/611)，支持 predict 及 batch_predict；
     - 新增 [UIE服务化部署](./examples/text/uie) 案例；
     - [测试功能] 新增OpenVINO后端Device设置，支持集显/独立显卡的调用；
-  
+
   - **📲 移动端和端侧部署：支持更多模型**
-    
+
     - 新增Android图像分类、目标检测、语义分割、OCR、人脸检测 APK工程及示例.
-      
+
       | <font size=3>图像分类</font>                                                                                                                                                   | <font size=3>目标检测</font>                                                                                                                                              | <font size=3>语义分割</font>                                                                                                                                          | <font size=3>文字识别</font>                                                                                                                                        | <font size=3>人脸检测</font>                                                                                                                                            |
       |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
       | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation) | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/facedet)</font> |
@@ -75,61 +75,61 @@
 ## 目录
 
 * <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
-  
+
   - 安装文档
-    
+
     - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
     - [GPU部署环境编译安装](docs/cn/build_and_install/gpu.md)
     - [CPU部署环境编译安装](docs/cn/build_and_install/cpu.md)
     - [IPU部署环境编译安装](docs/cn/build_and_install/ipu.md)
     - [Jetson部署环境编译安装](docs/cn/build_and_install/jetson.md)
     - [Android平台部署环境编译安装](docs/cn/build_and_install/android.md)
-  
+
   - 快速使用
-    
+
     - [Python部署示例](docs/cn/quick_start/models/python.md)
     - [C++部署示例](docs/cn/quick_start/models/cpp.md)
     - [Runtime Python使用示例](docs/cn/quick_start/runtime/python.md)
     - [Runtime C++使用示例](docs/cn/quick_start/runtime/cpp.md)
-  
+
   - API文档(进行中)
-    
+
     - [Python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/)
     - [C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/)
-  
+
   - 性能调优
-    
+
     - [量化加速](docs/cn/quantize.md)
-  
+
   - 常见问题
-    
+
     - [1. 如何配置模型部署的推理后端](docs/cn/faq/how_to_change_backend.md)
     - [2. Windows上C++ SDK如何使用](docs/cn/faq/use_sdk_on_windows.md)
-    - [3. Android上如何使用FastDeploy](docs/cn/faq/use_sdk_on_android.md)(进行中)
+    - [3. Android上如何使用FastDeploy](java/android/README.md)
     - [4. TensorRT使用中的一些技巧](docs/cn/faq/tensorrt_tricks.md)
     - [5. 如何增加新的模型](docs/cn/faq/develop_a_new_model.md)(进行中)
-  
+
   - 更多FastDeploy部署模块
-    
+
     - [服务化部署](./serving)
-    
+
     - [Benchmark测试](./benchmark)
-      
-      </div></details>
+
+</div></details>
 
 * **🖥️ 服务器端部署**
-  
+
   * [Python SDK快速开始](#fastdeploy-quick-start-python)  
   * [C++ SDK快速开始](#fastdeploy-quick-start-cpp)
   * [服务端模型支持列表](#fastdeploy-server-models)
 
 * **📲 移动端和端侧部署**
-  
+
   * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
   * [端侧模型支持列表](#fastdeploy-edge-models)
 
 * **🌐 Web和小程序部署**  
-  
+
   * [Web端模型支持列表](#fastdeploy-web-models)
 
 * [**社区交流**](#fastdeploy-community)
@@ -180,7 +180,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ```
 
 * 测试推理结果
-  
+
   ```python
   # GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
   import cv2
