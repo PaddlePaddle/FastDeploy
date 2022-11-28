@@ -19,7 +19,7 @@
 在本文的yolov5服务化示例中，**Ensemble-Triton-Model**将前处理、模型预测、后处理3个**Triton-Model**串联组合为1个整体，整体的结构如下图所示。
 <p align="center">
     <br>
-<img src='../../simple_ensemble.png'>
+<img src='../simple_ensemble.png'>
     <br>
 </p>
   
@@ -112,7 +112,7 @@ class TritonPythonModel:
 
 <p align="center">
     <br>
-<img src='../../dynamic_batching.png'>
+<img src='../dynamic_batching.png'>
     <br>
 </p>
 
@@ -120,6 +120,6 @@ class TritonPythonModel:
 
 <p align="center">
     <br>
-<img src='../../instance_group.png'>
+<img src='../instance_group.png'>
     <br>
 </p>
