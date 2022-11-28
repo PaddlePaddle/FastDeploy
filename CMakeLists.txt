@@ -157,7 +157,10 @@ if(ANDROID OR IOS)
   endif()
 endif()
 
-##################################### Buiding: FastDeploy C++ SDK #######################################
+# Check for macOS architecture
+get_osx_architecture()
+
+##################################### Building: FastDeploy C++ SDK #######################################
 add_definitions(-DFASTDEPLOY_LIB)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
