@@ -6,8 +6,7 @@ FastDeploy supports Paddle-Lite backend on Android. It supports both armeabi-v7a
 |:---|:---|:---|:---|  
 |ENABLE_LITE_BACKEND|OFF|It needs to be set to ON when compiling the Android library| - |
 |WITH_OPENCV_STATIC|OFF|Whether to use the OpenCV static library| - |
-|WITH_LITE_STATIC|OFF|Whether to use the Lite static library
-| NOT Support now |
+|WITH_LITE_STATIC|OFF|Whether to use the Paddle-Lite static library| NOT Support now |
 
 Please reference [FastDeploy Compile Options](./README.md) for more details.
 
