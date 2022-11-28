@@ -141,7 +141,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                    is_scale_up, stride);
 
   BGR2RGB::Run(mat);
-  if(!this->disable_normalize_and_permute_){
+  if (!disable_normalize_and_permute_) {
     // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
     //                std::vector<float>(mat->Channels(), 1.0));
     // Compute `result = mat * alpha + beta` directly by channel
@@ -368,7 +368,7 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
   return true;
 }
 void SCRFD::DisableNormalizeAndPermute(){
-  this->disable_normalize_and_permute_ = true;
+  disable_normalize_and_permute_ = true;
 }
 }  // namespace facedet
 }  // namespace vision
