@@ -61,5 +61,21 @@ template <typename T> struct AbsFunctor {
   }
 };
 
+// ceil(x) = ceiling(x)
+template <typename T> struct CeilFunctor {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) = x.ceil();
+  }
+};
+
+// floor(x) = flooring(x)
+template <typename T> struct FloorFunctor {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) = x.floor();
+  }
+};
+
 }  // namespace function
 }  // namespace fastdeploy
