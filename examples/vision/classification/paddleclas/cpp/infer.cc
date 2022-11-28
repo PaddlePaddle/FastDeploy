@@ -36,7 +36,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -61,7 +61,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -87,7 +87,7 @@ void IpuInfer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -113,7 +113,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
