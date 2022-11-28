@@ -118,7 +118,7 @@ fd.vision.detection.YOLOv5.preprocess(data)
 动态合并Batch的原理如下图所示。当用户请求request并发量较大，但GPU利用率较小时，可以通过将不同用户的request组合为1个大的Batch进行模型预测，从而提高服务的吞吐性能。
 <p align="center">
     <br>
-<img src='https://user-images.githubusercontent.com/35565423/204268829-797112e1-bf75-486b-8931-07b44f659578.png'>
+<img src='https://user-images.githubusercontent.com/35565423/204285444-1f9aaf24-05c2-4aae-bbd5-47dc3582dc01.png'>
     <br>
 </p>
 
