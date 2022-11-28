@@ -1,6 +1,22 @@
 # 服务化部署示例
-我们以最简单的Ernie-3.0模型为例，讲述如何对进行服务化部署
-Triton中将前处理、后处理、模型预测、串联模型的Pipeline都视为一个Model
+我们以最简单的yolov5模型为例，讲述如何进行服务化部署，详细的代码和操作步骤见[yolov5服务化部署](../../../examples/vision/detection/yolov5/serving)，阅读本文之前建议您先阅读以下文档：
+- [服务化模型目录说明](model_repository.md) (说明如何准备模型目录)
+- [服务化部署配置说明](model_configuration.md)  (说明runtime的配置选项)
+
+## 目录结构与配置的原理介绍
+像常见的深度学习模型一样，yolov5完整的运行过程包含前处理+模型预测+后处理三个阶段。
+
+在Triton中，将前处理、模型预测、后处理均视为1个**Triton-Model**，每个Triton-Model的**config.pbtxt**配置文件中均描述了其输入数据格式、输出数据格式、Triton-Model的类型（即config.pbtxt中的**backend**或**platform**字段）、以及其他的一些配置选项。
+
+前处理和后处理一般是运行一段Python代码，为了方便后续描述，我们称之为**Python-Triton-Model**，其config.pbtxt配置文件中的`backend: "python"`。
+
+模型预测阶段是深度学习模型预测引擎（如ONNXRuntime、Paddle、TRT、FastDeploy）加载用户提供的深度学习模型文件来运行模型预测，我们称之为**Runtime-Triton-Model**，其config.pbtxt配置文件中的`backend: "fastdeploy"`。
+
+根据用户提供的模型类型的不同，可以在**optimization**字段中设置使用CPU、GPU、TRT、ONNX等配置，配置方法参考[服务化部署配置说明](model_configuration.md)。
+
+除此之外，还需要一个**Ensemble-Triton-Model**来将前处理、模型预测、后处理3个**Triton-Model**组合为1个整体，并描述3个Triton-Model之间的关联关系，例如，前处理的输出与模型预测的输入之间的对应关系，3个Triton-Model的调用顺序、串并联关系等，**Ensemble-Triton-Model**的config.pbtxt配置文件中的`platform: "ensemble"`。
+
+在本文的yolov5服务化示例中，**Ensemble-Triton-Model**将前处理、模型预测、后处理3个**Triton-Model**串联组合为1个整体，整体的结构如下图所示。
 
 
 ## 模型通用最小配置
