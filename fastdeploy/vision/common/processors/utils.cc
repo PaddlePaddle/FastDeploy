@@ -230,7 +230,7 @@ cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor) {
   int channels = static_cast<int>(tensor.shape[2]);
   return CreateZeroCopyOpenCVMatFromBuffer(
           height, width, channels, type, 
-          const_cast<void*>(tensor.Data()));
+          const_cast<void*>(tensor.CpuData()));
 }
 
 #ifdef ENABLE_FLYCV

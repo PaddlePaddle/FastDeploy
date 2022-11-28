@@ -285,6 +285,13 @@ std::string FaceAlignmentResult::Str() {
 }
 
 void SegmentationResult::Clear() {
+  label_map.clear();
+  score_map.clear();
+  shape.clear();
+  contain_score_map = false;
+}
+
+void SegmentationResult::Free() {
   std::vector<uint8_t>().swap(label_map);
   std::vector<float>().swap(score_map);
   std::vector<int64_t>().swap(shape);
@@ -293,7 +300,7 @@ void SegmentationResult::Clear() {
 
 void SegmentationResult::Reserve(int size) {
   label_map.reserve(size);
-  if (contain_score_map > 0) {
+  if (contain_score_map) {
     score_map.reserve(size);
   }
 }
@@ -332,6 +339,18 @@ std::string SegmentationResult::Str() {
   return out;
 }
 
+SegmentationResult& SegmentationResult::operator=(SegmentationResult&& other) {
+  if (&other != this) {
+    label_map = std::move(other.label_map);
+    shape = std::move(other.shape);
+    contain_score_map = std::move(other.contain_score_map);
+    if (contain_score_map) {
+      score_map.clear();
+      score_map = std::move(other.score_map);
+    }
+  }
+  return *this;
+}
 FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
   embedding.assign(res.embedding.begin(), res.embedding.end());
 }

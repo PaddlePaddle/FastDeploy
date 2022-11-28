@@ -14,8 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/common/processors/transform.h"
-#include "fastdeploy/vision/common/result.h"
+#include "fastdeploy/vision/segmentation/ppseg/preprocessor.h"
+#include "fastdeploy/vision/segmentation/ppseg/postprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -44,7 +44,7 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
   /// Get model's name
   std::string ModelName() const { return "PaddleSeg"; }
 
-  /** \brief Predict the segmentation result for an input image
+  /** \brief DEPRECATED Predict the segmentation result for an input image
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result The output segmentation result will be writen to this structure
@@ -52,36 +52,37 @@ class FASTDEPLOY_DECL PaddleSegModel : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, SegmentationResult* result);
 
-  /** \brief Whether applying softmax operator in the postprocess, default value is false
+  /** \brief Predict the segmentation result for an input image
+   *
+   * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] result The output segmentation result will be writen to this structure
+   * \return true if the segmentation prediction successed, otherwise false
    */
-  bool apply_softmax = false;
+  virtual bool Predict(const cv::Mat& im, SegmentationResult* result);
 
-  /** \brief For PP-HumanSeg model, set true if the input image is vertical image(height > width), default value is false
+  /** \brief Predict the segmentation results for a batch of input images
+   *
+   * \param[in] imgs, The input image list, each element comes from cv::imread()
+   * \param[in] results The output segmentation result list
+   * \return true if the prediction successed, otherwise false
    */
-  bool is_vertical_screen = false;
+  virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
+                            std::vector<SegmentationResult>* results);
 
+  /// Get preprocessor reference of PaddleSegModel
+  virtual PaddleSegPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
 
-  // This function will disable normalize and hwc2chw in preprocessing step.
-  void DisableNormalizeAndPermute();
- private:
+  /// Get postprocessor reference of PaddleSegModel
+  virtual PaddleSegPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
+
+ protected:
   bool Initialize();
-
-  bool BuildPreprocessPipelineFromConfig();
-
-  bool Preprocess(Mat* mat, FDTensor* outputs);
-
-  bool Postprocess(FDTensor* infer_result, SegmentationResult* result,
-                   const std::map<std::string, std::array<int, 2>>& im_info);
-
-  bool is_with_softmax = false;
-
-  bool is_with_argmax = true;
-
-  std::vector<std::shared_ptr<Processor>> processors_;
-  std::string config_file_;
-  
-  // for recording the switch of normalize and hwc2chw
-  bool disable_normalize_and_permute = false;
+  PaddleSegPreprocessor preprocessor_;
+  PaddleSegPostprocessor postprocessor_;
 };
 
 }  // namespace segmentation

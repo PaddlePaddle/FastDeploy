@@ -61,7 +61,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<std::vector<std::array<int, 8>>> results;
 
         if (!self.Run(inputs, &results, batch_det_img_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in DBDetectorPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in DBDetectorPostprocessor.");
         }
         return results;
       })
@@ -72,7 +72,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results, batch_det_img_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in DBDetectorPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in DBDetectorPostprocessor.");
         }
         return results;
       });
@@ -98,7 +98,7 @@ void BindPPOCRModel(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in ClassifierPreprocessor.");
         }
         for(size_t i = 0; i< outputs.size(); ++i){
           outputs[i].StopSharing();
@@ -114,7 +114,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<int> cls_labels;
         std::vector<float> cls_scores;
         if (!self.Run(inputs, &cls_labels, &cls_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in ClassifierPostprocessor.");
         }
         return make_pair(cls_labels,cls_scores);
       })
@@ -125,7 +125,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<int> cls_labels;
         std::vector<float> cls_scores;
         if (!self.Run(inputs, &cls_labels, &cls_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in ClassifierPostprocessor.");
         }
         return make_pair(cls_labels,cls_scores);
       });
@@ -152,7 +152,7 @@ void BindPPOCRModel(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in RecognizerPreprocessor.");
         }
         for(size_t i = 0; i< outputs.size(); ++i){
           outputs[i].StopSharing();
@@ -167,7 +167,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<std::string> texts;
         std::vector<float> rec_scores;
         if (!self.Run(inputs, &texts, &rec_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in RecognizerPostprocessor.");
         }
         return make_pair(texts, rec_scores);
       })
@@ -178,7 +178,7 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<std::string> texts;
         std::vector<float> rec_scores;
         if (!self.Run(inputs, &texts, &rec_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPostprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in RecognizerPostprocessor.");
         }
         return make_pair(texts, rec_scores);
       });
