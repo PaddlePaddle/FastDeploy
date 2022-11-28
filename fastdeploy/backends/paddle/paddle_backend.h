@@ -87,9 +87,12 @@ paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device);
 // Share memory buffer with paddle_infer::Tensor from fastdeploy::FDTensor
 void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor, FDTensor& fd_tensor);
 
-// Copy memory data from paddle_infer::Tensor to fastdeploy::FDTensor
-void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
-                     FDTensor* fd_tensor);
+// convert paddle_infer::Tensor to fastdeploy::FDTensor
+// if copy_to_fd is true, copy memory data to FDTensor
+/// else share memory to FDTensor
+void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
+                            FDTensor* fd_tensor,
+                            bool copy_to_fd);
 
 // Convert data type from paddle inference to fastdeploy
 FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype);
@@ -108,7 +111,9 @@ class PaddleBackend : public BaseBackend {
       const PaddleBackendOption& option = PaddleBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs) override;
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
+
 
   int NumInputs() const override { return inputs_desc_.size(); }
 

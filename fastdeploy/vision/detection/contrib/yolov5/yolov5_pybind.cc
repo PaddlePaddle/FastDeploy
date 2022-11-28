@@ -27,7 +27,7 @@ void BindYOLOv5(pybind11::module& m) {
         std::vector<FDTensor> outputs;
         std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
         if (!self.Run(&images, &outputs, &ims_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in PaddleClasPreprocessor.");
         }
         for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
@@ -45,7 +45,7 @@ void BindYOLOv5(pybind11::module& m) {
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
         std::vector<vision::DetectionResult> results;
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv5Postprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in YOLOv5Postprocessor.");
         }
         return results;
       })
@@ -55,7 +55,7 @@ void BindYOLOv5(pybind11::module& m) {
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in YOLOv5Postprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in YOLOv5Postprocessor.");
         }
         return results;
       })

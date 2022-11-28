@@ -23,6 +23,8 @@
 
 namespace fastdeploy {
 
+struct Scalar;
+
 struct FASTDEPLOY_DECL FDTensor {
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
@@ -76,7 +78,8 @@ struct FASTDEPLOY_DECL FDTensor {
   // So take care with the user buffer
   void SetExternalData(const std::vector<int64_t>& new_shape,
                        const FDDataType& data_type, void* data_buffer,
-                       const Device& new_device = Device::CPU);
+                       const Device& new_device = Device::CPU,
+                       int new_device_id = -1);
 
   // Expand the shape of a Tensor. Insert a new axis that will appear
   // at the `axis` position in the expanded Tensor shape.
@@ -126,6 +129,8 @@ struct FASTDEPLOY_DECL FDTensor {
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+  explicit FDTensor(const char* tensor_name);
+
   // Deep copy
   FDTensor(const FDTensor& other);
   // Move constructor
@@ -135,6 +140,9 @@ struct FASTDEPLOY_DECL FDTensor {
   FDTensor& operator=(const FDTensor& other);
   // Move assignment
   FDTensor& operator=(FDTensor&& other);
+
+  // Scalar to FDTensor
+  explicit FDTensor(const Scalar& scalar);
 
   ~FDTensor() { FreeFn(); }
 

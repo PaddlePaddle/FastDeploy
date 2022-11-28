@@ -197,7 +197,8 @@ TensorInfo LiteBackend::GetOutputInfo(int index) {
 std::vector<TensorInfo> LiteBackend::GetOutputInfos() { return outputs_desc_; }
 
 bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
-                        std::vector<FDTensor>* outputs) {                                                
+                        std::vector<FDTensor>* outputs,
+                        bool copy_to_fd) {                                                
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
