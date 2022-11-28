@@ -1,4 +1,4 @@
- # Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,69 +18,11 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
-class YOLOv7Face(FastDeployModel):
-    def __init__(self,
-                 model_file,
-                 params_file="",
-                 runtime_option=None,
-                 model_format=ModelFormat.ONNX):
-        """Load a YOLOv5Face model exported by YOLOv5Face.
-
-        :param model_file: (str)Path of model file, e.g ./yolov7face.onnx
-        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
-        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
-        """
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
-        super(YOLOv7Face, self).__init__(runtime_option)
-
-        self._model = C.vision.facedet.YOLOv7Face(
-            model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "YOLOv7Face initialize failed."
-
-    def predict(self, input_image, conf_threshold=0.3, nms_iou_threshold=0.5):
-        """Detect the location and key points of human faces from an input image
-
-        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param conf_threshold: confidence threashold for postprocessing, default is 0.3
-        :param nms_iou_threshold: iou threashold for NMS, default is 0.5
-        :return: FaceDetectionResult
-        """
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
-    
-    def batch_predict(self, images):
-        """Classify a batch of input image
-
-        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
-        :return list of DetectionResult
-        """
-
-        return self._model.batch_predict(images)
-
-    @property
-    def preprocessor(self):
-        """Get YOLOv7Preprocessor object of the loaded model
-
-        :return YOLOv7Preprocessor
-        """
-        return self._model.preprocessor
-
-    @property
-    def postprocessor(self):
-        """Get YOLOv7Postprocessor object of the loaded model
-
-        :return YOLOv7Postprocessor
-        """
-        return self._model.postprocessor
-
 class Yolov7FacePreprocessor:
     def __init__(self):
         """Create a preprocessor for Yolov7Face
         """
-        self._preprocessor = C.vision.facedet.YOLOv7Preprocessor()
+        self._preprocessor = C.vision.facedet.Yolov7Preprocessor()
 
     def run(self, input_ims):
         """Preprocess input images for Yolov7Face
@@ -175,3 +117,61 @@ class Yolov7FacePostprocessor:
         assert isinstance(nms_threshold, float),\
             "The value to set `nms_threshold` must be type of float."
         self._postprocessor.nms_threshold = nms_threshold
+
+class YOLOv7Face(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 params_file="",
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a YOLOv7Face model exported by YOLOv7Face.
+
+        :param model_file: (str)Path of model file, e.g ./yolov7face.onnx
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+        # 调用基函数进行backend_option的初始化
+        # 初始化后的option保存在self._runtime_option
+        super(YOLOv7Face, self).__init__(runtime_option)
+
+        self._model = C.vision.facedet.YOLOv7Face(
+            model_file, params_file, self._runtime_option, model_format)
+        # 通过self.initialized判断整个模型的初始化是否成功
+        assert self.initialized, "YOLOv7Face initialize failed."
+
+    def predict(self, input_image, conf_threshold=0.3, nms_iou_threshold=0.5):
+        """Detect the location and key points of human faces from an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param conf_threshold: confidence threashold for postprocessing, default is 0.3
+        :param nms_iou_threshold: iou threashold for NMS, default is 0.5
+        :return: FaceDetectionResult
+        """
+        return self._model.predict(input_image, conf_threshold,
+                                   nms_iou_threshold)
+    
+    def batch_predict(self, images):
+        """Classify a batch of input image
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
+        """
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get YOLOv7Preprocessor object of the loaded model
+
+        :return YOLOv7Preprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get YOLOv7Postprocessor object of the loaded model
+
+        :return YOLOv7Postprocessor
+        """
+        return self._model.postprocessor
