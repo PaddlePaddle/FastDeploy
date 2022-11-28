@@ -14,7 +14,7 @@
 
 from __future__ import absolute_import
 from .contrib.yolov5face import YOLOv5Face
-from .contrib.yolov5face import YOLOv7Face
+from .contrib.yolov7face import YOLOv7Face
 from .contrib.retinaface import RetinaFace
 from .contrib.scrfd import SCRFD
 from .contrib.ultraface import UltraFace
