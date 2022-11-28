@@ -23,6 +23,8 @@
 
 namespace fastdeploy {
 
+struct Scalar;
+
 struct FASTDEPLOY_DECL FDTensor {
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
@@ -127,6 +129,8 @@ struct FASTDEPLOY_DECL FDTensor {
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+  explicit FDTensor(const char* tensor_name);
+
   // Deep copy
   FDTensor(const FDTensor& other);
   // Move constructor
@@ -136,6 +140,9 @@ struct FASTDEPLOY_DECL FDTensor {
   FDTensor& operator=(const FDTensor& other);
   // Move assignment
   FDTensor& operator=(FDTensor&& other);
+
+  // Scalar to FDTensor
+  explicit FDTensor(const Scalar& scalar);
 
   ~FDTensor() { FreeFn(); }
 

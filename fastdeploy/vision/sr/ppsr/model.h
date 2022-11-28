@@ -13,6 +13,6 @@
 // limitations under the License.
 
 #pragma once
-#include "fastdeploy/vision/sr/ppsr/ppmsvsr.h"
-#include "fastdeploy/vision/sr/ppsr/edvr.h"
 #include "fastdeploy/vision/sr/ppsr/basicvsr.h"
+#include "fastdeploy/vision/sr/ppsr/edvr.h"
+#include "fastdeploy/vision/sr/ppsr/ppmsvsr.h"
