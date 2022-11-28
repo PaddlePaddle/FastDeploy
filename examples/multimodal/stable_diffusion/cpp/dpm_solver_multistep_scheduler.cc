@@ -70,11 +70,10 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
              beta_schedule.c_str());
   }
 
-  Scalar one = static_cast<float>(1.0);
-  alphas_ = FDTensor(one) - betas_;
+  alphas_ = 1.0f - betas_;
   function::Cumprod(alphas_, &alphas_cumprod_);
   function::Sqrt(alphas_cumprod_, &alpha_t_);
-  function::Sqrt(FDTensor(one) - alphas_cumprod_, &sigma_t_);
+  function::Sqrt(1.0f - alphas_cumprod_, &sigma_t_);
   FDTensor alpha_t_log, sigma_t_log;
   function::Log(alpha_t_, &alpha_t_log);
   function::Log(sigma_t_, &sigma_t_log);
@@ -105,10 +104,8 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
     FDTensor x0_pred;
     if (predict_epsilon_) {
       FDTensor alpha_t, sigma_t;
-      function::Slice(alpha_t_, {0}, {timestep}, {timestep + 1}, &alpha_t);
-      function::Slice(sigma_t_, {0}, {timestep}, {timestep + 1}, &sigma_t);
-      alpha_t.Squeeze();
-      sigma_t_.Squeeze();
+      function::Slice(alpha_t_, {0}, {timestep}, &alpha_t);
+      function::Slice(sigma_t_, {0}, {timestep}, &sigma_t);
       x0_pred = (sample - sigma_t * model_output) / alpha_t;
     } else {
       x0_pred = model_output;
@@ -138,11 +135,9 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
       *out = model_output;
     } else {
       FDTensor alpha_t, sigma_t;
-      function::Slice(alpha_t_, {0}, {timestep}, {timestep + 1}, &alpha_t);
-      function::Slice(sigma_t_, {0}, {timestep}, {timestep + 1}, &sigma_t);
-      alpha_t.Squeeze();
-      sigma_t_.Squeeze();
-      *out = (sample - alpha_t * model_output) / sigma_t;
+      function::Slice(alpha_t_, {0}, {timestep}, &alpha_t);
+      function::Slice(sigma_t_, {0}, {timestep}, &sigma_t);
+      *out = (sample - (alpha_t * model_output)) / sigma_t;
     }
   }
 }
@@ -151,42 +146,77 @@ void DPMSolverMultistepScheduler::DPMSolverFirstOrderUpdate(
     const FDTensor& model_output, int timestep, int prev_timestep,
     const FDTensor& sample, FDTensor* out) {
   FDTensor lambda_t, lambda_s;
-  function::Slice(lambda_t_, {0}, {prev_timestep}, {prev_timestep + 1},
-                  &lambda_t);
-  function::Slice(lambda_t_, {0}, {timestep}, {timestep + 1}, &lambda_s);
-  lambda_t.Squeeze();
-  lambda_s.Squeeze();
+  function::Slice(lambda_t_, {0}, {prev_timestep}, &lambda_t);
+  function::Slice(lambda_t_, {0}, {timestep}, &lambda_s);
 
   FDTensor alpha_t, alpha_s;
-  function::Slice(alpha_t_, {0}, {prev_timestep}, {prev_timestep + 1},
-                  &alpha_t);
-  function::Slice(alpha_t_, {0}, {timestep}, {timestep + 1}, &alpha_s);
-  alpha_t.Squeeze();
-  alpha_s.Squeeze();
+  function::Slice(alpha_t_, {0}, {prev_timestep}, &alpha_t);
+  function::Slice(alpha_t_, {0}, {timestep}, &alpha_s);
 
   FDTensor sigma_t, sigma_s;
-  function::Slice(sigma_t_, {0}, {prev_timestep}, {prev_timestep + 1},
-                  &sigma_t);
-  function::Slice(sigma_t_, {0}, {timestep}, {timestep + 1}, &sigma_s);
-  sigma_t.Squeeze();
-  sigma_s.Squeeze();
+  function::Slice(sigma_t_, {0}, {prev_timestep}, &sigma_t);
+  function::Slice(sigma_t_, {0}, {timestep}, &sigma_s);
 
   FDTensor h = lambda_t - lambda_s;
-  FDTensor one(Scalar(1.0f));
-  FDTensor zero(Scalar(0.0f));
   if (algorithm_type_ == "dpmsolver++") {
-    function::Exp(zero - h, &h);
-    *out = (sigma_t / sigma_s) * sample - (alpha_t * (h - one)) * model_output;
+    function::Exp(0.0f - h, &h);
+    *out = (sigma_t / sigma_s) * sample - (alpha_t * (h - 1.0f)) * model_output;
   } else if (algorithm_type_ == "dpmsolver") {
     function::Exp(h, &h);
-    *out = (alpha_t / alpha_s) * sample - (sigma_t * (h - one)) * model_output;
+    *out = (alpha_t / alpha_s) * sample - (sigma_t * (h - 1.0f)) * model_output;
   }
 }
 
 void DPMSolverMultistepScheduler::MultiStepDPMSolverSecondOrderUpdate(
     const std::vector<FDTensor>& model_output_list,
     const std::vector<int>& timestep_list, int prev_timestep,
-    const FDTensor& sample, FDTensor* out) {}
+    const FDTensor& sample, FDTensor* out) {
+  int timestep_size = timestep_list.size();
+  int model_output_size = model_output_list.size();
+  int t = prev_timestep;
+  int s0 = timestep_list[timestep_size - 1];
+  int s1 = timestep_list[timestep_size - 2];
+  const FDTensor& m0 = model_output_list[model_output_size - 1];
+  const FDTensor& m1 = model_output_list[model_output_size - 2];
+  FDTensor lambda_t, lambda_s0, lambda_s1;
+  function::Slice(lambda_t_, {0}, {t}, &lambda_t);
+  function::Slice(lambda_t_, {0}, {s0}, &lambda_s0);
+  function::Slice(lambda_t_, {0}, {s1}, &lambda_s1);
+
+  FDTensor alpha_t, alpha_s0, sigma_t, sigma_s0;
+  function::Slice(alpha_t_, {0}, {t}, &alpha_t);
+  function::Slice(alpha_t_, {0}, {s0}, &alpha_s0);
+  function::Slice(sigma_t_, {0}, {t}, &sigma_t);
+  function::Slice(sigma_t_, {0}, {s0}, &sigma_s0);
+
+  FDTensor h = lambda_t - lambda_s0;
+  FDTensor h0 = lambda_s0 - lambda_s1;
+  FDTensor r0 = h0 / h;
+  FDTensor D0 = m0;
+  FDTensor D1 = (1.0f / r0) * (m0 - m1);
+  if (algorithm_type_ == "dpmsolver++") {
+    if (solver_type_ == "midpoint") {
+      function::Exp(0.0f - h, &h);
+      *out = (sigma_t / sigma_s0 * sample) - (alpha_t * (h - 1.0f) * D0) -
+             (0.5f * alpha_t * (h - 1.0f) * D1);
+    } else if (solver_type_ == "heun") {
+      FDTensor h_exp;
+      function::Exp(0.0f - h, &h_exp);
+      *out = (sigma_t / sigma_s0 * sample) - (alpha_t * (h_exp - 1.0f) * D0) +
+             (alpha_t * ((h_exp - 1.0f) / h + 1.0f) * D1);
+    }
+  } else if (algorithm_type_ == "dpmsolver") {
+    FDTensor h_exp;
+    function::Exp(h, &h_exp);
+    if (solver_type_ == "midpoint") {
+      *out = alpha_t / alpha_s0 * sample - sigma_t * (h_exp - 1.0f) * D0 -
+             0.5 * (sigma_t * (h_exp - 1.0f) * D1);
+    } else if (solver_type_ == "heun") {
+      *out = alpha_t / alpha_s0 * sample - sigma_t * (h_exp - 1.0f) * D0 -
+             *(sigma_t * ((h_exp - 1.0f) / h - 1.0f) * D1);
+    }
+  }
+}
 
 void DPMSolverMultistepScheduler::ScaleModelInput(
     const FDTensor& sample, FDTensor* out,
