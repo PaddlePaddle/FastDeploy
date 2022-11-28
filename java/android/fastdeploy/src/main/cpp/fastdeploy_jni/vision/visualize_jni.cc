@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <jni.h>  // NOLINT
+#include "fastdeploy_jni/perf_jni.h"  // NOLINT
 #include "fastdeploy_jni/bitmap_jni.h"  // NOLINT
 #include "fastdeploy_jni/convert_jni.h" // NOLINT
 #include "fastdeploy_jni/vision/results_jni.h"  // NOLINT
@@ -19,16 +20,19 @@
 namespace fni = fastdeploy::jni;
 namespace vision = fastdeploy::vision;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace fastdeploy {
+namespace jni {
 
-/// VisClassification
-JNIEXPORT jboolean JNICALL
-Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+/// Some visualize helpers.
+jboolean VisClassificationFromJava(
+    JNIEnv *env, jobject argb8888_bitmap,
     jobject result, jfloat score_threshold, jfloat font_size,
     jobjectArray labels) {
+  const jclass j_cls_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/ClassifyResult");
+  if (!env->IsInstanceOf(result, j_cls_result_clazz)) {
+    return JNI_FALSE;
+  }
   vision::ClassifyResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
@@ -56,19 +60,21 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
   return JNI_TRUE;
 }
 
-/// VisDetection
-JNIEXPORT jboolean JNICALL
-Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+jboolean VisDetectionFromJava(
+    JNIEnv *env, jobject argb8888_bitmap,
     jobject result, jfloat score_threshold, jint line_size,
     jfloat font_size, jobjectArray labels) {
+  const jclass j_det_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/DetectionResult");
+  if (!env->IsInstanceOf(result, j_det_result_clazz)) {
+    return JNI_FALSE;
+  }
   vision::DetectionResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
       vision::ResultType::DETECTION)) {
     return JNI_FALSE;
   }
-
   // Get labels from Java [n]
   auto c_labels = fni::ConvertTo<std::vector<std::string>>(env, labels);
 
@@ -90,11 +96,13 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
   return JNI_TRUE;
 }
 
-/// VisOcr
-JNIEXPORT jboolean JNICALL
-Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
-    jobject result) {
+jboolean VisOcrFromJava(
+    JNIEnv *env, jobject argb8888_bitmap, jobject result) {
+  const jclass j_ocr_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/OCRResult");
+  if (!env->IsInstanceOf(result, j_ocr_result_clazz)) {
+    return JNI_FALSE;
+  }
   vision::OCRResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
@@ -113,17 +121,20 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
   return JNI_TRUE;
 }
 
-JNIEXPORT jboolean JNICALL
-Java_com_baidu_paddle_fastdeploy_vision_Visualize_visSegmentationNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
-    jobject result, jfloat weight) {
+jboolean VisSegmentationFromJava(
+    JNIEnv *env, jobject argb8888_bitmap, jobject result, jfloat weight) {
+  const jclass j_seg_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
+  if (!env->IsInstanceOf(result, j_seg_result_clazz)) {
+    return JNI_FALSE;
+  }
+  // Allocate from Java result, may cost some times.
   vision::SegmentationResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
       vision::ResultType::SEGMENTATION)) {
     return JNI_FALSE;
   }
-
   cv::Mat c_bgr;
   if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
     return JNI_FALSE;
@@ -135,17 +146,61 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visSegmentationNative(
   return JNI_TRUE;
 }
 
-JNIEXPORT jboolean JNICALL
-Java_com_baidu_paddle_fastdeploy_vision_Visualize_visFaceDetectionNative(
-    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+jboolean VisSegmentationFromCxxBuffer(
+    JNIEnv *env, jobject argb8888_bitmap, jobject result, jfloat weight) {
+  const jclass j_seg_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
+  if (!env->IsInstanceOf(result, j_seg_result_clazz)) {
+    return JNI_FALSE;
+  }
+  const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mEnableCxxBuffer", "Z");
+  const jfieldID  j_cxx_buffer_id = env->GetFieldID(
+      j_seg_result_clazz, "mCxxBuffer", "J");
+  const jfieldID j_seg_initialized_id = env->GetFieldID(
+      j_seg_result_clazz, "mInitialized", "Z");
+  jboolean j_enable_cxx_buffer =
+      env->GetBooleanField(result, j_enable_cxx_buffer_id);
+  jboolean j_seg_initialized =
+      env->GetBooleanField(result, j_seg_initialized_id);
+  if (j_seg_initialized == JNI_FALSE) {
+    return JNI_FALSE;
+  }
+  // Use CxxBuffer directly without any copy.
+  if (j_enable_cxx_buffer == JNI_TRUE) {
+    jlong j_cxx_buffer = env->GetLongField(result, j_cxx_buffer_id);
+    if (j_cxx_buffer == 0) {
+      return JNI_FALSE;
+    }
+    // Allocate from cxx context to cxx result
+    auto c_cxx_buffer = reinterpret_cast<vision::SegmentationResult *>(j_cxx_buffer);
+    cv::Mat c_bgr;
+    if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
+      return JNI_FALSE;
+    }
+    auto c_vis_im = vision::VisSegmentation(c_bgr, *c_cxx_buffer, weight);
+    if (!fni::BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {
+      return JNI_FALSE;
+    }
+    return JNI_TRUE;
+  }
+  return JNI_FALSE;
+}
+
+jboolean VisFaceDetectionFromJava(
+    JNIEnv *env, jobject argb8888_bitmap,
     jobject result, jint line_size, jfloat font_size) {
+  const jclass j_face_det_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/FaceDetectionResult");
+  if (!env->IsInstanceOf(result, j_face_det_result_clazz)) {
+    return JNI_FALSE;
+  }
   vision::FaceDetectionResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
       vision::ResultType::FACE_DETECTION)) {
     return JNI_FALSE;
   }
-
   cv::Mat c_bgr;
   if (!fni::ARGB888Bitmap2BGR(env, argb8888_bitmap, &c_bgr)) {
     return JNI_FALSE;
@@ -155,6 +210,64 @@ Java_com_baidu_paddle_fastdeploy_vision_Visualize_visFaceDetectionNative(
     return JNI_FALSE;
   }
   return JNI_TRUE;
+}
+
+}  // jni
+}  // fastdeploy
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/// VisClassification
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visClassificationNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat score_threshold, jfloat font_size,
+    jobjectArray labels) {
+  return fni::VisClassificationFromJava(env, argb8888_bitmap, result,
+                                        score_threshold, font_size, labels);
+}
+
+/// VisDetection
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visDetectionNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat score_threshold, jint line_size,
+    jfloat font_size, jobjectArray labels) {
+  return fni::VisDetectionFromJava(env, argb8888_bitmap, result, score_threshold,
+                                   line_size, font_size, labels);
+}
+
+/// VisOcr
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visOcrNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result) {
+  return fni::VisOcrFromJava(env, argb8888_bitmap, result);
+}
+
+/// VisSegmentation
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visSegmentationNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jfloat weight) {
+  // First, try visualize segmentation result via CxxBuffer.
+  if (fni::VisSegmentationFromCxxBuffer(
+      env, argb8888_bitmap, result, weight)) {
+    return JNI_TRUE;
+  }
+  // Then, try visualize segmentation from Java result(may cost some times).
+  return fni::VisSegmentationFromJava(env, argb8888_bitmap, result, weight);
+}
+
+/// VisFaceDetection
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_Visualize_visFaceDetectionNative(
+    JNIEnv *env, jclass clazz, jobject argb8888_bitmap,
+    jobject result, jint line_size, jfloat font_size) {
+  return fni::VisFaceDetectionFromJava(env, argb8888_bitmap, result,
+                                       line_size, font_size);
 }
 
 #ifdef __cplusplus
