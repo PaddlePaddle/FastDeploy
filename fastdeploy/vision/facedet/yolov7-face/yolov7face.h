@@ -33,7 +33,7 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
   
   std::string ModelName(){return "yolov7-face";}
 
-  virtual bool Predict(cv::Mat* im, FaceDetectionResult* result
+  virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
                        float conf_threshold = 0.25,
                        float nms_threshold = 0.5);
 
