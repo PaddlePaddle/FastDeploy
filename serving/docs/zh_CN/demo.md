@@ -6,30 +6,30 @@
 ## 基本原理介绍
 像常见的深度学习模型一样，yolov5完整的运行过程包含前处理+模型预测+后处理三个阶段。
 
-在Triton中，将前处理、模型预测、后处理均视为1个**Triton-Model**，每个Triton-Model的**config.pbtxt**配置文件中均描述了其输入数据格式、输出数据格式、Triton-Model的类型（即config.pbtxt中的**backend**或**platform**字段）、以及其他的一些配置选项。
+在FastDeployServer中，将前处理、模型预测、后处理均视为1个**模型服务**，每个模型服务的**config.pbtxt**配置文件中均描述了其输入数据格式、输出数据格式、模型服务的类型（即config.pbtxt中的**backend**或**platform**字段）、以及其他的一些配置选项。
 
-前处理和后处理一般是运行一段Python代码，为了方便后续描述，我们称之为**Python-Triton-Model**，其config.pbtxt配置文件中的`backend: "python"`。
+前处理和后处理一般是运行一段Python代码，为了方便后续描述，我们称之为**Python模型服务**，其config.pbtxt配置文件中的`backend: "python"`。
 
-模型预测阶段是深度学习模型预测引擎（如ONNXRuntime、Paddle、TRT、FastDeploy）加载用户提供的深度学习模型文件来运行模型预测，我们称之为**Runtime-Triton-Model**，其config.pbtxt配置文件中的`backend: "fastdeploy"`。
+模型预测阶段是深度学习模型预测引擎加载用户提供的深度学习模型文件来运行模型预测，我们称之为**Runtime模型服务**，其config.pbtxt配置文件中的`backend: "fastdeploy"`。
 
 根据用户提供的模型类型的不同，可以在**optimization**字段中设置使用CPU、GPU、TRT、ONNX等配置，配置方法参考[服务化部署配置说明](model_configuration.md)。
 
-除此之外，还需要一个**Ensemble-Triton-Model**来将前处理、模型预测、后处理3个**Triton-Model**组合为1个整体，并描述3个Triton-Model之间的关联关系。例如，前处理的输出与模型预测的输入之间的对应关系，多个Triton-Model的调用顺序、串并联关系等，**Ensemble-Triton-Model**的config.pbtxt配置文件中的`platform: "ensemble"`。
+除此之外，还需要一个**Ensemble模型服务**来将前处理、模型预测、后处理3个**模型服务**组合为1个整体，并描述3个模型服务之间的关联关系。例如，前处理的输出与模型预测的输入之间的对应关系，多个模型服务的调用顺序、串并联关系等，**Ensemble模型服务**的config.pbtxt配置文件中的`platform: "ensemble"`。
 
-在本文的yolov5服务化示例中，**Ensemble-Triton-Model**将前处理、模型预测、后处理3个**Triton-Model**串联组合为1个整体，整体的结构如下图所示。
+在本文的yolov5服务化示例中，**Ensemble模型服务**将前处理、模型预测、后处理3个**模型服务**串联组合为1个整体，整体的结构如下图所示。
 <p align="center">
     <br>
 <img src='https://user-images.githubusercontent.com/35565423/204268774-7b2f6b4a-50b1-4962-ade9-cd10cf3897ab.png'>
     <br>
 </p>
   
-对于像[OCR这样多个深度学习模型的组合模型](../../../examples/vision/ocr/PP-OCRv3/serving)，或者[流式输入输出的深度学习模型](../../../examples/audio/pp-tts/serving)，其**Ensemble-Triton-Model**会更加复杂。
+对于像[OCR这样多个深度学习模型的组合模型](../../../examples/vision/ocr/PP-OCRv3/serving)，或者[流式输入输出的深度学习模型](../../../examples/audio/pp-tts/serving)，其**Ensemble模型服务**的配置会更加复杂。
   
   
-## Python-Triton-Model简介
-我们以[yolov5前处理](../../../examples/vision/detection/yolov5/serving/models/preprocess/1/model.py)为例，简单介绍一下编写Python-Triton-Model中的注意事项。
+## Python模型服务简介
+我们以[yolov5前处理](../../../examples/vision/detection/yolov5/serving/models/preprocess/1/model.py)为例，简单介绍一下编写Python模型服务中的注意事项。
 
-Python-Triton-Model代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自行编写代码。
+Python模型服务的代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自行编写代码。
 
 ```
 import json
@@ -97,9 +97,9 @@ class TritonPythonModel:
         #你的析构代码，finalize只在模型卸载的时候被调用1次
 ```
 
-`initialize`中一般放置初始化的一些操作，该函数只在Python-Triton-Model被加载的时候执行1次。
+`initialize`中一般放置初始化的一些操作，该函数只在Python模型服务被加载的时候执行1次。
 
-`finalize`中一般放置一些析构释放的操作，该函数只在Python-Triton-Model被卸载的时候执行1次。
+`finalize`中一般放置一些析构释放的操作，该函数只在Python模型服务被卸载的时候执行1次。
 
 `execute`中放置用户需要的前后处理的逻辑，该函数在每次服务端收到客户端请求的时候被执行1次。
 
@@ -122,14 +122,14 @@ fd.vision.detection.YOLOv5.preprocess(data)
     <br>
 </p>
 
-开启动态合并Batch功能非常简单，仅需在config.pbtxt结尾处，增加`dynamic_batching{}`字段即可。
+开启动态合并Batch功能非常简单，仅需在config.pbtxt结尾处，增加`dynamic_batching{}`字段即可，但最大的合并Batch不会超过`max_batch_size`。
 
-**注意**：`ensemble_scheduling`字段与`dynamic_batching`字段不可共存，即对于**Ensemble-Triton-Model**不存在动态合并Batch功能，这也可以理解，因为**Ensemble-Triton-Model**本身仅仅是多个Triton-Model的组合。
+**注意**：`ensemble_scheduling`字段与`dynamic_batching`字段不可共存，即对于**Ensemble模型服务**不存在动态合并Batch功能，这也可以理解，因为**Ensemble模型服务**本身仅仅是多个模型服务的组合。
 
 ## 多模型实例
-多模型实例的原理如下图所示。当前后处理（通常不支持Batch）成为整个服务的性能瓶颈时，能通过增加多个前后处理的**Python-Triton-Model**实例，来提高整个服务的时延性能。
+多模型实例的原理如下图所示。当前后处理（通常不支持Batch）成为整个服务的性能瓶颈时，能通过增加多个前后处理的**Python模型服务**实例，来提高整个服务的时延性能。
 
-当然也可以开启多个**Runtime-Triton-Model**模型实例，来提升GPU利用率。
+当然也可以开启多个**Runtime模型服务**实例，来提升GPU利用率。
 <p align="center">
     <br>
 <img src='https://user-images.githubusercontent.com/35565423/204268809-6ea95a9f-e014-468a-8597-98b67ebc7381.png'>
