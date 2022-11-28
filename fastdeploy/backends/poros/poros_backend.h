@@ -85,7 +85,9 @@ class PorosBackend : public BaseBackend {
                std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const PorosBackendOption& option = PorosBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
 
   int NumInputs() const { return _numinputs; }
 
