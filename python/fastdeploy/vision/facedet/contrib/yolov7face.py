@@ -148,8 +148,9 @@ class YOLOv7Face(FastDeployModel):
         :param nms_iou_threshold: iou threashold for NMS, default is 0.5
         :return: FaceDetectionResult
         """
-        return self._model.predict(input_image, conf_threshold,
-                                   nms_iou_threshold)
+        self.postprocessor.conf_threshold = conf_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
+        return self._model.predict(input_image)
     
     def batch_predict(self, images):
         """Classify a batch of input image
