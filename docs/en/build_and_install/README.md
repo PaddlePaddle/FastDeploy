@@ -1,3 +1,5 @@
+English | [中文](../../cn/build_and_install/README.md)
+
 # Install FastDeploy - Tutorials
 
 ## Install Prebuilt FastDeploy

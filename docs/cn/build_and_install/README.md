@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/README.md) | 中文
+
 # FastDeploy安装
 
 ## FastDeploy预编译库安装
