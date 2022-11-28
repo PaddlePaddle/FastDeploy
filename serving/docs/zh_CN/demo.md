@@ -19,7 +19,7 @@
 在本文的yolov5服务化示例中，**Ensemble-Triton-Model**将前处理、模型预测、后处理3个**Triton-Model**串联组合为1个整体，整体的结构如下图所示。
 <p align="center">
     <br>
-<img src='../simple_ensemble.png'>
+<img src='https://user-images.githubusercontent.com/35565423/204268774-7b2f6b4a-50b1-4962-ade9-cd10cf3897ab.png'>
     <br>
 </p>
   
@@ -118,7 +118,7 @@ fd.vision.detection.YOLOv5.preprocess(data)
 动态合并Batch的原理如下图所示。当用户请求request并发量较大，但GPU利用率较小时，可以通过将不同用户的request组合为1个大的Batch进行模型预测，从而提高服务的吞吐性能。
 <p align="center">
     <br>
-<img src='../dynamic_batching.png'>
+<img src='https://user-images.githubusercontent.com/35565423/204268829-797112e1-bf75-486b-8931-07b44f659578.png'>
     <br>
 </p>
 
@@ -132,7 +132,7 @@ fd.vision.detection.YOLOv5.preprocess(data)
 当然也可以开启多个**Runtime-Triton-Model**模型实例，来提升GPU利用率。
 <p align="center">
     <br>
-<img src='../instance_group.png'>
+<img src='https://user-images.githubusercontent.com/35565423/204268809-6ea95a9f-e014-468a-8597-98b67ebc7381.png'>
     <br>
 </p>
 
