@@ -3,7 +3,7 @@
 - [服务化模型目录说明](model_repository.md) (说明如何准备模型目录)
 - [服务化部署配置说明](model_configuration.md)  (说明runtime的配置选项)
 
-## 目录结构与配置的原理介绍
+## 基本原理介绍
 像常见的深度学习模型一样，yolov5完整的运行过程包含前处理+模型预测+后处理三个阶段。
 
 在Triton中，将前处理、模型预测、后处理均视为1个**Triton-Model**，每个Triton-Model的**config.pbtxt**配置文件中均描述了其输入数据格式、输出数据格式、Triton-Model的类型（即config.pbtxt中的**backend**或**platform**字段）、以及其他的一些配置选项。
@@ -14,175 +14,112 @@
 
 根据用户提供的模型类型的不同，可以在**optimization**字段中设置使用CPU、GPU、TRT、ONNX等配置，配置方法参考[服务化部署配置说明](model_configuration.md)。
 
-除此之外，还需要一个**Ensemble-Triton-Model**来将前处理、模型预测、后处理3个**Triton-Model**组合为1个整体，并描述3个Triton-Model之间的关联关系，例如，前处理的输出与模型预测的输入之间的对应关系，3个Triton-Model的调用顺序、串并联关系等，**Ensemble-Triton-Model**的config.pbtxt配置文件中的`platform: "ensemble"`。
+除此之外，还需要一个**Ensemble-Triton-Model**来将前处理、模型预测、后处理3个**Triton-Model**组合为1个整体，并描述3个Triton-Model之间的关联关系。例如，前处理的输出与模型预测的输入之间的对应关系，多个Triton-Model的调用顺序、串并联关系等，**Ensemble-Triton-Model**的config.pbtxt配置文件中的`platform: "ensemble"`。
 
 在本文的yolov5服务化示例中，**Ensemble-Triton-Model**将前处理、模型预测、后处理3个**Triton-Model**串联组合为1个整体，整体的结构如下图所示。
+<p align="center">
+    <br>
+<img src='../../simple_ensemble.png'>
+    <br>
+</p>
+  
+对于像[OCR这样多个深度学习模型的组合模型](../../../examples/vision/ocr/PP-OCRv3/serving/README.md)，或者[流式输入输出的深度学习模型](../../../examples/audio/pp-tts/serving/README.md)，其**Ensemble-Triton-Model**会更加复杂。
+  
+  
+## Python-Triton-Model简介
+我们以[yolov5前处理](../../../examples/vision/detection/yolov5/serving/models/preprocess/1/model.py)为例，简单介绍一下编写Python-Triton-Model中的注意事项。
 
+Python-Triton-Model代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自定义的代码。
 
-## 模型通用最小配置
-详细的模型通用配置请看官网文档: [model_configuration](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md).Triton的最小模型配置必须包括: *platform* 或 *backend* 属性、*max_batch_size* 属性和模型的输入输出.
+`initialize`中一般放置初始化的一些操作，该函数只在Python-Triton-Model被加载的时候执行1次。
 
-例如一个Paddle模型，有两个输入*input0* 和 *input1*，一个输出*output0*，输入输出都是float32类型的tensor，最大batch为8.则最小的配置如下:
+`finalize`中一般放置一些析构释放的操作，该函数只在Python-Triton-Model被卸载的时候执行1次。
+
+`execute`中放置用户需要的前后处理的逻辑，该函数在每次服务端收到客户端请求的时候被执行1次。
+
+`execute`函数的输入参数requests为InferenceRequest的集合，在没有开启[动态合并Batch功能](#动态合并Batch功能)时候，requests的长度是1，即只有1个InferenceRequest。
+
+`execute`函数的返回参数responses必须是InferenceResponse的集合，通常情况下长度与requests的长度一致，即有N个InferenceRequest就必须返回N个InferenceResponse。
+
 
 ```
-  backend: "fastdeploy"
-  max_batch_size: 8
-  input [
-    {
-      name: "input0"
-      data_type: TYPE_FP32
-      dims: [ 16 ]
-    },
-    {
-      name: "input1"
-      data_type: TYPE_FP32
-      dims: [ 16 ]
-    }
-  ]
-  output [
-    {
-      name: "output0"
-      data_type: TYPE_FP32
-      dims: [ 16 ]
-    }
-  ]
+import json
+import numpy as np
+import time
+import fastdeploy as fd
+
+# triton_python_backend_utils is available in every Triton Python model. You
+# need to use this module to create inference requests and responses. It also
+# contains some utility functions for extracting information from model_config
+# and converting Triton input/output types to numpy types.
+import triton_python_backend_utils as pb_utils
+
+class TritonPythonModel:
+    """Your Python model must use the same class name. Every Python model
+    that is created must have "TritonPythonModel" as the class name.
+    """
+
+    def initialize(self, args):
+        """`initialize` is called only once when the model is being loaded.
+        Implementing `initialize` function is optional. This function allows
+        the model to intialize any state associated with this model.
+        Parameters
+        ----------
+        args : dict
+          Both keys and values are strings. The dictionary keys and values are:
+          * model_config: A JSON string containing the model configuration
+          * model_instance_kind: A string containing model instance kind
+          * model_instance_device_id: A string containing model instance device ID
+          * model_repository: Model repository path
+          * model_version: Model version
+          * model_name: Model name
+        """
+        #你的初始化操作代码，initialize函数只在模型加载的时候调用1次
+        
+    def execute(self, requests):
+        """`execute` must be implemented in every Python model. `execute`
+        function receives a list of pb_utils.InferenceRequest as the only
+        argument. This function is called when an inference is requested
+        for this model. Depending on the batching configuration (e.g. Dynamic
+        Batching) used, `requests` may contain multiple requests. Every
+        Python model, must create one pb_utils.InferenceResponse for every
+        pb_utils.InferenceRequest in `requests`. If there is an error, you can
+        set the error argument when creating a pb_utils.InferenceResponse.
+        Parameters
+        ----------
+        requests : list
+          A list of pb_utils.InferenceRequest
+        Returns
+        -------
+        list
+          A list of pb_utils.InferenceResponse. The length of this list must
+          be the same as `requests`
+        """
+        #你的前处理代码，每次预测调用均会调用execute函数
+        #FastDeploy提供了部分模型的python前后处理函数，无须用户编写
+        #调用方式为fd.vision.detection.YOLOv5.preprocess(data)
+        #用户也可以自行编写需要的处理逻辑
+        
+    def finalize(self):
+        """`finalize` is called only once when the model is being unloaded.
+        Implementing `finalize` function is optional. This function allows
+        the model to perform any necessary clean ups before exit.
+        """
+        #你的析构代码，finalize只在模型卸载的时候被调用1次
 ```
 
-## CPU、GPU和实例个数配置
+## 动态合并Batch功能
 
-通过*instance_group*属性可以配置服务使用哪种硬件资源，分别部署多少个模型推理实例。
+<p align="center">
+    <br>
+<img src='../../dynamic_batching.png'>
+    <br>
+</p>
 
-CPU部署例子：
-```
-  instance_group [
-    {
-      # 创建两个CPU实例
-      count: 2
-      # 使用CPU部署  
-      kind: KIND_CPU
-    }
-  ]
-```
+## 多实例
 
-在*GPU 0*上部署2个实例，在*GPU1*和*GPU*上分别部署1个实例
-
-```
-  instance_group [
-    {
-      # 创建两个GPU实例
-      count: 2
-      # 使用GPU推理
-      kind: KIND_GPU
-      # 部署在GPU卡0上
-      gpus: [ 0 ]
-    },
-    {
-      count: 1
-      kind: KIND_GPU
-      # 在GPU卡1、2都部署
-      gpus: [ 1, 2 ]
-    }
-  ]
-```
-
-### Name, Platform and Backend
-模型配置中 *name* 属性是可选的。如果模型没有在配置中指定，则使用模型的目录名；如果指定了该属性，它必须要跟模型的目录名一致。
-
-使用 *fastdeploy backend*，没有*platform*属性可以配置，必须配置*backend*属性为*fastdeploy*。
-
-```
-backend: "fastdeploy"
-```
-
-### FastDeploy Backend配置
-
-FastDeploy后端目前支持*cpu*和*gpu*推理，*cpu*上支持*paddle*、*onnxruntime*和*openvino*三个推理引擎，*gpu*上支持*paddle*、*onnxruntime*和*tensorrt*三个引擎。
-
-
-#### 配置使用Paddle引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置:
-
-```
-optimization {
-  execution_accelerators {
-    # CPU推理配置， 配合KIND_CPU使用
-    cpu_execution_accelerator : [
-      {
-        name : "paddle"
-        # 设置推理并行计算线程数为4
-        parameters { key: "cpu_threads" value: "4" }
-        # 开启mkldnn加速，设置为0关闭mkldnn
-        parameters { key: "use_mkldnn" value: "1" }
-      }
-    ],
-    # GPU推理配置， 配合KIND_GPU使用
-    gpu_execution_accelerator : [
-      {
-        name : "paddle"
-        # 设置推理并行计算线程数为4
-        parameters { key: "cpu_threads" value: "4" }
-        # 开启mkldnn加速，设置为0关闭mkldnn
-        parameters { key: "use_mkldnn" value: "1" }
-      }
-    ]
-  }
-}
-```
-
-### 配置使用ONNXRuntime引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置:
-
-```
-optimization {
-  execution_accelerators {
-    cpu_execution_accelerator : [
-      {
-        name : "onnxruntime"
-        # 设置推理并行计算线程数为4
-        parameters { key: "cpu_threads" value: "4" }
-      }
-    ],
-    gpu_execution_accelerator : [
-      {
-        name : "onnxruntime"
-      }
-    ]
-  }
-}
-```
-
-### 配置使用OpenVINO引擎
-OpenVINO引擎只支持CPU推理，配置如下:
-
-```
-optimization {
-  execution_accelerators {
-    cpu_execution_accelerator : [
-      {
-        name : "openvino"
-        # 设置推理并行计算线程数为4（所有实例总共线程数）
-        parameters { key: "cpu_threads" value: "4" }
-        # 设置OpenVINO的num_streams（一般设置为跟实例数一致）
-        parameters { key: "num_streams" value: "1" }
-      }
-    ]
-  }
-}
-```
-
-### 配置使用TensorRT引擎
-TensorRT引擎只支持GPU推理，配置如下:
-
-```
-optimization {
-  execution_accelerators {
-    gpu_execution_accelerator : [
-      {
-        name : "tensorrt"
-        # 使用TensorRT的FP16推理,其他可选项为: trt_fp32、trt_int8
-        parameters { key: "precision" value: "trt_fp16" }
-      }
-    ]
-  }
-}
-```
+<p align="center">
+    <br>
+<img src='../../instance_group.png'>
+    <br>
+</p>
