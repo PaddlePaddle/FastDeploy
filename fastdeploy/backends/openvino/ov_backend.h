@@ -48,7 +48,8 @@ class OpenVINOBackend : public BaseBackend {
                const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
   bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs) override;
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
 
   int NumInputs() const override;
 

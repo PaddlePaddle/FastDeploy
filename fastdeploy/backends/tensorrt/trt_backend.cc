@@ -283,7 +283,8 @@ int TrtBackend::ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs) {
 }
 
 bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
-                       std::vector<FDTensor>* outputs) {
+                       std::vector<FDTensor>* outputs,
+                       bool copy_to_fd) {
   if (inputs.size() != NumInputs()) {
     FDERROR << "Require " << NumInputs() << "inputs, but get " << inputs.size()
             << "." << std::endl;
@@ -304,7 +305,7 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
 
   cudaSetDevice(option_.gpu_id);
   SetInputs(inputs);
-  AllocateOutputsBuffer(outputs);
+  AllocateOutputsBuffer(outputs, copy_to_fd);
 
   if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
     FDERROR << "Failed to Infer with TensorRT." << std::endl;
@@ -323,6 +324,11 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
       casted_output_tensors_[(*outputs)[i].name].Resize((*outputs)[i].shape, (*outputs)[i].dtype,
                                                         (*outputs)[i].name, Device::GPU);
       function::CudaCast(output_tensor, &casted_output_tensors_[(*outputs)[i].name], stream_);
+      if(!copy_to_fd) {
+        (*outputs)[i].SetExternalData((*outputs)[i].shape, model_output_dtype,
+                          casted_output_tensors_[(*outputs)[i].name].MutableData(),
+                          Device::GPU, option_.gpu_id);
+      }
     } else {
       casted_output_tensors_[(*outputs)[i].name].SetExternalData(
           (*outputs)[i].shape, model_output_dtype,
@@ -330,15 +336,17 @@ bool TrtBackend::Infer(std::vector<FDTensor>& inputs,
           Device::GPU);
     }
   }
-  for (size_t i = 0; i < outputs->size(); ++i) {
-    FDASSERT(cudaMemcpyAsync((*outputs)[i].Data(),
-                             casted_output_tensors_[(*outputs)[i].name].Data(),
-                             (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
-                             stream_) == 0,
-             "[ERROR] Error occurs while copy memory from GPU to CPU.");
+  if (copy_to_fd) {
+    for (size_t i = 0; i < outputs->size(); ++i) {
+      FDASSERT(cudaMemcpyAsync((*outputs)[i].Data(),
+                              casted_output_tensors_[(*outputs)[i].name].Data(),
+                              (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
+                              stream_) == 0,
+              "[ERROR] Error occurs while copy memory from GPU to CPU.");
+    }
+    FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
+            "[ERROR] Error occurs while sync cuda stream.");
   }
-  FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
-           "[ERROR] Error occurs while sync cuda stream.");
 
   return true;
 }
@@ -427,7 +435,8 @@ void TrtBackend::SetInputs(const std::vector<FDTensor>& inputs) {
   }
 }
 
-void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
+void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
+                                       bool copy_to_fd) {
   if (outputs->size() != outputs_desc_.size()) {
     outputs->resize(outputs_desc_.size());
   }
@@ -446,18 +455,26 @@ void TrtBackend::AllocateOutputsBuffer(std::vector<FDTensor>* outputs) {
         outputs_desc_[i].name.c_str());
     auto ori_idx = iter->second;
 
-    // set user's outputs info
-    std::vector<int64_t> shape(output_dims.d,
-                               output_dims.d + output_dims.nbDims);
-    (*outputs)[ori_idx].is_pinned_memory = option_.enable_pinned_memory;
-    (*outputs)[ori_idx].Resize(shape, outputs_desc_[i].original_dtype,
-                               outputs_desc_[i].name);
-
     // Allocate output buffer memory
     outputs_device_buffer_[outputs_desc_[i].name].resize(output_dims);
   
     // binding output buffer
-    bindings_[idx] = outputs_device_buffer_[outputs_desc_[i].name].data();
+    bindings_[idx] = outputs_device_buffer_[outputs_desc_[i].name].data();    
+    
+    // set user's outputs info
+    std::vector<int64_t> shape(output_dims.d,
+                               output_dims.d + output_dims.nbDims);
+    if(copy_to_fd) {
+      (*outputs)[ori_idx].is_pinned_memory = option_.enable_pinned_memory;
+      (*outputs)[ori_idx].Resize(shape, outputs_desc_[i].original_dtype,
+                                 outputs_desc_[i].name);
+    } else {
+      (*outputs)[ori_idx].name = outputs_desc_[i].name;
+      (*outputs)[ori_idx].SetExternalData(
+                shape, outputs_desc_[i].original_dtype,
+                bindings_[idx], Device::GPU,
+                option_.gpu_id);
+    }
   }
 }
 

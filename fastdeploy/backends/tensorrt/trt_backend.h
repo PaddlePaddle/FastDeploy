@@ -97,7 +97,9 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs);
+  bool Infer(std::vector<FDTensor>& inputs,
+             std::vector<FDTensor>* outputs,
+             bool copy_to_fd = true) override;
 
   int NumInputs() const { return inputs_desc_.size(); }
   int NumOutputs() const { return outputs_desc_.size(); }
@@ -162,7 +164,8 @@ class TrtBackend : public BaseBackend {
   bool LoadTrtCache(const std::string& trt_engine_file);
   int ShapeRangeInfoUpdated(const std::vector<FDTensor>& inputs);
   void SetInputs(const std::vector<FDTensor>& inputs);
-  void AllocateOutputsBuffer(std::vector<FDTensor>* outputs);
+  void AllocateOutputsBuffer(std::vector<FDTensor>* outputs,
+                             bool copy_to_fd = true);
 };
 
 }  // namespace fastdeploy

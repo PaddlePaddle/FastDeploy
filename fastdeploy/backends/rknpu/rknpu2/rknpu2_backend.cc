@@ -289,7 +289,8 @@ std::vector<TensorInfo> RKNPU2Backend::GetOutputInfos() {
 }
 
 bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs) {
+                          std::vector<FDTensor>* outputs,
+                          bool copy_to_fd) {
   int ret = RKNN_SUCC;
   // Judge whether the input and output size are the same
   if (inputs.size() != inputs_desc_.size()) {
