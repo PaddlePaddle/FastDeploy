@@ -82,7 +82,7 @@ pip install fastdeploy-python==0.0.0 -f https://www.paddlepaddle.org.cn/whl/fast
 
 ### C++ SDK
 
-Install the released version（Latest 0.7.0 for now, Android is 0.4.0 pre-release）
+Install the released version（Latest 0.7.0 for now, Android is 1.0.0 pre-release）
 
 | Platform      | File                                                                                                                  | Description                    |
 |:------------- |:--------------------------------------------------------------------------------------------------------------------- |:------------------------------ |
@@ -91,7 +91,15 @@ Install the released version（Latest 0.7.0 for now, Android is 0.4.0 pre-releas
 | Mac OSX x64 | [fastdeploy-osx-x86_64-0.7.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-0.7.0.tgz) | clang++ 10.0.0|
 | Mac OSX arm64 | [fastdeploy-osx-arm64-0.7.0.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-0.7.0.tgz) | clang++ 13.0.0 |
 | Linux aarch64 | - | - |  
-| Android armv7&v8 | [fastdeploy-android-0.4.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-0.4.0-shared.tgz) | NDK 25, clang++, support arm64-v8a及armeabi-v7a |
+| Android armv7&v8 | [fastdeploy-android-1.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.0-shared.tgz)| NDK 25, clang++, support arm64-v8a及armeabi-v7a |
+
+## Java SDK
+
+Install the released version（Android is 1.0.0 pre-release）
+
+| Platform | File | Description |
+| :--- | :--- | :---- |
+| Android Java SDK | [fastdeploy-android-sdk-1.0.0.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.0.aar) | NDK 20, minSdkVersion 15, targetSdkVersion 28 |
 
 Install the Develop version（Nightly build）
 
