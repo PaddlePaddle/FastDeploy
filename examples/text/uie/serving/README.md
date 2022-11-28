@@ -1,5 +1,9 @@
 # UIE 服务化部署示例
 
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
 ## 准备模型
 
 下载UIE-Base模型(如果有已训练好的模型，跳过此步骤):
@@ -26,11 +30,11 @@ models
 
 ## 拉取并运行镜像
 ```bash
-# CPU镜像, 仅支持Paddle/ONNX模型在CPU上进行服务化部署，支持的推理后端包括OpenVINO、Paddle Inference和ONNX Runtime
-docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
-
-# GPU 镜像, 支持Paddle/ONNX模型在GPU/CPU上进行服务化部署，支持的推理后端包括OpenVINO、TensorRT、Paddle Inference和ONNX Runtime
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
+# x.y.z为镜像版本号，需参照serving文档替换为数字
+# GPU镜像
+docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+# CPU镜像
+docker pull paddlepaddle/fastdeploy:z.y.z-cpu-only-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /uie_serving 目录
 docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v `pwd`/:/uie_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 bash

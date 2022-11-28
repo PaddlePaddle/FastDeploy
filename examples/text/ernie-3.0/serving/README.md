@@ -1,5 +1,9 @@
 # ERNIE 3.0 服务化部署示例
 
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
 ## 准备模型
 
 下载ERNIE 3.0的新闻分类模型、序列标注模型(如果有已训练好的模型，跳过此步骤):
@@ -43,14 +47,14 @@ models
 
 ## 拉取并运行镜像
 ```bash
-# CPU镜像, 仅支持Paddle/ONNX模型在CPU上进行服务化部署，支持的推理后端包括OpenVINO、Paddle Inference和ONNX Runtime
-docker pull paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10
-
-# GPU 镜像, 支持Paddle/ONNX模型在GPU/CPU上进行服务化部署，支持的推理后端包括OpenVINO、TensorRT、Paddle Inference和ONNX Runtime
-docker pull paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10
+# x.y.z为镜像版本号，需参照serving文档替换为数字
+# GPU镜像
+docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+# CPU镜像
+docker pull paddlepaddle/fastdeploy:z.y.z-cpu-only-21.10
 
 # 运行
-docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.3.0-cpu-only-21.10 bash
+docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10 bash
 ```
 
 ## 部署模型
@@ -63,7 +67,7 @@ token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚�
 ```
 
 *注意*:启动服务时，Server的每个python后端进程默认申请`64M`内存，默认启动的docker无法启动多个python后端节点。有两个解决方案：
-- 1.启动容器时设置`shm-size`参数, 比如:`docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.3.0-gpu-cuda11.4-trt8.4-21.10 bash`
+- 1.启动容器时设置`shm-size`参数, 比如:`docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 bash`
 - 2.启动服务时设置python后端的`shm-default-byte-size`参数, 设置python后端的默认内存为10M： `tritonserver --model-repository=/models --backend-config=python,shm-default-byte-size=10485760`
 
 ### 分类任务

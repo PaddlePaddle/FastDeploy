@@ -1,5 +1,10 @@
 # YOLOv5 服务化部署示例
 
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
+
 ## 启动服务
 
 ```bash
@@ -13,8 +18,11 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
 # 将模型放入 models/runtime/1目录下, 并重命名为model.onnx
 mv yolov5s.onnx models/runtime/1/model.onnx
 
-# 拉取fastdeploy镜像
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
+# 拉取fastdeploy镜像(x.y.z为镜像版本号，需参照serving文档替换为数字)
+# GPU镜像
+docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+# CPU镜像
+docker pull paddlepaddle/fastdeploy:z.y.z-cpu-only-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /yolov5_serving 目录
 nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10  bash
