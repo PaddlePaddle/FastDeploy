@@ -39,6 +39,7 @@ Users can also compile the image by themselves according to their own needs, ref
 
 - [How to Prepare Serving Model Repository](docs/zh_CN/model_repository.md)
 - [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md)
+- [Demo of Serving Deployment](docs/zh_CN/demo.md)
 
 
 ### Serving Deployment Demo
