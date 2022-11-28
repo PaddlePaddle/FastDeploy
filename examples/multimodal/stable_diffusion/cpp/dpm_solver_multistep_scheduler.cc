@@ -213,8 +213,63 @@ void DPMSolverMultistepScheduler::MultiStepDPMSolverSecondOrderUpdate(
              0.5 * (sigma_t * (h_exp - 1.0f) * D1);
     } else if (solver_type_ == "heun") {
       *out = alpha_t / alpha_s0 * sample - sigma_t * (h_exp - 1.0f) * D0 -
-             *(sigma_t * ((h_exp - 1.0f) / h - 1.0f) * D1);
+             (sigma_t * ((h_exp - 1.0f) / h - 1.0f) * D1);
     }
+  }
+}
+
+void DPMSolverMultistepScheduler::MultiStepDPMSolverThirdOrderUpdate(
+    const std::vector<FDTensor>& model_output_list,
+    const std::vector<int>& timestep_list, int prev_timestep,
+    const FDTensor& sample, FDTensor* out) {
+  int timestep_size = timestep_list.size();
+  int model_output_size = model_output_list.size();
+  int t = prev_timestep;
+
+  int s0 = timestep_list[timestep_size - 1];
+  int s1 = timestep_list[timestep_size - 2];
+  int s2 = timestep_list[timestep_size - 3];
+  const FDTensor& m0 = model_output_list[model_output_size - 1];
+  const FDTensor& m1 = model_output_list[model_output_size - 2];
+  const FDTensor& m2 = model_output_list[model_output_size - 3];
+
+  FDTensor lambda_t, lambda_s0, lambda_s1, lambda_s2;
+  function::Slice(lambda_t_, {0}, {t}, &lambda_t);
+  function::Slice(lambda_t_, {0}, {s0}, &lambda_s0);
+  function::Slice(lambda_t_, {0}, {s1}, &lambda_s1);
+  function::Slice(lambda_t_, {0}, {s2}, &lambda_s2);
+
+  FDTensor alpha_t, alpha_s0, sigma_t, sigma_s0;
+  function::Slice(alpha_t_, {0}, {t}, &alpha_t);
+  function::Slice(alpha_t_, {0}, {s0}, &alpha_s0);
+  function::Slice(sigma_t_, {0}, {t}, &sigma_t);
+  function::Slice(sigma_t_, {0}, {s0}, &sigma_s0);
+
+  FDTensor h = lambda_t - lambda_s0;
+  FDTensor h0 = lambda_s0 - lambda_s1;
+  FDTensor h1 = lambda_s1 - lambda_s2;
+
+  FDTensor r0 = h0 / h;
+  FDTensor r1 = h1 / h;
+  FDTensor D0 = m0;
+  FDTensor D1_0 = (1.0f / r0) * (m0 - m1);
+  FDTensor D1_1 = (1.0f / r1) * (m1 - m2);
+  FDTensor D1 = D1_0 + (r0 / (r0 + r1)) * (D1_0 - D1_1);
+  FDTensor D2 = (1.0f / (r0 + r1)) * (D1_0 - D1_1);
+
+  if (algorithm_type_ == "dpmsolver++") {
+    FDTensor h_exp;
+    function::Exp(0.0f - h, &h_exp);
+    *out = (sigma_t / sigma_s0) * sample - (alpha_t * (h_exp - 1.0f)) * D0 +
+           (alpha_t * ((h_exp - 1.0) / h + 1.0)) * D1 -
+           (alpha_t * ((h_exp - 1.0 + h) / (h * h) - 0.5)) * D2;
+
+  } else if (algorithm_type_ == "dpmsolver") {
+    FDTensor h_exp;
+    function::Exp(h, &h_exp);
+    *out = (alpha_t / alpha_s0) * sample - (sigma_t * (h_exp - 1.0f)) * D0 +
+           (sigma_t * ((h_exp - 1.0) / h - 1.0)) * D1 -
+           (sigma_t * ((h_exp - 1.0 - h) / (h * h) - 0.5)) * D2;
   }
 }
 
