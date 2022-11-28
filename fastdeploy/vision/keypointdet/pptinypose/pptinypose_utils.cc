@@ -120,6 +120,6 @@ void GetFinalPredictions(const std::vector<float>& heatmap,
   TransformPreds(coords, center, scale, img_size, dim, preds);
 }
 
-}  // namespace detection
+}  // namespace keypointdetection
 }  // namespace vision
 }  // namespace fastdeploy

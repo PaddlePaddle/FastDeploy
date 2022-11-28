@@ -24,7 +24,7 @@ namespace fastdeploy {
 namespace vision {
 namespace tracking {
 
-void TKalmanFilter::init(const cv::Mat &measurement) {
+void TKalmanFilter::init(const cv::Mat& measurement) {
   measurement.copyTo(statePost(cv::Rect(0, 0, 1, 4)));
   statePost(cv::Rect(0, 4, 1, 4)).setTo(0);
   statePost.copyTo(statePre);
@@ -46,7 +46,7 @@ void TKalmanFilter::init(const cv::Mat &measurement) {
   errorCovPost.copyTo(errorCovPre);
 }
 
-const cv::Mat &TKalmanFilter::predict() {
+const cv::Mat& TKalmanFilter::predict() {
   float varpos = std_weight_position * (*statePre.ptr<float>(3));
   varpos *= varpos;
   float varvel = std_weight_velocity * (*statePre.ptr<float>(3));
@@ -65,7 +65,7 @@ const cv::Mat &TKalmanFilter::predict() {
   return cv::KalmanFilter::predict();
 }
 
-const cv::Mat &TKalmanFilter::correct(const cv::Mat &measurement) {
+const cv::Mat& TKalmanFilter::correct(const cv::Mat& measurement) {
   float varpos = std_weight_position * (*measurement.ptr<float>(3));
   varpos *= varpos;
 
@@ -78,7 +78,7 @@ const cv::Mat &TKalmanFilter::correct(const cv::Mat &measurement) {
   return cv::KalmanFilter::correct(measurement);
 }
 
-void TKalmanFilter::project(cv::Mat *mean, cv::Mat *covariance) const {
+void TKalmanFilter::project(cv::Mat* mean, cv::Mat* covariance) const {
   float varpos = std_weight_position * (*statePost.ptr<float>(3));
   varpos *= varpos;
 
@@ -90,22 +90,17 @@ void TKalmanFilter::project(cv::Mat *mean, cv::Mat *covariance) const {
 
   *mean = measurementMatrix * statePost;
   cv::Mat temp = measurementMatrix * errorCovPost;
-  gemm(temp,
-       measurementMatrix,
-       1,
-       measurementNoiseCov_,
-       1,
-       *covariance,
+  gemm(temp, measurementMatrix, 1, measurementNoiseCov_, 1, *covariance,
        cv::GEMM_2_T);
 }
 
-const cv::Mat &Trajectory::predict(void) {
-  if (state != Tracked) *cv::KalmanFilter::statePost.ptr<float>(7) = 0;
+const cv::Mat& Trajectory::predict(void) {
+  if (state != Tracked)
+    *cv::KalmanFilter::statePost.ptr<float>(7) = 0;
   return TKalmanFilter::predict();
 }
 
-void Trajectory::update(Trajectory *traj,
-                        int timestamp_,
+void Trajectory::update(Trajectory* traj, int timestamp_,
                         bool update_embedding_) {
   timestamp = timestamp_;
   ++length;
@@ -115,10 +110,11 @@ void Trajectory::update(Trajectory *traj,
   state = Tracked;
   is_activated = true;
   score = traj->score;
-  if (update_embedding_) update_embedding(traj->current_embedding);
+  if (update_embedding_)
+    update_embedding(traj->current_embedding);
 }
 
-void Trajectory::activate(int &cnt, int timestamp_) {
+void Trajectory::activate(int& cnt, int timestamp_) {
   id = next_id(cnt);
   TKalmanFilter::init(cv::Mat(xyah));
   length = 0;
@@ -130,17 +126,19 @@ void Trajectory::activate(int &cnt, int timestamp_) {
   starttime = timestamp_;
 }
 
-void Trajectory::reactivate(Trajectory *traj, int &cnt, int timestamp_, bool newid) {
+void Trajectory::reactivate(Trajectory* traj, int& cnt, int timestamp_,
+                            bool newid) {
   TKalmanFilter::correct(cv::Mat(traj->xyah));
   update_embedding(traj->current_embedding);
   length = 0;
   state = Tracked;
   is_activated = true;
   timestamp = timestamp_;
-  if (newid) id = next_id(cnt);
+  if (newid)
+    id = next_id(cnt);
 }
 
-void Trajectory::update_embedding(const cv::Mat &embedding) {
+void Trajectory::update_embedding(const cv::Mat& embedding) {
   current_embedding = embedding / cv::norm(embedding);
   if (smooth_embedding.empty()) {
     smooth_embedding = current_embedding;
@@ -150,12 +148,13 @@ void Trajectory::update_embedding(const cv::Mat &embedding) {
   smooth_embedding = smooth_embedding / cv::norm(smooth_embedding);
 }
 
-TrajectoryPool operator+(const TrajectoryPool &a, const TrajectoryPool &b) {
+TrajectoryPool operator+(const TrajectoryPool& a, const TrajectoryPool& b) {
   TrajectoryPool sum;
   sum.insert(sum.end(), a.begin(), a.end());
 
   std::vector<int> ids(a.size());
-  for (size_t i = 0; i < a.size(); ++i) ids[i] = a[i].id;
+  for (size_t i = 0; i < a.size(); ++i)
+    ids[i] = a[i].id;
 
   for (size_t i = 0; i < b.size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), b[i].id);
@@ -168,12 +167,13 @@ TrajectoryPool operator+(const TrajectoryPool &a, const TrajectoryPool &b) {
   return sum;
 }
 
-TrajectoryPool operator+(const TrajectoryPool &a, const TrajectoryPtrPool &b) {
+TrajectoryPool operator+(const TrajectoryPool& a, const TrajectoryPtrPool& b) {
   TrajectoryPool sum;
   sum.insert(sum.end(), a.begin(), a.end());
 
   std::vector<int> ids(a.size());
-  for (size_t i = 0; i < a.size(); ++i) ids[i] = a[i].id;
+  for (size_t i = 0; i < a.size(); ++i)
+    ids[i] = a[i].id;
 
   for (size_t i = 0; i < b.size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), b[i]->id);
@@ -186,13 +186,15 @@ TrajectoryPool operator+(const TrajectoryPool &a, const TrajectoryPtrPool &b) {
   return sum;
 }
 
-TrajectoryPool &operator+=(TrajectoryPool &a,  // NOLINT
-                           const TrajectoryPtrPool &b) {
+TrajectoryPool& operator+=(TrajectoryPool& a,  // NOLINT
+                           const TrajectoryPtrPool& b) {
   std::vector<int> ids(a.size());
-  for (size_t i = 0; i < a.size(); ++i) ids[i] = a[i].id;
+  for (size_t i = 0; i < a.size(); ++i)
+    ids[i] = a[i].id;
 
   for (size_t i = 0; i < b.size(); ++i) {
-    if (b[i]->smooth_embedding.empty()) continue;
+    if (b[i]->smooth_embedding.empty())
+      continue;
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), b[i]->id);
     if (iter == ids.end()) {
       a.push_back(*b[i]);
@@ -203,23 +205,26 @@ TrajectoryPool &operator+=(TrajectoryPool &a,  // NOLINT
   return a;
 }
 
-TrajectoryPool operator-(const TrajectoryPool &a, const TrajectoryPool &b) {
+TrajectoryPool operator-(const TrajectoryPool& a, const TrajectoryPool& b) {
   TrajectoryPool dif;
   std::vector<int> ids(b.size());
-  for (size_t i = 0; i < b.size(); ++i) ids[i] = b[i].id;
+  for (size_t i = 0; i < b.size(); ++i)
+    ids[i] = b[i].id;
 
   for (size_t i = 0; i < a.size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), a[i].id);
-    if (iter == ids.end()) dif.push_back(a[i]);
+    if (iter == ids.end())
+      dif.push_back(a[i]);
   }
 
   return dif;
 }
 
-TrajectoryPool &operator-=(TrajectoryPool &a,  // NOLINT
-                           const TrajectoryPool &b) {
+TrajectoryPool& operator-=(TrajectoryPool& a,  // NOLINT
+                           const TrajectoryPool& b) {
   std::vector<int> ids(b.size());
-  for (size_t i = 0; i < b.size(); ++i) ids[i] = b[i].id;
+  for (size_t i = 0; i < b.size(); ++i)
+    ids[i] = b[i].id;
 
   TrajectoryPoolIterator piter;
   for (piter = a.begin(); piter != a.end();) {
@@ -233,13 +238,14 @@ TrajectoryPool &operator-=(TrajectoryPool &a,  // NOLINT
   return a;
 }
 
-TrajectoryPtrPool operator+(const TrajectoryPtrPool &a,
-                            const TrajectoryPtrPool &b) {
+TrajectoryPtrPool operator+(const TrajectoryPtrPool& a,
+                            const TrajectoryPtrPool& b) {
   TrajectoryPtrPool sum;
   sum.insert(sum.end(), a.begin(), a.end());
 
   std::vector<int> ids(a.size());
-  for (size_t i = 0; i < a.size(); ++i) ids[i] = a[i]->id;
+  for (size_t i = 0; i < a.size(); ++i)
+    ids[i] = a[i]->id;
 
   for (size_t i = 0; i < b.size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), b[i]->id);
@@ -252,12 +258,13 @@ TrajectoryPtrPool operator+(const TrajectoryPtrPool &a,
   return sum;
 }
 
-TrajectoryPtrPool operator+(const TrajectoryPtrPool &a, TrajectoryPool *b) {
+TrajectoryPtrPool operator+(const TrajectoryPtrPool& a, TrajectoryPool* b) {
   TrajectoryPtrPool sum;
   sum.insert(sum.end(), a.begin(), a.end());
 
   std::vector<int> ids(a.size());
-  for (size_t i = 0; i < a.size(); ++i) ids[i] = a[i]->id;
+  for (size_t i = 0; i < a.size(); ++i)
+    ids[i] = a[i]->id;
 
   for (size_t i = 0; i < b->size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), (*b)[i].id);
@@ -270,24 +277,26 @@ TrajectoryPtrPool operator+(const TrajectoryPtrPool &a, TrajectoryPool *b) {
   return sum;
 }
 
-TrajectoryPtrPool operator-(const TrajectoryPtrPool &a,
-                            const TrajectoryPtrPool &b) {
+TrajectoryPtrPool operator-(const TrajectoryPtrPool& a,
+                            const TrajectoryPtrPool& b) {
   TrajectoryPtrPool dif;
   std::vector<int> ids(b.size());
-  for (size_t i = 0; i < b.size(); ++i) ids[i] = b[i]->id;
+  for (size_t i = 0; i < b.size(); ++i)
+    ids[i] = b[i]->id;
 
   for (size_t i = 0; i < a.size(); ++i) {
     std::vector<int>::iterator iter = find(ids.begin(), ids.end(), a[i]->id);
-    if (iter == ids.end()) dif.push_back(a[i]);
+    if (iter == ids.end())
+      dif.push_back(a[i]);
   }
 
   return dif;
 }
 
-cv::Mat embedding_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
+cv::Mat embedding_distance(const TrajectoryPool& a, const TrajectoryPool& b) {
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       cv::Mat u = a[i].smooth_embedding;
       cv::Mat v = b[j].smooth_embedding;
@@ -303,11 +312,11 @@ cv::Mat embedding_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
   return dists;
 }
 
-cv::Mat embedding_distance(const TrajectoryPtrPool &a,
-                           const TrajectoryPtrPool &b) {
+cv::Mat embedding_distance(const TrajectoryPtrPool& a,
+                           const TrajectoryPtrPool& b) {
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       // double dist = cv::norm(a[i]->smooth_embedding, b[j]->smooth_embedding,
       // cv::NORM_L2);
@@ -325,11 +334,11 @@ cv::Mat embedding_distance(const TrajectoryPtrPool &a,
   return dists;
 }
 
-cv::Mat embedding_distance(const TrajectoryPtrPool &a,
-                           const TrajectoryPool &b) {
+cv::Mat embedding_distance(const TrajectoryPtrPool& a,
+                           const TrajectoryPool& b) {
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       // double dist = cv::norm(a[i]->smooth_embedding, b[j].smooth_embedding,
       // cv::NORM_L2);
@@ -347,7 +356,7 @@ cv::Mat embedding_distance(const TrajectoryPtrPool &a,
   return dists;
 }
 
-cv::Mat mahalanobis_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
+cv::Mat mahalanobis_distance(const TrajectoryPool& a, const TrajectoryPool& b) {
   std::vector<cv::Mat> means(a.size());
   std::vector<cv::Mat> icovariances(a.size());
   for (size_t i = 0; i < a.size(); ++i) {
@@ -358,7 +367,7 @@ cv::Mat mahalanobis_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       const cv::Mat x(b[j].xyah);
       float dist =
@@ -370,8 +379,8 @@ cv::Mat mahalanobis_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
   return dists;
 }
 
-cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
-                             const TrajectoryPtrPool &b) {
+cv::Mat mahalanobis_distance(const TrajectoryPtrPool& a,
+                             const TrajectoryPtrPool& b) {
   std::vector<cv::Mat> means(a.size());
   std::vector<cv::Mat> icovariances(a.size());
   for (size_t i = 0; i < a.size(); ++i) {
@@ -382,7 +391,7 @@ cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       const cv::Mat x(b[j]->xyah);
       float dist =
@@ -394,8 +403,8 @@ cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
   return dists;
 }
 
-cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
-                             const TrajectoryPool &b) {
+cv::Mat mahalanobis_distance(const TrajectoryPtrPool& a,
+                             const TrajectoryPool& b) {
   std::vector<cv::Mat> means(a.size());
   std::vector<cv::Mat> icovariances(a.size());
 
@@ -407,7 +416,7 @@ cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    float *distsi = dists.ptr<float>(i);
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
       const cv::Mat x(b[j].xyah);
       float dist =
@@ -419,15 +428,16 @@ cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
   return dists;
 }
 
-static inline float calc_inter_area(const cv::Vec4f &a, const cv::Vec4f &b) {
-  if (a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]) return 0.f;
+static inline float calc_inter_area(const cv::Vec4f& a, const cv::Vec4f& b) {
+  if (a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3])
+    return 0.f;
 
   float w = std::min(a[2], b[2]) - std::max(a[0], b[0]);
   float h = std::min(a[3], b[3]) - std::max(a[1], b[1]);
   return w * h;
 }
 
-cv::Mat iou_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
+cv::Mat iou_distance(const TrajectoryPool& a, const TrajectoryPool& b) {
   std::vector<float> areaa(a.size());
   for (size_t i = 0; i < a.size(); ++i) {
     float w = a[i].ltrb[2] - a[i].ltrb[0];
@@ -444,10 +454,10 @@ cv::Mat iou_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    const cv::Vec4f &boxa = a[i].ltrb;
-    float *distsi = dists.ptr<float>(i);
+    const cv::Vec4f& boxa = a[i].ltrb;
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
-      const cv::Vec4f &boxb = b[j].ltrb;
+      const cv::Vec4f& boxb = b[j].ltrb;
       float inters = calc_inter_area(boxa, boxb);
       distsi[j] = 1.f - inters / (areaa[i] + areab[j] - inters);
     }
@@ -456,7 +466,7 @@ cv::Mat iou_distance(const TrajectoryPool &a, const TrajectoryPool &b) {
   return dists;
 }
 
-cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPtrPool &b) {
+cv::Mat iou_distance(const TrajectoryPtrPool& a, const TrajectoryPtrPool& b) {
   std::vector<float> areaa(a.size());
   for (size_t i = 0; i < a.size(); ++i) {
     float w = a[i]->ltrb[2] - a[i]->ltrb[0];
@@ -473,10 +483,10 @@ cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPtrPool &b) {
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    const cv::Vec4f &boxa = a[i]->ltrb;
-    float *distsi = dists.ptr<float>(i);
+    const cv::Vec4f& boxa = a[i]->ltrb;
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
-      const cv::Vec4f &boxb = b[j]->ltrb;
+      const cv::Vec4f& boxb = b[j]->ltrb;
       float inters = calc_inter_area(boxa, boxb);
       distsi[j] = 1.f - inters / (areaa[i] + areab[j] - inters);
     }
@@ -485,7 +495,7 @@ cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPtrPool &b) {
   return dists;
 }
 
-cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b) {
+cv::Mat iou_distance(const TrajectoryPtrPool& a, const TrajectoryPool& b) {
   std::vector<float> areaa(a.size());
   for (size_t i = 0; i < a.size(); ++i) {
     float w = a[i]->ltrb[2] - a[i]->ltrb[0];
@@ -502,10 +512,10 @@ cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b) {
 
   cv::Mat dists(a.size(), b.size(), CV_32F);
   for (size_t i = 0; i < a.size(); ++i) {
-    const cv::Vec4f &boxa = a[i]->ltrb;
-    float *distsi = dists.ptr<float>(i);
+    const cv::Vec4f& boxa = a[i]->ltrb;
+    float* distsi = dists.ptr<float>(i);
     for (size_t j = 0; j < b.size(); ++j) {
-      const cv::Vec4f &boxb = b[j].ltrb;
+      const cv::Vec4f& boxb = b[j].ltrb;
       float inters = calc_inter_area(boxa, boxb);
       distsi[j] = 1.f - inters / (areaa[i] + areab[j] - inters);
     }
@@ -514,6 +524,6 @@ cv::Mat iou_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b) {
   return dists;
 }
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

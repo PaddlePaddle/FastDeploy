@@ -16,9 +16,9 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
-#include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
 #include "fastdeploy/vision/ocr/ppocr/rec_postprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
+#include "fastdeploy/vision/ocr/ppocr/utils/ocr_postprocess_op.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -52,7 +52,8 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
-               std::vector<std::string>* texts, std::vector<float>* rec_scores);
+                            std::vector<std::string>* texts,
+                            std::vector<float>* rec_scores);
 
   RecognizerPreprocessor preprocessor_;
   RecognizerPostprocessor postprocessor_;

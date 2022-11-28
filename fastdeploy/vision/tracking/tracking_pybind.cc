@@ -16,11 +16,10 @@
 
 namespace fastdeploy {
 
-    void BindPPTracking(pybind11::module& m);
+void BindPPTracking(pybind11::module& m);
 
-    void BindTracking(pybind11::module& m) {
-        auto tracking_module =
-                m.def_submodule("tracking", "object tracking models.");
-        BindPPTracking(tracking_module);
-    }
+void BindTracking(pybind11::module& m) {
+  auto tracking_module = m.def_submodule("tracking", "object tracking models.");
+  BindPPTracking(tracking_module);
+}
 }  // namespace fastdeploy

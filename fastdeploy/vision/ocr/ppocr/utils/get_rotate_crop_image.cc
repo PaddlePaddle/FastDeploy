@@ -80,6 +80,6 @@ cv::Mat GetRotateCropImage(const cv::Mat& srcimage,
   }
 }
 
-}  // namesoace ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

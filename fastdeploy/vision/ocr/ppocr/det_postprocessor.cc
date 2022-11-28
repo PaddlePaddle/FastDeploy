@@ -20,19 +20,14 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-DBDetectorPostprocessor::DBDetectorPostprocessor() {
-  initialized_ = true;
-}
+DBDetectorPostprocessor::DBDetectorPostprocessor() { initialized_ = true; }
 
 bool DBDetectorPostprocessor::SingleBatchPostprocessor(
-      const float* out_data,
-      int n2,
-      int n3,
-      const std::array<int,4>& det_img_info,
-      std::vector<std::array<int, 8>>* boxes_result
-    ) {
+    const float* out_data, int n2, int n3,
+    const std::array<int, 4>& det_img_info,
+    std::vector<std::array<int, 8>>* boxes_result) {
   int n = n2 * n3;
-  
+
   // prepare bitmap
   std::vector<float> pred(n, 0.0);
   std::vector<unsigned char> cbuf(n, ' ');
@@ -77,9 +72,10 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
   return true;
 }
 
-bool DBDetectorPostprocessor::Run(const std::vector<FDTensor>& tensors,
-                                  std::vector<std::vector<std::array<int, 8>>>* results,
-                                  const std::vector<std::array<int,4>>& batch_det_img_info) {
+bool DBDetectorPostprocessor::Run(
+    const std::vector<FDTensor>& tensors,
+    std::vector<std::vector<std::array<int, 8>>>* results,
+    const std::vector<std::array<int, 4>>& batch_det_img_info) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -89,17 +85,16 @@ bool DBDetectorPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
   // For DBDetector, the output tensor shape = [batch, 1, ?, ?]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin() + 1, tensor.shape.end(), 1,
+                             std::multiplies<int>());
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
- 
+
   results->resize(batch);
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data,
-                                 tensor.shape[2],
-                                 tensor.shape[3],
-                                 batch_det_img_info[i_batch],
-                                 &results->at(i_batch)
-                                ))return false;
+    if (!SingleBatchPostprocessor(tensor_data, tensor.shape[2], tensor.shape[3],
+                                  batch_det_img_info[i_batch],
+                                  &results->at(i_batch)))
+      return false;
     tensor_data = tensor_data + length;
   }
   return true;

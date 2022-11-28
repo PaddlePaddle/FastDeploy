@@ -118,16 +118,16 @@ bool RobustVideoMatting::Postprocess(
 
   // for alpha
   float* alpha_ptr = static_cast<float*>(alpha.Data());
-  Mat alpha_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
-                                  alpha_ptr); // ref-only, zero copy.
+  Mat alpha_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32,
+                                  alpha_ptr);  // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
     Resize::Run(&alpha_resized, in_w, in_h, -1, -1);
   }
 
   // for foreground
   float* fgr_ptr = static_cast<float*>(fgr.Data());
-  Mat fgr_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32, 
-                                fgr_ptr); // ref-only, zero copy.
+  Mat fgr_resized = Mat::Create(out_h, out_w, 1, FDDataType::FP32,
+                                fgr_ptr);  // ref-only, zero copy.
   if ((out_h != in_h) || (out_w != in_w)) {
     Resize::Run(&fgr_resized, in_w, in_h, -1, -1);
   }

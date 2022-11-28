@@ -19,12 +19,12 @@
 
 #pragma once
 
-#include <vector>
 #include "fastdeploy/fastdeploy_model.h"
+#include "opencv2/video/tracking.hpp"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include "opencv2/video/tracking.hpp"
+#include <vector>
 
 namespace fastdeploy {
 namespace vision {
@@ -35,17 +35,17 @@ typedef enum { New = 0, Tracked = 1, Lost = 2, Removed = 3 } TrajectoryState;
 class Trajectory;
 typedef std::vector<Trajectory> TrajectoryPool;
 typedef std::vector<Trajectory>::iterator TrajectoryPoolIterator;
-typedef std::vector<Trajectory *> TrajectoryPtrPool;
-typedef std::vector<Trajectory *>::iterator TrajectoryPtrPoolIterator;
+typedef std::vector<Trajectory*> TrajectoryPtrPool;
+typedef std::vector<Trajectory*>::iterator TrajectoryPtrPoolIterator;
 
 class FASTDEPLOY_DECL TKalmanFilter : public cv::KalmanFilter {
  public:
   TKalmanFilter(void);
   virtual ~TKalmanFilter(void) {}
-  virtual void init(const cv::Mat &measurement);
-  virtual const cv::Mat &predict();
-  virtual const cv::Mat &correct(const cv::Mat &measurement);
-  virtual void project(cv::Mat *mean, cv::Mat *covariance) const;
+  virtual void init(const cv::Mat& measurement);
+  virtual const cv::Mat& predict();
+  virtual const cv::Mat& correct(const cv::Mat& measurement);
+  virtual void project(cv::Mat* mean, cv::Mat* covariance) const;
 
  private:
   float std_weight_position;
@@ -64,61 +64,60 @@ inline TKalmanFilter::TKalmanFilter(void) : cv::KalmanFilter(8, 4) {
 class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
  public:
   Trajectory();
-  Trajectory(const cv::Vec4f &ltrb, float score, const cv::Mat &embedding);
-  Trajectory(const Trajectory &other);
-  Trajectory &operator=(const Trajectory &rhs);
+  Trajectory(const cv::Vec4f& ltrb, float score, const cv::Mat& embedding);
+  Trajectory(const Trajectory& other);
+  Trajectory& operator=(const Trajectory& rhs);
   virtual ~Trajectory(void) {}
 
-  int next_id(int &nt);
-  virtual const cv::Mat &predict(void);
-  virtual void update(Trajectory *traj,
-                      int timestamp,
+  int next_id(int& nt);
+  virtual const cv::Mat& predict(void);
+  virtual void update(Trajectory* traj, int timestamp,
                       bool update_embedding = true);
-  virtual void activate(int &cnt, int timestamp);
-  virtual void reactivate(Trajectory *traj, int &cnt,
-                          int timestamp, bool newid = false);
+  virtual void activate(int& cnt, int timestamp);
+  virtual void reactivate(Trajectory* traj, int& cnt, int timestamp,
+                          bool newid = false);
   virtual void mark_lost(void);
   virtual void mark_removed(void);
 
-  friend TrajectoryPool operator+(const TrajectoryPool &a,
-                                  const TrajectoryPool &b);
-  friend TrajectoryPool operator+(const TrajectoryPool &a,
-                                  const TrajectoryPtrPool &b);
-  friend TrajectoryPool &operator+=(TrajectoryPool &a,  // NOLINT
-                                    const TrajectoryPtrPool &b);
-  friend TrajectoryPool operator-(const TrajectoryPool &a,
-                                  const TrajectoryPool &b);
-  friend TrajectoryPool &operator-=(TrajectoryPool &a,  // NOLINT
-                                    const TrajectoryPool &b);
-  friend TrajectoryPtrPool operator+(const TrajectoryPtrPool &a,
-                                     const TrajectoryPtrPool &b);
-  friend TrajectoryPtrPool operator+(const TrajectoryPtrPool &a,
-                                     TrajectoryPool *b);
-  friend TrajectoryPtrPool operator-(const TrajectoryPtrPool &a,
-                                     const TrajectoryPtrPool &b);
+  friend TrajectoryPool operator+(const TrajectoryPool& a,
+                                  const TrajectoryPool& b);
+  friend TrajectoryPool operator+(const TrajectoryPool& a,
+                                  const TrajectoryPtrPool& b);
+  friend TrajectoryPool& operator+=(TrajectoryPool& a,  // NOLINT
+                                    const TrajectoryPtrPool& b);
+  friend TrajectoryPool operator-(const TrajectoryPool& a,
+                                  const TrajectoryPool& b);
+  friend TrajectoryPool& operator-=(TrajectoryPool& a,  // NOLINT
+                                    const TrajectoryPool& b);
+  friend TrajectoryPtrPool operator+(const TrajectoryPtrPool& a,
+                                     const TrajectoryPtrPool& b);
+  friend TrajectoryPtrPool operator+(const TrajectoryPtrPool& a,
+                                     TrajectoryPool* b);
+  friend TrajectoryPtrPool operator-(const TrajectoryPtrPool& a,
+                                     const TrajectoryPtrPool& b);
 
-  friend cv::Mat embedding_distance(const TrajectoryPool &a,
-                                    const TrajectoryPool &b);
-  friend cv::Mat embedding_distance(const TrajectoryPtrPool &a,
-                                    const TrajectoryPtrPool &b);
-  friend cv::Mat embedding_distance(const TrajectoryPtrPool &a,
-                                    const TrajectoryPool &b);
+  friend cv::Mat embedding_distance(const TrajectoryPool& a,
+                                    const TrajectoryPool& b);
+  friend cv::Mat embedding_distance(const TrajectoryPtrPool& a,
+                                    const TrajectoryPtrPool& b);
+  friend cv::Mat embedding_distance(const TrajectoryPtrPool& a,
+                                    const TrajectoryPool& b);
 
-  friend cv::Mat mahalanobis_distance(const TrajectoryPool &a,
-                                      const TrajectoryPool &b);
-  friend cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
-                                      const TrajectoryPtrPool &b);
-  friend cv::Mat mahalanobis_distance(const TrajectoryPtrPool &a,
-                                      const TrajectoryPool &b);
+  friend cv::Mat mahalanobis_distance(const TrajectoryPool& a,
+                                      const TrajectoryPool& b);
+  friend cv::Mat mahalanobis_distance(const TrajectoryPtrPool& a,
+                                      const TrajectoryPtrPool& b);
+  friend cv::Mat mahalanobis_distance(const TrajectoryPtrPool& a,
+                                      const TrajectoryPool& b);
 
-  friend cv::Mat iou_distance(const TrajectoryPool &a, const TrajectoryPool &b);
-  friend cv::Mat iou_distance(const TrajectoryPtrPool &a,
-                              const TrajectoryPtrPool &b);
-  friend cv::Mat iou_distance(const TrajectoryPtrPool &a,
-                              const TrajectoryPool &b);
+  friend cv::Mat iou_distance(const TrajectoryPool& a, const TrajectoryPool& b);
+  friend cv::Mat iou_distance(const TrajectoryPtrPool& a,
+                              const TrajectoryPtrPool& b);
+  friend cv::Mat iou_distance(const TrajectoryPtrPool& a,
+                              const TrajectoryPool& b);
 
  private:
-  void update_embedding(const cv::Mat &embedding);
+  void update_embedding(const cv::Mat& embedding);
 
  public:
   TrajectoryState state;
@@ -131,14 +130,14 @@ class FASTDEPLOY_DECL Trajectory : public TKalmanFilter {
   float score;
 
  private:
-//  int count=0;
+  //  int count=0;
   cv::Vec4f xyah;
   cv::Mat current_embedding;
   float eta;
   int length;
 };
 
-inline cv::Vec4f ltrb2xyah(const cv::Vec4f &ltrb) {
+inline cv::Vec4f ltrb2xyah(const cv::Vec4f& ltrb) {
   cv::Vec4f xyah;
   xyah[0] = (ltrb[0] + ltrb[2]) * 0.5f;
   xyah[1] = (ltrb[1] + ltrb[3]) * 0.5f;
@@ -148,45 +147,24 @@ inline cv::Vec4f ltrb2xyah(const cv::Vec4f &ltrb) {
 }
 
 inline Trajectory::Trajectory()
-    : state(New),
-      ltrb(cv::Vec4f()),
-      smooth_embedding(cv::Mat()),
-      id(0),
-      is_activated(false),
-      timestamp(0),
-      starttime(0),
-      score(0),
-      eta(0.9),
+    : state(New), ltrb(cv::Vec4f()), smooth_embedding(cv::Mat()), id(0),
+      is_activated(false), timestamp(0), starttime(0), score(0), eta(0.9),
       length(0) {}
 
-inline Trajectory::Trajectory(const cv::Vec4f &ltrb_,
-                              float score_,
-                              const cv::Mat &embedding)
-    : state(New),
-      ltrb(ltrb_),
-      smooth_embedding(cv::Mat()),
-      id(0),
-      is_activated(false),
-      timestamp(0),
-      starttime(0),
-      score(score_),
-      eta(0.9),
+inline Trajectory::Trajectory(const cv::Vec4f& ltrb_, float score_,
+                              const cv::Mat& embedding)
+    : state(New), ltrb(ltrb_), smooth_embedding(cv::Mat()), id(0),
+      is_activated(false), timestamp(0), starttime(0), score(score_), eta(0.9),
       length(0) {
   xyah = ltrb2xyah(ltrb);
   update_embedding(embedding);
 }
 
-inline Trajectory::Trajectory(const Trajectory &other)
-    : state(other.state),
-      ltrb(other.ltrb),
-      id(other.id),
-      is_activated(other.is_activated),
-      timestamp(other.timestamp),
-      starttime(other.starttime),
-      xyah(other.xyah),
-      score(other.score),
-      eta(other.eta),
-      length(other.length) {
+inline Trajectory::Trajectory(const Trajectory& other)
+    : state(other.state), ltrb(other.ltrb), id(other.id),
+      is_activated(other.is_activated), timestamp(other.timestamp),
+      starttime(other.starttime), xyah(other.xyah), score(other.score),
+      eta(other.eta), length(other.length) {
   other.smooth_embedding.copyTo(smooth_embedding);
   other.current_embedding.copyTo(current_embedding);
   // copy state in KalmanFilter
@@ -197,7 +175,7 @@ inline Trajectory::Trajectory(const Trajectory &other)
   other.errorCovPost.copyTo(cv::KalmanFilter::errorCovPost);
 }
 
-inline Trajectory &Trajectory::operator=(const Trajectory &rhs) {
+inline Trajectory& Trajectory::operator=(const Trajectory& rhs) {
   this->state = rhs.state;
   this->ltrb = rhs.ltrb;
   rhs.smooth_embedding.copyTo(this->smooth_embedding);
@@ -221,7 +199,7 @@ inline Trajectory &Trajectory::operator=(const Trajectory &rhs) {
   return *this;
 }
 
-inline int Trajectory::next_id(int &cnt) {
+inline int Trajectory::next_id(int& cnt) {
   ++cnt;
   return cnt;
 }

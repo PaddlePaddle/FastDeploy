@@ -30,7 +30,7 @@ namespace keypointdetection {
  */
 class FASTDEPLOY_DECL PPTinyPose : public FastDeployModel {
  public:
- /** \brief Set path of model file and configuration file, and the configuration of runtime
+  /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
    * \param[in] model_file Path of model file, e.g pptinypose/model.pdmodel
    * \param[in] params_file Path of parameter file, e.g pptinypose/model.pdiparams, if the model format is ONNX, this parameter will be ignored

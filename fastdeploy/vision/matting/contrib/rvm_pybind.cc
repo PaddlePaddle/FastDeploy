@@ -17,18 +17,21 @@
 namespace fastdeploy {
 void BindRobustVideoMatting(pybind11::module& m) {
   // Bind RobustVideoMatting
-  pybind11::class_<vision::matting::RobustVideoMatting, FastDeployModel>(m, "RobustVideoMatting")
+  pybind11::class_<vision::matting::RobustVideoMatting, FastDeployModel>(
+      m, "RobustVideoMatting")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
-      .def("predict",
-           [](vision::matting::RobustVideoMatting& self, pybind11::array& data) {
-             auto mat = PyArrayToCvMat(data);
-             vision::MattingResult res;
-             self.Predict(&mat, &res);
-             return res;
-           })
+      .def(
+          "predict",
+          [](vision::matting::RobustVideoMatting& self, pybind11::array& data) {
+            auto mat = PyArrayToCvMat(data);
+            vision::MattingResult res;
+            self.Predict(&mat, &res);
+            return res;
+          })
       .def_readwrite("size", &vision::matting::RobustVideoMatting::size)
-      .def_readwrite("video_mode", &vision::matting::RobustVideoMatting::video_mode)
+      .def_readwrite("video_mode",
+                     &vision::matting::RobustVideoMatting::video_mode)
       .def_readwrite("swap_rb", &vision::matting::RobustVideoMatting::swap_rb);
 }
 

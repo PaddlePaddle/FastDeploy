@@ -14,16 +14,16 @@
 
 #pragma once
 
-#include <map>
-#include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/tracking/pptracking/tracker.h"
+#include <map>
 
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
-struct TrailRecorder{
+struct TrailRecorder {
   std::map<int, std::vector<std::array<int, 2>>> records;
   void Add(int id, const std::array<int, 2>& record);
 };
@@ -39,7 +39,7 @@ inline void TrailRecorder::Add(int id, const std::array<int, 2>& record) {
   }
 }
 
-class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
+class FASTDEPLOY_DECL PPTracking : public FastDeployModel {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
@@ -49,8 +49,7 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
-  PPTracking(const std::string& model_file,
-             const std::string& params_file,
+  PPTracking(const std::string& model_file, const std::string& params_file,
              const std::string& config_file,
              const RuntimeOption& custom_option = RuntimeOption(),
              const ModelFormat& model_format = ModelFormat::PADDLE);
@@ -81,7 +80,7 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
 
   bool Preprocess(Mat* img, std::vector<FDTensor>* outputs);
 
-  bool Postprocess(std::vector<FDTensor>& infer_result, MOTResult *result);
+  bool Postprocess(std::vector<FDTensor>& infer_result, MOTResult* result);
 
   std::vector<std::shared_ptr<Processor>> processors_;
   std::string config_file_;
@@ -91,7 +90,7 @@ class FASTDEPLOY_DECL PPTracking: public FastDeployModel {
   float min_box_area_;
   bool is_record_trail_ = false;
   std::unique_ptr<JDETracker> jdeTracker_;
-  TrailRecorder *recorder_ = nullptr;
+  TrailRecorder* recorder_ = nullptr;
 };
 
 }  // namespace tracking

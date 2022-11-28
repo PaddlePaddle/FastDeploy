@@ -26,11 +26,11 @@ Classifier::Classifier(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
   runtime_option = custom_option;
@@ -51,7 +51,8 @@ bool Classifier::Initialize() {
 }
 
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores) {
+                              std::vector<int32_t>* cls_labels,
+                              std::vector<float>* cls_scores) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -64,12 +65,13 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
   }
 
   if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

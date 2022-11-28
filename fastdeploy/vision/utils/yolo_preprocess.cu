@@ -32,14 +32,15 @@ struct AffineMatrix {
   float value[6];
 };
 
-__global__ void YoloPreprocessCudaKernel( 
-    uint8_t* src, int src_line_size, int src_width, 
-    int src_height, float* dst, int dst_width, 
-    int dst_height, uint8_t padding_color_b,
-    uint8_t padding_color_g, uint8_t padding_color_r,
-    AffineMatrix d2s, int edge) {
+__global__ void
+YoloPreprocessCudaKernel(uint8_t* src, int src_line_size, int src_width,
+                         int src_height, float* dst, int dst_width,
+                         int dst_height, uint8_t padding_color_b,
+                         uint8_t padding_color_g, uint8_t padding_color_r,
+                         AffineMatrix d2s, int edge) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
-  if (position >= edge) return;
+  if (position >= edge)
+    return;
 
   float m_x1 = d2s.value[0];
   float m_y1 = d2s.value[1];
@@ -77,13 +78,17 @@ __global__ void YoloPreprocessCudaKernel(
     uint8_t* v4 = const_value;
 
     if (y_low >= 0) {
-      if (x_low >= 0) v1 = src + y_low * src_line_size + x_low * 3;
-      if (x_high < src_width) v2 = src + y_low * src_line_size + x_high * 3;
+      if (x_low >= 0)
+        v1 = src + y_low * src_line_size + x_low * 3;
+      if (x_high < src_width)
+        v2 = src + y_low * src_line_size + x_high * 3;
     }
 
     if (y_high < src_height) {
-      if (x_low >= 0) v3 = src + y_high * src_line_size + x_low * 3;
-      if (x_high < src_width) v4 = src + y_high * src_line_size + x_high * 3;
+      if (x_low >= 0)
+        v3 = src + y_high * src_line_size + x_low * 3;
+      if (x_high < src_width)
+        v4 = src + y_high * src_line_size + x_high * 3;
     }
 
     c0 = w1 * v1[0] + w2 * v2[0] + w3 * v3[0] + w4 * v4[0];
@@ -91,7 +96,7 @@ __global__ void YoloPreprocessCudaKernel(
     c2 = w1 * v1[2] + w2 * v2[2] + w3 * v3[2] + w4 * v4[2];
   }
 
-  // bgr to rgb 
+  // bgr to rgb
   float t = c2;
   c2 = c0;
   c0 = t;
@@ -111,16 +116,17 @@ __global__ void YoloPreprocessCudaKernel(
   *pdst_c2 = c2;
 }
 
-void CudaYoloPreprocess(
-    uint8_t* src, int src_width, int src_height,
-    float* dst, int dst_width, int dst_height,
-    const std::vector<float> padding_value, cudaStream_t stream) {
+void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height, float* dst,
+                        int dst_width, int dst_height,
+                        const std::vector<float> padding_value,
+                        cudaStream_t stream) {
   AffineMatrix s2d, d2s;
-  float scale = std::min(dst_height / (float)src_height, dst_width / (float)src_width);
+  float scale =
+      std::min(dst_height / (float)src_height, dst_width / (float)src_width);
 
   s2d.value[0] = scale;
   s2d.value[1] = 0;
-  s2d.value[2] = -scale * src_width  * 0.5  + dst_width * 0.5;
+  s2d.value[2] = -scale * src_width * 0.5 + dst_width * 0.5;
   s2d.value[3] = 0;
   s2d.value[4] = scale;
   s2d.value[5] = -scale * src_height * 0.5 + dst_height * 0.5;
@@ -135,10 +141,8 @@ void CudaYoloPreprocess(
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
   YoloPreprocessCudaKernel<<<blocks, threads, 0, stream>>>(
-      src, src_width * 3, src_width,
-      src_height, dst, dst_width,
-      dst_height, padding_value[0], padding_value[1], padding_value[2], d2s, jobs);
-
+      src, src_width * 3, src_width, src_height, dst, dst_width, dst_height,
+      padding_value[0], padding_value[1], padding_value[2], d2s, jobs);
 }
 
 }  // namespace utils

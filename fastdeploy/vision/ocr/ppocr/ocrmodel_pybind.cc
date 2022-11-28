@@ -11,14 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <pybind11/stl.h>
 #include "fastdeploy/pybind/main.h"
+#include <pybind11/stl.h>
 
 namespace fastdeploy {
 void BindPPOCRModel(pybind11::module& m) {
   m.def("sort_boxes", [](std::vector<std::array<int, 8>>& boxes) {
-       vision::ocr::SortBoxes(&boxes);
-       return boxes;
+    vision::ocr::SortBoxes(&boxes);
+    return boxes;
   });
   // DBDetector
   pybind11::class_<vision::ocr::DBDetector, FastDeployModel>(m, "DBDetector")
@@ -28,13 +28,17 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_readwrite("preprocessor", &vision::ocr::DBDetector::preprocessor_)
       .def_readwrite("postprocessor", &vision::ocr::DBDetector::postprocessor_);
 
-  pybind11::class_<vision::ocr::DBDetectorPreprocessor>(m, "DBDetectorPreprocessor")
+  pybind11::class_<vision::ocr::DBDetectorPreprocessor>(
+      m, "DBDetectorPreprocessor")
       .def(pybind11::init<>())
-      .def_readwrite("max_side_len", &vision::ocr::DBDetectorPreprocessor::max_side_len_)
+      .def_readwrite("max_side_len",
+                     &vision::ocr::DBDetectorPreprocessor::max_side_len_)
       .def_readwrite("mean", &vision::ocr::DBDetectorPreprocessor::mean_)
       .def_readwrite("scale", &vision::ocr::DBDetectorPreprocessor::scale_)
-      .def_readwrite("is_scale", &vision::ocr::DBDetectorPreprocessor::is_scale_)
-      .def("run", [](vision::ocr::DBDetectorPreprocessor& self, std::vector<pybind11::array>& im_list) {
+      .def_readwrite("is_scale",
+                     &vision::ocr::DBDetectorPreprocessor::is_scale_)
+      .def("run", [](vision::ocr::DBDetectorPreprocessor& self,
+                     std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
           images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
@@ -42,40 +46,51 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<FDTensor> outputs;
         std::vector<std::array<int, 4>> batch_det_img_info;
         self.Run(&images, &outputs, &batch_det_img_info);
-        for(size_t i = 0; i< outputs.size(); ++i){
+        for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
         }
         return make_pair(outputs, batch_det_img_info);
       });
 
-  pybind11::class_<vision::ocr::DBDetectorPostprocessor>(m, "DBDetectorPostprocessor")
+  pybind11::class_<vision::ocr::DBDetectorPostprocessor>(
+      m, "DBDetectorPostprocessor")
       .def(pybind11::init<>())
-      .def_readwrite("det_db_thresh", &vision::ocr::DBDetectorPostprocessor::det_db_thresh_)
-      .def_readwrite("det_db_box_thresh", &vision::ocr::DBDetectorPostprocessor::det_db_box_thresh_)
-      .def_readwrite("det_db_unclip_ratio", &vision::ocr::DBDetectorPostprocessor::det_db_unclip_ratio_)
-      .def_readwrite("det_db_score_mode", &vision::ocr::DBDetectorPostprocessor::det_db_score_mode_)
-      .def_readwrite("use_dilation", &vision::ocr::DBDetectorPostprocessor::use_dilation_)
-      .def("run", [](vision::ocr::DBDetectorPostprocessor& self,
-                     std::vector<FDTensor>& inputs,
-                     const std::vector<std::array<int, 4>>& batch_det_img_info) {
-        std::vector<std::vector<std::array<int, 8>>> results;
+      .def_readwrite("det_db_thresh",
+                     &vision::ocr::DBDetectorPostprocessor::det_db_thresh_)
+      .def_readwrite("det_db_box_thresh",
+                     &vision::ocr::DBDetectorPostprocessor::det_db_box_thresh_)
+      .def_readwrite(
+          "det_db_unclip_ratio",
+          &vision::ocr::DBDetectorPostprocessor::det_db_unclip_ratio_)
+      .def_readwrite("det_db_score_mode",
+                     &vision::ocr::DBDetectorPostprocessor::det_db_score_mode_)
+      .def_readwrite("use_dilation",
+                     &vision::ocr::DBDetectorPostprocessor::use_dilation_)
+      .def("run",
+           [](vision::ocr::DBDetectorPostprocessor& self,
+              std::vector<FDTensor>& inputs,
+              const std::vector<std::array<int, 4>>& batch_det_img_info) {
+             std::vector<std::vector<std::array<int, 8>>> results;
 
-        if (!self.Run(inputs, &results, batch_det_img_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in DBDetectorPostprocessor.')");
-        }
-        return results;
-      })
-      .def("run", [](vision::ocr::DBDetectorPostprocessor& self,
-                     std::vector<pybind11::array>& input_array,
-                     const std::vector<std::array<int, 4>>& batch_det_img_info) {
-        std::vector<std::vector<std::array<int, 8>>> results;
-        std::vector<FDTensor> inputs;
-        PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
-        if (!self.Run(inputs, &results, batch_det_img_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in DBDetectorPostprocessor.')");
-        }
-        return results;
-      });
+             if (!self.Run(inputs, &results, batch_det_img_info)) {
+               pybind11::eval("raise Exception('Failed to preprocess the input "
+                              "data in DBDetectorPostprocessor.')");
+             }
+             return results;
+           })
+      .def("run",
+           [](vision::ocr::DBDetectorPostprocessor& self,
+              std::vector<pybind11::array>& input_array,
+              const std::vector<std::array<int, 4>>& batch_det_img_info) {
+             std::vector<std::vector<std::array<int, 8>>> results;
+             std::vector<FDTensor> inputs;
+             PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
+             if (!self.Run(inputs, &results, batch_det_img_info)) {
+               pybind11::eval("raise Exception('Failed to preprocess the input "
+                              "data in DBDetectorPostprocessor.')");
+             }
+             return results;
+           });
 
   // Classifier
   pybind11::class_<vision::ocr::Classifier, FastDeployModel>(m, "Classifier")
@@ -85,39 +100,48 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_readwrite("preprocessor", &vision::ocr::Classifier::preprocessor_)
       .def_readwrite("postprocessor", &vision::ocr::Classifier::postprocessor_);
 
-    pybind11::class_<vision::ocr::ClassifierPreprocessor>(m, "ClassifierPreprocessor")
+  pybind11::class_<vision::ocr::ClassifierPreprocessor>(
+      m, "ClassifierPreprocessor")
       .def(pybind11::init<>())
-      .def_readwrite("cls_image_shape", &vision::ocr::ClassifierPreprocessor::cls_image_shape_)
+      .def_readwrite("cls_image_shape",
+                     &vision::ocr::ClassifierPreprocessor::cls_image_shape_)
       .def_readwrite("mean", &vision::ocr::ClassifierPreprocessor::mean_)
       .def_readwrite("scale", &vision::ocr::ClassifierPreprocessor::scale_)
-      .def_readwrite("is_scale", &vision::ocr::ClassifierPreprocessor::is_scale_)
-      .def("run", [](vision::ocr::ClassifierPreprocessor& self, std::vector<pybind11::array>& im_list) {
+      .def_readwrite("is_scale",
+                     &vision::ocr::ClassifierPreprocessor::is_scale_)
+      .def("run", [](vision::ocr::ClassifierPreprocessor& self,
+                     std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
           images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPreprocessor.')");
+          pybind11::eval("raise Exception('Failed to preprocess the input data "
+                         "in ClassifierPreprocessor.')");
         }
-        for(size_t i = 0; i< outputs.size(); ++i){
+        for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
         }
         return outputs;
       });
 
-  pybind11::class_<vision::ocr::ClassifierPostprocessor>(m, "ClassifierPostprocessor")
+  pybind11::class_<vision::ocr::ClassifierPostprocessor>(
+      m, "ClassifierPostprocessor")
       .def(pybind11::init<>())
-      .def_readwrite("cls_thresh", &vision::ocr::ClassifierPostprocessor::cls_thresh_)
-      .def("run", [](vision::ocr::ClassifierPostprocessor& self,
-                     std::vector<FDTensor>& inputs) {
-        std::vector<int> cls_labels;
-        std::vector<float> cls_scores;
-        if (!self.Run(inputs, &cls_labels, &cls_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPostprocessor.')");
-        }
-        return make_pair(cls_labels,cls_scores);
-      })
+      .def_readwrite("cls_thresh",
+                     &vision::ocr::ClassifierPostprocessor::cls_thresh_)
+      .def("run",
+           [](vision::ocr::ClassifierPostprocessor& self,
+              std::vector<FDTensor>& inputs) {
+             std::vector<int> cls_labels;
+             std::vector<float> cls_scores;
+             if (!self.Run(inputs, &cls_labels, &cls_scores)) {
+               pybind11::eval("raise Exception('Failed to preprocess the input "
+                              "data in ClassifierPostprocessor.')");
+             }
+             return make_pair(cls_labels, cls_scores);
+           })
       .def("run", [](vision::ocr::ClassifierPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<FDTensor> inputs;
@@ -125,11 +149,11 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<int> cls_labels;
         std::vector<float> cls_scores;
         if (!self.Run(inputs, &cls_labels, &cls_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in ClassifierPostprocessor.')");
+          pybind11::eval("raise Exception('Failed to preprocess the input data "
+                         "in ClassifierPostprocessor.')");
         }
-        return make_pair(cls_labels,cls_scores);
+        return make_pair(cls_labels, cls_scores);
       });
-
 
   // Recognizer
   pybind11::class_<vision::ocr::Recognizer, FastDeployModel>(m, "Recognizer")
@@ -139,38 +163,46 @@ void BindPPOCRModel(pybind11::module& m) {
       .def_readwrite("preprocessor", &vision::ocr::Recognizer::preprocessor_)
       .def_readwrite("postprocessor", &vision::ocr::Recognizer::postprocessor_);
 
-    pybind11::class_<vision::ocr::RecognizerPreprocessor>(m, "RecognizerPreprocessor")
+  pybind11::class_<vision::ocr::RecognizerPreprocessor>(
+      m, "RecognizerPreprocessor")
       .def(pybind11::init<>())
-      .def_readwrite("rec_image_shape", &vision::ocr::RecognizerPreprocessor::rec_image_shape_)
+      .def_readwrite("rec_image_shape",
+                     &vision::ocr::RecognizerPreprocessor::rec_image_shape_)
       .def_readwrite("mean", &vision::ocr::RecognizerPreprocessor::mean_)
       .def_readwrite("scale", &vision::ocr::RecognizerPreprocessor::scale_)
-      .def_readwrite("is_scale", &vision::ocr::RecognizerPreprocessor::is_scale_)
-      .def("run", [](vision::ocr::RecognizerPreprocessor& self, std::vector<pybind11::array>& im_list) {
+      .def_readwrite("is_scale",
+                     &vision::ocr::RecognizerPreprocessor::is_scale_)
+      .def("run", [](vision::ocr::RecognizerPreprocessor& self,
+                     std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
           images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPreprocessor.')");
+          pybind11::eval("raise Exception('Failed to preprocess the input data "
+                         "in RecognizerPreprocessor.')");
         }
-        for(size_t i = 0; i< outputs.size(); ++i){
+        for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
         }
         return outputs;
       });
 
-  pybind11::class_<vision::ocr::RecognizerPostprocessor>(m, "RecognizerPostprocessor")
+  pybind11::class_<vision::ocr::RecognizerPostprocessor>(
+      m, "RecognizerPostprocessor")
       .def(pybind11::init<std::string>())
-      .def("run", [](vision::ocr::RecognizerPostprocessor& self,
-                     std::vector<FDTensor>& inputs) {
-        std::vector<std::string> texts;
-        std::vector<float> rec_scores;
-        if (!self.Run(inputs, &texts, &rec_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPostprocessor.')");
-        }
-        return make_pair(texts, rec_scores);
-      })
+      .def("run",
+           [](vision::ocr::RecognizerPostprocessor& self,
+              std::vector<FDTensor>& inputs) {
+             std::vector<std::string> texts;
+             std::vector<float> rec_scores;
+             if (!self.Run(inputs, &texts, &rec_scores)) {
+               pybind11::eval("raise Exception('Failed to preprocess the input "
+                              "data in RecognizerPostprocessor.')");
+             }
+             return make_pair(texts, rec_scores);
+           })
       .def("run", [](vision::ocr::RecognizerPostprocessor& self,
                      std::vector<pybind11::array>& input_array) {
         std::vector<FDTensor> inputs;
@@ -178,7 +210,8 @@ void BindPPOCRModel(pybind11::module& m) {
         std::vector<std::string> texts;
         std::vector<float> rec_scores;
         if (!self.Run(inputs, &texts, &rec_scores)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in RecognizerPostprocessor.')");
+          pybind11::eval("raise Exception('Failed to preprocess the input data "
+                         "in RecognizerPostprocessor.')");
         }
         return make_pair(texts, rec_scores);
       });

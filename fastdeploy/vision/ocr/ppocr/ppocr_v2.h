@@ -41,8 +41,8 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
    */
   PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
-                fastdeploy::vision::ocr::Classifier* cls_model,
-                fastdeploy::vision::ocr::Recognizer* rec_model);
+          fastdeploy::vision::ocr::Classifier* cls_model,
+          fastdeploy::vision::ocr::Recognizer* rec_model);
 
   /** \brief Classification model is optional, so this function is set up the detection model path and recognition model path respectively.
    *
@@ -50,7 +50,7 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv2_rec_infer
    */
   PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
-                fastdeploy::vision::ocr::Recognizer* rec_model);
+          fastdeploy::vision::ocr::Recognizer* rec_model);
 
   /** \brief Predict the input image and get OCR result.
    *
@@ -65,7 +65,8 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    * \param[in] batch_result The output list of OCR result will be writen to this structure.
    * \return true if the prediction successed, otherwise false.
    */
-  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+  virtual bool
+  BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<fastdeploy::vision::OCRResult>* batch_result);
   bool Initialized() const override;
 
@@ -78,7 +79,7 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
 
 namespace application {
 namespace ocrsystem {
-  typedef pipeline::PPOCRv2 PPOCRSystemv2;
+typedef pipeline::PPOCRv2 PPOCRSystemv2;
 }  // namespace ocrsystem
 }  // namespace application
 

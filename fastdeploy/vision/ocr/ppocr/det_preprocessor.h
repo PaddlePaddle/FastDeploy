@@ -36,8 +36,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
    * \param[in] batch_det_img_info_ptr The output of preprocess
    * \return true if the preprocess successed, otherwise false
    */
-  bool Run(std::vector<FDMat>* images,
-           std::vector<FDTensor>* outputs,
+  bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::array<int, 4>>* batch_det_img_info_ptr);
 
   int max_side_len_ = 960;

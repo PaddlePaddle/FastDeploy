@@ -13,17 +13,15 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/cls_preprocessor.h"
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-ClassifierPreprocessor::ClassifierPreprocessor() {
-  initialized_ = true;
-}
+ClassifierPreprocessor::ClassifierPreprocessor() { initialized_ = true; }
 
 void OcrClassifierResizeImage(FDMat* mat,
                               const std::vector<int>& cls_image_shape) {
@@ -47,13 +45,15 @@ void OcrClassifierResizeImage(FDMat* mat,
   }
 }
 
-bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+bool ClassifierPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
 
@@ -70,7 +70,7 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

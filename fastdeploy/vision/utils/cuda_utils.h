@@ -14,27 +14,27 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cstdint>
+#include <cuda_runtime.h>
 #include <vector>
 
 #ifndef CUDA_CHECK
-#define CUDA_CHECK(callstr)\
-  {\
-    cudaError_t error_code = callstr;\
-    if (error_code != cudaSuccess) {\
-      std::cerr << "CUDA error " << error_code << " at " << __FILE__ << ":";\
-      std::cerr << __LINE__;\
-      assert(0);\
-    }\
+#define CUDA_CHECK(callstr)                                                    \
+  {                                                                            \
+    cudaError_t error_code = callstr;                                          \
+    if (error_code != cudaSuccess) {                                           \
+      std::cerr << "CUDA error " << error_code << " at " << __FILE__ << ":";   \
+      std::cerr << __LINE__;                                                   \
+      assert(0);                                                               \
+    }                                                                          \
   }
 #endif  // CUDA_CHECK
 
 namespace fastdeploy {
 namespace vision {
 namespace utils {
-void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height,
-                        float* dst, int dst_width, int dst_height,
+void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height, float* dst,
+                        int dst_width, int dst_height,
                         const std::vector<float> padding_value,
                         cudaStream_t stream);
 }  // namespace utils

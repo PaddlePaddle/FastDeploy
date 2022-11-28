@@ -15,12 +15,13 @@
 #include "fastdeploy/vision/tracking/pptracking/letter_box_resize.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 
-namespace fastdeploy{
-namespace vision{
+namespace fastdeploy {
+namespace vision {
 
 bool LetterBoxResize::operator()(Mat* mat, ProcLib lib) {
   if (mat->Channels() != color_.size()) {
-    FDERROR << "LetterBoxResize: Require input channels equals to size of color value, "
+    FDERROR << "LetterBoxResize: Require input channels equals to size of "
+               "color value, "
                "but now channels = "
             << mat->Channels()
             << ", the size of color values = " << color_.size() << "."
@@ -50,9 +51,10 @@ bool LetterBoxResize::operator()(Mat* mat, ProcLib lib) {
   return true;
 }
 
-bool LetterBoxResize::Run(Mat* mat, const std::vector<int>& target_size, const std::vector<float>& color, ProcLib lib) {
-    auto l = LetterBoxResize(target_size,color);
-    return l(mat, lib);
+bool LetterBoxResize::Run(Mat* mat, const std::vector<int>& target_size,
+                          const std::vector<float>& color, ProcLib lib) {
+  auto l = LetterBoxResize(target_size, color);
+  return l(mat, lib);
 }
 
 }  // namespace vision

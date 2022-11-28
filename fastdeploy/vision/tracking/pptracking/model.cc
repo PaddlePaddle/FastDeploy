@@ -24,8 +24,8 @@ PPTracking::PPTracking(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& config_file,
                        const RuntimeOption& custom_option,
-                       const ModelFormat& model_format){
-  config_file_=config_file;
+                       const ModelFormat& model_format) {
+  config_file_ = config_file;
   valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
 
@@ -37,30 +37,29 @@ PPTracking::PPTracking(const std::string& model_file,
   initialized = Initialize();
 }
 
-bool PPTracking::BuildPreprocessPipelineFromConfig(){
+bool PPTracking::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   try {
-      cfg = YAML::LoadFile(config_file_);
+    cfg = YAML::LoadFile(config_file_);
   } catch (YAML::BadFile& e) {
-      FDERROR << "Failed to load yaml file " << config_file_
-              << ", maybe you should check this file." << std::endl;
-      return false;
+    FDERROR << "Failed to load yaml file " << config_file_
+            << ", maybe you should check this file." << std::endl;
+    return false;
   }
 
   // Get draw_threshold for visualization
   if (cfg["draw_threshold"].IsDefined()) {
-      draw_threshold_ = cfg["draw_threshold"].as<float>();
+    draw_threshold_ = cfg["draw_threshold"].as<float>();
   } else {
-      FDERROR << "Please set draw_threshold." << std::endl;
-      return false;
+    FDERROR << "Please set draw_threshold." << std::endl;
+    return false;
   }
   // Get config for tracker
   if (cfg["tracker"].IsDefined()) {
     if (cfg["tracker"]["conf_thres"].IsDefined()) {
       conf_thresh_ = cfg["tracker"]["conf_thres"].as<float>();
-    }
-    else {
+    } else {
       std::cerr << "Please set conf_thres in tracker." << std::endl;
       return false;
     }
@@ -86,48 +85,47 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
         int width = target_size[1];
         int height = target_size[0];
         processors_.push_back(
-                std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
+            std::make_shared<Resize>(width, height, -1.0, -1.0, interp, false));
       } else {
         int min_target_size = std::min(target_size[0], target_size[1]);
         int max_target_size = std::max(target_size[0], target_size[1]);
         std::vector<int> max_size;
         if (max_target_size > 0) {
-            max_size.push_back(max_target_size);
-            max_size.push_back(max_target_size);
+          max_size.push_back(max_target_size);
+          max_size.push_back(max_target_size);
         }
         processors_.push_back(std::make_shared<ResizeByShort>(
-                min_target_size, interp, true, max_size));
+            min_target_size, interp, true, max_size));
       }
 
-    }
-    else if(op_name == "LetterBoxResize"){
+    } else if (op_name == "LetterBoxResize") {
       auto target_size = op["target_size"].as<std::vector<int>>();
-      FDASSERT(target_size.size() == 2,"Require size of target_size be 2, but now it's %lu.",
+      FDASSERT(target_size.size() == 2,
+               "Require size of target_size be 2, but now it's %lu.",
                target_size.size());
-      std::vector<float> color{127.0f,127.0f,127.0f};
-      if (op["fill_value"].IsDefined()){
-          color =op["fill_value"].as<std::vector<float>>();
+      std::vector<float> color{127.0f, 127.0f, 127.0f};
+      if (op["fill_value"].IsDefined()) {
+        color = op["fill_value"].as<std::vector<float>>();
       }
-      processors_.push_back(std::make_shared<LetterBoxResize>(target_size, color));
-    }
-    else if (op_name == "NormalizeImage") {
+      processors_.push_back(
+          std::make_shared<LetterBoxResize>(target_size, color));
+    } else if (op_name == "NormalizeImage") {
       auto mean = op["mean"].as<std::vector<float>>();
       auto std = op["std"].as<std::vector<float>>();
       bool is_scale = true;
       if (op["is_scale"]) {
-          is_scale = op["is_scale"].as<bool>();
+        is_scale = op["is_scale"].as<bool>();
       }
       std::string norm_type = "mean_std";
       if (op["norm_type"]) {
-          norm_type = op["norm_type"].as<std::string>();
+        norm_type = op["norm_type"].as<std::string>();
       }
       if (norm_type != "mean_std") {
-          std::fill(mean.begin(), mean.end(), 0.0);
-          std::fill(std.begin(), std.end(), 1.0);
+        std::fill(mean.begin(), mean.end(), 0.0);
+        std::fill(std.begin(), std.end(), 1.0);
       }
       processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
-    }
-    else if (op_name == "Permute") {
+    } else if (op_name == "Permute") {
       // Do nothing, do permute as the last operation
       continue;
       // processors_.push_back(std::make_shared<HWC2CHW>());
@@ -136,11 +134,11 @@ bool PPTracking::BuildPreprocessPipelineFromConfig(){
       auto value = op["fill_value"].as<std::vector<float>>();
       processors_.push_back(std::make_shared<Cast>("float"));
       processors_.push_back(
-              std::make_shared<PadToSize>(size[1], size[0], value));
+          std::make_shared<PadToSize>(size[1], size[0], value));
     } else if (op_name == "PadStride") {
       auto stride = op["stride"].as<int>();
       processors_.push_back(
-              std::make_shared<StridePad>(stride, std::vector<float>(3, 0)));
+          std::make_shared<StridePad>(stride, std::vector<float>(3, 0)));
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
               << std::endl;
@@ -168,7 +166,7 @@ bool PPTracking::Initialize() {
   return true;
 }
 
-bool PPTracking::Predict(cv::Mat *img, MOTResult *result) {
+bool PPTracking::Predict(cv::Mat* img, MOTResult* result) {
   Mat mat(*img);
   std::vector<FDTensor> input_tensors;
 
@@ -189,7 +187,6 @@ bool PPTracking::Predict(cv::Mat *img, MOTResult *result) {
   return true;
 }
 
-
 bool PPTracking::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
 
   int origin_w = mat->Width();
@@ -203,9 +200,9 @@ bool PPTracking::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
     }
   }
 
-//  LetterBoxResize(mat);
-//  Normalize::Run(mat,mean_,scale_,is_scale_);
-//  HWC2CHW::Run(mat);
+  //  LetterBoxResize(mat);
+  //  Normalize::Run(mat,mean_,scale_,is_scale_);
+  //  HWC2CHW::Run(mat);
   Cast::Run(mat, "float");
 
   outputs->resize(3);
@@ -226,8 +223,8 @@ bool PPTracking::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
   return true;
 }
 
-
-void FilterDets(const float conf_thresh,const cv::Mat& dets,std::vector<int>* index) {
+void FilterDets(const float conf_thresh, const cv::Mat& dets,
+                std::vector<int>* index) {
   for (int i = 0; i < dets.rows; ++i) {
     float score = *dets.ptr<float>(i, 4);
     if (score > conf_thresh) {
@@ -236,7 +233,8 @@ void FilterDets(const float conf_thresh,const cv::Mat& dets,std::vector<int>* in
   }
 }
 
-bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *result){
+bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result,
+                             MOTResult* result) {
   auto bbox_shape = infer_result[0].shape;
   auto bbox_data = static_cast<float*>(infer_result[0].Data());
 
@@ -252,15 +250,14 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
   FilterDets(conf_thresh_, dets, &valid);
   cv::Mat new_dets, new_emb;
   for (int i = 0; i < valid.size(); ++i) {
-      new_dets.push_back(dets.row(valid[i]));
-      new_emb.push_back(emb.row(valid[i]));
+    new_dets.push_back(dets.row(valid[i]));
+    new_emb.push_back(emb.row(valid[i]));
   }
   jdeTracker_->update(new_dets, new_emb, &tracks);
   if (tracks.size() == 0) {
-    std::array<int ,4> box={int(*dets.ptr<float>(0, 0)),
-                            int(*dets.ptr<float>(0, 1)),
-                            int(*dets.ptr<float>(0, 2)),
-                            int(*dets.ptr<float>(0, 3))};
+    std::array<int, 4> box = {
+        int(*dets.ptr<float>(0, 0)), int(*dets.ptr<float>(0, 1)),
+        int(*dets.ptr<float>(0, 2)), int(*dets.ptr<float>(0, 3))};
     result->boxes.push_back(box);
     result->ids.push_back(1);
     result->scores.push_back(*dets.ptr<float>(0, 4));
@@ -275,8 +272,8 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
         bool vertical = w / h > 1.6;
         float area = w * h;
         if (area > min_box_area_ && !vertical) {
-          std::array<int ,4> box = {
-                      int(titer->ltrb[0]), int(titer->ltrb[1]), int(titer->ltrb[2]), int(titer->ltrb[3])};
+          std::array<int, 4> box = {int(titer->ltrb[0]), int(titer->ltrb[1]),
+                                    int(titer->ltrb[2]), int(titer->ltrb[3])};
           result->boxes.push_back(box);
           result->ids.push_back(titer->id);
           result->scores.push_back(titer->score);
@@ -284,36 +281,38 @@ bool PPTracking::Postprocess(std::vector<FDTensor>& infer_result, MOTResult *res
       }
     }
   }
-  if (!is_record_trail_) return true;
+  if (!is_record_trail_)
+    return true;
   int nums = result->boxes.size();
-  for (int i=0; i<nums; i++) {
+  for (int i = 0; i < nums; i++) {
     float center_x = (result->boxes[i][0] + result->boxes[i][2]) / 2;
     float center_y = (result->boxes[i][1] + result->boxes[i][3]) / 2;
     int id = result->ids[i];
-    recorder_->Add(id,{int(center_x), int(center_y)});
+    recorder_->Add(id, {int(center_x), int(center_y)});
   }
   return true;
 }
 
-void PPTracking::BindRecorder(TrailRecorder* recorder){
+void PPTracking::BindRecorder(TrailRecorder* recorder) {
 
-    recorder_ = recorder;
-    is_record_trail_ = true;
+  recorder_ = recorder;
+  is_record_trail_ = true;
 }
 
-void PPTracking::UnbindRecorder(){
+void PPTracking::UnbindRecorder() {
 
-    is_record_trail_ = false;
-    std::map<int, std::vector<std::array<int, 2>>>::iterator iter;
-    for(iter = recorder_->records.begin(); iter != recorder_->records.end(); iter++){
-      iter->second.clear();
-      iter->second.shrink_to_fit();
-    }
-    recorder_->records.clear();
-    std::map<int, std::vector<std::array<int, 2>>>().swap(recorder_->records);
-    recorder_ = nullptr;
+  is_record_trail_ = false;
+  std::map<int, std::vector<std::array<int, 2>>>::iterator iter;
+  for (iter = recorder_->records.begin(); iter != recorder_->records.end();
+       iter++) {
+    iter->second.clear();
+    iter->second.shrink_to_fit();
+  }
+  recorder_->records.clear();
+  std::map<int, std::vector<std::array<int, 2>>>().swap(recorder_->records);
+  recorder_ = nullptr;
 }
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

@@ -31,7 +31,7 @@ ArcFace::ArcFace(const std::string& model_file, const std::string& params_file,
 }
 
 bool ArcFace::Initialize() {
-  
+
   // (1) if parent class initialed backend
   if (initialized) {
     // (1.1) re-init parameters for specific sub-classes

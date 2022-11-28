@@ -28,10 +28,8 @@ cv::Mat VisFaceAlignment(const cv::Mat& im, const FaceAlignmentResult& result,
   cv::Scalar landmark_color = cv::Scalar(0, 255, 0);
   for (size_t i = 0; i < result.landmarks.size(); ++i) {
     cv::Point landmark;
-    landmark.x = static_cast<int>(
-        result.landmarks[i][0]);
-    landmark.y = static_cast<int>(
-        result.landmarks[i][1]);
+    landmark.x = static_cast<int>(result.landmarks[i][0]);
+    landmark.y = static_cast<int>(result.landmarks[i][1]);
     cv::circle(vis_im, landmark, line_size, landmark_color, -1);
   }
   return vis_im;

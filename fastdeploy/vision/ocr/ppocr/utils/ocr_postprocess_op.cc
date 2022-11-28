@@ -13,15 +13,15 @@
 // limitations under the License.
 
 #include "ocr_postprocess_op.h"
-#include <map>
 #include "clipper.h"
+#include <map>
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
-                                   float unclip_ratio, float &distance) {
+void PostProcessor::GetContourArea(const std::vector<std::vector<float>>& box,
+                                   float unclip_ratio, float& distance) {
   int pts_num = 4;
   float area = 0.0f;
   float dist = 0.0f;
@@ -39,7 +39,7 @@ void PostProcessor::GetContourArea(const std::vector<std::vector<float>> &box,
 }
 
 cv::RotatedRect PostProcessor::UnClip(std::vector<std::vector<float>> box,
-                                      const float &unclip_ratio) {
+                                      const float& unclip_ratio) {
   float distance = 1.0;
 
   GetContourArea(box, unclip_ratio, distance);
@@ -70,9 +70,10 @@ cv::RotatedRect PostProcessor::UnClip(std::vector<std::vector<float>> box,
   return res;
 }
 
-float **PostProcessor::Mat2Vec(cv::Mat mat) {
-  auto **array = new float *[mat.rows];
-  for (int i = 0; i < mat.rows; ++i) array[i] = new float[mat.cols];
+float** PostProcessor::Mat2Vec(cv::Mat mat) {
+  auto** array = new float*[mat.rows];
+  for (int i = 0; i < mat.rows; ++i)
+    array[i] = new float[mat.cols];
   for (int i = 0; i < mat.rows; ++i) {
     for (int j = 0; j < mat.cols; ++j) {
       array[i][j] = mat.at<float>(i, j);
@@ -82,17 +83,19 @@ float **PostProcessor::Mat2Vec(cv::Mat mat) {
   return array;
 }
 
-std::vector<std::vector<int>> PostProcessor::OrderPointsClockwise(
-    std::vector<std::vector<int>> pts) {
+std::vector<std::vector<int>>
+PostProcessor::OrderPointsClockwise(std::vector<std::vector<int>> pts) {
   std::vector<std::vector<int>> box = pts;
   std::sort(box.begin(), box.end(), XsortInt);
 
   std::vector<std::vector<int>> leftmost = {box[0], box[1]};
   std::vector<std::vector<int>> rightmost = {box[2], box[3]};
 
-  if (leftmost[0][1] > leftmost[1][1]) std::swap(leftmost[0], leftmost[1]);
+  if (leftmost[0][1] > leftmost[1][1])
+    std::swap(leftmost[0], leftmost[1]);
 
-  if (rightmost[0][1] > rightmost[1][1]) std::swap(rightmost[0], rightmost[1]);
+  if (rightmost[0][1] > rightmost[1][1])
+    std::swap(rightmost[0], rightmost[1]);
 
   std::vector<std::vector<int>> rect = {leftmost[0], rightmost[0], rightmost[1],
                                         leftmost[1]};
@@ -114,17 +117,19 @@ std::vector<std::vector<float>> PostProcessor::Mat2Vector(cv::Mat mat) {
 }
 
 bool PostProcessor::XsortFp32(std::vector<float> a, std::vector<float> b) {
-  if (a[0] != b[0]) return a[0] < b[0];
+  if (a[0] != b[0])
+    return a[0] < b[0];
   return false;
 }
 
 bool PostProcessor::XsortInt(std::vector<int> a, std::vector<int> b) {
-  if (a[0] != b[0]) return a[0] < b[0];
+  if (a[0] != b[0])
+    return a[0] < b[0];
   return false;
 }
 
 std::vector<std::vector<float>> PostProcessor::GetMiniBoxes(cv::RotatedRect box,
-                                                            float &ssid) {
+                                                            float& ssid) {
   ssid = std::max(box.size.width, box.size.height);
 
   cv::Mat points;
@@ -185,12 +190,12 @@ float PostProcessor::PolygonScoreAcc(std::vector<cv::Point> contour,
   cv::Mat mask;
   mask = cv::Mat::zeros(ymax - ymin + 1, xmax - xmin + 1, CV_8UC1);
 
-  cv::Point *rook_point = new cv::Point[contour.size()];
+  cv::Point* rook_point = new cv::Point[contour.size()];
 
   for (int i = 0; i < contour.size(); ++i) {
     rook_point[i] = cv::Point(int(box_x[i]) - xmin, int(box_y[i]) - ymin);
   }
-  const cv::Point *ppt[1] = {rook_point};
+  const cv::Point* ppt[1] = {rook_point};
   int npt[] = {int(contour.size())};
 
   cv::fillPoly(mask, ppt, npt, 1, cv::Scalar(1));
@@ -230,7 +235,7 @@ float PostProcessor::BoxScoreFast(std::vector<std::vector<float>> box_array,
   root_point[1] = cv::Point(int(array[1][0]) - xmin, int(array[1][1]) - ymin);
   root_point[2] = cv::Point(int(array[2][0]) - xmin, int(array[2][1]) - ymin);
   root_point[3] = cv::Point(int(array[3][0]) - xmin, int(array[3][1]) - ymin);
-  const cv::Point *ppt[1] = {root_point};
+  const cv::Point* ppt[1] = {root_point};
   int npt[] = {4};
   cv::fillPoly(mask, ppt, npt, 1, cv::Scalar(1));
 
@@ -243,8 +248,8 @@ float PostProcessor::BoxScoreFast(std::vector<std::vector<float>> box_array,
 }
 
 std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
-    const cv::Mat pred, const cv::Mat bitmap, const float &box_thresh,
-    const float &det_db_unclip_ratio, const std::string &det_db_score_mode) {
+    const cv::Mat pred, const cv::Mat bitmap, const float& box_thresh,
+    const float& det_db_unclip_ratio, const std::string& det_db_score_mode) {
   const int min_size = 3;
   const int max_candidates = 1000;
 
@@ -283,7 +288,8 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
     else
       score = BoxScoreFast(array, pred);
 
-    if (score < box_thresh) continue;
+    if (score < box_thresh)
+      continue;
 
     // start for unclip
     cv::RotatedRect points = UnClip(box_for_unclip, det_db_unclip_ratio);
@@ -295,20 +301,20 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
     cv::RotatedRect clipbox = points;
     auto cliparray = GetMiniBoxes(clipbox, ssid);
 
-    if (ssid < min_size + 2) continue;
+    if (ssid < min_size + 2)
+      continue;
 
     int dest_width = pred.cols;
     int dest_height = pred.rows;
     std::vector<std::vector<int>> intcliparray;
 
     for (int num_pt = 0; num_pt < 4; num_pt++) {
-      std::vector<int> a{
-          int(clampf(
-              roundf(cliparray[num_pt][0] / float(width) * float(dest_width)),
-              0, float(dest_width))),
-          int(clampf(
-              roundf(cliparray[num_pt][1] / float(height) * float(dest_height)),
-              0, float(dest_height)))};
+      std::vector<int> a{int(clampf(roundf(cliparray[num_pt][0] / float(width) *
+                                           float(dest_width)),
+                                    0, float(dest_width))),
+                         int(clampf(roundf(cliparray[num_pt][1] /
+                                           float(height) * float(dest_height)),
+                                    0, float(dest_height)))};
       intcliparray.push_back(a);
     }
     boxes.push_back(intcliparray);
@@ -317,13 +323,13 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::BoxesFromBitmap(
   return boxes;
 }
 
-std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
-    std::vector<std::vector<std::vector<int>>> boxes,
-    const std::array<int,4>& det_img_info) {
+std::vector<std::vector<std::vector<int>>>
+PostProcessor::FilterTagDetRes(std::vector<std::vector<std::vector<int>>> boxes,
+                               const std::array<int, 4>& det_img_info) {
   int oriimg_w = det_img_info[0];
   int oriimg_h = det_img_info[1];
-  float ratio_w = float(det_img_info[2])/float(oriimg_w);
-  float ratio_h = float(det_img_info[3])/float(oriimg_h);
+  float ratio_w = float(det_img_info[2]) / float(oriimg_w);
+  float ratio_h = float(det_img_info[3]) / float(oriimg_h);
 
   std::vector<std::vector<std::vector<int>>> root_points;
   for (int n = 0; n < boxes.size(); n++) {
@@ -343,7 +349,8 @@ std::vector<std::vector<std::vector<int>>> PostProcessor::FilterTagDetRes(
                           pow(boxes[n][0][1] - boxes[n][1][1], 2)));
     rect_height = int(sqrt(pow(boxes[n][0][0] - boxes[n][3][0], 2) +
                            pow(boxes[n][0][1] - boxes[n][3][1], 2)));
-    if (rect_width <= 4 || rect_height <= 4) continue;
+    if (rect_width <= 4 || rect_height <= 4)
+      continue;
     root_points.push_back(boxes[n]);
   }
   return root_points;

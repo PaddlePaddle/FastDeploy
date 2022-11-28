@@ -22,11 +22,11 @@
 #include <map>
 #include <vector>
 
+#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/tracking/pptracking/trajectory.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/tracking/pptracking/trajectory.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -43,23 +43,18 @@ struct Track {
 
 class FASTDEPLOY_DECL JDETracker {
  public:
-
   JDETracker();
 
-  virtual bool update(const cv::Mat &dets,
-                      const cv::Mat &emb,
-                      std::vector<Track> *tracks);
+  virtual bool update(const cv::Mat& dets, const cv::Mat& emb,
+                      std::vector<Track>* tracks);
   virtual ~JDETracker() {}
- private:
 
-  cv::Mat motion_distance(const TrajectoryPtrPool &a, const TrajectoryPool &b);
-  void linear_assignment(const cv::Mat &cost,
-                         float cost_limit,
-                         Match *matches,
-                         std::vector<int> *mismatch_row,
-                         std::vector<int> *mismatch_col);
-  void remove_duplicate_trajectory(TrajectoryPool *a,
-                                   TrajectoryPool *b,
+ private:
+  cv::Mat motion_distance(const TrajectoryPtrPool& a, const TrajectoryPool& b);
+  void linear_assignment(const cv::Mat& cost, float cost_limit, Match* matches,
+                         std::vector<int>* mismatch_row,
+                         std::vector<int>* mismatch_col);
+  void remove_duplicate_trajectory(TrajectoryPool* a, TrajectoryPool* b,
                                    float iou_thresh = 0.15f);
 
  private:
@@ -73,6 +68,6 @@ class FASTDEPLOY_DECL JDETracker {
   int count = 0;
 };
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

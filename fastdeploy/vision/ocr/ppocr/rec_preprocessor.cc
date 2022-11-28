@@ -13,17 +13,15 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/ocr/ppocr/rec_preprocessor.h"
+#include "fastdeploy/function/concat.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/ocr/ppocr/utils/ocr_utils.h"
-#include "fastdeploy/function/concat.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-RecognizerPreprocessor::RecognizerPreprocessor() {
-  initialized_ = true;
-}
+RecognizerPreprocessor::RecognizerPreprocessor() { initialized_ = true; }
 
 void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
                               const std::vector<int>& rec_image_shape) {
@@ -38,7 +36,7 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
   int resize_w;
   if (ceilf(imgH * ratio) > imgW) {
     resize_w = imgW;
-  }else{
+  } else {
     resize_w = int(ceilf(imgH * ratio));
   }
   Resize::Run(mat, resize_w, imgH);
@@ -47,13 +45,15 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
   Pad::Run(mat, 0, 0, 0, int(imgW - mat->Width()), value);
 }
 
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+bool RecognizerPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
 
@@ -61,7 +61,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   int imgW = rec_image_shape_[2];
   float max_wh_ratio = imgW * 1.0 / imgH;
   float ori_wh_ratio;
-  
+
   for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
@@ -81,7 +81,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

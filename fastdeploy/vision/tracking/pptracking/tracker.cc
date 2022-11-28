@@ -17,48 +17,39 @@
 // Ths copyright of CnybTseng/JDE is as follows:
 // MIT License
 
-#include <limits.h>
-#include <stdio.h>
 #include <algorithm>
+#include <limits.h>
 #include <map>
+#include <stdio.h>
 
 #include "fastdeploy/vision/tracking/pptracking/lapjv.h"
 #include "fastdeploy/vision/tracking/pptracking/tracker.h"
 
-#define mat2vec4f(m)             \
-  cv::Vec4f(*m.ptr<float>(0, 0), \
-            *m.ptr<float>(0, 1), \
-            *m.ptr<float>(0, 2), \
+#define mat2vec4f(m)                                                           \
+  cv::Vec4f(*m.ptr<float>(0, 0), *m.ptr<float>(0, 1), *m.ptr<float>(0, 2),     \
             *m.ptr<float>(0, 3))
 
 namespace fastdeploy {
 namespace vision {
 namespace tracking {
 
-static std::map<int, float> chi2inv95 = {{1, 3.841459f},
-                                         {2, 5.991465f},
-                                         {3, 7.814728f},
-                                         {4, 9.487729f},
-                                         {5, 11.070498f},
-                                         {6, 12.591587f},
-                                         {7, 14.067140f},
-                                         {8, 15.507313f},
-                                         {9, 16.918978f}};
-
+static std::map<int, float> chi2inv95 = {
+    {1, 3.841459f},  {2, 5.991465f},  {3, 7.814728f},
+    {4, 9.487729f},  {5, 11.070498f}, {6, 12.591587f},
+    {7, 14.067140f}, {8, 15.507313f}, {9, 16.918978f}};
 
 JDETracker::JDETracker()
     : timestamp(0), max_lost_time(30), lambda(0.98f), det_thresh(0.3f) {}
 
-bool JDETracker::update(const cv::Mat &dets,
-                        const cv::Mat &emb,
-                        std::vector<Track> *tracks) {
+bool JDETracker::update(const cv::Mat& dets, const cv::Mat& emb,
+                        std::vector<Track>* tracks) {
   ++timestamp;
   TrajectoryPool candidates(dets.rows);
   for (int i = 0; i < dets.rows; ++i) {
     float score = *dets.ptr<float>(i, 1);
-    const cv::Mat &ltrb_ = dets(cv::Rect(2, i, 4, 1));
+    const cv::Mat& ltrb_ = dets(cv::Rect(2, i, 4, 1));
     cv::Vec4f ltrb = mat2vec4f(ltrb_);
-    const cv::Mat &embedding = emb(cv::Rect(0, i, emb.cols, 1));
+    const cv::Mat& embedding = emb(cv::Rect(0, i, emb.cols, 1));
     candidates[i] = Trajectory(ltrb, score, embedding);
   }
 
@@ -89,13 +80,13 @@ bool JDETracker::update(const cv::Mat &dets,
   TrajectoryPtrPool retrieved_trajectories;
 
   for (miter = matches.begin(); miter != matches.end(); miter++) {
-    Trajectory *pt = trajectory_pool[miter->first];
-    Trajectory &ct = candidates[miter->second];
+    Trajectory* pt = trajectory_pool[miter->first];
+    Trajectory& ct = candidates[miter->second];
     if (pt->state == Tracked) {
       pt->update(&ct, timestamp);
       activated_trajectories.push_back(pt);
     } else {
-      pt->reactivate(&ct, count,timestamp);
+      pt->reactivate(&ct, count, timestamp);
       retrieved_trajectories.push_back(pt);
     }
   }
@@ -115,20 +106,20 @@ bool JDETracker::update(const cv::Mat &dets,
   linear_assignment(cost, 0.5f, &matches, &mismatch_row, &mismatch_col);
 
   for (miter = matches.begin(); miter != matches.end(); miter++) {
-    Trajectory *pt = next_trajectory_pool[miter->first];
-    Trajectory *ct = next_candidates[miter->second];
+    Trajectory* pt = next_trajectory_pool[miter->first];
+    Trajectory* ct = next_candidates[miter->second];
     if (pt->state == Tracked) {
       pt->update(ct, timestamp);
       activated_trajectories.push_back(pt);
     } else {
-      pt->reactivate(ct,count, timestamp);
+      pt->reactivate(ct, count, timestamp);
       retrieved_trajectories.push_back(pt);
     }
   }
 
   TrajectoryPtrPool lost_trajectories;
   for (size_t i = 0; i < mismatch_row.size(); ++i) {
-    Trajectory *pt = next_trajectory_pool[mismatch_row[i]];
+    Trajectory* pt = next_trajectory_pool[mismatch_row[i]];
     if (pt->state != Lost) {
       pt->mark_lost();
       lost_trajectories.push_back(pt);
@@ -155,13 +146,14 @@ bool JDETracker::update(const cv::Mat &dets,
   }
 
   for (size_t i = 0; i < mismatch_col.size(); ++i) {
-    if (nnext_candidates[mismatch_col[i]]->score < det_thresh) continue;
+    if (nnext_candidates[mismatch_col[i]]->score < det_thresh)
+      continue;
     nnext_candidates[mismatch_col[i]]->activate(count, timestamp);
     activated_trajectories.push_back(nnext_candidates[mismatch_col[i]]);
   }
 
   for (size_t i = 0; i < this->lost_trajectories.size(); ++i) {
-    Trajectory &lt = this->lost_trajectories[i];
+    Trajectory& lt = this->lost_trajectories[i];
     if (timestamp - lt.timestamp > max_lost_time) {
       lt.mark_removed();
       removed_trajectories.push_back(&lt);
@@ -199,8 +191,8 @@ bool JDETracker::update(const cv::Mat &dets,
   return 0;
 }
 
-cv::Mat JDETracker::motion_distance(const TrajectoryPtrPool &a,
-                                    const TrajectoryPool &b) {
+cv::Mat JDETracker::motion_distance(const TrajectoryPtrPool& a,
+                                    const TrajectoryPool& b) {
   if (0 == a.size() || 0 == b.size())
     return cv::Mat(a.size(), b.size(), CV_32F);
 
@@ -219,17 +211,18 @@ cv::Mat JDETracker::motion_distance(const TrajectoryPtrPool &a,
   return fdists;
 }
 
-void JDETracker::linear_assignment(const cv::Mat &cost,
-                                   float cost_limit,
-                                   Match *matches,
-                                   std::vector<int> *mismatch_row,
-                                   std::vector<int> *mismatch_col) {
+void JDETracker::linear_assignment(const cv::Mat& cost, float cost_limit,
+                                   Match* matches,
+                                   std::vector<int>* mismatch_row,
+                                   std::vector<int>* mismatch_col) {
   matches->clear();
   mismatch_row->clear();
   mismatch_col->clear();
   if (cost.empty()) {
-    for (int i = 0; i < cost.rows; ++i) mismatch_row->push_back(i);
-    for (int i = 0; i < cost.cols; ++i) mismatch_col->push_back(i);
+    for (int i = 0; i < cost.rows; ++i)
+      mismatch_row->push_back(i);
+    for (int i = 0; i < cost.cols; ++i)
+      mismatch_col->push_back(i);
     return;
   }
 
@@ -237,11 +230,8 @@ void JDETracker::linear_assignment(const cv::Mat &cost,
   cv::Mat x(cost.rows, 1, CV_32S);
   cv::Mat y(cost.cols, 1, CV_32S);
 
-  lapjv_internal(cost,
-                 true,
-                 cost_limit,
-                 reinterpret_cast<int *>(x.data),
-                 reinterpret_cast<int *>(y.data));
+  lapjv_internal(cost, true, cost_limit, reinterpret_cast<int*>(x.data),
+                 reinterpret_cast<int*>(y.data));
 
   for (int i = 0; i < x.rows; ++i) {
     int j = *x.ptr<int>(i);
@@ -253,16 +243,18 @@ void JDETracker::linear_assignment(const cv::Mat &cost,
 
   for (int i = 0; i < y.rows; ++i) {
     int j = *y.ptr<int>(i);
-    if (j < 0) mismatch_col->push_back(i);
+    if (j < 0)
+      mismatch_col->push_back(i);
   }
 
   return;
 }
 
-void JDETracker::remove_duplicate_trajectory(TrajectoryPool *a,
-                                             TrajectoryPool *b,
+void JDETracker::remove_duplicate_trajectory(TrajectoryPool* a,
+                                             TrajectoryPool* b,
                                              float iou_thresh) {
-  if (a->size() == 0 || b->size() == 0) return;
+  if (a->size() == 0 || b->size() == 0)
+    return;
 
   cv::Mat dist = iou_distance(*a, *b);
   cv::Mat mask = dist < iou_thresh;
@@ -300,6 +292,6 @@ void JDETracker::remove_duplicate_trajectory(TrajectoryPool *a,
   }
 }
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

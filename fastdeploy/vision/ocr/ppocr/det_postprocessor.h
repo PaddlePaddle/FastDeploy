@@ -50,9 +50,7 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
  private:
   bool initialized_ = false;
   PostProcessor post_processor_;
-  bool SingleBatchPostprocessor(const float* out_data,
-                                int n2,
-                                int n3,
+  bool SingleBatchPostprocessor(const float* out_data, int n2, int n3,
                                 const std::array<int, 4>& det_img_info,
                                 std::vector<std::array<int, 8>>* boxes_result);
 };

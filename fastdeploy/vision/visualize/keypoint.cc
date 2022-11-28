@@ -29,7 +29,7 @@ cv::Mat VisKeypointDetection(const cv::Mat& im,
   auto colormap = GenerateColorMap();
   cv::Mat vis_img = im.clone();
   int detection_nums = results.keypoints.size() / 17;
-  for (int i = 0; i < detection_nums; i++){
+  for (int i = 0; i < detection_nums; i++) {
     int index = i * 17;
     bool is_over_threshold = true;
     for (int j = 0; j < results.num_joints; j++) {
@@ -43,16 +43,15 @@ cv::Mat VisKeypointDetection(const cv::Mat& im,
         int x_coord = int(results.keypoints[index + k][0]);
         int y_coord = int(results.keypoints[index + k][1]);
         cv::circle(vis_img, cv::Point2d(x_coord, y_coord), 1,
-                  cv::Scalar(0, 0, 255), 2);
+                   cv::Scalar(0, 0, 255), 2);
         int x_start = int(results.keypoints[index + edge[k][0]][0]);
         int y_start = int(results.keypoints[index + edge[k][0]][1]);
         int x_end = int(results.keypoints[index + edge[k][1]][0]);
         int y_end = int(results.keypoints[index + edge[k][1]][1]);
-        cv::line(vis_img, cv::Point2d(x_start, y_start), cv::Point2d(x_end, y_end),
-                colormap[k], 1);
+        cv::line(vis_img, cv::Point2d(x_start, y_start),
+                 cv::Point2d(x_end, y_end), colormap[k], 1);
       }
     }
-    
   }
   return vis_img;
 }

@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL ClassifierPostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-          std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores);
+           std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores);
 
   float cls_thresh_ = 0.9;
 

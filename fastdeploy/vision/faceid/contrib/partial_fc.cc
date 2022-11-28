@@ -32,7 +32,7 @@ PartialFC::PartialFC(const std::string& model_file,
 }
 
 bool PartialFC::Initialize() {
- 
+
   if (initialized) {
     // (1.1) re-init parameters for specific sub-classes
     size = {112, 112};

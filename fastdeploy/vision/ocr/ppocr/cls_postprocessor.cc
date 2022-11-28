@@ -20,17 +20,15 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-ClassifierPostprocessor::ClassifierPostprocessor() {
-  initialized_ = true;
-}
+ClassifierPostprocessor::ClassifierPostprocessor() { initialized_ = true; }
 
-bool SingleBatchPostprocessor(const float* out_data, const size_t& length, int* cls_label, float* cls_score) {
+bool SingleBatchPostprocessor(const float* out_data, const size_t& length,
+                              int* cls_label, float* cls_score) {
 
-  *cls_label = std::distance(
-      &out_data[0], std::max_element(&out_data[0], &out_data[length]));
+  *cls_label = std::distance(&out_data[0],
+                             std::max_element(&out_data[0], &out_data[length]));
 
-  *cls_score =
-      float(*std::max_element(&out_data[0], &out_data[length]));
+  *cls_score = float(*std::max_element(&out_data[0], &out_data[length]));
   return true;
 }
 
@@ -46,20 +44,23 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
   // For Classifier, the output tensor shape = [batch,2]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin() + 1, tensor.shape.end(), 1,
+                             std::multiplies<int>());
 
   cls_labels->resize(batch);
   cls_scores->resize(batch);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
- 
+
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, length, &cls_labels->at(i_batch),&cls_scores->at(i_batch))) return false;
+    if (!SingleBatchPostprocessor(tensor_data, length, &cls_labels->at(i_batch),
+                                  &cls_scores->at(i_batch)))
+      return false;
     tensor_data = tensor_data + length;
   }
 
   return true;
 }
 
-}  // namespace classification
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

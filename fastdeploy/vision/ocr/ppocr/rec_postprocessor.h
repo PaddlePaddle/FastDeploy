@@ -44,8 +44,8 @@ class FASTDEPLOY_DECL RecognizerPostprocessor {
 
  private:
   bool SingleBatchPostprocessor(const float* out_data,
-                              const std::vector<int64_t>& output_shape,
-                              std::string* text, float* rec_score);
+                                const std::vector<int64_t>& output_shape,
+                                std::string* text, float* rec_score);
   bool initialized_ = false;
   std::vector<std::string> label_list_;
 };

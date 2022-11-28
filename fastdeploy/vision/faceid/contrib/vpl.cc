@@ -30,7 +30,7 @@ VPL::VPL(const std::string& model_file, const std::string& params_file,
 }
 
 bool VPL::Initialize() {
- 
+
   if (initialized) {
     // (1.1) re-init parameters for specific sub-classes
     size = {112, 112};

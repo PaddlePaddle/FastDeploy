@@ -29,10 +29,10 @@ namespace tracking {
 
 /** Column-reduction and reduction transfer for a dense cost matrix.
  */
-int _ccrrt_dense(
-    const int n, float *cost[], int *free_rows, int *x, int *y, float *v) {
+int _ccrrt_dense(const int n, float* cost[], int* free_rows, int* x, int* y,
+                 float* v) {
   int n_free_rows;
-  bool *unique;
+  bool* unique;
 
   for (int i = 0; i < n; i++) {
     x[i] = -1;
@@ -88,13 +88,8 @@ int _ccrrt_dense(
 
 /** Augmenting row reduction for a dense cost matrix.
  */
-int _carr_dense(const int n,
-                float *cost[],
-                const int n_free_rows,
-                int *free_rows,
-                int *x,
-                int *y,
-                float *v) {
+int _carr_dense(const int n, float* cost[], const int n_free_rows,
+                int* free_rows, int* x, int* y, float* v) {
   int current = 0;
   int new_free_rows = 0;
   int rr_cnt = 0;
@@ -154,7 +149,7 @@ int _carr_dense(const int n,
 
 /** Find columns with minimum d[j] and put them on the SCAN list.
  */
-int _find_dense(const int n, int lo, float *d, int *cols, int *y) {
+int _find_dense(const int n, int lo, float* d, int* cols, int* y) {
   int hi = lo + 1;
   float mind = d[cols[lo]];
   for (int k = hi; k < n; k++) {
@@ -173,15 +168,8 @@ int _find_dense(const int n, int lo, float *d, int *cols, int *y) {
 
 // Scan all columns in TODO starting from arbitrary column in SCAN
 // and try to decrease d of the TODO columns using the SCAN column.
-int _scan_dense(const int n,
-                float *cost[],
-                int *plo,
-                int *phi,
-                float *d,
-                int *cols,
-                int *pred,
-                int *y,
-                float *v) {
+int _scan_dense(const int n, float* cost[], int* plo, int* phi, float* d,
+                int* cols, int* pred, int* y, float* v) {
   int lo = *plo;
   int hi = *phi;
   float h, cred_ij;
@@ -220,17 +208,13 @@ int _scan_dense(const int n,
  *
  * \return The closest free column index.
  */
-int find_path_dense(const int n,
-                    float *cost[],
-                    const int start_i,
-                    int *y,
-                    float *v,
-                    int *pred) {
+int find_path_dense(const int n, float* cost[], const int start_i, int* y,
+                    float* v, int* pred) {
   int lo = 0, hi = 0;
   int final_j = -1;
   int n_ready = 0;
-  int *cols;
-  float *d;
+  int* cols;
+  float* d;
 
   NEW(cols, int, n);
   NEW(d, float, n);
@@ -273,18 +257,13 @@ int find_path_dense(const int n,
 
 /** Augment for a dense cost matrix.
  */
-int _ca_dense(const int n,
-              float *cost[],
-              const int n_free_rows,
-              int *free_rows,
-              int *x,
-              int *y,
-              float *v) {
-  int *pred;
+int _ca_dense(const int n, float* cost[], const int n_free_rows, int* free_rows,
+              int* x, int* y, float* v) {
+  int* pred;
 
   NEW(pred, int, n);
 
-  for (int *pfree_i = free_rows; pfree_i < free_rows + n_free_rows; pfree_i++) {
+  for (int* pfree_i = free_rows; pfree_i < free_rows + n_free_rows; pfree_i++) {
     int i = -1, j;
     int k = 0;
 
@@ -302,11 +281,8 @@ int _ca_dense(const int n,
 
 /** Solve dense sparse LAP.
  */
-int lapjv_internal(const cv::Mat &cost,
-                   const bool extend_cost,
-                   const float cost_limit,
-                   int *x,
-                   int *y) {
+int lapjv_internal(const cv::Mat& cost, const bool extend_cost,
+                   const float cost_limit, int* x, int* y) {
   int n_rows = cost.rows;
   int n_cols = cost.cols;
   int n;
@@ -344,8 +320,8 @@ int lapjv_internal(const cv::Mat &cost,
   }
 
   // Convert Mat to pointer array
-  float **cost_ptr;
-  NEW(cost_ptr, float *, n);
+  float** cost_ptr;
+  NEW(cost_ptr, float*, n);
   for (int i = 0; i < n; ++i) {
     NEW(cost_ptr[i], float, n);
   }
@@ -356,10 +332,10 @@ int lapjv_internal(const cv::Mat &cost,
   }
 
   int ret;
-  int *free_rows;
-  float *v;
-  int *x_c;
-  int *y_c;
+  int* free_rows;
+  float* v;
+  int* x_c;
+  int* y_c;
 
   NEW(free_rows, int, n);
   NEW(v, float, n);
@@ -408,6 +384,6 @@ int lapjv_internal(const cv::Mat &cost,
   return ret;
 }
 
-} // namespace tracking
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace tracking
+}  // namespace vision
+}  // namespace fastdeploy

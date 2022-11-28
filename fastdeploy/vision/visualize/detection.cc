@@ -105,10 +105,9 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
 }
 
 // Visualize DetectionResult with custom labels.
-cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result, 
+cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
                      const std::vector<std::string>& labels,
-                     float score_threshold, int line_size,
-                     float font_size) {
+                     float score_threshold, int line_size, float font_size) {
   if (result.contain_masks) {
     FDASSERT(result.boxes.size() == result.masks.size(),
              "The size of masks must be equal to the size of boxes, but now "
@@ -145,8 +144,8 @@ cv::Mat VisDetection(const cv::Mat& im, const DetectionResult& result,
     if (labels.size() > result.label_ids[i]) {
       text = labels[result.label_ids[i]] + "," + text;
     } else {
-      FDWARNING << "The label_id: " << result.label_ids[i] 
-                << " in DetectionResult should be less than length of labels:" 
+      FDWARNING << "The label_id: " << result.label_ids[i]
+                << " in DetectionResult should be less than length of labels:"
                 << labels.size() << "." << std::endl;
     }
     if (text.size() > 16) {

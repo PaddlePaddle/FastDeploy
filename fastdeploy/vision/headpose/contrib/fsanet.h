@@ -34,8 +34,8 @@ class FASTDEPLOY_DECL FSANet : public FastDeployModel {
    * \param[in] model_format Model format of the loaded model, default is ONNX format
    */
   FSANet(const std::string& model_file, const std::string& params_file = "",
-             const RuntimeOption& custom_option = RuntimeOption(),
-             const ModelFormat& model_format = ModelFormat::ONNX);
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::ONNX);
 
   std::string ModelName() const { return "FSANet"; }
   /** \brief Predict the face detection result for an input image

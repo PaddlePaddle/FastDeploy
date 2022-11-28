@@ -25,16 +25,16 @@ namespace pipeline {
  */
 class FASTDEPLOY_DECL PPOCRv3 : public PPOCRv2 {
  public:
-   /** \brief Set up the detection model path, classification model path and recognition model path respectively.
+  /** \brief Set up the detection model path, classification model path and recognition model path respectively.
    *
    * \param[in] det_model Path of detection model, e.g ./ch_PP-OCRv3_det_infer
    * \param[in] cls_model Path of classification model, e.g ./ch_ppocr_mobile_v2.0_cls_infer
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
    */
   PPOCRv3(fastdeploy::vision::ocr::DBDetector* det_model,
-                fastdeploy::vision::ocr::Classifier* cls_model,
-                fastdeploy::vision::ocr::Recognizer* rec_model)
-                : PPOCRv2(det_model, cls_model, rec_model) {
+          fastdeploy::vision::ocr::Classifier* cls_model,
+          fastdeploy::vision::ocr::Recognizer* rec_model)
+      : PPOCRv2(det_model, cls_model, rec_model) {
     // The only difference between v2 and v3
     recognizer_->preprocessor_.rec_image_shape_[1] = 48;
   }
@@ -44,8 +44,8 @@ class FASTDEPLOY_DECL PPOCRv3 : public PPOCRv2 {
    * \param[in] rec_model Path of recognition model, e.g ./ch_PP-OCRv3_rec_infer
    */
   PPOCRv3(fastdeploy::vision::ocr::DBDetector* det_model,
-                fastdeploy::vision::ocr::Recognizer* rec_model)
-                : PPOCRv2(det_model, rec_model) {
+          fastdeploy::vision::ocr::Recognizer* rec_model)
+      : PPOCRv2(det_model, rec_model) {
     // The only difference between v2 and v3
     recognizer_->preprocessor_.rec_image_shape_[1] = 48;
   }
@@ -55,7 +55,7 @@ class FASTDEPLOY_DECL PPOCRv3 : public PPOCRv2 {
 
 namespace application {
 namespace ocrsystem {
-  typedef pipeline::PPOCRv3 PPOCRSystemv3;
+typedef pipeline::PPOCRv3 PPOCRSystemv3;
 }  // namespace ocrsystem
 }  // namespace application
 

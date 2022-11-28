@@ -143,17 +143,17 @@ void BindVisualize(pybind11::module& m) {
             vision::Mat(vis_im).ShareWithTensor(&out);
             return TensorToPyArray(out);
           })
-      .def_static(
-          "vis_face_detection",
-          [](pybind11::array& im_data, vision::FaceDetectionResult& result,
-             int line_size, float font_size) {
-            auto im = PyArrayToCvMat(im_data);
-            auto vis_im = vision::Visualize::VisFaceDetection(
-                im, result, line_size, font_size);
-            FDTensor out;
-            vision::Mat(vis_im).ShareWithTensor(&out);
-            return TensorToPyArray(out);
-          })
+      .def_static("vis_face_detection",
+                  [](pybind11::array& im_data,
+                     vision::FaceDetectionResult& result, int line_size,
+                     float font_size) {
+                    auto im = PyArrayToCvMat(im_data);
+                    auto vis_im = vision::Visualize::VisFaceDetection(
+                        im, result, line_size, font_size);
+                    FDTensor out;
+                    vision::Mat(vis_im).ShareWithTensor(&out);
+                    return TensorToPyArray(out);
+                  })
       .def_static(
           "vis_segmentation",
           [](pybind11::array& im_data, vision::SegmentationResult& result) {
@@ -163,18 +163,18 @@ void BindVisualize(pybind11::module& m) {
             vision::Mat(vis_im).ShareWithTensor(&out);
             return TensorToPyArray(out);
           })
-      .def_static(
-          "swap_background_matting",
-          [](pybind11::array& im_data, pybind11::array& background_data,
-             vision::MattingResult& result, bool remove_small_connected_area) {
-            cv::Mat im = PyArrayToCvMat(im_data);
-            cv::Mat background = PyArrayToCvMat(background_data);
-            auto vis_im = vision::Visualize::SwapBackgroundMatting(
-                im, background, result, remove_small_connected_area);
-            FDTensor out;
-            vision::Mat(vis_im).ShareWithTensor(&out);
-            return TensorToPyArray(out);
-          })
+      .def_static("swap_background_matting",
+                  [](pybind11::array& im_data, pybind11::array& background_data,
+                     vision::MattingResult& result,
+                     bool remove_small_connected_area) {
+                    cv::Mat im = PyArrayToCvMat(im_data);
+                    cv::Mat background = PyArrayToCvMat(background_data);
+                    auto vis_im = vision::Visualize::SwapBackgroundMatting(
+                        im, background, result, remove_small_connected_area);
+                    FDTensor out;
+                    vision::Mat(vis_im).ShareWithTensor(&out);
+                    return TensorToPyArray(out);
+                  })
       .def_static("swap_background_segmentation",
                   [](pybind11::array& im_data, pybind11::array& background_data,
                      int background_label, vision::SegmentationResult& result) {

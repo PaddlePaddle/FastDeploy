@@ -22,13 +22,12 @@ namespace vision {
 
 namespace headpose {
 
-FSANet::FSANet(const std::string& model_file,
-               const std::string& params_file,
+FSANet::FSANet(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT}; 
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
@@ -52,7 +51,7 @@ bool FSANet::Initialize() {
 }
 
 bool FSANet::Preprocess(Mat* mat, FDTensor* output,
-                      std::map<std::string, std::array<int, 2>>* im_info) {
+                        std::map<std::string, std::array<int, 2>>* im_info) {
   // Resize
   int resize_w = size[0];
   int resize_h = size[1];
@@ -62,7 +61,8 @@ bool FSANet::Preprocess(Mat* mat, FDTensor* output,
 
   // Normalize
   std::vector<float> alpha = {1.0f / 128.0f, 1.0f / 128.0f, 1.0f / 128.0f};
-  std::vector<float> beta = {-127.5f / 128.0f, -127.5f / 128.0f, -127.5f / 128.0f};
+  std::vector<float> beta = {-127.5f / 128.0f, -127.5f / 128.0f,
+                             -127.5f / 128.0f};
   Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
@@ -76,8 +76,9 @@ bool FSANet::Preprocess(Mat* mat, FDTensor* output,
   return true;
 }
 
-bool FSANet::Postprocess(FDTensor& infer_result, HeadPoseResult* result,
-                       const std::map<std::string, std::array<int, 2>>& im_info) {
+bool FSANet::Postprocess(
+    FDTensor& infer_result, HeadPoseResult* result,
+    const std::map<std::string, std::array<int, 2>>& im_info) {
   FDASSERT(infer_result.shape[0] == 1, "Only support batch = 1 now.");
   if (infer_result.dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
@@ -85,8 +86,7 @@ bool FSANet::Postprocess(FDTensor& infer_result, HeadPoseResult* result,
   }
 
   auto iter_in = im_info.find("input_shape");
-  FDASSERT(iter_in != im_info.end(),
-           "Cannot find input_shape from im_info.");
+  FDASSERT(iter_in != im_info.end(), "Cannot find input_shape from im_info.");
   int in_h = iter_in->second[0];
   int in_w = iter_in->second[1];
 

@@ -58,7 +58,8 @@ cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred, float threshold) {
     int* label_row_ptr = labels.ptr<int>(i);
     float* alpha_row_ptr = alpha_pred_clone.ptr<float>(i);
     for (int j = 0; j < w; ++j) {
-      if (label_row_ptr[j] != max_connected_id) alpha_row_ptr[j] = 0.f;
+      if (label_row_ptr[j] != max_connected_id)
+        alpha_row_ptr[j] = 0.f;
     }
   }
   return alpha_pred_clone;
@@ -102,7 +103,8 @@ cv::Mat Visualize::RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
     int* label_row_ptr = labels.ptr<int>(i);
     float* alpha_row_ptr = alpha_pred_clone.ptr<float>(i);
     for (int j = 0; j < w; ++j) {
-      if (label_row_ptr[j] != max_connected_id) alpha_row_ptr[j] = 0.f;
+      if (label_row_ptr[j] != max_connected_id)
+        alpha_row_ptr[j] = 0.f;
     }
   }
   return alpha_pred_clone;

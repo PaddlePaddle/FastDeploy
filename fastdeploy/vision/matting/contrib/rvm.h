@@ -73,20 +73,20 @@ class FASTDEPLOY_DECL RobustVideoMatting : public FastDeployModel {
 
   /// Init dynamic inputs datas
   std::vector<std::vector<float>> dynamic_inputs_datas_ = {
-     {0.0f},  // r1i
-     {0.0f},  // r2i
-     {0.0f},  // r3i
-     {0.0f},  // r4i
-     {0.25f},  // downsample_ratio
+      {0.0f},   // r1i
+      {0.0f},   // r2i
+      {0.0f},   // r3i
+      {0.0f},   // r4i
+      {0.25f},  // downsample_ratio
   };
 
   /// Init dynamic inputs dims
   std::vector<std::vector<int64_t>> dynamic_inputs_dims_ = {
-     {1, 1, 1, 1},  // r1i
-     {1, 1, 1, 1},  // r2i
-     {1, 1, 1, 1},  // r3i
-     {1, 1, 1, 1},  // r4i
-     {1},  // downsample_ratio
+      {1, 1, 1, 1},  // r1i
+      {1, 1, 1, 1},  // r2i
+      {1, 1, 1, 1},  // r3i
+      {1, 1, 1, 1},  // r4i
+      {1},           // downsample_ratio
   };
 };
 

@@ -26,13 +26,14 @@ Recognizer::Recognizer(const std::string& model_file,
                        const std::string& params_file,
                        const std::string& label_path,
                        const RuntimeOption& custom_option,
-                       const ModelFormat& model_format):postprocessor_(label_path) {
+                       const ModelFormat& model_format)
+    : postprocessor_(label_path) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT,
-                          Backend::OPENVINO};  
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
-    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+    valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                          Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   }
 
@@ -54,7 +55,8 @@ bool Recognizer::Initialize() {
 }
 
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
-                              std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+                              std::vector<std::string>* texts,
+                              std::vector<float>* rec_scores) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -67,12 +69,13 @@ bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
   }
 
   if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores)) {
-    FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference cls_results by runtime."
+            << std::endl;
     return false;
   }
   return true;
 }
 
-}  // namesapce ocr
+}  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy

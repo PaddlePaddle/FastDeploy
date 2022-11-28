@@ -33,19 +33,18 @@ std::vector<std::string> ReadDict(const std::string& path) {
   return m_vec;
 }
 
-RecognizerPostprocessor::RecognizerPostprocessor(){
-  initialized_ = true;
-}
+RecognizerPostprocessor::RecognizerPostprocessor() { initialized_ = true; }
 
-RecognizerPostprocessor::RecognizerPostprocessor(const std::string& label_path) {
+RecognizerPostprocessor::RecognizerPostprocessor(
+    const std::string& label_path) {
   // init label_lsit
   label_list_ = ReadDict(label_path);
   initialized_ = true;
 }
 
-bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
-                              const std::vector<int64_t>& output_shape,
-                              std::string* text, float* rec_score) {
+bool RecognizerPostprocessor::SingleBatchPostprocessor(
+    const float* out_data, const std::vector<int64_t>& output_shape,
+    std::string* text, float* rec_score) {
   std::string& str_res = *text;
   float& score = *rec_score;
   score = 0.f;
@@ -66,10 +65,12 @@ bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
     if (argmax_idx > 0 && (!(n > 0 && argmax_idx == last_index))) {
       score += max_value;
       count += 1;
-      if(argmax_idx > label_list_.size()) {
-        FDERROR << "The output index: " << argmax_idx << " is larger than the size of label_list: "
-        << label_list_.size() << ". Please check the label file!" << std::endl;
-        return false; 
+      if (argmax_idx > label_list_.size()) {
+        FDERROR << "The output index: " << argmax_idx
+                << " is larger than the size of label_list: "
+                << label_list_.size() << ". Please check the label file!"
+                << std::endl;
+        return false;
       }
       str_res += label_list_[argmax_idx];
     }
@@ -83,7 +84,8 @@ bool RecognizerPostprocessor::SingleBatchPostprocessor(const float* out_data,
 }
 
 bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
-                                  std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+                                  std::vector<std::string>* texts,
+                                  std::vector<float>* rec_scores) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -92,13 +94,16 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   const FDTensor& tensor = tensors[0];
   // For Recognizer, the output tensor shape = [batch, ?, 6625]
   size_t batch = tensor.shape[0];
-  size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
+  size_t length = accumulate(tensor.shape.begin() + 1, tensor.shape.end(), 1,
+                             std::multiplies<int>());
 
   texts->resize(batch);
   rec_scores->resize(batch);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
-    for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, tensor.shape, &texts->at(i_batch), &rec_scores->at(i_batch))) {
+  for (int i_batch = 0; i_batch < batch; ++i_batch) {
+    if (!SingleBatchPostprocessor(tensor_data, tensor.shape,
+                                  &texts->at(i_batch),
+                                  &rec_scores->at(i_batch))) {
       return false;
     }
     tensor_data = tensor_data + length;
