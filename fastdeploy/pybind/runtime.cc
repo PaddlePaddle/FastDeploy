@@ -34,6 +34,8 @@ void BindRuntime(pybind11::module& m) {
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
       .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
+      .def("set_openvino_shape_info", &RuntimeOption::SetOpenVINOShapeInfo)
+      .def("set_openvino_cpu_operators", &RuntimeOption::SetOpenVINOCpuOperators)
       .def("enable_paddle_log_info", &RuntimeOption::EnablePaddleLogInfo)
       .def("disable_paddle_log_info", &RuntimeOption::DisablePaddleLogInfo)
       .def("set_paddle_mkldnn_cache_size",
@@ -175,7 +177,7 @@ void BindRuntime(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Infer(inputs, &outputs)) {
-          pybind11::eval("raise Exception('Failed to inference with Runtime.')");
+          throw std::runtime_error("Failed to inference with Runtime.");
         }
         return outputs;
       })
