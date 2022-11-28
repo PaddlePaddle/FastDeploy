@@ -14,6 +14,8 @@
 | ENABLE_TEXT             | Linux(x64) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
 
 第三方库依赖指定（不设定如下参数，会自动下载预编译库）
+| 选项                     | 说明                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
 | ORT_DIRECTORY           | 当开启ONNX Runtime后端时，用于指定用户本地的ONNX Runtime库路径；如果不指定，编译过程会自动下载ONNX Runtime库  |
 | OPENCV_DIRECTORY        | 当ENABLE_VISION=ON时，用于指定用户本地的OpenCV库路径；如果不指定，编译过程会自动下载OpenCV库              |
 | OPENVINO_DIRECTORY      | 当开启OpenVINO后端时, 用于指定用户本地的OpenVINO库路径；如果不指定，编译过程会自动下载OpenVINO库             |

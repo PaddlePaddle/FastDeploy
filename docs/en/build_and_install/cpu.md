@@ -15,6 +15,8 @@ Please do not modify other cmake paramters exclude the following options.
 | ENABLE_TEXT             | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate text models |
 
 The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
 | ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
 | OPENCV_DIRECTORY        | While ENABLE_VISION=ON时， use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
 | OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON时， use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
