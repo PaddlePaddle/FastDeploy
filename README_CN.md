@@ -90,7 +90,7 @@
    - 常见问题
         - [1. 如何配置模型部署的推理后端](docs/cn/faq/how_to_change_backend.md)
         - [2. Windows上C++ SDK如何使用](docs/cn/faq/use_sdk_on_windows.md)
-        - [3. Android上如何使用FastDeploy](docs/cn/faq/use_sdk_on_android.md)(进行中)
+        - [3. Android上如何使用FastDeploy](java/android/README.md)
         - [4. TensorRT使用中的一些技巧](docs/cn/faq/tensorrt_tricks.md)
         - [5. 如何增加新的模型](docs/cn/faq/develop_a_new_model.md)(进行中)
    - 更多FastDeploy部署模块
