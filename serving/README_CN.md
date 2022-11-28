@@ -42,3 +42,4 @@ docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 | Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md) |
 | NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
 | Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|
+| OCR |	[PaddleOCR/PP-OCRv3](../examples/vision/ocr/PP-OCRv3/serving/README.md)|
