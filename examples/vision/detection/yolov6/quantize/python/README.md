@@ -21,8 +21,8 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_qat_model.tar
 tar -xvf yolov6s_qat_model.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# 在CPU上使用Paddle-Inference推理量化模型
-python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device cpu --backend paddle
+# 在CPU上使用ONNX Runtime推理量化模型
+python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device cpu --backend ort
 # 在GPU上使用TensorRT推理量化模型
 python infer.py --model yolov6s_qat_model --image 000000014439.jpg --device gpu --backend trt
 # 在GPU上使用Paddle-TensorRT推理量化模型

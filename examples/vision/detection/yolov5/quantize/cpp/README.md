@@ -28,7 +28,7 @@ tar -xvf yolov5s_quant.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
-# 在CPU上使用Paddle-Inference推理量化模型
+# 在CPU上使用ONNX Runtime推理量化模型
 ./infer_demo yolov5s_quant 000000014439.jpg 0
 # 在GPU上使用TensorRT推理量化模型
 ./infer_demo yolov5s_quant 000000014439.jpg 1
