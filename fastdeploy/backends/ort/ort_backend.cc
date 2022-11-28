@@ -181,8 +181,8 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
   return true;
 }
 
-void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
-                           const std::string& name) {
+void OrtBackend::OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
+                           const std::string& name, bool copy_to_fd) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
@@ -210,12 +210,21 @@ void OrtBackend::CopyToCpu(const Ort::Value& value, FDTensor* tensor,
         "Unrecognized data type of %d while calling OrtBackend::CopyToCpu().",
         data_type);
   }
-  tensor->Resize(shape, dtype, name);
-  memcpy(tensor->MutableData(), value.GetTensorData<void*>(), numel);
+  const void* value_ptr = value.GetTensorData<void*>();
+  if (copy_to_fd) {
+    tensor->Resize(shape, dtype, name);
+    memcpy(tensor->MutableData(), value_ptr, numel);
+  } else {
+    tensor->name = name;
+    tensor->SetExternalData(
+      shape, dtype,
+      const_cast<void*>(value_ptr), Device::CPU);
+  }
 }
 
 bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
-                       std::vector<FDTensor>* outputs) {
+                       std::vector<FDTensor>* outputs,
+                       bool copy_to_fd) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[OrtBackend] Size of the inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -243,11 +252,12 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  // Copy result after inference
+  // Convert result after inference
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    CopyToCpu(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name);
+    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]),
+                       outputs_desc_[i].name, copy_to_fd);
   }
 
   return true;
