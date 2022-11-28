@@ -1,6 +1,3 @@
-"""
-compile function for poros.
-"""
 # Copyright (c) 2022 Baidu, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +11,9 @@ compile function for poros.
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+compile function for poros.
+"""
 
 from typing import List, Dict, Any
 import torch
@@ -45,7 +45,6 @@ def wrap_cpp_module(cpp_module):
 
 def load(filename, poros_options):
     """
-    todo: load poros model
     Args:
         filename( str): poros model save path
         poros_options(PorosOptions / Dict of settings): compile settings for poros
@@ -59,7 +58,6 @@ def load(filename, poros_options):
 
 def save(module, filename):
     """
-    todo: save poros module
     Args:
         module（PorosModule）: poros module
         filename( str): poros model save path
@@ -69,7 +67,8 @@ def save(module, filename):
     module.save(filename)
 
 def compile(module, prewarm_inputs, poros_options):
-    """Compile a TorchScriptModule/nn.Module to porosModule
+    """
+    Compile a TorchScriptModule/nn.Module to porosModule
     Converts specifically the forward method of the original Module
     Args:
         module (torch.nn.Module / torch.jit.ScriptModule): Source module

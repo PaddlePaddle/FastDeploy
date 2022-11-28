@@ -20,7 +20,6 @@
 **/
 #include "torch/script.h"
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/constant.h"
 #include "poros/converter/gpu/converter_util.h"
 #include "poros/converter/gpu/weight.h"

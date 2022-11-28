@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/softmax.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/converter/gpu/converter_util.h"
@@ -55,8 +54,6 @@ bool SoftmaxConverter::converter(TensorrtEngine* engine, const torch::jit::Node 
     // SoftMax needs at least 2D input
     if (shape.size() < 2) {
         auto new_shape = sizes_to_nvdim_with_pad(shape, 2);
-        LOG(INFO) << "Input shape is less than 2D got: " << in->getDimensions() 
-                 << ", inserting shuffle layer to reshape to 2D tensor shape: " << new_shape;
         auto shuffle = engine->network()->addShuffle(*in);
         shuffle->setReshapeDimensions(new_shape);
         shuffle->setName((layer_info(node) + " [Reshape to " + nvdim_to_str(new_shape) + ']').c_str());
@@ -78,11 +75,9 @@ bool SoftmaxConverter::converter(TensorrtEngine* engine, const torch::jit::Node 
     
     //extract dim
     auto dim = (engine->context().get_constant(inputs[1])).toInt();
-    LOG(INFO) << "Softmax original dim " << dim;
     if (dim < 0) {
         dim = shape.size() + dim;
     }
-    LOG(INFO) << "Softmax converted dim " << dim;
     
     //main function
     auto softmax = engine->network()->addSoftMax(*in);

@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Part of the following code in this file refs to
+// https://github.com/pytorch/TensorRT/blob/master/core/lowering/passes/unpack_var.cpp
+//
+// Copyright (c) 2020-present, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Licensed under the BSD 3-Clause "New" or "Revised" License
+
 /**
 * @file unpack_certain_ops.cpp
 * @author tianjinjin@baidu.com

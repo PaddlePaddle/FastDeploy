@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/topk.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/converter/gpu/converter_util.h"
@@ -55,9 +54,6 @@ bool TopkConverter::converter(TensorrtEngine* engine, const torch::jit::Node *no
     auto k = (engine->context().get_constant(inputs[1])).toInt();
     auto dim = (engine->context().get_constant(inputs[2])).toInt();
     auto largest = (engine->context().get_constant(inputs[3])).toBool();
-    LOG(WARNING) << "Note: sorted argument is not used in TensorRT for aten::topk, "
-                << "results will depend on the value of largest";
-    // auto sorted = (engine->context().get_constant(inputs[4])).toBool(); # Currently unused
     
     if (dim < 0) {
         dim = self_dim.size() + dim;

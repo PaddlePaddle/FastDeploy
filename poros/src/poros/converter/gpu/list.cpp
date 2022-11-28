@@ -21,7 +21,6 @@
 #include "torch/script.h"
 
 #include "poros/converter/gpu/converter_util.h"
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/list.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/context/poros_global.h"

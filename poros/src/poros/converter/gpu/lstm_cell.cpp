@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/lstm_cell.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/converter/gpu/converter_util.h"

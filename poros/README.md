@@ -4,7 +4,7 @@
 
 Poros is an AI Inference Accelerator for deep learning framework. It can provide significantly lower inference latency comparing with original model, and provide much flexibility for dynamic graphs.
 Poros mainly works on the TorchScript IR currently, that means it supports the models from PyTorch, ONNX, TensorFlow and any other framework that can be converted to TorchScript. also, we are planting to support more IRs in the future.
-poros is designed to supports multiple hardware backends conveniently, For now, Poros supports GPU and XPU(BAIDU-Kunlun) Device, It's welcomed to add additional devices.
+Poros is designed to supports multiple hardware backends conveniently, For now, Poros supports GPU and XPU (BAIDU-Kunlun) Device, It's welcomed to add additional devices.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ fusions were employed to reduce the actual calculating load of CUDA Kernels.
 
 ## Dependencies
 
-Poros is developed based on PyTorch, CUDA, TensorRT(TRT Engine), CuDNN. The minimum_required(recommended) versions of
+Poros is developed based on PyTorch, CUDA, TensorRT (TRT Engine), CuDNN. The minimum_required (recommended) versions of
 these packages are listed as below:
 
 | Package  | Minimum Version | Recommended Version |
@@ -42,7 +42,7 @@ reference CUDA...." errors may appear during building.
 
 ### 0. Install Dependencies
 
-get poros source code:
+get Poros source code:
 
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -58,7 +58,7 @@ conda activate poros
 export CMAKE_PREFIX_PATH=$CONDA_PREFIX
 conda install cmake==3.22.1 pytorch==1.12.1 cudatoolkit=11.3 numpy -c pytorch
 ```
-**If CUDA has been installed as system driver, cudatoolkit is not necessary. And CMake version requires >= 3.21, GCC version requires == 8.2.**
+**If CUDA has been installed as system driver, cudatoolkit is not necessary. And CMake version requires >= 3.21, GCC version requires >= 8.2.**
 
 
 Poros uses cmake to manage dependencies. It will find all dependency packages automatically as long as the packages were
@@ -82,7 +82,7 @@ It can be added into cmake by installing, if not, you can try to add it by:
 conda install mkl
 ```
 
-Other packages that poros depend on are: gflags, googletest etc. , they can be downloaded
+Other packages that Poros depend on are: gflags, googletest etc. , they can be downloaded
 by ` git submodule update --init --recursive --jobs 0 -f`
 
 ### 1. Build Project with CMake
@@ -104,7 +104,7 @@ cmake -DBUILD_STATIC=on ..
 make 
 ```
 
-Poros `kernel` contains the framework of poros, as well as the IR lowering strategy, the sub-graph segmentation strategy
+Poros `kernel` contains the framework of Poros, as well as the IR lowering strategy, the sub-graph segmentation strategy
 and the engine manager without any specific engine (e.g. TensorRT). For Developers who want to use their own
 engines, `kernel` can be built separately with options as below:
 
@@ -122,9 +122,9 @@ cmake -DBUILD_STATIC_KERNEL=on ..
 make 
 ```
 
-### 2. Build Distributing Package with setuptools(python3)
+### 2. Build Distributing Package with setuptools (Python3)
 
-After the libporos.so has been built, you can build the `.whl` package for python3:
+After the libporos.so has been built, you can build the `.whl` package for Python3:
 
 ```shell
 cd ../python
@@ -173,12 +173,12 @@ original_model = models.resnet50(pretrained=True).cuda().eval() #load/download p
 option = poros.PorosOptions() #set poros option
 poros_model = poros.compile(torch.jit.script(original_model), input_datas, option) #build the model
 
-input = torch.randn(1,3,224,224,dtype=torch.float32).cuda()
+input = torch.randn(1,3,224,224, dtype=torch.float32).cuda()
 poros_res = poros_model(input) # use compiled model in the same way as the original model
 
 ```
 
-The complete benchmark example(resnet50) .py script is `python/example/test_resnet.py`
+The complete benchmark example (resnet50) .py script is `python/example/test_resnet.py`
 
 ```shell
 python3 python/example/test_resnet.py
@@ -192,7 +192,7 @@ If the executable binary `poros-tool` is built, you can run the benchmark like t
 ./poros-tool --module_file_path ../../poros/tools/std_pretrained_resnet50_gpu.pt --test_mode=original #original PyTorch model
 ./poros-tool --module_file_path ../../poros/tools/std_pretrained_resnet50_gpu.pt --test_mode=poros #poros compiled model
 ```
-> PyTorch has changed the packaging format of model since 1.4+, while the pretrained model of resnet50 is still using the old format(.tar).
+> PyTorch has changed the packaging format of model since 1.4+, while the pretrained model of resnet50 is still using the old format (.tar).
 > You may need to convert the format to the newer one (.zip) by your self. Convert command like this:
 > ```python
 > original_model = models.resnet50(pretrained=True).cuda().eval()
@@ -204,4 +204,4 @@ If the executable binary `poros-tool` is built, you can run the benchmark like t
 Take a look at the [Benchmark](docs/Benchmark.md).
 
 ## Acknowledgement
-Poros has been incubated for more than 2 years. In this project, NVIDIA helped us a lot (especially  Gary Ji, Vincent Zhang, Jie Fang). They answered lots of technical questions about GPU and gave us many suggestions. Appreciate their great support.
+Poros has been incubated for more than 2 years. In this project, NVIDIA helped us a lot (especially  Gary Ji, Vincent Zhang, Jie Fang). They answered lots of technical questions about GPU and gave us many suggestions. Appreciate for their great support.

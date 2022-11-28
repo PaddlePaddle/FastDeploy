@@ -8,7 +8,6 @@ This benchmark is tested on CentOS7 with GPU `A10` and CPU `Intel(R) Xeon(R) Pla
 | TensorRT | 8.4.1.5  |
 | Python   | 3.8.13   |
 | PyTorch  | 1.12.1   |
-&emsp;
 
 ## Performance
 The following is the result of comparison between pytorch eager and poros, which measured by average latency time (ms) of model infering 1000 times.

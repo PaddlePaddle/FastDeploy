@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/aten_eval.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/converter/gpu/converter_util.h"
@@ -71,7 +70,7 @@ bool GetitemConverter::converter(TensorrtEngine* engine, const torch::jit::Node 
     if (node->outputs()[0]->type()->str() == "Tensor") {
         //extract list
         std::vector<nvinfer1::ITensor*> tensorlist;
-        POROS_CHECK_TRUE((engine->context().get_tensorlist(inputs[0], tensorlist)), "extract tensor list err")
+        POROS_CHECK_TRUE((engine->context().get_tensorlist(inputs[0], tensorlist)), "extract tensor list err")
         
         const int64_t list_size = tensorlist.size();
         auto index = (engine->context().get_constant(inputs[1])).toInt();

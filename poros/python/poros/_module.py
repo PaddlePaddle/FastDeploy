@@ -1,6 +1,3 @@
-"""
-poros module here
-"""
 # Copyright (c) 2022 Baidu, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +11,9 @@ poros module here
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+poros module here
+"""
 
 import poros._C
 from poros._parse_util import _parse_device
@@ -52,7 +52,6 @@ class DynamicOptions(object):
             self.min_shapes = opt
             self.opt_shapes = opt
             self.max_shapes = opt
-            #TODO: should I set is_dynamic false here??
             self.is_dynamic = False
     
     def get_dynamic_options(self):
@@ -121,10 +120,6 @@ class PorosOptions(object):
         assert type(self.unsupport_op_list) is list
         option.unsupport_op_list = self.unsupport_op_list
 
-        # dynamic_option = DynamicOptions()
-        # dynamic_option.is_dynamic = self.is_dynamic
-        # dynamic_option.set_dynamic_options(self.max_shapes, self.min_shapes, self.opt_shapes)
-        # option.dynamic_shape_options = dynamic_option.to_internal()
         return option
 
     def set_device(self, device):

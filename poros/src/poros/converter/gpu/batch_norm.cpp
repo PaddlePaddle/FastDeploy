@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/batch_norm.h"
 #include "poros/converter/gpu/converter_util.h"
 #include "poros/converter/gpu/weight.h"
@@ -73,22 +72,6 @@ bool BatchNormConverter::converter(TensorrtEngine* engine, const torch::jit::Nod
     auto maybe_beta = engine->context().get_constant(inputs[2]);
     auto maybe_mean = engine->context().get_constant(inputs[3]);
     auto maybe_bar = engine->context().get_constant(inputs[4]);
-
-    /** TODO: check input_is_dynamic situation
-     * 感觉这个条件不是很合理，回头遇到具体的case check(2021.08.18 记录)
-     * 本converter的写法跟原版是不一致的。**/
-    // 原版如下:
-    // if (PorosGlobalContext::instance().is_input_dynamic()) {
-    //     gamma = args[1].unwrapToTensor();
-    //     beta = args[2].unwrapToTensor();
-    //     mean = args[3].unwrapToTensor();
-    //     var = args[4].unwrapToTensor();
-    // } else {
-    //     gamma = args[1].unwrapToTensor(at::full({shape}, 1, {options}));
-    //     beta = args[2].unwrapToTensor(at::full({shape}, 1, {options}));
-    //     mean = args[3].unwrapToTensor(at::full({shape}, 0, {options}));
-    //     var = args[4].unwrapToTensor(at::full({shape}, 0, {options}));
-    // }
 
     if (maybe_gamma.isTensor()) {
         gamma = maybe_gamma.toTensor();
@@ -222,18 +205,8 @@ bool InstanceNormConverter::converter(TensorrtEngine* engine, const torch::jit::
         return true;
     }
 
-    /*
-    https://docs.nvidia.com/deeplearning/tensorrt/api/c_api/namespacenvinfer1.html
-    https://github.com/NVIDIA/TensorRT/tree/8.0.1/plugin/instanceNormalizationPlugin
-    Type	      Parameter	  Description
-    float	      epsilon	    A small number to prevent being divided by zero during normalization.
-    Weights *	  scale	      A pointer to weights which contains information about scale factors for
-                            normalization. The definition of Weights can be found in the NvInfer.h header.
-    Weights *	  bias        A pointer to weights which contains information about the bias values for
-                            normalization. The definition of Weights can be found in the NvInfer.h header.
-    int	        relu	      A value used to enable leaky relu activation
-    float	      alpha	      A small negative slope for the leaky relu activation
-    */
+    // https://github.com/NVIDIA/TensorRT/tree/release/8.4/plugin/instanceNormalizationPlugin
+    
     const int relu = 0;
     const float alpha = 0;
     std::vector<nvinfer1::PluginField> f;

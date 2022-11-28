@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Part of the following code in this file refs to
+// https://github.com/pytorch/pytorch/blob/master/torch/csrc/jit/passes/loop_unrolling.cpp
+//
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Licensed under the 3-Clause BSD License
+
 /**
 * @file unrolling_loop.cpp
 * @author tianjinjin@baidu.com
 * @date Mon Nov 22 16:59:25 CST 2021
-* @brief
+* @brief this file is modified from torch/csrc/jit/passes/loop_unrolling.cpp
+*        and some parameters are different from the original funciton
 **/
 #include "poros/lowering/lowering_pass.h"
 

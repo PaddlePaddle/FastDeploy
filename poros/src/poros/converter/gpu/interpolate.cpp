@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Part of the following code in this file refs to
+// https://github.com/pytorch/TensorRT/blob/master/core/conversion/converters/impl/interpolate.cpp
+//
+// Copyright (c) 2020-present, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Licensed under the 3-Clause BSD License
+
 /**
 * @file interpolate.cpp
 * @author tianjinjin@baidu.com
@@ -19,7 +26,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/interpolate.h"
 #include "poros/converter/gpu/weight.h"
 #include "poros/converter/gpu/converter_util.h"

@@ -37,29 +37,6 @@ namespace py = pybind11;
 namespace poros {
 namespace pyapi {
 
-//DEPRECATED NOW
-torch::jit::Module compile_graph_v1(const torch::jit::Module& mod, 
-                                const py::args& args,
-                                const py::kwargs& kwargs) {
-    auto function_schema = mod.get_method("forward").function().getSchema();
-    std::vector<torch::jit::Stack> prewarm_datas;
-    torch::jit::Stack stack;
-    {
-        py::gil_scoped_acquire gil;
-        stack = torch::jit::createStackForSchema(function_schema, args, kwargs, mod._ivalue());
-    }
-    prewarm_datas.push_back(stack);
-    baidu::mirana::poros::PorosOptions  option;
-    option.device = baidu::mirana::poros::Device::GPU;
-    auto poros_mod = baidu::mirana::poros::CompileGraph(mod, prewarm_datas, option);
-
-    if (poros_mod) {
-        return *poros_mod;
-    } else {
-        throw c10::Error("comile failed", "");
-    }
-}
-
 torch::jit::Module compile_graph(const torch::jit::Module& mod, 
                                 const py::list& input_list,
                                 baidu::mirana::poros::PorosOptions& poros_option) {
@@ -73,7 +50,7 @@ torch::jit::Module compile_graph(const torch::jit::Module& mod,
         }
         prewarm_datas.push_back(stack);
     }
-    //auto option = poros_option.to_internal();
+    
     auto poros_mod = baidu::mirana::poros::CompileGraph(mod, prewarm_datas, poros_option);
     if (poros_mod) {
         return *poros_mod;
@@ -94,13 +71,6 @@ PYBIND11_MODULE(_C, m) {
         .value("XPU", baidu::mirana::poros::Device::XPU, "Spiecify using XPU as the backend of poros Module")
         .export_values();
 
-    // py::class_<baidu::mirana::poros::DynamicShapeOptions>(m, "DynamicShapeOptions")
-    //     .def(py::init<>())
-    //     .def_readwrite("is_dynamic", &baidu::mirana::poros::DynamicShapeOptions::is_dynamic)
-    //     .def_readwrite("max_shapes", &baidu::mirana::poros::DynamicShapeOptions::max_shapes)
-    //     .def_readwrite("min_shapes", &baidu::mirana::poros::DynamicShapeOptions::min_shapes)
-    //     .def_readwrite("opt_shapes", &baidu::mirana::poros::DynamicShapeOptions::opt_shapes);
-
     py::class_<baidu::mirana::poros::PorosOptions>(m, "PorosOptions")
         .def(py::init<>())
         .def_readwrite("device", &baidu::mirana::poros::PorosOptions::device)
@@ -109,7 +79,6 @@ PYBIND11_MODULE(_C, m) {
         .def_readwrite("is_dynamic", &baidu::mirana::poros::PorosOptions::is_dynamic)
         .def_readwrite("long_to_int", &baidu::mirana::poros::PorosOptions::long_to_int)
         .def_readwrite("device_id", &baidu::mirana::poros::PorosOptions::device_id)
-        //.def_readwrite("dynamic_shape_options", &baidu::mirana::poros::PorosOptions::dynamic_shape_options)
         .def_readwrite("max_workspace_size", &baidu::mirana::poros::PorosOptions::max_workspace_size)
         .def_readwrite("unconst_ops_thres", &baidu::mirana::poros::PorosOptions::unconst_ops_thres)
         .def_readwrite("use_nvidia_tf32", &baidu::mirana::poros::PorosOptions::use_nvidia_tf32)
@@ -117,12 +86,12 @@ PYBIND11_MODULE(_C, m) {
         .def_readwrite("unsupport_op_list", &baidu::mirana::poros::PorosOptions::unsupport_op_list);
         
 
-    m.doc() = "Poros Internal C Bindings";
+    m.doc() = "Poros C Bindings";
     m.def(
         "compile_graph",
         &poros::pyapi::compile_graph,
-        "Ingest a PyTorch JIT module and convert supported subgraphs to TensorRT engines, \
-        returns a JIT module with the engines embedded");
+        "compile a PyTorch module and return a Poros module \
+        that can significantly lower the inference latency");
     m.def(
         "load",
         &poros::pyapi::load,

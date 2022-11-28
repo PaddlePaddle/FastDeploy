@@ -1,6 +1,3 @@
-"""
- convert prewarm-data to c10:ivalues list that can handle in poros.
-"""
 # Copyright (c) 2022 Baidu, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+ convert prewarm-data to c10:ivalues list that can handle in poros.
+"""
 
 import typing #  List & Dict & Any
 import torch
@@ -22,7 +22,6 @@ import poros._C
 from poros._module import DynamicOptions
 from poros._module import PorosOptions
 from poros._parse_util import _parse_device
-from poros._parse_util import _parse_dynamic_shape
 
 def make_to_tuple(prewarm_input):
     """
@@ -106,8 +105,6 @@ def convert_poros_option(poros_option):
             assert type(poros_option["preprocess_mode"]) is int
             option.preprocess_mode= poros_option["preprocess_mode"]
 
-        # if "dynamic_shape_options" in poros_option:
-        #     option.dynamic_shape_options = _parse_dynamic_shape(poros_option["dynamic_shape_options"])
         return option
     elif isinstance(poros_option, PorosOptions):
         return poros_option.to_internal()

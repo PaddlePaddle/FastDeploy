@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Part of the following code in this file refs to
+// https://github.com/pytorch/TensorRT/blob/master/core/conversion/converters/impl/shuffle.cpp
+//
+// Copyright (c) 2020-present, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Licensed under the 3-Clause BSD License
+
 /**
 * @file shuffle.cpp
 * @author tianjinjin@baidu.com
@@ -19,7 +26,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/converter_util.h"
 #include "poros/converter/gpu/shuffle.h"
 #include "poros/converter/gpu/weight.h"
@@ -336,9 +342,6 @@ bool PixelShuffleConverter::converter(TensorrtEngine* engine, const torch::jit::
     int64_t oh = ih * upscale_factor;
     int64_t ow = iw * upscale_factor;
 
-    // First, reshape to split the channels dim from c into 3 separate dims: (oc,
-    // upscale_factor, upscale_factor). This allows shuffling to be done next by
-    // permuting dims.
     std::vector<int64_t> added_dims_shape(in_shape.begin(), self_sizes_batch_end);
     added_dims_shape.insert(added_dims_shape.end(), {oc, upscale_factor, upscale_factor, ih, iw});
     auto view_layer = engine->network()->addShuffle(*self);
@@ -346,27 +349,18 @@ bool PixelShuffleConverter::converter(TensorrtEngine* engine, const torch::jit::
     view_layer->setReshapeDimensions(sizes_to_nvdim(added_dims_shape));
     int64_t view_rank = added_dims_shape.size();
 
-    // Next, shuffle by permuting the new upscale_factor dims alongside the height and width dims.
     auto permutation_layer = engine->network()->addShuffle(*view_layer->getOutput(0));
     POROS_CHECK(permutation_layer, "Unable to create shuffle layer from node: " << *node);
-    // std::iota is used to maintain the batch dims within the permutation.
-    // Eg: if added_dims_shape is {n1, n2, c, r, r, h, w}, then the new_order is {view_rank-7,
-    // view_rank-6, view_rank-5, view_rank-2, view_rank-4, view_rank-1, view_rank-3}
     std::vector<int64_t> new_order(in_shape.begin(), self_sizes_batch_end);
     std::iota(new_order.begin(), new_order.end(), 0);
     new_order.insert(
         new_order.end(),
-        {view_rank - 5 /* oc */,
-        view_rank - 2 /* ih */,
-        view_rank - 4 /* 1st upscale_factor */,
-        view_rank - 1 /* iw */,
-        view_rank - 3 /* 2nd upscale_factor */});
+        {view_rank - 5, view_rank - 2, view_rank - 4, view_rank - 1, view_rank - 3});
     nvinfer1::Permutation permute;
     std::copy(new_order.begin(), new_order.end(), permute.order);
     permutation_layer->setSecondTranspose(permute);
 
-    // Finally, upscale by collapsing (ih, upscale_factor) -> a single dim (oh)
-    // and (iw, upscale_factor) -> a single dim (ow).
+
     std::vector<int64_t> final_shape(in_shape.begin(), self_sizes_batch_end);
     final_shape.insert(final_shape.end(), {oc, oh, ow});
     auto last_view_layer = engine->network()->addShuffle(*permutation_layer->getOutput(0));

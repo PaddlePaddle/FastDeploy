@@ -19,7 +19,6 @@
 * @brief 
 **/
 
-#include "poros/converter/gpu/aten_trt_util.h"
 #include "poros/converter/gpu/converter_util.h"
 #include "poros/converter/gpu/pooling.h"
 #include "poros/converter/gpu/weight.h"
@@ -117,15 +116,6 @@ bool PoolingConverter::converter(TensorrtEngine* engine, const torch::jit::Node 
     new_layer->setPaddingNd(padding);
     new_layer->setStrideNd(stride);
     
-    //TODO: DLA situation. check check 
-    // if (stride.nbDims != 2 && ctx->settings.device.device_type == nvinfer1::DeviceType::kDLA) {
-    //     if (!ctx->settings.device.allow_gpu_fallback) {
-    //         POROS_THROW_ERROR("DLA Pooling stride is limited to 2D, allow GPU fallback");
-    //     } else {
-    //         LOG(WARNING) << "DLA Pooling stride is limited to 2D, will run on GPU";
-    //     }
-    // }
-    
     auto out_tensor = add_unpadding(engine, node, new_layer->getOutput(0), orig_dims.nbDims, false, true);
     
     // avg_pool2d or avg_pool3d divisor_override
@@ -214,7 +204,6 @@ bool AdaptivePoolingConverter::converter(TensorrtEngine* engine, const torch::ji
     auto in_shape = nvdim_to_sizes(in->getDimensions());
     nvinfer1::ILayer* new_layer = nullptr;
     
-    /*======CONFIGURE PLUGIN PARAMETERS======*/
     nvinfer1::PluginFieldCollection fc;
     std::vector<nvinfer1::PluginField> f;
     auto out_shape = in_shape;
@@ -249,12 +238,7 @@ bool AdaptivePoolingConverter::converter(TensorrtEngine* engine, const torch::ji
         
     fc.nbFields = f.size();
     fc.fields = f.data();
-    /*====== PLUGIN PARAMETERS CONFIGURATION COMPLETED ======*/
-    
-    LOG(WARNING) << "Adaptive pooling layer will be using Aten library kernels in pytorch for execution." 
-        << "TensorRT does not support adaptive pooling natively. "
-        << "Consider switching to non-adaptive pooling if this is an issue";
-        
+     
     auto creator = getPluginRegistry()->getPluginCreator("Interpolate", "1", "");
     auto interpolate_plugin = creator->createPlugin(mode.c_str(), &fc);
     LOG(INFO) << "create Interpolate plugin done";
