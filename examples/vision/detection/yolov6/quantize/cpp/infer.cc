@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
 
   if (flag == 0) {
     option.UseCpu();
-    option.UsePaddleBackend();
+    option.UsePaddleInferBackend();
   } else if (flag == 1) {
     option.UseGpu();
     option.UseTrtBackend();

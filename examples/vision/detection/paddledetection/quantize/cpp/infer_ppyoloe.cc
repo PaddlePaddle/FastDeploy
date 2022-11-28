@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
   }
     else if (flag == 3) {
     option.UseCpu();
-    option.UsePaddleBackend();
+    option.UsePaddleInferBackend();
     }
 
   std::string model_dir = argv[1];

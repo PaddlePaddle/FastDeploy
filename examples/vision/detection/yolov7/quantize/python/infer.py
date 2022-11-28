@@ -55,7 +55,7 @@ def build_option(args):
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
-        option.use_paddle_backend()
+        option.use_paddle_infer_backend()
     elif args.backend.lower() == "openvino":
         assert args.device.lower(
         ) == "cpu", "OpenVINO backend require inference on device CPU."
