@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <numeric>
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/function/transpose.h"
+#include <numeric>
+#include <vector>
 
 #include "glog/logging.h"
-#include "gtest/gtest.h"
 #include "gtest_utils.h"
+#include "gtest/gtest.h"
 
 namespace fastdeploy {
 namespace function {

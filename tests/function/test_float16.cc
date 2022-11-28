@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/core/float16.h"
+#include "gtest_utils.h"
+#include "gtest/gtest.h"
 #include <array>
 #include <cstring>
 #include <vector>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/core/float16.h"
-#include "gtest/gtest.h"
-#include "gtest_utils.h"
 
 namespace fastdeploy {
 
@@ -113,7 +113,7 @@ TEST(float16, comparison_cpu) {
 TEST(float16, floating) {
   // compile time assert.
   FDASSERT(std::is_floating_point<float16>::value,
-           "The float16 support in CPU failed.")
+           "The float16 support in CPU failed.");
 }
 
 TEST(float16, print) {
