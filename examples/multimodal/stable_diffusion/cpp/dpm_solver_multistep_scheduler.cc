@@ -147,6 +147,10 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
   }
 }
 
+void DPMSolverMultistepScheduler::DPMSolverFirstOrderUpdate(
+    const FDTensor& model_output, int timestep, int prev_timestep,
+    const FDTensor& sample, FDTensor* out) {}
+
 void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {
   num_inference_steps_ = num_inference_steps;
   function::Linspace(0, num_train_timesteps_ - 1, num_inference_steps + 1,

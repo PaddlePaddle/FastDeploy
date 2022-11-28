@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include "fastdeploy/core/fd_tensor.h"
 #include "./scheduler.h"
+#include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
 
@@ -36,7 +36,9 @@ class DPMSolverMultistepScheduler : public Scheduler {
                        float max_beta = 0.999);
   void ConvertModelOutput(const FDTensor& model_output, int timestep,
                           const FDTensor& sample, FDTensor* out);
-
+  void DPMSolverFirstOrderUpdate(const FDTensor& model_output, int timestep,
+                                 int prev_timestep, const FDTensor& sample,
+                                 FDTensor* out);
   void SetTimesteps(int num_inference_steps) override;
   void Step(const FDTensor& model_output, int timestep, const FDTensor& sample,
             FDTensor* prev_sample) override;
