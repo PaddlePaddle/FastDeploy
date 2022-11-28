@@ -68,6 +68,7 @@ option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
+option(WITH_OPENMP "Use OpenMP support for Android." OFF)
 
 # Please don't open this flag now, some bugs exists.
 # Only support Linux Now
@@ -156,7 +157,10 @@ if(ANDROID OR IOS)
   endif()
 endif()
 
-##################################### Buiding: FastDeploy C++ SDK #######################################
+# Check for macOS architecture
+get_osx_architecture()
+
+##################################### Building: FastDeploy C++ SDK #######################################
 add_definitions(-DFASTDEPLOY_LIB)
 # configure files before glob sources.
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
@@ -486,12 +490,15 @@ if(MSVC)
   target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
 endif()
 
-if (ANDROID)
+# extra depend libs for android
+if(ANDROID)
   find_library(log-lib log)
   list(APPEND DEPEND_LIBS ${log-lib})
-  find_package(OpenMP)
-  if(OpenMP_CXX_FOUND)
-    list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
+  if(WITH_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+      list(APPEND DEPEND_LIBS OpenMP::OpenMP_CXX)
+    endif()
   endif()
 endif()
 
