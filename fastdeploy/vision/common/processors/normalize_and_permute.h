@@ -62,13 +62,9 @@ class FASTDEPLOY_DECL NormalizeAndPermute : public Processor {
     beta_.assign(beta.begin(), beta.end());
   }
 
-  bool GetSwapRB() {
-    return swap_rb_;
-  }
+  bool GetSwapRB() { return swap_rb_; }
 
-  void SetSwapRB(bool swap_rb) {
-    swap_rb_ = swap_rb;
-  }
+  void SetSwapRB(bool swap_rb) { swap_rb_ = swap_rb; }
 
  private:
   std::vector<float> alpha_;

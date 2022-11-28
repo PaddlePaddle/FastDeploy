@@ -19,16 +19,13 @@ limitations under the License. */
 namespace fastdeploy {
 namespace utils {
 // Trait to select overloads and return types for MakeUnique.
-template <typename T>
-struct MakeUniqueResult {
+template <typename T> struct MakeUniqueResult {
   using scalar = std::unique_ptr<T>;
 };
-template <typename T>
-struct MakeUniqueResult<T[]> {
+template <typename T> struct MakeUniqueResult<T[]> {
   using array = std::unique_ptr<T[]>;
 };
-template <typename T, size_t N>
-struct MakeUniqueResult<T[N]> {
+template <typename T, size_t N> struct MakeUniqueResult<T[N]> {
   using invalid = void;
 };
 
@@ -36,7 +33,7 @@ struct MakeUniqueResult<T[N]> {
 // It is designed to be 100% compatible with std::make_unique so that the
 // eventual switchover will be a simple renaming operation.
 template <typename T, typename... Args>
-typename MakeUniqueResult<T>::scalar make_unique(Args &&... args) {  // NOLINT
+typename MakeUniqueResult<T>::scalar make_unique(Args&&... args) {  // NOLINT
   return std::unique_ptr<T>(
       new T(std::forward<Args>(args)...));  // NOLINT(build/c++11)
 }
@@ -51,8 +48,8 @@ typename MakeUniqueResult<T>::array make_unique(size_t n) {
 
 // Reject arrays of known bound.
 template <typename T, typename... Args>
-typename MakeUniqueResult<T>::invalid make_unique(Args &&... /* args */) =
-    delete;  // NOLINT
+typename MakeUniqueResult<T>::invalid
+make_unique(Args&&... /* args */) = delete;  // NOLINT
 
 }  // namespace utils
 }  // namespace fastdeploy

@@ -35,22 +35,24 @@ void BindUIE(pybind11::module& m) {
 
   py::class_<text::UIEModel, FastDeployModel>(m, "UIEModel")
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    std::vector<std::string>, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
+                    std::vector<std::string>, RuntimeOption, ModelFormat,
+                    text::SchemaLanguage>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
            py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
            py::arg("schema_language") = text::SchemaLanguage::ZH)
-      .def(
-          py::init<std::string, std::string, std::string, float, size_t,
-                   std::vector<text::SchemaNode>, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
-          py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
-          py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
-          py::arg("custom_option") = fastdeploy::RuntimeOption(),
-          py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
-          py::arg("schema_language") = text::SchemaLanguage::ZH)
       .def(py::init<std::string, std::string, std::string, float, size_t,
-                    text::SchemaNode, RuntimeOption, ModelFormat, text::SchemaLanguage>(),
+                    std::vector<text::SchemaNode>, RuntimeOption, ModelFormat,
+                    text::SchemaLanguage>(),
+           py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
+           py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
+           py::arg("custom_option") = fastdeploy::RuntimeOption(),
+           py::arg("model_format") = fastdeploy::ModelFormat::PADDLE,
+           py::arg("schema_language") = text::SchemaLanguage::ZH)
+      .def(py::init<std::string, std::string, std::string, float, size_t,
+                    text::SchemaNode, RuntimeOption, ModelFormat,
+                    text::SchemaLanguage>(),
            py::arg("model_file"), py::arg("params_file"), py::arg("vocab_file"),
            py::arg("position_prob"), py::arg("max_length"), py::arg("schema"),
            py::arg("custom_option") = fastdeploy::RuntimeOption(),
@@ -60,23 +62,25 @@ void BindUIE(pybind11::module& m) {
            static_cast<void (text::UIEModel::*)(
                const std::vector<std::string>&)>(&text::UIEModel::SetSchema),
            py::arg("schema"))
-      .def("set_schema", static_cast<void (text::UIEModel::*)(
-                             const std::vector<text::SchemaNode>&)>(
-                             &text::UIEModel::SetSchema),
+      .def("set_schema",
+           static_cast<void (text::UIEModel::*)(
+               const std::vector<text::SchemaNode>&)>(
+               &text::UIEModel::SetSchema),
            py::arg("schema"))
       .def("set_schema",
            static_cast<void (text::UIEModel::*)(const text::SchemaNode&)>(
                &text::UIEModel::SetSchema),
            py::arg("schema"))
-      .def("predict",
-           [](text::UIEModel& self, const std::vector<std::string>& texts) {
-             std::vector<
-                 std::unordered_map<std::string, std::vector<text::UIEResult>>>
-                 results;
-             self.Predict(texts, &results);
-             return results;
-           },
-           py::arg("text"));
+      .def(
+          "predict",
+          [](text::UIEModel& self, const std::vector<std::string>& texts) {
+            std::vector<
+                std::unordered_map<std::string, std::vector<text::UIEResult>>>
+                results;
+            self.Predict(texts, &results);
+            return results;
+          },
+          py::arg("text"));
 }
 
 }  // namespace fastdeploy

@@ -37,7 +37,7 @@ class FASTDEPLOY_DECL PaddleClasPostprocessor {
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
-          std::vector<ClassifyResult>* result);
+           std::vector<ClassifyResult>* result);
 
   /// Set topk value
   void SetTopk(int topk) { topk_ = topk; }

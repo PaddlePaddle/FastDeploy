@@ -20,13 +20,12 @@ void BindResNet(pybind11::module& m) {
   // the constructor and the predict funtion are necessary
   // the constructor is used to initialize the python model class.
   // the necessary public functions and variables like `size`, `mean_vals` should also be binded.
-  pybind11::class_<vision::classification::ResNet, FastDeployModel>(
-      m, "ResNet")
+  pybind11::class_<vision::classification::ResNet, FastDeployModel>(m, "ResNet")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
            [](vision::classification::ResNet& self, pybind11::array& data,
-             int topk = 1) {
+              int topk = 1) {
              auto mat = PyArrayToCvMat(data);
              vision::ClassifyResult res;
              self.Predict(&mat, &res, topk);
@@ -37,4 +36,3 @@ void BindResNet(pybind11::module& m) {
       .def_readwrite("std_vals", &vision::classification::ResNet::std_vals);
 }
 }  // namespace fastdeploy
-

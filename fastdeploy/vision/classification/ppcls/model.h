@@ -14,8 +14,8 @@
 
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 #include "fastdeploy/vision/classification/ppcls/postprocessor.h"
+#include "fastdeploy/vision/classification/ppcls/preprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -51,7 +51,6 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
    */
   virtual bool Predict(cv::Mat* im, ClassifyResult* result, int topk = 1);
 
-
   /** \brief Predict the classification result for an input image
    *
    * \param[in] img The input image data, comes from cv::imread()
@@ -70,14 +69,10 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
                             std::vector<ClassifyResult>* results);
 
   /// Get preprocessor reference of PaddleClasModel
-  virtual PaddleClasPreprocessor& GetPreprocessor() {
-    return preprocessor_;
-  }
+  virtual PaddleClasPreprocessor& GetPreprocessor() { return preprocessor_; }
 
   /// Get postprocessor reference of PaddleClasModel
-  virtual PaddleClasPostprocessor& GetPostprocessor() {
-    return postprocessor_;
-  }
+  virtual PaddleClasPostprocessor& GetPostprocessor() { return postprocessor_; }
 
  protected:
   bool Initialize();

@@ -42,8 +42,7 @@ static std::string DBC2SBC(const std::string& content) {
       result.append(content.data() + content_utf8_len, content_char_width);
     } else {
       char dst_char[5] = {0};
-      uint32_t utf8_uint32 =
-          fast_tokenizer::utils::UnicodeToUTF8(content_char);
+      uint32_t utf8_uint32 = fast_tokenizer::utils::UnicodeToUTF8(content_char);
       uint32_t utf8_char_count =
           fast_tokenizer::utils::UnicodeToUTF8Char(utf8_uint32, dst_char);
       result.append(dst_char, utf8_char_count);
@@ -167,10 +166,8 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
-      tokenizer_(vocab_file) {
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.SetModelPath(model_file, params_file);
@@ -188,10 +185,8 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
-      tokenizer_(vocab_file) {
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.SetModelPath(model_file, params_file);
@@ -209,10 +204,8 @@ UIEModel::UIEModel(const std::string& model_file,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
-      tokenizer_(vocab_file) {
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.SetModelPath(model_file, params_file);
@@ -253,8 +246,8 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
   size_t cnt_org = 0;
   size_t cnt_short = 0;
   for (auto& text : texts) {
-    auto text_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
-        text.c_str(), text.length());
+    auto text_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(text.c_str(),
+                                                                 text.length());
     if (text_len <= max_length) {
       short_texts->push_back(text);
       if (input_mapping->size() <= cnt_org) {
@@ -264,8 +257,7 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
       }
       cnt_short += 1;
     } else {
-      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
-          text);
+      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(text);
       for (size_t start = 0; start < text_len; start += max_length) {
         size_t end = start + max_length;
         if (end > text_len) {

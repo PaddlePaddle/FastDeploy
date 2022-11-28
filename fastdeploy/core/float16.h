@@ -41,7 +41,7 @@ struct FD_ALIGN(2) float16 {
   float16& operator=(float16&& o) = default;
   ~float16() = default;
 
-// Constructors
+  // Constructors
 
 #ifdef FD_WITH_NATIVE_FP16
   // __fp16 is a native half precision data type for arm cpu,
@@ -87,7 +87,7 @@ struct FD_ALIGN(2) float16 {
   inline explicit float16(const T& val)
       : x(float16(static_cast<float>(val)).x) {}
 
-// Assignment operators
+  // Assignment operators
 
 #ifdef FD_WITH_NATIVE_FP16
   inline float16& operator=(const float16_t& rhs) {
@@ -285,80 +285,75 @@ struct FD_ALIGN(2) float16 {
 #if defined(FD_WITH_NATIVE_FP16)
 inline float16 operator+(const float16& a, const float16& b) {
   float16 res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fadd h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&(res.x))
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fadd h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&(res.x))
+               :  // clobbers
+               "memory", "v0", "v1");
   return res;
 }
 
 inline float16 operator-(const float16& a, const float16& b) {
   float16 res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fsub h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&(res.x))
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fsub h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&(res.x))
+               :  // clobbers
+               "memory", "v0", "v1");
   return res;
 }
 
 inline float16 operator*(const float16& a, const float16& b) {
   float16 res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fmul h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&(res.x))
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fmul h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&(res.x))
+               :  // clobbers
+               "memory", "v0", "v1");
   return res;
 }
 
 inline float16 operator/(const float16& a, const float16& b) {
   float16 res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fdiv h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&(res.x))
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fdiv h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&(res.x))
+               :  // clobbers
+               "memory", "v0", "v1");
   return res;
 }
 
 inline float16 operator-(const float16& a) {
   float16 res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "fneg h0, h0\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)),
-      [res_ptr] "r"(&(res.x))
-      :  // clobbers
-      "memory", "v0");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "fneg h0, h0\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)),
+               [res_ptr] "r"(&(res.x))
+               :  // clobbers
+               "memory", "v0");
   return res;
 }
 
@@ -384,17 +379,16 @@ inline float16& operator/=(float16& a, const float16& b) {  // NOLINT
 
 inline bool operator==(const float16& a, const float16& b) {
   uint16_t res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fcmeq h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&res)
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fcmeq h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&res)
+               :  // clobbers
+               "memory", "v0", "v1");
   return (res & 0xffff) != 0;
 }
 
@@ -402,65 +396,61 @@ inline bool operator!=(const float16& a, const float16& b) { return !(a == b); }
 
 inline bool operator<(const float16& a, const float16& b) {
   uint16_t res;
-  asm volatile(
-      "ld1 {v1.h}[0], [%[a_ptr]]\n"
-      "ld1 {v0.h}[0], [%[b_ptr]]\n"
-      "fcmgt h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&res)
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v1.h}[0], [%[a_ptr]]\n"
+               "ld1 {v0.h}[0], [%[b_ptr]]\n"
+               "fcmgt h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&res)
+               :  // clobbers
+               "memory", "v0", "v1");
   return (res & 0xffff) != 0;
 }
 
 inline bool operator<=(const float16& a, const float16& b) {
   uint16_t res;
-  asm volatile(
-      "ld1 {v1.h}[0], [%[a_ptr]]\n"
-      "ld1 {v0.h}[0], [%[b_ptr]]\n"
-      "fcmge h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&res)
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v1.h}[0], [%[a_ptr]]\n"
+               "ld1 {v0.h}[0], [%[b_ptr]]\n"
+               "fcmge h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&res)
+               :  // clobbers
+               "memory", "v0", "v1");
   return (res & 0xffff) != 0;
 }
 
 inline bool operator>(const float16& a, const float16& b) {
   uint16_t res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fcmgt h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&res)
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fcmgt h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&res)
+               :  // clobbers
+               "memory", "v0", "v1");
   return (res & 0xffff) != 0;
 }
 
 inline bool operator>=(const float16& a, const float16& b) {
   uint16_t res;
-  asm volatile(
-      "ld1 {v0.h}[0], [%[a_ptr]]\n"
-      "ld1 {v1.h}[0], [%[b_ptr]]\n"
-      "fcmge h0, h0, h1\n"
-      "st1 {v0.h}[0], [%[res_ptr]]\n"
-      :  // outputs
-      :  // inputs
-      [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
-      [res_ptr] "r"(&res)
-      :  // clobbers
-      "memory", "v0", "v1");
+  asm volatile("ld1 {v0.h}[0], [%[a_ptr]]\n"
+               "ld1 {v1.h}[0], [%[b_ptr]]\n"
+               "fcmge h0, h0, h1\n"
+               "st1 {v0.h}[0], [%[res_ptr]]\n"
+               :  // outputs
+               :  // inputs
+               [a_ptr] "r"(&(a.x)), [b_ptr] "r"(&(b.x)),
+               [res_ptr] "r"(&res)
+               :  // clobbers
+               "memory", "v0", "v1");
   return (res & 0xffff) != 0;
 #else
 inline float16 operator+(const float16& a, const float16& b) {
@@ -579,8 +569,7 @@ namespace std {
 // more restricted in that you cannot provide any customized
 // constructor in float16. Hence, we override is_pod here following C++11
 // so that .cu files can be successfully compiled by nvcc.
-template <>
-struct is_pod<fastdeploy::float16> {
+template <> struct is_pod<fastdeploy::float16> {
   static const bool value = is_trivial<fastdeploy::float16>::value &&
                             is_standard_layout<fastdeploy::float16>::value;
 };
@@ -591,13 +580,11 @@ struct is_floating_point<fastdeploy::float16>
           bool, std::is_same<fastdeploy::float16,
                              typename std::remove_cv<
                                  fastdeploy::float16>::type>::value> {};
-template <>
-struct is_signed<fastdeploy::float16> {
+template <> struct is_signed<fastdeploy::float16> {
   static const bool value = true;
 };
 
-template <>
-struct is_unsigned<fastdeploy::float16> {
+template <> struct is_unsigned<fastdeploy::float16> {
   static const bool value = false;
 };
 
@@ -605,8 +592,7 @@ inline bool isnan(const fastdeploy::float16& a) { return fastdeploy::isnan(a); }
 
 inline bool isinf(const fastdeploy::float16& a) { return fastdeploy::isinf(a); }
 
-template <>
-struct numeric_limits<fastdeploy::float16> {
+template <> struct numeric_limits<fastdeploy::float16> {
   static const bool is_specialized = true;
   static const bool is_signed = true;
   static const bool is_integer = false;

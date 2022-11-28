@@ -17,8 +17,7 @@
 namespace fastdeploy {
 namespace vision {
 
-void FuseNormalizeCast(
-    std::vector<std::shared_ptr<Processor>>* processors) {
+void FuseNormalizeCast(std::vector<std::shared_ptr<Processor>>* processors) {
   // Fuse Normalize and Cast<Float>
   int cast_index = -1;
   for (size_t i = 0; i < processors->size(); ++i) {
@@ -47,8 +46,7 @@ void FuseNormalizeCast(
          << " in preprocessing pipeline." << std::endl;
 }
 
-void FuseNormalizeHWC2CHW(
-    std::vector<std::shared_ptr<Processor>>* processors) {
+void FuseNormalizeHWC2CHW(std::vector<std::shared_ptr<Processor>>* processors) {
   // Fuse Normalize and HWC2CHW to NormalizeAndPermute
   int hwc2chw_index = -1;
   for (size_t i = 0; i < processors->size(); ++i) {
@@ -143,8 +141,8 @@ void FuseNormalizeColorConvert(
       (*processors)[normalize_index - 1]->Name();
   bool swap_rb;
   if (normalize_processor_name == "Normalize") {
-    auto processor = dynamic_cast<Normalize*>(
-        (*processors)[normalize_index - 1].get());
+    auto processor =
+        dynamic_cast<Normalize*>((*processors)[normalize_index - 1].get());
     swap_rb = processor->GetSwapRB();
     processor->SetSwapRB(!swap_rb);
   } else if (normalize_processor_name == "NormalizeAndPermute") {
@@ -161,13 +159,11 @@ void FuseNormalizeColorConvert(
          << " with swap_rb=" << !swap_rb << std::endl;
 }
 
-void FuseTransforms(
-    std::vector<std::shared_ptr<Processor>>* processors) {
+void FuseTransforms(std::vector<std::shared_ptr<Processor>>* processors) {
   FuseNormalizeCast(processors);
   FuseNormalizeHWC2CHW(processors);
   FuseNormalizeColorConvert(processors);
 }
-
 
 }  // namespace vision
 }  // namespace fastdeploy

@@ -63,6 +63,5 @@ class FASTDEPLOY_DECL RGB2GRAY : public Processor {
   static bool Run(FDMat* mat, ProcLib lib = ProcLib::DEFAULT);
 };
 
-
 }  // namespace vision
 }  // namespace fastdeploy

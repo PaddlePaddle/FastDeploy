@@ -186,94 +186,89 @@ cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim) {
 }
 #endif
 
-cv::Mat CreateZeroCopyOpenCVMatFromBuffer(
-  int height, int width, int channels, 
-  FDDataType type, void* data) {
+cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width, int channels,
+                                          FDDataType type, void* data) {
   cv::Mat ocv_mat;
   switch (type) {
-    case FDDataType::UINT8:
-      ocv_mat = cv::Mat(height, width, CV_8UC(channels), data);
-      break;
-    case FDDataType::INT8:
-      ocv_mat = cv::Mat(height, width, CV_8SC(channels), data);
-      break;
-    case FDDataType::INT16:
-      ocv_mat = cv::Mat(height, width, CV_16SC(channels), data);
-      break;
-    case FDDataType::INT32:
-      ocv_mat = cv::Mat(height, width, CV_32SC(channels), data);
-      break;
-    case FDDataType::FP32:
-      ocv_mat = cv::Mat(height, width, CV_32FC(channels), data);
-      break;
-    case FDDataType::FP64:
-      ocv_mat = cv::Mat(height, width, CV_64FC(channels), data);
-      break;
-    default:
-      FDASSERT(false,
-               "Tensor type %d is not supported While calling "
-               "CreateZeroCopyOpenCVMat.",
-               type);
-      break;
+  case FDDataType::UINT8:
+    ocv_mat = cv::Mat(height, width, CV_8UC(channels), data);
+    break;
+  case FDDataType::INT8:
+    ocv_mat = cv::Mat(height, width, CV_8SC(channels), data);
+    break;
+  case FDDataType::INT16:
+    ocv_mat = cv::Mat(height, width, CV_16SC(channels), data);
+    break;
+  case FDDataType::INT32:
+    ocv_mat = cv::Mat(height, width, CV_32SC(channels), data);
+    break;
+  case FDDataType::FP32:
+    ocv_mat = cv::Mat(height, width, CV_32FC(channels), data);
+    break;
+  case FDDataType::FP64:
+    ocv_mat = cv::Mat(height, width, CV_64FC(channels), data);
+    break;
+  default:
+    FDASSERT(false,
+             "Tensor type %d is not supported While calling "
+             "CreateZeroCopyOpenCVMat.",
+             type);
+    break;
   }
   return ocv_mat;
 }
 
 cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor) {
-  // TODO(qiuyanjun): Should add a Layout checking. Now, we 
-  // assume that the input tensor is already in Layout::HWC. 
-  FDASSERT(tensor.shape.size() == 3, "When create OepnCV Mat from tensor,"
-  "tensor shape should be 3-Dim, HWC layout");
+  // TODO(qiuyanjun): Should add a Layout checking. Now, we
+  // assume that the input tensor is already in Layout::HWC.
+  FDASSERT(tensor.shape.size() == 3,
+           "When create OepnCV Mat from tensor,"
+           "tensor shape should be 3-Dim, HWC layout");
   FDDataType type = tensor.dtype;
   int height = static_cast<int>(tensor.shape[0]);
   int width = static_cast<int>(tensor.shape[1]);
   int channels = static_cast<int>(tensor.shape[2]);
-  return CreateZeroCopyOpenCVMatFromBuffer(
-          height, width, channels, type, 
-          const_cast<void*>(tensor.Data()));
+  return CreateZeroCopyOpenCVMatFromBuffer(height, width, channels, type,
+                                           const_cast<void*>(tensor.Data()));
 }
 
 #ifdef ENABLE_FLYCV
-fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(
-  int height, int width, int channels, 
-  FDDataType type, void* data) {
+fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width, int channels,
+                                          FDDataType type, void* data) {
   fcv::Mat fcv_mat;
   auto fcv_type = CreateFlyCVDataType(type, channels);
   switch (type) {
-    case FDDataType::UINT8:
-      fcv_mat =
-        fcv::Mat(width, height, fcv_type, data);
-      break;
-    case FDDataType::FP32:
-      fcv_mat =
-        fcv::Mat(width, height, fcv_type, data);
-      break;
-    case FDDataType::FP64:
-      fcv_mat =
-        fcv::Mat(width, height, fcv_type, data);
+  case FDDataType::UINT8:
+    fcv_mat = fcv::Mat(width, height, fcv_type, data);
     break;
-    default:
-      FDASSERT(false,
-              "Tensor type %d is not supported While calling "
-              "CreateZeroCopyFlyCVMat.",
-               type);
+  case FDDataType::FP32:
+    fcv_mat = fcv::Mat(width, height, fcv_type, data);
+    break;
+  case FDDataType::FP64:
+    fcv_mat = fcv::Mat(width, height, fcv_type, data);
+    break;
+  default:
+    FDASSERT(false,
+             "Tensor type %d is not supported While calling "
+             "CreateZeroCopyFlyCVMat.",
+             type);
     break;
   }
   return fcv_mat;
 }
 
 fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor) {
-  // TODO(qiuyanjun): Should add a Layout checking. Now, we 
-  // assume that the input tensor is already in Layout::HWC. 
-  FDASSERT(tensor.shape.size() == 3, "When create FlyCV Mat from tensor,"
-  "tensor shape should be 3-Dim, HWC layout");
+  // TODO(qiuyanjun): Should add a Layout checking. Now, we
+  // assume that the input tensor is already in Layout::HWC.
+  FDASSERT(tensor.shape.size() == 3,
+           "When create FlyCV Mat from tensor,"
+           "tensor shape should be 3-Dim, HWC layout");
   FDDataType type = tensor.dtype;
   int height = static_cast<int>(tensor.shape[0]);
   int width = static_cast<int>(tensor.shape[1]);
   int channels = static_cast<int>(tensor.shape[2]);
-  return CreateZeroCopyFlyCVMatFromBuffer(
-          height, width, channels, type, 
-          const_cast<void*>(tensor.Data()));
+  return CreateZeroCopyFlyCVMatFromBuffer(height, width, channels, type,
+                                          const_cast<void*>(tensor.Data()));
 }
 #endif
 

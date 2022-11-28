@@ -30,7 +30,8 @@ void CastKernel(const FDTensor& x, FDTensor* out, FDDataType output_dtype) {
                        auto* in_end = in_begin + x.Numel();
                        FDTensor out_tmp;
                        out_tmp.Allocate(x.Shape(), output_dtype);
-                       auto* out_begin = reinterpret_cast<data_t*>(out_tmp.Data());
+                       auto* out_begin =
+                           reinterpret_cast<data_t*>(out_tmp.Data());
                        std::transform(in_begin, in_end, out_begin,
                                       CastOpTransformFunctor<InT, data_t>());
                        *out = std::move(out_tmp);

@@ -81,7 +81,8 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
 void PaddleClasPreprocessor::UseGpu(int gpu_id) {
 #ifdef WITH_GPU
   use_cuda_ = true;
-  if (gpu_id < 0) return;
+  if (gpu_id < 0)
+    return;
   device_id_ = gpu_id;
   cudaSetDevice(device_id_);
 #else
@@ -91,13 +92,15 @@ void PaddleClasPreprocessor::UseGpu(int gpu_id) {
 #endif
 }
 
-bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images,
+                                 std::vector<FDTensor>* outputs) {
   if (!initialized_) {
     FDERROR << "The preprocessor is not initialized." << std::endl;
     return false;
   }
   if (images->size() == 0) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+    FDERROR << "The size of input images should be greater than 0."
+            << std::endl;
     return false;
   }
 
@@ -119,7 +122,7 @@ bool PaddleClasPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
 
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images->size()); 
+  std::vector<FDTensor> tensors(images->size());
   for (size_t i = 0; i < images->size(); ++i) {
     (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);

@@ -22,7 +22,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX};
+enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX };
 
 FASTDEPLOY_DECL std::string Str(const Device& d);
 
@@ -60,8 +60,7 @@ FASTDEPLOY_DECL std::string Str(const FDDataType& fdt);
 
 FASTDEPLOY_DECL int32_t FDDataTypeSize(const FDDataType& data_dtype);
 
-template <typename PlainType>
-struct FASTDEPLOY_DECL TypeToDataType {
+template <typename PlainType> struct FASTDEPLOY_DECL TypeToDataType {
   static const FDDataType dtype;
 };
 

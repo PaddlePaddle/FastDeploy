@@ -50,13 +50,9 @@ class FASTDEPLOY_DECL Normalize : public Processor {
   std::vector<float> GetAlpha() const { return alpha_; }
   std::vector<float> GetBeta() const { return beta_; }
 
-  bool GetSwapRB() {
-    return swap_rb_;
-  }
+  bool GetSwapRB() { return swap_rb_; }
 
-  void SetSwapRB(bool swap_rb) {
-    swap_rb_ = swap_rb;
-  }
+  void SetSwapRB(bool swap_rb) { swap_rb_ = swap_rb; }
 
  private:
   std::vector<float> alpha_;

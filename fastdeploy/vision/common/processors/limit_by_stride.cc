@@ -59,11 +59,12 @@ bool LimitByStride::ImplByFlyCV(Mat* mat) {
     } else if (interp_ == 2) {
       interp_method = fcv::InterpolationType::INTER_CUBIC;
     } else if (interp_ == 3) {
-      interp_method = fcv::InterpolationType::INTER_AREA; 
+      interp_method = fcv::InterpolationType::INTER_AREA;
     } else {
-      FDERROR << "LimitByStride: Only support interp_ be 0/1/2/3 with FlyCV, but "
-                 "now it's "
-              << interp_ << "." << std::endl;
+      FDERROR
+          << "LimitByStride: Only support interp_ be 0/1/2/3 with FlyCV, but "
+             "now it's "
+          << interp_ << "." << std::endl;
       return false;
     }
 

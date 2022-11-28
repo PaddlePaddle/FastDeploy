@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <vector>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/text/common/result.h"
 #include "fastdeploy/utils/utils.h"
+#include <vector>
 
 namespace fastdeploy {
 namespace text {

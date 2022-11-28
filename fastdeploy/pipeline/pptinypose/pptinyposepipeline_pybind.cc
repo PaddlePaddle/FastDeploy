@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <pybind11/stl.h>
 #include "fastdeploy/pybind/main.h"
+#include <pybind11/stl.h>
 
 namespace fastdeploy {
 void BindPPTinyPosePipeline(pybind11::module& m) {
@@ -20,15 +20,15 @@ void BindPPTinyPosePipeline(pybind11::module& m) {
 
       .def(pybind11::init<fastdeploy::vision::detection::PicoDet*,
                           fastdeploy::vision::keypointdetection::PPTinyPose*>())
-      .def("predict", [](pipeline::PPTinyPose& self,
-                         pybind11::array& data) {
-        auto mat = PyArrayToCvMat(data);
-        vision::KeyPointDetectionResult res;
-        self.Predict(&mat, &res);
-        return res;
-      })
+      .def("predict",
+           [](pipeline::PPTinyPose& self, pybind11::array& data) {
+             auto mat = PyArrayToCvMat(data);
+             vision::KeyPointDetectionResult res;
+             self.Predict(&mat, &res);
+             return res;
+           })
 
-      .def_readwrite("detection_model_score_threshold", 
+      .def_readwrite("detection_model_score_threshold",
                      &pipeline::PPTinyPose::detection_model_score_threshold);
 }
 

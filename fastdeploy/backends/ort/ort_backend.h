@@ -67,8 +67,7 @@ class OrtBackend : public BaseBackend {
                     const OrtBackendOption& option = OrtBackendOption(),
                     bool from_memory_buffer = false);
 
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const override { return inputs_desc_.size(); }

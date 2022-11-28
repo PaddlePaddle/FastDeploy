@@ -81,8 +81,7 @@ const void* FDTensor::CpuData() const {
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,
-                               const Device& new_device,
-                               int new_device_id) {
+                               const Device& new_device, int new_device_id) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;

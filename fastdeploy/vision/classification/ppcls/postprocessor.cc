@@ -24,7 +24,8 @@ PaddleClasPostprocessor::PaddleClasPostprocessor(int topk) {
   initialized_ = true;
 }
 
-bool PaddleClasPostprocessor::Run(const std::vector<FDTensor>& infer_result, std::vector<ClassifyResult>* results) {
+bool PaddleClasPostprocessor::Run(const std::vector<FDTensor>& infer_result,
+                                  std::vector<ClassifyResult>* results) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -32,16 +33,19 @@ bool PaddleClasPostprocessor::Run(const std::vector<FDTensor>& infer_result, std
 
   int batch = infer_result[0].shape[0];
   int num_classes = infer_result[0].shape[1];
-  const float* infer_result_data = reinterpret_cast<const float*>(infer_result[0].Data());
- 
+  const float* infer_result_data =
+      reinterpret_cast<const float*>(infer_result[0].Data());
+
   results->resize(batch);
 
   int topk = std::min(num_classes, topk_);
   for (int i = 0; i < batch; ++i) {
-    (*results)[i].label_ids = utils::TopKIndices(infer_result_data + i * num_classes, num_classes, topk);
+    (*results)[i].label_ids = utils::TopKIndices(
+        infer_result_data + i * num_classes, num_classes, topk);
     (*results)[i].scores.resize(topk);
     for (int j = 0; j < topk; ++j) {
-      (*results)[i].scores[j] = infer_result_data[i * num_classes + (*results)[i].label_ids[j]];
+      (*results)[i].scores[j] =
+          infer_result_data[i * num_classes + (*results)[i].label_ids[j]];
     }
   }
 

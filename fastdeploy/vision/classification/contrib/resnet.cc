@@ -13,23 +13,22 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/classification/contrib/resnet.h"
-#include "fastdeploy/vision/utils/utils.h"
 #include "fastdeploy/utils/perf.h"
+#include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace classification {
 
-ResNet::ResNet(const std::string& model_file,
-               const std::string& params_file,
+ResNet::ResNet(const std::string& model_file, const std::string& params_file,
                const RuntimeOption& custom_option,
                const ModelFormat& model_format) {
   // In constructor, the 3 steps below are necessary.
   // 1. set the Backend 2. set RuntimeOption 3. call Initialize()
 
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO}; 
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};  
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER};
     valid_gpu_backends = {Backend::PDINFER};
@@ -57,14 +56,13 @@ bool ResNet::Initialize() {
   return true;
 }
 
-
 bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
 
-// In this function, the preprocess need be implemented according to the original Repos,
-// The result of preprocess has to be saved in FDTensor variable, because the input of Infer() need to be std::vector<FDTensor>.
-// 1. Resize 2. BGR2RGB 3. Normalize 4. HWC2CHW 5. Put the result into FDTensor variable.
-        
-  if (mat->Height()!=size[0] || mat->Width()!=size[1]){
+  // In this function, the preprocess need be implemented according to the original Repos,
+  // The result of preprocess has to be saved in FDTensor variable, because the input of Infer() need to be std::vector<FDTensor>.
+  // 1. Resize 2. BGR2RGB 3. Normalize 4. HWC2CHW 5. Put the result into FDTensor variable.
+
+  if (mat->Height() != size[0] || mat->Width() != size[1]) {
     int interp = cv::INTER_LINEAR;
     Resize::Run(mat, size[1], size[0], -1, -1, interp);
   }
@@ -79,8 +77,8 @@ bool ResNet::Preprocess(Mat* mat, FDTensor* output) {
   return true;
 }
 
-bool ResNet::Postprocess(FDTensor& infer_result,
-                                  ClassifyResult* result, int topk) {
+bool ResNet::Postprocess(FDTensor& infer_result, ClassifyResult* result,
+                         int topk) {
 
   // In this function, the postprocess need be implemented according to the original Repos,
   // Finally the reslut of postprocess should be saved in ClassifyResult variable.
@@ -88,7 +86,8 @@ bool ResNet::Postprocess(FDTensor& infer_result,
 
   int num_classes = infer_result.shape[1];
   function::Softmax(infer_result, &infer_result);
-  const float* infer_result_buffer = reinterpret_cast<float*>(infer_result.Data());
+  const float* infer_result_buffer =
+      reinterpret_cast<float*>(infer_result.Data());
   topk = std::min(num_classes, topk);
   result->label_ids =
       utils::TopKIndices(infer_result_buffer, num_classes, topk);
@@ -127,7 +126,6 @@ bool ResNet::Predict(cv::Mat* im, ClassifyResult* result, int topk) {
 
   return true;
 }
-
 
 }  // namespace classification
 }  // namespace vision

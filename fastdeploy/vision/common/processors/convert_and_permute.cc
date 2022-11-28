@@ -20,8 +20,8 @@ namespace vision {
 ConvertAndPermute::ConvertAndPermute(const std::vector<float>& alpha,
                                      const std::vector<float>& beta,
                                      bool swap_rb) {
-  FDASSERT(alpha.size() == beta.size(),
-           "ConvertAndPermute: requires the size of alpha equal to the size of beta.");
+  FDASSERT(alpha.size() == beta.size(), "ConvertAndPermute: requires the size "
+                                        "of alpha equal to the size of beta.");
   FDASSERT(alpha.size() > 0 && beta.size() > 0,
            "ConvertAndPermute: requires the size of alpha and beta > 0.");
   alpha_.assign(alpha.begin(), alpha.end());
@@ -35,7 +35,8 @@ bool ConvertAndPermute::ImplByOpenCV(FDMat* mat) {
   int origin_h = im->rows;
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
-  if (swap_rb_) std::swap(split_im[0], split_im[2]);
+  if (swap_rb_)
+    std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -72,7 +73,8 @@ bool ConvertAndPermute::ImplByFlyCV(FDMat* mat) {
   }
 
   std::vector<uint32_t> channel_reorder_index = {0, 1, 2};
-  if (swap_rb_) std::swap(channel_reorder_index[0], channel_reorder_index[2]);
+  if (swap_rb_)
+    std::swap(channel_reorder_index[0], channel_reorder_index[2]);
 
   fcv::Mat new_im;
   fcv::normalize_to_submean_to_reorder(*im, mean, std, channel_reorder_index,

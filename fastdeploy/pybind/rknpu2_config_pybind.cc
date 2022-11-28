@@ -15,19 +15,23 @@
 #include "fastdeploy/pybind/main.h"
 namespace fastdeploy {
 void BindRKNPU2Config(pybind11::module& m) {
-  pybind11::enum_<fastdeploy::rknpu2::CpuName>(m, "CpuName", pybind11::arithmetic(),
-                           "CpuName for inference.")
+  pybind11::enum_<fastdeploy::rknpu2::CpuName>(
+      m, "CpuName", pybind11::arithmetic(), "CpuName for inference.")
       .value("RK356X", fastdeploy::rknpu2::CpuName::RK356X)
       .value("RK3588", fastdeploy::rknpu2::CpuName::RK3588)
       .value("UNDEFINED", fastdeploy::rknpu2::CpuName::UNDEFINED);
-  pybind11::enum_<fastdeploy::rknpu2::CoreMask>(m, "CoreMask", pybind11::arithmetic(),
-                            "CoreMask for inference.")
-      .value("RKNN_NPU_CORE_AUTO", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO)
+  pybind11::enum_<fastdeploy::rknpu2::CoreMask>(
+      m, "CoreMask", pybind11::arithmetic(), "CoreMask for inference.")
+      .value("RKNN_NPU_CORE_AUTO",
+             fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO)
       .value("RKNN_NPU_CORE_0", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0)
       .value("RKNN_NPU_CORE_1", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_1)
       .value("RKNN_NPU_CORE_2", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_2)
-      .value("RKNN_NPU_CORE_0_1", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0_1)
-      .value("RKNN_NPU_CORE_0_1_2", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0_1_2)
-      .value("RKNN_NPU_CORE_UNDEFINED", fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_UNDEFINED);
+      .value("RKNN_NPU_CORE_0_1",
+             fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0_1)
+      .value("RKNN_NPU_CORE_0_1_2",
+             fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0_1_2)
+      .value("RKNN_NPU_CORE_UNDEFINED",
+             fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_UNDEFINED);
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

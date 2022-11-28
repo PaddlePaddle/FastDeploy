@@ -25,7 +25,7 @@ namespace function {
     @param pad_value The value which will fill into out tensor
 */
 FASTDEPLOY_DECL void Pad(const FDTensor& x, FDTensor* out,
-            const std::vector<int>& pads, float pad_value = 0);
+                         const std::vector<int>& pads, float pad_value = 0);
 
-}
+}  // namespace function
 }  // namespace fastdeploy

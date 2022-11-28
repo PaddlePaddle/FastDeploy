@@ -50,9 +50,8 @@ FDTensor* Processor::UpdateAndGetReusedBuffer(
     reused_buffers_[buffer_name] = FDTensor();
   }
   reused_buffers_[buffer_name].is_pinned_memory = use_pinned_memory;
-  reused_buffers_[buffer_name].Resize(new_shape,
-                                      OpenCVDataTypeToFD(opencv_dtype),
-                                      buffer_name, new_device);
+  reused_buffers_[buffer_name].Resize(
+      new_shape, OpenCVDataTypeToFD(opencv_dtype), buffer_name, new_device);
   return &reused_buffers_[buffer_name];
 }
 

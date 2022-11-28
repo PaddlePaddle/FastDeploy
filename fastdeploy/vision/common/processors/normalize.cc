@@ -58,7 +58,8 @@ bool Normalize::ImplByOpenCV(Mat* mat) {
 
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
-  if (swap_rb_) std::swap(split_im[0], split_im[2]);
+  if (swap_rb_)
+    std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -83,10 +84,10 @@ bool Normalize::ImplByFlyCV(Mat* mat) {
   }
 
   std::vector<uint32_t> channel_reorder_index = {0, 1, 2};
-  if (swap_rb_) std::swap(channel_reorder_index[0], channel_reorder_index[2]);
+  if (swap_rb_)
+    std::swap(channel_reorder_index[0], channel_reorder_index[2]);
 
-  fcv::Mat new_im(im->width(), im->height(),
-                  fcv::FCVImageType::PKG_BGR_F32);
+  fcv::Mat new_im(im->width(), im->height(), fcv::FCVImageType::PKG_BGR_F32);
   fcv::normalize_to_submean_to_reorder(*im, mean, std, channel_reorder_index,
                                        new_im, true);
   mat->SetMat(new_im);

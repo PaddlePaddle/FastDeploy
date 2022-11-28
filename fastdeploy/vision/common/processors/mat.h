@@ -13,15 +13,14 @@
 // limitations under the License.
 #pragma once
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/vision/common/processors/utils.h"
 #include "fastdeploy/vision/common/processors/proc_lib.h"
+#include "fastdeploy/vision/common/processors/utils.h"
 #include "opencv2/core/core.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
 enum Layout { HWC, CHW };
-
 
 struct FASTDEPLOY_DECL Mat {
   explicit Mat(const cv::Mat& mat) {
@@ -142,10 +141,10 @@ struct FASTDEPLOY_DECL Mat {
   // default ProcLib (OPENCV,FLYCV,...).
   static Mat Create(const FDTensor& tensor);
   static Mat Create(const FDTensor& tensor, ProcLib lib);
-  static Mat Create(int height, int width, int channels,
-                    FDDataType type, void* data);
-  static Mat Create(int height, int width, int channels,
-                    FDDataType type, void* data, ProcLib lib);
+  static Mat Create(int height, int width, int channels, FDDataType type,
+                    void* data);
+  static Mat Create(int height, int width, int channels, FDDataType type,
+                    void* data, ProcLib lib);
 };
 
 typedef Mat FDMat;

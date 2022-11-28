@@ -66,7 +66,8 @@ class FASTDEPLOY_DECL FDLogger {
     if (!verbose_ && line_ != "") {
       std::cout << line_ << std::endl;
 #ifdef __ANDROID__
-      __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s", line_.c_str());
+      __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s",
+                          line_.c_str());
 #endif
     }
   }

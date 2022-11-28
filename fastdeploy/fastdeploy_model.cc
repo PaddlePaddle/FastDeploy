@@ -42,8 +42,7 @@ bool IsSupported(const std::vector<Backend>& backends, Backend backend) {
 bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   if (!IsBackendAvailable(runtime_option.backend)) {
     FDERROR << runtime_option.backend
-            << " is not compiled with current FastDeploy library."
-            << std::endl;
+            << " is not compiled with current FastDeploy library." << std::endl;
     return false;
   }
 
@@ -54,27 +53,37 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
 
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid gpu backends of model " << ModelName() << " are " << Str(valid_gpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid gpu backends of model " << ModelName() << " are "
+              << Str(valid_gpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_rknpu) {
     if (!IsSupported(valid_rknpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid rknpu backends of model " << ModelName() << " are " << Str(valid_rknpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid rknpu backends of model " << ModelName() << " are "
+              << Str(valid_rknpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else if (use_timvx) {
     if (!IsSupported(valid_timvx_backends, runtime_option.backend)) {
-      FDERROR << "The valid timvx backends of model " << ModelName() << " are " << Str(valid_timvx_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid timvx backends of model " << ModelName() << " are "
+              << Str(valid_timvx_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
-  } else if(use_ipu) {
+  } else if (use_ipu) {
     if (!IsSupported(valid_ipu_backends, runtime_option.backend)) {
-      FDERROR << "The valid ipu backends of model " << ModelName() << " are " << Str(valid_ipu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid ipu backends of model " << ModelName() << " are "
+              << Str(valid_ipu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   } else {
     if (!IsSupported(valid_cpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid cpu backends of model " << ModelName() << " are " << Str(valid_cpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      FDERROR << "The valid cpu backends of model " << ModelName() << " are "
+              << Str(valid_cpu_backends) << ", " << runtime_option.backend
+              << " is not supported." << std::endl;
       return false;
     }
   }

@@ -24,10 +24,12 @@ bool WarpAffine::ImplByOpenCV(Mat* mat) {
   }
   cv::Mat* im = mat->GetOpenCVMat();
   if (width_ > 0 && height_ > 0) {
-    cv::warpAffine(*im, *im, trans_matrix_, cv::Size(width_, height_), interp_, border_mode_, borderValue_);
+    cv::warpAffine(*im, *im, trans_matrix_, cv::Size(width_, height_), interp_,
+                   border_mode_, borderValue_);
   } else {
-    FDERROR << "WarpAffine: the parameters must satisfy (width > 0 && height > 0) ."
-            << std::endl;
+    FDERROR
+        << "WarpAffine: the parameters must satisfy (width > 0 && height > 0) ."
+        << std::endl;
     return false;
   }
   mat->SetWidth(im->cols);
@@ -36,16 +38,13 @@ bool WarpAffine::ImplByOpenCV(Mat* mat) {
   return true;
 }
 
-bool WarpAffine::Run(Mat* mat,
-                     const cv::Mat& trans_matrix,
-                     int width, int height, 
-                     int interp, 
-                     int border_mode, 
-                     const cv::Scalar& borderValue,
-                     ProcLib lib) {
-  auto r = WarpAffine(trans_matrix, width, height, interp, border_mode, borderValue);
-  return r(mat, lib);    
+bool WarpAffine::Run(Mat* mat, const cv::Mat& trans_matrix, int width,
+                     int height, int interp, int border_mode,
+                     const cv::Scalar& borderValue, ProcLib lib) {
+  auto r =
+      WarpAffine(trans_matrix, width, height, interp, border_mode, borderValue);
+  return r(mat, lib);
 }
 
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace vision
+}  // namespace fastdeploy

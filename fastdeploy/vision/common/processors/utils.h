@@ -41,12 +41,12 @@ cv::Mat ConvertFlyCVMatToOpenCV(fcv::Mat& fim);
 #endif
 
 // Create zero copy OpenCV/FlyCV Mat from FD Tensor / Buffer
-cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width,
-  int channels, FDDataType type, void* data);
+cv::Mat CreateZeroCopyOpenCVMatFromBuffer(int height, int width, int channels,
+                                          FDDataType type, void* data);
 cv::Mat CreateZeroCopyOpenCVMatFromTensor(const FDTensor& tensor);
 #ifdef ENABLE_FLYCV
-fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width,
-  int channels, FDDataType type, void* data);
+fcv::Mat CreateZeroCopyFlyCVMatFromBuffer(int height, int width, int channels,
+                                          FDDataType type, void* data);
 fcv::Mat CreateZeroCopyFlyCVMatFromTensor(const FDTensor& tensor);
 #endif
 }  // namespace vision

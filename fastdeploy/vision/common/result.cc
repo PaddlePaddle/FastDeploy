@@ -121,9 +121,8 @@ std::string DetectionResult::Str() {
   if (!contain_masks) {
     out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]\n";
   } else {
-    out =
-        "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
-        "mask_shape]\n";
+    out = "DetectionResult: [xmin, ymin, xmax, ymax, score, label_id, "
+          "mask_shape]\n";
   }
   for (size_t i = 0; i < boxes.size(); ++i) {
     out = out + std::to_string(boxes[i][0]) + "," +
@@ -155,8 +154,8 @@ std::string KeyPointDetectionResult::Str() {
   out = "KeyPointDetectionResult: [x, y, conf]\n";
   for (size_t i = 0; i < keypoints.size(); ++i) {
     out = out + std::to_string(keypoints[i][0]) + "," +
-          std::to_string(keypoints[i][1]) + ", " +
-          std::to_string(scores[i]) + "\n";
+          std::to_string(keypoints[i][1]) + ", " + std::to_string(scores[i]) +
+          "\n";
   }
   out += "num_joints:" + std::to_string(num_joints) + "\n";
   return out;
@@ -170,22 +169,22 @@ void OCRResult::Clear() {
   cls_labels.clear();
 }
 
-void MOTResult::Clear(){
+void MOTResult::Clear() {
   boxes.clear();
   ids.clear();
   scores.clear();
   class_ids.clear();
 }
 
-std::string MOTResult::Str(){
+std::string MOTResult::Str() {
   std::string out;
-  out = "MOTResult:\nall boxes counts: "+std::to_string(boxes.size())+"\n";
+  out = "MOTResult:\nall boxes counts: " + std::to_string(boxes.size()) + "\n";
   out += "[xmin\tymin\txmax\tymax\tid\tscore]\n";
   for (size_t i = 0; i < boxes.size(); ++i) {
-    out = out + "["+ std::to_string(boxes[i][0]) + "\t" +
+    out = out + "[" + std::to_string(boxes[i][0]) + "\t" +
           std::to_string(boxes[i][1]) + "\t" + std::to_string(boxes[i][2]) +
-          "\t" + std::to_string(boxes[i][3]) + "\t" +
-          std::to_string(ids[i]) + "\t" + std::to_string(scores[i]) + "]\n";
+          "\t" + std::to_string(boxes[i][3]) + "\t" + std::to_string(ids[i]) +
+          "\t" + std::to_string(scores[i]) + "]\n";
   }
   return out;
 }
@@ -261,19 +260,16 @@ void FaceAlignmentResult::Clear() {
   std::vector<std::array<float, 2>>().swap(landmarks);
 }
 
-void FaceAlignmentResult::Reserve(int size) {
-  landmarks.resize(size);
-}
+void FaceAlignmentResult::Reserve(int size) { landmarks.resize(size); }
 
-void FaceAlignmentResult::Resize(int size) {
-  landmarks.resize(size);
-}
+void FaceAlignmentResult::Resize(int size) { landmarks.resize(size); }
 
 std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  out = out + "There are " + std::to_string(landmarks.size()) +
+        " landmarks, the top 10 are listed as below:\n";
   int landmarks_size = landmarks.size();
   size_t result_length = std::min(10, landmarks_size);
   for (size_t i = 0; i < result_length; ++i) {
@@ -471,8 +467,8 @@ std::string OCRResult::Str() {
       out = out + "]";
 
       if (rec_scores.size() > 0) {
-        out = out + "rec text: " + text[n] + " rec score:" +
-              std::to_string(rec_scores[n]) + " ";
+        out = out + "rec text: " + text[n] +
+              " rec score:" + std::to_string(rec_scores[n]) + " ";
       }
       if (cls_labels.size() > 0) {
         out = out + "cls label: " + std::to_string(cls_labels[n]) +
@@ -486,8 +482,8 @@ std::string OCRResult::Str() {
              cls_scores.size() > 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "cls label: " + std::to_string(cls_labels[i]) +
             " cls score: " + std::to_string(cls_scores[i]);
       out = out + "\n";
@@ -506,8 +502,8 @@ std::string OCRResult::Str() {
              cls_scores.size() == 0) {
     std::string out;
     for (int i = 0; i < rec_scores.size(); i++) {
-      out = out + "rec text: " + text[i] + " rec score:" +
-            std::to_string(rec_scores[i]) + " ";
+      out = out + "rec text: " + text[i] +
+            " rec score:" + std::to_string(rec_scores[i]) + " ";
       out = out + "\n";
     }
     return out;
@@ -517,17 +513,11 @@ std::string OCRResult::Str() {
   return no_result;
 }
 
-void HeadPoseResult::Clear() {
-  std::vector<float>().swap(euler_angles);
-}
+void HeadPoseResult::Clear() { std::vector<float>().swap(euler_angles); }
 
-void HeadPoseResult::Reserve(int size) {
-  euler_angles.resize(size);
-}
+void HeadPoseResult::Reserve(int size) { euler_angles.resize(size); }
 
-void HeadPoseResult::Resize(int size) {
-  euler_angles.resize(size);
-}
+void HeadPoseResult::Resize(int size) { euler_angles.resize(size); }
 
 std::string HeadPoseResult::Str() {
   std::string out;
@@ -538,7 +528,6 @@ std::string HeadPoseResult::Str() {
         "roll: " + std::to_string(euler_angles[2]) + "\n";
   return out;
 }
-
 
 }  // namespace vision
 }  // namespace fastdeploy

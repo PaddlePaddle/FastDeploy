@@ -47,28 +47,28 @@ int FDDataTypeSize(const FDDataType& data_type) {
 std::string Str(const Device& d) {
   std::string out;
   switch (d) {
-    case Device::CPU:
-      out = "Device::CPU";
-      break;
-    case Device::GPU:
-      out = "Device::GPU";
-      break;
-    case Device::RKNPU:
-      out = "Device::RKNPU";
-      break;
-    case Device::IPU:
-      out = "Device::IPU";
-      break;
-    case Device::TIMVX:
-      out = "Device::TIMVX";
-      break;
-    default:
-      out = "Device::UNKOWN";
+  case Device::CPU:
+    out = "Device::CPU";
+    break;
+  case Device::GPU:
+    out = "Device::GPU";
+    break;
+  case Device::RKNPU:
+    out = "Device::RKNPU";
+    break;
+  case Device::IPU:
+    out = "Device::IPU";
+    break;
+  case Device::TIMVX:
+    out = "Device::TIMVX";
+    break;
+  default:
+    out = "Device::UNKOWN";
   }
   return out;
 }
 
-std::ostream& operator<<(std::ostream& out,const Device& d){
+std::ostream& operator<<(std::ostream& out, const Device& d) {
   switch (d) {
   case Device::CPU:
     out << "Device::CPU";
@@ -88,45 +88,43 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
   return out;
 }
 
-
-
 std::string Str(const FDDataType& fdt) {
   std::string out;
   switch (fdt) {
-    case FDDataType::BOOL:
-      out = "FDDataType::BOOL";
-      break;
-    case FDDataType::INT16:
-      out = "FDDataType::INT16";
-      break;
-    case FDDataType::INT32:
-      out = "FDDataType::INT32";
-      break;
-    case FDDataType::INT64:
-      out = "FDDataType::INT64";
-      break;
-    case FDDataType::FP32:
-      out = "FDDataType::FP32";
-      break;
-    case FDDataType::FP64:
-      out = "FDDataType::FP64";
-      break;
-    case FDDataType::FP16:
-      out = "FDDataType::FP16";
-      break;
-    case FDDataType::UINT8:
-      out = "FDDataType::UINT8";
-      break;
-    case FDDataType::INT8:
-      out = "FDDataType::INT8";
-      break;
-    default:
-      out = "FDDataType::UNKNOWN";
+  case FDDataType::BOOL:
+    out = "FDDataType::BOOL";
+    break;
+  case FDDataType::INT16:
+    out = "FDDataType::INT16";
+    break;
+  case FDDataType::INT32:
+    out = "FDDataType::INT32";
+    break;
+  case FDDataType::INT64:
+    out = "FDDataType::INT64";
+    break;
+  case FDDataType::FP32:
+    out = "FDDataType::FP32";
+    break;
+  case FDDataType::FP64:
+    out = "FDDataType::FP64";
+    break;
+  case FDDataType::FP16:
+    out = "FDDataType::FP16";
+    break;
+  case FDDataType::UINT8:
+    out = "FDDataType::UINT8";
+    break;
+  case FDDataType::INT8:
+    out = "FDDataType::INT8";
+    break;
+  default:
+    out = "FDDataType::UNKNOWN";
   }
   return out;
 }
 
-std::ostream& operator<<(std::ostream& out,const FDDataType& fdt){
+std::ostream& operator<<(std::ostream& out, const FDDataType& fdt) {
   switch (fdt) {
   case FDDataType::BOOL:
     out << "FDDataType::BOOL";
@@ -164,36 +162,28 @@ std::ostream& operator<<(std::ostream& out,const FDDataType& fdt){
 template <typename PlainType>
 const FDDataType TypeToDataType<PlainType>::dtype = UNKNOWN1;
 
-template <>
-const FDDataType TypeToDataType<bool>::dtype = BOOL;
+template <> const FDDataType TypeToDataType<bool>::dtype = BOOL;
 
-template <>
-const FDDataType TypeToDataType<int16_t>::dtype = INT16;
+template <> const FDDataType TypeToDataType<int16_t>::dtype = INT16;
 
-template <>
-const FDDataType TypeToDataType<int32_t>::dtype = INT32;
+template <> const FDDataType TypeToDataType<int32_t>::dtype = INT32;
 
-template <>
-const FDDataType TypeToDataType<int64_t>::dtype = INT64;
+template <> const FDDataType TypeToDataType<int64_t>::dtype = INT64;
 
-template <>
-const FDDataType TypeToDataType<float>::dtype = FP32;
+template <> const FDDataType TypeToDataType<float>::dtype = FP32;
 
-template <>
-const FDDataType TypeToDataType<double>::dtype = FP64;
+template <> const FDDataType TypeToDataType<double>::dtype = FP64;
 
-template <>
-const FDDataType TypeToDataType<uint8_t>::dtype = UINT8;
+template <> const FDDataType TypeToDataType<uint8_t>::dtype = UINT8;
 
-template <>
-const FDDataType TypeToDataType<int8_t>::dtype = INT8;
+template <> const FDDataType TypeToDataType<int8_t>::dtype = INT8;
 
 std::string Str(const ModelFormat& f) {
   if (f == ModelFormat::PADDLE) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
-  }else if (f == ModelFormat::RKNN) {
+  } else if (f == ModelFormat::RKNN) {
     return "ModelFormat::RKNN";
   } else if (f == ModelFormat::TORCHSCRIPT) {
     return "ModelFormat::TORCHSCRIPT";

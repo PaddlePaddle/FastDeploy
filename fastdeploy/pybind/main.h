@@ -14,18 +14,18 @@
 
 #pragma once
 
+#include <pybind11/eval.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/eval.h>
 
 #include <type_traits>
 
 #include "fastdeploy/runtime.h"
 
 #ifdef ENABLE_VISION
-#include "fastdeploy/vision.h"
 #include "fastdeploy/pipeline.h"
+#include "fastdeploy/vision.h"
 #endif
 
 #ifdef ENABLE_TEXT
@@ -57,8 +57,7 @@ pybind11::array TensorToPyArray(const FDTensor& tensor);
 cv::Mat PyArrayToCvMat(pybind11::array& pyarray);
 #endif
 
-template <typename T>
-FDDataType CTypeToFDDataType() {
+template <typename T> FDDataType CTypeToFDDataType() {
   if (std::is_same<T, int32_t>::value) {
     return FDDataType::INT32;
   } else if (std::is_same<T, int64_t>::value) {
@@ -74,9 +73,9 @@ FDDataType CTypeToFDDataType() {
 }
 
 template <typename T>
-std::vector<pybind11::array> PyBackendInfer(
-    T& self, const std::vector<std::string>& names,
-    std::vector<pybind11::array>& data) {
+std::vector<pybind11::array>
+PyBackendInfer(T& self, const std::vector<std::string>& names,
+               std::vector<pybind11::array>& data) {
   std::vector<FDTensor> inputs(data.size());
   for (size_t i = 0; i < data.size(); ++i) {
     // TODO(jiangjiajun) here is considered to use user memory directly
@@ -116,8 +115,7 @@ constexpr int NPY_FLOAT16_ = 23;
 // Note: Since float16 is not a builtin type in C++, we register
 // fastdeploy::float16 as numpy.float16.
 // Ref: https://github.com/pybind/pybind11/issues/1776
-template <>
-struct npy_format_descriptor<fastdeploy::float16> {
+template <> struct npy_format_descriptor<fastdeploy::float16> {
   static pybind11::dtype dtype() {
     handle ptr = npy_api::get().PyArray_DescrFromType_(NPY_FLOAT16_);
     return reinterpret_borrow<pybind11::dtype>(ptr);

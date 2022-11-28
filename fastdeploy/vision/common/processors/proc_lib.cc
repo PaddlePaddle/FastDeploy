@@ -21,20 +21,20 @@ ProcLib DefaultProcLib::default_lib = ProcLib::DEFAULT;
 
 std::ostream& operator<<(std::ostream& out, const ProcLib& p) {
   switch (p) {
-    case ProcLib::DEFAULT:
-      out << "ProcLib::DEFAULT";
-      break;
-    case ProcLib::OPENCV:
-      out << "ProcLib::OPENCV";
-      break;
-    case ProcLib::FLYCV:
-      out << "ProcLib::FLYCV";
-      break;
-    case ProcLib::CUDA:
-      out << "ProcLib::CUDA";
-      break;
-    default:
-      FDASSERT(false, "Unknow type of ProcLib.");
+  case ProcLib::DEFAULT:
+    out << "ProcLib::DEFAULT";
+    break;
+  case ProcLib::OPENCV:
+    out << "ProcLib::OPENCV";
+    break;
+  case ProcLib::FLYCV:
+    out << "ProcLib::FLYCV";
+    break;
+  case ProcLib::CUDA:
+    out << "ProcLib::CUDA";
+    break;
+  default:
+    FDASSERT(false, "Unknow type of ProcLib.");
   }
   return out;
 }

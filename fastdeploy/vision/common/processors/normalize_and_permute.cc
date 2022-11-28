@@ -62,7 +62,8 @@ bool NormalizeAndPermute::ImplByOpenCV(Mat* mat) {
   int origin_h = im->rows;
   std::vector<cv::Mat> split_im;
   cv::split(*im, split_im);
-  if (swap_rb_) std::swap(split_im[0], split_im[2]);
+  if (swap_rb_)
+    std::swap(split_im[0], split_im[2]);
   for (int c = 0; c < im->channels(); c++) {
     split_im[c].convertTo(split_im[c], CV_32FC1, alpha_[c], beta_[c]);
   }
@@ -98,7 +99,8 @@ bool NormalizeAndPermute::ImplByFlyCV(Mat* mat) {
   }
 
   std::vector<uint32_t> channel_reorder_index = {0, 1, 2};
-  if (swap_rb_) std::swap(channel_reorder_index[0], channel_reorder_index[2]);
+  if (swap_rb_)
+    std::swap(channel_reorder_index[0], channel_reorder_index[2]);
 
   fcv::Mat new_im;
   fcv::normalize_to_submean_to_reorder(*im, mean, std, channel_reorder_index,

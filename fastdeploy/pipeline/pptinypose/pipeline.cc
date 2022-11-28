@@ -21,8 +21,8 @@ PPTinyPose::PPTinyPose(
     fastdeploy::vision::keypointdetection::PPTinyPose* pptinypose_model)
     : detector_(det_model), pptinypose_model_(pptinypose_model) {}
 
-bool PPTinyPose::Detect(
-    cv::Mat* img, fastdeploy::vision::DetectionResult* detection_res) {
+bool PPTinyPose::Detect(cv::Mat* img,
+                        fastdeploy::vision::DetectionResult* detection_res) {
   if (!detector_->Predict(img, detection_res)) {
     FDERROR << "There's a error while detectiong human box in image."
             << std::endl;
@@ -42,8 +42,8 @@ bool PPTinyPose::KeypointDetect(
   return true;
 }
 
-bool PPTinyPose::Predict(
-    cv::Mat* img, fastdeploy::vision::KeyPointDetectionResult* result) {
+bool PPTinyPose::Predict(cv::Mat* img,
+                         fastdeploy::vision::KeyPointDetectionResult* result) {
   result->Clear();
   fastdeploy::vision::DetectionResult detection_res;
   if (nullptr != detector_ && !Detect(img, &detection_res)) {

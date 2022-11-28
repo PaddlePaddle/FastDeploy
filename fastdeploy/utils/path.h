@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <fstream>
 #include <string>
 #include <vector>
-#include <fstream>
 #ifdef _MSC_VER
 #define PATH_SEP "\\"
 #else

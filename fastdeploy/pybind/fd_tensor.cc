@@ -15,9 +15,9 @@
 #include <dlpack/dlpack.h>
 
 #include "fastdeploy/core/fd_type.h"
-#include "fastdeploy/utils/utils.h"
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 
@@ -30,46 +30,46 @@ DLDataType FDToDlpackType(FDDataType fd_dtype) {
 
   dl_dtype.lanes = 1;
   switch (fd_dtype) {
-    case FDDataType::BOOL:
-      dl_code = DLDataTypeCode::kDLInt;
-      dt_size = 1;
-      break;
-    case FDDataType::UINT8:
-      dl_code = DLDataTypeCode::kDLUInt;
-      dt_size = 8;
-      break;
-    case FDDataType::INT8:
-      dl_code = DLDataTypeCode::kDLInt;
-      dt_size = 8;
-      break;
-    case FDDataType::INT16:
-      dl_code = DLDataTypeCode::kDLInt;
-      dt_size = 16;
-      break;
-    case FDDataType::INT32:
-      dl_code = DLDataTypeCode::kDLInt;
-      dt_size = 32;
-      break;
-    case FDDataType::INT64:
-      dl_code = DLDataTypeCode::kDLInt;
-      dt_size = 64;
-      break;
-    case FDDataType::FP16:
-      dl_code = DLDataTypeCode::kDLFloat;
-      dt_size = 16;
-      break;
-    case FDDataType::FP32:
-      dl_code = DLDataTypeCode::kDLFloat;
-      dt_size = 32;
-      break;
-    case FDDataType::FP64:
-      dl_code = DLDataTypeCode::kDLFloat;
-      dt_size = 64;
-      break;
+  case FDDataType::BOOL:
+    dl_code = DLDataTypeCode::kDLInt;
+    dt_size = 1;
+    break;
+  case FDDataType::UINT8:
+    dl_code = DLDataTypeCode::kDLUInt;
+    dt_size = 8;
+    break;
+  case FDDataType::INT8:
+    dl_code = DLDataTypeCode::kDLInt;
+    dt_size = 8;
+    break;
+  case FDDataType::INT16:
+    dl_code = DLDataTypeCode::kDLInt;
+    dt_size = 16;
+    break;
+  case FDDataType::INT32:
+    dl_code = DLDataTypeCode::kDLInt;
+    dt_size = 32;
+    break;
+  case FDDataType::INT64:
+    dl_code = DLDataTypeCode::kDLInt;
+    dt_size = 64;
+    break;
+  case FDDataType::FP16:
+    dl_code = DLDataTypeCode::kDLFloat;
+    dt_size = 16;
+    break;
+  case FDDataType::FP32:
+    dl_code = DLDataTypeCode::kDLFloat;
+    dt_size = 32;
+    break;
+  case FDDataType::FP64:
+    dl_code = DLDataTypeCode::kDLFloat;
+    dt_size = 64;
+    break;
 
-    default:
-      FDASSERT(false,
-              "Convert to DlPack, FDType \"%s\" is not supported.", Str(fd_dtype).c_str());
+  default:
+    FDASSERT(false, "Convert to DlPack, FDType \"%s\" is not supported.",
+             Str(fd_dtype).c_str());
   }
 
   dl_dtype.code = dl_code;
@@ -77,10 +77,8 @@ DLDataType FDToDlpackType(FDDataType fd_dtype) {
   return dl_dtype;
 }
 
-FDDataType
-DlpackToFDType(const DLDataType& data_type) {
-  FDASSERT(data_type.lanes == 1,
-          "FDTensor does not support dlpack lanes != 1")
+FDDataType DlpackToFDType(const DLDataType& data_type) {
+  FDASSERT(data_type.lanes == 1, "FDTensor does not support dlpack lanes != 1")
 
   if (data_type.code == DLDataTypeCode::kDLFloat) {
     if (data_type.bits == 16) {
@@ -152,7 +150,7 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
   dlpack_tensor->dl_tensor.dtype = FDToDlpackType(fd_tensor.dtype);
 
   dlpack_tensor->dl_tensor.device.device_id = fd_tensor.device_id;
-  if(fd_tensor.device == Device::GPU) {
+  if (fd_tensor.device == Device::GPU) {
     if (fd_tensor.is_pinned_memory) {
       dlpack_tensor->dl_tensor.device.device_type = DLDeviceType::kDLCUDAHost;
     } else {
@@ -162,10 +160,9 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
     dlpack_tensor->dl_tensor.device.device_type = DLDeviceType::kDLCPU;
   }
 
-  return pybind11::capsule(
-      static_cast<void*>(dlpack_tensor), "dltensor", &DeleteUnusedDltensor);
+  return pybind11::capsule(static_cast<void*>(dlpack_tensor), "dltensor",
+                           &DeleteUnusedDltensor);
 }
-
 
 void BindFDTensor(pybind11::module& m) {
   pybind11::class_<FDTensor>(m, "FDTensor")
@@ -174,13 +171,13 @@ void BindFDTensor(pybind11::module& m) {
       .def_readonly("shape", &FDTensor::shape)
       .def_readonly("dtype", &FDTensor::dtype)
       .def_readonly("device", &FDTensor::device)
-      .def("numpy", [](FDTensor& self) {
-        return TensorToPyArray(self);
-      })
+      .def("numpy", [](FDTensor& self) { return TensorToPyArray(self); })
       .def("data", &FDTensor::MutableData)
-      .def("from_numpy", [](FDTensor& self, pybind11::array& pyarray, bool share_buffer = false) {
-        PyArrayToTensor(pyarray, &self, share_buffer);
-      })
+      .def("from_numpy",
+           [](FDTensor& self, pybind11::array& pyarray,
+              bool share_buffer = false) {
+             PyArrayToTensor(pyarray, &self, share_buffer);
+           })
       .def("to_dlpack", &FDTensorToDLPack);
 }
 

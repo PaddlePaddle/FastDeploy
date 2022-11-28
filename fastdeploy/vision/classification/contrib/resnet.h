@@ -36,13 +36,12 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
    * \param[in] model_format Model format of the loaded model, default is ONNX format
    */
-  ResNet(const std::string& model_file,
-               const std::string& params_file = "",
-               const RuntimeOption& custom_option = RuntimeOption(),
-               const ModelFormat& model_format = ModelFormat::ONNX);
+  ResNet(const std::string& model_file, const std::string& params_file = "",
+         const RuntimeOption& custom_option = RuntimeOption(),
+         const ModelFormat& model_format = ModelFormat::ONNX);
 
   virtual std::string ModelName() const { return "ResNet"; }
-   /** \brief Predict for the input "im", the result will be saved in "result".
+  /** \brief Predict for the input "im", the result will be saved in "result".
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result Saving the inference result.
@@ -61,7 +60,6 @@ class FASTDEPLOY_DECL ResNet : public FastDeployModel {
   Std parameters for normalize, size should be the the same as channels, default std_vals = {0.229f, 0.224f, 0.225f}
   */
   std::vector<float> std_vals;
-
 
  private:
   /*! @brief Initialize for ResNet model, assign values to the global variables and call InitRuntime()

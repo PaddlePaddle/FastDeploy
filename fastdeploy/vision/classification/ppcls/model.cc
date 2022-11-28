@@ -22,7 +22,8 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                                  const std::string& params_file,
                                  const std::string& config_file,
                                  const RuntimeOption& custom_option,
-                                 const ModelFormat& model_format) : preprocessor_(config_file) {
+                                 const ModelFormat& model_format)
+    : preprocessor_(config_file) {
   if (model_format == ModelFormat::PADDLE) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
                           Backend::LITE};
@@ -33,7 +34,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   }
-  
+
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
@@ -66,7 +67,8 @@ bool PaddleClasModel::Predict(const cv::Mat& im, ClassifyResult* result) {
   return true;
 }
 
-bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vector<ClassifyResult>* results) {
+bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images,
+                                   std::vector<ClassifyResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
@@ -79,7 +81,8 @@ bool PaddleClasModel::BatchPredict(const std::vector<cv::Mat>& images, std::vect
   }
 
   if (!postprocessor_.Run(reused_output_tensors_, results)) {
-    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference results by runtime."
+            << std::endl;
     return false;
   }
 

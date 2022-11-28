@@ -91,7 +91,6 @@ struct FASTDEPLOY_DECL Mask : public BaseResult {
   std::string Str();
 };
 
-
 /*! @brief Detection result structure for all the object detection models and instance segmentation models
  */
 struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
@@ -189,8 +188,6 @@ struct FASTDEPLOY_DECL MOTResult : public BaseResult {
   /// Debug function, convert the result to string to print
   std::string Str();
 };
-
-
 
 /*! @brief Face detection result structure for all the face detection models
  */
@@ -298,7 +295,7 @@ struct FASTDEPLOY_DECL MattingResult : public BaseResult {
   /** \brief
   `alpha` is a one-dimensional vector, which is the predicted alpha transparency value. The range of values is [0., 1.], and the length is hxw. h, w are the height and width of the input image
   */
-  std::vector<float> alpha;       // h x w
+  std::vector<float> alpha;  // h x w
   /** \brief
   If the model can predict foreground, `foreground` save the predicted foreground image, the shape is [hight,width,channel] generally.
   */
@@ -347,7 +344,6 @@ struct FASTDEPLOY_DECL HeadPoseResult : public BaseResult {
   /// Debug function, convert the result to string to print
   std::string Str();
 };
-
 
 }  // namespace vision
 }  // namespace fastdeploy

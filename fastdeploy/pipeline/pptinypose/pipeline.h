@@ -58,9 +58,10 @@ class FASTDEPLOY_DECL PPTinyPose {
 
   virtual bool Detect(cv::Mat* img,
                       fastdeploy::vision::DetectionResult* result);
-  virtual bool KeypointDetect(
-      cv::Mat* img, fastdeploy::vision::KeyPointDetectionResult* result,
-      fastdeploy::vision::DetectionResult& detection_result);
+  virtual bool
+  KeypointDetect(cv::Mat* img,
+                 fastdeploy::vision::KeyPointDetectionResult* result,
+                 fastdeploy::vision::DetectionResult& detection_result);
 };
 
 }  // namespace pipeline

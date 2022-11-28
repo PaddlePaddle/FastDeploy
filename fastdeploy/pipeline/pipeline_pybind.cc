@@ -18,7 +18,5 @@ namespace fastdeploy {
 
 void BindPPTinyPosePipeline(pybind11::module& m);
 
-void BindPipeline(pybind11::module& m) {
-  BindPPTinyPosePipeline(m);
-}
+void BindPipeline(pybind11::module& m) { BindPPTinyPosePipeline(m); }
 }  // namespace fastdeploy

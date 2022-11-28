@@ -51,21 +51,18 @@ class FASTDEPLOY_DECL Processor {
     return false;
   }
 
-  virtual bool ImplByFlyCV(Mat* mat) {
-    return ImplByOpenCV(mat);
-  }
+  virtual bool ImplByFlyCV(Mat* mat) { return ImplByOpenCV(mat); }
 
-  virtual bool ImplByCuda(Mat* mat) {
-    return ImplByOpenCV(mat);
-  }
+  virtual bool ImplByCuda(Mat* mat) { return ImplByOpenCV(mat); }
 
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 
  protected:
-  FDTensor* UpdateAndGetReusedBuffer(
-      const std::vector<int64_t>& new_shape, const int& opencv_dtype,
-      const std::string& buffer_name, const Device& new_device = Device::CPU,
-      const bool& use_pinned_memory = false);
+  FDTensor* UpdateAndGetReusedBuffer(const std::vector<int64_t>& new_shape,
+                                     const int& opencv_dtype,
+                                     const std::string& buffer_name,
+                                     const Device& new_device = Device::CPU,
+                                     const bool& use_pinned_memory = false);
 
  private:
   std::unordered_map<std::string, FDTensor> reused_buffers_;

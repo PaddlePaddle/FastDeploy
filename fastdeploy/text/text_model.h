@@ -33,8 +33,7 @@ class FASTDEPLOY_DECL TextModel : public FastDeployModel {
                        const PredictionOption& option);
   virtual bool PredictBatch(const std::vector<std::string>& raw_text_array,
                             Result* result, const PredictionOption& option);
-  template <typename T, typename... Args>
-  void SetPreprocessor(Args&&... args) {
+  template <typename T, typename... Args> void SetPreprocessor(Args&&... args) {
     preprocessor_ = utils::make_unique<T>(std::forward<Args>(args)...);
   }
   template <typename T, typename... Args>
