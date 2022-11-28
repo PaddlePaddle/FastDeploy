@@ -31,8 +31,10 @@ jboolean VisClassificationFromJava(
   const jclass j_cls_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/ClassifyResult");
   if (!env->IsInstanceOf(result, j_cls_result_clazz)) {
+    env->DeleteLocalRef(j_cls_result_clazz);
     return JNI_FALSE;
   }
+  env->DeleteLocalRef(j_cls_result_clazz);
   vision::ClassifyResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
@@ -67,8 +69,10 @@ jboolean VisDetectionFromJava(
   const jclass j_det_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/DetectionResult");
   if (!env->IsInstanceOf(result, j_det_result_clazz)) {
+    env->DeleteLocalRef(j_det_result_clazz);
     return JNI_FALSE;
   }
+  env->DeleteLocalRef(j_det_result_clazz);
   vision::DetectionResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
@@ -101,8 +105,10 @@ jboolean VisOcrFromJava(
   const jclass j_ocr_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/OCRResult");
   if (!env->IsInstanceOf(result, j_ocr_result_clazz)) {
+    env->DeleteLocalRef(j_ocr_result_clazz);
     return JNI_FALSE;
   }
+  env->DeleteLocalRef(j_ocr_result_clazz);
   vision::OCRResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
@@ -126,8 +132,10 @@ jboolean VisSegmentationFromJava(
   const jclass j_seg_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   if (!env->IsInstanceOf(result, j_seg_result_clazz)) {
+    env->DeleteLocalRef(j_seg_result_clazz);
     return JNI_FALSE;
   }
+  env->DeleteLocalRef(j_seg_result_clazz);
   // Allocate from Java result, may cost some times.
   vision::SegmentationResult c_result;
   if (!fni::AllocateCxxResultFromJava(
@@ -151,6 +159,7 @@ jboolean VisSegmentationFromCxxBuffer(
   const jclass j_seg_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/SegmentationResult");
   if (!env->IsInstanceOf(result, j_seg_result_clazz)) {
+    env->DeleteLocalRef(j_seg_result_clazz);
     return JNI_FALSE;
   }
   const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
@@ -163,6 +172,8 @@ jboolean VisSegmentationFromCxxBuffer(
       env->GetBooleanField(result, j_enable_cxx_buffer_id);
   jboolean j_seg_initialized =
       env->GetBooleanField(result, j_seg_initialized_id);
+
+  env->DeleteLocalRef(j_seg_result_clazz);
   if (j_seg_initialized == JNI_FALSE) {
     return JNI_FALSE;
   }
@@ -193,8 +204,10 @@ jboolean VisFaceDetectionFromJava(
   const jclass j_face_det_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/FaceDetectionResult");
   if (!env->IsInstanceOf(result, j_face_det_result_clazz)) {
+    env->DeleteLocalRef(j_face_det_result_clazz);
     return JNI_FALSE;
   }
+  env->DeleteLocalRef(j_face_det_result_clazz);
   vision::FaceDetectionResult c_result;
   if (!fni::AllocateCxxResultFromJava(
       env, result, reinterpret_cast<void *>(&c_result),
