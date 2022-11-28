@@ -23,7 +23,7 @@
     <br>
 </p>
   
-对于像[OCR这样多个深度学习模型的组合模型](../../../examples/vision/ocr/PP-OCRv3/serving/README.md)，或者[流式输入输出的深度学习模型](../../../examples/audio/pp-tts/serving/README.md)，其**Ensemble-Triton-Model**会更加复杂。
+对于像[OCR这样多个深度学习模型的组合模型](../../../examples/vision/ocr/PP-OCRv3/serving)，或者[流式输入输出的深度学习模型](../../../examples/audio/pp-tts/serving)，其**Ensemble-Triton-Model**会更加复杂。
   
   
 ## Python-Triton-Model简介
@@ -109,17 +109,33 @@ class TritonPythonModel:
 ```
 
 ## 动态合并Batch功能
-
+动态合并Batch的原理如下图所示。当用户请求request并发量较大，但GPU利用率较小时，可以通过将不同用户的request组合为1个大的Batch进行模型预测，从而提高服务的吞吐性能。
 <p align="center">
     <br>
 <img src='../dynamic_batching.png'>
     <br>
 </p>
 
-## 多实例
+开启动态合并Batch功能非常简单，仅需在config.pbtxt结尾处，增加`dynamic_batching{}`字段即可。
 
+**注意**：`ensemble_scheduling`字段与`dynamic_batching`字段不可共存，即对于**Ensemble-Triton-Model**不存在动态合并Batch功能，这也可以理解，因为**Ensemble-Triton-Model**本身仅仅是多个Triton-Model的组合。
+
+## 多模型实例
+多模型实例的原理如下图所示。当前后处理（通常不支持Batch）成为整个服务的性能瓶颈时，能通过增加多个前后处理的**Python-Triton-Model**实例，来提高整个服务的时延性能。
+
+当然也可以开启多个**Runtime-Triton-Model**模型实例，来提升GPU利用率。
 <p align="center">
     <br>
 <img src='../instance_group.png'>
     <br>
 </p>
+
+设置多模式实例的方法很简单，如下所示。
+```
+instance_group [
+  {
+      count: 3
+      kind: KIND_CPU
+  }
+]
+```
