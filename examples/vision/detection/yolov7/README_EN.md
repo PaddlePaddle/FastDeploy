@@ -3,7 +3,7 @@
 # YOLOv7 Prepare the model for Deployment
 
 - YOLOv7 deployment is based on [YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1) branching code, and [COCO Pre-Trained Models](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1).
-  
+
   - （1）The *.pt provided by the [Official Library](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1) can be deployed after the [export ONNX model](#export ONNX model) operation; *.trt and *.pose models do not support deployment.
   - （2）As for YOLOv7 model trained on customized data, please follow the operations guidelines in [Export ONNX model](#Export-ONNX-Model) and then refer to [Detailed Deployment Tutorials](#Detailed-Deployment-Tutorials) to complete the deployment.
 
@@ -16,8 +16,8 @@ wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 # Export onnx file (Tips: in accordance with YOLOv7 release v0.1 code)
 python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
 
-# If your code supports exporting ONNX files with NMS, please use the following command to export ONNX files (do not use "--end2end" for now. We will support deployment of ONNX models with NMS in the future)
-python models/export.py --grid --dynamic --weights PATH/TO/yolov7.pt
+# If your code supports exporting ONNX files with NMS, please use the following command to export ONNX files, then refer to the example of `yolov7end2end_ort` or `yolov7end2end_ort`
+python models/export.py --grid --dynamic --end2end --weights PATH/TO/yolov7.pt
 ```
 
 ## Download the pre-trained ONNX model
