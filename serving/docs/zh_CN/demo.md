@@ -31,17 +31,6 @@
 
 Python-Triton-Model代码model.py的整体结构框架如下所示。Python代码的核心是1个`class TritonPythonModel`类，类中包含3个成员函数`initialize`、`execute`、`finalize`，类名、成员函数名、函数输入变量都不允许更改。在此基础上，用户可以自行编写代码。
 
-`initialize`中一般放置初始化的一些操作，该函数只在Python-Triton-Model被加载的时候执行1次。
-
-`finalize`中一般放置一些析构释放的操作，该函数只在Python-Triton-Model被卸载的时候执行1次。
-
-`execute`中放置用户需要的前后处理的逻辑，该函数在每次服务端收到客户端请求的时候被执行1次。
-
-`execute`函数的输入参数requests为InferenceRequest的集合，在没有开启[动态合并Batch功能](#动态合并Batch功能)时候，requests的长度是1，即只有1个InferenceRequest。
-
-`execute`函数的返回参数responses必须是InferenceResponse的集合，通常情况下长度与requests的长度一致，即有N个InferenceRequest就必须返回N个InferenceResponse。
-
-
 ```
 import json
 import numpy as np
@@ -106,6 +95,23 @@ class TritonPythonModel:
         the model to perform any necessary clean ups before exit.
         """
         #你的析构代码，finalize只在模型卸载的时候被调用1次
+```
+
+`initialize`中一般放置初始化的一些操作，该函数只在Python-Triton-Model被加载的时候执行1次。
+
+`finalize`中一般放置一些析构释放的操作，该函数只在Python-Triton-Model被卸载的时候执行1次。
+
+`execute`中放置用户需要的前后处理的逻辑，该函数在每次服务端收到客户端请求的时候被执行1次。
+
+`execute`函数的输入参数requests为InferenceRequest的集合，在没有开启[动态合并Batch功能](#动态合并Batch功能)时候，requests的长度是1，即只有1个InferenceRequest。
+
+`execute`函数的返回参数responses必须是InferenceResponse的集合，通常情况下长度与requests的长度一致，即有N个InferenceRequest就必须返回N个InferenceResponse。
+
+用户可以在`execute`函数中自行编写Python代码进行数据前处理或后处理，为了方便用户，FastDeploy提供了部分模型的python前后处理函数，使用方式如下：
+
+```
+import fastdeploy as fd
+fd.vision.detection.YOLOv5.preprocess(data)
 ```
 
 ## 动态合并Batch功能
