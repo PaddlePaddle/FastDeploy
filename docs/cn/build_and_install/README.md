@@ -1,11 +1,15 @@
 # FastDeploy安装
 
-- [预编译库下载安装](download_prebuilt_libraries.md)
-- [GPU部署环境编译安装](gpu.md)
-- [CPU部署环境编译安装](cpu.md)
-- [Jetson部署环境编译安装](jetson.md)
-- [Android平台部署环境编译安装](android.md)
-- [瑞芯微RK1126部署环境编译安装](rk1126.md)
+## FastDeploy预编译库安装
+- [FastDeploy预编译库下载安装](download_prebuilt_libraries.md)
+
+## 自行编译安装
+- [GPU部署环境](gpu.md)
+- [CPU部署环境](cpu.md)
+- [CPU部署环境](ipu.md)
+- [Jetson部署环境](jetson.md)
+- [Android平台部署环境](android.md)
+- [瑞芯微RK1126部署环境](rk1126.md)
 
 
 ## FastDeploy编译选项说明

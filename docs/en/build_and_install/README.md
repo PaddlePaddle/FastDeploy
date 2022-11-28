@@ -1,10 +1,15 @@
 # Install FastDeploy - Tutorials
 
-- [How to Install FastDeploy Prebuilt Libraries](download_prebuilt_libraries.md)
-- [How to Build and Install FastDeploy on GPU Platform](gpu.md)
-- [How to Build and Install FastDeploy Library on CPU Platform](cpu.md)
-- [How to Build and Install FastDeploy Library on Nvidia Jetson Platform](jetson.md)
-- [How to Build and Install FastDeploy Library on Android Platform](android.md)
+## Install Prebuilt FastDeploy
+- [Install Prebuilt FastDeploy Libraries](download_prebuilt_libraries.md)
+
+## Build FastDeploy and Install
+
+- [Build and Install on GPU Platform](gpu.md)
+- [Build and Install on CPU Platform](cpu.md)
+- [Build and Install on IPU Platform](ipu.md)
+- [Build and Install on Nvidia Jetson Platform](jetson.md)
+- [Build and Install on Android Platform](android.md)
 
 
 ## Build options
