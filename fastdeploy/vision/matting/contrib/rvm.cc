@@ -28,7 +28,7 @@ RobustVideoMatting::RobustVideoMatting(const std::string& model_file,
                                        const RuntimeOption& custom_option,
                                        const ModelFormat& model_format) {
   if (model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
+    valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT};

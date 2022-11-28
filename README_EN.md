@@ -11,7 +11,6 @@ English | [简体中文](README_CN.md)
     <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-pink.svg"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/graphs/contributors"><img src="https://img.shields.io/github/contributors/PaddlePaddle/FastDeploy?color=9ea"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/commits"><img src="https://img.shields.io/github/commit-activity/m/PaddlePaddle/FastDeploy?color=3af"></a>
-    <a href="https://pypi.org/project/FastDeploy-python/"><img src="https://img.shields.io/pypi/dm/FastDeploy-python?color=9cf"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/issues"><img src="https://img.shields.io/github/issues/PaddlePaddle/FastDeploy?color=9cc"></a>
     <a href="https://github.com/PaddlePaddle/FastDeploy/stargazers"><img src="https://img.shields.io/github/stars/PaddlePaddle/FastDeploy?color=ccf"></a>
 </p>
@@ -40,29 +39,29 @@ Including image classification, object detection, image segmentation, face detec
 ## 📣 Recent Updates
 
 - **Community**
-  
+
   - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
-  
+
   - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
-    
+
     <div align="center">
     <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "100" height = "100" />
     </div>
 
 - 🔥 **2022.11.23：Release FastDeploy [release v0.8.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.8.0)** <br>
-  
+
   - **🖥️ Server-side and Cloud Deployment: Support more CV models, improve deployment performance**
-    
+
     - Support [PIPNet](./examples/vision/facealign/pipnet), [FaceLandmark1000](./examples/vision/facealign/face_landmark_1000) face alignment models deployment;
     - Support [Video Super-Resolution](./examples/vision/sr) series model PP-MSVSR、EDVR、BasicVSR;
     - Upgrade YOLOv7 deployment code to add `batch_predict` deployment;
     - Support [UIE service-based](./examples/text/uie) deployment;
     - Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.
-  
+
   - **📱 Mobile and Edge Device Deployment: support more CV model**
-    
+
     - Support Android image classification, target detection, semantic segmentation, OCR, face detection APK projects and examples.
-      
+
       | <font size=3>Image Classification</font>                                                                                                                                                  | <font size=3>Object Detection</font>                                                                                                                                                  | <font size=3>Semantic Segmentation</font>                                                                                                                                                              | <font size=3>OCR</font>                                                                                                                                                                 | <font size=3>Face Detection</font>                                                                                                                                                   |
       |:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
       | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification)</font>        | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection)</font>         | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation)                              | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr)</font>                 | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/facedet)</font>          |
@@ -74,60 +73,60 @@ Including image classification, object detection, image segmentation, face detec
 ## Contents
 
 * <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
-  
+
   - Install
-    
+
     - [Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
     - [Build and Install FastDeploy Library on GPU Platform](docs/en/build_and_install/gpu.md)
     - [Build and Install FastDeploy Library on CPU Platform](docs/en/build_and_install/cpu.md)
     - [Build and Install FastDeploy Library on IPU Platform](docs/en/build_and_install/ipu.md)
     - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](docs/en/build_and_install/jetson.md)
     - [Build and Install FastDeploy Library on Android Platform](docs/en/build_and_install/android.md)
-  
+
   - A Quick Start - Demos
-    
+
     - [Python Deployment Demo](docs/en/quick_start/models/python.md)
     - [C++ Deployment Demo](docs/en/quick_start/models/cpp.md)
     - [A Quick Start on Runtime Python](docs/en/quick_start/runtime/python.md)
     - [A Quick Start on Runtime C++](docs/en/quick_start/runtime/cpp.md)
-  
+
   - API (To be continued)
-    
+
     - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
     - [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
-  
+
   - Performance Optimization
-    
+
     - [Quantization Acceleration](docs/en/quantize.md)
-  
+
   - Frequent Q&As
-    
+
     - [1. How to Change Inference Backends](docs/en/faq/how_to_change_backend.md)
     - [2. How to Use FastDeploy C++ SDK on Windows Platform](docs/en/faq/use_sdk_on_windows.md)
-    - [3. How to Use FastDeploy C++ SDK on Android Platform](docs/en/faq/use_sdk_on_android.md)(To be Continued)
+    - [3. How to Use FastDeploy C++ SDK on Android Platform](java/android/README_EN.md)(To be Continued)
     - [4. Tricks of TensorRT](docs/en/faq/tensorrt_tricks.md)
     - [5. How to Develop a New Model](docs/en/faq/develop_a_new_model.md)(To be Continued)
-  
+
   - More FastDeploy Deployment Module
-    
+
     - [deployment AI Model as a Service](./serving)
-    
+
     - [Benchmark Testing](./benchmark)
 
 </div></details>
 
 * **🖥️ Server-side and Cloud Deployment**
-  
+
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
   * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
   * [Supported Server-side and Cloud Model List](#fastdeploy-server-models)
 
 * **📱 Mobile and Edge Device Deployment**
-  
+
   * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
 
 * **🌐 Browser and Mini Program Deployment**
-  
+
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 
 * [**Community**](#fastdeploy-community)
