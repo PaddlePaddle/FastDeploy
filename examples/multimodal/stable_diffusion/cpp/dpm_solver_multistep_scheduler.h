@@ -39,9 +39,15 @@ class DPMSolverMultistepScheduler : public Scheduler {
   void DPMSolverFirstOrderUpdate(const FDTensor& model_output, int timestep,
                                  int prev_timestep, const FDTensor& sample,
                                  FDTensor* out);
+  void MultiStepDPMSolverSecondOrderUpdate(
+      const std::vector<FDTensor>& model_output_list,
+      const std::vector<int>& timestep_list, int prev_timestep,
+      const FDTensor& sample, FDTensor* out);
   void SetTimesteps(int num_inference_steps) override;
   void Step(const FDTensor& model_output, int timestep, const FDTensor& sample,
             FDTensor* prev_sample) override;
+  void ScaleModelInput(const FDTensor& sample, FDTensor* out,
+                       const std::vector<FDTensor>& timesteps = {}) override;
 
  private:
   FDTensor betas_;

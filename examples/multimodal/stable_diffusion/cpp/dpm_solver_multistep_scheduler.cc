@@ -175,12 +175,23 @@ void DPMSolverMultistepScheduler::DPMSolverFirstOrderUpdate(
   FDTensor one(Scalar(1.0f));
   FDTensor zero(Scalar(0.0f));
   if (algorithm_type_ == "dpmsolver++") {
-    functions::Exp(zero - h, &h);
+    function::Exp(zero - h, &h);
     *out = (sigma_t / sigma_s) * sample - (alpha_t * (h - one)) * model_output;
   } else if (algorithm_type_ == "dpmsolver") {
-    functions::Exp(h, &h);
+    function::Exp(h, &h);
     *out = (alpha_t / alpha_s) * sample - (sigma_t * (h - one)) * model_output;
   }
+}
+
+void DPMSolverMultistepScheduler::MultiStepDPMSolverSecondOrderUpdate(
+    const std::vector<FDTensor>& model_output_list,
+    const std::vector<int>& timestep_list, int prev_timestep,
+    const FDTensor& sample, FDTensor* out) {}
+
+void DPMSolverMultistepScheduler::ScaleModelInput(
+    const FDTensor& sample, FDTensor* out,
+    const std::vector<FDTensor>& timesteps) {
+  *out = sample;
 }
 
 void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {

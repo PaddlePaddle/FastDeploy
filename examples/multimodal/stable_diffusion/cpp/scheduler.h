@@ -22,6 +22,8 @@ class Scheduler {
   virtual void SetTimesteps(int num_inference_steps) = 0;
   virtual void Step(const FDTensor& model_output, int timestep,
                     const FDTensor& sample, FDTensor* prev_sample) = 0;
+  virtual void ScaleModelInput(const FDTensor& sample, FDTensor* out,
+                               const std::vector<FDTensor>& timesteps = {}) = 0;
 };
 
 }  // namespace fastdeploy
