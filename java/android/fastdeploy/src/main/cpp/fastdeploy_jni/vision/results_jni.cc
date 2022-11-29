@@ -859,6 +859,13 @@ bool AllocateSegmentationResultFromJava(
     return false;
   }
 
+  // mInitialized boolean:         Z
+  jboolean j_seg_initialized =
+      env->GetBooleanField(j_seg_result_obj, j_seg_initialized_id_cc);
+  if (j_seg_initialized == JNI_FALSE) {
+    return false;
+  }
+
   // If 'mEnableCxxBuffer' set as true, then, we only Allocate from
   // cxx context to cxx result. Some users may want to use this
   // method to boost the performance of segmentation.
@@ -872,30 +879,21 @@ bool AllocateSegmentationResultFromJava(
     }
     // Allocate from cxx context to cxx result
     auto c_cxx_buffer = reinterpret_cast<vision::SegmentationResult *>(j_cxx_buffer);
-    // TODO: May use 'swap' to exchange the administrative privileges ?
-    // c_result_ptr->shape.swap(c_cxx_buffer->shape);
-    // c_result_ptr->label_map.swap(c_cxx_buffer->label_map);
-    // c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
-    // if (c_cxx_buffer->contain_score_map) {
-    //   c_result_ptr->score_map.swap(c_cxx_buffer->score_map);
-    // }
-    c_result_ptr->shape.assign(
-        c_cxx_buffer->shape.begin(), c_cxx_buffer->shape.end());
-    c_result_ptr->label_map.assign(
-        c_cxx_buffer->label_map.begin(), c_cxx_buffer->label_map.end());
+
+    // (*c_result_ptr) = std::move(*c_cxx_buffer);
+    c_result_ptr->shape = c_cxx_buffer->shape;
+    const size_t label_len = c_cxx_buffer->label_map.size();
+    c_result_ptr->label_map.resize(label_len);
+    std::memcpy(c_result_ptr->label_map.data(), c_cxx_buffer->label_map.data(),
+                label_len * sizeof(uint8_t));
     c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
     if (c_cxx_buffer->contain_score_map) {
-      c_result_ptr->score_map.assign(
-          c_cxx_buffer->score_map.begin(), c_cxx_buffer->score_map.end());
+      const size_t score_len = c_cxx_buffer->score_map.size();
+      c_result_ptr->score_map.resize(score_len);
+      std::memcpy(c_result_ptr->score_map.data(), c_cxx_buffer->score_map.data(),
+                  score_len * sizeof(float));
     }
     return true;
-  }
-
-  // mInitialized boolean:         Z
-  jboolean j_seg_initialized =
-      env->GetBooleanField(j_seg_result_obj, j_seg_initialized_id_cc);
-  if (j_seg_initialized == JNI_FALSE) {
-    return false;
   }
 
   jbyteArray j_seg_label_map_byte_arr = reinterpret_cast<jbyteArray>(
