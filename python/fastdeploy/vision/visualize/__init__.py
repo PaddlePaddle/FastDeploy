@@ -24,25 +24,64 @@ def vis_detection(im_data,
                   score_threshold=0.0,
                   line_size=1,
                   font_size=0.5):
+    """Show the visulized results for detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param det_result: the result produced by model
+    :param labels: (list of str) the visulized result will show the bounding box contain class label
+    :param score_threshold: (float) score_threshold threshold for result scores, the bounding box will not be shown if the score is smaller than score_threshold
+    :param line_size: (float) line_size line size for bounding boxes
+    :param font_size: (float) font_size font size for text
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_detection(im_data, det_result, labels, score_threshold,
                                   line_size, font_size)
 
 
 def vis_keypoint_detection(im_data, keypoint_det_result, conf_threshold=0.5):
+    """Show the visulized results for keypoint detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param keypoint_det_result: the result produced by model
+    :param conf_threshold: (float) conf_threshold threshold for result scores, the bounding box will not be shown if the score is smaller than conf_threshold
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.Visualize.vis_keypoint_detection(
         im_data, keypoint_det_result, conf_threshold)
 
 
 def vis_face_detection(im_data, face_det_result, line_size=1, font_size=0.5):
+    """Show the visulized results for face detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param face_det_result: the result produced by model
+    :param line_size: (float) line_size line size for bounding boxes
+    :param font_size: (float) font_size font size for text
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_face_detection(im_data, face_det_result, line_size,
                                        font_size)
 
 
 def vis_face_alignment(im_data, face_align_result, line_size=1):
+    """Show the visulized results for detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param face_align_result: the result produced by model
+    :param line_size: (float)line_size line size for circle point
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_face_alignment(im_data, face_align_result, line_size)
 
 
 def vis_segmentation(im_data, seg_result, weight=0.5):
+    """Show the visulized results for detection models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param seg_result: the result produced by model
+    :param weight: (float)transparent weight of visulized result image
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_segmentation(im_data, seg_result, weight)
 
 
@@ -57,6 +96,13 @@ def vis_matting_alpha(im_data,
 
 
 def vis_matting(im_data, matting_result, remove_small_connected_area=False):
+    """Show the visulized results for matting models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param matting_result: the result produced by model
+    :param remove_small_connected_area: (bool) if remove_small_connected_area==True, the visualized result will not include the small connected areas
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_matting(im_data, matting_result,
                                 remove_small_connected_area)
 
@@ -105,6 +151,12 @@ def swap_background(im_data,
 
 
 def vis_ppocr(im_data, det_result):
+    """Show the visulized results for ocr models
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param det_result: the result produced by model
+    :return visualiezd result: (numpy.ndarray) image with visulized results
+    """
     return C.vision.vis_ppocr(im_data, det_result)
 
 
