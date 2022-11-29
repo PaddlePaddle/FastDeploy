@@ -10,6 +10,7 @@
 - [IPU部署环境编译安装](cn/build_and_install/ipu.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
 - [Android平台部署环境编译安装](cn/build_and_install/android.md)
+- [服务化部署镜像编译安装](../serving/docs/zh_CN/compile.md)
 
 ## 快速使用
 
