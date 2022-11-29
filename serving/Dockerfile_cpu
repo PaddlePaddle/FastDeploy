@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM paddlepaddle/fastdeploy:22.09-cpu-only-min
+FROM paddlepaddle/fastdeploy:21.10-cpu-only-min
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgo
     && python3 -m pip install -U pip \
     && python3 -m pip install paddlepaddle paddlenlp fast-tokenizer-python
 
-COPY python/dist/*.whl *.whl /opt/fastdeploy/ 
+COPY python/dist/*.whl /opt/fastdeploy/ 
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \
     && rm -rf /opt/fastdeploy/*.whl
 
