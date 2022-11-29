@@ -57,7 +57,7 @@ def build_option(args):
     if args.backend == 'onnx_runtime':
         runtime_option.use_ort_backend()
     elif args.backend == 'paddle_inference':
-        runtime_option.use_paddle_backend()
+        runtime_option.use_paddle_infer_backend()
     elif args.backend == 'openvino':
         runtime_option.use_openvino_backend()
     runtime_option.set_cpu_thread_num(args.cpu_num_threads)

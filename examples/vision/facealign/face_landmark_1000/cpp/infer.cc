@@ -40,7 +40,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     if (FLAGS_backend == "ort") {
       option->UseOrtBackend();
     } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleBackend();
+      option->UsePaddleInferBackend();
     } else if (FLAGS_backend == "trt" || 
                FLAGS_backend == "paddle_trt") {
       option->UseTrtBackend();
@@ -63,7 +63,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
     } else if (FLAGS_backend == "ov") {
       option->UseOpenVINOBackend();
     } else if (FLAGS_backend == "paddle") {
-      option->UsePaddleBackend();
+      option->UsePaddleInferBackend();
     } else if (FLAGS_backend == "default") {
       return true;
     } else {

@@ -78,7 +78,7 @@ class TritonPythonModel:
 
         for option in options:
             if option['name'] == 'paddle':
-                runtime_option.use_paddle_backend()
+                runtime_option.use_paddle_infer_backend()
             elif option['name'] == 'onnxruntime':
                 runtime_option.use_ort_backend()
             elif option['name'] == 'openvino':

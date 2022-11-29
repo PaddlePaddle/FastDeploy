@@ -57,7 +57,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
 
 //   fastdeploy::RuntimeOption option;
 //   option.UseCpu();
-//   option.UsePaddleBackend();
+//   option.UsePaddleInferBackend();
 //   std::cout<<"Xyy-debug, enable Paddle Backend==!";
 
 //   std::string model_dir = argv[1];
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     std::cout<<"Use ORT!"<<std::endl;
   } else if (flag == 1) {
     option.UseCpu();
-    option.UsePaddleBackend();
+    option.UsePaddleInferBackend();
     std::cout<<"Use PP!"<<std::endl;
   }
 

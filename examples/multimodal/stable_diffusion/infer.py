@@ -120,7 +120,7 @@ def create_paddle_inference_runtime(model_dir,
                                     use_fp16=False,
                                     device_id=0):
     option = fd.RuntimeOption()
-    option.use_paddle_backend()
+    option.use_paddle_infer_backend()
     if device_id == -1:
         option.use_cpu()
     else:

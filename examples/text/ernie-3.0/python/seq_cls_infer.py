@@ -99,7 +99,7 @@ class ErnieForSequenceClassificationPredictor(object):
         else:
             option.use_gpu()
         if args.backend == 'paddle':
-            option.use_paddle_backend()
+            option.use_paddle_infer_backend()
         elif args.backend == 'onnx_runtime':
             option.use_ort_backend()
         elif args.backend == 'openvino':

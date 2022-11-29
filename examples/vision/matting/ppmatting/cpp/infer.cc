@@ -60,7 +60,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file,
 
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  option.UsePaddleBackend();
+  option.UsePaddleInferBackend();
   auto model = fastdeploy::vision::matting::PPMatting(model_file, params_file,
                                                       config_file, option);
   if (!model.Initialized()) {
