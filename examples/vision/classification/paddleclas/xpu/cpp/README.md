@@ -1,10 +1,10 @@
-# PaddleClas 模型在 XPU 上的 C++ 部署示例
+# PaddleClas 模型在昆仑芯 XPU 上的 C++ 部署示例
 
-本目录下提供的 `infer.cc`，可以帮助用户快速完成 PaddleClas 模型在 XPU 上的部署推理加速。
+本目录下提供的 `infer.cc`，可以帮助用户快速完成 PaddleClas 模型在昆仑芯 XPU 上的部署推理加速。
 
-## 在 XPU 上部署 ResNet50_Vd 分类模型
-请按照以下步骤完成在 XPU 上部署 ResNet50_Vd 检测模型：
-1. 适用于 XPU 的 FastDeploy 库编译，具体请参考：[编译 FastDeploy](../../../../../../docs/cn/build_and_install/xpu.md)
+## 在昆仑芯 XPU 上部署 ResNet50_Vd 分类模型
+请按照以下步骤完成在昆仑芯 XPU 上部署 ResNet50_Vd 检测模型：
+1. 适用于昆仑芯 XPU 的 FastDeploy 库编译，具体请参考：[编译 FastDeploy](../../../../../../docs/cn/build_and_install/xpu.md)
 
 2. 将编译后的库拷贝到当前目录，可使用如下命令：
 ```bash
@@ -26,7 +26,7 @@ make -j8
 # 成功编译之后，会生成可运行 demo
 ```
 
-5. 部署 ResNet50_vd 分类模型到 XPU 上，可使用如下命令：
+5. 部署 ResNet50_vd 分类模型到昆仑芯 XPU 上，可使用如下命令：
 ```bash
 cd FastDeploy/examples/vision/classification/paddleclas/xpu/cpp/build/
 ./infer_demo infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg

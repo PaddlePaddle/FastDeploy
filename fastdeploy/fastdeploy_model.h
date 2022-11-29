@@ -45,7 +45,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
-  /** Model's valid xpu backends. This member defined all the xpu backends have successfully tested for the model
+  /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_xpu_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model

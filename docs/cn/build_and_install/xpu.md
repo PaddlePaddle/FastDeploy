@@ -1,6 +1,6 @@
-# XPU 部署环境编译安装
+# 昆仑芯 XPU 部署环境编译安装
 
-FastDeploy 基于 Paddle-Lite 后端支持在 XPU 上进行部署推理。
+FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理。
 更多详细的信息请参考：[PaddleLite部署示例](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
 
 本文档介绍如何编译基于 PaddleLite 的 C++ FastDeploy 编译库。
@@ -20,17 +20,17 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy  
 mkdir build && cd build
 
-# CMake configuration with xpu toolchain
+# CMake configuration with KunlunXin xpu toolchain
 cmake -DCMAKE_TOOLCHAIN_FILE=./../cmake/xpu.cmake \
       -DENABLE_XPU=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
       -Wno-dev ..
 
-# Build FastDeploy XPU C++ SDK
+# Build FastDeploy KunlunXin XPU C++ SDK
 make -j8
 make install
 ```  
 编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
 
-XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/rk1126/README.md)
+昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)

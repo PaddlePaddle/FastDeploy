@@ -64,7 +64,7 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
 option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
-option(ENABLE_XPU "Whether to compile for XPU deploy." OFF)
+option(ENABLE_XPU "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)

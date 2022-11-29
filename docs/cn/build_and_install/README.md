@@ -12,7 +12,7 @@
 - [Jetson部署环境](jetson.md)
 - [Android平台部署环境](android.md)
 - [瑞芯微RK1126部署环境](rk1126.md)
-- [XPU部署环境](xpu.md)
+- [昆仑芯XPU部署环境](xpu.md)
 
 
 ## FastDeploy编译选项说明
@@ -23,7 +23,7 @@
 | ENABLE_PADDLE_BACKEND   | 默认OFF，是否编译集成Paddle Inference后端(CPU/GPU上推荐打开)                              |  
 | ENABLE_LITE_BACKEND     | 默认OFF，是否编译集成Paddle Lite后端(编译Android库时需要设置为ON)                             |
 | ENABLE_RKNPU2_BACKEND   | 默认OFF，是否编译集成RKNPU2后端(RK3588/RK3568/RK3566上推荐打开)                           |
-| ENABLE_XPU              | 默认OFF，当在XPU上部署时，需设置为ON                                                     |
+| ENABLE_XPU              | 默认OFF，当在昆仑芯XPU上部署时，需设置为ON                                                     |
 | ENABLE_TIMVX            | 默认OFF，是否开启Lite的TIMVX(RV1126)                                                   |
 | ENABLE_TRT_BACKEND      | 默认OFF，是否编译集成TensorRT后端(GPU上推荐打开)                                          |
 | ENABLE_OPENVINO_BACKEND | 默认OFF，是否编译集成OpenVINO后端(CPU上推荐打开)                                          |
