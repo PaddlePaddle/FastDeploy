@@ -354,4 +354,41 @@ void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
   }
 }
 
+void DPMSolverMultistepScheduler::AddNoise(const FDTensor& original_samples,
+                                           const FDTensor& noise,
+                                           const FDTensor& timesteps,
+                                           FDTensor* out) {
+  function::Cast(alphas_cumprod_, &alphas_cumprod_, original_samples.Dtype());
+
+  int64_t* timesteps_data = reinterpret_cast<int64_t*>(timesteps.Data());
+  std::vector<int64_t> timesteps_vec;
+  for (int i = 0; i < timesteps.Numel(); ++i) {
+    timesteps_vec.push_back(timesteps_data[i]);
+  }
+  FDTensor sqrt_alpha_prod;
+  function::Slice(alphas_cumprod_, {0}, timesteps_vec, &sqrt_alpha_prod);
+  function::Sqrt(sqrt_alpha_prod, &sqrt_alpha_prod);
+  sqrt_alpha_prod.Reshape({-1});
+  int rank_diff =
+      original_samples.Shape().size() - sqrt_alpha_prod.Shape().size();
+  for (int i = 0; i < rank_diff; ++i) {
+    int curr_rank = sqrt_alpha_prod.Shape().size();
+    sqrt_alpha_prod.ExpandDim(curr_rank - 1);
+  }
+
+  FDTensor sqrt_one_minus_alpha_prod;
+  function::Slice(alphas_cumprod_, {0}, timesteps_vec,
+                  &sqrt_one_minus_alpha_prod);
+  sqrt_one_minus_alpha_prod = 1.0f - sqrt_one_minus_alpha_prod;
+  function::Sqrt(sqrt_one_minus_alpha_prod, &sqrt_one_minus_alpha_prod);
+  sqrt_one_minus_alpha_prod.Reshape({-1});
+  rank_diff = original_samples.Shape().size() -
+              sqrt_one_minus_alpha_prod.Shape().size();
+  for (int i = 0; i < rank_diff; ++i) {
+    int curr_rank = sqrt_one_minus_alpha_prod.Shape().size();
+    sqrt_one_minus_alpha_prod.ExpandDim(curr_rank - 1);
+  }
+  *out = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise;
+}
+
 }  // namespace fastdeploy

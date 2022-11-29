@@ -24,6 +24,8 @@ class Scheduler {
                     const FDTensor& sample, FDTensor* prev_sample) = 0;
   virtual void ScaleModelInput(const FDTensor& sample, FDTensor* out,
                                const std::vector<FDTensor>& timesteps = {}) = 0;
+  virtual void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
+                        const FDTensor& timesteps, FDTensor* out) = 0;
 };
 
 }  // namespace fastdeploy

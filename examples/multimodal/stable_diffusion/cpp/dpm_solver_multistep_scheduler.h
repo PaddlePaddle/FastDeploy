@@ -52,6 +52,8 @@ class DPMSolverMultistepScheduler : public Scheduler {
             FDTensor* prev_sample) override;
   void ScaleModelInput(const FDTensor& sample, FDTensor* out,
                        const std::vector<FDTensor>& timesteps = {}) override;
+  void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
+                const FDTensor& timesteps, FDTensor* out) override;
 
  private:
   FDTensor betas_;
