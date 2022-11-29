@@ -22,7 +22,8 @@
 ## API 
 
 - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-- [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
+- [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/) 
+- [Android Java API](../java/android)
 
 ## Performance Optimization
 
@@ -32,11 +33,11 @@
 
 - [1. How to Change Inference Backends](en/faq/how_to_change_backend.md)
 - [2. How to Use FastDeploy C++ SDK on Windows Platform](en/faq/use_sdk_on_windows.md)
-- [3. How to Use FastDeploy C++ SDK on Android Platform](en/faq/use_sdk_on_android.md)
+- [3. How to Use FastDeploy C++ SDK on Android Platform](en/faq/use_cpp_sdk_on_android.md)
 - [4. Tricks of TensorRT](en/faq/tensorrt_tricks.md)
 - [5. How to Develop a New Model](en/faq/develop_a_new_model.md)
 
 ## More FastDeploy Deployment Module
 
-- [deployment AI Model as a Service](../serving)
+- [Deployment AI Model as a Service](../serving)
 - [Benchmark Testing](../benchmark)
