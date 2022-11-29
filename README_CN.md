@@ -62,8 +62,8 @@
 * **🌐 Web和小程序部署**  
 
   * [Web端模型支持列表](#fastdeploy-web-models)
-* [**Acknowledge**](#fastdeploy-acknowledge)  
-* [**License**](#fastdeploy-license)
+* [Acknowledge](#fastdeploy-acknowledge)  
+* [License](#fastdeploy-license)
 
 ## 🖥️ 服务端部署
 
