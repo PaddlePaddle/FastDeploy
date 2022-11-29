@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.segmentation;
 
-import static com.baidu.ui.Utils.decodeBitmap;
-import static com.baidu.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -29,13 +29,13 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.ui.Utils;
+import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
-import com.baidu.ui.Utils;
-import com.baidu.ui.view.CameraSurfaceView;
-import com.baidu.ui.view.ResultListView;
-import com.baidu.ui.view.model.BaseResultModel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -340,7 +340,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.4f);
+        predictor.predict(bitmap, true, 0.7f);
         resultImage.setImageBitmap(bitmap);
     }
 

@@ -10,8 +10,8 @@ import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.ui.Utils;
-import com.baidu.ui.view.AppCompatPreferenceActivity;
+import com.baidu.paddle.fastdeploy.ui.Utils;
+import com.baidu.paddle.fastdeploy.ui.view.AppCompatPreferenceActivity;
 
 import java.util.ArrayList;
 import java.util.List;

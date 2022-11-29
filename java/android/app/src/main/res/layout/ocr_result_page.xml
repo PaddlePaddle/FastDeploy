@@ -9,7 +9,7 @@
         android:background="#FFFFFF"
         android:orientation="vertical">
 
-        <com.baidu.ui.layout.ActionBarLayout
+        <com.baidu.paddle.fastdeploy.ui.layout.ActionBarLayout
             android:id="@+id/action_bar_result"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -34,7 +34,7 @@
                 android:layout_marginTop="50px"
                 android:textColor="@color/textColor"
                 android:textSize="@dimen/action_btn_text_size" />
-        </com.baidu.ui.layout.ActionBarLayout>
+        </com.baidu.paddle.fastdeploy.ui.layout.ActionBarLayout>
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -147,12 +147,12 @@
                 android:paddingLeft="@dimen/result_list_padding_lr"
                 android:paddingRight="@dimen/result_list_padding_lr">
 
-                <com.baidu.ui.view.ResultListView
+                <com.baidu.paddle.fastdeploy.ui.view.ResultListView
                     android:id="@+id/result_list_view"
                     android:layout_width="match_parent"
                     android:layout_height="700px"
                     android:divider="#FFFFFF"
-                    android:dividerHeight="@dimen/result_list_gap_width"></com.baidu.ui.view.ResultListView>
+                    android:dividerHeight="@dimen/result_list_gap_width"></com.baidu.paddle.fastdeploy.ui.view.ResultListView>>
             </ScrollView>
 
         </FrameLayout>

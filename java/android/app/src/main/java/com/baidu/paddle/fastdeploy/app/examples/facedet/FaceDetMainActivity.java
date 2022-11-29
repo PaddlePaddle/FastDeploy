@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.facedet;
 
-import static com.baidu.ui.Utils.decodeBitmap;
-import static com.baidu.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -30,14 +30,14 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.ui.Utils;
+import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.ui.view.adapter.BaseResultAdapter;
+import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
-import com.baidu.ui.Utils;
-import com.baidu.ui.view.CameraSurfaceView;
-import com.baidu.ui.view.ResultListView;
-import com.baidu.ui.view.adapter.BaseResultAdapter;
-import com.baidu.ui.view.model.BaseResultModel;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
