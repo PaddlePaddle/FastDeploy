@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.ui.view.model;
+package com.baidu.paddle.fastdeploy.app.ui.view.model;
 
 public class BaseResultModel {
     private int index;

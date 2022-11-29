@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.ui.view;
+package com.baidu.paddle.fastdeploy.app.ui.view;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -278,10 +278,9 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         disableCamera = true;
     }
 
-    public void enableCamera() {
+	public void enableCamera() {
         disableCamera = false;
     }
-
     public void switchCamera() {
         releaseCamera();
         selectedCameraId = (selectedCameraId + 1) % numberOfCameras;

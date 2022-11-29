@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.ui.view.adapter;
+package com.baidu.paddle.fastdeploy.app.ui.view.adapter;
 
 import android.content.Context;
 import android.support.annotation.NonNull;

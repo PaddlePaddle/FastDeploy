@@ -278,6 +278,10 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         disableCamera = true;
     }
 
+    public void enableCamera() {
+        disableCamera = false;
+    }
+
     public void switchCamera() {
         releaseCamera();
         selectedCameraId = (selectedCameraId + 1) % numberOfCameras;
@@ -301,7 +305,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         boolean rotate = degree == 90 || degree == 270;
         textureWidth = rotate ? previewSize.height : previewSize.width;
         textureHeight = rotate ? previewSize.width : previewSize.height;
-
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);
