@@ -171,6 +171,9 @@ void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
   }
   Slice(x, axes, index, ends, out);
   for (int i = 0; i < axes.size(); ++i) {
+    if (out->Shape().size() <= 1) {
+      break;
+    }
     out->Squeeze(axes[i]);
   }
 }
