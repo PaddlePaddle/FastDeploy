@@ -28,17 +28,22 @@ namespace function {
 template <typename T, typename Functor>
 void ActivationImpl(const FDTensor& X, FDTensor* Out, const Functor& functor) {
   FDASSERT(Out != nullptr, "Output Out should not be nullptr");
+  FDTensor out_tmp;
   auto x = EigenVector<T>::Flatten(X);
-  Out->Allocate(X.Shape(), X.Dtype());
-  auto out = EigenVector<T>::Flatten(*Out);
+  out_tmp.Allocate(X.Shape(), X.Dtype());
+  auto out = EigenVector<T>::Flatten(out_tmp);
   const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
   functor(dev, x, out);
+  *Out = std::move(out_tmp);
 }
 
 DEFINE_ACTIVATION_KERNEL(Sqrt, SqrtFunctor)
 DEFINE_ACTIVATION_KERNEL(Log, LogFunctor)
 DEFINE_ACTIVATION_KERNEL(Round, RoundFunctor)
 DEFINE_ACTIVATION_KERNEL(Exp, ExpFunctor)
+DEFINE_ACTIVATION_KERNEL(Abs, AbsFunctor)
+DEFINE_ACTIVATION_KERNEL(Ceil, CeilFunctor)
+DEFINE_ACTIVATION_KERNEL(Floor, FloorFunctor)
 
 void Sqrt(const FDTensor& x, FDTensor* out) {
   FD_VISIT_FLOAT_TYPES(x.dtype, "SqrtKernel",
@@ -58,6 +63,21 @@ void Round(const FDTensor& x, FDTensor* out) {
 void Exp(const FDTensor& x, FDTensor* out) {
   FD_VISIT_FLOAT_TYPES(x.dtype, "ExpKernel",
                        ([&] { ExpKernel<data_t>(x, out); }));
+}
+
+void Abs(const FDTensor& x, FDTensor* out) {
+  FD_VISIT_FLOAT_TYPES(x.dtype, "AbsKernel",
+                       ([&] { AbsKernel<data_t>(x, out); }));
+}
+
+void Ceil(const FDTensor& x, FDTensor* out) {
+  FD_VISIT_FLOAT_TYPES(x.dtype, "CeilKernel",
+                       ([&] { CeilKernel<data_t>(x, out); }));
+}
+
+void Floor(const FDTensor& x, FDTensor* out) {
+  FD_VISIT_FLOAT_TYPES(x.dtype, "FloorKernel",
+                       ([&] { FloorKernel<data_t>(x, out); }));
 }
 
 }  // namespace function

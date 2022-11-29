@@ -250,12 +250,10 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         }
 
         boolean modified = false;
-
-        long tc = System.currentTimeMillis();
-
         SegmentationResult result = new SegmentationResult();
         result.setCxxBufferFlag(true);
 
+        long tc = System.currentTimeMillis();
         predictor.predict(ARGB8888ImageBitmap, result);
         timeElapsed += (System.currentTimeMillis() - tc);
 
@@ -287,6 +285,8 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
+        } else {
+            svPreview.enableCamera();
         }
         svPreview.onResume();
     }

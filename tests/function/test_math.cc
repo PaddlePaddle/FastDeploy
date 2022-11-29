@@ -71,6 +71,22 @@ TEST(fastdeploy, exp_sqrt_round_log) {
   check_data(reinterpret_cast<const float*>(y.Data()), round_result.data(),
              round_result.size());
 
+  Ceil(x, &y);
+  std::vector<float> ceil_result = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                                    1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                                    1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+  check_shape(y.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(y.Data()), ceil_result.data(),
+             ceil_result.size());
+
+  Floor(x, &y);
+  std::vector<float> floor_result = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  check_shape(y.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(y.Data()), floor_result.data(),
+             floor_result.size());
+
   // Test Log function
   Log(x, &y);
   std::vector<float> log_result = {
@@ -81,6 +97,19 @@ TEST(fastdeploy, exp_sqrt_round_log) {
   check_shape(y.shape, {2, 3, 4});
   check_data(reinterpret_cast<const float*>(y.Data()), log_result.data(),
              log_result.size());
+}
+
+TEST(fastdeploy, abs) {
+  CheckShape check_shape;
+  CheckData check_data;
+  FDTensor x, y;
+  std::vector<float> test_data = {-1, 2, 3, -5, -4, -6};
+  x.SetExternalData({2, 3}, FDDataType::FP32, test_data.data());
+  std::vector<float> result = {1, 2, 3, 5, 4, 6};
+  Abs(x, &y);
+  check_shape(y.shape, {2, 3});
+  check_data(reinterpret_cast<const float*>(y.Data()), result.data(),
+             result.size());
 }
 
 }  // namespace function

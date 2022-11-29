@@ -54,12 +54,6 @@ def build_option(args):
         option.enable_paddle_to_trt()
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
-    elif args.backend.lower() == "paddle":
-        option.use_paddle_backend()
-    elif args.backend.lower() == "openvino":
-        assert args.device.lower(
-        ) == "cpu", "OpenVINO backend require inference on device CPU."
-        option.use_openvino_backend()
     return option
 
 
