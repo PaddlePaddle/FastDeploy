@@ -1,5 +1,5 @@
 # PaddleSeg 量化模型 C++部署示例
-本目录下提供的`infer.cc`,可以帮助用户快速完成PaddleSeg量化模型在CPU/GPU上的部署推理加速.
+本目录下提供的`infer.cc`,可以帮助用户快速完成PaddleSeg量化模型在CPU上的部署推理加速.
 
 ## 部署准备
 ### FastDeploy环境准备
