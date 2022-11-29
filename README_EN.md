@@ -38,7 +38,7 @@ Including image classification, object detection, image segmentation, face detec
 
 ## 👬 Community
 
- - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
+ - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas.
 
  - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
 
@@ -61,9 +61,9 @@ Including image classification, object detection, image segmentation, face detec
 
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 
-* [**Acknowledge**](#fastdeploy-acknowledge)  
+* [Acknowledge](#fastdeploy-acknowledge)  
 
-* [**License**](#fastdeploy-license)
+* [License](#fastdeploy-license)
 
 ## 🖥️ Server-side and Cloud Deployment
 
