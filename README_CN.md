@@ -56,7 +56,6 @@
 
 * **📲 移动端和端侧部署**
 
-  * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
   * [端侧模型支持列表](#fastdeploy-edge-models)
 
 * **🌐 Web和小程序部署**  
