@@ -60,7 +60,9 @@ class LiteBackend : public BaseBackend {
                       const std::string& params_file,
                       const LiteBackendOption& option = LiteBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs) override; // NOLINT
+  bool Infer(std::vector<FDTensor>& inputs,
+            std::vector<FDTensor>* outputs,
+            bool copy_to_fd = true) override; // NOLINT
 
   int NumInputs() const override { return inputs_desc_.size(); }
 
