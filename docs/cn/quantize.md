@@ -27,7 +27,7 @@ FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了�
 
 ### 使用FastDeploy一键模型自动化压缩工具来量化模型
 FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具，请参考如下文档进行一键模型自动化压缩。
-- [FastDeploy 一键模型自动化压缩](../../tools/auto_compression/)
+- [FastDeploy 一键模型自动化压缩](../../tools/common_tools/auto_compression/)
 当用户获得产出的压缩模型之后，即可以使用FastDeploy来部署压缩模型。
 
 
