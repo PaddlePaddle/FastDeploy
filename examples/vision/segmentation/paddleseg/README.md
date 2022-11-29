@@ -20,7 +20,6 @@ PaddleSeg模型导出，请参考其文档说明[模型导出](https://github.co
 
 **注意**
 - PaddleSeg导出的模型包含`model.pdmodel`、`model.pdiparams`和`deploy.yaml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息
-- aarch64平台（如：Jetson）暂时只支持`onnxruntime`和`tensorrt`作为后端推理。
 
 ## 下载预训练模型
 
