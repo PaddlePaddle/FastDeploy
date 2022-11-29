@@ -45,6 +45,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
+  /** Model's valid xpu backends. This member defined all the xpu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_xpu_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
@@ -129,6 +132,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
   bool CreateTimVXBackend();
+  bool CreateXPUBackend();
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;

@@ -61,6 +61,8 @@ else() # Linux
     set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-linux-arm64-20220920.tgz")
   elseif(TARGET_ABI MATCHES "armhf")
     set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_armhf_1101.tgz")
+  elseif(TARGET_ABI MATCHES "amd64")
+    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_1129.tgz")
   else()
     message(FATAL_ERROR "Only support Linux aarch64 now, x64 is not supported with backend Paddle Lite.")
   endif()

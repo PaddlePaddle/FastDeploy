@@ -45,6 +45,7 @@ struct LiteBackendOption {
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
   std::string nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
+  bool enable_xpu = false;
 };
 
 // Convert data type from paddle lite to fastdeploy

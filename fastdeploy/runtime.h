@@ -102,6 +102,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  /// Use XPU to inference
+  void UseXPU();
+
   void SetExternalStream(void* external_stream);
 
   /*
@@ -353,6 +356,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
+  bool enable_xpu = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
