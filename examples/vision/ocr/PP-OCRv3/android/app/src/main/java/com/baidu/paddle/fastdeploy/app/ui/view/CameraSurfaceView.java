@@ -12,6 +12,7 @@ import android.opengl.GLSurfaceView;
 import android.opengl.GLSurfaceView.Renderer;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.util.Log;
 
@@ -305,7 +306,6 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         boolean rotate = degree == 90 || degree == 270;
         textureWidth = rotate ? previewSize.height : previewSize.width;
         textureHeight = rotate ? previewSize.width : previewSize.height;
-
         // Destroy FBO and draw textures
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glDeleteFramebuffers(1, fbo, 0);
