@@ -10,6 +10,7 @@
 - [Build and Install FastDeploy Library on IPU Platform](en/build_and_install/ipu.md)
 - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
 - [Build and Install FastDeploy Library on Android Platform](en/build_and_install/android.md)
+- [Build and Install FastDeploy Serving Deployment Image](../serving/docs/EN/compile-en.md）
 
 ## A Quick Start - Demos
 
