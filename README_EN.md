@@ -61,9 +61,9 @@ Including image classification, object detection, image segmentation, face detec
 
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 
-* [**Acknowledge**](#fastdeploy-acknowledge)  
+* [Acknowledge](#fastdeploy-acknowledge)  
 
-* [**License**](#fastdeploy-license)
+* [License](#fastdeploy-license)
 
 ## 🖥️ Server-side and Cloud Deployment
 
