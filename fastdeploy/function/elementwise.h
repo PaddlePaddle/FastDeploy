@@ -65,55 +65,41 @@ FASTDEPLOY_DECL void Maximum(const FDTensor& x, const FDTensor& y,
 FASTDEPLOY_DECL FDTensor operator+(const FDTensor& x, const FDTensor& y);
 
 template <typename T> FDTensor operator+(const FDTensor& x, T y) {
-  FDTensor rhs = FDTensor(Scalar(y));
-  return x + rhs;
+  return x + FDTensor(Scalar(y));
 }
 
 template <typename T> FDTensor operator+(T x, const FDTensor& y) {
-  FDTensor lhs = FDTensor(Scalar(x));
-  return lhs + y;
+  return FDTensor(Scalar(x)) + y;
 }
 
 FASTDEPLOY_DECL FDTensor operator-(const FDTensor& x, const FDTensor& y);
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator-(const FDTensor& x, T y) {
-  FDTensor rhs = FDTensor(Scalar(y));
-  return x - rhs;
+template <typename T> FDTensor operator-(const FDTensor& x, T y) {
+  return x - FDTensor(Scalar(y));
 }
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator-(T x, const FDTensor& y) {
-  FDTensor lhs = FDTensor(Scalar(x));
-  return lhs - y;
+template <typename T> FDTensor operator-(T x, const FDTensor& y) {
+  return FDTensor(Scalar(x)) - y;
 }
 
 FASTDEPLOY_DECL FDTensor operator*(const FDTensor& x, const FDTensor& y);
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator*(const FDTensor& x, T y) {
-  FDTensor rhs = FDTensor(Scalar(y));
-  return x * rhs;
+template <typename T> FDTensor operator*(const FDTensor& x, T y) {
+  return x * FDTensor(Scalar(y));
 }
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator*(T x, const FDTensor& y) {
-  FDTensor lhs = FDTensor(Scalar(x));
-  return lhs * y;
+template <typename T> FDTensor operator*(T x, const FDTensor& y) {
+  return FDTensor(Scalar(x)) * y;
 }
 
 FASTDEPLOY_DECL FDTensor operator/(const FDTensor& x, const FDTensor& y);
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator/(const FDTensor& x, T y) {
-  FDTensor rhs = FDTensor(Scalar(y));
-  return x * rhs;
+template <typename T> FDTensor operator/(const FDTensor& x, T y) {
+  return x / FDTensor(Scalar(y));
 }
 
-template <typename T>
-FASTDEPLOY_DECL FDTensor operator/(T x, const FDTensor& y) {
-  FDTensor lhs = FDTensor(Scalar(x));
-  return lhs * y;
+template <typename T> FDTensor operator/(T x, const FDTensor& y) {
+  return FDTensor(Scalar(x)) / y;
 }
 
 }  // namespace fastdeploy

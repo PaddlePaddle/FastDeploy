@@ -21,7 +21,7 @@
 
 namespace fastdeploy {
 
-class Scalar {
+class FASTDEPLOY_DECL Scalar {
  public:
   // Constructor support implicit
   Scalar() : Scalar(0) {}
