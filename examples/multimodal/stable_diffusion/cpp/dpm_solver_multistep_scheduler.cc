@@ -333,8 +333,8 @@ void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
   model_outputs_[solver_order_ - 1] = std::move(model_out);
 
   if (solver_order_ == 1 || lower_order_nums_ < 1 || lower_order_final) {
-    DPMSolverFirstOrderUpdate(model_out, timestep, prev_timestep, sample,
-                              prev_sample);
+    DPMSolverFirstOrderUpdate(model_outputs_[solver_order_ - 1], timestep,
+                              prev_timestep, sample, prev_sample);
   } else if (solver_order_ == 2 || lower_order_nums_ < 2 ||
              lower_order_second) {
     int t0 = reinterpret_cast<int64_t*>(timesteps_.Data())[step_index - 1];
@@ -360,7 +360,8 @@ void DPMSolverMultistepScheduler::AddNoise(const FDTensor& original_samples,
                                            FDTensor* out) {
   function::Cast(alphas_cumprod_, &alphas_cumprod_, original_samples.Dtype());
 
-  const int64_t* timesteps_data = reinterpret_cast<const int64_t*>(timesteps.Data());
+  const int64_t* timesteps_data =
+      reinterpret_cast<const int64_t*>(timesteps.Data());
   std::vector<int64_t> timesteps_vec;
   for (int i = 0; i < timesteps.Numel(); ++i) {
     timesteps_vec.push_back(timesteps_data[i]);
