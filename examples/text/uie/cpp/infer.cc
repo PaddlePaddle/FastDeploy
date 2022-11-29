@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
   }
   switch (backend_type) {
     case 0:
-      option.UsePaddleBackend();
+      option.UsePaddleInferBackend();
       break;
     case 1:
       option.UseOrtBackend();

@@ -49,7 +49,7 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_bindNative(
   jboolean j_is_vertical_screen = env->GetBooleanField(
       thiz, j_is_vertical_screen_id);
   bool c_is_vertical_screen = static_cast<jboolean>(j_is_vertical_screen);
-  c_model_ptr->is_vertical_screen = c_is_vertical_screen;
+  c_model_ptr->GetPreprocessor().SetIsVerticalScreen(c_is_vertical_screen);
   env->DeleteLocalRef(j_ppseg_clazz);
 
   vision::EnableFlyCV();
