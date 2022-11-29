@@ -360,7 +360,7 @@ void DPMSolverMultistepScheduler::AddNoise(const FDTensor& original_samples,
                                            FDTensor* out) {
   function::Cast(alphas_cumprod_, &alphas_cumprod_, original_samples.Dtype());
 
-  int64_t* timesteps_data = reinterpret_cast<int64_t*>(timesteps.Data());
+  const int64_t* timesteps_data = reinterpret_cast<const int64_t*>(timesteps.Data());
   std::vector<int64_t> timesteps_vec;
   for (int i = 0; i < timesteps.Numel(); ++i) {
     timesteps_vec.push_back(timesteps_data[i]);
