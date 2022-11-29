@@ -610,6 +610,7 @@ FDTensor* Runtime::GetOutputTensor(const std::string& name) {
       return &t;
     }
   }
+  FDWARNING << "The output name [" << name << "] don't exist." << std::endl;
   return nullptr;
 }
 
