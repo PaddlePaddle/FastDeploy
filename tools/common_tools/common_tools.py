@@ -4,8 +4,8 @@ import ast
 
 def argsparser():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('tools', choices=['compress', 'convert'])
     ## argumentments for auto compression
-    parser.add_argument('--auto_compress', default=False, action='store_true')
     parser.add_argument(
         '--config_path',
         type=str,
@@ -27,7 +27,6 @@ def argsparser():
         default='gpu',
         help="which device used to compress.")
     ## arguments for other x2paddle
-    parser.add_argument('--convert', default=False, action='store_true')
     parser.add_argument(
         '--framework',
         type=str,
@@ -76,16 +75,11 @@ def argsparser():
 
 def main():
     args = argsparser().parse_args()
-    if args.auto_compress == True:
-        try:
-            from .auto_compression.fd_auto_compress.fd_auto_compress import auto_compress
-            print("Welcome to use FastDeploy Auto Compression Toolkit!")
-            auto_compress(args)
-        except ImportError:
-            print(
-                "Can not start auto compresssion successfully! Please check if you have installed it!"
-            )
-    if args.convert == True:
+    if args.tools == "compress":
+        from .auto_compression.fd_auto_compress.fd_auto_compress import auto_compress
+        print("Welcome to use FastDeploy Auto Compression Toolkit!")
+        auto_compress(args)
+    if args.tools == "convert":
         try:
             import platform
             import logging
