@@ -1,8 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.facedet;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -31,14 +28,17 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
 import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.FaceDetectionResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.facedet.SCRFD;
+
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -314,8 +314,6 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
     protected void onDestroy() {
         if (predictor != null) {
             predictor.release();
-        } else {
-            svPreview.enableCamera();
         }
         super.onDestroy();
     }

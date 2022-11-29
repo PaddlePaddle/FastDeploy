@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.ui.view.adapter;
+package com.baidu.paddle.fastdeploy.app.ui.view.adapter;
 
 import android.content.Context;
 import android.support.annotation.NonNull;
@@ -10,7 +10,7 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
+import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 
 import java.text.DecimalFormat;
 import java.util.List;

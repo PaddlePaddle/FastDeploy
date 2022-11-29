@@ -19,6 +19,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -286,8 +287,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
-        } else {
-            svPreview.enableCamera();
         }
         svPreview.onResume();
     }
@@ -342,7 +341,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.7f);
+        predictor.predict(bitmap, true, 0.4f);
         resultImage.setImageBitmap(bitmap);
     }
 
