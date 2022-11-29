@@ -181,7 +181,8 @@ void BindFDTensor(pybind11::module& m) {
       .def("from_numpy", [](FDTensor& self, pybind11::array& pyarray, bool share_buffer = false) {
         PyArrayToTensor(pyarray, &self, share_buffer);
       })
-      .def("to_dlpack", &FDTensorToDLPack);
+      .def("to_dlpack", &FDTensorToDLPack)
+      .def("print_info", &FDTensor::PrintInfo);
 }
 
 }  // namespace fastdeploy
