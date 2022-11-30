@@ -19,17 +19,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
 }
 
 dependencies {
-    implementation fileTree(include: ['*.aar'], dir: 'libs')
+    // implementation fileTree(include: ['*.aar'], dir: 'libs')
     implementation 'com.android.support:appcompat-v7:28.0.0'
     //noinspection GradleDependency
     implementation 'com.android.support.constraint:constraint-layout:1.1.3'
     implementation 'com.android.support:design:28.0.0'
     implementation 'org.jetbrains:annotations:15.0'
-    // implementation project(path: ':fastdeploy')
+    implementation project(path: ':fastdeploy')
     implementation project(path: ':ui')
     //noinspection GradleDependency
     testImplementation 'junit:junit:4.12'
@@ -81,7 +80,7 @@ def FD_JAVA_SDK = [
 
 task downloadAndExtractModels(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting fastdeploy models ..."
+        println "[INFO] Downloading and extracting fastdeploy models ..."
     }
     doLast {
         String cachePath = "cache"
@@ -91,19 +90,22 @@ task downloadAndExtractModels(type: DefaultTask) {
         FD_MODEL.eachWithIndex { model, index ->
             String[] modelPaths = model.src.split("/")
             String modelName = modelPaths[modelPaths.length - 1]
+            String modelPrefix = modelName.substring(0, modelName.length() - 4)
             // Download the target model if not exists
-            boolean copyFiles = !file("${model.dest}").exists()
+            boolean copyFiles = !file("${model.dest}/${modelPrefix}").exists()
             if (!file("${cachePath}/${modelName}").exists()) {
-                println "Downloading ${model.src} -> ${cachePath}/${modelName}"
+                println "[INFO] Downloading ${model.src} -> ${cachePath}/${modelName}"
                 ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
                 copyFiles = true
             }
             if (copyFiles) {
-                println "Coping ${cachePath}/${modelName} -> ${model.dest}"
+                println "[INFO] Taring ${cachePath}/${modelName} -> ${model.dest}/${modelPrefix}"
                 copy {
                     from tarTree("${cachePath}/${modelName}")
                     into "${model.dest}"
                 }
+            } else {
+                println "[INFO] ${model.dest}/${modelPrefix} already exists!"
             }
         }
     }
@@ -111,7 +113,7 @@ task downloadAndExtractModels(type: DefaultTask) {
 
 task downloadAndExtractSDKs(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting fastdeploy android java sdk ..."
+        println "[INFO] Downloading and extracting fastdeploy android java sdk ..."
     }
     doLast {
         String cachePath = "cache"
@@ -124,16 +126,18 @@ task downloadAndExtractSDKs(type: DefaultTask) {
             // Download the target SDK if not exists
             boolean copyFiles = !file("${sdk.dest}/${sdkName}").exists()
             if (!file("${cachePath}/${sdkName}").exists()) {
-                println "Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
+                println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
                 ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
                 copyFiles = true
             }
             if (copyFiles) {
-                println "Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
+                println "[INFO] Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
                 copy {
                     from "${cachePath}/${sdkName}"
                     into "${sdk.dest}"
                 }
+            } else {
+                println "[INFO] ${sdk.dest}/${sdkName} already exists!"
             }
         }
     }

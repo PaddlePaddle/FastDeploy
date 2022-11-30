@@ -19,7 +19,7 @@
 namespace fastdeploy {
 namespace jni {
 
-/// Rendering DetectionResult to ARGB888Bitmap
+/// Rendering KeyPointDetectionResult to ARGB888Bitmap
 void RenderingKeyPointDetection(
     JNIEnv *env, const cv::Mat &c_bgr,
     const vision::KeyPointDetectionResult &c_result,
