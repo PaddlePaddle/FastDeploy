@@ -19,6 +19,7 @@
 namespace fastdeploy {
 
 class Scheduler {
+ public:
   virtual void SetTimesteps(int num_inference_steps) = 0;
   virtual void Step(const FDTensor& model_output, int timestep,
                     const FDTensor& sample, FDTensor* prev_sample) = 0;
