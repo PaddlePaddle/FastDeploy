@@ -1,5 +1,5 @@
-# PaddleClas rv1126开发板 C++ 部署示例
-本目录下提供的 `infer.cc`，可以帮助用户快速完成 PaddleClas 量化模型在 rv1126 上的部署推理加速。
+# PaddleClas RV1126 开发板 C++ 部署示例
+本目录下提供的 `infer.cc`，可以帮助用户快速完成 PaddleClas 量化模型在 RV1126 上的部署推理加速。
 
 ## 部署准备
 ### FastDeploy 交叉编译环境准备
@@ -7,11 +7,11 @@
 
 ### 量化模型准备
 - 1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
-- 2. 用户可以使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此 yaml 文件, 用户从 FP32 模型文件夹下复制此 yaml 文件到量化后的模型文件夹内即可.)
+- 2. 用户可以使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此 yaml 文件, 用户从 FP32 模型文件夹下复制此 yaml 文件到量化后的模型文件夹内即可.)
 - 更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
 
-## 在 rv1126 上部署量化后的 ResNet50_Vd 分类模型
-请按照以下步骤完成在 rv1126 上部署 ResNet50_Vd 量化模型：
+## 在 RV1126 上部署量化后的 ResNet50_Vd 分类模型
+请按照以下步骤完成在 RV1126 上部署 ResNet50_Vd 量化模型：
 1. 交叉编译编译 FastDeploy 库，具体请参考：[交叉编译 FastDeploy](../../../../../../docs/cn/build_and_install/rv1126.md#基于-paddlelite-的-fastdeploy-交叉编译库编译)
 
 2. 将编译后的库拷贝到当前目录，可使用如下命令：
@@ -50,4 +50,4 @@ bash run_with_adb.sh infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg $
 
 <img width="640" src="https://user-images.githubusercontent.com/30516196/200767389-26519e50-9e4f-4fe1-8d52-260718f73476.png">
 
-需要特别注意的是，在 rv1126 上部署的模型需要是量化后的模型，模型的量化请参考：[模型量化](../../../../../../docs/cn/quantize.md)
+需要特别注意的是，在 RV1126 上部署的模型需要是量化后的模型，模型的量化请参考：[模型量化](../../../../../../docs/cn/quantize.md)
