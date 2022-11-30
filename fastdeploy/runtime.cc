@@ -234,13 +234,11 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 void RuntimeOption::UseTimVX() {
   enable_timvx = true;
   device = Device::TIMVX;
-  UseLiteBackend();
 }
 
 void RuntimeOption::UseXPU() {
   enable_xpu = true;
   device = Device::XPU;
-  UseLiteBackend();
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {

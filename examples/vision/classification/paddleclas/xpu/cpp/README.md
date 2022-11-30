@@ -21,7 +21,7 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 4. 编译部署示例，可使入如下命令：
 ```bash
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../fastdeploy-xpu/xpu.cmake -DFASTDEPLOY_INSTALL_DIR=fastdeploy-xpu ..
+cmake -DFASTDEPLOY_INSTALL_DIR=fastdeploy-xpu ..
 make -j8
 # 成功编译之后，会生成可运行 demo
 ```

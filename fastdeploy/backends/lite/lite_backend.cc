@@ -66,10 +66,9 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       if (supported_fp16_) {
         valid_places.push_back(
             paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
-        FDINFO << "Your device is supported fp16 ! Lite::Backend will "
-              << "inference with fp16 precision!" << std::endl;    
+        FDINFO << "The device supports FP16, Lite::Backend will inference with FP16 precision." << std::endl;    
       } else {
-        FDWARNING << "This device is not supported fp16, will skip fp16 option.";
+        FDWARNING << "The device doesn't support FP16, will fallback to FP32.";
       }
     }
   }
