@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.segmentation;
+package com.baidu.paddle.fastdeploy.app.examples.keypointdetection;
 
 import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
@@ -19,6 +19,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -35,13 +36,15 @@ import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
 import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
-import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
+import com.baidu.paddle.fastdeploy.vision.KeyPointDetectionResult;
+import com.baidu.paddle.fastdeploy.vision.keypointdetection.PPTinyPose;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class SegmentationMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = SegmentationMainActivity.class.getSimpleName();
+
+public class KeyPointDetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = KeyPointDetectionMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -75,7 +78,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
-    PaddleSegModel predictor = new PaddleSegModel();
+    PPTinyPose predictor = new PPTinyPose();
     private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
@@ -86,7 +89,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.segmentation_activity_main);
+        setContentView(R.layout.keypointdetection_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -113,7 +116,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                 resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(SegmentationMainActivity.this, SegmentationSettingsActivity.class));
+                startActivity(new Intent(this, KeyPointDetectionSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -175,7 +178,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
                             detail(shutterBitmap);
                         } else {
-                            new AlertDialog.Builder(SegmentationMainActivity.this)
+                            new AlertDialog.Builder(KeyPointDetectionMainActivity.this)
                                     .setTitle("Empty Result!")
                                     .setMessage("Current picture is empty, please shutting it again!")
                                     .setCancelable(true)
@@ -249,17 +252,14 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         }
 
         boolean modified = false;
-        SegmentationResult result = new SegmentationResult();
-        result.setCxxBufferFlag(true);
 
         long tc = System.currentTimeMillis();
-        predictor.predict(ARGB8888ImageBitmap, result);
+        KeyPointDetectionResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
 
-        Visualize.visSegmentation(ARGB8888ImageBitmap, result);
-        modified = result.initialized();
+        Visualize.visKeypointDetection(ARGB8888ImageBitmap, result, 0.f);
 
-        result.releaseCxxBuffer();
+        modified = result.initialized();
 
         frameCounter++;
         if (frameCounter >= 30) {
@@ -309,14 +309,13 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
         // should mean 'width' if the camera display orientation is 90 | 270 degree
         // (Hold the phone upright to record video)
-        // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
-        // So, we set this preview size (480,480) here. Reference:
-        // https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README_cn.md
-        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
+        // (2) Smaller resolution is more suitable for Human Pose detection on mobile
+        // device. So, we set this preview size (720,480) here. Reference:
+        // https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
         CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
-        svPreview.switchCamera(); // Front camera for HumanSeg
 
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
@@ -340,7 +339,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.7f);
+        predictor.predict(bitmap, true, 5.f);
         resultImage.setImageBitmap(bitmap);
     }
 
@@ -350,24 +349,24 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        SegmentationSettingsActivity.resetSettings();
+        KeyPointDetectionSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (SegmentationSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + SegmentationSettingsActivity.modelDir;
-            Utils.copyDirectoryFromAssets(this, SegmentationSettingsActivity.modelDir, realModelDir);
+        if (KeyPointDetectionSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + KeyPointDetectionSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, KeyPointDetectionSettingsActivity.modelDir, realModelDir);
 
             String modelFile = realModelDir + "/" + "model.pdmodel";
             String paramsFile = realModelDir + "/" + "model.pdiparams";
-            String configFile = realModelDir + "/" + "deploy.yaml";
+            String configFile = realModelDir + "/" + "infer_cfg.yml";
             RuntimeOption option = new RuntimeOption();
-            option.setCpuThreadNum(SegmentationSettingsActivity.cpuThreadNum);
-            option.setLitePowerMode(SegmentationSettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
+            option.setCpuThreadNum(KeyPointDetectionSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(KeyPointDetectionSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(KeyPointDetectionSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
-            predictor.setIsVerticalScreen(true);
+            predictor.setUseDark(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }
@@ -377,7 +376,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(SegmentationMainActivity.this)
+            new AlertDialog.Builder(KeyPointDetectionMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -385,7 +384,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            SegmentationMainActivity.this.finish();
+                            KeyPointDetectionMainActivity.this.finish();
                         }
                     }).show();
         }
