@@ -161,6 +161,22 @@ class FASTDEPLOY_DECL MaskRCNN : public PPDetBase {
   virtual std::string ModelName() const { return "PaddleDetection/MaskRCNN"; }
 };
 
+class FASTDEPLOY_DECL SSD : public PPDetBase {
+ public:
+  SSD(const std::string& model_file, const std::string& params_file,
+      const std::string& config_file,
+      const RuntimeOption& custom_option = RuntimeOption(),
+      const ModelFormat& model_format = ModelFormat::PADDLE)
+      : PPDetBase(model_file, params_file, config_file, custom_option,
+                model_format) {
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER};
+    initialized = Initialize();
+  }
+
+  virtual std::string ModelName() const { return "PaddleDetection/SSD"; }
+};
+
 }  // namespace detection
 }  // namespace vision
 }  // namespace fastdeploy

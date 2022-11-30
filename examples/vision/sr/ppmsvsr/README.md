@@ -18,7 +18,7 @@
 
 | 模型                                                                          | 参数大小  | 精度    | 备注 |
 |:----------------------------------------------------------------------------|:------|:----- | :------ |
-| [PP-MSVSR](https://bj.bcebos.com/paddlehub/fastdeploy/PP-MSVSR_reds_x4.tgz) | 8.8MB | - |
+| [PP-MSVSR](https://bj.bcebos.com/paddlehub/fastdeploy/PP-MSVSR_reds_x4.tar) | 8.8MB | - |
 
 
 ## 详细部署文档

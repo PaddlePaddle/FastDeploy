@@ -69,7 +69,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   if (FLAGS_backend == "onnx_runtime") {
     option->UseOrtBackend();
   } else if (FLAGS_backend == "paddle") {
-    option->UsePaddleBackend();
+    option->UsePaddleInferBackend();
   } else if (FLAGS_backend == "openvino") {
     option->UseOpenVINOBackend();
   } else if (FLAGS_backend == "tensorrt" ||

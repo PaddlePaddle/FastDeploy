@@ -52,5 +52,30 @@ template <typename T> struct SqrtFunctor {
   }
 };
 
+// abs(x) = x if x > 0 else -x
+template <typename T> struct AbsFunctor {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) =
+        x.unaryExpr([](T v) { return v > static_cast<T>(0) ? v : -v; });
+  }
+};
+
+// ceil(x) = ceiling(x)
+template <typename T> struct CeilFunctor {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) = x.ceil();
+  }
+};
+
+// floor(x) = flooring(x)
+template <typename T> struct FloorFunctor {
+  template <typename Device, typename X, typename Out>
+  void operator()(Device d, X x, Out out) const {
+    out.device(d) = x.floor();
+  }
+};
+
 }  // namespace function
 }  // namespace fastdeploy
