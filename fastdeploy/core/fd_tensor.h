@@ -19,11 +19,10 @@
 #include <vector>
 
 #include "fastdeploy/core/allocate.h"
+#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
-
-struct Scalar;
 
 struct FASTDEPLOY_DECL FDTensor {
   // std::vector<int8_t> data;
