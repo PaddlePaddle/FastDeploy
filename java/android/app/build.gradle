@@ -68,6 +68,10 @@ def FD_MODEL = [
         [
                 'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/portrait_pp_humansegv2_lite_256x144_inference_model.tgz',
                 'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_128x96_infer.tgz',
+                'dest': 'src/main/assets/models'
         ]
 ]
 

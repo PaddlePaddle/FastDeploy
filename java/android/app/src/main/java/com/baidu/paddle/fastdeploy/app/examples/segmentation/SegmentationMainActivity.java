@@ -367,7 +367,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
-            predictor.setVerticalScreenFlag(true);
+            predictor.setIsVerticalScreen(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }

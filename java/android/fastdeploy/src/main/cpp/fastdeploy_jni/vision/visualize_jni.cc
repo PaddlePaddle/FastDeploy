@@ -227,7 +227,7 @@ jboolean VisFaceDetectionFromJava(
 
 jboolean VisKeyPointDetectionFromJava(
     JNIEnv *env, jobject argb8888_bitmap, jobject result,
-    jint conf_threshold) {
+    jfloat conf_threshold) {
   const jclass j_keypoint_det_result_clazz = env->FindClass(
       "com/baidu/paddle/fastdeploy/vision/KeyPointDetectionResult");
   if (!env->IsInstanceOf(result, j_keypoint_det_result_clazz)) {

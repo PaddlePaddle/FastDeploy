@@ -30,6 +30,10 @@ public class PPTinyPose {
         init_(modelFile, paramsFile, configFile, runtimeOption);
     }
 
+    public void setUseDark(boolean flag) {
+        mUseDark = flag;
+    }
+
     // Call init manually without label file
     public boolean init(String modelFile,
                         String paramsFile,

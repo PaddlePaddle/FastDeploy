@@ -27,8 +27,8 @@ void RenderingKeyPointDetection(
     jstring save_path) {
   if (!c_result.keypoints.empty()) {
     auto t = GetCurrentTime();
-    cv::Mat c_vis_im;
-    vision::VisKeypointDetection(c_bgr, c_result, conf_threshold);
+    auto c_vis_im = vision::VisKeypointDetection(
+        c_bgr, c_result, conf_threshold);
     LOGD("Visualize from native costs %f ms", GetElapsedTime(t));
 
     if (!BGR2ARGB888Bitmap(env, argb8888_bitmap, c_vis_im)) {

@@ -96,8 +96,6 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
                 getString(R.string.CPU_THREAD_NUM_DEFAULT));
         String cpu_power_mode = sharedPreferences.getString(getString(R.string.CPU_POWER_MODE_KEY),
                 getString(R.string.CPU_POWER_MODE_DEFAULT));
-        String score_threshold = sharedPreferences.getString(getString(R.string.SCORE_THRESHOLD_KEY),
-                getString(R.string.SCORE_THRESHOLD_FACEDET));
         String enable_lite_fp16 = sharedPreferences.getString(getString(R.string.ENABLE_LITE_FP16_MODE_KEY),
                 getString(R.string.ENABLE_LITE_FP16_MODE_DEFAULT));
 
