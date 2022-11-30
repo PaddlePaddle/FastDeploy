@@ -39,7 +39,7 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX) AND (NOT ENABLE_CANN))
   include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
 endif()
 
@@ -64,6 +64,7 @@ option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
 option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
+option(ENABLE_CANN "Whether to compile for CANN deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -141,6 +142,9 @@ if (ENABLE_TIMVX)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
+if (ENABLE_CANN)
+  include(${PROJECT_SOURCE_DIR}/cmake/cann.cmake)
+endif()
 
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)

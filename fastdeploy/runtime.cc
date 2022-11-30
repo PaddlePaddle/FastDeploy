@@ -237,6 +237,12 @@ void RuntimeOption::UseTimVX() {
   UseLiteBackend();
 }
 
+void RuntimeOption::UseCANN(){
+  enable_cann = true;
+  device = Device::CANN;
+  UseLiteBackend();
+}
+
 void RuntimeOption::SetExternalStream(void* external_stream) {
   external_stream_ = external_stream;
 }
@@ -532,8 +538,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::CANN,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::CANN.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -788,6 +794,7 @@ void Runtime::CreateLiteBackend() {
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
   lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
   lite_option.enable_timvx = option.enable_timvx;
+  lite_option.enable_cann = option.enable_cann;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
