@@ -73,8 +73,9 @@ void SortKernel(const FDTensor& x, FDTensor* out, FDTensor* indices,
   axis = (axis < 0) ? (rank + axis) : axis;
   // Do full sort
   if (axis == -1 || axis + 1 == rank) {
-    const int64_t input_width = input_shape[rank - 1];
-    const int64_t input_height = x.Numel() / input_width;
+    int64_t numel = x.Numel();
+    int64_t input_width = input_shape[axis];
+    int64_t input_height = numel / input_width;
     FD_VISIT_INT_TYPES(indices_type, "FullSort", ([&] {
                          FullSort<T, data_t>(input_height, input_width, rank,
                                              &x, out, indices, descending);
@@ -93,8 +94,9 @@ void SortKernel(const FDTensor& x, FDTensor* out, FDTensor* indices,
 
     FDTensor trans_inp;
     Transpose(x, &trans_inp, trans);
-    const int64_t input_width = input_shape[axis];
-    const int64_t input_height = x.Numel() / input_width;
+    int64_t numel = x.Numel();
+    int64_t input_width = input_shape[axis];
+    int64_t input_height = numel / input_width;
     FD_VISIT_INT_TYPES(indices_type, "FullSort", ([&] {
                          FullSort<T, data_t>(input_height, input_width, rank,
                                              &trans_inp, out, indices,
