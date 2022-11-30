@@ -11,3 +11,10 @@ app/build
 app/src/main/assets/models/*
 app/.gradle
 app/.idea
+fastdeploy/cache
+fastdeploy/libs/fastdeploy*
+fastdeploy/.cxx
+fastdeploy/build
+fastdeploy/src/main/assets/models/*
+fastdeploy/.gradle
+fastdeploy/.idea

@@ -19,8 +19,7 @@ namespace fastdeploy {
 namespace vision {
 namespace sr {
 
-
-class FASTDEPLOY_DECL EDVR : public PPMSVSR{
+class FASTDEPLOY_DECL EDVR : public PPMSVSR {
  public:
   /**
    * Set path of model file and configuration file, and the configuration of runtime
@@ -29,8 +28,7 @@ class FASTDEPLOY_DECL EDVR : public PPMSVSR{
    * @param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * @param[in] model_format Model format of the loaded model, default is Paddle format
    */
-  EDVR(const std::string& model_file,
-       const std::string& params_file,
+  EDVR(const std::string& model_file, const std::string& params_file,
        const RuntimeOption& custom_option = RuntimeOption(),
        const ModelFormat& model_format = ModelFormat::PADDLE);
   /// model name contained EDVR

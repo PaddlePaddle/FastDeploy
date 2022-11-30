@@ -61,25 +61,56 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
            Str(fd_tensor.dtype).c_str());
 }
 
-void CopyTensorToCpu(std::unique_ptr<paddle_infer::Tensor>& tensor,
-                     FDTensor* fd_tensor) {
+void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
+                            FDTensor* fd_tensor,
+                            bool copy_to_fd) {
   auto fd_dtype = PaddleDataTypeToFD(tensor->type());
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
   shape.assign(tmp_shape.begin(), tmp_shape.end());
-  fd_tensor->Resize(shape, fd_dtype, tensor->name());
-  if (fd_tensor->dtype == FDDataType::FP32) {
-    tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
-    return;
-  } else if (fd_tensor->dtype == FDDataType::INT32) {
-    tensor->CopyToCpu(static_cast<int32_t*>(fd_tensor->MutableData()));
-    return;
-  } else if (fd_tensor->dtype == FDDataType::INT64) {
-    tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
-    return;
+  if(copy_to_fd) {
+    fd_tensor->Resize(shape, fd_dtype, tensor->name());
+    if (fd_tensor->dtype == FDDataType::FP32) {
+      tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
+      return;
+    } else if (fd_tensor->dtype == FDDataType::INT32) {
+      tensor->CopyToCpu(static_cast<int32_t*>(fd_tensor->MutableData()));
+      return;
+    } else if (fd_tensor->dtype == FDDataType::INT64) {
+      tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
+      return;
+    } 
+    FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
+            Str(fd_tensor->dtype).c_str());
+  } else {
+    paddle_infer::PlaceType place;
+    int size = 0;
+    // TODO(liqi): The tensor->data interface of paddle don't return device id
+    //               and don't support return void*.
+    void* out_data = nullptr;
+    if (fd_dtype == FDDataType::FP32) {
+      out_data = tensor->data<float>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT32) {
+      out_data = tensor->data<int>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT64) {
+      out_data = tensor->data<int64_t>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT8) {
+      out_data = tensor->data<int8_t>(&place, &size);
+    } else if (fd_dtype == FDDataType::UINT8) {
+      out_data = tensor->data<uint8_t>(&place, &size);
+    } else {
+      FDASSERT(false, "Unexpected data type(%s) while infer shared with PaddleBackend.",
+          Str(fd_dtype).c_str());
+    }
+    Device device = Device::CPU;
+    if(place == paddle_infer::PlaceType::kGPU) {
+      device = Device::GPU;
+    }
+    fd_tensor->name = tensor->name();
+    fd_tensor->SetExternalData(
+        shape, fd_dtype,
+        out_data, device);
   }
-  FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
-           Str(fd_tensor->dtype).c_str());
 }
 
 FDDataType PaddleDataTypeToFD(const paddle_infer::DataType& dtype) {

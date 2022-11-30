@@ -22,23 +22,20 @@ git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
 python setup.py install
 ```
 
-3.安装fd-auto-compress一键模型自动化压缩工具
+3.安装fastdeploy-tools工具包
 ```bash
-# 通过pip安装fd-auto-compress.
+# 通过pip安装fastdeploy-tools. 此工具包目前支持模型一键自动化压缩和模型转换的功能.
 # FastDeploy的python包已包含此工具, 不需重复安装.
-pip install fd-auto-compress==0.0.1
-
-# 在当前目录执行以下命令
-python setup.py install
+pip install fastdeploy-tools==0.0.1
 ```
 
 ### 一键模型自动化压缩工具的使用
 按照以上步骤成功安装后,即可使用FastDeploy一键模型自动化压缩工具, 示例如下.
 
 ```bash
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
-详细使用文档请参考[FastDeploy一键模型自动化压缩工具](./auto_compression/README.md)
+详细使用文档请参考[FastDeploy一键模型自动化压缩工具](./common_tools/auto_compression/README.md)
 
 <p id="2"></p>
 
@@ -72,7 +69,7 @@ python setup.py install
 按照以上步骤成功安装后,即可使用 FastDeploy 一键转换工具, 示例如下:
 
 ```bash
-fastdeploy --convert --framework onnx --model yolov5s.onnx --save_dir pd_model
+fastdeploy convert --framework onnx --model yolov5s.onnx --save_dir pd_model
 ```
 
 更多详细内容可参考[X2Paddle](https://github.com/PaddlePaddle/X2Paddle)

@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.segmentation;
 
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -29,10 +29,10 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.app.ui.Utils;
-import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
+import com.baidu.paddle.fastdeploy.ui.Utils;
+import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
@@ -249,13 +249,17 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         }
 
         boolean modified = false;
+        SegmentationResult result = new SegmentationResult();
+        result.setCxxBufferFlag(true);
 
         long tc = System.currentTimeMillis();
-        SegmentationResult result = predictor.predict(ARGB8888ImageBitmap);
+        predictor.predict(ARGB8888ImageBitmap, result);
         timeElapsed += (System.currentTimeMillis() - tc);
 
         Visualize.visSegmentation(ARGB8888ImageBitmap, result);
         modified = result.initialized();
+
+        result.releaseCxxBuffer();
 
         frameCounter++;
         if (frameCounter >= 30) {
@@ -280,6 +284,8 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
+        } else {
+            svPreview.enableCamera();
         }
         svPreview.onResume();
     }
@@ -304,7 +310,8 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // should mean 'width' if the camera display orientation is 90 | 270 degree
         // (Hold the phone upright to record video)
         // (2) Smaller resolution is more suitable for Lite Portrait HumanSeg.
-        // So, we set this preview size (480,480) here.
+        // So, we set this preview size (480,480) here. Reference:
+        // https://github.com/PaddlePaddle/PaddleSeg/blob/release/2.6/contrib/PP-HumanSeg/README_cn.md
         CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 480;
         CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
@@ -333,7 +340,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.4f);
+        predictor.predict(bitmap, true, 0.7f);
         resultImage.setImageBitmap(bitmap);
     }
 
@@ -360,6 +367,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
+            predictor.setIsVerticalScreen(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }

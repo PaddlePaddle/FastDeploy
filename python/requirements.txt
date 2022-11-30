@@ -3,5 +3,5 @@ requests
 tqdm
 numpy
 opencv-python
-fd-auto-compress>=0.0.1
+fastdeploy-tools==0.0.1
 pyyaml

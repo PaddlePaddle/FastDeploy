@@ -22,22 +22,20 @@ git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
 python setup.py install
 ```
 
-3.Install fd-auto-compress package
+3.Install fastdeploy-tools package
 ```bash
-# Installing fd-auto-compress via pip
+# Installing fastdeploy-tools via pip
 # This tool is included in the python installer of FastDeploy, so you don't need to install it again.
-pip install fd-auto-compress==0.0.1
+pip install fastdeploy-tools==0.0.1
 
-# Execute in the current directory
-python setup.py install
 ```
 
 ### The Usage of One-Click Model Auto Compression Tool
 After the above steps are successfully installed, you can use FastDeploy one-click model automation compression tool, as shown in the following example.
 ```bash
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
-For detailed documentation, please refer to [FastDeploy One-Click Model Auto Compression Tool](./auto_compression/README.md)
+For detailed documentation, please refer to [FastDeploy One-Click Model Auto Compression Tool](./common_tools/auto_compression/README_EN.md)
 
 <p id="2"></p>
 
@@ -71,7 +69,7 @@ python setup.py install
 After successful installation according to the above steps, you can use the FastDeploy one-click conversion tool. The example is as follows:
 
 ```bash
-fastdeploy --convert --framework onnx --model yolov5s.onnx --save_dir pd_model
+fastdeploy convert --framework onnx --model yolov5s.onnx --save_dir pd_model
 ```
 
 For more details, please refer to[X2Paddle](https://github.com/PaddlePaddle/X2Paddle)
