@@ -21,10 +21,10 @@ cd FastDeploy
 mkdir build && cd build
 
 # CMake configuration with KunlunXin xpu toolchain
-cmake -DENABLE_XPU=ON  \
+cmake -DWITH_XPU=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
-      -Wno-dev ..
+      ..
 
 # Build FastDeploy KunlunXin XPU C++ SDK
 make -j8

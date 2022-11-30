@@ -39,7 +39,7 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS "-Wno-format")
 endif(NOT MSVC)
 
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
   include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
 endif()
 
@@ -63,8 +63,8 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
-option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
-option(ENABLE_XPU "Whether to compile for KunlunXin XPU deploy." OFF)
+option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
+option(WITH_XPU "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -138,11 +138,11 @@ set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-if (ENABLE_TIMVX)
+if (WITH_TIMVX)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
-if (ENABLE_XPU)
+if (WITH_XPU)
   include(${PROJECT_SOURCE_DIR}/cmake/xpu.cmake)
 endif()
 
