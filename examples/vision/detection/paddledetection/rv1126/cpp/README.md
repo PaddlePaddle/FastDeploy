@@ -8,7 +8,7 @@
 
 ### 模型准备
 - 1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
-- 2. 用户可以先试用 PaddleDetection 自行导出 Float32 模型，注意导出模型模型时设置参数：use_shared_conv=False，更多细节请参考：[PPYOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
+- 2. 用户可以先使用 PaddleDetection 自行导出 Float32 模型，注意导出模型模型时设置参数：use_shared_conv=False，更多细节请参考：[PPYOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
 - 3. 在导出 Float32 模型之后，用户使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的 inference_cls.yaml 文件, 自行量化的模型文件夹内不包含此 yaml 文件, 用户从 FP32 模型文件夹下复制此 yaml 文件到量化后的模型文件夹内即可.)
 - 更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
 

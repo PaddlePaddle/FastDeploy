@@ -6,6 +6,6 @@
 
 ## 详细部署文档
 
-在 RV/home/yeliang/develop/FastDeploy/examples/vision/classification/paddleclas/rv1126/README.md1126 上只支持 C++ 的部署。
+在 RV1126 上只支持 C++ 的部署。
 
 - [C++部署](cpp)
