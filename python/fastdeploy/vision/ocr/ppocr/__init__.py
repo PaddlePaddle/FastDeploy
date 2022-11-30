@@ -638,7 +638,6 @@ class PPOCRv3(FastDeployModel):
 
     def predict(self, input_image):
         """Predict an input image
-
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: OCRResult
         """
@@ -649,8 +648,29 @@ class PPOCRv3(FastDeployModel):
         :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
         :return: OCRBatchResult
         """
-
         return self.system.batch_predict(images)
+
+    @property
+    def cls_batch_size(self):
+        return self.system.cls_batch_size
+
+    @cls_batch_size.setter
+    def cls_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `cls_batch_size` must be type of int."
+        self.system.cls_batch_size = value
+
+    @property
+    def rec_batch_size(self):
+        return self.system.rec_batch_size
+
+    @rec_batch_size.setter
+    def rec_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `rec_batch_size` must be type of int."
+        self.system.rec_batch_size = value
 
 
 class PPOCRSystemv3(PPOCRv3):
@@ -695,6 +715,28 @@ class PPOCRv2(FastDeployModel):
         """
 
         return self.system.batch_predict(images)
+
+    @property
+    def cls_batch_size(self):
+        return self.system.cls_batch_size
+
+    @cls_batch_size.setter
+    def cls_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `cls_batch_size` must be type of int."
+        self.system.cls_batch_size = value
+
+    @property
+    def rec_batch_size(self):
+        return self.system.rec_batch_size
+
+    @rec_batch_size.setter
+    def rec_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `rec_batch_size` must be type of int."
+        self.system.rec_batch_size = value
 
 
 class PPOCRSystemv2(PPOCRv2):
