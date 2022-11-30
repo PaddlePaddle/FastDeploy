@@ -54,6 +54,20 @@ class DPMSolverMultistepScheduler : public Scheduler {
                        const std::vector<FDTensor>& timesteps = {}) override;
   void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
                 const FDTensor& timesteps, FDTensor* out) override;
+  struct Config {
+    int num_train_timesteps_;
+    float beta_start_;
+    float beta_end_;
+    std::string beta_schedule_;
+    int solver_order_;
+    bool predict_epsilon_;
+    bool thresholding_;
+    float dynamic_thresholding_ratio_;
+    float sample_max_value_;
+    std::string algorithm_type_;
+    std::string solver_type_;
+    bool lower_order_final_;
+  } config;
 
  private:
   FDTensor betas_;
@@ -66,19 +80,6 @@ class DPMSolverMultistepScheduler : public Scheduler {
   FDTensor timesteps_;
   int lower_order_nums_;
   std::vector<FDTensor> model_outputs_;
-
-  int num_train_timesteps_;
-  float beta_start_;
-  float beta_end_;
-  std::string beta_schedule_;
-  int solver_order_;
-  bool predict_epsilon_;
-  bool thresholding_;
-  float dynamic_thresholding_ratio_;
-  float sample_max_value_;
-  std::string algorithm_type_;
-  std::string solver_type_;
-  bool lower_order_final_;
 };
 
 }  // namespace fastdeploy

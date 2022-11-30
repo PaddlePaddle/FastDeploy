@@ -44,13 +44,10 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
     float dynamic_thresholding_ratio, float sample_max_value,
     const std::string& algorithm_type, const std::string& solver_type,
     bool lower_order_final)
-    : num_train_timesteps_(num_train_timesteps), beta_start_(beta_start),
-      beta_end_(beta_end), beta_schedule_(beta_schedule),
-      solver_order_(solver_order), predict_epsilon_(predict_epsilon),
-      thresholding_(thresholding),
-      dynamic_thresholding_ratio_(dynamic_thresholding_ratio),
-      sample_max_value_(sample_max_value), algorithm_type_(algorithm_type),
-      solver_type_(solver_type), lower_order_final_(lower_order_final) {
+    : config({num_train_timesteps, beta_start, beta_end, beta_schedule,
+              solver_order, predict_epsilon, thresholding,
+              dynamic_thresholding_ratio, sample_max_value, algorithm_type,
+              solver_type, lower_order_final}) {
   int beta_size = trained_betas.size();
   if (beta_size > 0) {
     betas_.Allocate({beta_size}, FDDataType::FP32);
@@ -79,31 +76,32 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
   function::Log(sigma_t_, &sigma_t_log);
   lambda_t_ = alpha_t_log - sigma_t_log;
 
-  FDASSERT(algorithm_type_ == "dpmsolver" || algorithm_type_ == "dpmsolver++",
+  FDASSERT(config.algorithm_type_ == "dpmsolver" ||
+               config.algorithm_type_ == "dpmsolver++",
            "%s does is not implemented for DPMSolverMultistepScheduler",
-           algorithm_type_.c_str());
-  FDASSERT(solver_type_ == "midpoint" || solver_type_ == "heun",
+           config.algorithm_type_.c_str());
+  FDASSERT(config.solver_type_ == "midpoint" || config.solver_type_ == "heun",
            "%s does is not implemented for DPMSolverMultistepScheduler",
-           solver_type_.c_str());
+           config.solver_type_.c_str());
   num_inference_steps_ = -1;
 
-  function::Linspace(0, num_train_timesteps_ - 1, num_train_timesteps_,
-                     &timesteps_);
+  function::Linspace(0, config.num_train_timesteps_ - 1,
+                     config.num_train_timesteps_, &timesteps_);
   function::Cast(timesteps_, &timesteps_, FDDataType::INT64);
   // Reverse timesteps
   int64_t* timesteps_data = reinterpret_cast<int64_t*>(timesteps_.Data());
   std::reverse(timesteps_data, timesteps_data + timesteps_.Numel());
 
-  model_outputs_.resize(solver_order_);
+  model_outputs_.resize(config.solver_order_);
   lower_order_nums_ = 0;
 }
 
 void DPMSolverMultistepScheduler::ConvertModelOutput(
     const FDTensor& model_output, int timestep, const FDTensor& sample,
     FDTensor* out) {
-  if (algorithm_type_ == "dpmsolver++") {
+  if (config.algorithm_type_ == "dpmsolver++") {
     FDTensor x0_pred;
-    if (predict_epsilon_) {
+    if (config.predict_epsilon_) {
       FDTensor alpha_t, sigma_t;
       function::Slice(alpha_t_, {0}, {timestep}, &alpha_t);
       function::Slice(sigma_t_, {0}, {timestep}, &sigma_t);
@@ -111,15 +109,15 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
     } else {
       x0_pred = model_output;
     }
-    if (thresholding_) {
+    if (config.thresholding_) {
       FDTensor dynamic_max_val, x0_pred_abs;
       function::Abs(x0_pred, &x0_pred_abs);
       x0_pred_abs.Reshape({x0_pred_abs.Shape()[0], -1});
-      function::Quantile(x0_pred_abs, {dynamic_thresholding_ratio_}, {1},
+      function::Quantile(x0_pred_abs, {config.dynamic_thresholding_ratio_}, {1},
                          &dynamic_max_val);
 
       FDTensor max_value, dy_max_val;
-      function::FullLike(dynamic_max_val, sample_max_value_, &max_value,
+      function::FullLike(dynamic_max_val, config.sample_max_value_, &max_value,
                          dynamic_max_val.Dtype());
       function::Maximum(dynamic_max_val, max_value, &dy_max_val);
       int expand_dims = x0_pred.Shape().size() - 1;
@@ -131,8 +129,8 @@ void DPMSolverMultistepScheduler::ConvertModelOutput(
       x0_pred = x0_pred / dy_max_val;
     }
     *out = std::move(x0_pred);
-  } else if (algorithm_type_ == "dpmsolver") {
-    if (predict_epsilon_) {
+  } else if (config.algorithm_type_ == "dpmsolver") {
+    if (config.predict_epsilon_) {
       *out = model_output;
     } else {
       FDTensor alpha_t, sigma_t;
@@ -159,10 +157,10 @@ void DPMSolverMultistepScheduler::DPMSolverFirstOrderUpdate(
   function::Slice(sigma_t_, {0}, {timestep}, &sigma_s);
 
   FDTensor h = lambda_t - lambda_s;
-  if (algorithm_type_ == "dpmsolver++") {
+  if (config.algorithm_type_ == "dpmsolver++") {
     function::Exp(0.0f - h, &h);
     *out = (sigma_t / sigma_s) * sample - (alpha_t * (h - 1.0f)) * model_output;
-  } else if (algorithm_type_ == "dpmsolver") {
+  } else if (config.algorithm_type_ == "dpmsolver") {
     function::Exp(h, &h);
     *out = (alpha_t / alpha_s) * sample - (sigma_t * (h - 1.0f)) * model_output;
   }
@@ -195,24 +193,24 @@ void DPMSolverMultistepScheduler::MultiStepDPMSolverSecondOrderUpdate(
   FDTensor r0 = h0 / h;
   FDTensor D0 = m0;
   FDTensor D1 = (1.0f / r0) * (m0 - m1);
-  if (algorithm_type_ == "dpmsolver++") {
-    if (solver_type_ == "midpoint") {
+  if (config.algorithm_type_ == "dpmsolver++") {
+    if (config.solver_type_ == "midpoint") {
       function::Exp(0.0f - h, &h);
       *out = (sigma_t / sigma_s0 * sample) - (alpha_t * (h - 1.0f) * D0) -
              (0.5f * alpha_t * (h - 1.0f) * D1);
-    } else if (solver_type_ == "heun") {
+    } else if (config.solver_type_ == "heun") {
       FDTensor h_exp;
       function::Exp(0.0f - h, &h_exp);
       *out = (sigma_t / sigma_s0 * sample) - (alpha_t * (h_exp - 1.0f) * D0) +
              (alpha_t * ((h_exp - 1.0f) / h + 1.0f) * D1);
     }
-  } else if (algorithm_type_ == "dpmsolver") {
+  } else if (config.algorithm_type_ == "dpmsolver") {
     FDTensor h_exp;
     function::Exp(h, &h_exp);
-    if (solver_type_ == "midpoint") {
+    if (config.solver_type_ == "midpoint") {
       *out = alpha_t / alpha_s0 * sample - sigma_t * (h_exp - 1.0f) * D0 -
              0.5 * (sigma_t * (h_exp - 1.0f) * D1);
-    } else if (solver_type_ == "heun") {
+    } else if (config.solver_type_ == "heun") {
       *out = alpha_t / alpha_s0 * sample - sigma_t * (h_exp - 1.0f) * D0 -
              (sigma_t * ((h_exp - 1.0f) / h - 1.0f) * D1);
     }
@@ -258,14 +256,14 @@ void DPMSolverMultistepScheduler::MultiStepDPMSolverThirdOrderUpdate(
   FDTensor D1 = D1_0 + (r0 / (r0 + r1)) * (D1_0 - D1_1);
   FDTensor D2 = (1.0f / (r0 + r1)) * (D1_0 - D1_1);
 
-  if (algorithm_type_ == "dpmsolver++") {
+  if (config.algorithm_type_ == "dpmsolver++") {
     FDTensor h_exp;
     function::Exp(0.0f - h, &h_exp);
     *out = (sigma_t / sigma_s0) * sample - (alpha_t * (h_exp - 1.0f)) * D0 +
            (alpha_t * ((h_exp - 1.0) / h + 1.0)) * D1 -
            (alpha_t * ((h_exp - 1.0 + h) / (h * h) - 0.5)) * D2;
 
-  } else if (algorithm_type_ == "dpmsolver") {
+  } else if (config.algorithm_type_ == "dpmsolver") {
     FDTensor h_exp;
     function::Exp(h, &h_exp);
     *out = (alpha_t / alpha_s0) * sample - (sigma_t * (h_exp - 1.0f)) * D0 +
@@ -282,8 +280,8 @@ void DPMSolverMultistepScheduler::ScaleModelInput(
 
 void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {
   num_inference_steps_ = num_inference_steps;
-  function::Linspace(0, num_train_timesteps_ - 1, num_inference_steps + 1,
-                     &timesteps_);
+  function::Linspace(0, config.num_train_timesteps_ - 1,
+                     num_inference_steps + 1, &timesteps_);
   function::Round(timesteps_, &timesteps_);
   // Reverse timesteps
   float* timesteps_data = reinterpret_cast<float*>(timesteps_.Data());
@@ -298,7 +296,7 @@ void DPMSolverMultistepScheduler::SetTimesteps(int num_inference_steps) {
   function::Cast(timesteps_, &timesteps_, FDDataType::INT64);
 
   model_outputs_.clear();
-  model_outputs_.resize(solver_order_);
+  model_outputs_.resize(config.solver_order_);
 
   lower_order_nums_ = 0;
 }
@@ -322,20 +320,22 @@ void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
     prev_timestep = timesteps_data[step_index + 1];
   }
   bool lower_order_final = (step_index == timesteps_.Numel() - 1) &&
-                           lower_order_final_ && (timesteps_.Numel() < 15);
+                           config.lower_order_final_ &&
+                           (timesteps_.Numel() < 15);
   bool lower_order_second = (step_index == timesteps_.Numel() - 2) &&
-                            lower_order_final_ && (timesteps_.Numel() < 15);
+                            config.lower_order_final_ &&
+                            (timesteps_.Numel() < 15);
   FDTensor model_out;
   ConvertModelOutput(model_output, timestep, sample, &model_out);
-  for (int i = 0; i < solver_order_ - 1; ++i) {
+  for (int i = 0; i < config.solver_order_ - 1; ++i) {
     model_outputs_[i] = std::move(model_outputs_[i + 1]);
   }
-  model_outputs_[solver_order_ - 1] = std::move(model_out);
+  model_outputs_[config.solver_order_ - 1] = std::move(model_out);
 
-  if (solver_order_ == 1 || lower_order_nums_ < 1 || lower_order_final) {
-    DPMSolverFirstOrderUpdate(model_outputs_[solver_order_ - 1], timestep,
-                              prev_timestep, sample, prev_sample);
-  } else if (solver_order_ == 2 || lower_order_nums_ < 2 ||
+  if (config.solver_order_ == 1 || lower_order_nums_ < 1 || lower_order_final) {
+    DPMSolverFirstOrderUpdate(model_outputs_[config.solver_order_ - 1],
+                              timestep, prev_timestep, sample, prev_sample);
+  } else if (config.solver_order_ == 2 || lower_order_nums_ < 2 ||
              lower_order_second) {
     int t0 = reinterpret_cast<int64_t*>(timesteps_.Data())[step_index - 1];
     std::vector<int> timestep_list = {t0, timestep};
@@ -349,7 +349,7 @@ void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
                                        prev_timestep, sample, prev_sample);
   }
 
-  if (lower_order_nums_ < solver_order_) {
+  if (lower_order_nums_ < config.solver_order_) {
     lower_order_nums_ += 1;
   }
 }

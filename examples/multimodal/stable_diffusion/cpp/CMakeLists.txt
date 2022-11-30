@@ -21,5 +21,7 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(main ${PROJECT_SOURCE_DIR}/main.cc ${PROJECT_SOURCE_DIR}/dpm_solver_multistep_scheduler.cc)
+file(GLOB_RECURSE ALL_SRCS ${PROJECT_SOURCE_DIR}/*.cc)
+
+add_executable(main ${ALL_SRCS})
 target_link_libraries(main ${FASTDEPLOY_LIBS} ${THIRD_LIBS})
