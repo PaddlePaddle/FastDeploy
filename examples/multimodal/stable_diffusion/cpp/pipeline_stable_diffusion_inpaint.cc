@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "pipeline_stable_diffusion_inpaint.h"
+#include "fastdeploy/function/functions.h"
 
 using namespace paddlenlp;
 
@@ -63,5 +64,59 @@ void StableDiffusionInpaintPipeline::Predict(
   }
   std::vector<fast_tokenizer::core::Encoding> encodings;
   tokenizer_.EncodeBatchStrings(prompts, &encodings);
+
+  std::vector<int64_t> input_ids;
+  for (auto& encoding : encodings) {
+    auto curr_ids = encoding.GetIds();
+    input_ids.insert(input_ids.end(), curr_ids.begin(), curr_ids.end());
+  }
+  encodings.clear();
+  // Get text encoder output
+  FDTensor text_intput_ids;
+  std::vector<FDTensor> text_inputs(1);
+  text_inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
+                                 input_ids.data());
+
+  TensorInfo text_info = text_encoder_->GetInputInfo(0);
+  text_inputs[0].name = text_info.name;
+  int output_size = text_encoder_->GetOutputInfos().size();
+  std::vector<FDTensor> text_outputs(output_size);
+  text_encoder_->Infer(text_inputs, &text_outputs);
+
+  FDTensor text_embeddings;
+  function::Tile(text_outputs[0], {num_images_per_prompt, 1, 1},
+                 &text_embeddings);
+
+  //    here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+  //    of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+  //    corresponds to doing no classifier free guidance.
+  bool do_classifier_free_guidance = guidance_scale > 1.0;
+  if (do_classifier_free_guidance) {
+    std::vector<std::string> uncond_tokens;
+    if (negative_prompt.size() == 0) {
+      uncond_tokens = {""};
+    } else if (negative_prompt.size() != batch_size) {
+      FDASSERT(false,
+               "negative_prompt has batch size %d, but prompt has batch size "
+               "%d. Please make sure that passed `negative_prompt` matches the "
+               "batch size of `prompt`.",
+               prompts.size(), negative_prompt.size());
+    } else {
+      uncond_tokens = negative_prompt;
+    }
+    tokenizer_.EncodeBatchStrings(uncond_tokens, &encodings);
+    input_ids.clear();
+    for (auto& encoding : encodings) {
+      auto curr_ids = encoding.GetIds();
+      input_ids.insert(input_ids.end(), curr_ids.begin(), curr_ids.end());
+    }
+    text_inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
+                                   input_ids.data());
+    text_encoder_->Infer(text_inputs, &text_outputs);
+    FDTensor uncond_embeddings;
+    function::Tile(text_outputs[0], {num_images_per_prompt, 1, 1},
+                   &uncond_embeddings);
+    function::Concat({uncond_embeddings, text_embeddings}, &text_embeddings);
+  }
 }
 }  // namespace fastdeploy
