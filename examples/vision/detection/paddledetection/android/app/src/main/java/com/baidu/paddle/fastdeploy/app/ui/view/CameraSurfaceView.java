@@ -278,6 +278,10 @@ public class CameraSurfaceView extends GLSurfaceView implements Renderer,
         disableCamera = true;
     }
 
+    public void enableCamera() {
+        disableCamera = false;
+    }
+
     public void switchCamera() {
         releaseCamera();
         selectedCameraId = (selectedCameraId + 1) % numberOfCameras;
