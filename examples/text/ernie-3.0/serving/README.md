@@ -51,10 +51,10 @@ models
 # GPU镜像
 docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 # CPU镜像
-docker pull paddlepaddle/fastdeploy:z.y.z-cpu-only-21.10
+docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # 运行
-docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10 bash
+docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 bash
 ```
 
 ## 部署模型
@@ -67,7 +67,7 @@ token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚�
 ```
 
 *注意*:启动服务时，Server的每个python后端进程默认申请`64M`内存，默认启动的docker无法启动多个python后端节点。有两个解决方案：
-- 1.启动容器时设置`shm-size`参数, 比如:`docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 bash`
+- 1.启动容器时设置`shm-size`参数, 比如:`docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash`
 - 2.启动服务时设置python后端的`shm-default-byte-size`参数, 设置python后端的默认内存为10M： `tritonserver --model-repository=/models --backend-config=python,shm-default-byte-size=10485760`
 
 ### 分类任务
