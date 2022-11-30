@@ -36,87 +36,19 @@ Including image classification, object detection, image segmentation, face detec
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                                                                        |
 | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p> |
 
-## 📣 Recent Updates
+## 👬 Community
 
-- **Community**
+ - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas.
 
-  - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas.
-
-  - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
+ - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
 
     <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "100" height = "100" />
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "200" height = "200" />
     </div>
-
-- 🔥 **2022.11.23：Release FastDeploy [release v0.8.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.8.0)** <br>
-
-  - **🖥️ Server-side and Cloud Deployment: Support more CV models, improve deployment performance**
-
-    - Support [PIPNet](./examples/vision/facealign/pipnet), [FaceLandmark1000](./examples/vision/facealign/face_landmark_1000) face alignment models deployment;
-    - Support [Video Super-Resolution](./examples/vision/sr) series model PP-MSVSR、EDVR、BasicVSR;
-    - Upgrade YOLOv7 deployment code to add `batch_predict` deployment;
-    - Support [UIE service-based](./examples/text/uie) deployment;
-    - Add Python API to_dlpack interface for FDTensor to support copyless transfer of FDTensor between frameworks.
-
-  - **📱 Mobile and Edge Device Deployment: support more CV model**
-
-    - Support Android image classification, target detection, semantic segmentation, OCR, face detection APK projects and examples.
-
-      | <font size=3>Image Classification</font>                                                                                                                                                  | <font size=3>Object Detection</font>                                                                                                                                                  | <font size=3>Semantic Segmentation</font>                                                                                                                                                              | <font size=3>OCR</font>                                                                                                                                                                 | <font size=3>Face Detection</font>                                                                                                                                                   |
-      |:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-      | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification)</font>        | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection)</font>         | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation)                              | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr)</font>                 | <font size=2>[Project Code](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/facedet)</font>          |
-      | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-MobileNetV1.apk)</font> | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PicoDet.apk)</font> | <font size=2>[Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-Portrait-HumanSegV2-Lite.apk)</font> | <font size=2> [Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PP-OCRv2.apk)</font> | <font size=2> [Scan&nbsp;the&nbsp;code<br>or&nbsp;click&nbsp;on&nbsp;the&nbsp;link<br>to&nbsp;install](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-SCRFD.apk)</font> |
-      | <img src=https://user-images.githubusercontent.com/54695910/203604502-991972a8-5a9c-49cd-9e58-ed8e2a942b9b.png height="100" width="110">                                                  | <img src=https://user-images.githubusercontent.com/54695910/203604475-724be708-27d6-4e56-9c2f-ae2eca24118c.png height="100" width="110">                                              | <img src=https://user-images.githubusercontent.com/54695910/203604459-9a2915bc-91dc-460c-bff6-a0e2584d2eff.png height="100" width="110">                                                               | <img src=https://user-images.githubusercontent.com/54695910/203604453-6ce0118e-7b93-4044-8a92-56f2ab65c26a.png height="100" width="110">                                                | <img src=https://user-images.githubusercontent.com/54695910/203604418-7c9703b5-1805-457e-966c-5a6625f212ff.png height="100" width="110">                                             |
-
-- [**more releases information**](./releases)
 
 ## Contents
 
-* <details open><summary><b>📖 Tutorials（click to fold）</b></summary><div>
-
-  - Install
-
-    - [Install FastDeploy Prebuilt Libraries](docs/en/build_and_install/download_prebuilt_libraries.md)
-    - [Build and Install FastDeploy Library on GPU Platform](docs/en/build_and_install/gpu.md)
-    - [Build and Install FastDeploy Library on CPU Platform](docs/en/build_and_install/cpu.md)
-    - [Build and Install FastDeploy Library on IPU Platform](docs/en/build_and_install/ipu.md)
-    - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](docs/en/build_and_install/jetson.md)
-    - [Build and Install FastDeploy Library on Android Platform](docs/en/build_and_install/android.md)
-
-  - A Quick Start - Demos
-
-    - [Python Deployment Demo](docs/en/quick_start/models/python.md)
-    - [C++ Deployment Demo](docs/en/quick_start/models/cpp.md)
-    - [A Quick Start on Runtime Python](docs/en/quick_start/runtime/python.md)
-    - [A Quick Start on Runtime C++](docs/en/quick_start/runtime/cpp.md)
-
-  - API (To be continued)
-
-    - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-    - [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
-
-  - Performance Optimization
-
-    - [Quantization Acceleration](docs/en/quantize.md)
-
-  - Frequent Q&As
-
-    - [1. How to Change Inference Backends](docs/en/faq/how_to_change_backend.md)
-    - [2. How to Use FastDeploy C++ SDK on Windows Platform](docs/en/faq/use_sdk_on_windows.md)
-    - [3. How to Use FastDeploy C++ SDK on Android Platform](java/android/README_EN.md)(To be Continued)
-    - [4. Tricks of TensorRT](docs/en/faq/tensorrt_tricks.md)
-    - [5. How to Develop a New Model](docs/en/faq/develop_a_new_model.md)(To be Continued)
-
-  - More FastDeploy Deployment Module
-
-    - [deployment AI Model as a Service](./serving)
-
-    - [Benchmark Testing](./benchmark)
-
-</div></details>
-
 * **🖥️ Server-side and Cloud Deployment**
-
   * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
   * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
   * [Supported Server-side and Cloud Model List](#fastdeploy-server-models)
@@ -129,11 +61,9 @@ Including image classification, object detection, image segmentation, face detec
 
   * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
 
-* [**Community**](#fastdeploy-community)
+* [Acknowledge](#fastdeploy-acknowledge)  
 
-* [**Acknowledge**](#fastdeploy-acknowledge)  
-
-* [**License**](#fastdeploy-license)
+* [License](#fastdeploy-license)
 
 ## 🖥️ Server-side and Cloud Deployment
 
@@ -272,15 +202,14 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Classification         | [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
 | Classification         | [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Classification         | [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
-| Classification         | [PaddleClas/SwinTransformer](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/Faster-RCNN](./examples/vision/detection/paddledetection)                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/Mask-RCNN](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅               | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Faster-RCNN](./examples/vision/detection/paddledetection)                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Mask-RCNN](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Detection              | [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox)                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Detection              | [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7)                                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Detection              | [WongKinYiu/YOLOv7end2end_trt](./examples/vision/detection/yolov7end2end_trt)                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
@@ -317,7 +246,7 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Matting                | [ZHKKKe/MODNet](./examples/vision/matting/modnet)                                            | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Matting                | [PeterL1n/RobustVideoMatting]()                                                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Matting                | [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
-| Matting                | [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Matting                | [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Matting                | [PaddleSeg/ModNet](./examples/vision/matting/modnet)                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Video Super-Resolution | [PaddleGAN/BasicVSR](./)                                                                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Video Super-Resolution | [PaddleGAN/EDVR](./examples/vision/sr/edvr)                                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
@@ -390,18 +319,6 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 
 </div></details>
 
-## Community
-
-<div id="fastdeploy-community"></div>
-
-- If you have any question or suggestion, please give us your valuable input via GitHub Issues
-- **Join Us👬：**
-  - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
-  - **WeChat**：join our **WeChat community** and chat with other community members about ideas
-
-<div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
-</div>
 
 ## Acknowledge
 
