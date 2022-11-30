@@ -32,6 +32,7 @@ docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
 ## 其它文档
 - [模型仓库目录说明](docs/zh_CN/model_repository.md) (说明如何准备模型仓库目录)
 - [模型配置说明](docs/zh_CN/model_configuration.md)  (说明runtime的配置选项)
+- [服务化部署示例](docs/zh_CN/demo.md) (服务化部署示例)
 
 
 ### 服务化部署示例

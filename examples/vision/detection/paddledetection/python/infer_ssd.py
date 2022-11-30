@@ -36,12 +36,14 @@ config_file = os.path.join(args.model_dir, "infer_cfg.yml")
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.SSD(
-    model_file, params_file, config_file, runtime_option=runtime_option)
+model = fd.vision.detection.SSD(model_file,
+                                params_file,
+                                config_file,
+                                runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 
 # 预测结果可视化

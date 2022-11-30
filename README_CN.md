@@ -35,86 +35,18 @@
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                      |
 | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p> |
 
-## 近期更新
 
-- 🔥 [**【三日部署直播课回放】**](https://aistudio.baidu.com/aistudio/course/introduce/27800)
+## **社区交流**
 
-- **社区交流**
+*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
 
-  - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1hhvpb279-iw2pNPwrDaMBQ5OQhO3Siw) and chat with other community members about ideas
+*  **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
 
-  - **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
-
-    <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "120" height = "120" />
-    </div>
-
-- 🔥 **2022.11.23：Release FastDeploy [release v0.8.0](https://github.com/PaddlePaddle/FastDeploy/tree/release/0.8)**
-
-  - **🖥️ 服务端部署：支持更多的模型，推理性能进一步提升**  
-
-    - 新增 PIPNet、FaceLandmark1000 [人脸对齐模型](./examples/vision/facealign)的部署支持；
-    - 新增[视频超分系列模型](./examples/vision/sr) PP-MSVSR、EDVR、BasicVSR 部署示例；
-    - 升级[YOLOv7部署代码](https://github.com/PaddlePaddle/FastDeploy/pull/611)，支持 predict 及 batch_predict；
-    - 新增 [UIE服务化部署](./examples/text/uie) 案例；
-    - [测试功能] 新增OpenVINO后端Device设置，支持集显/独立显卡的调用；
-
-  - **📲 移动端和端侧部署：支持更多模型**
-
-    - 新增Android图像分类、目标检测、语义分割、OCR、人脸检测 APK工程及示例.
-
-      | <font size=3>图像分类</font>                                                                                                                                                   | <font size=3>目标检测</font>                                                                                                                                              | <font size=3>语义分割</font>                                                                                                                                          | <font size=3>文字识别</font>                                                                                                                                        | <font size=3>人脸检测</font>                                                                                                                                            |
-      |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-      | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation) | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr)</font> | <font size=2>[工程代码](https://github.com/PaddlePaddle/FastDeploy/tree/develop/java/android/app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/facedet)</font> |
-      | <font size=2>[扫码或点击链接<br>安装试用](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-MobileNetV1.apk)</font>                                                         | <font size=2>[扫码或点击链接<br>安装试用](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PicoDet.apk)</font>                                                        | <font size=2>[扫码或点击链接<br>安装试用](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-Portrait-HumanSegV2-Lite.apk)</font>                                   | <font size=2> [扫码或点击链接<br>安装试用](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-PP-OCRv2.apk)</font>                                                | <font size=2> [扫码或点击链接<br>安装试用](https://bj.bcebos.com/fastdeploy/release/android/FastDeploy-SCRFD.apk)</font>                                                       |
-      | <img src=https://user-images.githubusercontent.com/54695910/203604502-991972a8-5a9c-49cd-9e58-ed8e2a942b9b.png height="90" width="100">                                    | <img src=https://user-images.githubusercontent.com/54695910/203604475-724be708-27d6-4e56-9c2f-ae2eca24118c.png height="90" width="100">                               | <img src=https://user-images.githubusercontent.com/54695910/203604459-9a2915bc-91dc-460c-bff6-a0e2584d2eff.png height="90" width="100">                           | <img src=https://user-images.githubusercontent.com/54695910/203604453-6ce0118e-7b93-4044-8a92-56f2ab65c26a.png height="90" width="100">                         | <img src=https://user-images.githubusercontent.com/54695910/203604418-7c9703b5-1805-457e-966c-5a6625f212ff.png height="90" width="100">                             |
-
-- [**more releases information**](./releases)
+<div align="center">
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
+</div>
 
 ## 目录
-
-* <details open> <summary><b>📖 文档教程（点击可收缩）</b></summary><div>
-
-  - 安装文档
-
-    - [预编译库下载安装](docs/cn/build_and_install/download_prebuilt_libraries.md)
-    - [GPU部署环境编译安装](docs/cn/build_and_install/gpu.md)
-    - [CPU部署环境编译安装](docs/cn/build_and_install/cpu.md)
-    - [IPU部署环境编译安装](docs/cn/build_and_install/ipu.md)
-    - [Jetson部署环境编译安装](docs/cn/build_and_install/jetson.md)
-    - [Android平台部署环境编译安装](docs/cn/build_and_install/android.md)
-
-  - 快速使用
-
-    - [Python部署示例](docs/cn/quick_start/models/python.md)
-    - [C++部署示例](docs/cn/quick_start/models/cpp.md)
-    - [Runtime Python使用示例](docs/cn/quick_start/runtime/python.md)
-    - [Runtime C++使用示例](docs/cn/quick_start/runtime/cpp.md)
-
-  - API文档(进行中)
-
-    - [Python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/)
-    - [C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/)
-
-  - 性能调优
-
-    - [量化加速](docs/cn/quantize.md)
-
-  - 常见问题
-
-    - [1. 如何配置模型部署的推理后端](docs/cn/faq/how_to_change_backend.md)
-    - [2. Windows上C++ SDK如何使用](docs/cn/faq/use_sdk_on_windows.md)
-    - [3. Android上如何使用FastDeploy](java/android/README.md)
-    - [4. TensorRT使用中的一些技巧](docs/cn/faq/tensorrt_tricks.md)
-    - [5. 如何增加新的模型](docs/cn/faq/develop_a_new_model.md)(进行中)
-
-  - 更多FastDeploy部署模块
-
-    - [服务化部署](./serving)
-
-    - [Benchmark测试](./benchmark)
-
-</div></details>
 
 * **🖥️ 服务器端部署**
 
@@ -124,24 +56,21 @@
 
 * **📲 移动端和端侧部署**
 
-  * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
   * [端侧模型支持列表](#fastdeploy-edge-models)
 
 * **🌐 Web和小程序部署**  
 
   * [Web端模型支持列表](#fastdeploy-web-models)
-
-* [**社区交流**](#fastdeploy-community)
-
-* [**Acknowledge**](#fastdeploy-acknowledge)  
-
-* [**License**](#fastdeploy-license)
+* [Acknowledge](#fastdeploy-acknowledge)  
+* [License](#fastdeploy-license)
 
 ## 🖥️ 服务端部署
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details close> <summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
+<details close>
+
+<summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
 
 #### 快速安装
 
@@ -180,11 +109,10 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 
 * 测试推理结果
 
-  ```python
-  # GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
-  import cv2
-  import fastdeploy.vision as vision
-  ```
+```python
+# GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
+import cv2
+import fastdeploy.vision as vision
 
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
@@ -197,11 +125,13 @@ vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
 
 ```
+
 </div></details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
-<details>
+<details close>
+
 <summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
 
 
@@ -274,14 +204,14 @@ int main(int argc, char* argv[]) {
 | Classification         | [PaddleClas/SqueeezeNetV1.1](./examples/vision/classification/paddleclas)                    | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
 | Classification         | [PaddleClas/Inceptionv3](./examples/vision/classification/paddleclas)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Classification         | [PaddleClas/PP-HGNet](./examples/vision/classification/paddleclas)                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/Faster-RCNN](./examples/vision/detection/paddledetection)                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
-| Detection              | [PaddleDetection/Mask-RCNN](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOE](./examples/vision/detection/paddledetection)                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PicoDet](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOX](./examples/vision/detection/paddledetection)                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅               | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/YOLOv3](./examples/vision/detection/paddledetection)                        | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLO](./examples/vision/detection/paddledetection)                       | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/PP-YOLOv2](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Faster-RCNN](./examples/vision/detection/paddledetection)                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
+| Detection              | [PaddleDetection/Mask-RCNN](./examples/vision/detection/paddledetection)                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ✅       |
 | Detection              | [Megvii-BaseDetection/YOLOX](./examples/vision/detection/yolox)                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Detection              | [WongKinYiu/YOLOv7](./examples/vision/detection/yolov7)                                      | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Detection              | [WongKinYiu/YOLOv7end2end_trt](./examples/vision/detection/yolov7end2end_trt)                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
@@ -318,7 +248,7 @@ int main(int argc, char* argv[]) {
 | Matting                | [ZHKKKe/MODNet](./examples/vision/matting/modnet)                                            | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Matting                | [PeterL1n/RobustVideoMatting]()                                                              | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Matting                | [PaddleSeg/PP-Matting](./examples/vision/matting/ppmatting)                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
-| Matting                | [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
+| Matting                | [PaddleSeg/PP-HumanMatting](./examples/vision/matting/modnet)                                | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Matting                | [PaddleSeg/ModNet](./examples/vision/matting/modnet)                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Video Super-Resolution | [PaddleGAN/BasicVSR](./)                                                                     | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Video Super-Resolution | [PaddleGAN/EDVR](./examples/vision/sr/edvr)                                                  | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
@@ -392,15 +322,6 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-<div id="fastdeploy-community"></div>
-
-## 社区交流
-
-- **加入社区👬：** 微信扫描二维码，进入**FastDeploy技术交流群**
-
-<div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg"  width = "225" height = "225" />
-</div>
 
 <div id="fastdeploy-acknowledge"></div>
 
