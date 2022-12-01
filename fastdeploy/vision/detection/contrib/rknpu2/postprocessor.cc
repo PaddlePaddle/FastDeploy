@@ -47,11 +47,6 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
     return false;
   }
 
-  return PostProcess(tensors, results);
-}
-
-int RKYOLOPostprocessor::PostProcess(const std::vector<FDTensor>& tensors,
-                                     std::vector<DetectionResult>* results) {
   results->resize(tensors[0].shape[0]);
   for (int num = 0; num < tensors[0].shape[0]; ++num) {
     int validCount = 0;
@@ -68,11 +63,12 @@ int RKYOLOPostprocessor::PostProcess(const std::vector<FDTensor>& tensors,
       int grid_w = width_ / stride;
       int* anchor = &(anchors_.data()[i * 2 * anchor_per_branch_]);
       if (tensors[i].dtype == FDDataType::INT8 || tensors[i].dtype == FDDataType::UINT8) {
+        auto quantization_info = tensors[i].GetQuantizationInfo();
         validCount = validCount +
                      ProcessInt8((int8_t*)tensors[i].Data() + skip_address,
                                  anchor, grid_h, grid_w, stride, filterBoxes,
                                  boxesScore, classId, conf_threshold_,
-                                 tensors[i].zp_, tensors[i].scale_);
+                                 quantization_info.first, quantization_info.second[0]);
       } else {
         FDERROR << "RKYOLO Only Support INT8 Model" << std::endl;
       }
@@ -128,7 +124,6 @@ int RKYOLOPostprocessor::PostProcess(const std::vector<FDTensor>& tensors,
     }
     std::cout << "last_count" << last_count << std::endl;
   }
-
   return true;
 }
 

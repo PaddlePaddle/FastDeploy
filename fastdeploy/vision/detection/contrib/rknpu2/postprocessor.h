@@ -73,8 +73,6 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   int height_ = 0;
   int width_ = 0;
   int anchor_per_branch_ = 0;
-  int PostProcess(const std::vector<FDTensor>& tensors,
-                  std::vector<DetectionResult>* results);
 
   // Process Int8 Model
   int ProcessInt8(int8_t* input, int* anchor, int grid_h, int grid_w,

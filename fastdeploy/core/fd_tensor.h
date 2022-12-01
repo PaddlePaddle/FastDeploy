@@ -24,10 +24,10 @@
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
-  // only for RKNPU2
-  int32_t zp_;
-  float scale_;
-  void SetZpAndScale(int32_t &zp, float &scale);
+  // These two parameters are general parameters of quantitative model.
+  std::pair<int32_t, std::vector<float>> quantized_parameter_ = {0, {0}};
+  void SetQuantizationInfo(int32_t &zero_point, std::vector<float> &scale);
+  const std::pair<int32_t, std::vector<float>> GetQuantizationInfo() const;
 
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;

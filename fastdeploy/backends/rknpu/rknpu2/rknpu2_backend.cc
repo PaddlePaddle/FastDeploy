@@ -391,7 +391,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    (*outputs)[i].SetZpAndScale(output_attrs_[i].zp,output_attrs_[i].scale);
+    std::vector<float>  output_scale = {output_attrs_[i].scale};
+    (*outputs)[i].SetQuantizationInfo(output_attrs_[i].zp, output_scale);
     memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->virt_addr,
            (*outputs)[i].Nbytes());
   }
