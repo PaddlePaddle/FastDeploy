@@ -29,12 +29,23 @@
             android:textSize="25sp" />
 
         <TextView
+            android:id="@+id/baidu"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/model_text"
             android:layout_centerHorizontal="true"
             android:layout_marginTop="20dp"
             android:text="百度"
+            android:textColor="@color/colorTextWrite"
+            android:textSize="22sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/baidu"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="10dp"
+            android:text="Power by EasyEdge"
             android:textColor="@color/colorTextWrite"
             android:textSize="22sp" />
 
