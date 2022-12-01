@@ -36,8 +36,8 @@ class StableDiffusionInpaintPipeline {
       std::unique_ptr<Scheduler> scheduler,
       const paddlenlp::fast_tokenizer::tokenizers_impl::ClipFastTokenizer&
           tokenizer);
-  void Predict(const std::vector<std::string>& prompts, cv::Mat* image,
-               cv::Mat* mask_image, std::vector<FDTensor>* output_images,
+  void Predict(const std::vector<std::string>& prompts, const cv::Mat& image,
+               const cv::Mat& mask_image, std::vector<FDTensor>* output_images,
                int height = 512, int width = 512, int num_inference_steps = 50,
                float guidance_scale = 7.5,
                const std::vector<std::string>& negative_prompt = {},
@@ -47,7 +47,7 @@ class StableDiffusionInpaintPipeline {
                int callback_steps = 1);
 
  private:
-  void PrepareMaskAndMaskedImage(cv::Mat* image, cv::Mat* mask_mat,
+  void PrepareMaskAndMaskedImage(const cv::Mat& image, const cv::Mat& mask_mat,
                                  const std::vector<int64_t>& shape,
                                  FDTensor* mask, FDTensor* mask_image);
   std::unique_ptr<Runtime> vae_encoder_;

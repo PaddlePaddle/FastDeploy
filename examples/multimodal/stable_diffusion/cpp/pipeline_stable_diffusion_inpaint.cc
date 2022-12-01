@@ -14,6 +14,9 @@
 
 #include "pipeline_stable_diffusion_inpaint.h"
 #include "fastdeploy/function/functions.h"
+#include "fastdeploy/vision/common/processors/color_space_convert.h"
+#include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/vision/common/processors/resize.h"
 #include <algorithm>
 
 using namespace paddlenlp;
@@ -24,8 +27,53 @@ static constexpr int NUM_LATENT_CHANNELS = 4;
 static constexpr int NUM_UNET_INPUT_CHANNELS = 9;
 
 void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
-    cv::Mat* image, cv::Mat* mask_mat, const std::vector<int64_t>& shape,
-    FDTensor* mask, FDTensor* mask_image) {}
+    const cv::Mat& image, const cv::Mat& mask_mat,
+    const std::vector<int64_t>& shape, FDTensor* mask, FDTensor* mask_image) {
+  vision::FDMat image_fdmat(image);
+  vision::BGR2RGB::Run(&image_fdmat, vision::ProcLib::OPENCV);
+  vision::Resize::Run(&image_fdmat, shape[1] * 8, shape[0] * 8, -1.0f, -1.0f,
+                      cv::INTER_NEAREST, false, vision::ProcLib::OPENCV);
+  image_fdmat.CopyToTensor(mask_image);
+
+  vision::FDMat mask_fdmat(mask_mat);
+  vision::BGR2GRAY::Run(&mask_fdmat, vision::ProcLib::OPENCV);
+  vision::Resize::Run(&mask_fdmat, shape[1] * 8, shape[0] * 8, -1.0f, -1.0f,
+                      cv::INTER_NEAREST, false, vision::ProcLib::OPENCV);
+  FDTensor image_mask;
+  mask_fdmat.CopyToTensor(&image_mask);
+  function::Cast(image_mask, &image_mask, FDDataType::FP32);
+  std::vector<float> float_mask(image_mask.Numel(), 0);
+  float* image_mask_ptr = reinterpret_cast<float*>(image_mask.Data());
+  for (int i = 0; i < image_mask.Numel(); ++i) {
+    if (image_mask_ptr[i] < 127.5) {
+      float_mask[i] = 1;
+    }
+  }
+  image_mask.SetExternalData({1, 1, shape[1] * 8, shape[0] * 8},
+                             FDDataType::FP32, float_mask.data());
+
+  // Set mask_image
+  mask_image->ExpandDim();
+  function::Transpose(*mask_image, mask_image, {0, 3, 1, 2});
+  function::Cast(*mask_image, mask_image, FDDataType::FP32);
+  *mask_image = *mask_image / 127.5f - 1.0f;
+  *mask_image = *mask_image * image_mask;
+
+  // Set mask
+  mask_fdmat.CopyToTensor(mask);
+  function::Cast(*mask, mask, FDDataType::FP32);
+  *mask = *mask / 255.0f;
+  mask->ExpandDim();
+  mask->ExpandDim();
+  float* mask_data = reinterpret_cast<float*>(mask->Data());
+  for (int i = 0; i < mask->Numel(); ++i) {
+    if (mask_data[i] < 0.5) {
+      mask_data[i] = 0;
+    } else {
+      mask_data[i] = 1;
+    }
+  }
+}
 
 StableDiffusionInpaintPipeline::StableDiffusionInpaintPipeline(
     std::unique_ptr<Runtime> vae_encoder, std::unique_ptr<Runtime> vae_decoder,
@@ -39,8 +87,8 @@ StableDiffusionInpaintPipeline::StableDiffusionInpaintPipeline(
       scheduler_(std::move(scheduler)), tokenizer_(tokenizer) {}
 
 void StableDiffusionInpaintPipeline::Predict(
-    const std::vector<std::string>& prompts, cv::Mat* image,
-    cv::Mat* mask_image, std::vector<FDTensor>* output_images, int height,
+    const std::vector<std::string>& prompts, const cv::Mat& image,
+    const cv::Mat& mask_image, std::vector<FDTensor>* output_images, int height,
     int width, int num_inference_steps, float guidance_scale,
     const std::vector<std::string>& negative_prompt, int num_images_per_prompt,
     float eta, uint32_t max_length, const FDTensor* latents, bool output_cv_mat,
