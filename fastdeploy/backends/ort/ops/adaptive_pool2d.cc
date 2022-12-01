@@ -76,7 +76,7 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
       context, 0, output_size_.data(), output_size_.size());
   
   float* output_data = ort_.GetTensorMutableData<float>(output);
-  if(this->provider_ == "CUDAExecutionProvider"){
+  if(!strcmp(this->provider_, "CUDAExecutionProvider")){
 #ifdef WITH_GPU
     auto compute_stream = ort_.KernelContext_GetGPUComputeStream(context);
     CudaAdaptivePool(input_size, output_size_, output_data, input_data, compute_stream, pooling_type_);
@@ -85,7 +85,7 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
             << "Will force to use CPU to run." << std::endl;
   CpuAdaptivePool(input_size, output_size_, input_data, output_data);
 #endif
-  }else{
+  } else {
     CpuAdaptivePool(input_size, output_size_, input_data, output_data);
   }
 }
