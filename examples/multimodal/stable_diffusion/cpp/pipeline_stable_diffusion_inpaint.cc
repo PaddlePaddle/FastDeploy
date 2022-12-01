@@ -40,10 +40,10 @@ StableDiffusionInpaintPipeline::StableDiffusionInpaintPipeline(
 
 void StableDiffusionInpaintPipeline::Predict(
     const std::vector<std::string>& prompts, cv::Mat* image,
-    cv::Mat* mask_image, FDTensor* output_image, int height, int width,
-    int num_inference_steps, float guidance_scale,
+    cv::Mat* mask_image, std::vector<FDTensor>* output_images, int height,
+    int width, int num_inference_steps, float guidance_scale,
     const std::vector<std::string>& negative_prompt, int num_images_per_prompt,
-    float eta, uint32_t max_length, const FDTensor* latents,
+    float eta, uint32_t max_length, const FDTensor* latents, bool output_cv_mat,
     callback_ptr callback, int callback_steps) {
   int batch_size = prompts.size();
   FDASSERT(batch_size >= 1, "prompts should not be empty");
@@ -226,6 +226,37 @@ void StableDiffusionInpaintPipeline::Predict(
     // call the callback, if provided
     if (callback != nullptr && i % callback_steps == 0) {
       callback(i, time, &actual_latents);
+    }
+    actual_latents = (1.0f / 0.18215f) * actual_latents;
+
+    // Get vae decoder output
+    int actual_latents_bs = actual_latents.Shape()[0];
+    TensorInfo vae_decoder_info = vae_decoder_->GetInputInfo(0);
+    inputs.resize(1);
+    outputs.resize(vae_decoder_->GetOutputInfos().size());
+    std::vector<FDTensor> decoder_reuslt;
+    for (int i = 0; i < actual_latents_bs; ++i) {
+      function::Slice(actual_latents, {0}, {i}, {i + 1}, &inputs[0]);
+      inputs[0].name = vae_decoder_info.name;
+      vae_decoder_->Infer(inputs, &outputs);
+      decoder_reuslt.emplace_back(std::move(outputs[0]));
+    }
+    FDTensor output_image;
+    function::Concat(decoder_reuslt, &output_image);
+
+    function::Clip(output_image / 2.0f + 0.5f, 0, 1, &output_image);
+    function::Transpose(output_image, &output_image, {0, 2, 3, 1});
+
+    if (output_cv_mat) {
+      output_image = output_image * 255.0f;
+      function::Round(output_image, &output_image);
+      function::Cast(output_image, &output_image, FDDataType::UINT8);
+    }
+
+    int output_batch_size = output_image.Shape()[0];
+    output_images->resize(output_batch_size);
+    for (int i = 0; i < output_batch_size; ++i) {
+      function::Slice(output_image, {0}, {i}, &(*output_images)[i]);
     }
   }
 }

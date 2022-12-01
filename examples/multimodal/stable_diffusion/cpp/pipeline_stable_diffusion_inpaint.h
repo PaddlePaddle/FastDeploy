@@ -37,13 +37,14 @@ class StableDiffusionInpaintPipeline {
       const paddlenlp::fast_tokenizer::tokenizers_impl::ClipFastTokenizer&
           tokenizer);
   void Predict(const std::vector<std::string>& prompts, cv::Mat* image,
-               cv::Mat* mask_image, FDTensor* output_image, int height = 512,
-               int width = 512, int num_inference_steps = 50,
+               cv::Mat* mask_image, std::vector<FDTensor>* output_images,
+               int height = 512, int width = 512, int num_inference_steps = 50,
                float guidance_scale = 7.5,
                const std::vector<std::string>& negative_prompt = {},
                int num_images_per_prompt = 1, float eta = 0.0,
                uint32_t max_length = 77, const FDTensor* latents = nullptr,
-               callback_ptr callback = nullptr, int callback_steps = 1);
+               bool output_cv_mat = true, callback_ptr callback = nullptr,
+               int callback_steps = 1);
 
  private:
   void PrepareMaskAndMaskedImage(cv::Mat* image, cv::Mat* mask_mat,
