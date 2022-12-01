@@ -96,6 +96,8 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
   lower_order_nums_ = 0;
 }
 
+float DPMSolverMultistepScheduler::InitNoiseSigma() { return 1.0; }
+
 void DPMSolverMultistepScheduler::ConvertModelOutput(
     const FDTensor& model_output, int timestep, const FDTensor& sample,
     FDTensor* out) {

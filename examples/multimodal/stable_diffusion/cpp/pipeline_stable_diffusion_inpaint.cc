@@ -23,6 +23,10 @@ namespace fastdeploy {
 static constexpr int NUM_LATENT_CHANNELS = 4;
 static constexpr int NUM_UNET_INPUT_CHANNELS = 9;
 
+void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
+    cv::Mat* image, cv::Mat* mask_mat, const std::vector<int64_t>& shape,
+    FDTensor* mask, FDTensor* mask_image) {}
+
 StableDiffusionInpaintPipeline::StableDiffusionInpaintPipeline(
     std::unique_ptr<Runtime> vae_encoder, std::unique_ptr<Runtime> vae_decoder,
     std::unique_ptr<Runtime> text_encoder, std::unique_ptr<Runtime> unet,
@@ -77,23 +81,22 @@ void StableDiffusionInpaintPipeline::Predict(
   encodings.clear();
   // Get text encoder output
   FDTensor text_intput_ids;
-  std::vector<FDTensor> text_inputs(1);
-  text_inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
-                                 input_ids.data());
+  std::vector<FDTensor> inputs(1);
+  inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
+                            input_ids.data());
 
   TensorInfo text_info = text_encoder_->GetInputInfo(0);
-  text_inputs[0].name = text_info.name;
+  inputs[0].name = text_info.name;
   int output_size = text_encoder_->GetOutputInfos().size();
-  std::vector<FDTensor> text_outputs(output_size);
-  text_encoder_->Infer(text_inputs, &text_outputs);
+  std::vector<FDTensor> outputs(output_size);
+  text_encoder_->Infer(inputs, &outputs);
 
   FDTensor text_embeddings;
-  function::Tile(text_outputs[0], {num_images_per_prompt, 1, 1},
-                 &text_embeddings);
+  function::Tile(outputs[0], {num_images_per_prompt, 1, 1}, &text_embeddings);
 
-  //    here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
-  //    of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
-  //    corresponds to doing no classifier free guidance.
+  // here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+  // of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+  // corresponds to doing no classifier free guidance.
   bool do_classifier_free_guidance = guidance_scale > 1.0;
   if (do_classifier_free_guidance) {
     std::vector<std::string> uncond_tokens;
@@ -114,11 +117,11 @@ void StableDiffusionInpaintPipeline::Predict(
       auto curr_ids = encoding.GetIds();
       input_ids.insert(input_ids.end(), curr_ids.begin(), curr_ids.end());
     }
-    text_inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
-                                   input_ids.data());
-    text_encoder_->Infer(text_inputs, &text_outputs);
+    inputs[0].SetExternalData({batch_size, max_length}, FDDataType::INT64,
+                              input_ids.data());
+    text_encoder_->Infer(inputs, &outputs);
     FDTensor uncond_embeddings;
-    function::Tile(text_outputs[0], {num_images_per_prompt, 1, 1},
+    function::Tile(outputs[0], {num_images_per_prompt, 1, 1},
                    &uncond_embeddings);
     function::Concat({uncond_embeddings, text_embeddings}, &text_embeddings);
   }
@@ -131,10 +134,55 @@ void StableDiffusionInpaintPipeline::Predict(
     function::GaussianRandom(latents_shape, &actual_latents, latents_dtype);
   } else {
     bool result = std::equal(latents_shape.begin(), latents_shape.end(),
-                              latents->Shape().begin());
+                             latents->Shape().begin());
     FDASSERT(result, "Unexpected latents shape, got %s, expected %s",
              Str(latents_shape).c_str(), Str(latents->Shape()).c_str());
     actual_latents = *latents;
   }
+  FDTensor mask_t, mask_image_t;
+  PrepareMaskAndMaskedImage(image, mask_image, {height / 8, width / 8}, &mask_t,
+                            &mask_image_t);
+  function::Cast(mask_t, &mask_t, actual_latents.Dtype());
+  function::Cast(mask_image_t, &mask_image_t, actual_latents.Dtype());
+
+  // Get vae encoder output
+  TensorInfo vae_encoder_info = vae_encoder_->GetInputInfo(0);
+  mask_image_t.name = vae_encoder_info.name;
+  outputs.resize(vae_encoder_->GetOutputInfos().size());
+  inputs = {mask_image_t};
+  vae_encoder_->Infer(inputs, &outputs);
+  FDTensor masked_image_latents = 0.18215 * outputs[0];
+
+  auto mask_shape = mask_t.Shape();
+  mask_shape[0] = batch_size * num_images_per_prompt;
+  function::Tile(mask_t, mask_shape, &mask_t);
+
+  auto mask_image_shape = mask_image_t.Shape();
+  mask_image_shape[0] = batch_size * num_images_per_prompt;
+  function::Tile(mask_image_t, mask_image_shape, &mask_image_t);
+
+  if (do_classifier_free_guidance) {
+    function::Concat({mask_t, mask_t}, &mask_t);
+    function::Concat({mask_image_t, mask_image_t}, &mask_image_t);
+  }
+  int num_channels_mask = mask_t.Shape()[1];
+  int num_channels_masked_image = mask_image_t.Shape()[1];
+  FDASSERT(
+      NUM_LATENT_CHANNELS + num_channels_mask + num_channels_masked_image ==
+          NUM_UNET_INPUT_CHANNELS,
+      "Incorrect configuration settings! The config of `pipeline.unet` expects"
+      " {%d} but received `num_channels_latents`: %d + `num_channels_mask`: %d "
+      "+ `num_channels_masked_image`: %d"
+      " = %d. Please verify the config of `pipeline.unet` or your `mask_image` "
+      "or `image` input.",
+      NUM_UNET_INPUT_CHANNELS, NUM_LATENT_CHANNELS, num_channels_mask,
+      num_channels_masked_image,
+      NUM_LATENT_CHANNELS + num_channels_mask + num_channels_masked_image);
+
+  // set timesteps
+  scheduler_->SetTimesteps(num_inference_steps);
+
+  // scale the initial noise by the standard deviation required by the scheduler
+  actual_latents = actual_latents * scheduler_->InitNoiseSigma();
 }
 }  // namespace fastdeploy

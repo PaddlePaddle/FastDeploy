@@ -27,6 +27,7 @@ class Scheduler {
                                const std::vector<FDTensor>& timesteps = {}) = 0;
   virtual void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
                         const FDTensor& timesteps, FDTensor* out) = 0;
+  virtual float InitNoiseSigma() = 0;
 };
 
 }  // namespace fastdeploy

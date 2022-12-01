@@ -46,6 +46,9 @@ class StableDiffusionInpaintPipeline {
                callback_ptr callback = nullptr, int callback_steps = 1);
 
  private:
+  void PrepareMaskAndMaskedImage(cv::Mat* image, cv::Mat* mask_mat,
+                                 const std::vector<int64_t>& shape,
+                                 FDTensor* mask, FDTensor* mask_image);
   std::unique_ptr<Runtime> vae_encoder_;
   std::unique_ptr<Runtime> vae_decoder_;
   std::unique_ptr<Runtime> text_encoder_;
