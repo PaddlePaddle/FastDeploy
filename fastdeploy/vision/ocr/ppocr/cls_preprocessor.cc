@@ -50,8 +50,8 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
 bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index) {
 
-  if (images->size() == 0 || end_index <= start_index || end_index > images->size()) {
-    FDERROR << "The size of input images should be greater than 0." << std::endl;
+  if (images->size() == 0 || start_index <0 || end_index <= start_index || end_index > images->size()) {
+    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < end_index <= images->size()" << std::endl;
     return false;
   }
 
@@ -68,7 +68,7 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  size_t tensor_size = end_index-start_index;
+  size_t tensor_size = end_index - start_index;
   std::vector<FDTensor> tensors(tensor_size); 
   for (size_t i = 0; i < tensor_size; ++i) {
     (*images)[i + start_index].ShareWithTensor(&(tensors[i]));

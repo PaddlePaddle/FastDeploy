@@ -48,8 +48,16 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
   size_t batch = tensor.shape[0];
   size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
 
-  if (start_index < 0 || (start_index + batch) > total_size) {
-    FDERROR << "index error." << std::endl;
+  if (batch <= 0) {
+    FDERROR << "The infer outputTensor.shape[0] <=0, wrong infer result." << std::endl;
+    return false;
+  }
+  if (start_index < 0 || total_size <= 0) {
+    FDERROR << "start_index or total_size error. Correct is: 0 <= start_index < total_size" << std::endl;
+    return false;
+  }
+  if ((start_index + batch) > total_size) {
+    FDERROR << "start_index or total_size error. Correct is: start_index + batch(outputTensor.shape[0]) <= total_size" << std::endl;
     return false;
   }
 

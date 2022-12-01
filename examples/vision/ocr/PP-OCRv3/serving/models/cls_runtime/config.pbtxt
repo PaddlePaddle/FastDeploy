@@ -45,7 +45,7 @@ optimization {
         # 设置推理并行计算线程数为4
         parameters { key: "cpu_threads" value: "4" }
         # 开启mkldnn加速，设置为0关闭mkldnn
-        parameters { key: "use_mkldnn" value: "0" }
+        parameters { key: "use_mkldnn" value: "1" }
       }
     ]
   }

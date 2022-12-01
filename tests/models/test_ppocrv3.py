@@ -102,6 +102,10 @@ rec_model = fd.vision.ocr.Recognizer(
 ppocr_v3 = fd.vision.ocr.PPOCRv3(
     det_model=det_model, cls_model=cls_model, rec_model=rec_model)
 
+#pp_ocrv3_no_cls
+ppocr_v3_no_cls = fd.vision.ocr.PPOCRv3(
+    det_model=det_model, rec_model=rec_model)
+
 #input image
 img_file = "resources/12.jpg"
 im = []
@@ -142,7 +146,32 @@ def compare_result(pred_boxes, pred_cls_labels, pred_cls_scores, pred_text,
     assert diff_rec_scores < diff_threshold, "There is diff in rec_scores"
 
 
+def compare_result_no_cls(pred_boxes, pred_text, pred_rec_scores):
+    pred_boxes = np.array(pred_boxes)
+    pred_text = pred_text
+    pred_rec_scores = np.array(pred_rec_scores)
+
+    diff_boxes = np.fabs(base_boxes - pred_boxes).max()
+    diff_text = (base_text != pred_text)
+    diff_rec_scores = np.fabs(base_rec_scores - pred_rec_scores).max()
+
+    print('diff:', diff_boxes, diff_text, diff_rec_scores)
+    diff_threshold = 1e-01
+    assert diff_boxes < diff_threshold, "There is diff in boxes"
+    assert diff_text < diff_threshold, "There is diff in text"
+    assert diff_rec_scores < diff_threshold, "There is diff in rec_scores"
+
+
 def test_ppocr_v3():
+    ppocr_v3.cls_batch_size = -1
+    ppocr_v3.rec_batch_size = -1
+    ocr_result = ppocr_v3.predict(im[0])
+    compare_result(ocr_result.boxes, ocr_result.cls_labels,
+                   ocr_result.cls_scores, ocr_result.text,
+                   ocr_result.rec_scores)
+
+    ppocr_v3.cls_batch_size = 2
+    ppocr_v3.rec_batch_size = 2
     ocr_result = ppocr_v3.predict(im[0])
     compare_result(ocr_result.boxes, ocr_result.cls_labels,
                    ocr_result.cls_scores, ocr_result.text,
@@ -150,6 +179,20 @@ def test_ppocr_v3():
 
 
 def test_ppocr_v3_1():
+    ppocr_v3_no_cls.cls_batch_size = -1
+    ppocr_v3_no_cls.rec_batch_size = -1
+    ocr_result = ppocr_v3_no_cls.predict(im[0])
+    compare_result_no_cls(ocr_result.boxes, ocr_result.text,
+                          ocr_result.rec_scores)
+
+    ppocr_v3_no_cls.cls_batch_size = 2
+    ppocr_v3_no_cls.rec_batch_size = 2
+    ocr_result = ppocr_v3_no_cls.predict(im[0])
+    compare_result_no_cls(ocr_result.boxes, ocr_result.text,
+                          ocr_result.rec_scores)
+
+
+def test_ppocr_v3_2():
     det_input_tensors, batch_det_img_info = det_preprocessor.run(im)
     det_output_tensors = det_runtime.infer({"x": det_input_tensors[0]})
     det_results = det_postprocessor.run(det_output_tensors, batch_det_img_info)
@@ -202,5 +245,12 @@ def test_ppocr_v3_1():
 
 
 if __name__ == "__main__":
+    print("test test_ppocr_v3")
     test_ppocr_v3()
+    test_ppocr_v3()
+    print("test test_ppocr_v3_1")
     test_ppocr_v3_1()
+    test_ppocr_v3_1()
+    print("test test_ppocr_v3_2")
+    test_ppocr_v3_2()
+    test_ppocr_v3_2()

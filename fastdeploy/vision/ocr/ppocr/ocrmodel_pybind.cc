@@ -81,7 +81,7 @@ void BindPPOCRModel(pybind11::module& m) {
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         std::vector<std::array<int, 8>> boxes_result;
-        self.Predict(&mat, &boxes_result);
+        self.Predict(mat, &boxes_result);
         return boxes_result;
       })
       .def("batch_predict", [](vision::ocr::DBDetector& self, std::vector<pybind11::array>& data) {
@@ -151,7 +151,7 @@ void BindPPOCRModel(pybind11::module& m) {
         auto mat = PyArrayToCvMat(data);
         int32_t cls_label;
         float cls_score;
-        self.Predict(&mat, &cls_label, &cls_score);
+        self.Predict(mat, &cls_label, &cls_score);
         return std::make_pair(cls_label, cls_score);
       })
       .def("batch_predict", [](vision::ocr::Classifier& self, std::vector<pybind11::array>& data) {
@@ -221,7 +221,7 @@ void BindPPOCRModel(pybind11::module& m) {
         auto mat = PyArrayToCvMat(data);
         std::string text;
         float rec_score;
-        self.Predict(&mat, &text, &rec_score);
+        self.Predict(mat, &text, &rec_score);
         return std::make_pair(text, rec_score);
       })
       .def("batch_predict", [](vision::ocr::Recognizer& self, std::vector<pybind11::array>& data) {
