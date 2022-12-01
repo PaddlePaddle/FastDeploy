@@ -35,3 +35,18 @@ instance_group [
     gpus: [0]
   }
 ]
+
+optimization {
+  execution_accelerators {
+    # GPU推理配置， 配合KIND_GPU使用
+    gpu_execution_accelerator : [
+      {
+        name : "paddle"
+        # 设置推理并行计算线程数为4
+        parameters { key: "cpu_threads" value: "4" }
+        # 开启mkldnn加速，设置为0关闭mkldnn
+        parameters { key: "use_mkldnn" value: "0" }
+      }
+    ]
+  }
+}
