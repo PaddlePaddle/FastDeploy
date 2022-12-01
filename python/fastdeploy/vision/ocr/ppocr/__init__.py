@@ -188,6 +188,22 @@ class DBDetector(FastDeployModel):
             return self._model.batch_predict(images)
         return False
 
+    @property
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
+
     # Det Preprocessor Property
     @property
     def max_side_len(self):
@@ -408,6 +424,22 @@ class Classifier(FastDeployModel):
             return self._model.batch_predict(images)
         return False
 
+    @property
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
+
     # Cls Preprocessor Property
     @property
     def is_scale(self):
@@ -577,6 +609,22 @@ class Recognizer(FastDeployModel):
         if self._runnable:
             return self._model.batch_predict(images)
         return False
+
+    @property
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
 
     @property
     def is_scale(self):
