@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.ocr;
+package com.baidu.paddle.fastdeploy.app.examples.keypointdetection;
 
 import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
 import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
@@ -19,36 +19,32 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
-import com.baidu.paddle.fastdeploy.pipeline.PPOCRv3;
 import com.baidu.paddle.fastdeploy.ui.Utils;
 import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.ui.view.adapter.BaseResultAdapter;
 import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
-import com.baidu.paddle.fastdeploy.vision.OCRResult;
+import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
-import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
-import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
-import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
+import com.baidu.paddle.fastdeploy.vision.KeyPointDetectionResult;
+import com.baidu.paddle.fastdeploy.vision.keypointdetection.PPTinyPose;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class OcrMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
-    private static final String TAG = OcrMainActivity.class.getSimpleName();
+
+public class KeyPointDetectionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener {
+    private static final String TAG = KeyPointDetectionMainActivity.class.getSimpleName();
 
     CameraSurfaceView svPreview;
     TextView tvStatus;
@@ -63,14 +59,9 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     private ViewGroup resultPageView;
     private ImageView resultImage;
     private ImageView backInResult;
-    private SeekBar confidenceSeekbar;
-    private TextView seekbarText;
-    private float resultNum = 1.0f;
     private ResultListView resultView;
-    private Bitmap picBitmap;
     private Bitmap shutterBitmap;
-    private Bitmap originPicBitmap;
-    private Bitmap originShutterBitmap;
+    private Bitmap picBitmap;
     private boolean isShutterBitmapCopied = false;
 
     public static final int TYPE_UNKNOWN = -1;
@@ -87,11 +78,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
     long frameCounter = 0;
 
     // Call 'init' and 'release' manually later
-    PPOCRv2 predictor = new PPOCRv2();
-
-    private String[] texts;
-    private float[] recScores;
-    private boolean initialized;
+    PPTinyPose predictor = new PPTinyPose();
     private List<BaseResultModel> results = new ArrayList<>();
 
     @Override
@@ -102,7 +89,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.ocr_activity_main);
+        setContentView(R.layout.keypointdetection_activity_main);
 
         // Clear all setting items to avoid app crashing due to the incorrect settings
         initSettings();
@@ -129,7 +116,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 resultView.setAdapter(null);
                 break;
             case R.id.btn_settings:
-                startActivity(new Intent(OcrMainActivity.this, OcrSettingsActivity.class));
+                startActivity(new Intent(this, KeyPointDetectionSettingsActivity.class));
                 break;
             case R.id.realtime_toggle_btn:
                 toggleRealtimeStyle();
@@ -137,7 +124,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             case R.id.back_in_preview:
                 finish();
                 break;
-            case R.id.iv_select:
+            case R.id.album_select:
                 TYPE = ALBUM_SELECT;
                 // Judge whether authority has been granted.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -169,12 +156,6 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         isShutterBitmapCopied = false;
         svPreview.onResume();
         results.clear();
-        if (texts != null) {
-            texts = null;
-        }
-        if (recScores != null) {
-            recScores = null;
-        }
     }
 
     private void shutterAndPauseCamera() {
@@ -190,16 +171,14 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 runOnUiThread(new Runnable() {
                     @SuppressLint("SetTextI18n")
                     public void run() {
-                        // These code will run in main thread.
+                        // These codes will run in main thread.
                         svPreview.onPause();
                         cameraPageView.setVisibility(View.GONE);
                         resultPageView.setVisibility(View.VISIBLE);
-                        seekbarText.setText(resultNum + "");
-                        confidenceSeekbar.setProgress((int) (resultNum * 100));
                         if (shutterBitmap != null && !shutterBitmap.isRecycled()) {
-                            resultImage.setImageBitmap(shutterBitmap);
+                            detail(shutterBitmap);
                         } else {
-                            new AlertDialog.Builder(OcrMainActivity.this)
+                            new AlertDialog.Builder(KeyPointDetectionMainActivity.this)
                                     .setTitle("Empty Result!")
                                     .setMessage("Current picture is empty, please shutting it again!")
                                     .setCancelable(true)
@@ -207,7 +186,6 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                         }
                     }
                 });
-
             }
         }).start();
     }
@@ -219,13 +197,11 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         if (!ARGB8888ImageBitmap.isRecycled()) {
             synchronized (this) {
                 shutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                originShutterBitmap = ARGB8888ImageBitmap.copy(Bitmap.Config.ARGB_8888, true);
             }
             SystemClock.sleep(TIME_SLEEP_INTERVAL);
             isShutterBitmapCopied = true;
         }
     }
-
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -234,13 +210,12 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             if (resultCode == Activity.RESULT_OK) {
                 cameraPageView.setVisibility(View.GONE);
                 resultPageView.setVisibility(View.VISIBLE);
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
                 Uri uri = data.getData();
                 String path = getRealPathFromURI(this, uri);
-                picBitmap = decodeBitmap(path, 720, 1280);
-                originPicBitmap = picBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                resultImage.setImageBitmap(picBitmap);
+                Bitmap bitmap = decodeBitmap(path, 720, 1280);
+                picBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                SystemClock.sleep(TIME_SLEEP_INTERVAL * 10); // 500ms
+                detail(picBitmap);
             }
         }
     }
@@ -256,6 +231,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
             realtimeToggleButton.setImageResource(R.drawable.realtime_start_btn);
             tvStatus.setVisibility(View.GONE);
             isShutterBitmapCopied = false;
+            // Camera is still working but detecting loop is on pause.
             svPreview.setOnTextureChangedListener(new CameraSurfaceView.OnTextureChangedListener() {
                 @Override
                 public boolean onTextureChanged(Bitmap ARGB8888ImageBitmap) {
@@ -278,10 +254,11 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         boolean modified = false;
 
         long tc = System.currentTimeMillis();
-        OCRResult result = predictor.predict(ARGB8888ImageBitmap);
+        KeyPointDetectionResult result = predictor.predict(ARGB8888ImageBitmap);
         timeElapsed += (System.currentTimeMillis() - tc);
 
-        Visualize.visOcr(ARGB8888ImageBitmap, result);
+        Visualize.visKeypointDetection(ARGB8888ImageBitmap, result, 0.f);
+
         modified = result.initialized();
 
         frameCounter++;
@@ -329,8 +306,17 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
 
     public void initView() {
         TYPE = REALTIME_DETECT;
+        // (1) EXPECTED_PREVIEW_WIDTH should mean 'height' and EXPECTED_PREVIEW_HEIGHT
+        // should mean 'width' if the camera display orientation is 90 | 270 degree
+        // (Hold the phone upright to record video)
+        // (2) Smaller resolution is more suitable for Human Pose detection on mobile
+        // device. So, we set this preview size (720,480) here. Reference:
+        // https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose
+        CameraSurfaceView.EXPECTED_PREVIEW_WIDTH = 720;
+        CameraSurfaceView.EXPECTED_PREVIEW_HEIGHT = 480;
         svPreview = (CameraSurfaceView) findViewById(R.id.sv_preview);
         svPreview.setOnTextureChangedListener(this);
+
         tvStatus = (TextView) findViewById(R.id.tv_status);
         btnSwitch = (ImageButton) findViewById(R.id.btn_switch);
         btnSwitch.setOnClickListener(this);
@@ -342,74 +328,19 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         realtimeToggleButton.setOnClickListener(this);
         backInPreview = findViewById(R.id.back_in_preview);
         backInPreview.setOnClickListener(this);
-        albumSelectButton = findViewById(R.id.iv_select);
+        albumSelectButton = findViewById(R.id.album_select);
         albumSelectButton.setOnClickListener(this);
         cameraPageView = findViewById(R.id.camera_page);
         resultPageView = findViewById(R.id.result_page);
         resultImage = findViewById(R.id.result_image);
         backInResult = findViewById(R.id.back_in_result);
         backInResult.setOnClickListener(this);
-        confidenceSeekbar = findViewById(R.id.confidence_seekbar);
-        seekbarText = findViewById(R.id.seekbar_text);
         resultView = findViewById(R.id.result_list_view);
-
-        confidenceSeekbar.setMax(100);
-        confidenceSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                float resultConfidence = seekBar.getProgress() / 100f;
-                BigDecimal bd = new BigDecimal(resultConfidence);
-                resultNum = bd.setScale(1, BigDecimal.ROUND_HALF_UP).floatValue();
-                seekbarText.setText(resultNum + "");
-                confidenceSeekbar.setProgress((int) (resultNum * 100));
-                results.clear();
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (TYPE == ALBUM_SELECT) {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            detail(picBitmap);
-                            picBitmap = originPicBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                        } else {
-                            SystemClock.sleep(TIME_SLEEP_INTERVAL * 10);
-                            detail(shutterBitmap);
-                            shutterBitmap = originShutterBitmap.copy(Bitmap.Config.ARGB_8888, true);
-                        }
-                    }
-                });
-            }
-        });
     }
 
     private void detail(Bitmap bitmap) {
-        OCRResult result = predictor.predict(bitmap, true);
-
-        texts = result.mText;
-        recScores = result.mRecScores;
-
-        initialized = result.initialized();
-        if (initialized) {
-            for (int i = 0; i < texts.length; i++) {
-                if (recScores[i] > resultNum) {
-                    results.add(new BaseResultModel(i + 1, texts[i], recScores[i]));
-                }
-            }
-        }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.base_result_page_item, results);
-        resultView.setAdapter(adapter);
-        resultView.invalidate();
-
+        predictor.predict(bitmap, true, 5.f);
         resultImage.setImageBitmap(bitmap);
-        resultNum = 1.0f;
     }
 
     @SuppressLint("ApplySharedPref")
@@ -418,53 +349,25 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.clear();
         editor.commit();
-        OcrSettingsActivity.resetSettings();
+        KeyPointDetectionSettingsActivity.resetSettings();
     }
 
     public void checkAndUpdateSettings() {
-        if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
-            String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
-            String detModelName = "ch_PP-OCRv2_det_infer";
-            String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
-            String recModelName = "ch_PP-OCRv2_rec_infer";
-            String realDetModelDir = realModelDir + "/" + detModelName;
-            String realClsModelDir = realModelDir + "/" + clsModelName;
-            String realRecModelDir = realModelDir + "/" + recModelName;
-            String srcDetModelDir = OcrSettingsActivity.modelDir + "/" + detModelName;
-            String srcClsModelDir = OcrSettingsActivity.modelDir + "/" + clsModelName;
-            String srcRecModelDir = OcrSettingsActivity.modelDir + "/" + recModelName;
-            Utils.copyDirectoryFromAssets(this, srcDetModelDir, realDetModelDir);
-            Utils.copyDirectoryFromAssets(this, srcClsModelDir, realClsModelDir);
-            Utils.copyDirectoryFromAssets(this, srcRecModelDir, realRecModelDir);
-            String realLabelPath = getCacheDir() + "/" + OcrSettingsActivity.labelPath;
-            Utils.copyFileFromAssets(this, OcrSettingsActivity.labelPath, realLabelPath);
+        if (KeyPointDetectionSettingsActivity.checkAndUpdateSettings(this)) {
+            String realModelDir = getCacheDir() + "/" + KeyPointDetectionSettingsActivity.modelDir;
+            Utils.copyDirectoryFromAssets(this, KeyPointDetectionSettingsActivity.modelDir, realModelDir);
 
-            String detModelFile = realDetModelDir + "/" + "inference.pdmodel";
-            String detParamsFile = realDetModelDir + "/" + "inference.pdiparams";
-            String clsModelFile = realClsModelDir + "/" + "inference.pdmodel";
-            String clsParamsFile = realClsModelDir + "/" + "inference.pdiparams";
-            String recModelFile = realRecModelDir + "/" + "inference.pdmodel";
-            String recParamsFile = realRecModelDir + "/" + "inference.pdiparams";
-            String recLabelFilePath = realLabelPath; // ppocr_keys_v1.txt
-            RuntimeOption detOption = new RuntimeOption();
-            RuntimeOption clsOption = new RuntimeOption();
-            RuntimeOption recOption = new RuntimeOption();
-            detOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            clsOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            recOption.setCpuThreadNum(OcrSettingsActivity.cpuThreadNum);
-            detOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            clsOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            recOption.setLitePowerMode(OcrSettingsActivity.cpuPowerMode);
-            if (Boolean.parseBoolean(OcrSettingsActivity.enableLiteFp16)) {
-                detOption.enableLiteFp16();
-                clsOption.enableLiteFp16();
-                recOption.enableLiteFp16();
+            String modelFile = realModelDir + "/" + "model.pdmodel";
+            String paramsFile = realModelDir + "/" + "model.pdiparams";
+            String configFile = realModelDir + "/" + "infer_cfg.yml";
+            RuntimeOption option = new RuntimeOption();
+            option.setCpuThreadNum(KeyPointDetectionSettingsActivity.cpuThreadNum);
+            option.setLitePowerMode(KeyPointDetectionSettingsActivity.cpuPowerMode);
+            if (Boolean.parseBoolean(KeyPointDetectionSettingsActivity.enableLiteFp16)) {
+                option.enableLiteFp16();
             }
-
-            DBDetector detModel = new DBDetector(detModelFile, detParamsFile, detOption);
-            Classifier clsModel = new Classifier(clsModelFile, clsParamsFile, clsOption);
-            Recognizer recModel = new Recognizer(recModelFile, recParamsFile, recLabelFilePath, recOption);
-            predictor.init(detModel, clsModel, recModel);
+            predictor.setUseDark(true);
+            predictor.init(modelFile, paramsFile, configFile, option);
         }
     }
 
@@ -473,7 +376,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(OcrMainActivity.this)
+            new AlertDialog.Builder(KeyPointDetectionMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -481,7 +384,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            OcrMainActivity.this.finish();
+                            KeyPointDetectionMainActivity.this.finish();
                         }
                     }).show();
         }
@@ -496,4 +399,5 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
+
 }
