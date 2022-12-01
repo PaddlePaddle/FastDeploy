@@ -26,6 +26,8 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   
   fastdeploy::RuntimeOption option;
   option.UseCANN();
+  option.SetNNAdapterDeviceNames({"huawei_ascend_npu"});
+  option.SetNNAdapterContextProperties("HUAWEI_ASCEND_NPU_SELECTED_DEVICE_IDS=0");
 
   auto model = fastdeploy::vision::classification::PaddleClasModel(
       model_file, params_file, config_file, option);
