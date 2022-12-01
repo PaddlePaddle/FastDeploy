@@ -43,6 +43,10 @@ void OcrClassifierResizeImage(FDMat* mat,
   }
 }
 
+bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
+  return Run(images, outputs, 0, images->size());
+}
+
 bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index) {
 
