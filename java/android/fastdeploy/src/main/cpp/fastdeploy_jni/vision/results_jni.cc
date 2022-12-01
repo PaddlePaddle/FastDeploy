@@ -842,9 +842,12 @@ bool AllocateOCRResultFromJava(
     return false;
   }
 
-  const int cls_len = env->GetArrayLength(j_ocr_cls_scores_float_arr);
-  if (cls_len != env->GetArrayLength(j_ocr_cls_labels_int_arr)) {
-    return false;
+  int cls_len = 0;
+  if ((j_ocr_cls_labels_int_arr != NULL) && (j_ocr_cls_scores_float_arr != NULL)) {
+    cls_len = env->GetArrayLength(j_ocr_cls_scores_float_arr);
+    if (cls_len != env->GetArrayLength(j_ocr_cls_labels_int_arr)) {
+      return false;
+    }
   }
 
   // Init cxx result
