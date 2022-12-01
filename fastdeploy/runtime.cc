@@ -370,6 +370,46 @@ void RuntimeOption::SetLiteSubgraphPartitionPath(
   lite_nnadapter_subgraph_partition_config_path = nnadapter_subgraph_partition_config_path;
 }
 
+void RuntimeOption::SetNNAdapterSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer){
+  lite_nnadapter_subgraph_partition_config_buffer = nnadapter_subgraph_partition_config_buffer;
+}
+
+void RuntimeOption::SetNNAdapterDeviceNames(const std::vector<std::string>& nnadapter_device_names){
+  lite_nnadapter_device_names = nnadapter_device_names; 
+}
+
+void RuntimeOption::SetNNAdapterContextProperties(const std::string& nnadapter_context_properties){
+  lite_nnadapter_context_properties = nnadapter_context_properties; 
+}
+
+void RuntimeOption::SetNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir){
+  lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
+}
+
+void RuntimeOption::SetNNAdapterModelCacheBuffers(
+      const std::string& nnadapter_model_cache_token,
+      const std::vector<char>& nnadapter_model_cache_buffer){
+  lite_nnadapter_model_cache_token = nnadapter_model_cache_token; 
+  lite_nnadapter_model_cache_buffer = nnadapter_model_cache_buffer;
+}
+
+void RuntimeOption::SetNNAdapterDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info){
+  lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info; 
+}
+
+void RuntimeOption::SetNNAdapterMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path){
+        lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
+}
+
+void RuntimeOption::SetNNAdapterMixedPrecisionQuantizationConfigBuffer(
+      const std::string& nnadapter_mixed_precision_quantization_config_buffer){
+        lite_nnadapter_mixed_precision_quantization_config_buffer = nnadapter_mixed_precision_quantization_config_buffer;
+}
+
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
                                      const std::vector<int32_t>& opt_shape,
@@ -793,6 +833,13 @@ void Runtime::CreateLiteBackend() {
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
   lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_buffer = option.lite_nnadapter_subgraph_partition_config_buffer;
+  lite_option.nnadapter_device_names = option.lite_nnadapter_device_names;
+  lite_option.nnadapter_context_properties = option.lite_nnadapter_context_properties;
+  lite_option.nnadapter_model_cache_dir = option.lite_nnadapter_model_cache_dir;
+  lite_option.nnadapter_dynamic_shape_info = option.lite_nnadapter_dynamic_shape_info;
+  lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
+  lite_option.nnadapter_mixed_precision_quantization_config_buffer = option.lite_nnadapter_mixed_precision_quantization_config_buffer;
   lite_option.enable_timvx = option.enable_timvx;
   lite_option.enable_cann = option.enable_cann;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
