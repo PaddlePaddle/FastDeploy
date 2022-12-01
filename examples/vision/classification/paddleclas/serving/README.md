@@ -1,5 +1,10 @@
 # PaddleClas 服务化部署示例
 
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
+
 ## 启动服务
 
 ```bash
@@ -19,21 +24,21 @@ mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/inference_cls.yaml
 mv ResNet50_vd_infer/inference.pdmodel models/runtime/1/model.pdmodel
 mv ResNet50_vd_infer/inference.pdiparams models/runtime/1/model.pdiparams
 
-# 拉取fastdeploy镜像
+# 拉取fastdeploy镜像(x.y.z为镜像版本号，需参照serving文档替换为数字)
 # GPU镜像
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 # CPU镜像
-docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
+docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /serving 目录
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
 
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760
 ```
 >> **注意**:
 
->> 拉取其他硬件上的镜像请看[服务化部署主文档](../../../../../serving/README.md)
+>> 拉取其他硬件上的镜像请看[服务化部署主文档](../../../../../serving/README_CN.md)
 
 >> 执行fastdeployserver启动服务出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改客户端示例中的请求端口号.
 

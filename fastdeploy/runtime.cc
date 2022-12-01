@@ -580,6 +580,40 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
   return backend_->Infer(input_tensors, output_tensors);
 }
 
+bool Runtime::Infer() {
+  return backend_->Infer(input_tensors_, &output_tensors_, false);
+}
+
+void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
+  bool is_exist = false;
+  for (auto& t : input_tensors_) {
+    if (t.name == name) {
+      is_exist = true;
+      t.SetExternalData(input.shape, input.dtype,
+                        input.MutableData(), input.device,
+                        input.device_id);
+      break;
+    }
+  }
+  if(!is_exist) {
+    FDTensor new_tensor(name);
+    new_tensor.SetExternalData(input.shape, input.dtype,
+                        input.MutableData(), input.device,
+                        input.device_id);
+    input_tensors_.emplace_back(std::move(new_tensor));
+  }
+}
+
+FDTensor* Runtime::GetOutputTensor(const std::string& name) {
+  for (auto& t : output_tensors_) {
+    if (t.name == name) {
+      return &t;
+    }
+  }
+  FDWARNING << "The output name [" << name << "] don't exist." << std::endl;
+  return nullptr;
+}
+
 void Runtime::CreatePaddleBackend() {
 #ifdef ENABLE_PADDLE_BACKEND
   auto pd_option = PaddleBackendOption();

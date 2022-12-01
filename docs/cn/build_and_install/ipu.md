@@ -1,7 +1,24 @@
 
 # IPU部署库编译
 
-FastDeploy当前在IPU环境仅支持Linux下的Paddle Inference后端推理。
+## 编译选项说明
+
+无论是在何平台编译，编译时仅根据需求修改如下选项，勿修改其它参数
+| 选项                      | 支持平台 | 说明                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| WITH_IPU | Linux(x64) | 默认OFF，当编译支持IPU时，需设置为ON |
+| ENABLE_ORT_BACKEND      | Linux(x64) | 默认OFF, 是否编译集成ONNX Runtime后端(仅支持CPU)    |
+| ENABLE_PADDLE_BACKEND   | Linux(x64) | 默认OFF，是否编译集成Paddle Inference后端(支持IPU & CPU)                         |  
+| ENABLE_OPENVINO_BACKEND | Linux(x64) | 默认OFF，是否编译集成OpenVINO后端(仅支持CPU)       |
+| ENABLE_VISION           | Linux(x64) |  默认OFF，是否编译集成视觉模型的部署模块                                                    |
+| ENABLE_TEXT             | Linux(x64) | 默认OFF，是否编译集成文本NLP模型的部署模块                                                  |
+
+第三方库依赖指定（不设定如下参数，会自动下载预编译库）
+| 选项                     | 说明                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | 当开启ONNX Runtime后端时，用于指定用户本地的ONNX Runtime库路径；如果不指定，编译过程会自动下载ONNX Runtime库  |
+| OPENCV_DIRECTORY        | 当ENABLE_VISION=ON时，用于指定用户本地的OpenCV库路径；如果不指定，编译过程会自动下载OpenCV库              |
+| OPENVINO_DIRECTORY      | 当开启OpenVINO后端时, 用于指定用户本地的OpenVINO库路径；如果不指定，编译过程会自动下载OpenVINO库             |
 
 ## C++ SDK编译安装
 

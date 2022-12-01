@@ -57,7 +57,35 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, np.ndarray) and not v.data.contiguous:
+                    data[k] = np.ascontiguousarray(data[k])
+
         return self._runtime.infer(data)
+
+    def bind_input_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share input memory
+
+        :param name: (str)The name of input data.
+        :param fdtensor: (fastdeploy.FDTensor)The input FDTensor.
+        """
+        self._runtime.bind_input_tensor(name, fdtensor)
+
+    def zero_copy_infer(self):
+        """No params inference the model.
+
+        the input and output data need to pass through the bind_input_tensor and get_output_tensor interfaces.
+        """
+        self._runtime.infer()
+
+    def get_output_tensor(self, name):
+        """Get output FDTensor by name, no copy and share backend output memory
+
+        :param name: (str)The name of output data.
+        :return fastdeploy.FDTensor
+        """
+        return self._runtime.get_output_tensor(name)
 
     def compile(self, warm_datas):
         """[Only for Poros backend] compile with prewarm data for poros
@@ -175,7 +203,8 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value, bool), "The value to set `long_to_int` must be type of bool."
+            value,
+            bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -203,6 +232,17 @@ class RuntimeOption:
 
         :param device_id: (int)The index of GPU will be used for inference, default 0
         """
+        if not C.is_built_with_gpu():
+            logging.warning(
+                "The installed fastdeploy-python package is not built with GPU, will force to use CPU. To use GPU, following the commands to install fastdeploy-gpu-python."
+            )
+            logging.warning(
+                "    ================= Install GPU FastDeploy===============")
+            logging.warning("    python -m pip uninstall fastdeploy-python")
+            logging.warning(
+                "    python -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html"
+            )
+            return
         return self._option.use_gpu(device_id)
 
     def use_cpu(self):
@@ -420,7 +460,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

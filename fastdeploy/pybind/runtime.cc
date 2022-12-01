@@ -129,12 +129,6 @@ void BindRuntime(pybind11::module& m) {
              return self.Compile(warm_tensors, _option);
            })
       .def("infer",
-           [](Runtime& self, std::vector<FDTensor>& inputs) {
-             std::vector<FDTensor> outputs(self.NumOutputs());
-             self.Infer(inputs, &outputs);
-             return outputs;
-           })
-      .def("infer",
            [](Runtime& self, std::map<std::string, pybind11::array>& data) {
              std::vector<FDTensor> inputs(data.size());
              int index = 0;
@@ -177,13 +171,24 @@ void BindRuntime(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Infer(inputs, &outputs)) {
-          pybind11::eval("raise Exception('Failed to inference with Runtime.')");
+          throw std::runtime_error("Failed to inference with Runtime.");
         }
         return outputs;
       })
       .def("infer", [](Runtime& self, std::vector<FDTensor>& inputs) {
         std::vector<FDTensor> outputs;
         return self.Infer(inputs, &outputs);
+      })
+      .def("bind_input_tensor", &Runtime::BindInputTensor)
+      .def("infer", [](Runtime& self) {
+        self.Infer();
+      })
+      .def("get_output_tensor", [](Runtime& self, const std::string& name) {
+        FDTensor* output = self.GetOutputTensor(name);
+        if(output == nullptr) {
+          return pybind11::cast(nullptr);
+        }
+        return pybind11::cast(*output);
       })
       .def("num_inputs", &Runtime::NumInputs)
       .def("num_outputs", &Runtime::NumOutputs)

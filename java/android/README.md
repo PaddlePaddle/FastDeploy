@@ -26,11 +26,11 @@ FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别
 <div id="SDK"></div>  
 
 ### 下载 FastDeploy Android SDK  
-Release版本（Java SDK 目前仅支持Android，当前版本为0.8.0 pre-release）  
+Release版本（Java SDK 目前仅支持Android，当前版本为 1.0.0）  
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
-| Android Java SDK | [fastdeploy-android-sdk-0.8.0.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-0.8.0.aar) | NDK 20 编译产出, minSdkVersion 15,targetSdkVersion 28 |
+| Android Java SDK | [fastdeploy-android-sdk-1.0.0.aar](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-sdk-1.0.0.aar) | NDK 20 编译产出, minSdkVersion 15,targetSdkVersion 28 |
 
 更多预编译库信息，请参考: [download_prebuilt_libraries.md](../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
