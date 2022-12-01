@@ -126,13 +126,15 @@ void StableDiffusionInpaintPipeline::Predict(
                                         NUM_LATENT_CHANNELS, height / 8,
                                         width / 8};
   auto latents_dtype = text_embeddings.Dtype();
+  FDTensor actual_latents;
   if (latents == nullptr) {
-
-  } else if {
-    bool result = std::equals(latents_shape.begin(), latents_shape.end(),
+    function::GaussianRandom(latents_shape, &actual_latents, latents_dtype);
+  } else {
+    bool result = std::equal(latents_shape.begin(), latents_shape.end(),
                               latents->Shape().begin());
     FDASSERT(result, "Unexpected latents shape, got %s, expected %s",
              Str(latents_shape).c_str(), Str(latents->Shape()).c_str());
+    actual_latents = *latents;
   }
 }
 }  // namespace fastdeploy
