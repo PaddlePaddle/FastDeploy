@@ -14,10 +14,14 @@
 
 #include "pipeline_stable_diffusion_inpaint.h"
 #include "fastdeploy/function/functions.h"
+#include <algorithm>
 
 using namespace paddlenlp;
 
 namespace fastdeploy {
+
+static constexpr int NUM_LATENT_CHANNELS = 4;
+static constexpr int NUM_UNET_INPUT_CHANNELS = 9;
 
 StableDiffusionInpaintPipeline::StableDiffusionInpaintPipeline(
     std::unique_ptr<Runtime> vae_encoder, std::unique_ptr<Runtime> vae_decoder,
@@ -117,6 +121,18 @@ void StableDiffusionInpaintPipeline::Predict(
     function::Tile(text_outputs[0], {num_images_per_prompt, 1, 1},
                    &uncond_embeddings);
     function::Concat({uncond_embeddings, text_embeddings}, &text_embeddings);
+  }
+  std::vector<int64_t> latents_shape = {batch_size * num_images_per_prompt,
+                                        NUM_LATENT_CHANNELS, height / 8,
+                                        width / 8};
+  auto latents_dtype = text_embeddings.Dtype();
+  if (latents == nullptr) {
+
+  } else if {
+    bool result = std::equals(latents_shape.begin(), latents_shape.end(),
+                              latents->Shape().begin());
+    FDASSERT(result, "Unexpected latents shape, got %s, expected %s",
+             Str(latents_shape).c_str(), Str(latents->Shape()).c_str());
   }
 }
 }  // namespace fastdeploy
