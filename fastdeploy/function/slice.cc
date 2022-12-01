@@ -65,25 +65,25 @@ void CheckAndUpdateSliceAttrs(const std::vector<int64_t>& in_dims,
                step);
       int64_t start =
           (*starts)[i] < 0 ? ((*starts)[i] + dim_value) : (*starts)[i];
-      start = std::max(start, static_cast<int64_t>(0));
+      start = (std::max)(start, static_cast<int64_t>(0));
 
       int64_t end =
           0 < step && (*ends)[i] < 0 ? ((*ends)[i] + dim_value) : (*ends)[i];
-      end = std::min(end, dim_value);
+      end = (std::min)(end, dim_value);
 
       if (step > 0) {
-        start = std::min(start, dim_value);
-        end = std::max(end, static_cast<int64_t>(0));
+        start = (std::min)(start, dim_value);
+        end = (std::max)(end, static_cast<int64_t>(0));
         FDASSERT(end > start,
                  "When step > 0, end should be greater than start, but "
                  "received end = %d, start = %d.",
                  end, start)
       } else {
-        start = std::min(start, dim_value - 1);
+        start = (std::min)(start, dim_value - 1);
         if (end < -1) {
           end += dim_value;
         }
-        end = std::max(end, static_cast<int64_t>(-1));
+        end = (std::max)(end, static_cast<int64_t>(-1));
         FDASSERT(start >= end,
                  "When step < 0, start should be greater than end, but "
                  "received start = %d, end = %d.",
@@ -161,6 +161,21 @@ void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
                    rank);
         }
       }));
+}
+
+void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
+           const std::vector<int64_t>& index, FDTensor* out) {
+  std::vector<int64_t> ends = index;
+  for (int i = 0; i < ends.size(); ++i) {
+    ends[i] += 1;
+  }
+  Slice(x, axes, index, ends, out);
+  for (int i = 0; i < axes.size(); ++i) {
+    if (out->Shape().size() <= 1) {
+      break;
+    }
+    out->Squeeze(axes[i]);
+  }
 }
 
 }  // namespace function
