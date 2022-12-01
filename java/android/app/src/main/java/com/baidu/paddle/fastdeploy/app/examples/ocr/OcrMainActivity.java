@@ -31,6 +31,7 @@ import android.widget.TextView;
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
 import com.baidu.paddle.fastdeploy.pipeline.PPOCRv2;
+import com.baidu.paddle.fastdeploy.pipeline.PPOCRv3;
 import com.baidu.paddle.fastdeploy.ui.Utils;
 import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
 import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
@@ -41,6 +42,7 @@ import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.ocr.Classifier;
 import com.baidu.paddle.fastdeploy.vision.ocr.DBDetector;
 import com.baidu.paddle.fastdeploy.vision.ocr.Recognizer;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -423,9 +425,7 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
         if (OcrSettingsActivity.checkAndUpdateSettings(this)) {
             String realModelDir = getCacheDir() + "/" + OcrSettingsActivity.modelDir;
             String detModelName = "ch_PP-OCRv2_det_infer";
-            // String detModelName = "ch_ppocr_mobile_v2.0_det_infer";
             String clsModelName = "ch_ppocr_mobile_v2.0_cls_infer";
-            // String recModelName = "ch_ppocr_mobile_v2.0_rec_infer";
             String recModelName = "ch_PP-OCRv2_rec_infer";
             String realDetModelDir = realModelDir + "/" + detModelName;
             String realClsModelDir = realModelDir + "/" + clsModelName;
@@ -460,11 +460,11 @@ public class OcrMainActivity extends Activity implements View.OnClickListener, C
                 clsOption.enableLiteFp16();
                 recOption.enableLiteFp16();
             }
+
             DBDetector detModel = new DBDetector(detModelFile, detParamsFile, detOption);
             Classifier clsModel = new Classifier(clsModelFile, clsParamsFile, clsOption);
             Recognizer recModel = new Recognizer(recModelFile, recParamsFile, recLabelFilePath, recOption);
             predictor.init(detModel, clsModel, recModel);
-
         }
     }
 

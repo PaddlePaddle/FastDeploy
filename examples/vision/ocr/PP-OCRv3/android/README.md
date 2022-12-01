@@ -79,6 +79,26 @@ public boolean initialized(); // 检查是否初始化成功
 <string name="OCR_MODEL_DIR_DEFAULT">models</string>  
 <string name="OCR_LABEL_PATH_DEFAULT">labels/ppocr_keys_v1.txt</string>
 ```  
+## 使用量化模型  
+如果您使用的是量化格式的模型，只需要使用RuntimeOption的enableLiteInt8()接口设置Int8精度推理即可。
+```java
+String detModelFile = "ch_ppocrv3_plate_det_quant/inference.pdmodel";
+String detParamsFile = "ch_ppocrv3_plate_det_quant/inference.pdiparams";
+String recModelFile = "ch_ppocrv3_plate_rec_distillation_quant/inference.pdmodel";
+String recParamsFile = "ch_ppocrv3_plate_rec_distillation_quant/inference.pdiparams";
+String recLabelFilePath = "ppocr_keys_v1.txt"; // ppocr_keys_v1.txt
+RuntimeOption detOption = new RuntimeOption();
+RuntimeOption recOption = new RuntimeOption();
+// 使用Int8精度进行推理
+detOption.enableLiteInt8();
+recOption.enableLiteInt8();
+// 初始化PP-OCRv3 Pipeline
+PPOCRv3 predictor = new PPOCRv3();
+DBDetector detModel = new DBDetector(detModelFile, detParamsFile, detOption);
+Recognizer recModel = new Recognizer(recModelFile, recParamsFile, recLabelFilePath, recOption);
+predictor.init(detModel, recModel);
+```
+在App中使用，可以参考 [OcrMainActivity.java](./app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/ocr/OcrMainActivity.java) 中的用法。  
 
 ## 更多参考文档
 如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:
