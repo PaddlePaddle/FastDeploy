@@ -47,7 +47,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   return Run(images, outputs, 0, images->size());
 }
 
-bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs
+bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
                                  size_t start_index, size_t end_index) {
   if (images->size() == 0 || end_index <= start_index || end_index > images->size()) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
