@@ -14,6 +14,7 @@
 
 #include "dpm_solver_multistep_scheduler.h"
 #include "fastdeploy/vision/common/processors/mat.h"
+#include "fastdeploy/utils/perf.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "pipeline_stable_diffusion_inpaint.h"
@@ -120,8 +121,12 @@ int main() {
   std::vector<std::string> prompts = {
       "Face of a yellow cat, high resolution, sitting on a park bench"};
   std::vector<fastdeploy::FDTensor> outputs;
+  fastdeploy::TimeCounter tc;
+  tc.Start();
   pipe.Predict(prompts, image, mask_image, &outputs, /* height = */ 512,
                /* width = */ 512, /* num_inference_steps = */ 50);
+  tc.End();
+  tc.PrintInfo();
   fastdeploy::vision::FDMat mat = fastdeploy::vision::FDMat::Create(outputs[0]);
   cv::imwrite("cat_on_bench_new.png", *mat.GetOpenCVMat());
   return 0;
