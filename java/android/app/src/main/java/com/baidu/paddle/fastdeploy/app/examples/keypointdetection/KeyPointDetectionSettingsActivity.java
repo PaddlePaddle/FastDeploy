@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.segmentation;
+package com.baidu.paddle.fastdeploy.app.examples.keypointdetection;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -16,9 +16,10 @@ import com.baidu.paddle.fastdeploy.ui.view.AppCompatPreferenceActivity;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SegmentationSettingsActivity extends AppCompatPreferenceActivity implements
+
+public class KeyPointDetectionSettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String TAG = SegmentationSettingsActivity.class.getSimpleName();
+    private static final String TAG = KeyPointDetectionSettingsActivity.class.getSimpleName();
 
     static public int selectedModelIdx = -1;
     static public String modelDir = "";
@@ -40,7 +41,7 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        addPreferencesFromResource(R.xml.segmentation_setting);
+        addPreferencesFromResource(R.xml.keypointdetection_settting);
         ActionBar supportActionBar = getSupportActionBar();
         if (supportActionBar != null) {
             supportActionBar.setDisplayHomeAsUpEnabled(true);
@@ -51,7 +52,7 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
         preInstalledCPUThreadNums = new ArrayList<String>();
         preInstalledCPUPowerModes = new ArrayList<String>();
         preInstalledEnableLiteFp16s = new ArrayList<String>();
-        preInstalledModelDirs.add(getString(R.string.SEGMENTATION_MODEL_DIR_DEFAULT));
+        preInstalledModelDirs.add(getString(R.string.KEYPOINT_DETECTION_MODEL_DIR_DEFAULT));
         preInstalledCPUThreadNums.add(getString(R.string.CPU_THREAD_NUM_DEFAULT));
         preInstalledCPUPowerModes.add(getString(R.string.CPU_POWER_MODE_DEFAULT));
         preInstalledEnableLiteFp16s.add(getString(R.string.ENABLE_LITE_FP16_MODE_DEFAULT));
@@ -77,7 +78,7 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
         SharedPreferences sharedPreferences = getPreferenceScreen().getSharedPreferences();
 
         String selected_model_dir = sharedPreferences.getString(getString(R.string.CHOOSE_PRE_INSTALLED_MODEL_KEY),
-                getString(R.string.SEGMENTATION_MODEL_DIR_DEFAULT));
+                getString(R.string.KEYPOINT_DETECTION_MODEL_DIR_DEFAULT));
         int selected_model_idx = lpChoosePreInstalledModel.findIndexOfValue(selected_model_dir);
         if (selected_model_idx >= 0 && selected_model_idx < preInstalledModelDirs.size() && selected_model_idx != selectedModelIdx) {
             SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -91,7 +92,7 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
         }
 
         String model_dir = sharedPreferences.getString(getString(R.string.MODEL_DIR_KEY),
-                getString(R.string.SEGMENTATION_MODEL_DIR_DEFAULT));
+                getString(R.string.KEYPOINT_DETECTION_MODEL_DIR_DEFAULT));
         String cpu_thread_num = sharedPreferences.getString(getString(R.string.CPU_THREAD_NUM_KEY),
                 getString(R.string.CPU_THREAD_NUM_DEFAULT));
         String cpu_power_mode = sharedPreferences.getString(getString(R.string.CPU_POWER_MODE_KEY),
@@ -106,7 +107,6 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
         lpCPUPowerMode.setSummary(cpu_power_mode);
         lpEnableLiteFp16.setValue(enable_lite_fp16);
         lpEnableLiteFp16.setSummary(enable_lite_fp16);
-
     }
 
     static boolean checkAndUpdateSettings(Context ctx) {
@@ -114,7 +114,7 @@ public class SegmentationSettingsActivity extends AppCompatPreferenceActivity im
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(ctx);
 
         String model_dir = sharedPreferences.getString(ctx.getString(R.string.MODEL_DIR_KEY),
-                ctx.getString(R.string.SEGMENTATION_MODEL_DIR_DEFAULT));
+                ctx.getString(R.string.KEYPOINT_DETECTION_MODEL_DIR_DEFAULT));
         settingsChanged |= !modelDir.equalsIgnoreCase(model_dir);
         modelDir = model_dir;
 
