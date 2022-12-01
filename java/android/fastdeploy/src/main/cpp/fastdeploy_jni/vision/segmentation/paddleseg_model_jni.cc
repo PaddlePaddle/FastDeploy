@@ -42,13 +42,13 @@ Java_com_baidu_paddle_fastdeploy_vision_segmentation_PaddleSegModel_bindNative(
   c_model_ptr->EnableRecordTimeOfRuntime();
 #endif
 
-  // Setup is_vertical_screen param
+  // setup is_vertical_screen param
   const jclass j_ppseg_clazz = env->GetObjectClass(thiz);
   const jfieldID j_is_vertical_screen_id = env->GetFieldID(
       j_ppseg_clazz, "mIsVerticalScreen", "Z");
   jboolean j_is_vertical_screen = env->GetBooleanField(
       thiz, j_is_vertical_screen_id);
-  bool c_is_vertical_screen = static_cast<jboolean>(j_is_vertical_screen);
+  const bool c_is_vertical_screen = static_cast<bool>(j_is_vertical_screen);
   c_model_ptr->GetPreprocessor().SetIsVerticalScreen(c_is_vertical_screen);
   env->DeleteLocalRef(j_ppseg_clazz);
 
