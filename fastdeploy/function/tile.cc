@@ -62,7 +62,7 @@ void TileFunctor(const FDTensor& x,
 
   out_tmp.Allocate(out_shape, x.Dtype());
   auto eigen_x = EigenTensor<T, Rank>::From(x, x_shape);
-  auto eigen_out = EigenTensor<T, Rank>::From(*out, out_shape);
+  auto eigen_out = EigenTensor<T, Rank>::From(out_tmp, out_shape);
 
   const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
   eigen_out.device(dev) = eigen_x.broadcast(bcast_dims);

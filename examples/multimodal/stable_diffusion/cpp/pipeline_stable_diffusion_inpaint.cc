@@ -33,14 +33,14 @@ void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
   vision::BGR2RGB::Run(&image_fdmat, vision::ProcLib::OPENCV);
   vision::Resize::Run(&image_fdmat, shape[1] * 8, shape[0] * 8, -1.0f, -1.0f,
                       cv::INTER_NEAREST, false, vision::ProcLib::OPENCV);
-  image_fdmat.CopyToTensor(mask_image);
+  image_fdmat.ShareWithTensor(mask_image);
 
   vision::FDMat mask_fdmat(mask_mat);
   vision::BGR2GRAY::Run(&mask_fdmat, vision::ProcLib::OPENCV);
   vision::Resize::Run(&mask_fdmat, shape[1] * 8, shape[0] * 8, -1.0f, -1.0f,
                       cv::INTER_NEAREST, false, vision::ProcLib::OPENCV);
   FDTensor image_mask;
-  mask_fdmat.CopyToTensor(&image_mask);
+  mask_fdmat.ShareWithTensor(&image_mask);
   function::Cast(image_mask, &image_mask, FDDataType::FP32);
   std::vector<float> float_mask(image_mask.Numel(), 0);
   float* image_mask_ptr = reinterpret_cast<float*>(image_mask.Data());
@@ -60,11 +60,15 @@ void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
   *mask_image = *mask_image * image_mask;
 
   // Set mask
-  mask_fdmat.CopyToTensor(mask);
+  vision::FDMat mask_fdmat_t(mask_mat);
+  vision::BGR2GRAY::Run(&mask_fdmat_t, vision::ProcLib::OPENCV);
+  vision::Resize::Run(&mask_fdmat_t, shape[1], shape[0], -1.0f, -1.0f,
+                      cv::INTER_NEAREST, false, vision::ProcLib::OPENCV);
+  mask_fdmat_t.ShareWithTensor(mask);
   function::Cast(*mask, mask, FDDataType::FP32);
   *mask = *mask / 255.0f;
   mask->ExpandDim();
-  mask->ExpandDim();
+  function::Transpose(*mask, mask, {0, 3, 1, 2});
   float* mask_data = reinterpret_cast<float*>(mask->Data());
   for (int i = 0; i < mask->Numel(); ++i) {
     if (mask_data[i] < 0.5) {
@@ -96,10 +100,10 @@ void StableDiffusionInpaintPipeline::Predict(
   int batch_size = prompts.size();
   FDASSERT(batch_size >= 1, "prompts should not be empty");
   FDASSERT(
-      height % 8 != 0 or width % 8 != 0,
+      height % 8 == 0 && width % 8 == 0,
       "`height` and `width` have to be divisible by 8 but are {%d} and {%d}.",
       height, width);
-  FDASSERT(callback_steps <= 0,
+  FDASSERT(callback_steps > 0,
            "`callback_steps` has to be a positive integer but is {%d}",
            callback_steps);
 
@@ -199,25 +203,26 @@ void StableDiffusionInpaintPipeline::Predict(
   vae_encoder_->Infer(inputs, &outputs);
   FDTensor masked_image_latents = 0.18215 * outputs[0];
 
-  auto mask_shape = mask_t.Shape();
+  std::vector<int64_t> mask_shape(mask_t.Shape().size(), 1);
   mask_shape[0] = batch_size * num_images_per_prompt;
   function::Tile(mask_t, mask_shape, &mask_t);
 
-  auto mask_image_shape = mask_image_t.Shape();
+  std::vector<int64_t> mask_image_shape(masked_image_latents.Shape().size(), 1);
   mask_image_shape[0] = batch_size * num_images_per_prompt;
-  function::Tile(mask_image_t, mask_image_shape, &mask_image_t);
+  function::Tile(masked_image_latents, mask_image_shape, &masked_image_latents);
 
   if (do_classifier_free_guidance) {
     function::Concat({mask_t, mask_t}, &mask_t);
-    function::Concat({mask_image_t, mask_image_t}, &mask_image_t);
+    function::Concat({masked_image_latents, masked_image_latents},
+                     &masked_image_latents);
   }
   int num_channels_mask = mask_t.Shape()[1];
-  int num_channels_masked_image = mask_image_t.Shape()[1];
+  int num_channels_masked_image = masked_image_latents.Shape()[1];
   FDASSERT(
       NUM_LATENT_CHANNELS + num_channels_mask + num_channels_masked_image ==
           NUM_UNET_INPUT_CHANNELS,
       "Incorrect configuration settings! The config of `pipeline.unet` expects"
-      " {%d} but received `num_channels_latents`: %d + `num_channels_mask`: %d "
+      " %d but received `num_channels_latents`: %d + `num_channels_mask`: %d "
       "+ `num_channels_masked_image`: %d"
       " = %d. Please verify the config of `pipeline.unet` or your `mask_image` "
       "or `image` input.",
@@ -244,7 +249,7 @@ void StableDiffusionInpaintPipeline::Predict(
       latent_model_input = actual_latents;
     }
     // concat latents, mask, masked_image_latnets in the channel dimension
-    function::Concat({latent_model_input, mask_t, mask_image_t},
+    function::Concat({latent_model_input, mask_t, masked_image_latents},
                      &latent_model_input, 1);
     scheduler_->ScaleModelInput(latent_model_input, &latent_model_input, {t});
 
