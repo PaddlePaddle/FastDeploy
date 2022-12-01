@@ -238,11 +238,15 @@ void StableDiffusionInpaintPipeline::Predict(
 
   auto timestep = scheduler_->GetTimesteps();
   int64_t* timestep_data = reinterpret_cast<int64_t*>(timestep.Data());
+  outputs.resize(unet_->GetOutputInfos().size());
+  inputs.resize(unet_->GetInputInfos().size());
+  inputs[2] = std::move(text_embeddings);
+  auto unet_infos = unet_->GetInputInfos();
   for (int i = 0; i < timestep.Numel(); ++i) {
-    FDTensor t;
+    FDTensor& t = inputs[1];
     function::Slice(timestep, {0}, {i}, &t);
     // expand the latents if we are doing classifier free guidance
-    FDTensor latent_model_input;
+    FDTensor& latent_model_input = inputs[0];
     if (do_classifier_free_guidance) {
       function::Concat({actual_latents, actual_latents}, &latent_model_input);
     } else {
@@ -254,15 +258,11 @@ void StableDiffusionInpaintPipeline::Predict(
     scheduler_->ScaleModelInput(latent_model_input, &latent_model_input, {t});
 
     // predict the noise residual
-    FDTensor noise_pred;
-    auto unet_infos = unet_->GetInputInfos();
-    latent_model_input.name = unet_infos[0].name;
-    t.name = unet_infos[1].name;
-    text_embeddings.name = unet_infos[2].name;
-    outputs.resize(unet_->GetOutputInfos().size());
-    inputs = {latent_model_input, t, text_embeddings};
+    for (int i = 0; i < unet_infos.size(); ++i) {
+      inputs[i].name = unet_infos[i].name;
+    }
     unet_->Infer(inputs, &outputs);
-    noise_pred = std::move(outputs[0]);
+    FDTensor noise_pred = std::move(outputs[0]);
     // perform guidance
     if (do_classifier_free_guidance) {
       std::vector<FDTensor> noise_preds;
