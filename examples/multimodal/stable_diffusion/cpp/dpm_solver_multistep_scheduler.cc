@@ -394,4 +394,6 @@ void DPMSolverMultistepScheduler::AddNoise(const FDTensor& original_samples,
   *out = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise;
 }
 
+FDTensor DPMSolverMultistepScheduler::GetTimesteps() { return timesteps_; }
+
 }  // namespace fastdeploy

@@ -55,8 +55,6 @@ void StableDiffusionInpaintPipeline::Predict(
            "`callback_steps` has to be a positive integer but is {%d}",
            callback_steps);
 
-  scheduler_->SetTimesteps(num_inference_steps);
-
   // Setting tokenizer attr
   if (max_length == 0) {
     tokenizer_.EnablePadMethod(fast_tokenizer::core::RIGHT,
@@ -184,5 +182,51 @@ void StableDiffusionInpaintPipeline::Predict(
 
   // scale the initial noise by the standard deviation required by the scheduler
   actual_latents = actual_latents * scheduler_->InitNoiseSigma();
+
+  auto timestep = scheduler_->GetTimesteps();
+  int64_t* timestep_data = reinterpret_cast<int64_t*>(timestep.Data());
+  for (int i = 0; i < timestep.Numel(); ++i) {
+    FDTensor t;
+    function::Slice(timestep, {0}, {i}, &t);
+    // expand the latents if we are doing classifier free guidance
+    FDTensor latent_model_input;
+    if (do_classifier_free_guidance) {
+      function::Concat({actual_latents, actual_latents}, &latent_model_input);
+    } else {
+      latent_model_input = actual_latents;
+    }
+    // concat latents, mask, masked_image_latnets in the channel dimension
+    function::Concat({latent_model_input, mask_t, mask_image_t},
+                     &latent_model_input, 1);
+    scheduler_->ScaleModelInput(latent_model_input, &latent_model_input, {t});
+
+    // predict the noise residual
+    FDTensor noise_pred;
+    auto unet_infos = unet_->GetInputInfos();
+    latent_model_input.name = unet_infos[0].name;
+    t.name = unet_infos[1].name;
+    text_embeddings.name = unet_infos[2].name;
+    outputs.resize(unet_->GetOutputInfos().size());
+    inputs = {latent_model_input, t, text_embeddings};
+    unet_->Infer(inputs, &outputs);
+    noise_pred = std::move(outputs[0]);
+    // perform guidance
+    if (do_classifier_free_guidance) {
+      std::vector<FDTensor> noise_preds;
+      int dim0 = noise_pred.Shape()[0];
+      function::Split(noise_pred, {dim0 - dim0 / 2, dim0 / 2}, &noise_preds);
+      noise_pred =
+          noise_preds[0] + guidance_scale * (noise_preds[1] - noise_preds[0]);
+    }
+
+    // compute the previous noisy sample x_t -> x_t-1
+    int64_t time = reinterpret_cast<int64_t*>(t.Data())[0];
+    scheduler_->Step(noise_pred, time, actual_latents, &actual_latents);
+
+    // call the callback, if provided
+    if (callback != nullptr && i % callback_steps == 0) {
+      callback(i, time, &actual_latents);
+    }
+  }
 }
 }  // namespace fastdeploy
