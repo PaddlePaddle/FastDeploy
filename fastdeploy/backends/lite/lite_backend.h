@@ -44,6 +44,16 @@ struct LiteBackendOption {
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
   std::string nnadapter_subgraph_partition_config_path = "";
+  std::string nnadapter_subgraph_partition_config_buffer = "";
+  std::vector<std::string> nnadapter_device_names = {""};
+  std::string nnadapter_context_properties = "";
+  std::string nnadapter_model_cache_dir = "";
+  std::string nnadapter_model_cache_token = "";
+  std::vector<char> nnadapter_model_cache_buffer = {' '};
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    nnadapter_dynamic_shape_info = {{" ", {{0}}}};
+  std::string nnadapter_mixed_precision_quantization_config_path = "";
+  std::string nnadapter_mixed_precision_quantization_config_buffer = "";
   bool enable_timvx = false;
   bool enable_cann = false;
 };

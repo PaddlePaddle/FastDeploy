@@ -81,8 +81,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
   }else if(option_.enable_cann){
-    config_.set_nnadapter_device_names({"huawei_ascend_npu"});
-    config_.set_nnadapter_context_properties("HUAWEI_ASCEND_NPU_SELECTED_DEVICE_IDS=0");
+    config_.set_nnadapter_device_names(option_.nnadapter_device_names);
+    config_.set_nnadapter_context_properties(option_.nnadapter_context_properties);
     valid_places.push_back(
           paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
     valid_places.push_back(

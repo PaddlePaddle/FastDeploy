@@ -203,6 +203,55 @@ struct FASTDEPLOY_DECL RuntimeOption {
     const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
+   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   */
+  void SetNNAdapterSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer);
+
+  /**
+   * @brief Set nnadapter device name for Paddle Lite backend.
+   */
+  void SetNNAdapterDeviceNames(
+      const std::vector<std::string>& nnadapter_device_names);
+
+  /**
+   * @brief Set nnadapter context properties for Paddle Lite backend.
+   */
+  void  SetNNAdapterContextProperties(
+      const std::string& nnadapter_context_properties);
+
+  /**
+   * @brief Set nnadapter model cache dir for Paddle Lite backend.
+   */
+  void SetNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir);
+
+  /**
+   * @brief Set nnadapter model cache buffer for Paddle Lite backend.
+   */
+  void SetNNAdapterModelCacheBuffers(
+      const std::string& nnadapter_model_cache_token,
+      const std::vector<char>& nnadapter_model_cache_buffer);
+
+  /**
+   * @brief Set nnadapter dynamic shape info for Paddle Lite backend.
+   */
+  void SetNNAdapterDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info);
+
+  /**
+   * @brief Set nnadapter mixed precision quantization config path for Paddle Lite backend.
+   */
+  void SetNNAdapterMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path);
+
+  /**
+   * @brief Set nnadapter mixed precision quantization config buffer for Paddle Lite backend.
+   */
+  void SetNNAdapterMixedPrecisionQuantizationConfigBuffer(
+      const std::string& nnadapter_mixed_precision_quantization_config_buffer);
+
+  /**
    * @brief enable half precision while use paddle lite backend
    */
   void EnableLiteFP16();
@@ -355,6 +404,18 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
+  // and other nnadapter settings for CxxConfig
+  std::string lite_nnadapter_subgraph_partition_config_buffer = "";
+  std::vector<std::string> lite_nnadapter_device_names = {""};
+  std::string lite_nnadapter_context_properties = "";
+  std::string lite_nnadapter_model_cache_dir = "";
+  std::string lite_nnadapter_model_cache_token = "";
+  std::vector<char> lite_nnadapter_model_cache_buffer = {' '};
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    lite_nnadapter_dynamic_shape_info = {{" ", {{0}}}};
+  std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
+  std::string lite_nnadapter_mixed_precision_quantization_config_buffer = "";
+
   bool enable_timvx = false;
   bool enable_cann = false;
 
