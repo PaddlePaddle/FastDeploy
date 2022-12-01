@@ -19,4 +19,7 @@
     <color name="table_result_tableheader_text_color">#333333</color>
     <color name="result_section_border_color">#E5E5E5</color>
     <color name="result_popview_tablebody_bk">#3b85f5</color>
+
+    <color name="colorTextWrite">#FFFFFF</color>
+    <color name="colorStartBtn">#7c4bd2</color>
 </resources>
