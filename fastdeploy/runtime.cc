@@ -236,8 +236,9 @@ void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
 }
 
-void RuntimeOption::UseXPU() {
+void RuntimeOption::UseXPU(int xpu_id) {
   enable_xpu = true;
+  device_id = xpu_id;
   device = Device::XPU;
 }
 
@@ -793,6 +794,7 @@ void Runtime::CreateLiteBackend() {
   lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
   lite_option.enable_timvx = option.enable_timvx;
   lite_option.enable_xpu = option.enable_xpu;
+  lite_option.device_id  = option.device_id;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

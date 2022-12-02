@@ -70,6 +70,7 @@ setup_configs["ENABLE_FLYCV"] = os.getenv("ENABLE_FLYCV", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["WITH_IPU"] = os.getenv("WITH_IPU", "OFF")
+setup_configs["WITH_XPU"] = os.getenv("WITH_XPU", "OFF")
 setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",
@@ -79,7 +80,8 @@ setup_configs["PY_LIBRARY_NAME"] = PACKAGE_NAME + "_main"
 setup_configs["OPENCV_DIRECTORY"] = os.getenv("OPENCV_DIRECTORY", "")
 setup_configs["ORT_DIRECTORY"] = os.getenv("ORT_DIRECTORY", "")
 setup_configs["RKNN2_TARGET_SOC"] = os.getenv("RKNN2_TARGET_SOC", "")
-if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs["BUILD_ON_JETSON"] != "OFF":
+if setup_configs["RKNN2_TARGET_SOC"] != "" or setup_configs[
+        "BUILD_ON_JETSON"] != "OFF":
     REQUIRED_PACKAGES = REQUIRED_PACKAGES.replace("opencv-python", "")
 
 if setup_configs["WITH_GPU"] == "ON" or setup_configs[

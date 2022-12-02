@@ -9,10 +9,11 @@ FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
 |ENABLE_LITE_BACKEND|OFF|编译RK库时需要设置为ON| - |
+|WITH_XPU|OFF|需要在XPU上部署时需要设置为ON| - |
 
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
-## 基于 PaddleLite 的 FastDeploy 库编译
+## 基于 PaddleLite 的 C++ FastDeploy 库编译
 编译命令如下：
 ```bash
 # Download the latest source code
@@ -31,5 +32,17 @@ make -j8
 make install
 ```  
 编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
+
+## Python 编译
+编译命令如下：
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/python
+export WITH_XPU=ON
+export ENABLE_VISION=ON
+
+python setup.py build
+python setup.py bdist_wheel
+```  
 
 昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)

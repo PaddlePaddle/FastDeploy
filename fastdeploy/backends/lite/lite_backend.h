@@ -46,6 +46,7 @@ struct LiteBackendOption {
   std::string nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
   bool enable_xpu = false;
+  int device_id = 0;
 };
 
 // Convert data type from paddle lite to fastdeploy

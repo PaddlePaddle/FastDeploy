@@ -103,7 +103,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseTimVX();
 
   /// Use XPU to inference
-  void UseXPU();
+  void UseXPU(int xpu_id = 0);
 
   void SetExternalStream(void* external_stream);
 

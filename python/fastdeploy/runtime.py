@@ -245,6 +245,11 @@ class RuntimeOption:
             return
         return self._option.use_gpu(device_id)
 
+    def use_xpu(self, device_id=0):
+        """Inference with XPU
+        """
+        return self._option.use_xpu(device_id)
+
     def use_cpu(self):
         """Inference with CPU
         """

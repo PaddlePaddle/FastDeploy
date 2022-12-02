@@ -43,7 +43,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
   if (option_.enable_int8) {
-    if(option_.enable_xpu){
+    if(option_.enable_xpu) {
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
     } else {
@@ -96,6 +96,9 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
     valid_places.push_back(
       paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
+    if(option_.device_id > 0) {
+      config_.set_xpu_dev_per_thread(option_.device_id);
+    }
   } else {
     valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
