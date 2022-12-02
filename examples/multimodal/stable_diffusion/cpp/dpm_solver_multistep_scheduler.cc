@@ -57,8 +57,8 @@ DPMSolverMultistepScheduler::DPMSolverMultistepScheduler(
     function::Linspace(beta_start, beta_end, num_train_timesteps, &betas_,
                        FDDataType::FP32);
   } else if (beta_schedule == "scaled_linear") {
-    function::Linspace(beta_start, beta_end, num_train_timesteps, &betas_,
-                       FDDataType::FP32);
+    function::Linspace(std::sqrt(beta_start), std::sqrt(beta_end),
+                       num_train_timesteps, &betas_, FDDataType::FP32);
     betas_ = betas_ * betas_;
   } else if (beta_schedule == "squaredcos_cap_v2") {
     BetaForAlphaBar(&betas_, num_train_timesteps);
@@ -316,7 +316,6 @@ void DPMSolverMultistepScheduler::Step(const FDTensor& model_output,
   if (timesteps_iter - timesteps_data < timesteps_.Numel()) {
     step_index = timesteps_iter - timesteps_data;
   }
-
   int64_t prev_timestep = 0;
   if (step_index != timesteps_.Numel() - 1) {
     prev_timestep = timesteps_data[step_index + 1];

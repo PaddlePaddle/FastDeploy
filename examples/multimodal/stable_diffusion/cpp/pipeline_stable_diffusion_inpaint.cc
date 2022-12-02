@@ -201,7 +201,7 @@ void StableDiffusionInpaintPipeline::Predict(
   outputs.resize(vae_encoder_->GetOutputInfos().size());
   inputs = {mask_image_t};
   vae_encoder_->Infer(inputs, &outputs);
-  FDTensor masked_image_latents = 0.18215 * outputs[0];
+  FDTensor masked_image_latents = 0.18215f * outputs[0];
 
   std::vector<int64_t> mask_shape(mask_t.Shape().size(), 1);
   mask_shape[0] = batch_size * num_images_per_prompt;
@@ -243,10 +243,11 @@ void StableDiffusionInpaintPipeline::Predict(
   inputs[2] = std::move(text_embeddings);
   auto unet_infos = unet_->GetInputInfos();
   for (int i = 0; i < timestep.Numel(); ++i) {
-    FDTensor& t = inputs[1];
+    FDTensor t;
     function::Slice(timestep, {0}, {i}, &t);
+    inputs[1] = t;
     // expand the latents if we are doing classifier free guidance
-    FDTensor& latent_model_input = inputs[0];
+    FDTensor latent_model_input;
     if (do_classifier_free_guidance) {
       function::Concat({actual_latents, actual_latents}, &latent_model_input);
     } else {
@@ -256,7 +257,7 @@ void StableDiffusionInpaintPipeline::Predict(
     function::Concat({latent_model_input, mask_t, masked_image_latents},
                      &latent_model_input, 1);
     scheduler_->ScaleModelInput(latent_model_input, &latent_model_input, {t});
-
+    inputs[0] = std::move(latent_model_input);
     // predict the noise residual
     for (int i = 0; i < unet_infos.size(); ++i) {
       inputs[i].name = unet_infos[i].name;
