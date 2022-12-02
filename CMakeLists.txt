@@ -488,6 +488,8 @@ set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 if(MSVC)
   # disable warnings for dll export
   target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
+  file(GLOB FD_FILES_REQUIRE_BIGOBJ ${CSRCS_DIR_NAME}/fastdeploy/function/reduce.cc) 
+  set_source_files_properties(${FD_FILES_REQUIRE_BIGOBJ} PROPERTIES COMPILE_FLAGS "/bigobj")
 endif()
 
 # extra depend libs for android
@@ -506,8 +508,12 @@ target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(WIN32)
   if(ENABLE_VISION)
-    add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
-    add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+    if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+      add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+    else()
+      add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+      add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+    endif()
   endif()
 endif()
 

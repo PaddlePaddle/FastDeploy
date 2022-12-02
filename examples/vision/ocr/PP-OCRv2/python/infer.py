@@ -81,7 +81,7 @@ def build_option(args):
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
-        option.use_paddle_backend()
+        option.use_paddle_infer_backend()
     elif args.backend.lower() == "openvino":
         assert args.device.lower(
         ) == "cpu", "OpenVINO backend require inference on device CPU."
@@ -119,7 +119,7 @@ det_model = fd.vision.ocr.DBDetector(
 
 cls_option = runtime_option
 cls_option.set_trt_input_shape("x", [1, 3, 48, 10], [10, 3, 48, 320],
-                               [64, 3, 48, 1024])
+                               [32, 3, 48, 1024])
 # 用户可以把TRT引擎文件保存至本地
 # cls_option.set_trt_cache_file(args.cls_model  + "/cls_trt_cache.trt")
 cls_model = fd.vision.ocr.Classifier(
@@ -127,7 +127,7 @@ cls_model = fd.vision.ocr.Classifier(
 
 rec_option = runtime_option
 rec_option.set_trt_input_shape("x", [1, 3, 32, 10], [10, 3, 32, 320],
-                               [64, 3, 32, 2304])
+                               [32, 3, 32, 2304])
 # 用户可以把TRT引擎文件保存至本地
 # rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
 rec_model = fd.vision.ocr.Recognizer(
