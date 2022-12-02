@@ -79,8 +79,8 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
 
  private:
-  int cls_batch_size_ = -1;
-  int rec_batch_size_ = -1;
+  int cls_batch_size_ = 6;
+  int rec_batch_size_ = 6;
   /// Launch the detection process in OCR.
 };
 
