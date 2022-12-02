@@ -231,6 +231,10 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
         reinterpret_cast<const float*>(const_cast<void*>(
         inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT64) {
+      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int64_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT32) {
       tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(
         reinterpret_cast<const int*>(const_cast<void*>(
