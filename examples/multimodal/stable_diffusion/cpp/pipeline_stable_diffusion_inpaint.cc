@@ -307,11 +307,16 @@ void StableDiffusionInpaintPipeline::Predict(
     function::Round(output_image, &output_image);
     function::Cast(output_image, &output_image, FDDataType::UINT8);
   }
-
   int output_batch_size = output_image.Shape()[0];
   output_images->resize(output_batch_size);
   for (int i = 0; i < output_batch_size; ++i) {
     function::Slice(output_image, {0}, {i}, &(*output_images)[i]);
+    vision::FDMat mask_fdmat_t = vision::FDMat::Create((*output_images)[i]);
+    vision::RGB2BGR::Run(&mask_fdmat_t, vision::ProcLib::OPENCV);
+    mask_fdmat_t.CopyToTensor(&(*output_images)[i]);
+    FDTensor sum;
+    function::Sum((*output_images)[i], &sum, {}, false, true);
+    FDINFO << "sum = " << ((float*)sum.Data())[0] << std::endl;
   }
 }
 }  // namespace fastdeploy
