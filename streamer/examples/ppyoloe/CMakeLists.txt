@@ -20,4 +20,4 @@ CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 include_directories(${FDSTREAMER_INCLUDE_DIR})
 
 add_executable(streamer_demo main.cc)
-target_link_libraries(streamer_demo fd_streamer /workspace/icode/FastDeploy/build/third_party/yaml-cpp/libyaml-cpp.a)
+target_link_libraries(streamer_demo fd_streamer)

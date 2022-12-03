@@ -4,6 +4,7 @@
 int main(int argc, char* argv[]) {
 
   auto streamer = fastdeploy::streamer::FDStreamer();
-  streamer.Init("test.yml");
+  streamer.Init("streamer_cfg.yml");
+  streamer.Run();
   return 0;
 }

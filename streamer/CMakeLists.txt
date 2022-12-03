@@ -46,7 +46,11 @@ include_directories(${FASTDEPLOY_INCS})
 
 message(STATUS "hahah " ${FASTDEPLOY_LIBS})
 
-add_subdirectory(yaml-cpp)
+# get_filename_component(YAMAL_CPP_PATH
+#                        "${PROJECT_SOURCE_DIR}/../third_party/yaml-cpp"
+#                        ABSOLUTE)
+# message(STATUS "hahah " ${YAMAL_CPP_PATH})
+# add_subdirectory(${PROJECT_SOURCE_DIR}/../third_party/yaml-cpp yaml-cpp)
 list(APPEND DEPEND_LIBS yaml-cpp)
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})

@@ -22,6 +22,13 @@ struct FASTDEPLOY_DECL NvUriSrcBinConfig {
   int gpu_id = 0;
   int file_loop = false;
   std::string uri;
+  int source_id = -1;
+};
+
+struct FASTDEPLOY_DECL NvUriSrcBinListConfig {
+  int gpu_id = 0;
+  int file_loop = false;
+  std::vector<NvUriSrcBinConfig> src_bins;
 };
 
 struct FASTDEPLOY_DECL NvStreamMuxConfig {
@@ -50,19 +57,16 @@ struct FASTDEPLOY_DECL NvMultiStreamTilerConfig {
   int gpu_id = 0;
   int rows = 0;
   int columns = 0;
-  int batched_push_timeout = -1;
 };
 
-struct FASTDEPLOY_DECL NvVideoConvertConfig {
+struct FASTDEPLOY_DECL NvOsdBinConfig {
   int gpu_id = 0;
 };
 
-struct FASTDEPLOY_DECL NvDsOsdConfig {
+struct FASTDEPLOY_DECL NvVideoEncFileSinkBin {
   int gpu_id = 0;
-};
-
-struct FASTDEPLOY_DECL NvV4l2H264EncConfig {
-  int gpu_id = 0;
+  int bitrate = 0;
+  std::string output_file;
 };
 
 }  // namespace streamer

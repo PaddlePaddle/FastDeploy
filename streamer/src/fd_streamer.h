@@ -16,6 +16,8 @@
 #include "fastdeploy/utils/utils.h"
 // #include "fd_streamer_config.h"
 
+#include <gst/gst.h>
+
 namespace fastdeploy {
 namespace streamer {
 
@@ -29,6 +31,12 @@ class FASTDEPLOY_DECL FDStreamer {
    * \return true if the streamer is initialized, otherwise false
    */
   bool Init(const std::string& config_file);
+
+  bool Run();
+
+  GMainLoop* loop_;
+  GstElement* pipeline_;
+  guint bus_watch_id_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy
