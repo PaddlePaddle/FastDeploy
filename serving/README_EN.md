@@ -20,7 +20,7 @@ FastDeploy builds an end-to-end serving deployment based on [Triton Inference Se
 CPU images only support Paddle/ONNX models for serving deployment on CPUs, and supported inference backends include OpenVINO, Paddle Inference, and ONNX Runtime
 
 ```shell
-docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
+docker pull paddlepaddle/fastdeploy:1.0.0-cpu-only-21.10
 ```
 
 #### GPU Image
@@ -28,7 +28,7 @@ docker pull paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10
 GPU images support Paddle/ONNX models for serving deployment on GPU and CPU, and supported inference backends including OpenVINO, TensorRT, Paddle Inference, and ONNX Runtime
 
 ```
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
+docker pull paddlepaddle/fastdeploy:1.0.0-gpu-cuda11.4-trt8.4-21.10
 ```
 
 Users can also compile the image by themselves according to their own needs, referring to the following documents:
@@ -39,14 +39,17 @@ Users can also compile the image by themselves according to their own needs, ref
 
 - [How to Prepare Serving Model Repository](docs/zh_CN/model_repository.md)
 - [Serving Deployment Configuration for Runtime](docs/zh_CN/model_configuration.md)
-- [Serving Deployment Demo](docs/zh_CN/demo.md)
-  - [YOLOV5 - Detection Task](../examples/vision/detection/yolov5/serving/README.md)
+- [Demo of Serving Deployment](docs/zh_CN/demo.md)
 
-### Model List
+
+### Serving Deployment Demo
 
 | Task | Model  |
 |---|---|
 | Classification | [PaddleClas](../examples/vision/classification/paddleclas/serving/README.md) |
+| Detection | [PaddleDetection](../examples/vision/detection/paddledetection/serving/README.md) |
 | Detection | [ultralytics/YOLOv5](../examples/vision/detection/yolov5/serving/README.md) |
 | NLP |	[PaddleNLP/ERNIE-3.0](../examples/text/ernie-3.0/serving/README.md)|
+| NLP |	[PaddleNLP/UIE](../examples/text/uie/serving/README.md)|
 | Speech |	[PaddleSpeech/PP-TTS](../examples/audio/pp-tts/serving/README.md)|
+| OCR |	[PaddleOCR/PP-OCRv3](../examples/vision/ocr/PP-OCRv3/serving/README.md)|

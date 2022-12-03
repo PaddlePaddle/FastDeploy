@@ -438,9 +438,79 @@ bool AllocateJavaFaceDetectionResultFromCxx(
   return true;
 }
 
-bool AllocateJavaResultFromCxx(
-    JNIEnv *env, jobject j_result_obj, void *cxx_result,
-    vision::ResultType type) {
+bool AllocateJavaKeyPointDetectionResultFromCxx(
+    JNIEnv *env, jobject j_keypoint_det_result_obj, void *cxx_result) {
+  // WARN: Please make sure 'j_keypoint_det_result_obj' param
+  // is a ref of Java KeyPointDetectionResult.
+  // Field signatures of Java KeyPointDetectionResult:
+  // (1) mBoxes float[][] shape (n*num_joints,2): [[F
+  // (2) mScores float[]  shape (n*num_joints):   [F
+  // (3) mNumJoints int  shape (1):               I
+  // (4) mInitialized boolean:                    Z
+  // Docs: docs/api/vision_results/keypointdetection_result.md
+  if (cxx_result == nullptr) {
+    return false;
+  }
+  auto c_result_ptr = reinterpret_cast<vision::KeyPointDetectionResult *>(cxx_result);
+
+  const int len = static_cast<int>(c_result_ptr->keypoints.size());
+  if (len == 0) {
+    return false;
+  }
+
+  const jclass j_keypoint_det_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/KeyPointDetectionResult");
+  const jclass j_keypoint_float_arr_clazz = env->FindClass("[F");  // (2,)
+  const jfieldID j_keypoint_det_keypoints_id = env->GetFieldID(
+      j_keypoint_det_result_clazz, "mKeyPoints", "[[F");
+  const jfieldID j_keypoint_det_scores_id = env->GetFieldID(
+      j_keypoint_det_result_clazz, "mScores", "[F");
+  const jfieldID j_keypoint_det_num_joints_id = env->GetFieldID(
+      j_keypoint_det_result_clazz, "mNumJoints", "I");
+  const jfieldID j_keypoint_det_initialized_id = env->GetFieldID(
+      j_keypoint_det_result_clazz, "mInitialized", "Z");
+
+  if (!env->IsInstanceOf(j_keypoint_det_result_obj, j_keypoint_det_result_clazz)) {
+    return false;
+  }
+
+  // mKeyPoints float[][] shape (n*num_joints,2): [[F
+  const auto &keypoints = c_result_ptr->keypoints;
+  jobjectArray j_keypoint_det_keypoints_float_arr =
+      env->NewObjectArray(len, j_keypoint_float_arr_clazz, NULL);
+  for (int i = 0; i < len; ++i) {
+    jfloatArray j_point = env->NewFloatArray(2);
+    env->SetFloatArrayRegion(j_point, 0, 2, keypoints.at(i).data());
+    env->SetObjectArrayElement(j_keypoint_det_keypoints_float_arr, i, j_point);
+    env->DeleteLocalRef(j_point);
+  }
+
+  // mScores float[]  shape (n):   [F
+  const auto &scores = c_result_ptr->scores;
+  const int score_len = scores.size();
+  jfloatArray j_keypoint_det_scores_float_arr = env->NewFloatArray(score_len);
+  env->SetFloatArrayRegion(j_keypoint_det_scores_float_arr, 0, score_len, scores.data());
+
+  // mNumJoints int  shape (1):   I
+  jint j_keypoint_det_num_joints = static_cast<jint>(c_result_ptr->num_joints);
+
+  // Set object fields
+  env->SetObjectField(j_keypoint_det_result_obj, j_keypoint_det_keypoints_id, j_keypoint_det_keypoints_float_arr);
+  env->SetObjectField(j_keypoint_det_result_obj, j_keypoint_det_scores_id, j_keypoint_det_scores_float_arr);
+  env->SetIntField(j_keypoint_det_result_obj, j_keypoint_det_num_joints_id, j_keypoint_det_num_joints);
+  env->SetBooleanField(j_keypoint_det_result_obj, j_keypoint_det_initialized_id, JNI_TRUE);
+
+  // Release local Refs
+  env->DeleteLocalRef(j_keypoint_det_keypoints_float_arr);
+  env->DeleteLocalRef(j_keypoint_det_scores_float_arr);
+  env->DeleteLocalRef(j_keypoint_det_result_clazz);
+  env->DeleteLocalRef(j_keypoint_float_arr_clazz);
+
+  return true;
+}
+
+bool AllocateJavaResultFromCxx(JNIEnv *env, jobject j_result_obj,
+                               void *cxx_result, vision::ResultType type) {
   if (type == vision::ResultType::CLASSIFY) {
     return AllocateJavaClassifyResultFromCxx(env, j_result_obj, cxx_result);
   } else if (type == vision::ResultType::DETECTION) {
@@ -451,6 +521,8 @@ bool AllocateJavaResultFromCxx(
     return AllocateJavaSegmentationResultFromCxx(env, j_result_obj, cxx_result);
   } else if (type == vision::ResultType::FACE_DETECTION) {
     return AllocateJavaFaceDetectionResultFromCxx(env, j_result_obj, cxx_result);
+  } else if (type == vision::ResultType::KEYPOINT_DETECTION) {
+    return AllocateJavaKeyPointDetectionResultFromCxx(env, j_result_obj, cxx_result);
   } else {
     LOGE("Not support this ResultType in JNI now, type: %d",
          static_cast<int>(type));
@@ -519,6 +591,18 @@ jobject NewJavaFaceDetectionResultFromCxx(JNIEnv *env, void *cxx_result) {
   return j_face_det_result_obj;
 }
 
+jobject NewJavaKeyPointDetectionResultFromCxx(JNIEnv *env, void *cxx_result) {
+  const jclass j_keypoint_det_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/KeyPointDetectionResult");
+  const jmethodID j_keypoint_det_result_init = env->GetMethodID(
+      j_keypoint_det_result_clazz, "<init>", "()V");
+  jobject j_keypoint_det_result_obj = env->NewObject(
+      j_keypoint_det_result_clazz, j_keypoint_det_result_init);
+  AllocateJavaKeyPointDetectionResultFromCxx(env, j_keypoint_det_result_obj, cxx_result);
+  env->DeleteLocalRef(j_keypoint_det_result_clazz);
+  return j_keypoint_det_result_obj;
+}
+
 jobject NewJavaResultFromCxx(
     JNIEnv *env, void *cxx_result, vision::ResultType type) {
   if (type == vision::ResultType::CLASSIFY) {
@@ -531,6 +615,8 @@ jobject NewJavaResultFromCxx(
     return NewJavaSegmentationResultFromCxx(env, cxx_result);
   } else if (type == vision::ResultType::FACE_DETECTION) {
     return NewJavaFaceDetectionResultFromCxx(env, cxx_result);
+  } else if (type == vision::ResultType::KEYPOINT_DETECTION) {
+    return NewJavaKeyPointDetectionResultFromCxx(env, cxx_result);
   } else {
     LOGE("Not support this ResultType in JNI now, type: %d",
          static_cast<int>(type));
@@ -756,9 +842,12 @@ bool AllocateOCRResultFromJava(
     return false;
   }
 
-  const int cls_len = env->GetArrayLength(j_ocr_cls_scores_float_arr);
-  if (cls_len != env->GetArrayLength(j_ocr_cls_labels_int_arr)) {
-    return false;
+  int cls_len = 0;
+  if ((j_ocr_cls_labels_int_arr != NULL) && (j_ocr_cls_scores_float_arr != NULL)) {
+    cls_len = env->GetArrayLength(j_ocr_cls_scores_float_arr);
+    if (cls_len != env->GetArrayLength(j_ocr_cls_labels_int_arr)) {
+      return false;
+    }
   }
 
   // Init cxx result
@@ -859,6 +948,13 @@ bool AllocateSegmentationResultFromJava(
     return false;
   }
 
+  // mInitialized boolean:         Z
+  jboolean j_seg_initialized =
+      env->GetBooleanField(j_seg_result_obj, j_seg_initialized_id_cc);
+  if (j_seg_initialized == JNI_FALSE) {
+    return false;
+  }
+
   // If 'mEnableCxxBuffer' set as true, then, we only Allocate from
   // cxx context to cxx result. Some users may want to use this
   // method to boost the performance of segmentation.
@@ -872,30 +968,21 @@ bool AllocateSegmentationResultFromJava(
     }
     // Allocate from cxx context to cxx result
     auto c_cxx_buffer = reinterpret_cast<vision::SegmentationResult *>(j_cxx_buffer);
-    // TODO: May use 'swap' to exchange the administrative privileges ?
-    // c_result_ptr->shape.swap(c_cxx_buffer->shape);
-    // c_result_ptr->label_map.swap(c_cxx_buffer->label_map);
-    // c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
-    // if (c_cxx_buffer->contain_score_map) {
-    //   c_result_ptr->score_map.swap(c_cxx_buffer->score_map);
-    // }
-    c_result_ptr->shape.assign(
-        c_cxx_buffer->shape.begin(), c_cxx_buffer->shape.end());
-    c_result_ptr->label_map.assign(
-        c_cxx_buffer->label_map.begin(), c_cxx_buffer->label_map.end());
+
+    // (*c_result_ptr) = std::move(*c_cxx_buffer);
+    c_result_ptr->shape = c_cxx_buffer->shape;
+    const size_t label_len = c_cxx_buffer->label_map.size();
+    c_result_ptr->label_map.resize(label_len);
+    std::memcpy(c_result_ptr->label_map.data(), c_cxx_buffer->label_map.data(),
+                label_len * sizeof(uint8_t));
     c_result_ptr->contain_score_map = c_cxx_buffer->contain_score_map;
     if (c_cxx_buffer->contain_score_map) {
-      c_result_ptr->score_map.assign(
-          c_cxx_buffer->score_map.begin(), c_cxx_buffer->score_map.end());
+      const size_t score_len = c_cxx_buffer->score_map.size();
+      c_result_ptr->score_map.resize(score_len);
+      std::memcpy(c_result_ptr->score_map.data(), c_cxx_buffer->score_map.data(),
+                  score_len * sizeof(float));
     }
     return true;
-  }
-
-  // mInitialized boolean:         Z
-  jboolean j_seg_initialized =
-      env->GetBooleanField(j_seg_result_obj, j_seg_initialized_id_cc);
-  if (j_seg_initialized == JNI_FALSE) {
-    return false;
   }
 
   jbyteArray j_seg_label_map_byte_arr = reinterpret_cast<jbyteArray>(
@@ -1060,6 +1147,95 @@ bool AllocateFaceDetectionResultFromJava(
   return true;
 }
 
+bool AllocateKeyPointDetectionResultFromJava(
+    JNIEnv *env, jobject j_keypoint_det_result_obj, void *cxx_result) {
+  // WARN: Please make sure 'j_keypoint_det_result_obj' param
+  // is a ref of Java KeyPointDetectionResult.
+  // Field signatures of Java KeyPointDetectionResult:
+  // (1) mBoxes float[][] shape (n*num_joints,2): [[F
+  // (2) mScores float[]  shape (n*num_joints):   [F
+  // (3) mNumJoints int  shape (1):               I
+  // (4) mInitialized boolean:                    Z
+  // Docs: docs/api/vision_results/keypointdetection_result.md
+  if (cxx_result == nullptr || j_keypoint_det_result_obj == nullptr) {
+    return false;
+  }
+  auto c_result_ptr = reinterpret_cast<vision::KeyPointDetectionResult *>(cxx_result);
+
+  const jclass j_keypoint_det_result_clazz_cc = env->FindClass(
+      "com/baidu/paddle/fastdeploy/vision/KeyPointDetectionResult");
+  const jfieldID j_keypoint_det_keypoints_id_cc = env->GetFieldID(
+      j_keypoint_det_result_clazz_cc, "mKeyPoints", "[[F");
+  const jfieldID j_keypoint_det_scores_id_cc = env->GetFieldID(
+      j_keypoint_det_result_clazz_cc, "mScores", "[F");
+  const jfieldID j_keypoint_det_num_joints_id_cc = env->GetFieldID(
+      j_keypoint_det_result_clazz_cc, "mNumJoints", "I");
+  const jfieldID j_keypoint_det_initialized_id_cc = env->GetFieldID(
+      j_keypoint_det_result_clazz_cc, "mInitialized", "Z");
+
+  if (!env->IsInstanceOf(j_keypoint_det_result_obj, j_keypoint_det_result_clazz_cc)) {
+    return false;
+  }
+
+  // mInitialized boolean:         Z
+  jboolean j_keypoint_det_initialized =
+      env->GetBooleanField(j_keypoint_det_result_obj, j_keypoint_det_initialized_id_cc);
+  if (j_keypoint_det_initialized == JNI_FALSE) {
+    return false;
+  }
+
+  jobjectArray j_keypoint_det_keypoints_float_arr = reinterpret_cast<jobjectArray>(
+      env->GetObjectField(j_keypoint_det_result_obj, j_keypoint_det_keypoints_id_cc));
+  jfloatArray j_keypoint_det_scores_float_arr = reinterpret_cast<jfloatArray>(
+      env->GetObjectField(j_keypoint_det_result_obj, j_keypoint_det_scores_id_cc));
+  jint j_keypoint_det_num_joints = env->GetIntField(
+      j_keypoint_det_result_obj, j_keypoint_det_num_joints_id_cc);
+
+  int len = env->GetArrayLength(j_keypoint_det_keypoints_float_arr);
+  if ((len == 0) || (len != env->GetArrayLength(j_keypoint_det_scores_float_arr)) ||
+      (j_keypoint_det_num_joints < 0)) {
+    return false;
+  }
+
+  // Init Cxx result
+  c_result_ptr->Clear();
+
+  // mKeyPoints float[][] shape (n*num_joints,2): [[F
+  c_result_ptr->keypoints.resize(len);
+  bool c_check_validation = true;
+  for (int i = 0; i < len; ++i) {
+    auto j_point = reinterpret_cast<jfloatArray>(
+        env->GetObjectArrayElement(j_keypoint_det_keypoints_float_arr, i));
+    if (env->GetArrayLength(j_point) == 2) {
+      jfloat *j_point_ptr = env->GetFloatArrayElements(j_point, nullptr);
+      std::memcpy(c_result_ptr->keypoints[i].data(), j_point_ptr, 2 * sizeof(float));
+      env->ReleaseFloatArrayElements(j_point, j_point_ptr, 0);
+    } else {
+      c_check_validation = false;
+      break;
+    }
+  }
+  if (!c_check_validation) {
+    LOGE("The length of each detection box is not equal 2!");
+    return false;
+  }
+
+  // mScores float[]  shape (n):   [F
+  c_result_ptr->scores.resize(len);
+  jfloat *j_keypoint_det_scores_ptr =
+      env->GetFloatArrayElements(j_keypoint_det_scores_float_arr, nullptr);
+  std::memcpy(c_result_ptr->scores.data(), j_keypoint_det_scores_ptr, len * sizeof(float));
+  env->ReleaseFloatArrayElements(j_keypoint_det_scores_float_arr, j_keypoint_det_scores_ptr, 0);
+
+  // mNumJoints int  shape (1):   I
+  c_result_ptr->num_joints = static_cast<int>(j_keypoint_det_num_joints);
+
+  // Release local Refs
+  env->DeleteLocalRef(j_keypoint_det_result_clazz_cc);
+
+  return true;
+}
+
 bool AllocateCxxResultFromJava(
     JNIEnv *env, jobject j_result_obj, void *cxx_result,
     vision::ResultType type) {
@@ -1071,8 +1247,10 @@ bool AllocateCxxResultFromJava(
     return AllocateOCRResultFromJava(env, j_result_obj, cxx_result);
   } else if (type == vision::ResultType::SEGMENTATION) {
     return AllocateSegmentationResultFromJava(env, j_result_obj, cxx_result);
-  }  else if (type == vision::ResultType::FACE_DETECTION) {
+  } else if (type == vision::ResultType::FACE_DETECTION) {
     return AllocateFaceDetectionResultFromJava(env, j_result_obj, cxx_result);
+  } else if (type == vision::ResultType::KEYPOINT_DETECTION) {
+    return AllocateKeyPointDetectionResultFromJava(env, j_result_obj, cxx_result);
   } else {
     LOGE("Not support this ResultType in JNI now, type: %d",
          static_cast<int>(type));
@@ -1082,7 +1260,6 @@ bool AllocateCxxResultFromJava(
 
 }  // namespace jni
 }  // namespace fastdeploy
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -1111,7 +1288,7 @@ Java_com_baidu_paddle_fastdeploy_vision_SegmentationResult_releaseCxxBufferNativ
   auto c_result_ptr = reinterpret_cast<
       fastdeploy::vision::SegmentationResult *>(j_cxx_buffer);
   delete c_result_ptr;
-  LOGD("[End] Release SegmentationResult in native !");
+  LOGD("[End] Release SegmentationResult & CxxBuffer in native !");
 
   env->SetBooleanField(thiz, j_seg_initialized_id, JNI_FALSE);
   env->DeleteLocalRef(j_seg_result_clazz);

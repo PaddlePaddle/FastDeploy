@@ -22,6 +22,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #ifdef __ANDROID__
@@ -65,7 +66,8 @@ class FASTDEPLOY_DECL FDLogger {
     if (!verbose_ && line_ != "") {
       std::cout << line_ << std::endl;
 #ifdef __ANDROID__
-      __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s", line_.c_str());
+      __android_log_print(ANDROID_LOG_INFO, prefix_.c_str(), "%s",
+                          line_.c_str());
 #endif
     }
   }
@@ -121,6 +123,8 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
   [&] {                                                                        \
     const auto& __dtype__ = TYPE;                                              \
     switch (__dtype__) {                                                       \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::UINT8, uint8_t,     \
+                           __VA_ARGS__)                                        \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::BOOL, bool,         \
                            __VA_ARGS__)                                        \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT32, int32_t,     \
@@ -152,10 +156,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                            __VA_ARGS__)                                        \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::FP64, double,       \
                            __VA_ARGS__)                                        \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::UINT8, uint8_t,     \
+                           __VA_ARGS__)                                        \
     default:                                                                   \
       FDASSERT(false,                                                          \
                "Invalid enum data type. Expect to accept data type INT32, "    \
-               "INT64, FP32, FP64, but receive type %s.",                      \
+               "INT64, FP32, FP64, UINT8 but receive type %s.",                \
                Str(__dtype__).c_str());                                        \
     }                                                                          \
   }()
@@ -184,10 +190,12 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
                            __VA_ARGS__)                                        \
       FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::INT64, int64_t,     \
                            __VA_ARGS__)                                        \
+      FD_PRIVATE_CASE_TYPE(NAME, ::fastdeploy::FDDataType::UINT8, uint8_t,     \
+                           __VA_ARGS__)                                        \
     default:                                                                   \
       FDASSERT(false,                                                          \
                "Invalid enum data type. Expect to accept data type INT32, "    \
-               "INT64, but receive type %s.",                                  \
+               "INT64, UINT8 but receive type %s.",                            \
                Str(__dtype__).c_str());                                        \
     }                                                                          \
   }()
@@ -195,6 +203,16 @@ FASTDEPLOY_DECL bool ReadBinaryFromFile(const std::string& file,
 FASTDEPLOY_DECL std::vector<int64_t>
 GetStride(const std::vector<int64_t>& dims);
 
-FASTDEPLOY_DECL std::string Str(const std::vector<int64_t>& shape);
+template <typename T, typename std::enable_if<std::is_integral<T>::value,
+                                              bool>::type = true>
+std::string Str(const std::vector<T>& shape) {
+  std::ostringstream oss;
+  oss << "[ " << shape[0];
+  for (int i = 1; i < shape.size(); ++i) {
+    oss << " ," << shape[i];
+  }
+  oss << " ]";
+  return oss.str();
+}
 
 }  // namespace fastdeploy

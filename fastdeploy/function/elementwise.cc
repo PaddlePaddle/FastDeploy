@@ -32,21 +32,9 @@ void Add(const FDTensor& x, const FDTensor& y, FDTensor* out) {
                      ([&] { AddRawKernel<data_t>()(x, y, -1, out); }));
 }
 
-FDTensor operator+(const FDTensor& x, const FDTensor& y) {
-  FDTensor out;
-  Add(x, y, &out);
-  return out;
-}
-
 void Subtract(const FDTensor& x, const FDTensor& y, FDTensor* out) {
   FD_VISIT_ALL_TYPES(x.dtype, "SubtractRawKernel",
                      ([&] { SubtractRawKernel<data_t>()(x, y, -1, out); }));
-}
-
-FDTensor operator-(const FDTensor& x, const FDTensor& y) {
-  FDTensor out;
-  Subtract(x, y, &out);
-  return out;
 }
 
 void Multiply(const FDTensor& x, const FDTensor& y, FDTensor* out) {
@@ -54,21 +42,9 @@ void Multiply(const FDTensor& x, const FDTensor& y, FDTensor* out) {
                      ([&] { MultiplyRawKernel<data_t>()(x, y, -1, out); }));
 }
 
-FDTensor operator*(const FDTensor& x, const FDTensor& y) {
-  FDTensor out;
-  Multiply(x, y, &out);
-  return out;
-}
-
 void Divide(const FDTensor& x, const FDTensor& y, FDTensor* out) {
   FD_VISIT_ALL_TYPES(x.dtype, "DivideRawKernel",
                      ([&] { DivideRawKernel<data_t>()(x, y, -1, out); }));
-}
-
-FDTensor operator/(const FDTensor& x, const FDTensor& y) {
-  FDTensor out;
-  Divide(x, y, &out);
-  return out;
 }
 
 template <typename T> struct MaximumRawKernel {
@@ -85,4 +61,50 @@ void Maximum(const FDTensor& x, const FDTensor& y, FDTensor* out) {
 }
 
 }  // namespace function
+
+FDTensor operator+(const FDTensor& x, const FDTensor& y) {
+  FDTensor out;
+  function::Add(x, y, &out);
+  return out;
+}
+
+FDTensor operator-(const FDTensor& x, const FDTensor& y) {
+  FDTensor out;
+  function::Subtract(x, y, &out);
+  return out;
+}
+
+FDTensor operator*(const FDTensor& x, const FDTensor& y) {
+  FDTensor out;
+  function::Multiply(x, y, &out);
+  return out;
+}
+
+FDTensor operator/(const FDTensor& x, const FDTensor& y) {
+  FDTensor out;
+  function::Divide(x, y, &out);
+  return out;
+}
+
+#define INSTANTIATE_OPERATOR(operation_type)                                   \
+  template FDTensor operator operation_type(const FDTensor& x, bool y);        \
+  template FDTensor operator operation_type(const FDTensor& x, uint8_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, int16_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, int y);         \
+  template FDTensor operator operation_type(const FDTensor& x, int64_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, float y);       \
+  template FDTensor operator operation_type(const FDTensor& x, double y);      \
+  template FDTensor operator operation_type(bool x, const FDTensor& y);        \
+  template FDTensor operator operation_type(uint8_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(int16_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(int x, const FDTensor& y);         \
+  template FDTensor operator operation_type(int64_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(float x, const FDTensor& y);       \
+  template FDTensor operator operation_type(double x, const FDTensor& y)
+
+INSTANTIATE_OPERATOR(+);
+INSTANTIATE_OPERATOR(-);
+INSTANTIATE_OPERATOR(*);
+INSTANTIATE_OPERATOR(/);
+
 }  // namespace fastdeploy

@@ -16,19 +16,19 @@
 
 #include <map>
 #include <string>
+#include <algorithm>
+#include <cmath>
+#include "fastdeploy/core/fd_tensor.h"
+#include "fastdeploy/utils/utils.h"
 
 #ifndef NON_64_PLATFORM
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
-namespace fastdeploy {
 #ifdef WITH_GPU
-void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
-                      const std::vector<int64_t>& output_dims,
-                      float* output,
-                      const float* input,
-                      void* compute_stream,
-                      const std::string& pooling_type);
+#include "fastdeploy/backends/op_cuda_kernels/adaptive_pool2d_kernel.h"
 #endif
+
+namespace fastdeploy {
 struct AdaptivePool2dKernel {
  protected:
   std::string pooling_type_ = "avg";
