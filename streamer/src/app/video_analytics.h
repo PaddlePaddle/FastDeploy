@@ -15,22 +15,32 @@
 
 #include "fastdeploy/utils/utils.h"
 
+#include <gst/gst.h>
 
 namespace fastdeploy {
 namespace streamer {
 
-struct FASTDEPLOY_DECL FDStreamerConfig {
+/*! @brief FDStreamer class, user inferfaces for FastDeploy Streamer
+ */
+class FASTDEPLOY_DECL VideoAnalyticsApp {
  public:
-  /** \brief Init config from YAML file
+  /** \brief Init FD streamer
    *
-   * \param[in] config_file config file path
-   * \return true if the init is successful, otherwise false
+   * \param[in] config config file path
+   * \return true if the streamer is initialized, otherwise false
    */
-  bool Init(const std::string& config_file);
+  bool Init();
 
-#ifdef ENABLE_DEEPSTREAM
-  std::vector<NvUriSrcBinConfig> nv_uri_src_configs;
+  bool Run();
 
-}
+  GstElement* GetPipeline() {
+    return pipeline_;
+  }
+
+ private:
+  GMainLoop* loop_;
+  GstElement* pipeline_;
+  guint bus_watch_id_;
+};
 }  // namespace streamer
 }  // namespace fastdeploy

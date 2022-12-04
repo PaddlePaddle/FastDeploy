@@ -43,6 +43,7 @@ endif()
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 
 include_directories(${FASTDEPLOY_INCS})
+include_directories(${PROJECT_SOURCE_DIR}/src/)
 
 message(STATUS "hahah " ${FASTDEPLOY_LIBS})
 

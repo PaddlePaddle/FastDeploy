@@ -1,4 +1,4 @@
-#include "fd_source_bin.h"
+#include "source_bin.h"
 
 static void
 cb_newpad (GstElement * decodebin, GstPad * decoder_src_pad, gpointer data)

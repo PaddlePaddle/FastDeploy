@@ -14,9 +14,6 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
-// #include "fd_streamer_config.h"
-
-#include <gst/gst.h>
 
 namespace fastdeploy {
 namespace streamer {
@@ -34,9 +31,8 @@ class FASTDEPLOY_DECL FDStreamer {
 
   bool Run();
 
-  GMainLoop* loop_;
-  GstElement* pipeline_;
-  guint bus_watch_id_;
+ private:
+  void* app;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

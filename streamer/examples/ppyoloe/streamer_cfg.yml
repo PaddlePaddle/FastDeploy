@@ -1,5 +1,5 @@
 app:
-  enable-perf-measurement: 1
+  enable-perf-measurement: true
   perf-measurement-interval-sec: 5
 
 nvurisrcbin_list:
