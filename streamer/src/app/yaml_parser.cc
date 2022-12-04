@@ -6,31 +6,46 @@ namespace fastdeploy {
 namespace streamer {
 
 YamlParser::YamlParser(const std::string& config_file) {
-  config_file_ = config_file;
   // FDASSERT(BuildPipelineFromConfig(config_file),
           //  "Failed to create PaddleClasPreprocessor.");
-}
-
-void YamlParser::ValidateConfig(const std::string& config_file) {
-
+  try {
+    yaml_config_ = YAML::LoadFile(config_file);
+  } catch (YAML::BadFile& e) {
+    FDERROR << "Failed to load yaml file " << config_file
+            << ", maybe you should check this file." << std::endl;
+  }
+  config_file_ = config_file;
 }
 
 void YamlParser::ParseAppConfg(AppConfig& app_config) {
-  ValidateConfig(config_file_);
-  YAML::Node cfg;
-  try {
-    cfg = YAML::LoadFile(config_file_);
-  } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file_
-            << ", maybe you should check this file." << std::endl;
-  }
-  auto elem = cfg["app"];
+  ValidateConfig();
+  auto elem = yaml_config_["app"];
   app_config.type = AppType::VIDEO_ANALYTICS;
   app_config.enable_perf_measurement = elem["enable-perf-measurement"].as<bool>();
   if (app_config.enable_perf_measurement) {
     app_config.perf_interval_sec = elem["perf-measurement-interval-sec"].as<int>();
   }
   app_config_ = app_config;
+}
+
+void YamlParser::ValidateConfig() {
+  auto first_elem = yaml_config_.begin()->first.as<std::string>();
+  if (first_elem != "app") {
+    FDASSERT(false, "First config element must be app, but got %s.",
+             first_elem.c_str());
+  }
+}
+
+bool YamlParser::BuildPipelineFromConfig(GstElement* pipeline) {
+  pipeline_ = pipeline;
+  for (const auto& elem : yaml_config_) {
+    std::string elem_name = elem.first.as<std::string>();
+    std::cout << elem_name << std::endl;
+    FDASSERT(AddElement(elem_name, elem.second), "Failed to add element: %s",
+             elem_name.c_str());
+  }
+  // LinkElements();
+  return true;
 }
 
 bool YamlParser::AddNvUriSrcBins(const YAML::Node& properties) {
@@ -49,67 +64,50 @@ bool YamlParser::AddNvUriSrcBins(const YAML::Node& properties) {
   return true;
 }
 
-bool YamlParser::BuildPipelineFromConfig(GstElement* pipeline) {
-  YAML::Node cfg;
-  try {
-    cfg = YAML::LoadFile(config_file_);
-  } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file_
-            << ", maybe you should check this file." << std::endl;
-    return false;
-  }
-  pipeline_ = pipeline;
-  for (const auto& elem : cfg) {
-    std::string elem_name = elem.first.as<std::string>();
-    std::cout << elem_name << std::endl;
+void YamlParser::SetProperty(GstElement* elem, const YAML::Node& name,
+                             const YAML::Node& value) {
+  std::string prop_name = name.as<std::string>();
+  std::cout << "Setting property " << prop_name << std::endl;
 
-    if (elem_name == "app") {
-      // Do nothing
-    } else if (elem_name == "nvurisrcbin_list") {
-      AddNvUriSrcBins(elem.second);
-    // } else if (elem_name == "nvstreammux") {
-    //   NvStreamMuxConfig config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   config.batch_size = elem.second["batch-size"].as<int>();
-    //   config.width = elem.second["width"].as<int>();
-    //   config.height = elem.second["height"].as<int>();
-    //   config.batched_push_timeout = elem.second["batched-push-timeout"].as<int>();
-    //   AddNvStreamMux(pipeline, config);
-    // } else if (elem_name == "nvinfer") {
-    //   NvInferConfig config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   config.config_file_path = elem.second["config-file-path"].as<std::string>();
-    //   AddNvInfer(pipeline, config);
-    // } else if (elem_name == "nvtracker") {
-    //   NvTrackerConfig config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   config.tracker_width = elem.second["tracker-width"].as<int>();
-    //   config.tracker_height = elem.second["tracker-height"].as<int>();
-    //   config.ll_lib_file = elem.second["ll-lib-file"].as<std::string>();
-    //   config.ll_config_file = elem.second["ll-config-file"].as<std::string>();
-    //   config.enable_batch_process = elem.second["enable-batch-process"].as<bool>();
-    //   AddNvTracker(pipeline, config);
-    // } else if (elem_name == "nvmultistreamtiler") {
-    //   NvMultiStreamTilerConfig config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   config.rows = elem.second["rows"].as<int>();
-    //   config.columns = elem.second["columns"].as<int>();
-    //   AddNvMultiStreamTiler(pipeline, config);
-    // } else if (elem_name == "nvosdbin") {
-    //   NvOsdBinConfig config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   AddNvOsdBin(pipeline, config);
-    // } else if (elem_name == "nvvideoencfilesinkbin") {
-    //   NvVideoEncFileSinkBin config;
-    //   config.gpu_id = elem.second["gpu-id"].as<int>();
-    //   config.bitrate = elem.second["bitrate"].as<int>();
-    //   config.output_file = elem.second["output-file"].as<std::string>();
-    //   AddNvVideoEncFileSinkBin(pipeline, config);
-    } else {
-      FDASSERT(false, "Unsupported element: %s.", elem_name.c_str());
-    }
+  // Get default property value by property name,
+  // then get the value's data type.
+  GValue default_value = G_VALUE_INIT;
+  g_object_get_property(G_OBJECT(elem), prop_name.c_str(), &default_value);
+  std::string type_name(g_type_name(default_value.g_type));
+  std::cout << "  Type: " << type_name << std::endl;
+
+  // Convert the value in YAML into the data type of the property value
+  if (type_name == "gboolean") {
+    auto prop_value = value.as<bool>();
+    g_object_set(G_OBJECT(elem), prop_name.c_str(), prop_value, NULL);
+  } else if (type_name == "guint") {
+    auto prop_value = value.as<guint>();
+    g_object_set(G_OBJECT(elem), prop_name.c_str(), prop_value, NULL);
+  } else if (type_name == "gint") {
+    auto prop_value = value.as<gint>();
+    g_object_set(G_OBJECT(elem), prop_name.c_str(), prop_value, NULL);
+  } else if (type_name == "gchararray") {
+    auto prop_value = value.as<std::string>();
+    g_object_set(G_OBJECT(elem), prop_name.c_str(), prop_value.c_str(), NULL);
+  } else {
+    FDASSERT(false, "Unsupported property value type: %s.", type_name.c_str());
   }
-  // LinkElements();
+}
+
+bool YamlParser::AddElement(const std::string& name, const YAML::Node& properties) {
+  if (name == "app") return true;
+
+  if (name == "nvurisrcbin_list") {
+    return AddNvUriSrcBins(properties);
+  }
+
+  GstElement* elem = gst_element_factory_make(name.c_str(), NULL);
+  for (auto it = properties.begin(); it != properties.end(); it++) {
+    SetProperty(elem, it->first, it->second);
+  }
+  
+  if (name == "nvstreammux") {
+  }
   return true;
 }
 

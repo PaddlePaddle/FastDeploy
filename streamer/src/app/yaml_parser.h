@@ -30,7 +30,7 @@ class YamlParser {
 
   void ParseAppConfg(AppConfig& app_config);
 
-  void ValidateConfig(const std::string& config_file);
+  void ValidateConfig();
 
   bool BuildPipelineFromConfig(GstElement* pipeline);
 
@@ -39,10 +39,14 @@ class YamlParser {
 
  private:
   bool AddNvUriSrcBins(const YAML::Node& properties);
+  void SetProperty(GstElement* elem, const YAML::Node& name,
+                   const YAML::Node& value);
+  bool AddElement(const std::string& name, const YAML::Node& properties);
 
   AppConfig app_config_;
   std::string config_file_;
   GstElement* pipeline_;
+  YAML::Node yaml_config_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy
