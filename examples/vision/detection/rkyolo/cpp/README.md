@@ -1,6 +1,6 @@
-# PaddleDetection C++部署示例
+# RKYOLO C++部署示例
 
-本目录下提供`infer_xxxxx.cc`快速完成PPDetection模型在Rockchip板子上上通过二代NPU加速部署的示例。
+本目录下提供`infer_xxxxx.cc`快速完成RKYOLO模型在Rockchip板子上上通过二代NPU加速部署的示例。
 
 在部署前，需确认以下两个步骤:
 
@@ -60,7 +60,7 @@ make install
 
 ```bash
 cd ./build/install
-./infer_picodet model/picodet_s_416_coco_lcnet images/000000014439.jpg
+./infer_picodet model/ images/000000014439.jpg
 ```
 
 

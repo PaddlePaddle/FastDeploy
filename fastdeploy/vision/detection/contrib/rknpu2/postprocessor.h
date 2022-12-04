@@ -48,6 +48,12 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
     conf_threshold_ = conf_threshold;
   }
 
+  /// Get conf_threshold, default 0.25
+  float GetConfThreshold() const { return conf_threshold_; }
+
+  /// Get nms_threshold, default 0.45
+  float GetNMSThreshold() const { return nms_threshold_; }
+
   // Set model_type
   void SetModelType(ModelType model_type);
 
