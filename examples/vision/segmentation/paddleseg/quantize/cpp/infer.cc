@@ -34,7 +34,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
