@@ -37,6 +37,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format")
+  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 endif(NOT MSVC)
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))

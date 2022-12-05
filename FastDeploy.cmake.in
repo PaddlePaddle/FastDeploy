@@ -35,9 +35,12 @@ list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/include)
 # Note(zhoushunjie): include some useful utils function
 include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
 
-if(NOT CMAKE_CXX_STANDARD)
+# Set C++11 as standard for the whole project
+if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
-endif()
+  set(CMAKE_CXX_FLAGS "-Wno-format")
+  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+endif(NOT MSVC)
 
 if(ANDROID)
   add_library(fastdeploy STATIC IMPORTED GLOBAL)
