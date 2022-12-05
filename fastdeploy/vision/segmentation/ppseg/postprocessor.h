@@ -20,7 +20,8 @@
 namespace fastdeploy {
 namespace vision {
 namespace segmentation {
-
+/*! @brief Postprocessor object for PaddleSeg serials model.
+ */
 class FASTDEPLOY_DECL PaddleSegPostprocessor {
  public:
   /** \brief Create a postprocessor instance for PaddleSeg serials model
