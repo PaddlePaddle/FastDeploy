@@ -63,7 +63,7 @@ Benchmark表格说明:
 | [YOLOv7](../../examples/vision/detection/yolov7/quantize/)             | Paddle Inference  |    CPU    |     995.85  |     477.93|None|None      |   2.08         |51.1 | 46.2|量化蒸馏训练 |
 
 #### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [YOLOv5s](../../examples/vision/detection/yolov5/quantize/)             | TensorRT   |    GPU    |  24.61   | 21.20 |  20.78     | 20.94     |      1.18         | 37.6  | 36.7 | 量化蒸馏训练 |
 | [YOLOv5s](../../examples/vision/detection/yolov5/quantize/)             | Paddle-TensorRT  |    GPU   |  23.53    |  None |  21.98    | 19.84     |      1.28        | 37.6  | 36.8 | 量化蒸馏训练 |
@@ -94,7 +94,7 @@ Benchmark表格说明:
 | [MobileNetV1_ssld](../../examples/vision/classification/paddleclas/quantize/)        |  Paddle Inference  |    CPU    |     12.29  |   4.68  |     None|None|2.62       |77.89 | 71.36 |离线量化 |
 
 #### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 Top1 | INT8 Top1 | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 Top1 | INT8 Top1 | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [ResNet50_vd](../../examples/vision/classification/paddleclas/quantize/)            | TensorRT         |    GPU    |  4.92| 2.28|2.24|2.23 |      2.21     | 79.12  | 79.06 | 离线量化 |
 | [ResNet50_vd](../../examples/vision/classification/paddleclas/quantize/)            | Paddle-TensorRT  |    GPU    |  4.48|None |2.09|2.10 |      2.14   | 79.12  | 79.06 | 离线量化 |
@@ -119,7 +119,7 @@ NOTE:
 - TensorRT比Paddle-TensorRT快的原因是在runtime移除了multiclass_nms3算子
 
 #### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [ppyoloe_crn_l_300e_coco](../../examples/vision/detection/paddledetection/quantize )  | TensorRT         |    GPU    |  35.75 | 15.42 |20.70|20.85  |      2.32      | 51.4  | 50.7 | 量化蒸馏训练 |
 | [ppyoloe_crn_l_300e_coco](../../examples/vision/detection/paddledetection/quantize )  | Paddle-TensorRT |    GPU    | 33.48    |None  |  18.47 |18.03   |     1.81       | 51.4  | 50.5| 量化蒸馏训练 |
@@ -134,6 +134,6 @@ NOTE:
 | [PP-LiteSeg-T(STDC1)-cityscapes](../../examples/vision/segmentation/paddleseg/quantize)  | Paddle Inference |    CPU    |     1138.04|   602.62 |None|None     |      1.89      |77.37 | 71.62 |量化蒸馏训练 |
 
 #### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 mIoU | INT8 mIoU | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 mIoU | INT8 mIoU | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [PP-LiteSeg-T(STDC1)-cityscapes](../../examples/vision/segmentation/paddleseg/quantize)  | Paddle Inference |    CPU    |     4726.65|   4134.91|None|None     |      1.14      |77.37 | 71.62 |量化蒸馏训练 |
