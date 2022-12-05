@@ -65,7 +65,7 @@ else() # Linux
     elseif(WITH_XPU)
       set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_1129.tgz")
     else()
-      message(FATAL_ERROR "Only support Linux aarch64 now, x64 is not supported with backend Paddle Lite.")
+      message(FATAL_ERROR "Only support Linux aarch64/WITH_TIMVX/WITH_XPU now, x64 is not supported with backend Paddle Lite.")
     endif()
   endif()
 endif()

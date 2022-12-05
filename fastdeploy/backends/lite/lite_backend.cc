@@ -81,7 +81,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       }
     }
   }
-  if(option_.enable_timvx){
+  if(option_.enable_timvx) {
     config_.set_nnadapter_device_names({"verisilicon_timvx"});
     valid_places.push_back(
           paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});

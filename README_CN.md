@@ -68,8 +68,8 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details close> 
-    
+<details close>
+
 <summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
 
 #### 快速安装
@@ -131,7 +131,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details close>
-    
+
 <summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
 
 
