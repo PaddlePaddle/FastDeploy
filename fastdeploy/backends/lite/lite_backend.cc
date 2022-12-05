@@ -221,6 +221,10 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
       tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
         reinterpret_cast<const uint8_t*>(const_cast<void*>(
         inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT64) {
+      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int64_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
     } else {
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
     }
