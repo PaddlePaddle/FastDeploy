@@ -72,7 +72,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       }
     }
   }
-  if(option_.enable_timvx){
+  if(option_.enable_timvx) {
     config_.set_nnadapter_device_names({"verisilicon_timvx"});
     valid_places.push_back(
           paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
@@ -220,6 +220,10 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     } else if (inputs[i].dtype == FDDataType::UINT8) {
       tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
         reinterpret_cast<const uint8_t*>(const_cast<void*>(
+        inputs[i].CpuData())));
+    } else if (inputs[i].dtype == FDDataType::INT64) {
+      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kARM>(
+        reinterpret_cast<const int64_t*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else {
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
