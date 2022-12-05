@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# 模型名字
-MODEL_NAME=ResNet50_vd_infer
-# 预测的图片名字
-DATA_NAME=ILSVRC2012_val_00000010.jpeg
-# 本demo的可执行文件
-DEMO_NAME=infer_demo
-
 export GLOG_v=5
 # 设置本demo的环境变量
 # 正确设置fastdeploy-cann的安装路径
@@ -27,5 +20,5 @@ export ASCEND_GLOBAL_LOG_LEVEL=3
 
 chmod +x ./$BUILD_DIR
 
-# 运行本demo.
-./build/$DEMO_NAME ./models/$MODEL_NAME ./images/$DATA_NAME
+# 运行本demo, 输入的参数分别为模型路径和图片路径
+./build/infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg

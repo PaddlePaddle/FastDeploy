@@ -48,7 +48,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: infer_demo path/to/quant_model "
+    std::cout << "Usage: infer_demo path/to/model "
                  "path/to/image "
                  "run_option, "
                  "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg"
