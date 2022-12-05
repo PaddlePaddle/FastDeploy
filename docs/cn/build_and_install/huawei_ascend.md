@@ -69,11 +69,10 @@ cd FastDeploy
 mkdir build && cd build
 
 # CMake configuration with CANN
-cmake -DCMAKE_TOOLCHAIN_FILE=./../cmake/cann.cmake \
-      -DENABLE_CANN=ON  \
+cmake -DWITH_CANN=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-cann \
-      -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
-      -Wno-dev ..
+      -DENABLE_VISION=ON \
+      ..
 
 # Build FastDeploy CANN C++ SDK
 make -j8
