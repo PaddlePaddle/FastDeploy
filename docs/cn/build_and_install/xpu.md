@@ -45,4 +45,5 @@ python setup.py build
 python setup.py bdist_wheel
 ```  
 
-昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)
+1. 昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)
+2. 昆仑芯 XPU 上部署 YOLOv5 检测模型请参考：[YOLOv5 检测模型在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/detection/yolov5/xpu/README.md)
