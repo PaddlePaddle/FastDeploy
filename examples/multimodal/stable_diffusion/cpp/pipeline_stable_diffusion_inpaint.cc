@@ -49,7 +49,8 @@ void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
       float_mask[i] = 1;
     }
   }
-  image_mask.SetExternalData({1, 1, shape[1] * 8, shape[0] * 8},
+  // NCHW format
+  image_mask.SetExternalData({1, 1, shape[0] * 8, shape[1] * 8},
                              FDDataType::FP32, float_mask.data());
 
   // Set mask_image
