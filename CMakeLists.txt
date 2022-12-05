@@ -143,11 +143,6 @@ if (WITH_TIMVX)
 endif()
 
 if (WITH_XPU)
-  if (NOT DEFINED TARGET_ABI)
-      message(WARNING "TARGET_ABI is DEFINED, will set to TARGET_ABI=amd64")
-      set(TARGET_ABI amd64)
-  endif()
-
   if(NOT ${ENABLE_LITE_BACKEND})
       message(WARNING "While compiling with -DWITH_XPU=ON, will force to set -DENABLE_LITE_BACKEND=ON")
       set(ENABLE_LITE_BACKEND ON)
@@ -501,7 +496,7 @@ set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 if(MSVC)
   # disable warnings for dll export
   target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
-  file(GLOB FD_FILES_REQUIRE_BIGOBJ ${CSRCS_DIR_NAME}/fastdeploy/function/reduce.cc) 
+  file(GLOB FD_FILES_REQUIRE_BIGOBJ ${CSRCS_DIR_NAME}/fastdeploy/function/reduce.cc)
   set_source_files_properties(${FD_FILES_REQUIRE_BIGOBJ} PROPERTIES COMPILE_FLAGS "/bigobj")
 endif()
 
