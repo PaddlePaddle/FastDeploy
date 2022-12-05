@@ -36,7 +36,7 @@ FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了�
 目前, FastDeploy支持自动化压缩,并完成部署测试的模型的Runtime Benchmark和端到端Benchmark如下所示.
 
 Benchmark表格说明:
-- Rtuntime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
+- Runtime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
 - 端到端时延为模型在实际推理场景中的时延, 包含模型的前后处理.
 - 所测时延均为推理1000次后求得的平均值, 单位是毫秒.
 - INT8 + FP16 为在推理INT8量化模型的同时, 给Runtime 开启FP16推理选项
