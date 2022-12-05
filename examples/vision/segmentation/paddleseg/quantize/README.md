@@ -11,7 +11,7 @@ FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输�
 用户也可以直接下载下表中的量化模型进行部署.(点击模型名字即可下载)
 
 Benchmark表格说明:
-- Rtuntime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
+- Runtime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
 - 端到端时延为模型在实际推理场景中的时延, 包含模型的前后处理.
 - 所测时延均为推理1000次后求得的平均值, 单位是毫秒.
 - INT8 + FP16 为在推理INT8量化模型的同时, 给Runtime 开启FP16推理选项
@@ -26,7 +26,7 @@ Benchmark表格说明:
 | [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar))  | Paddle Inference |    CPU    |     1138.04|   602.62 |None|None     |      1.89      |77.37 | 71.62 |量化蒸馏训练 |
 
 #### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 mIoU | INT8 mIoU | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 mIoU | INT8 mIoU | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [PP-LiteSeg-T(STDC1)-cityscapes](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer_QAT_new.tar))  | Paddle Inference |    CPU    |     4726.65|   4134.91|None|None     |      1.14      |77.37 | 71.62 |量化蒸馏训练 |
 
