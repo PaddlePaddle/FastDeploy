@@ -176,7 +176,7 @@ bool OpenVINOBackend::InitFromPaddle(const std::string& model_file,
   }
 
   ov::AnyMap properties;
-  if (option_.cpu_thread_num > 0) {
+  if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
   if (option_.device == "CPU") {
@@ -306,7 +306,7 @@ bool OpenVINOBackend::InitFromOnnx(const std::string& model_file,
   }
 
   ov::AnyMap properties;
-  if (option_.cpu_thread_num > 0) {
+  if (option_.device == "CPU" && option_.cpu_thread_num > 0) {
     properties["INFERENCE_NUM_THREADS"] = option_.cpu_thread_num;
   }
   if (option_.device == "CPU") {
