@@ -60,6 +60,7 @@ def test_detection_ppyoloe():
         assert diff_label_ids[scores > score_threshold].max(
         ) < 1e-04, "There's diff in label_ids."
 
+
 def test_detection_ppyoloe1():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
@@ -75,15 +76,18 @@ def test_detection_ppyoloe1():
 
     preprocessor = fd.vision.detection.PaddleDetPreprocessor(config_file)
     postprocessor = fd.vision.detection.PaddleDetPostprocessor()
-    
+
     rc.test_option.set_model_path(model_file, params_file)
-    runtime = fd.Runtime(rc.test_option);
+    runtime = fd.Runtime(rc.test_option)
 
     # compare diff
     im1 = cv2.imread("./resources/000000014439.jpg")
     for i in range(2):
         input_tensors = preprocessor.run([im1])
-        output_tensors = runtime.infer({"image": input_tensors[0], "scale_factor": input_tensors[1]})
+        output_tensors = runtime.infer({
+            "image": input_tensors[0],
+            "scale_factor": input_tensors[1]
+        })
         results = postprocessor.run(output_tensors)
         result = results[0]
         with open("resources/ppyoloe_baseline.pkl", "rb") as f:

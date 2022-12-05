@@ -15,7 +15,7 @@ import os
 import distutils.util
 
 import numpy as np
-import faster_tokenizer
+import fast_tokenizer
 from paddlenlp.transformers import AutoTokenizer
 import fastdeploy as fd
 
@@ -99,7 +99,7 @@ class ErnieForSequenceClassificationPredictor(object):
         else:
             option.use_gpu()
         if args.backend == 'paddle':
-            option.use_paddle_backend()
+            option.use_paddle_infer_backend()
         elif args.backend == 'onnx_runtime':
             option.use_ort_backend()
         elif args.backend == 'openvino':

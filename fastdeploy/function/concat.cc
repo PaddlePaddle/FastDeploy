@@ -14,26 +14,17 @@
 
 #include "fastdeploy/function/concat.h"
 
+#include "fastdeploy/utils/utils.h"
 #include <cstring>
 #include <limits>
 #include <set>
 #include <sstream>
-#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace function {
-std::string Str(const std::vector<int64_t>& shape) {
-  std::ostringstream oss;
-  oss << "[ " << shape[0];
-  for (int i = 1; i < shape.size(); ++i) {
-    oss << " ," << shape[i];
-  }
-  oss << " ]";
-  return oss.str();
-}
 
-std::vector<int64_t> ComputeAndCheckConcatOutputShape(
-    const std::vector<FDTensor>& input, int axis) {
+std::vector<int64_t>
+ComputeAndCheckConcatOutputShape(const std::vector<FDTensor>& input, int axis) {
   const size_t n = input.size();
   auto out_dims = input[0].shape;
   size_t in_zero_dims_size = out_dims.size();
@@ -58,8 +49,7 @@ std::vector<int64_t> ComputeAndCheckConcatOutputShape(
   return out_dims;
 }
 
-template <typename T>
-struct ConcatFunctor {
+template <typename T> struct ConcatFunctor {
   void operator()(const std::vector<FDTensor>& input, int axis,
                   FDTensor* output) {
     size_t num = input.size();
@@ -98,11 +88,13 @@ template <typename T>
 void ConcatKernel(const std::vector<FDTensor>& input, FDTensor* output,
                   int axis) {
   auto output_shape = ComputeAndCheckConcatOutputShape(input, axis);
-  output->Resize(output_shape, TypeToDataType<T>::dtype, output->name,
-                 input[0].device);
+  FDTensor output_tmp;
+  output_tmp.Resize(output_shape, TypeToDataType<T>::dtype, output->name,
+                    input[0].device);
 
   ConcatFunctor<T> functor;
-  functor(input, axis, output);
+  functor(input, axis, &output_tmp);
+  *output = std::move(output_tmp);
 }
 
 void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {

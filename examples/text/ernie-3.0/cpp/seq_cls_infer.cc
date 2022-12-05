@@ -18,11 +18,11 @@
 #include "fastdeploy/function/softmax.h"
 #include "fastdeploy/runtime.h"
 #include "fastdeploy/utils/path.h"
-#include "faster_tokenizer/tokenizers/ernie_faster_tokenizer.h"
+#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 #include "gflags/gflags.h"
 
 using namespace paddlenlp;
-using namespace faster_tokenizer::tokenizers_impl;
+using namespace fast_tokenizer::tokenizers_impl;
 #ifdef WIN32
 const char sep = '\\';
 #else
@@ -69,7 +69,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   if (FLAGS_backend == "onnx_runtime") {
     option->UseOrtBackend();
   } else if (FLAGS_backend == "paddle") {
-    option->UsePaddleBackend();
+    option->UsePaddleInferBackend();
   } else if (FLAGS_backend == "openvino") {
     option->UseOpenVINOBackend();
   } else if (FLAGS_backend == "tensorrt" ||
@@ -124,10 +124,10 @@ struct SeqClsResult {
 
 struct ErnieForSequenceClassificationPredictor {
   fastdeploy::Runtime runtime_;
-  ErnieFasterTokenizer tokenizer_;
+  ErnieFastTokenizer tokenizer_;
   ErnieForSequenceClassificationPredictor(
       const fastdeploy::RuntimeOption& option,
-      const ErnieFasterTokenizer& tokenizer)
+      const ErnieFastTokenizer& tokenizer)
       : tokenizer_(tokenizer) {
     runtime_.Init(option);
   }
@@ -135,8 +135,8 @@ struct ErnieForSequenceClassificationPredictor {
   bool Preprocess(const std::vector<std::string>& texts,
                   const std::vector<std::string>& texts_pair,
                   std::vector<fastdeploy::FDTensor>* inputs) {
-    std::vector<faster_tokenizer::core::Encoding> encodings;
-    std::vector<faster_tokenizer::core::EncodeInput> text_pair_input;
+    std::vector<fast_tokenizer::core::Encoding> encodings;
+    std::vector<fast_tokenizer::core::EncodeInput> text_pair_input;
     // 1. Tokenize the text or (text, text_pair)
     if (texts_pair.empty()) {
       for (int i = 0; i < texts.size(); ++i) {
@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
   }
-  ErnieFasterTokenizer tokenizer(vocab_path);
+  ErnieFastTokenizer tokenizer(vocab_path);
 
   ErnieForSequenceClassificationPredictor predictor(option, tokenizer);
 

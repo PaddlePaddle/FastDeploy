@@ -27,6 +27,7 @@ void BindOcr(pybind11::module& m);
 void BindTracking(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
 void BindHeadPose(pybind11::module& m);
+void BindSR(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -102,6 +103,7 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("label_map", &vision::SegmentationResult::label_map)
       .def_readwrite("score_map", &vision::SegmentationResult::score_map)
       .def_readwrite("shape", &vision::SegmentationResult::shape)
+      .def_readwrite("contain_score_map", &vision::SegmentationResult::contain_score_map)
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 
@@ -110,11 +112,12 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("alpha", &vision::MattingResult::alpha)
       .def_readwrite("foreground", &vision::MattingResult::foreground)
       .def_readwrite("shape", &vision::MattingResult::shape)
-      .def_readwrite("contain_foreground", &vision::MattingResult::shape)
+      .def_readwrite("contain_foreground", &vision::MattingResult::contain_foreground)
       .def("__repr__", &vision::MattingResult::Str)
       .def("__str__", &vision::MattingResult::Str);
 
-  pybind11::class_<vision::KeyPointDetectionResult>(m, "KeyPointDetectionResult")
+  pybind11::class_<vision::KeyPointDetectionResult>(m,
+                                                    "KeyPointDetectionResult")
       .def(pybind11::init())
       .def_readwrite("keypoints", &vision::KeyPointDetectionResult::keypoints)
       .def_readwrite("scores", &vision::KeyPointDetectionResult::scores)
@@ -128,8 +131,10 @@ void BindVision(pybind11::module& m) {
       .def("__repr__", &vision::HeadPoseResult::Str)
       .def("__str__", &vision::HeadPoseResult::Str);
 
-  m.def("enable_flycv", &vision::EnableFlyCV, "Enable image preprocessing by FlyCV.");
-  m.def("disable_flycv", &vision::DisableFlyCV, "Disable image preprocessing by FlyCV, change to use OpenCV.");
+  m.def("enable_flycv", &vision::EnableFlyCV,
+        "Enable image preprocessing by FlyCV.");
+  m.def("disable_flycv", &vision::DisableFlyCV,
+        "Disable image preprocessing by FlyCV, change to use OpenCV.");
 
   BindDetection(m);
   BindClassification(m);
@@ -142,6 +147,7 @@ void BindVision(pybind11::module& m) {
   BindTracking(m);
   BindKeyPointDetection(m);
   BindHeadPose(m);
+  BindSR(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif

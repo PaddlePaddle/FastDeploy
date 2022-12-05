@@ -72,10 +72,16 @@ def build_option(args):
         assert args.device.lower(
         ) == "gpu", "TensorRT backend require inference on device GPU."
         option.use_trt_backend()
+    elif args.backend.lower() == "pptrt":
+        assert args.device.lower(
+        ) == "gpu", "Paddle-TensorRT backend require inference on device GPU."
+        option.use_trt_backend()
+        option.enable_paddle_trt_collect_shape()
+        option.enable_paddle_to_trt()
     elif args.backend.lower() == "ort":
         option.use_ort_backend()
     elif args.backend.lower() == "paddle":
-        option.use_paddle_backend()
+        option.use_paddle_infer_backend()
     elif args.backend.lower() == "openvino":
         assert args.device.lower(
         ) == "cpu", "OpenVINO backend require inference on device CPU."
@@ -100,27 +106,30 @@ rec_label_file = args.rec_label_file
 # 用户也可根据自行需求分别配置
 runtime_option = build_option(args)
 
+# 当使用TRT时，分别给三个模型的runtime设置动态shape,并完成模型的创建.
+# 注意: 需要在检测模型创建完成后，再设置分类模型的动态输入并创建分类模型, 识别模型同理.
+# 如果用户想要自己改动检测模型的输入shape, 我们建议用户把检测模型的长和高设置为32的倍数.
 det_option = runtime_option
-cls_option = runtime_option
-rec_option = runtime_option
-
-# 当使用TRT时，分别给三个Runtime设置动态shape
-det_option.set_trt_input_shape("x", [1, 3, 50, 50], [1, 3, 640, 640],
-                               [1, 3, 1536, 1536])
-cls_option.set_trt_input_shape("x", [1, 3, 48, 10], [1, 3, 48, 320],
-                               [1, 3, 48, 1024])
-rec_option.set_trt_input_shape("x", [1, 3, 48, 10], [1, 3, 48, 320],
-                               [1, 3, 48, 2304])
-
+det_option.set_trt_input_shape("x", [1, 3, 64, 64], [1, 3, 640, 640],
+                               [1, 3, 960, 960])
 # 用户可以把TRT引擎文件保存至本地
 # det_option.set_trt_cache_file(args.det_model  + "/det_trt_cache.trt")
-# cls_option.set_trt_cache_file(args.cls_model  + "/cls_trt_cache.trt")
-# rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
-
 det_model = fd.vision.ocr.DBDetector(
     det_model_file, det_params_file, runtime_option=det_option)
+
+cls_option = runtime_option
+cls_option.set_trt_input_shape("x", [1, 3, 48, 10], [10, 3, 48, 320],
+                               [64, 3, 48, 1024])
+# 用户可以把TRT引擎文件保存至本地
+# cls_option.set_trt_cache_file(args.cls_model  + "/cls_trt_cache.trt")
 cls_model = fd.vision.ocr.Classifier(
     cls_model_file, cls_params_file, runtime_option=cls_option)
+
+rec_option = runtime_option
+rec_option.set_trt_input_shape("x", [1, 3, 48, 10], [10, 3, 48, 320],
+                               [64, 3, 48, 2304])
+# 用户可以把TRT引擎文件保存至本地
+# rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
 rec_model = fd.vision.ocr.Recognizer(
     rec_model_file, rec_params_file, rec_label_file, runtime_option=rec_option)
 
