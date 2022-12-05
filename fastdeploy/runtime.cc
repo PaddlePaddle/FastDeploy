@@ -242,7 +242,6 @@ void RuntimeOption::UseTimVX() {
 void RuntimeOption::UseCANN(){
   enable_cann = true;
   device = Device::CANN;
-  UseLiteBackend();
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
