@@ -4,7 +4,7 @@ FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工
 
 ## FastDeploy一键模型自动化压缩工具
 FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
-详细教程请见: [一键模型自动化压缩工具](../../../../../tools/auto_compression/)
+详细教程请见: [一键模型自动化压缩工具](../../../../../tools/common_tools/auto_compression/)
 注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。
 
 ## 下载量化完成的PaddleClas模型
