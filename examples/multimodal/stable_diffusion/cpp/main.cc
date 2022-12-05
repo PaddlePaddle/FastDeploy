@@ -95,6 +95,13 @@ int main() {
   bool use_trt_backend = true;
   bool use_fp16 = true;
   int batch_size = 1;
+  int num_images_per_prompt = 1;
+  int num_inference_steps = 50;
+
+  int height = 512;
+  int width = 512;
+  constexpr int unet_inpaint_channels = 9;
+  constexpr int latents_channels = 4;
 
   // 1. Init scheduler
   std::unique_ptr<fastdeploy::Scheduler> dpm(
@@ -130,9 +137,9 @@ int main() {
   std::unordered_map<std::string, std::vector<std::vector<int>>>
       vae_encoder_dynamic_shape = {
           {"sample",
-           {/* min_shape */ {1, 3, 512, 512},
-            /* opt_shape */ {2 * batch_size, 3, 512, 512},
-            /* max_shape */ {2 * batch_size, 3, 512, 512}}}};
+           {/* min_shape */ {1, 3, height, width},
+            /* opt_shape */ {2 * batch_size, 3, height, width},
+            /* max_shape */ {2 * batch_size, 3, height, width}}}};
   std::string vae_encoder_model_dir = model_dir + sep + "vae_encoder";
   std::string vae_encoder_model_file =
       vae_encoder_model_dir + sep + "inference.pdmodel";
@@ -146,9 +153,11 @@ int main() {
   std::unordered_map<std::string, std::vector<std::vector<int>>>
       vae_decoder_dynamic_shape = {
           {"latent_sample",
-           {/* min_shape */ {1, 4, 64, 64},
-            /* opt_shape */ {2 * batch_size, 4, 64, 64},
-            /* max_shape */ {2 * batch_size, 4, 64, 64}}}};
+           {/* min_shape */ {1, latents_channels, height / 8, width / 8},
+            /* opt_shape */
+            {2 * batch_size, latents_channels, height / 8, width / 8},
+            /* max_shape */
+            {2 * batch_size, latents_channels, height / 8, width / 8}}}};
   std::string vae_decoder_model_dir = model_dir + sep + "vae_decoder";
   std::string vae_decoder_model_file =
       vae_decoder_model_dir + sep + "inference.pdmodel";
@@ -159,13 +168,14 @@ int main() {
                     use_trt_backend, use_fp16, vae_decoder_dynamic_shape);
 
   // 5. Init unet runtime
-  constexpr int unet_inpaint_channels = 9;
   std::unordered_map<std::string, std::vector<std::vector<int>>>
       unet_dynamic_shape = {
           {"sample",
-           {/* min_shape */ {1, unet_inpaint_channels, 64, 64},
-            /* opt_shape */ {2 * batch_size, unet_inpaint_channels, 64, 64},
-            /* max_shape */ {2 * batch_size, unet_inpaint_channels, 64, 64}}},
+           {/* min_shape */ {1, unet_inpaint_channels, height / 8, width / 8},
+            /* opt_shape */
+            {2 * batch_size, unet_inpaint_channels, height / 8, width / 8},
+            /* max_shape */
+            {2 * batch_size, unet_inpaint_channels, height / 8, width / 8}}},
           {"timesteps", {{1}, {1}, {1}}},
           {"encoder_hidden_states",
            {{1, max_length, 768},
@@ -201,12 +211,12 @@ int main() {
   fastdeploy::TimeCounter tc;
   tc.Start();
   pipe.Predict(prompts, image, mask_image, &outputs,
-               /* height = */ 512,
-               /* width = */ 512,
-               /* num_inference_steps = */ 50,
+               /* height = */ height,
+               /* width = */ width,
+               /* num_inference_steps = */ num_inference_steps,
                /* guidance_scale = */ 7.5,
                /* negative_prompt = */ {},
-               /* num_images_per_prompt = */ 1,
+               /* num_images_per_prompt = */ num_images_per_prompt,
                /* eta = */ 1.0,
                /* max_length = */ max_length,
                /* latents = */ nullptr,
