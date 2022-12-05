@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dpm_solver_multistep_scheduler.h"
+#include "./dpm_solver_multistep_scheduler.h"
+#include "./pipeline_stable_diffusion_inpaint.h"
 #include "fastdeploy/utils/perf.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
-#include "pipeline_stable_diffusion_inpaint.h"
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -68,7 +68,7 @@ std::unique_ptr<fastdeploy::Runtime> CreateRuntime(
       runtime_option.SetTrtInputShape(it->first, min_shape, opt_shape,
                                       max_shape);
     }
-    runtime_option.SetTrtCacheFile("");
+    runtime_option.SetTrtCacheFile("paddle.trt");
     runtime_option.EnablePaddleTrtCollectShape();
     runtime_option.DisablePaddleTrtOPs(disable_paddle_trt_ops);
     if (use_fp16) {
@@ -183,9 +183,12 @@ int main() {
   paddlenlp::fast_tokenizer::tokenizers_impl::ClipFastTokenizer tokenizer(
       "clip/vocab.json", "clip/merges.txt", /* max_length = */ max_length);
   fastdeploy::StableDiffusionInpaintPipeline pipe(
-      std::move(vae_encoder_runtime), std::move(vae_decoder_runtime),
-      std::move(text_encoder_runtime), std::move(unet_runtime),
-      /* scheduler = */ std::move(dpm), tokenizer);
+      /* vae_encoder = */ std::move(vae_encoder_runtime),
+      /* vae_decoder = */ std::move(vae_decoder_runtime),
+      /* text_encoder = */ std::move(text_encoder_runtime),
+      /* unet = */ std::move(unet_runtime),
+      /* scheduler = */ std::move(dpm),
+      /* tokenizer = */ tokenizer);
 
   // 7. Read images
   auto image = cv::imread("overture-creations.png");
@@ -197,8 +200,19 @@ int main() {
   std::vector<fastdeploy::FDTensor> outputs;
   fastdeploy::TimeCounter tc;
   tc.Start();
-  pipe.Predict(prompts, image, mask_image, &outputs, /* height = */ 512,
-               /* width = */ 512, /* num_inference_steps = */ 50);
+  pipe.Predict(prompts, image, mask_image, &outputs,
+               /* height = */ 512,
+               /* width = */ 512,
+               /* num_inference_steps = */ 50,
+               /* guidance_scale = */ 7.5,
+               /* negative_prompt = */ {},
+               /* num_images_per_prompt = */ 1,
+               /* eta = */ 1.0,
+               /* max_length = */ max_length,
+               /* latents = */ nullptr,
+               /* output_cv_mat = */ true,
+               /* callback = */ nullptr,
+               /* callback_steps = */ 1);
   tc.End();
   tc.PrintInfo();
   fastdeploy::vision::FDMat mat = fastdeploy::vision::FDMat::Create(outputs[0]);
