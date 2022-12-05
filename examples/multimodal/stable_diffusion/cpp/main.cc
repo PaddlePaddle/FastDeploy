@@ -205,6 +205,14 @@ int main() {
   auto mask_image = cv::imread("overture-creations-mask.png");
 
   // 8. Predict
+  /*
+   * One may need to pass the initial noise to predict api.
+   * There's an example:
+   * std::vector<float> latents_data = {xxxx};
+   * fastdeploy::FDTensor latents;
+   * latents.SetExternalData({batch_size * num_images_per_prompt, latents_channels, height / 8, width / 8},fastdeploy::FDDataType::FP32, latents_data.data());
+   * pipe.Predict(..., /* latents = *\/ &latents, ....);
+   */
   std::vector<std::string> prompts = {
       "Face of a yellow cat, high resolution, sitting on a park bench"};
   std::vector<fastdeploy::FDTensor> outputs;
