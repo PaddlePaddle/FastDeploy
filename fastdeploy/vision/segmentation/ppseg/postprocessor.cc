@@ -280,13 +280,17 @@ bool PaddleSegPostprocessor::Run(
 
     FDMat mat;
     std::vector<uint8_t> uint8_result_buffer;
+    // Resize interpration 
+    int interpolation = cv::INTER_LINEAR;
     if (is_resized) {
       if (infer_results_dtype == FDDataType::INT64 ||
           infer_results_dtype == FDDataType::INT32 ){
-            FDTensorCast2Uint8(&infer_result, infer_chw, &uint8_result_buffer);
-          }
+        FDTensorCast2Uint8(&infer_result, infer_chw, &uint8_result_buffer);
+        // label map resize with nearest interpolation
+        interpolation = cv::INTER_NEAREST;
+      }
       mat = std::move(Mat::Create(infer_result, ProcLib::OPENCV));
-      Resize::Run(&mat, input_width, input_height, -1.0f, -1.0f, 1, false, ProcLib::OPENCV);
+      Resize::Run(&mat, input_width, input_height, -1.0f, -1.0f, interpolation, false, ProcLib::OPENCV);
       mat.ShareWithTensor(&infer_result);
     } 
     result->shape = infer_result.shape;
