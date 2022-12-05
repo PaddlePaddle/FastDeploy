@@ -33,7 +33,7 @@ cp -r cityscapes_demo.png images
 4. 编译部署示例，可使入如下命令：
 ```bash
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../fastdeploy-tmivx/timvx.cmake -DFASTDEPLOY_INSTALL_DIR=fastdeploy-tmivx ..
+cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-tmivx/timvx.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-tmivx ..
 make -j8
 make install
 # 成功编译之后，会生成 install 文件夹，里面有一个运行 demo 和部署所需的库
@@ -49,6 +49,6 @@ bash run_with_adb.sh infer_demo ppliteseg cityscapes_demo.png $DEVICE_ID
 
 部署成功后运行结果如下：
 
-<img width="640" src="https://user-images.githubusercontent.com/30516196/204698260-31b2428a-f66f-42aa-9efd-8f472953c568.png">
+<img width="640" src="https://user-images.githubusercontent.com/30516196/205544166-9b2719ff-ed82-4908-b90a-095de47392e1.png">
 
 需要特别注意的是，在 RV1126 上部署的模型需要是量化后的模型，模型的量化请参考：[模型量化](../../../../../../docs/cn/quantize.md)

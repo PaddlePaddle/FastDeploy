@@ -34,7 +34,7 @@ cp -r 000000014439.jpg images
 4. 编译部署示例，可使入如下命令：
 ```bash
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../fastdeploy-tmivx/timvx.cmake -DFASTDEPLOY_INSTALL_DIR=fastdeploy-tmivx ..
+cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-tmivx/timvx.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-tmivx ..
 make -j8
 make install
 # 成功编译之后，会生成 install 文件夹，里面有一个运行 demo 和部署所需的库

@@ -44,6 +44,9 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
 
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -52,10 +55,6 @@ int main(int argc, char* argv[]) {
                  "path/to/image "
                  "run_option, "
                  "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run on cpu with ORT "
-                 "backend; 1: run "
-                 "on gpu with TensorRT backend. "
               << std::endl;
     return -1;
   }

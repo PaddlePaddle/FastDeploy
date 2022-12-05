@@ -42,7 +42,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -52,12 +52,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Usage: infer_demo path/to/quant_model "
                  "path/to/image "
                  "run_option, "
-                 "e.g ./infer_demo ./yolov5s_quant ./000000014439.jpg 0"
-              << std::endl;
-    std::cout << "The data type of run_option is int, 0: run on cpu with ORT "
-                 "backend; 1: run "
-                 "on cpu with Paddle backend ; 2: run with gpu and use "
-                 "TensorRT backend."
+                 "e.g ./infer_demo ./yolov5s_quant ./000000014439.jpg"
               << std::endl;
     return -1;
   }
