@@ -24,9 +24,9 @@
             android:layout_marginTop="120dp"
             android:background="@color/colorStartBtn"
             android:gravity="center"
-            android:text="FastDeploy-Segmentation"
+            android:text="Segmentation"
             android:textColor="@color/colorTextWrite"
-            android:textSize="25sp" />
+            android:textSize="30sp" />
 
         <TextView
             android:id="@+id/baidu"
@@ -35,7 +35,7 @@
             android:layout_below="@id/model_text"
             android:layout_centerHorizontal="true"
             android:layout_marginTop="20dp"
-            android:text="百度"
+            android:text="百度FastDeploy"
             android:textColor="@color/colorTextWrite"
             android:textSize="22sp" />
 
@@ -45,9 +45,9 @@
             android:layout_below="@id/baidu"
             android:layout_centerHorizontal="true"
             android:layout_marginTop="10dp"
-            android:text="Power by EasyEdge"
+            android:text="Powered by EasyEdge"
             android:textColor="@color/colorTextWrite"
-            android:textSize="22sp" />
+            android:textSize="18sp" />
 
         <Button
 
@@ -56,14 +56,22 @@
             android:layout_height="50dp"
             android:layout_alignParentBottom="true"
             android:layout_centerHorizontal="true"
-            android:layout_marginBottom="50dp"
+            android:layout_marginBottom="70dp"
             android:background="@drawable/round_corner_btn"
             android:text="@string/start_ui_activity"
             android:textColor="@color/colorTextWrite"
             android:textSize="22sp"
             android:onClick="startActivity"/>
 
-
+        <ImageView
+            android:id="@+id/logo"
+            android:layout_width="95dp"
+            android:layout_height="30dp"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/paddle_logo"
+            android:scaleType="centerCrop" />
     </RelativeLayout>
 </FrameLayout>
 

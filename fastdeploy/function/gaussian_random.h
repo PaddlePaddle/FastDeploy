@@ -17,18 +17,20 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
+namespace function {
 
-class Scheduler {
- public:
-  virtual void SetTimesteps(int num_inference_steps) = 0;
-  virtual FDTensor GetTimesteps() = 0;
-  virtual void Step(const FDTensor& model_output, int timestep,
-                    const FDTensor& sample, FDTensor* prev_sample) = 0;
-  virtual void ScaleModelInput(const FDTensor& sample, FDTensor* out,
-                               const std::vector<FDTensor>& timesteps = {}) = 0;
-  virtual void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
-                        const FDTensor& timesteps, FDTensor* out) = 0;
-  virtual float InitNoiseSigma() = 0;
-};
+/** Output is obtained by gathering entries of axis of x indexed by index and
+ *  concatenate them together.
+    @param shape The output tensor shape.
+    @param out the output tensor.
+    @param mean mean value of gaussian random
+    @param std standard value of gaussian random
+    @param seed The seed of random generator.
+    @param dtype The data type of the output Tensor.
+*/
+void GaussianRandom(const std::vector<int64_t>& shape, FDTensor* out,
+                    FDDataType dtype = FDDataType::FP32, float mean = 0.0f,
+                    float std = 1.0f, int seed = 0);
 
+}  // namespace function
 }  // namespace fastdeploy

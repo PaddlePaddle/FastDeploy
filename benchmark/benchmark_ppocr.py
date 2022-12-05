@@ -24,7 +24,21 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", required=True, help="Path of PaddleDetection model.")
+        "--model_dir", required=True, help="Model dir of PPOCR.")
+    parser.add_argument(
+        "--det_model", required=True, help="Path of Detection model of PPOCR.")
+    parser.add_argument(
+        "--cls_model",
+        required=True,
+        help="Path of Classification model of PPOCR.")
+    parser.add_argument(
+        "--rec_model",
+        required=True,
+        help="Path of Recognization model of PPOCR.")
+    parser.add_argument(
+        "--rec_label_file",
+        required=True,
+        help="Path of Recognization model of PPOCR.")
     parser.add_argument(
         "--image", type=str, required=False, help="Path of test image file.")
     parser.add_argument(
@@ -75,17 +89,6 @@ def build_option(args):
             option.use_ort_backend()
         elif backend == "paddle":
             option.use_paddle_backend()
-        elif backend == "ov":
-            option.use_openvino_backend()
-            # Using GPU and CPU heterogeneous execution mode
-            option.set_openvino_device("HETERO:GPU,CPU")
-            # change name and shape for models
-            option.set_openvino_shape_info({
-                "image": [1, 3, 320, 320],
-                "scale_factor": [1, 2]
-            })
-            # Set CPU up operator
-            option.set_openvino_cpu_operators(["MulticlassNms"])
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             if backend == "paddle_trt":
@@ -146,9 +149,22 @@ if __name__ == '__main__':
 
     args = parse_arguments()
     option = build_option(args)
-    model_file = os.path.join(args.model, "model.pdmodel")
-    params_file = os.path.join(args.model, "model.pdiparams")
-    config_file = os.path.join(args.model, "infer_cfg.yml")
+    # Detection Model
+    det_model_file = os.path.join(args.model_dir, args.det_model,
+                                  "inference.pdmodel")
+    det_params_file = os.path.join(args.model_dir, args.det_model,
+                                   "inference.pdiparams")
+    # Classification Model
+    cls_model_file = os.path.join(args.model_dir, args.cls_model,
+                                  "inference.pdmodel")
+    cls_params_file = os.path.join(args.model_dir, args.cls_model,
+                                   "inference.pdiparams")
+    # Recognition Model
+    rec_model_file = os.path.join(args.model_dir, args.rec_model,
+                                  "inference.pdmodel")
+    rec_params_file = os.path.join(args.model_dir, args.rec_model,
+                                   "inference.pdiparams")
+    rec_label_file = os.path.join(args.model_dir, args.rec_label_file)
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
@@ -157,39 +173,69 @@ if __name__ == '__main__':
     gpu_mem = list()
     gpu_util = list()
     if args.device == "cpu":
-        file_path = args.model + "_model_" + args.backend + "_" + \
+        file_path = args.model_dir + "_model_" + args.backend + "_" + \
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
         if args.enable_trt_fp16:
-            file_path = args.model + "_model_" + args.backend + "_fp16_" + args.device + ".txt"
+            file_path = args.model_dir + "_model_" + args.backend + "_fp16_" + args.device + ".txt"
         else:
-            file_path = args.model + "_model_" + args.backend + "_" + args.device + ".txt"
+            file_path = args.model_dir + "_model_" + args.backend + "_" + args.device + ".txt"
     f = open(file_path, "w")
     f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     try:
-        if "ppyoloe" in args.model:
-            model = fd.vision.detection.PPYOLOE(
-                model_file, params_file, config_file, runtime_option=option)
-        elif "picodet" in args.model:
-            model = fd.vision.detection.PicoDet(
-                model_file, params_file, config_file, runtime_option=option)
-        elif "yolox" in args.model:
-            model = fd.vision.detection.PaddleYOLOX(
-                model_file, params_file, config_file, runtime_option=option)
-        elif "yolov3" in args.model:
-            model = fd.vision.detection.YOLOv3(
-                model_file, params_file, config_file, runtime_option=option)
-        elif "ppyolo_r50vd_dcn_1x_coco" in args.model or "ppyolov2_r101vd_dcn_365e_coco" in args.model:
-            model = fd.vision.detection.PPYOLO(
-                model_file, params_file, config_file, runtime_option=option)
-        elif "faster_rcnn" in args.model:
-            model = fd.vision.detection.FasterRCNN(
-                model_file, params_file, config_file, runtime_option=option)
+        rec_option = option
+        if "OCRv2" in args.model_dir:
+            det_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                det_option.set_trt_input_shape(
+                    "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
+            det_model = fd.vision.ocr.DBDetector(
+                det_model_file, det_params_file, runtime_option=det_option)
+            cls_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                cls_option.set_trt_input_shape(
+                    "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
+            cls_model = fd.vision.ocr.Classifier(
+                cls_model_file, cls_params_file, runtime_option=cls_option)
+            rec_option = option
+            if args.backend in ["trt", "paddle_trt"]:
+                rec_option.set_trt_input_shape(
+                    "x", [1, 3, 32, 10], [10, 3, 32, 320], [32, 3, 32, 2304])
+            rec_model = fd.vision.ocr.Recognizer(
+                rec_model_file,
+                rec_params_file,
+                rec_label_file,
+                runtime_option=rec_option)
+            model = fd.vision.ocr.PPOCRv2(
+                det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+        elif "OCRv3" in args.model_dir:
+            if args.backend in ["trt", "paddle_trt"]:
+                det_option.set_trt_input_shape(
+                    "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
+            det_model = fd.vision.ocr.DBDetector(
+                det_model_file, det_params_file, runtime_option=det_option)
+            if args.backend in ["trt", "paddle_trt"]:
+                cls_option.set_trt_input_shape(
+                    "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
+            cls_model = fd.vision.ocr.Classifier(
+                cls_model_file, cls_params_file, runtime_option=cls_option)
+            if args.backend in ["trt", "paddle_trt"]:
+                rec_option.set_trt_input_shape(
+                    "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 2304])
+            rec_model = fd.vision.ocr.Recognizer(
+                rec_model_file,
+                rec_params_file,
+                rec_label_file,
+                runtime_option=rec_option)
+            model = fd.vision.ocr.PPOCRv3(
+                det_model=det_model, cls_model=cls_model, rec_model=rec_model)
         else:
-            raise Exception("model {} not support now in ppdet series".format(
-                args.model))
-        model.enable_record_time_of_runtime()
+            raise Exception("model {} not support now in ppocr series".format(
+                args.model_dir))
+        det_model.enable_record_time_of_runtime()
+        cls_model.enable_record_time_of_runtime()
+        rec_model.enable_record_time_of_runtime()
         im_ori = cv2.imread(args.image)
         for i in range(args.iter_num):
             im = im_ori
@@ -202,7 +248,9 @@ if __name__ == '__main__':
                 cpu_mem.append(cm)
                 gpu_mem.append(gm)
 
-        runtime_statis = model.print_statis_info_of_runtime()
+        runtime_statis_det = det_model.print_statis_info_of_runtime()
+        runtime_statis_cls = cls_model.print_statis_info_of_runtime()
+        runtime_statis_rec = rec_model.print_statis_info_of_runtime()
 
         warmup_iter = args.iter_num // 5
         end2end_statis_repeat = end2end_statis[warmup_iter:]
@@ -212,7 +260,9 @@ if __name__ == '__main__':
             gpu_util_repeat = gpu_util[warmup_iter:]
 
         dump_result = dict()
-        dump_result["runtime"] = runtime_statis["avg_time"] * 1000
+        dump_result["runtime"] = (
+            runtime_statis_det["avg_time"] + runtime_statis_cls["avg_time"] +
+            runtime_statis_rec["avg_time"]) * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
         if enable_collect_memory_info:
             dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
