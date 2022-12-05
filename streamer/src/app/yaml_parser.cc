@@ -1,6 +1,6 @@
 #include "app/yaml_parser.h"
 #include "gstreamer/source_bin.h"
-#include "fastdeploy/utils/utils.h"
+#include "gstreamer/utils.h"
 
 namespace fastdeploy {
 namespace streamer {
@@ -44,7 +44,7 @@ bool YamlParser::BuildPipelineFromConfig(GstElement* pipeline) {
     FDASSERT(AddElement(elem_name, elem.second), "Failed to add element: %s",
              elem_name.c_str());
   }
-  // LinkElements();
+  LinkElements();
   return true;
 }
 
@@ -59,7 +59,7 @@ bool YamlParser::AddNvUriSrcBins(const YAML::Node& properties) {
       return false;
     }
     gst_bin_add(GST_BIN(pipeline_), source_bin);
-    source_bins.push_back(source_bin);
+    source_bins_.push_back(source_bin);
   }
   return true;
 }
@@ -105,8 +105,43 @@ bool YamlParser::AddElement(const std::string& name, const YAML::Node& propertie
   for (auto it = properties.begin(); it != properties.end(); it++) {
     SetProperty(elem, it->first, it->second);
   }
-  
-  if (name == "nvstreammux") {
+  gst_bin_add(GST_BIN(pipeline_), elem);
+  unlinked_elements_.push_back(elem);
+  return true;
+}
+
+void YamlParser::LinkElements() {
+  std::string elem_name = GetElementName(unlinked_elements_[0]);
+  if (elem_name.rfind("nvstreammux", 0) == 0) {
+    FDASSERT(LinkSourePads(unlinked_elements_[0]),
+             "Failed to link source pads");
+  }
+  for (size_t i = 1; i < unlinked_elements_.size(); i++) {
+    FDASSERT(
+        gst_element_link(unlinked_elements_[i - 1], unlinked_elements_[i]),
+        "Failed to link elements.");
+  }
+}
+
+bool YamlParser::LinkSourePads(GstElement* streammux) {
+  for (size_t i = 0; i < source_bins_.size(); i++) {
+    std::string pad_name = "sink_" + std::to_string(i);
+    GstPad* sinkpad = gst_element_get_request_pad(streammux, pad_name.c_str());
+    if (!sinkpad) {
+      g_printerr("Streammux request sink pad failed. Exiting.\n");
+      return false;
+    }
+    GstPad* srcpad = gst_element_get_static_pad(source_bins_[i], "src");
+    if (!srcpad) {
+      g_printerr("Failed to get src pad of source bin. Exiting.\n");
+      return false;
+    }
+    if (gst_pad_link(srcpad, sinkpad) != GST_PAD_LINK_OK) {
+      g_printerr("Failed to link source bin to stream muxer. Exiting.\n");
+      return false;
+    }
+    gst_object_unref(srcpad);
+    gst_object_unref(sinkpad);
   }
   return true;
 }

@@ -13,7 +13,9 @@
 // limitations under the License.
 #pragma once
 
+#include "app/base_app.h"
 #include "fastdeploy/utils/utils.h"
+#include <memory>
 
 namespace fastdeploy {
 namespace streamer {
@@ -32,7 +34,7 @@ class FASTDEPLOY_DECL FDStreamer {
   bool Run();
 
  private:
-  void* app;
+  std::unique_ptr<BaseApp> app_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

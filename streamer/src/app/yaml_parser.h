@@ -34,7 +34,6 @@ class YamlParser {
 
   bool BuildPipelineFromConfig(GstElement* pipeline);
 
-  GstElement* pipeline;
   std::vector<GstElement*> source_bins;
 
  private:
@@ -42,11 +41,15 @@ class YamlParser {
   void SetProperty(GstElement* elem, const YAML::Node& name,
                    const YAML::Node& value);
   bool AddElement(const std::string& name, const YAML::Node& properties);
+  void LinkElements();
+  bool LinkSourePads(GstElement* streammux);
 
   AppConfig app_config_;
   std::string config_file_;
-  GstElement* pipeline_;
   YAML::Node yaml_config_;
+  GstElement* pipeline_;
+  std::vector<GstElement*> source_bins_;
+  std::vector<GstElement*> unlinked_elements_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

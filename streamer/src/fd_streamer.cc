@@ -15,6 +15,7 @@
 #include "fd_streamer.h"
 #include "app/yaml_parser.h"
 #include "app/video_analytics.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace streamer {
@@ -24,31 +25,16 @@ bool FDStreamer::Init(const std::string& config_file) {
   YamlParser parser(config_file);
   parser.ParseAppConfg(app_config);
   if (app_config.type == AppType::VIDEO_ANALYTICS) {
-    auto p = new VideoAnalyticsApp();
-    p->Init();
-    parser.BuildPipelineFromConfig(p->GetPipeline());
-    app = static_cast<void*>(p);
+    app_ = utils::make_unique<VideoAnalyticsApp>();
+    auto casted_app = dynamic_cast<VideoAnalyticsApp*>(app_.get());
+    casted_app->Init();
+    parser.BuildPipelineFromConfig(casted_app->GetPipeline());
   }
   return true;
 }
 
 bool FDStreamer::Run() {
-  // /* Set the pipeline to "playing" state */
-  // // g_print("Now playing: %s\n", argv[1]);
-  // gst_element_set_state(pipeline_, GST_STATE_PLAYING);
-
-  // /* Wait till pipeline encounters an error or EOS */
-  // g_print("Running...\n");
-  // g_main_loop_run(loop_);
-
-  // /* Out of the main loop, clean up nicely */
-  // g_print("Returned, stopping playback\n");
-  // gst_element_set_state(pipeline_, GST_STATE_NULL);
-  // g_print("Deleting pipeline\n");
-  // gst_object_unref(GST_OBJECT(pipeline_));
-  // g_source_remove(bus_watch_id_);
-  // g_main_loop_unref(loop_);
-  return true;
+  return app_->Run();
 }
 
 }  // namespace streamer

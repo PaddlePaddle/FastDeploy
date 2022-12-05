@@ -11,36 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#pragma once
 
-#include "app/base_app.h"
-#include "fastdeploy/utils/utils.h"
-
-#include <gst/gst.h>
+#include "gstreamer/utils.h"
 
 namespace fastdeploy {
 namespace streamer {
-
-/*! @brief VideoAnalyticsApp class
- */
-class FASTDEPLOY_DECL VideoAnalyticsApp : public BaseApp {
- public:
-  /** \brief Init app
-   *
-   * \return true if the app is initialized, otherwise false
-   */
-  bool Init();
-
-  bool Run();
-
-  GstElement* GetPipeline() {
-    return pipeline_;
-  }
-
- private:
-  GMainLoop* loop_;
-  GstElement* pipeline_;
-  guint bus_watch_id_;
-};
+std::string GetElementName(GstElement* elem) {
+  gchar* name = gst_element_get_name(elem);
+  std::string res(name);
+  g_free(name);
+  return res;
+}
 }  // namespace streamer
 }  // namespace fastdeploy

@@ -13,7 +13,6 @@
 // limitations under the License.
 #pragma once
 
-#include "app/base_app.h"
 #include "fastdeploy/utils/utils.h"
 
 #include <gst/gst.h>
@@ -21,26 +20,16 @@
 namespace fastdeploy {
 namespace streamer {
 
-/*! @brief VideoAnalyticsApp class
+/*! @brief FDStreamer class, user inferfaces for FastDeploy Streamer
  */
-class FASTDEPLOY_DECL VideoAnalyticsApp : public BaseApp {
+class BaseApp {
  public:
-  /** \brief Init app
-   *
-   * \return true if the app is initialized, otherwise false
-   */
-  bool Init();
+  BaseApp() {}
+  virtual ~BaseApp() = default;
 
-  bool Run();
+  virtual bool Init() = 0;
 
-  GstElement* GetPipeline() {
-    return pipeline_;
-  }
-
- private:
-  GMainLoop* loop_;
-  GstElement* pipeline_;
-  guint bus_watch_id_;
+  virtual bool Run() = 0;
 };
 }  // namespace streamer
 }  // namespace fastdeploy
