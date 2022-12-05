@@ -75,6 +75,11 @@ def build_option(args):
             option.use_ort_backend()
         elif backend == "paddle":
             option.use_paddle_backend()
+        elif backend == "ov":
+            option.use_openvino_backend()
+            option.set_openvino_device(name="GPU")
+            # change name and shape for models
+            option.set_openvino_shape_info({"images": [1, 3, 640, 640]})
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             if backend == "paddle_trt":

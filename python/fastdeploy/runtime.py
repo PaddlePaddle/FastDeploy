@@ -440,6 +440,16 @@ class RuntimeOption:
         """
         return self._option.disable_paddle_trt_collect_shape()
 
+    def delete_paddle_backend_pass(self, pass_name):
+        """Delete pass by name in paddle backend
+        """
+        return self._option.delete_paddle_backend_pass(pass_name)
+
+    def disable_paddle_trt_ops(self, ops):
+        """Disable some ops in paddle trt backend
+        """
+        return self._option.disable_paddle_trt_ops(ops)
+
     def use_ipu(self,
                 device_num=1,
                 micro_batch_size=1,

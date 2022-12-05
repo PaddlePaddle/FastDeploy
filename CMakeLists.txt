@@ -433,13 +433,6 @@ if(ENABLE_VISION)
   endif()
 endif()
 
-if(ANDROID OR IOS)
-  if(ENABLE_TEXT)
-    set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
-    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support fast_tokenizer with Android/IOS now.")
-  endif()
-endif()
-
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
