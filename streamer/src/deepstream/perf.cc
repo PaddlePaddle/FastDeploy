@@ -27,11 +27,15 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "gstnvdsmeta.h"
-#include "deepstream_perf.h"
+#include "deepstream/perf.h"
+#include <iostream>
 
-#define TIMESPEC_DIFF_USEC(timespec1, timespec2) \
-    (timespec1.tv_sec - timespec2.tv_sec) * 1000000.0 + \
-    (timespec1.tv_nsec - timespec2.tv_nsec) / 1000.0
+// #define TIMESPEC_DIFF_USEC(timespec1, timespec2) \
+//     (timespec1.tv_sec - timespec2.tv_sec) * 1000000.0 + \
+//     (timespec1.tv_nsec - timespec2.tv_nsec) / 1000.0
+
+namespace fastdeploy {
+namespace streamer {
 
 /**
  * Buffer probe function on sink element.
@@ -40,6 +44,7 @@ static GstPadProbeReturn
 sink_bin_buf_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
 {
   NvDsAppPerfStructInt *str = (NvDsAppPerfStructInt *) u_data;
+
   NvDsBatchMeta *batch_meta =
       gst_buffer_get_nvds_batch_meta (GST_BUFFER (info->data));
 
@@ -162,6 +167,7 @@ resume_perf_measurement (NvDsAppPerfStructInt * str)
   guint i;
 
   g_mutex_lock (&str->struct_lock);
+
   if (!str->stop) {
     g_mutex_unlock (&str->struct_lock);
     return;
@@ -188,15 +194,15 @@ enable_perf_measurement (NvDsAppPerfStructInt * str,
     guint num_surfaces_per_frame,
     perf_callback callback)
 {
-  guint i;
-
   if (!callback) {
     return FALSE;
   }
 
+  g_mutex_init(&str->struct_lock);
+  str->perf_measurement_timeout_id = 0;
   str->num_instances = num_sources;
 
-  str->measurement_interval_ms = interval_sec * 1000;
+  str->measurement_interval_ms = interval_sec * (gulong)1000;
   str->callback = callback;
   str->stop = TRUE;
 
@@ -206,8 +212,17 @@ enable_perf_measurement (NvDsAppPerfStructInt * str,
       str->dewarper_surfaces_per_frame = 1;
   }
 
-  for (i = 0; i < num_sources; i++) {
+  for (int i = 0; i < num_sources; i++) {
     str->instance_str[i].buffer_cnt = 0;
+    str->instance_str[i].total_buffer_cnt = 0;
+    str->instance_str[i].total_fps_time.tv_sec = 0;
+    str->instance_str[i].total_fps_time.tv_usec = 0;
+    str->instance_str[i].start_fps_time.tv_sec = 0;
+    str->instance_str[i].start_fps_time.tv_usec = 0;
+    str->instance_str[i].last_fps_time.tv_sec = 0;
+    str->instance_str[i].last_fps_time.tv_usec = 0;
+    str->instance_str[i].last_sample_fps_time.tv_sec = 0;
+    str->instance_str[i].last_sample_fps_time.tv_usec = 0;
   }
   str->sink_bin_pad = sink_bin_pad;
   str->fps_measure_probe_id =
@@ -218,3 +233,7 @@ enable_perf_measurement (NvDsAppPerfStructInt * str,
 
   return TRUE;
 }
+
+}  // namespace streamer
+}  // namespace fastdeploy
+

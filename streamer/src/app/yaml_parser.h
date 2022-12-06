@@ -2,21 +2,11 @@
 #pragma once
 
 #include "yaml-cpp/yaml.h"
-
+#include "app/base_app.h"
 #include <gst/gst.h>
 
 namespace fastdeploy {
 namespace streamer {
-
-enum AppType {
-  VIDEO_ANALYTICS,  ///< Video analytics app
-};
-
-struct AppConfig {
-  AppType type;
-  bool enable_perf_measurement = false;
-  int perf_interval_sec = 5;
-};
 
 /*! @brief YAML Parser class, to parse stream configs from yaml file
  */

@@ -25,11 +25,12 @@ bool FDStreamer::Init(const std::string& config_file) {
   YamlParser parser(config_file);
   parser.ParseAppConfg(app_config);
   if (app_config.type == AppType::VIDEO_ANALYTICS) {
-    app_ = utils::make_unique<VideoAnalyticsApp>();
+    app_ = utils::make_unique<VideoAnalyticsApp>(app_config);
     auto casted_app = dynamic_cast<VideoAnalyticsApp*>(app_.get());
     casted_app->Init();
     parser.BuildPipelineFromConfig(casted_app->GetPipeline());
   }
+  app_->SetupPerfMeasurement();
   return true;
 }
 

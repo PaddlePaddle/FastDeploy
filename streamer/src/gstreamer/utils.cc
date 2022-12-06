@@ -22,5 +22,38 @@ std::string GetElementName(GstElement* elem) {
   g_free(name);
   return res;
 }
+
+std::vector<std::string> GetSinkElemNames(GstBin* bin) {
+  GstIterator *it;
+  GValue val = G_VALUE_INIT;
+  gboolean done = FALSE;
+  std::vector<std::string> names;
+
+  it = gst_bin_iterate_sinks(bin);
+  do {
+    switch (gst_iterator_next(it, &val)) {
+      case GST_ITERATOR_OK: {
+        GstElement* sink = static_cast<GstElement*>(g_value_get_object(&val));
+        names.push_back(GetElementName(sink));
+        g_value_reset(&val);
+        break;
+      }
+      case GST_ITERATOR_RESYNC:
+        gst_iterator_resync(it);
+        break;
+      case GST_ITERATOR_ERROR:
+        GST_ERROR("Error iterating over %s's sink elements",
+            GST_ELEMENT_NAME(bin));
+      case GST_ITERATOR_DONE:
+        g_value_unset(&val);
+        done = TRUE;
+        break;
+    }
+  } while (!done);
+
+  gst_iterator_free(it);
+  return names;
+}
+
 }  // namespace streamer
 }  // namespace fastdeploy

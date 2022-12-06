@@ -14,22 +14,47 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
+#include "deepstream/perf.h"
 
 #include <gst/gst.h>
 
 namespace fastdeploy {
 namespace streamer {
 
-/*! @brief FDStreamer class, user inferfaces for FastDeploy Streamer
+enum AppType {
+  VIDEO_ANALYTICS,  ///< Video analytics app
+};
+
+struct AppConfig {
+  AppType type;
+  bool enable_perf_measurement = false;
+  int perf_interval_sec = 5;
+};
+
+/*! @brief Base App class
  */
 class BaseApp {
  public:
   BaseApp() {}
+  explicit BaseApp(AppConfig& app_config) {
+    app_config_ = app_config;
+  }
   virtual ~BaseApp() = default;
 
   virtual bool Init() = 0;
 
   virtual bool Run() = 0;
+
+  GstElement* GetPipeline() {
+    return pipeline_;
+  }
+
+  void SetupPerfMeasurement();
+
+ protected:
+  AppConfig app_config_;
+  GstElement* pipeline_;
+  NvDsAppPerfStructInt perf_struct_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

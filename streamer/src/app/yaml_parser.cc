@@ -6,8 +6,6 @@ namespace fastdeploy {
 namespace streamer {
 
 YamlParser::YamlParser(const std::string& config_file) {
-  // FDASSERT(BuildPipelineFromConfig(config_file),
-          //  "Failed to create PaddleClasPreprocessor.");
   try {
     yaml_config_ = YAML::LoadFile(config_file);
   } catch (YAML::BadFile& e) {
@@ -145,6 +143,5 @@ bool YamlParser::LinkSourePads(GstElement* streammux) {
   }
   return true;
 }
-
 }  // namespace streamer
 }  // namespace fastdeploy
