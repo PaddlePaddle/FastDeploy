@@ -1,3 +1,5 @@
+[English](../../en/faq/custom_opencv.md) | 中文
+
 # 自定义OpenCV版本
 
 受限于不同平台限制，目前FastDeploy提供的预编译包在**Linux平台**内置的OpenCV无法读取视频，或调用`imshow`等操作。对于有这类需求的开发者，可根据本文档来自行编译FastDeploy。
