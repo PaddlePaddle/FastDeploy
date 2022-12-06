@@ -24,3 +24,6 @@ include_directories(${FASTDEPLOY_INCS})
 
 add_executable(seq_cls_infer_demo ${PROJECT_SOURCE_DIR}/seq_cls_infer.cc)
 target_link_libraries(seq_cls_infer_demo ${FASTDEPLOY_LIBS} ${THIRD_LIBS})
+
+add_executable(intent_detection_and_slot_filling ${PROJECT_SOURCE_DIR}/intent_detection_and_slot_filling.cc)
+target_link_libraries(intent_detection_and_slot_filling ${FASTDEPLOY_LIBS} ${THIRD_LIBS})
