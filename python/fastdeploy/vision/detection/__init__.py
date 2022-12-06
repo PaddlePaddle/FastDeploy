@@ -19,6 +19,7 @@ from .contrib.scaled_yolov4 import ScaledYOLOv4
 from .contrib.nanodet_plus import NanoDetPlus
 from .contrib.yolox import YOLOX
 from .contrib.yolov5 import *
+from .contrib.fastestdet import *
 from .contrib.yolov5lite import YOLOv5Lite
 from .contrib.yolov6 import YOLOv6
 from .contrib.yolov7end2end_trt import YOLOv7End2EndTRT

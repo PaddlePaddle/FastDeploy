@@ -23,7 +23,7 @@ FastestDetPostprocessor::FastestDetPostprocessor() {
   conf_threshold_ = 0.65;
   nms_threshold_ = 0.45;
   multi_label_ = true;
-  max_wh_ = 4096.0;
+  max_wh_ = 0.0;
 }
 float FastestDetPostprocessor::Sigmoid(float x) {
   return 1.0f / (1.0f + exp(-x));
@@ -37,6 +37,11 @@ bool FastestDetPostprocessor::Run(
     const std::vector<FDTensor> &tensors, std::vector<DetectionResult> *results,
     const std::vector<std::map<std::string, std::array<float, 2>>> &ims_info) {
   int batch = 1;
+
+  FDINFO << "view infer output" << std::endl;
+  std::vector<FDTensor> debugTensors(tensors);
+  FDTensor debugFDT = debugTensors[0];
+  debugFDT.PrintInfo("view infer output");
 
   results->resize(batch);
 
@@ -114,12 +119,12 @@ bool FastestDetPostprocessor::Run(
       return true;
     }
 
-    utils::NMS(&((*results)[bs]), nms_threshold_);
+    //utils::NMS(&((*results)[bs]), nms_threshold_);
     FDINFO << "NMS done" << std::endl;
     FDINFO << "boxes num:" << (*results)[bs].boxes.size() << std::endl;
     FDINFO << "score thresh:" << conf_threshold_ << std::endl;
     // scale boxes to origin shape
-    float scale = std::min(out_h / ipt_h, out_w / ipt_w);
+    //float scale = std::min(out_h / ipt_h, out_w / ipt_w);
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
       float pad_h = 0.0f;
       float pad_w = 0.0f;
@@ -138,6 +143,7 @@ bool FastestDetPostprocessor::Run(
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
       (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
     }
+    utils::NMS(&((*results)[bs]), nms_threshold_);
   }
   return true;
 }

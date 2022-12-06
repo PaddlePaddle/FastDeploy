@@ -80,7 +80,6 @@ bool FastestDet::BatchPredict(const std::vector<cv::Mat>& images, std::vector<De
     FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
     return false;
   }
-
   return true;
 }
 

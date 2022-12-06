@@ -71,6 +71,7 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   // process after image load
   double ratio = (size_[0] * 1.0) / std::max(static_cast<float>(mat->Height()),
                                             static_cast<float>(mat->Width()));
+  /**
   if (std::fabs(ratio - 1.0f) > 1e-06) {
     int interp = cv::INTER_LINEAR;
     if (ratio > 1.0) {
@@ -80,6 +81,7 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
     int resize_w = int(mat->Width() * ratio);
     Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
   }
+  **/
   // fastestdet's preprocess steps
   // 1. letterbox
   // 2. convert_and_permute(swap_rb=true)
@@ -94,6 +96,10 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
   mat->ShareWithTensor(output);
   output->ExpandDim(0);  // reshape to n, h, w, c
+  
+  FDINFO << "view preprocess output" << std::endl;
+  output->PrintInfo("output");
+
   return true;
 }
 
