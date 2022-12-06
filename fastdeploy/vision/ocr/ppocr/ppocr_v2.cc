@@ -140,7 +140,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
 
     std::vector<float> width_list;
     for (int i = 0; i < image_list.size(); i++) {
-      width_list.push_back(float(image_list[i].cols) / img_list[i].rows);
+      width_list.push_back(float(image_list[i].cols) / image_list[i].rows);
     }
     std::vector<int> indices = vision::ocr::ArgSort(width_list);
 
