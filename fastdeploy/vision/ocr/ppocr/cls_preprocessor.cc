@@ -36,11 +36,6 @@ void OcrClassifierResizeImage(FDMat* mat,
     resize_w = int(ceilf(img_h * ratio));
 
   Resize::Run(mat, resize_w, img_h);
-
-  std::vector<float> value = {0, 0, 0};
-  if (resize_w < img_w) {
-    Pad::Run(mat, 0, 0, 0, img_w - resize_w, value);
-  }
 }
 
 bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
@@ -58,12 +53,13 @@ bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   for (size_t i = start_index; i < end_index; ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
-    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
-    /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
+    std::vector<float> value = {0, 0, 0};
+    if (mat->Width() < cls_image_shape_[2]) {
+      Pad::Run(mat, 0, 0, 0, cls_image_shape_[2] - mat->Width(), value);
+    }
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
-    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
