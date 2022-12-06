@@ -34,4 +34,4 @@ Now we get the C++ SDK in current directory `installed_fastdeploy`, this library
 
 This document also works for other hardware deployment(GPU/IPU/XPU...) on Linux platform. 
 
-- [More Option to build FastDeploy](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/README_EN.md)
+- [More Options to build FastDeploy](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/README_EN.md)
