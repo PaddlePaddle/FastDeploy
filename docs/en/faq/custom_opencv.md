@@ -1,3 +1,5 @@
+English | [中文](../../cn/faq/custom_opencv.md)
+
 # Use Own OpenCV Library
 
 The prebuilt FastDeploy library has a built-in OpenCV library, which is not able to read video file or call `imshow` because the prebuilt FastDeploy has to build in manylinux version. If you need to read video or other functions provided by opencv, this document shows how to build FastDeploy with your own OpenCV in your environment.
