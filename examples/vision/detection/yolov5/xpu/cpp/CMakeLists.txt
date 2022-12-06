@@ -12,4 +12,4 @@ include_directories(${FastDeploy_INCLUDE_DIRS})
 
 add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
 # 添加FastDeploy库依赖
-target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
+target_link_libraries(infer_demo ${FASTDEPLOY_LIBS} -lpthread -lrt -ldl)
