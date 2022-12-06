@@ -96,8 +96,13 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
     valid_places.push_back(
       paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
-    if(option_.device_id > 0) {
-      config_.set_xpu_dev_per_thread(option_.device_id);
+    config_.set_xpu_dev_per_thread(option_.device_id);
+    config_.set_xpu_workspace_l3_size_per_thread(option_.xpu_l3_workspace_size);
+    config_.set_xpu_l3_cache_method(option_.xpu_l3_workspace_size, option_.xpu_locked);
+    config_.set_xpu_conv_autotune(option_.xpu_autotune, option_.xpu_autotune_file);
+    config_.set_xpu_multi_encoder_method(option_.xpu_precision, option_.xpu_adaptive_seqlen);
+    if (option_.xpu_enable_multi_stream) {
+      config_.enable_xpu_multi_stream();
     }
   } else {
     valid_places.push_back(
@@ -230,10 +235,6 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     if (inputs[i].dtype == FDDataType::FP32) {
       tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
         reinterpret_cast<const float*>(const_cast<void*>(
-        inputs[i].CpuData())));
-    } else if (inputs[i].dtype == FDDataType::INT64) {
-      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kARM>(
-        reinterpret_cast<const int64_t*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT32) {
       tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(

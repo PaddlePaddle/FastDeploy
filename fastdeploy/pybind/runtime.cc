@@ -101,7 +101,21 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("ipu_available_memory_proportion",
                      &RuntimeOption::ipu_available_memory_proportion)
       .def_readwrite("ipu_enable_half_partial",
-                     &RuntimeOption::ipu_enable_half_partial);
+                     &RuntimeOption::ipu_enable_half_partial)
+      .def_readwrite("xpu_l3_workspace_size",
+                     &RuntimeOption::xpu_l3_workspace_size)
+      .def_readwrite("xpu_locked",
+                     &RuntimeOption::xpu_locked)
+      .def_readwrite("xpu_autotune",
+                     &RuntimeOption::xpu_autotune)
+      .def_readwrite("xpu_autotune_file",
+                     &RuntimeOption::xpu_autotune_file)
+      .def_readwrite("xpu_precision",
+                     &RuntimeOption::xpu_precision)
+      .def_readwrite("xpu_adaptive_seqlen",
+                     &RuntimeOption::xpu_adaptive_seqlen)
+      .def_readwrite("xpu_enable_multi_stream",
+                     &RuntimeOption::xpu_enable_multi_stream);                              
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
