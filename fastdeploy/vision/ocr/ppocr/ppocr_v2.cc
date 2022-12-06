@@ -146,7 +146,7 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
 
     for(size_t start_index = 0; start_index < image_list.size(); start_index+=rec_batch_size_) {
       size_t end_index = std::min(start_index + rec_batch_size_, image_list.size());
-      if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr, start_index, end_index)) {
+      if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr, start_index, end_index, indices)) {
         FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
         return false;
       }
