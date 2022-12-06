@@ -54,6 +54,8 @@ class DPMSolverMultistepScheduler : public Scheduler {
                        const std::vector<FDTensor>& timesteps = {}) override;
   void AddNoise(const FDTensor& original_samples, const FDTensor& noise,
                 const FDTensor& timesteps, FDTensor* out) override;
+  float InitNoiseSigma() override;
+  FDTensor GetTimesteps() override;
   struct Config {
     int num_train_timesteps_;
     float beta_start_;
