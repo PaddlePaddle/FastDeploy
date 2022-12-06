@@ -24,24 +24,20 @@ namespace facedet {
 Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
   conf_threshold_ = 0.7;
   nms_threshold_ = 0.5;
-  multi_label_ = true;
   max_wh_ = 7680.0;
 }
 
 bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result, std::vector<FaceDetectionResult>* results,
                               const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
-  FDASSERT(infer_result[0].shape[0] == 1, "Only support batch =1 now.");
   int batch = infer_result[0].shape[0];
+
+  std::cout <<"batch size:" << batch << std::endl;
  
   results->resize(batch);
 
   for (size_t bs = 0; bs < batch; ++bs) {
     (*results)[bs].Clear();
-    if (multi_label_) {
-      (*results)[bs].Reserve(infer_result[0].shape[1] * (infer_result[0].shape[2] - 5));
-    } else {
-      (*results)[bs].Reserve(infer_result[0].shape[1]);
-    }
+    (*results)[bs].Reserve(infer_result[0].shape[1]);
     if (infer_result[0].dtype != FDDataType::FP32) {
       FDERROR << "Only support post process with float32 data." << std::endl;
       return false;
@@ -50,49 +46,31 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result, std
     for (size_t i = 0; i < infer_result[0].shape[1]; ++i) {
       int s = i * infer_result[0].shape[2];
       float confidence = data[s + 4];
-      if (multi_label_) {
-        for (size_t j = 5; j < infer_result[0].shape[2]; ++j) {
-          confidence = data[s + 4];
-          const float* class_score = data + s + j;
-          confidence *= (*class_score);
-          // filter boxes by conf_threshold
-          if (confidence <= conf_threshold_) {
-            continue;
-          }
-          int32_t label_id = std::distance(data + s + 5, class_score);
-
-          // convert from [x, y, w, h] to [x1, y1, x2, y2]
-          (*results)[bs].boxes.emplace_back(std::array<float, 4>{
-              data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
-              data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
-              data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
-              data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-          (*results)[bs].scores.push_back(confidence);
-        }
-      } else {
-        const float* max_class_score =
-            std::max_element(data + s + 5, data + s + infer_result[0].shape[2]);
-        confidence *= (*max_class_score);
-        // filter boxes by conf_threshold
-        if (confidence <= conf_threshold_) {
-          continue;
-        }
-        int32_t label_id = std::distance(data + s + 5, max_class_score);
-        // convert from [x, y, w, h] to [x1, y1, x2, y2]
-        (*results)[bs].boxes.emplace_back(std::array<float, 4>{
-            data[s] - data[s + 2] / 2.0f + label_id * max_wh_,
-            data[s + 1] - data[s + 3] / 2.0f + label_id * max_wh_,
-            data[s + 0] + data[s + 2] / 2.0f + label_id * max_wh_,
-            data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
-        (*results)[bs].scores.push_back(confidence);
+      const float* reg_cls_ptr = data + s;
+      const float* class_score = data + s + 5;
+      confidence  *= (*class_score);
+      // filter boxes by conf_threshold
+      if (confidence <= conf_threshold_) {
+        continue;
       }
+      float x = reg_cls_ptr[0];
+      float y = reg_cls_ptr[1];
+      float w = reg_cls_ptr[2];
+      float h = reg_cls_ptr[3];
+
+      // convert from [x, y, w, h] to [x1, y1, x2, y2]
+      (*results)[bs].boxes.emplace_back(std::array<float, 4>{
+          (x - w / 2.f), (y - h / 2.f), (x + w / 2.f), (y + h / 2.f)});
+      (*results)[bs].scores.push_back(confidence);
     }
 
     if ((*results)[bs].boxes.size() == 0) {
       return true;
     }
-
+  
+    //std::cout << "Before: "<< (*results)[bs].Str() << std::endl;
     utils::NMS(&((*results)[bs]), nms_threshold_);
+    //std::cout << "After NMS: "<< (*results)[bs].Str() << std::endl;
 
     // scale the boxes to the origin image shape
     auto iter_out = ims_info[bs].find("output_shape");
