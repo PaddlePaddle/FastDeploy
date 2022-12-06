@@ -137,6 +137,13 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
         }
       }
     }
+
+    std::vector<float> width_list;
+    for (int i = 0; i < image_list.size(); i++) {
+      width_list.push_back(float(image_list[i].cols) / img_list[i].rows);
+    }
+    std::vector<int> indices = vision::ocr::ArgSort(width_list);
+
     for(size_t start_index = 0; start_index < image_list.size(); start_index+=rec_batch_size_) {
       size_t end_index = std::min(start_index + rec_batch_size_, image_list.size());
       if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr, start_index, end_index)) {

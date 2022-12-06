@@ -56,7 +56,8 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
                std::vector<std::string>* texts, std::vector<float>* rec_scores);
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<std::string>* texts, std::vector<float>* rec_scores,
-               size_t start_index, size_t end_index);
+               size_t start_index, size_t end_index,
+               const std::vector<int>& indices);
 
   RecognizerPreprocessor preprocessor_;
   RecognizerPostprocessor postprocessor_;

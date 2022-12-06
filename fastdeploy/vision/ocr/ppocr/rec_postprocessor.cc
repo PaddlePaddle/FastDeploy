@@ -92,7 +92,7 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
 bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                   std::vector<std::string>* texts, std::vector<float>* rec_scores,
-                                  size_t start_index, size_t total_size) {
+                                  size_t start_index, size_t total_size, const std::vector<int>& indices) {
   if (!initialized_) {
     FDERROR << "Postprocessor is not initialized." << std::endl;
     return false;
@@ -121,10 +121,14 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
+    size_t real_index = i_batch+start_index;
+    if (indices.size() != 0) {
+      real_index = indices[i_batch+start_index];
+    }
     if(!SingleBatchPostprocessor(tensor_data + i_batch * length,
                                  tensor.shape,
-                                 &texts->at(i_batch+start_index),
-                                 &rec_scores->at(i_batch+start_index))) {
+                                 &texts->at(real_index),
+                                 &rec_scores->at(real_index))) {
       return false;
     }
   }

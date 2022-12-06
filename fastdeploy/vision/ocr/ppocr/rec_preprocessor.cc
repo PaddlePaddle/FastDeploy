@@ -48,7 +48,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
 }
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                                 size_t start_index, size_t end_index) {
+                                 size_t start_index, size_t end_index, const std::vector<int>& indices) {
   if (images->size() == 0 || end_index <= start_index || end_index > images->size()) {
     FDERROR << "images->size() or index error. Correct is: 0 <= start_index < end_index <= images->size()" << std::endl;
     return false;
@@ -60,20 +60,23 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   float ori_wh_ratio;
   
   for (size_t i = start_index; i < end_index; ++i) {
-    FDMat* mat = &(images->at(i));
+    size_t real_index = i;
+    if (indices.size() != 0) {
+      real_index = indices[i];
+    }
+    FDMat* mat = &(images->at(real_index));
     ori_wh_ratio = mat->Width() * 1.0 / mat->Height();
     max_wh_ratio = std::max(max_wh_ratio, ori_wh_ratio);
   }
 
   for (size_t i = start_index; i < end_index; ++i) {
-    FDMat* mat = &(images->at(i));
+    size_t real_index = i;
+    if (indices.size() != 0) {
+      real_index = indices[i];
+    }
+    FDMat* mat = &(images->at(real_index));
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);
     NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
-    /*
-    Normalize::Run(mat, mean_, scale_, is_scale_);
-    HWC2CHW::Run(mat);
-    Cast::Run(mat, "float");
-    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
@@ -81,7 +84,12 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   // Concat all the preprocessed data to a batch tensor
   std::vector<FDTensor> tensors(tensor_size); 
   for (size_t i = 0; i < tensor_size; ++i) {
-    (*images)[i + start_index].ShareWithTensor(&(tensors[i]));
+    size_t real_index = i + start_index;
+    if (indices.size() != 0) {
+      real_index = indices[i + start_index];
+    }
+    
+    (*images)[real_index].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);
   }
   if (tensors.size() == 1) {

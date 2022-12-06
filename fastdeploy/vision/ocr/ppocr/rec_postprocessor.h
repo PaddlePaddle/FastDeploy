@@ -44,7 +44,8 @@ class FASTDEPLOY_DECL RecognizerPostprocessor {
 
   bool Run(const std::vector<FDTensor>& tensors,
            std::vector<std::string>* texts, std::vector<float>* rec_scores,
-           size_t start_index, size_t total_size);
+           size_t start_index, size_t total_size,
+           const std::vector<int>& indices);
 
  private:
   bool SingleBatchPostprocessor(const float* out_data,

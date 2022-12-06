@@ -32,7 +32,8 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-           size_t start_index, size_t end_index);
+           size_t start_index, size_t end_index,
+           const std::vector<int>& indices);
 
   std::vector<int> rec_image_shape_ = {3, 48, 320};
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
