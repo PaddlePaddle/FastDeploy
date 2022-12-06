@@ -19,36 +19,15 @@ namespace fastdeploy {
 namespace streamer {
 
 static GMutex fps_lock;
-static gdouble fps[5];
-static gdouble fps_avg[5];
-static void perf_cb (gpointer context, NvDsAppPerfStruct* str) {
-  static guint header_print_cnt = 0;
-  guint i;
-  // AppCtx *appCtx = (AppCtx *) context;
+static void perf_cb(gpointer context, NvDsAppPerfStruct* str) {
   guint numf = str->num_instances;
 
-  g_mutex_lock (&fps_lock);
-  for (i = 0; i < numf; i++) {
-    fps[i] = str->fps[i];
-    fps_avg[i] = str->fps_avg[i];
+  g_mutex_lock(&fps_lock);
+  for (int i = 0; i < numf; i++) {
+    std::cout << "Instance: " << i << ", FPS: " << str->fps[i]
+              << ", total avg.: " << str->fps_avg[i] << std::endl;
   }
-
-  if (header_print_cnt % 20 == 0) {
-    g_print ("\n**PERF:  ");
-    for (i = 0; i < numf; i++) {
-      g_print ("FPS %d (Avg)\t", i);
-    }
-    g_print ("\n");
-    header_print_cnt = 0;
-  }
-  header_print_cnt++;
-  g_print ("**PERF:  ");
-
-  for (i = 0; i < numf; i++) {
-    g_print ("%.2f (%.2f)\t", fps[i], fps_avg[i]);
-  }
-  g_print ("\n");
-  g_mutex_unlock (&fps_lock);
+  g_mutex_unlock(&fps_lock);
 }
 
 void BaseApp::SetupPerfMeasurement() {

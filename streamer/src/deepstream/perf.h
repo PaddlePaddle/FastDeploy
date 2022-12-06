@@ -53,18 +53,18 @@ struct NvDsAppPerfStructInt {
   gpointer context;
   GMutex struct_lock;
   perf_callback callback;
-  GstPad *sink_bin_pad;
+  GstPad* sink_bin_pad;
   gulong fps_measure_probe_id;
   NvDsInstancePerfStruct instance_str[MAX_SOURCE_BINS];
   guint dewarper_surfaces_per_frame;
 };
 
-gboolean enable_perf_measurement(NvDsAppPerfStructInt *str,
-    GstPad *sink_bin_pad, guint num_sources, gulong interval_sec,
+gboolean enable_perf_measurement(NvDsAppPerfStructInt* str,
+    GstPad* sink_bin_pad, guint num_sources, gulong interval_sec,
     guint num_surfaces_per_frame, perf_callback callback);
 
-void pause_perf_measurement(NvDsAppPerfStructInt *str);
-void resume_perf_measurement(NvDsAppPerfStructInt *str);
+void pause_perf_measurement(NvDsAppPerfStructInt* str);
+void resume_perf_measurement(NvDsAppPerfStructInt* str);
 
 }  // namespace streamer
 }  // namespace fastdeploy

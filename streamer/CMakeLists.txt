@@ -30,8 +30,13 @@ pkg_check_modules(GLIB2 glib-2.0 REQUIRED)
 include_directories(${GSTREAMER_INCLUDE_DIRS} ${GLIB2_INCLUDE_DIRS})
 list(APPEND DEPEND_LIBS ${GLIB2_LIBRARIES} ${GSTREAMER_LIBRARIES})
 
+include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
+include_directories(${FASTDEPLOY_INCS})
+include_directories(${PROJECT_SOURCE_DIR}/src/)
+
 if(ENABLE_DEEPSTREAM)
   add_definitions(-DENABLE_DEEPSTREAM)
+  include_directories(${CUDA_DIRECTORY}/include)
   include_directories(/opt/nvidia/deepstream/deepstream/sources/includes/)
   link_directories(/opt/nvidia/deepstream/deepstream/lib/)
   list(APPEND ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
@@ -40,18 +45,8 @@ else()
   message(FATAL_ERROR "Currently, DeepStream is required, we will make it optional later.")
 endif()
 
-include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
-
-include_directories(${FASTDEPLOY_INCS})
-include_directories(${PROJECT_SOURCE_DIR}/src/)
-
-message(STATUS "hahah " ${FASTDEPLOY_LIBS})
-
-# get_filename_component(YAMAL_CPP_PATH
-#                        "${PROJECT_SOURCE_DIR}/../third_party/yaml-cpp"
-#                        ABSOLUTE)
-# message(STATUS "hahah " ${YAMAL_CPP_PATH})
-# add_subdirectory(${PROJECT_SOURCE_DIR}/../third_party/yaml-cpp yaml-cpp)
+# Link the yaml-cpp in system path, because deepstream also depends on yaml-cpp,
+# If we link multiple yaml-cpp libs, strange error will occur.
 list(APPEND DEPEND_LIBS yaml-cpp)
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})
