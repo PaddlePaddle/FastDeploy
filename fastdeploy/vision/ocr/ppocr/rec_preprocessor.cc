@@ -44,7 +44,7 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
 }
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
-  return Run(images, outputs, 0, images->size());
+  return Run(images, outputs, 0, images->size(), {});
 }
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,

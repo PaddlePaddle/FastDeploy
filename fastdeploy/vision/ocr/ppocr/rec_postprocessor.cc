@@ -87,7 +87,7 @@ bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
   // Recognizer have only 1 output tensor.
   // For Recognizer, the output tensor shape = [batch, ?, 6625]
   size_t total_size = tensors[0].shape[0];
-  return Run(tensors, texts, rec_scores, 0, total_size);
+  return Run(tensors, texts, rec_scores, 0, total_size, {});
 }
 
 bool RecognizerPostprocessor::Run(const std::vector<FDTensor>& tensors,
