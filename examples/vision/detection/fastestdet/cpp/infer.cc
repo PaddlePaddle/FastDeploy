@@ -32,7 +32,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
   std::cout << "test" << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res,0.65);
+  auto vis_im = fastdeploy::vision::Visualize::VisDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
