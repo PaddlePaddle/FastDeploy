@@ -33,32 +33,6 @@ PPOCRv2::PPOCRv2(fastdeploy::vision::ocr::DBDetector* det_model,
   recognizer_->preprocessor_.rec_image_shape_[1] = 32;
 }
 
-bool PPOCRv2::SetClsBatchSize(int cls_batch_size) {
-  if (cls_batch_size < -1 || cls_batch_size == 0) {
-    FDERROR << "batch_size > 0 or batch_size == -1." << std::endl;
-    return false;
-  }
-  cls_batch_size_ = cls_batch_size;
-  return true;
-}
-
-int PPOCRv2::GetClsBatchSize() {
-  return cls_batch_size_;
-}
-
-bool PPOCRv2::SetRecBatchSize(int rec_batch_size) {
-  if (rec_batch_size < -1 || rec_batch_size == 0) {
-    FDERROR << "batch_size > 0 or batch_size == -1." << std::endl;
-    return false;
-  }
-  rec_batch_size_ = rec_batch_size;
-  return true;
-}
-
-int PPOCRv2::GetRecBatchSize() {
-  return rec_batch_size_;
-}
-
 bool PPOCRv2::Initialized() const {
   
   if (detector_ != nullptr && !detector_->Initialized()) {
@@ -78,10 +52,7 @@ bool PPOCRv2::Initialized() const {
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
   std::vector<fastdeploy::vision::OCRResult> batch_result(1);
-  bool success = BatchPredict({*img},&batch_result);
-  if(!success){
-    return success;
-  }
+  BatchPredict({*img},&batch_result);
   *result = std::move(batch_result[0]);
   return true;
 };
@@ -96,11 +67,11 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     FDERROR << "There's error while detecting image in PPOCR." << std::endl;
     return false;
   }
-
   for(int i_batch = 0; i_batch < batch_boxes.size(); ++i_batch) {
     vision::ocr::SortBoxes(&(batch_boxes[i_batch]));
     (*batch_result)[i_batch].boxes = batch_boxes[i_batch];
   }
+  
   
   for(int i_batch = 0; i_batch < images.size(); ++i_batch) {
     fastdeploy::vision::OCRResult& ocr_result = (*batch_result)[i_batch];
@@ -122,34 +93,22 @@ bool PPOCRv2::BatchPredict(const std::vector<cv::Mat>& images,
     std::vector<std::string>* text_ptr = &ocr_result.text;
     std::vector<float>* rec_scores_ptr = &ocr_result.rec_scores;
 
-    if (nullptr != classifier_) {
-      for(size_t start_index = 0; start_index < image_list.size(); start_index+=cls_batch_size_) {
-        size_t end_index = std::min(start_index + cls_batch_size_, image_list.size());
-        if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr, start_index, end_index)) {
-          FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
-          return false;
-        }else{
-          for (size_t i_img = start_index; i_img < end_index; ++i_img) {
-            if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->postprocessor_.cls_thresh_) {
-              cv::rotate(image_list[i_img], image_list[i_img], 1);
-            }
+    if (nullptr != classifier_){
+      if (!classifier_->BatchPredict(image_list, cls_labels_ptr, cls_scores_ptr)) {
+        FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
+        return false;
+      }else{
+        for (size_t i_img = 0; i_img < image_list.size(); ++i_img) {
+          if(cls_labels_ptr->at(i_img) % 2 == 1 && cls_scores_ptr->at(i_img) > classifier_->postprocessor_.cls_thresh_) {
+            cv::rotate(image_list[i_img], image_list[i_img], 1);
           }
         }
       }
     }
-
-    std::vector<float> width_list;
-    for (int i = 0; i < image_list.size(); i++) {
-      width_list.push_back(float(image_list[i].cols) / image_list[i].rows);
-    }
-    std::vector<int> indices = vision::ocr::ArgSort(width_list);
-
-    for(size_t start_index = 0; start_index < image_list.size(); start_index+=rec_batch_size_) {
-      size_t end_index = std::min(start_index + rec_batch_size_, image_list.size());
-      if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr, start_index, end_index, indices)) {
-        FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
-        return false;
-      }
+    
+    if (!recognizer_->BatchPredict(image_list, text_ptr, rec_scores_ptr)) {
+      FDERROR << "There's error while recognizing image in PPOCR." << std::endl;
+      return false;
     }
   }
   return true;

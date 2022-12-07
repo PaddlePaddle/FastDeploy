@@ -25,6 +25,11 @@ namespace ocr {
  */
 class FASTDEPLOY_DECL DBDetectorPostprocessor {
  public:
+  /** \brief Create a postprocessor instance for DBDetector serials model
+   *
+   */
+  DBDetectorPostprocessor();
+
   /** \brief Process the result of runtime and fill to results structure
    *
    * \param[in] tensors The inference result from runtime
@@ -43,7 +48,8 @@ class FASTDEPLOY_DECL DBDetectorPostprocessor {
   bool use_dilation_ = false;
 
  private:
-  PostProcessor util_post_processor_;
+  bool initialized_ = false;
+  PostProcessor post_processor_;
   bool SingleBatchPostprocessor(const float* out_data,
                                 int n2,
                                 int n3,

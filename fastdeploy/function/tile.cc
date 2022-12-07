@@ -49,7 +49,6 @@ void TileFunctor(const FDTensor& x,
     return;
   }
 
-  FDTensor out_tmp;
   Eigen::DSizes<Eigen::DenseIndex, Rank> bcast_dims;
   for (size_t i = 0; i < repeat_times.size(); ++i) {
     bcast_dims[i] = repeat_times[i];
@@ -60,14 +59,12 @@ void TileFunctor(const FDTensor& x,
     out_shape[i] *= repeat_times[i];
   }
 
-  out_tmp.Allocate(out_shape, x.Dtype());
+  out->Allocate(out_shape, x.Dtype());
   auto eigen_x = EigenTensor<T, Rank>::From(x, x_shape);
-  auto eigen_out = EigenTensor<T, Rank>::From(out_tmp, out_shape);
+  auto eigen_out = EigenTensor<T, Rank>::From(*out, out_shape);
 
   const auto& dev = *EigenDeviceWrapper::GetInstance()->GetDevice();
   eigen_out.device(dev) = eigen_x.broadcast(bcast_dims);
-
-  *out = std::move(out_tmp);
 }
 
 template <typename T>

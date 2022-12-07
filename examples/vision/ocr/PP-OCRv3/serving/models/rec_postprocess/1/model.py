@@ -47,6 +47,8 @@ class TritonPythonModel:
           * model_version: Model version
           * model_name: Model name
         """
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+        print(sys.getdefaultencoding())
         # You must parse model_config. JSON string is not parsed here
         self.model_config = json.loads(args['model_config'])
         print("model_config:", self.model_config)

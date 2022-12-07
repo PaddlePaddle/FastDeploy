@@ -68,19 +68,11 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<fastdeploy::vision::OCRResult>* batch_result);
   bool Initialized() const override;
-  bool SetClsBatchSize(int cls_batch_size);
-  int GetClsBatchSize();
-  bool SetRecBatchSize(int rec_batch_size);
-  int GetRecBatchSize();
 
  protected:
   fastdeploy::vision::ocr::DBDetector* detector_ = nullptr;
   fastdeploy::vision::ocr::Classifier* classifier_ = nullptr;
   fastdeploy::vision::ocr::Recognizer* recognizer_ = nullptr;
-
- private:
-  int cls_batch_size_ = 1;
-  int rec_batch_size_ = 6;
   /// Launch the detection process in OCR.
 };
 

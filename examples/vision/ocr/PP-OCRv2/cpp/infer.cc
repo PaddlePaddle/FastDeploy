@@ -37,9 +37,9 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   // We recommend that users set the length and height of the detection model to a multiple of 32.
   det_option.SetTrtInputShape("x", {1, 3, 64,64}, {1, 3, 640, 640},
                                 {1, 3, 960, 960});
-  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {10, 3, 48, 320}, {32, 3, 48, 1024});
+  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {10, 3, 48, 320}, {64, 3, 48, 1024});
   rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {10, 3, 32, 320},
-                                {32, 3, 32, 2304});
+                                {64, 3, 32, 2304});
   
   // Users could save TRT cache file to disk as follow. 
   // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");

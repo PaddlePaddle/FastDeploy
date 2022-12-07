@@ -94,7 +94,7 @@ std::string Str(const Backend& b) {
     return "Backend::POROS";
   } else if (b == Backend::RKNPU2) {
     return "Backend::RKNPU2";
-  } else if (b == Backend::OPENVINO) {
+  }else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
     return "Backend::PDLITE";
@@ -113,7 +113,7 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::OPENVINO";
   } else if (backend == Backend::RKNPU2) {
     out << "Backend::RKNPU2";
-  } else if (backend == Backend::POROS) {
+  }else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
     out << "Backend::PDLITE";
@@ -152,17 +152,15 @@ bool CheckModelFormat(const std::string& model_file,
   } else if (model_format == ModelFormat::TORCHSCRIPT) {
     if (model_file.size() < 3 ||
         model_file.substr(model_file.size() - 3, 3) != ".pt") {
-      FDERROR
-          << "With model format of ModelFormat::TORCHSCRIPT, the model file "
-             "should ends with `.pt`, but now it's "
-          << model_file << std::endl;
+      FDERROR << "With model format of ModelFormat::TORCHSCRIPT, the model file "
+                 "should ends with `.pt`, but now it's "
+              << model_file << std::endl;
       return false;
     }
   } else {
-    FDERROR
-        << "Only support model format with frontend ModelFormat::PADDLE / "
-           "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
-        << std::endl;
+    FDERROR << "Only support model format with frontend ModelFormat::PADDLE / "
+               "ModelFormat::ONNX / ModelFormat::RKNN / ModelFormat::TORCHSCRIPT."
+            << std::endl;
     return false;
   }
   return true;
@@ -207,9 +205,9 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
     model_file = model_path;
     model_format = ModelFormat::TORCHSCRIPT;
   } else {
-    FDASSERT(false,
-             "The model format only can be "
-             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
+    FDASSERT(
+        false,
+        "The model format only can be ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
   }
 }
 
@@ -319,18 +317,13 @@ void RuntimeOption::EnablePaddleLogInfo() { pd_enable_log_info = true; }
 void RuntimeOption::DisablePaddleLogInfo() { pd_enable_log_info = false; }
 
 void RuntimeOption::EnablePaddleToTrt() {
-  FDASSERT(backend == Backend::TRT,
-           "Should call UseTrtBackend() before call EnablePaddleToTrt().");
+  FDASSERT(backend == Backend::TRT, "Should call UseTrtBackend() before call EnablePaddleToTrt().");
 #ifdef ENABLE_PADDLE_BACKEND
-  FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will "
-            "change to use Paddle Inference Backend."
-         << std::endl;
+  FDINFO << "While using TrtBackend with EnablePaddleToTrt, FastDeploy will change to use Paddle Inference Backend." << std::endl;
   backend = Backend::PDINFER;
   pd_enable_trt = true;
 #else
-  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the "
-                  "FastDeploy is compiled with Paddle Inference Backend, "
-                  "please rebuild your FastDeploy.");
+  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the FastDeploy is compiled with Paddle Inference Backend, please rebuild your FastDeploy.");
 #endif
 }
 
@@ -343,12 +336,20 @@ void RuntimeOption::SetOpenVINODevice(const std::string& name) {
   openvino_device = name;
 }
 
-void RuntimeOption::EnableLiteFP16() { lite_enable_fp16 = true; }
+void RuntimeOption::EnableLiteFP16() {
+  lite_enable_fp16 = true;
+}
 
-void RuntimeOption::DisableLiteFP16() { lite_enable_fp16 = false; }
-void RuntimeOption::EnableLiteInt8() { lite_enable_int8 = true; }
+void RuntimeOption::DisableLiteFP16() {
+  lite_enable_fp16 = false;
+}
+void RuntimeOption::EnableLiteInt8() {
+  lite_enable_int8 = true;
+}
 
-void RuntimeOption::DisableLiteInt8() { lite_enable_int8 = false; }
+void RuntimeOption::DisableLiteInt8() {
+  lite_enable_int8 = false;
+}
 void RuntimeOption::SetLitePowerMode(LitePowerMode mode) {
   lite_power_mode = mode;
 }
@@ -360,8 +361,7 @@ void RuntimeOption::SetLiteOptimizedModelDir(
 
 void RuntimeOption::SetLiteSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
-  lite_nnadapter_subgraph_partition_config_path =
-      nnadapter_subgraph_partition_config_path;
+  lite_nnadapter_subgraph_partition_config_path = nnadapter_subgraph_partition_config_path;
 }
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
@@ -387,8 +387,8 @@ void RuntimeOption::SetTrtInputShape(const std::string& input_name,
 void RuntimeOption::SetTrtMaxWorkspaceSize(size_t max_workspace_size) {
   trt_max_workspace_size = max_workspace_size;
 }
-void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size) {
-  trt_max_batch_size = max_batch_size;
+void RuntimeOption::SetTrtMaxBatchSize(size_t max_batch_size){
+  trt_max_batch_size = max_batch_size; 
 }
 
 void RuntimeOption::EnableTrtFP16() { trt_enable_fp16 = true; }
@@ -422,27 +422,27 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
   poros_option.enable_fp16 = option.trt_enable_fp16;
   poros_option.max_batch_size = option.trt_max_batch_size;
   poros_option.max_workspace_size = option.trt_max_workspace_size;
-  FDASSERT(
-      option.model_format == ModelFormat::TORCHSCRIPT,
-      "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
+  FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
+           "PorosBackend only support model format of ModelFormat::TORCHSCRIPT.");
   backend_ = utils::make_unique<PorosBackend>();
   auto casted_backend = dynamic_cast<PorosBackend*>(backend_.get());
   FDASSERT(
       casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
       "Load model from Torchscript failed while initliazing PorosBackend.");
 #else
-  FDASSERT(false, "PorosBackend is not available, please compiled with "
-                  "ENABLE_POROS_BACKEND=ON.");
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
 }
 
-void RuntimeOption::EnablePaddleTrtCollectShape() { pd_collect_shape = true; }
+void RuntimeOption::EnablePaddleTrtCollectShape() {
+  pd_collect_shape = true;
+}
 
-void RuntimeOption::DisablePaddleTrtCollectShape() { pd_collect_shape = false; }
-
-void RuntimeOption::DisablePaddleTrtOPs(const std::vector<std::string>& ops) {
-  trt_disabled_ops_.insert(trt_disabled_ops_.end(), ops.begin(), ops.end());
+void RuntimeOption::DisablePaddleTrtCollectShape() {
+  pd_collect_shape = false;
 }
 
 void RuntimeOption::UseIpu(int device_num, int micro_batch_size,
@@ -519,9 +519,9 @@ bool Runtime::Init(const RuntimeOption& _option) {
   } else if (option.backend == Backend::POROS) {
     FDASSERT(option.device == Device::CPU || option.device == Device::GPU,
              "Backend::POROS only supports Device::CPU/Device::GPU.");
-    FDASSERT(option.model_format == ModelFormat::TORCHSCRIPT,
-             "Backend::POROS only supports model format of "
-             "ModelFormat::TORCHSCRIPT.");
+    FDASSERT(
+        option.model_format == ModelFormat::TORCHSCRIPT,
+        "Backend::POROS only supports model format of ModelFormat::TORCHSCRIPT.");
     FDINFO << "Runtime initialized with Backend::POROS in "
            << Str(option.device) << "." << std::endl;
     return true;
@@ -572,7 +572,7 @@ std::vector<TensorInfo> Runtime::GetOutputInfos() {
 
 bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
                     std::vector<FDTensor>* output_tensors) {
-  for (auto& tensor : input_tensors) {
+  for (auto& tensor: input_tensors) {
     FDASSERT(tensor.device_id < 0 || tensor.device_id == option.device_id,
              "Device id of input tensor(%d) and runtime(%d) are not same.",
              tensor.device_id, option.device_id);
@@ -589,15 +589,17 @@ void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
   for (auto& t : input_tensors_) {
     if (t.name == name) {
       is_exist = true;
-      t.SetExternalData(input.shape, input.dtype, input.MutableData(),
-                        input.device, input.device_id);
+      t.SetExternalData(input.shape, input.dtype,
+                        input.MutableData(), input.device,
+                        input.device_id);
       break;
     }
   }
-  if (!is_exist) {
+  if(!is_exist) {
     FDTensor new_tensor(name);
-    new_tensor.SetExternalData(input.shape, input.dtype, input.MutableData(),
-                               input.device, input.device_id);
+    new_tensor.SetExternalData(input.shape, input.dtype,
+                        input.MutableData(), input.device,
+                        input.device_id);
     input_tensors_.emplace_back(std::move(new_tensor));
   }
 }
@@ -642,7 +644,6 @@ void Runtime::CreatePaddleBackend() {
     trt_option.serialize_file = option.trt_serialize_file;
     trt_option.enable_pinned_memory = option.enable_pinned_memory;
     pd_option.trt_option = trt_option;
-    pd_option.trt_disabled_ops_ = option.trt_disabled_ops_;
   }
 #endif
 #ifdef WITH_IPU
@@ -668,8 +669,9 @@ void Runtime::CreatePaddleBackend() {
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
 #else
-  FDASSERT(false, "PaddleBackend is not available, please compiled with "
-                  "ENABLE_PADDLE_BACKEND=ON.");
+  FDASSERT(false,
+           "PaddleBackend is not available, please compiled with "
+           "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 
@@ -699,8 +701,9 @@ void Runtime::CreateOpenVINOBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OpenVINOBackend is not available, please compiled with "
-                  "ENABLE_OPENVINO_BACKEND=ON.");
+  FDASSERT(false,
+           "OpenVINOBackend is not available, please compiled with "
+           "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 
@@ -730,8 +733,9 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OrtBackend is not available, please compiled with "
-                  "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false,
+           "OrtBackend is not available, please compiled with "
+           "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -768,8 +772,9 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false, "TrtBackend is not available, please compiled with "
-                  "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false,
+           "TrtBackend is not available, please compiled with "
+           "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
 
@@ -781,8 +786,7 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
-  lite_option.nnadapter_subgraph_partition_config_path =
-      option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
   lite_option.enable_timvx = option.enable_timvx;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
@@ -792,8 +796,9 @@ void Runtime::CreateLiteBackend() {
                                           lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false, "LiteBackend is not available, please compiled with "
-                  "ENABLE_LITE_BACKEND=ON.");
+  FDASSERT(false,
+           "LiteBackend is not available, please compiled with "
+           "ENABLE_LITE_BACKEND=ON.");
 #endif
 }
 
@@ -816,8 +821,10 @@ void Runtime::CreateRKNPU2Backend() {
 
 Runtime* Runtime::Clone(void* stream, int device_id) {
   Runtime* runtime = new Runtime();
-  if (option.backend != Backend::OPENVINO &&
-      option.backend != Backend::PDINFER && option.backend != Backend::TRT) {
+  if (option.backend != Backend::OPENVINO
+      && option.backend != Backend::PDINFER
+      && option.backend != Backend::TRT
+      ) {
     runtime->Init(option);
     FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
                   clone engine to  reduce CPU/GPU memory usage now. For "
@@ -827,8 +834,8 @@ Runtime* Runtime::Clone(void* stream, int device_id) {
               << std::endl;
     return runtime;
   }
-  FDINFO << "Runtime Clone with Backend:: " << Str(option.backend) << " in "
-         << Str(option.device) << "." << std::endl;
+  FDINFO << "Runtime Clone with Backend:: " << Str(option.backend) << " in " << Str(option.device)
+         << "." << std::endl;
   runtime->option = option;
   runtime->backend_ = backend_->Clone(stream, device_id);
   return runtime;

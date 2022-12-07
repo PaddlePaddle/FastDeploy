@@ -37,8 +37,5 @@ FASTDEPLOY_DECL void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
                            const std::vector<int64_t>& starts,
                            const std::vector<int64_t>& ends, FDTensor* out);
 
-FASTDEPLOY_DECL void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
-                           const std::vector<int64_t>& index, FDTensor* out);
-
 }  // namespace function
 }  // namespace fastdeploy

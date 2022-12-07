@@ -20,6 +20,10 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
+DBDetectorPostprocessor::DBDetectorPostprocessor() {
+  initialized_ = true;
+}
+
 bool DBDetectorPostprocessor::SingleBatchPostprocessor(
       const float* out_data,
       int n2,
@@ -53,10 +57,10 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
   std::vector<std::vector<std::vector<int>>> boxes;
 
   boxes =
-      util_post_processor_.BoxesFromBitmap(pred_map, bit_map, det_db_box_thresh_,
+      post_processor_.BoxesFromBitmap(pred_map, bit_map, det_db_box_thresh_,
                                       det_db_unclip_ratio_, det_db_score_mode_);
 
-  boxes = util_post_processor_.FilterTagDetRes(boxes, det_img_info);
+  boxes = post_processor_.FilterTagDetRes(boxes, det_img_info);
 
   // boxes to boxes_result
   for (int i = 0; i < boxes.size(); i++) {
@@ -76,6 +80,10 @@ bool DBDetectorPostprocessor::SingleBatchPostprocessor(
 bool DBDetectorPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                   std::vector<std::vector<std::array<int, 8>>>* results,
                                   const std::vector<std::array<int,4>>& batch_det_img_info) {
+  if (!initialized_) {
+    FDERROR << "Postprocessor is not initialized." << std::endl;
+    return false;
+  }
   // DBDetector have only 1 output tensor.
   const FDTensor& tensor = tensors[0];
 

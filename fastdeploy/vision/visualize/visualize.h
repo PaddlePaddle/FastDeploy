@@ -20,11 +20,9 @@
 #include "fastdeploy/vision/tracking/pptracking/model.h"
 
 namespace fastdeploy {
-/** \brief All C++ FastDeploy Vision Models APIs are defined inside this namespace
-*
-*/
 namespace vision {
 
+// This class will deprecated, please not use it
 class FASTDEPLOY_DECL Visualize {
  public:
   static int num_classes_;
@@ -54,108 +52,35 @@ class FASTDEPLOY_DECL Visualize {
 
 std::vector<int> GenerateColorMap(int num_classes = 1000);
 cv::Mat RemoveSmallConnectedArea(const cv::Mat& alpha_pred, float threshold);
-/** \brief Show the visualized results for detection models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
- * \param[in] line_size line size for bounding boxes
- * \param[in] font_size font size for text
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      const DetectionResult& result,
                                      float score_threshold = 0.0,
                                      int line_size = 1, float font_size = 0.5f);
-/** \brief Show the visualized results with custom labels for detection models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] labels the visualized result will show the bounding box contain class label
- * \param[in] score_threshold threshold for result scores, the bounding box will not be shown if the score is less than score_threshold
- * \param[in] line_size line size for bounding boxes
- * \param[in] font_size font size for text
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisDetection(const cv::Mat& im,
                                      const DetectionResult& result,
                                      const std::vector<std::string>& labels,
                                      float score_threshold = 0.0,
                                      int line_size = 1, float font_size = 0.5f);
-/** \brief Show the visualized results for classification models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] top_k the length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
- * \param[in] score_threshold threshold for top_k scores, the class will not be shown if the score is less than score_threshold
- * \param[in] font_size font size
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisClassification(
   const cv::Mat& im, const ClassifyResult& result, int top_k = 5,
   float score_threshold = 0.0f, float font_size = 0.5f);
-/** \brief Show the visualized results with custom labels for classification models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] labels custom labels for user, the visualized result will show the corresponding custom labels
- * \param[in] top_k the length of return values, e.g., if topk==2, the result will include the 2 most possible class label for input image.
- * \param[in] score_threshold threshold for top_k scores, the class will not be shown if the score is less than score_threshold
- * \param[in] font_size font size
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisClassification(
   const cv::Mat& im, const ClassifyResult& result,
   const std::vector<std::string>& labels, int top_k = 5,
   float score_threshold = 0.0f, float font_size = 0.5f);
-/** \brief Show the visualized results for face detection models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] line_size line size for bounding boxes
- * \param[in] font_size font size for text
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisFaceDetection(const cv::Mat& im,
                                          const FaceDetectionResult& result,
                                          int line_size = 1,
                                          float font_size = 0.5f);
-/** \brief Show the visualized results for face alignment models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] line_size line size for circle point
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisFaceAlignment(const cv::Mat& im,
                                          const FaceAlignmentResult& result,
                                          int line_size = 1);
-/** \brief Show the visualized results for segmentation models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] weight transparent weight of visualized result image
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisSegmentation(const cv::Mat& im,
                                         const SegmentationResult& result,
                                         float weight = 0.5);
-/** \brief Show the visualized results for matting models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \param[in] remove_small_connected_area if remove_small_connected_area==true, the visualized result will not include the small connected areas
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisMatting(const cv::Mat& im,
                                    const MattingResult& result,
                                    bool remove_small_connected_area = false);
-/** \brief Show the visualized results for Ocr models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] result the result produced by model
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
 
 FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
@@ -168,13 +93,6 @@ FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const cv::Mat& background,
                                        const SegmentationResult& result,
                                        int background_label);
-/** \brief Show the visualized results for key point detection models
- *
- * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
- * \param[in] results the result produced by model
- * \param[in] conf_threshold threshold for result scores, the result will not be shown if the score is less than conf_threshold
- * \return cv::Mat type stores the visualized results
- */
 FASTDEPLOY_DECL cv::Mat VisKeypointDetection(const cv::Mat& im,
                         const KeyPointDetectionResult& results,
                         float conf_threshold = 0.5f);

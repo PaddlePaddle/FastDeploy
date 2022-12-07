@@ -1,7 +1,7 @@
 package com.baidu.paddle.fastdeploy.app.examples.segmentation;
 
-import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -19,6 +19,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -29,10 +30,10 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.ui.Utils;
-import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.SegmentationResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.segmentation.PaddleSegModel;
@@ -340,7 +341,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
     }
 
     private void detail(Bitmap bitmap) {
-        predictor.predict(bitmap, true, 0.7f);
+        predictor.predict(bitmap, true, 0.4f);
         resultImage.setImageBitmap(bitmap);
     }
 
@@ -367,7 +368,7 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
             if (Boolean.parseBoolean(SegmentationSettingsActivity.enableLiteFp16)) {
                 option.enableLiteFp16();
             }
-            predictor.setIsVerticalScreen(true);
+            predictor.setVerticalScreenFlag(true);
             predictor.init(modelFile, paramsFile, configFile, option);
         }
     }

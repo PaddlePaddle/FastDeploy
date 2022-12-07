@@ -1,9 +1,5 @@
 package com.baidu.paddle.fastdeploy.app.examples.detection;
 
-import static com.baidu.paddle.fastdeploy.ui.Utils.decodeBitmap;
-import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
-import static com.baidu.paddle.fastdeploy.ui.Utils.readTxt;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -20,6 +16,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -31,14 +28,18 @@ import android.widget.TextView;
 
 import com.baidu.paddle.fastdeploy.RuntimeOption;
 import com.baidu.paddle.fastdeploy.app.examples.R;
-import com.baidu.paddle.fastdeploy.ui.Utils;
-import com.baidu.paddle.fastdeploy.ui.view.CameraSurfaceView;
-import com.baidu.paddle.fastdeploy.ui.view.ResultListView;
-import com.baidu.paddle.fastdeploy.ui.view.adapter.BaseResultAdapter;
-import com.baidu.paddle.fastdeploy.ui.view.model.BaseResultModel;
+import com.baidu.paddle.fastdeploy.app.ui.view.CameraSurfaceView;
+import com.baidu.paddle.fastdeploy.app.ui.view.ResultListView;
+import com.baidu.paddle.fastdeploy.app.ui.Utils;
+import com.baidu.paddle.fastdeploy.app.ui.view.adapter.BaseResultAdapter;
+import com.baidu.paddle.fastdeploy.app.ui.view.model.BaseResultModel;
 import com.baidu.paddle.fastdeploy.vision.DetectionResult;
 import com.baidu.paddle.fastdeploy.vision.Visualize;
 import com.baidu.paddle.fastdeploy.vision.detection.PicoDet;
+
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.decodeBitmap;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.getRealPathFromURI;
+import static com.baidu.paddle.fastdeploy.app.ui.Utils.readTxt;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -405,7 +406,7 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
                 }
             }
         }
-        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.base_result_page_item, results);
+        BaseResultAdapter adapter = new BaseResultAdapter(getBaseContext(), R.layout.detection_result_page_item, results);
         resultView.setAdapter(adapter);
         resultView.invalidate();
 

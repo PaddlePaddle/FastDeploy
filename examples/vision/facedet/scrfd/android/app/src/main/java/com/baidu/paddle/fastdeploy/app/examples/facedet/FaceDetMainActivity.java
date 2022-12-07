@@ -300,8 +300,6 @@ public class FaceDetMainActivity extends Activity implements View.OnClickListene
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
-        } else {
-            svPreview.enableCamera();
         }
         svPreview.onResume();
     }

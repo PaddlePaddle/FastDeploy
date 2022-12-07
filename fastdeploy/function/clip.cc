@@ -39,15 +39,14 @@ void ClipKernel(const FDTensor& x, double min, double max, FDTensor* out) {
            "max should be greater than or equal to min. But received min = %f, "
            "max = %f",
            static_cast<float>(min_), static_cast<float>(max_));
-  FDTensor tmp;
-  tmp.Allocate(x.Shape(), x.Dtype());
+
+  out->Allocate(x.Shape(), x.Dtype());
   const T* x_data = reinterpret_cast<const T*>(x.Data());
 
   int64_t numel = x.Numel();
-  T* out_data = reinterpret_cast<T*>(tmp.Data());
+  T* out_data = reinterpret_cast<T*>(out->Data());
 
   std::transform(x_data, x_data + numel, out_data, ClipFunctor<T>(min_, max_));
-  *out = std::move(tmp);
 }
 
 void Clip(const FDTensor& x, double min, double max, FDTensor* out) {

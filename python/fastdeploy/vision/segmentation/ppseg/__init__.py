@@ -50,26 +50,23 @@ class PaddleSegModel(FastDeployModel):
         return self._model.predict(image)
 
     def batch_predict(self, image_list):
-        """Predict the segmentation results for a batch of input images
-
+        """Predict the segmentation results for a batch of input image
         :param image_list: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
-        :return: list of SegmentationResult
+        :return list of SegmentationResult
         """
         return self._model.batch_predict(image_list)
 
     @property
     def preprocessor(self):
         """Get PaddleSegPreprocessor object of the loaded model
-
-        :return: PaddleSegPreprocessor
+        :return PaddleSegPreprocessor
         """
         return self._model.preprocessor
 
     @property
     def postprocessor(self):
         """Get PaddleSegPostprocessor object of the loaded model
-
-        :return: PaddleSegPostprocessor
+        :return PaddleSegPostprocessor
         """
         return self._model.postprocessor
 
@@ -77,7 +74,6 @@ class PaddleSegModel(FastDeployModel):
 class PaddleSegPreprocessor:
     def __init__(self, config_file):
         """Create a preprocessor for PaddleSegModel from configuration file
-
         :param config_file: (str)Path of configuration file, e.g ppliteseg/deploy.yaml
         """
         self._preprocessor = C.vision.segmentation.PaddleSegPreprocessor(
@@ -85,8 +81,7 @@ class PaddleSegPreprocessor:
 
     def run(self, input_ims):
         """Preprocess input images for PaddleSegModel
-
-        :param input_ims: (list of numpy.ndarray)The input image
+        :param: input_ims: (list of numpy.ndarray)The input image
         :return: list of FDTensor
         """
         return self._preprocessor.run(input_ims)
@@ -119,7 +114,6 @@ class PaddleSegPreprocessor:
 class PaddleSegPostprocessor:
     def __init__(self, config_file):
         """Create a postprocessor for PaddleSegModel from configuration file
-
         :param config_file: (str)Path of configuration file, e.g ppliteseg/deploy.yaml
         """
         self._postprocessor = C.vision.segmentation.PaddleSegPostprocessor(
@@ -127,9 +121,8 @@ class PaddleSegPostprocessor:
 
     def run(self, runtime_results, imgs_info):
         """Postprocess the runtime results for PaddleSegModel
-
-        :param runtime_results: (list of FDTensor)The output FDTensor results from runtime
-        :param imgs_info: The original input images shape info map, key is "shape_info", value is [[image_height, image_width]]
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :param: imgs_info: The original input images shape info map, key is "shape_info", value is [[image_height, image_width]]
         :return: list of SegmentationResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
         return self._postprocessor.run(runtime_results, imgs_info)

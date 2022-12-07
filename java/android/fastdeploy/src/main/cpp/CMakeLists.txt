@@ -43,8 +43,6 @@ add_library(
         fastdeploy_jni/vision/facedet/scrfd_jni.cc
         fastdeploy_jni/vision/facedet/yolov5face_jni.cc
         fastdeploy_jni/vision/facedet/facedet_utils_jni.cc
-        fastdeploy_jni/vision/keypointdetection/pptinypose_jni.cc
-        fastdeploy_jni/vision/keypointdetection/keypointdetection_utils_jni.cc
 )
 
 # Searches for a specified prebuilt library and stores the path as a

@@ -6,7 +6,7 @@ Users can use the one-click model quantization tool to quantize and deploy the m
 ## FastDeploy One-Click Model Quantization Tool
 
 FastDeploy provides a one-click quantization tool that allows users to quantize a model simply with a configuration file.
-For detailed tutorial, please refer to : [One-Click Model Quantization Tool](../../../../../tools/common_tools/auto_compression/)
+For detailed tutorial, please refer to : [One-Click Model Quantization Tool](../../../../../tools/auto_compression/)
 
 ## Download Quantized YOLOv6s Model
 

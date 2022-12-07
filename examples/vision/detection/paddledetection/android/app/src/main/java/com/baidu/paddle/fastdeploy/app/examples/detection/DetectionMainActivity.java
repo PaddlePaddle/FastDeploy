@@ -305,8 +305,6 @@ public class DetectionMainActivity extends Activity implements View.OnClickListe
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
-        } else {
-            svPreview.enableCamera();
         }
         svPreview.onResume();
     }

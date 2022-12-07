@@ -50,6 +50,14 @@ bool DBDetector::Initialize() {
   return true;
 }
 
+bool DBDetector::Predict(cv::Mat* img,
+                         std::vector<std::array<int, 8>>* boxes_result) {
+  if (!Predict(*img, boxes_result)) {
+    return false;
+  }
+  return true;
+}
+
 bool DBDetector::Predict(const cv::Mat& img,
                          std::vector<std::array<int, 8>>* boxes_result) {
   std::vector<std::vector<std::array<int, 8>>> det_results;

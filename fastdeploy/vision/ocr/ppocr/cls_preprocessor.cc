@@ -21,53 +21,58 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
+ClassifierPreprocessor::ClassifierPreprocessor() {
+  initialized_ = true;
+}
+
 void OcrClassifierResizeImage(FDMat* mat,
                               const std::vector<int>& cls_image_shape) {
-  int img_c = cls_image_shape[0];
-  int img_h = cls_image_shape[1];
-  int img_w = cls_image_shape[2];
+  int imgC = cls_image_shape[0];
+  int imgH = cls_image_shape[1];
+  int imgW = cls_image_shape[2];
 
   float ratio = float(mat->Width()) / float(mat->Height());
 
   int resize_w;
-  if (ceilf(img_h * ratio) > img_w)
-    resize_w = img_w;
+  if (ceilf(imgH * ratio) > imgW)
+    resize_w = imgW;
   else
-    resize_w = int(ceilf(img_h * ratio));
+    resize_w = int(ceilf(imgH * ratio));
 
-  Resize::Run(mat, resize_w, img_h);
+  Resize::Run(mat, resize_w, imgH);
+
+  std::vector<float> value = {0, 0, 0};
+  if (resize_w < imgW) {
+    Pad::Run(mat, 0, 0, 0, imgW - resize_w, value);
+  }
 }
 
 bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
-  return Run(images, outputs, 0, images->size());
-}
-
-bool ClassifierPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
-                                 size_t start_index, size_t end_index) {
-
-  if (images->size() == 0 || start_index <0 || end_index <= start_index || end_index > images->size()) {
-    FDERROR << "images->size() or index error. Correct is: 0 <= start_index < end_index <= images->size()" << std::endl;
+  if (!initialized_) {
+    FDERROR << "The preprocessor is not initialized." << std::endl;
+    return false;
+  }
+  if (images->size() == 0) {
+    FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;
   }
 
-  for (size_t i = start_index; i < end_index; ++i) {
+  for (size_t i = 0; i < images->size(); ++i) {
     FDMat* mat = &(images->at(i));
     OcrClassifierResizeImage(mat, cls_image_shape_);
+    NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
+    /*
     Normalize::Run(mat, mean_, scale_, is_scale_);
-    std::vector<float> value = {0, 0, 0};
-    if (mat->Width() < cls_image_shape_[2]) {
-      Pad::Run(mat, 0, 0, 0, cls_image_shape_[2] - mat->Width(), value);
-    }
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
+    */
   }
   // Only have 1 output Tensor.
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
-  size_t tensor_size = end_index - start_index;
-  std::vector<FDTensor> tensors(tensor_size); 
-  for (size_t i = 0; i < tensor_size; ++i) {
-    (*images)[i + start_index].ShareWithTensor(&(tensors[i]));
+  std::vector<FDTensor> tensors(images->size()); 
+  for (size_t i = 0; i < images->size(); ++i) {
+    (*images)[i].ShareWithTensor(&(tensors[i]));
     tensors[i].ExpandDim(0);
   }
   if (tensors.size() == 1) {

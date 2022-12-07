@@ -19,33 +19,6 @@
 namespace fastdeploy {
 namespace jni {
 
-cv::Mat CreateZeroCopyRGBAFromBitmap(JNIEnv *env, jobject j_argb8888_bitmap) {
-  cv::Mat c_rgba;
-  AndroidBitmapInfo j_bitmap_info;
-  if (AndroidBitmap_getInfo(env, j_argb8888_bitmap, &j_bitmap_info) < 0) {
-    LOGE("Invoke AndroidBitmap_getInfo() failed!");
-    return c_rgba;
-  }
-  if (j_bitmap_info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-    LOGE("Only Bitmap.Config.ARGB8888 color format is supported!");
-    return c_rgba;
-  }
-  void *j_bitmap_pixels;
-  if (AndroidBitmap_lockPixels(env, j_argb8888_bitmap, &j_bitmap_pixels) < 0) {
-    LOGE("Invoke AndroidBitmap_lockPixels() failed!");
-    return c_rgba;
-  }
-  cv::Mat j_bitmap_im(static_cast<int>(j_bitmap_info.height),
-                      static_cast<int>(j_bitmap_info.width), CV_8UC4,
-                      j_bitmap_pixels); // no copied.
-  c_rgba = j_bitmap_im; // ref only.
-  if (AndroidBitmap_unlockPixels(env, j_argb8888_bitmap) < 0) {
-    LOGE("Invoke AndroidBitmap_unlockPixels() failed!");
-    return c_rgba;
-  }
-  return c_rgba;
-}
-
 jboolean ARGB888Bitmap2RGBA(JNIEnv *env, jobject j_argb8888_bitmap,
                             cv::Mat *c_rgba) {
   // Convert the android bitmap(ARGB8888) to the OpenCV RGBA image. Actually,
@@ -53,8 +26,26 @@ jboolean ARGB888Bitmap2RGBA(JNIEnv *env, jobject j_argb8888_bitmap,
   // so it is unnecessary to do the conversion of color format, check
   // https://developer.android.com/reference/android/graphics/Bitmap.Config#ARGB_8888
   // to get the more details about Bitmap.Config.ARGB8888
-  *c_rgba = CreateZeroCopyRGBAFromBitmap(env, j_argb8888_bitmap);
-  if (c_rgba->empty()) {
+  AndroidBitmapInfo j_bitmap_info;
+  if (AndroidBitmap_getInfo(env, j_argb8888_bitmap, &j_bitmap_info) < 0) {
+    LOGE("Invoke AndroidBitmap_getInfo() failed!");
+    return JNI_FALSE;
+  }
+  if (j_bitmap_info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
+    LOGE("Only Bitmap.Config.ARGB8888 color format is supported!");
+    return JNI_FALSE;
+  }
+  void *j_bitmap_pixels;
+  if (AndroidBitmap_lockPixels(env, j_argb8888_bitmap, &j_bitmap_pixels) < 0) {
+    LOGE("Invoke AndroidBitmap_lockPixels() failed!");
+    return JNI_FALSE;
+  }
+  cv::Mat j_bitmap_im(static_cast<int>(j_bitmap_info.height),
+                      static_cast<int>(j_bitmap_info.width), CV_8UC4,
+                      j_bitmap_pixels);
+  j_bitmap_im.copyTo(*(c_rgba));
+  if (AndroidBitmap_unlockPixels(env, j_argb8888_bitmap) < 0) {
+    LOGE("Invoke AndroidBitmap_unlockPixels() failed!");
     return JNI_FALSE;
   }
   return JNI_TRUE;
@@ -66,8 +57,6 @@ jboolean ARGB888Bitmap2BGR(JNIEnv *env, jobject j_argb8888_bitmap,
   if (!ARGB888Bitmap2RGBA(env, j_argb8888_bitmap, &c_rgba)) {
     return JNI_FALSE;
   }
-  // TODO: Use the neon instruction to optimize this conversion.
-  // COLOR_RGBA2BGR will allocate memories for new mat.
   cv::cvtColor(c_rgba, *(c_bgr), cv::COLOR_RGBA2BGR);
   return JNI_TRUE;
 }
@@ -84,11 +73,9 @@ jboolean RGBA2ARGB888Bitmap(JNIEnv *env, jobject j_argb8888_bitmap,
     LOGE("Invoke AndroidBitmap_lockPixels() failed!");
     return JNI_FALSE;
   }
-  // no copied, but point to bitmap data.
   cv::Mat j_bitmap_im(static_cast<int>(j_bitmap_info.height),
                       static_cast<int>(j_bitmap_info.width), CV_8UC4,
                       j_bitmap_pixels);
-  // TODO: Use zero copy operation or neon to boost performance.
   c_rgba.copyTo(j_bitmap_im);
   if (AndroidBitmap_unlockPixels(env, j_argb8888_bitmap) < 0) {
     LOGE("Invoke AndroidBitmap_unlockPixels() failed!");
