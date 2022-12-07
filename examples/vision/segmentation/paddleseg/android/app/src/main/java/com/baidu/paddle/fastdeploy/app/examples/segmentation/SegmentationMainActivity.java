@@ -287,8 +287,6 @@ public class SegmentationMainActivity extends Activity implements View.OnClickLi
         // Open camera until the permissions have been granted
         if (!checkAllPermissions()) {
             svPreview.disableCamera();
-        } else {
-            svPreview.enableCamera();
         }
         svPreview.onResume();
     }

@@ -74,12 +74,12 @@ void InferHumanPPHumansegv2Lite(const std::string& device) {
   auto im = cv::imread(image_file);
 
   if (device == "npu") {
-    model.GetPreprocessor().DisableNormalizeAndPermute();
+    model.DisableNormalizeAndPermute();
   }
 
   fastdeploy::vision::SegmentationResult res;
   clock_t start = clock();
-  if (!model.Predict(im, &res)) {
+  if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }

@@ -35,29 +35,13 @@ void SortBoxes(std::vector<std::array<int, 8>>* boxes) {
   if (boxes->size() == 0) {
     return;
   }
-  
+
   for (int i = 0; i < boxes->size() - 1; i++) {
-    for (int j = i; j >=0 ; j--){
-        if (std::abs((*boxes)[j + 1][1] - (*boxes)[j][1]) < 10 &&
-        ((*boxes)[j + 1][0] < (*boxes)[j][0])) {
-          std::swap((*boxes)[i], (*boxes)[i + 1]);
-        }
+    if (std::abs((*boxes)[i + 1][1] - (*boxes)[i][1]) < 10 &&
+        ((*boxes)[i + 1][0] < (*boxes)[i][0])) {
+      std::swap((*boxes)[i], (*boxes)[i + 1]);
     }
   }
-
-}
-
-std::vector<int> ArgSort(const std::vector<float> &array) {
-  const int array_len(array.size());
-  std::vector<int> array_index(array_len, 0);
-  for (int i = 0; i < array_len; ++i)
-    array_index[i] = i;
-
-  std::sort(
-      array_index.begin(), array_index.end(),
-      [&array](int pos1, int pos2) { return (array[pos1] < array[pos2]); });
-
-  return array_index;
 }
 
 }  // namespace ocr

@@ -161,24 +161,6 @@ public class Visualize {
                 fontSize);
     }
 
-    // Visualize KeyPointDetectionResult
-    public static boolean visKeypointDetection(Bitmap ARGB8888Bitmap,
-                                               KeyPointDetectionResult result) {
-        return visKeyPointDetectionNative(
-                ARGB8888Bitmap,
-                result,
-                0.5f);
-    }
-
-    public static boolean visKeypointDetection(Bitmap ARGB8888Bitmap,
-                                               KeyPointDetectionResult result,
-                                               float confThreshold) {
-        return visKeyPointDetectionNative(
-                ARGB8888Bitmap,
-                result,
-                confThreshold);
-    }
-
     // VisDetection in native
     private static native boolean visDetectionNative(Bitmap ARGB8888Bitmap,
                                                      DetectionResult result,
@@ -208,11 +190,6 @@ public class Visualize {
                                                          FaceDetectionResult result,
                                                          int lineSize,
                                                          float fontSize);
-
-    // VisKeypointDetection in native
-    private static native boolean visKeyPointDetectionNative(Bitmap ARGB8888Bitmap,
-                                                             KeyPointDetectionResult result,
-                                                             float confThreshold);
 
     /* Initializes at the beginning */
     static {

@@ -18,8 +18,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace segmentation {
-/*! @brief Preprocessor object for PaddleSeg serials model.
-  */
+
 class FASTDEPLOY_DECL PaddleSegPreprocessor {
  public:
   /** \brief Create a preprocessor instance for PaddleSeg serials model

@@ -22,6 +22,12 @@ public class PaddleSegModel {
         init_(modelFile, paramsFile, configFile, new RuntimeOption());
     }
 
+    // Is vertical screen or not, for PP-HumanSeg on vertical screen,
+    // this flag must be 'true'.
+    public void setVerticalScreenFlag(boolean flag) {
+        mIsVerticalScreen = flag;
+    }
+
     // Constructor with custom runtime option
     public PaddleSegModel(String modelFile,
                           String paramsFile,
@@ -35,17 +41,6 @@ public class PaddleSegModel {
                         String configFile,
                         RuntimeOption runtimeOption) {
         return init_(modelFile, paramsFile, configFile, runtimeOption);
-    }
-
-    // Deprecated. Please use setIsVerticalScreen instead.
-    public void setVerticalScreenFlag(boolean flag) {
-        mIsVerticalScreen = flag;
-    }
-
-    // Is vertical screen or not, for PP-HumanSeg on vertical screen,
-    // this flag must be 'true'.
-    public void setIsVerticalScreen(boolean flag) {
-        mIsVerticalScreen = flag;
     }
 
     public boolean release() {

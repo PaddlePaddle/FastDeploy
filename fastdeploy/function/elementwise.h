@@ -14,11 +14,9 @@
 
 #pragma once
 
-#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/fd_tensor.h"
 
 namespace fastdeploy {
-
 namespace function {
 
 /** Excute the add operation for input FDTensors. *out = x + y.
@@ -64,42 +62,10 @@ FASTDEPLOY_DECL void Maximum(const FDTensor& x, const FDTensor& y,
 
 FASTDEPLOY_DECL FDTensor operator+(const FDTensor& x, const FDTensor& y);
 
-template <typename T> FDTensor operator+(const FDTensor& x, T y) {
-  return x + FDTensor(Scalar(y));
-}
-
-template <typename T> FDTensor operator+(T x, const FDTensor& y) {
-  return FDTensor(Scalar(x)) + y;
-}
-
 FASTDEPLOY_DECL FDTensor operator-(const FDTensor& x, const FDTensor& y);
-
-template <typename T> FDTensor operator-(const FDTensor& x, T y) {
-  return x - FDTensor(Scalar(y));
-}
-
-template <typename T> FDTensor operator-(T x, const FDTensor& y) {
-  return FDTensor(Scalar(x)) - y;
-}
 
 FASTDEPLOY_DECL FDTensor operator*(const FDTensor& x, const FDTensor& y);
 
-template <typename T> FDTensor operator*(const FDTensor& x, T y) {
-  return x * FDTensor(Scalar(y));
-}
-
-template <typename T> FDTensor operator*(T x, const FDTensor& y) {
-  return FDTensor(Scalar(x)) * y;
-}
-
 FASTDEPLOY_DECL FDTensor operator/(const FDTensor& x, const FDTensor& y);
-
-template <typename T> FDTensor operator/(const FDTensor& x, T y) {
-  return x / FDTensor(Scalar(y));
-}
-
-template <typename T> FDTensor operator/(T x, const FDTensor& y) {
-  return FDTensor(Scalar(x)) / y;
-}
 
 }  // namespace fastdeploy

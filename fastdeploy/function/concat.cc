@@ -88,13 +88,11 @@ template <typename T>
 void ConcatKernel(const std::vector<FDTensor>& input, FDTensor* output,
                   int axis) {
   auto output_shape = ComputeAndCheckConcatOutputShape(input, axis);
-  FDTensor output_tmp;
-  output_tmp.Resize(output_shape, TypeToDataType<T>::dtype, output->name,
-                    input[0].device);
+  output->Resize(output_shape, TypeToDataType<T>::dtype, output->name,
+                 input[0].device);
 
   ConcatFunctor<T> functor;
-  functor(input, axis, &output_tmp);
-  *output = std::move(output_tmp);
+  functor(input, axis, output);
 }
 
 void Concat(const std::vector<FDTensor>& x, FDTensor* out, int axis) {
