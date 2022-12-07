@@ -20,10 +20,6 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-ClassifierPostprocessor::ClassifierPostprocessor() {
-  initialized_ = true;
-}
-
 bool SingleBatchPostprocessor(const float* out_data, const size_t& length, int* cls_label, float* cls_score) {
 
   *cls_label = std::distance(
@@ -37,10 +33,14 @@ bool SingleBatchPostprocessor(const float* out_data, const size_t& length, int* 
 bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                   std::vector<int32_t>* cls_labels,
                                   std::vector<float>* cls_scores) {
-  if (!initialized_) {
-    FDERROR << "Postprocessor is not initialized." << std::endl;
-    return false;
-  }
+  size_t total_size = tensors[0].shape[0];
+  return Run(tensors, cls_labels, cls_scores, 0, total_size);
+}
+
+bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
+                                  std::vector<int32_t>* cls_labels,
+                                  std::vector<float>* cls_scores,
+                                  size_t start_index, size_t total_size) {
   // Classifier have only 1 output tensor.
   const FDTensor& tensor = tensors[0];
 
@@ -48,13 +48,29 @@ bool ClassifierPostprocessor::Run(const std::vector<FDTensor>& tensors,
   size_t batch = tensor.shape[0];
   size_t length = accumulate(tensor.shape.begin()+1, tensor.shape.end(), 1, std::multiplies<int>());
 
-  cls_labels->resize(batch);
-  cls_scores->resize(batch);
+  if (batch <= 0) {
+    FDERROR << "The infer outputTensor.shape[0] <=0, wrong infer result." << std::endl;
+    return false;
+  }
+  if (start_index < 0 || total_size <= 0) {
+    FDERROR << "start_index or total_size error. Correct is: 0 <= start_index < total_size" << std::endl;
+    return false;
+  }
+  if ((start_index + batch) > total_size) {
+    FDERROR << "start_index or total_size error. Correct is: start_index + batch(outputTensor.shape[0]) <= total_size" << std::endl;
+    return false;
+  }
+
+  cls_labels->resize(total_size);
+  cls_scores->resize(total_size);
   const float* tensor_data = reinterpret_cast<const float*>(tensor.Data());
- 
   for (int i_batch = 0; i_batch < batch; ++i_batch) {
-    if(!SingleBatchPostprocessor(tensor_data, length, &cls_labels->at(i_batch),&cls_scores->at(i_batch))) return false;
-    tensor_data = tensor_data + length;
+    if(!SingleBatchPostprocessor(tensor_data+ i_batch * length,
+                                 length,
+                                 &cls_labels->at(i_batch + start_index),
+                                 &cls_scores->at(i_batch + start_index))) {
+      return false;
+    }
   }
 
   return true;

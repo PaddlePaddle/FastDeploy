@@ -50,10 +50,29 @@ bool Classifier::Initialize() {
   return true;
 }
 
+bool Classifier::Predict(cv::Mat& img, int32_t* cls_label, float* cls_score) {
+  std::vector<int32_t> cls_labels(1);
+  std::vector<float> cls_scores(1);
+  bool success = BatchPredict({img}, &cls_labels, &cls_scores);
+  if(!success){
+    return success;
+  }
+  *cls_label = cls_labels[0];
+  *cls_score = cls_scores[0];
+  return true;
+}
+
 bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores) {
+  return BatchPredict(images, cls_labels, cls_scores, 0, images.size());
+}
+
+bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores,
+                              size_t start_index, size_t end_index) {
+  size_t total_size = images.size();
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index, end_index)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
@@ -63,7 +82,7 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores)) {
+  if (!postprocessor_.Run(reused_output_tensors_, cls_labels, cls_scores, start_index, total_size)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
     return false;
   }
