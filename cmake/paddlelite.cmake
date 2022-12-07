@@ -61,7 +61,12 @@ else() # Linux
     set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-linux-arm64-20220920.tgz")
   else()
     if(ENABLE_TIMVX)
-      set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_armhf_1130.tgz")
+      if(${TARGET_ABI} MATCHES "armhf")
+        set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_armhf_1130.tgz")
+      else()
+        set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite_linux_timvx_armv8.tgz")
+      endif()
+      
     else()
       message(FATAL_ERROR "Only support Linux aarch64 or ENABLE_TIMVX now, x64 is not supported with backend Paddle Lite.")
     endif()
