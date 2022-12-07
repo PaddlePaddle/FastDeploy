@@ -34,6 +34,8 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
       j_runtime_option_clazz, "mCpuThreadNum", "I");
   const jfieldID j_enable_lite_fp16_id = env->GetFieldID(
       j_runtime_option_clazz, "mEnableLiteFp16", "Z");
+  const jfieldID j_enable_lite_int8_id = env->GetFieldID(
+      j_runtime_option_clazz, "mEnableLiteInt8", "Z");
   const jfieldID j_lite_power_mode_id = env->GetFieldID(
       j_runtime_option_clazz, "mLitePowerMode",
       "Lcom/baidu/paddle/fastdeploy/LitePowerMode;");
@@ -59,6 +61,8 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
       j_runtime_option_obj, j_cpu_num_thread_id);
   jboolean j_enable_lite_fp16 = env->GetBooleanField(
       j_runtime_option_obj, j_enable_lite_fp16_id);
+  jboolean j_enable_lite_int8 = env->GetBooleanField(
+      j_runtime_option_obj, j_enable_lite_int8_id);
   jstring j_lite_optimized_model_dir = static_cast<jstring>(
       env->GetObjectField(j_runtime_option_obj, j_lite_optimized_model_dir_id));
   jobject j_lite_power_mode_obj = env->GetObjectField(
@@ -68,6 +72,7 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
 
   int c_cpu_num_thread = static_cast<int>(j_cpu_num_thread);
   bool c_enable_lite_fp16 = static_cast<bool>(j_enable_lite_fp16);
+  bool c_enable_lite_int8 = static_cast<bool>(j_enable_lite_int8);
   fastdeploy::LitePowerMode c_lite_power_mode =
       static_cast<fastdeploy::LitePowerMode>(j_lite_power_mode);
   std::string c_lite_optimized_model_dir =
@@ -79,6 +84,9 @@ fastdeploy::RuntimeOption NewCxxRuntimeOption(
   c_runtime_option.SetLiteOptimizedModelDir(c_lite_optimized_model_dir);
   if (c_enable_lite_fp16) {
     c_runtime_option.EnableLiteFP16();
+  }
+  if (c_enable_lite_int8) {
+    c_runtime_option.EnableLiteInt8();
   }
 
   env->DeleteLocalRef(j_runtime_option_clazz);

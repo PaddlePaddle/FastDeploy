@@ -56,7 +56,6 @@
 
 * **📲 移动端和端侧部署**
 
-  * [Paddle Lite NPU部署](#fastdeploy-edge-sdk-npu)
   * [端侧模型支持列表](#fastdeploy-edge-models)
 
 * **🌐 Web和小程序部署**  
@@ -69,8 +68,8 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details close> 
-    
+<details close>
+
 <summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
 
 #### 快速安装
@@ -132,7 +131,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details close>
-    
+
 <summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
 
 
@@ -256,7 +255,7 @@ int main(int argc, char* argv[]) {
 | Video Super-Resolution | [PaddleGAN/PP-MSVSR](./examples/vision/sr/ppmsvsr)                                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Information Extraction | [PaddleNLP/UIE](./examples/text/uie)                                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           |         |
 | NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | ❔                           | ✅       |
-| Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
+| Speech                 | [PaddleSpeech/PP-TTS](./examples/audio/pp-tts)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
 
 
 </div></details>
@@ -275,7 +274,7 @@ int main(int argc, char* argv[]) {
   <img src="https://user-images.githubusercontent.com/54695910/198619323-c9b1cbce-1c1c-4f92-9737-4805c7c0ff2f.png" />
 </div>
 
-| 任务场景               | 模型                                                                                        | 大小(MB)   | Linux   | Android | iOS     | Linux                   | Linux                          | Linux                       | Linux                            | 更新中...  |
+| 任务场景               | 模型                                                                                        | 大小(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | 更新中...  |
 |:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------:|:-----------------------:|:------------------------------:|:---------------------------:|:--------------------------------:|:-------:|
 | ---                | ---                                                                                       | ---      | ARM CPU | ARM CPU | 瑞芯微NPU<br>RK3568/RK3588 | 瑞芯微NPU<br>RV1109/RV1126/RK1808 | 晶晨NPU <br>A311D/S905D/C308X | 恩智浦NPU<br>i.MX&nbsp;8M&nbsp;Plus | 更新中...｜ |
 | Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |  ❔                             |      ✅                                |                                   |                                   |         |
