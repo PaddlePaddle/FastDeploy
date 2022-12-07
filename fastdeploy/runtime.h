@@ -223,13 +223,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
       const std::string& nnadapter_model_cache_dir);
 
   /**
-   * @brief Set nnadapter model cache buffer for Paddle Lite backend.
-   */
-  void SetLiteNNAdapterModelCacheBuffers(
-      const std::string& nnadapter_model_cache_token,
-      const std::vector<char>& nnadapter_model_cache_buffer);
-
-  /**
    * @brief Set nnadapter dynamic shape info for Paddle Lite backend.
    */
   void SetLiteNNAdapterDynamicShapeInfo(
@@ -241,12 +234,6 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
       const std::string& nnadapter_mixed_precision_quantization_config_path);
-
-  /**
-   * @brief Set nnadapter mixed precision quantization config buffer for Paddle Lite backend.
-   */
-  void SetLiteNNAdapterMixedPrecisionQuantizationConfigBuffer(
-      const std::string& nnadapter_mixed_precision_quantization_config_buffer);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -411,12 +398,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::vector<std::string> lite_nnadapter_device_names = {""};
   std::string lite_nnadapter_context_properties = "";
   std::string lite_nnadapter_model_cache_dir = "";
-  std::string lite_nnadapter_model_cache_token = "";
-  std::vector<char> lite_nnadapter_model_cache_buffer = {' '};
   std::map<std::string, std::vector<std::vector<int64_t>>>
     lite_nnadapter_dynamic_shape_info = {{" ", {{0}}}};
   std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
-  std::string lite_nnadapter_mixed_precision_quantization_config_buffer = "";
 
   bool enable_timvx = false;
   bool enable_cann = false;

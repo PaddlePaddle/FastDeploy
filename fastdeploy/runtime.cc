@@ -386,12 +386,6 @@ void RuntimeOption::SetLiteNNAdapterModelCacheDir(const std::string& nnadapter_m
   lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
-void RuntimeOption::SetLiteNNAdapterModelCacheBuffers(
-      const std::string& nnadapter_model_cache_token,
-      const std::vector<char>& nnadapter_model_cache_buffer){
-  lite_nnadapter_model_cache_token = nnadapter_model_cache_token; 
-  lite_nnadapter_model_cache_buffer = nnadapter_model_cache_buffer;
-}
 
 void RuntimeOption::SetLiteNNAdapterDynamicShapeInfo(
       const std::map<std::string, std::vector<std::vector<int64_t>>>&
@@ -404,10 +398,6 @@ void RuntimeOption::SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
         lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
 }
 
-void RuntimeOption::SetLiteNNAdapterMixedPrecisionQuantizationConfigBuffer(
-      const std::string& nnadapter_mixed_precision_quantization_config_buffer){
-        lite_nnadapter_mixed_precision_quantization_config_buffer = nnadapter_mixed_precision_quantization_config_buffer;
-}
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
@@ -833,7 +823,6 @@ void Runtime::CreateLiteBackend() {
   lite_option.nnadapter_model_cache_dir = option.lite_nnadapter_model_cache_dir;
   lite_option.nnadapter_dynamic_shape_info = option.lite_nnadapter_dynamic_shape_info;
   lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
-  lite_option.nnadapter_mixed_precision_quantization_config_buffer = option.lite_nnadapter_mixed_precision_quantization_config_buffer;
   lite_option.enable_timvx = option.enable_timvx;
   lite_option.enable_cann = option.enable_cann;
   FDASSERT(option.model_format == ModelFormat::PADDLE,
