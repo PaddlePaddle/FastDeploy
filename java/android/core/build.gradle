@@ -1,0 +1,29 @@
+apply plugin: 'com.android.library'
+
+
+android {
+    compileSdkVersion 28
+
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 28
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    packagingOptions{
+        doNotStrip "*/*/libvad.dnn.so"
+        doNotStrip "*/*/libbd_easr_s1_merge_normal_20151216.dat.so"
+    }
+}
+
+
+
+dependencies {
+    api fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+}

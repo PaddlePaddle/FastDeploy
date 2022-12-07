@@ -5,7 +5,7 @@ android {
 
     defaultConfig {
         applicationId 'com.baidu.paddle.fastdeploy.app.examples'
-        minSdkVersion 15
+        minSdkVersion 16
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 28
         versionCode 1
@@ -30,6 +30,7 @@ dependencies {
     implementation 'org.jetbrains:annotations:15.0'
     // implementation project(path: ':fastdeploy')
     implementation project(path: ':ui')
+    implementation project(path: ':core')
     //noinspection GradleDependency
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
