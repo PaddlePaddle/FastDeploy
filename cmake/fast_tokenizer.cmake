@@ -24,9 +24,16 @@ set(FASTTOKENIZER_INC_DIR
     "${FASTTOKENIZER_INSTALL_DIR}/include"
     "${FASTTOKENIZER_INSTALL_DIR}/third_party/include"
     CACHE PATH "fast_tokenizer include directory." FORCE)
-set(FASTTOKENIZER_LIB_DIR
-    "${FASTTOKENIZER_INSTALL_DIR}/lib/"
-    CACHE PATH "fast_tokenizer lib directory." FORCE)
+if(ANDROID)
+  set(FASTTOKENIZER_LIB_DIR
+      "${FASTTOKENIZER_INSTALL_DIR}/lib/${ANDROID_ABI}"
+      CACHE PATH "fast_tokenizer lib directory." FORCE)
+else()
+  set(FASTTOKENIZER_LIB_DIR
+      "${FASTTOKENIZER_INSTALL_DIR}/lib/"
+      CACHE PATH "fast_tokenizer lib directory." FORCE)
+endif()    
+
 set(FASTTOKENIZER_THIRD_LIB_DIR
     "${FASTTOKENIZER_INSTALL_DIR}/third_party/lib/"
     CACHE PATH "fast_tokenizer lib directory." FORCE)
@@ -37,21 +44,21 @@ include_directories(${FASTTOKENIZER_INC_DIR})
 
 # Set lib path
 if(WIN32)
-set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/core_tokenizers.lib"
-    CACHE FILEPATH "fast_tokenizer compile library." FORCE)
-message("FASTTOKENIZER_COMPILE_LIB = ${FASTTOKENIZER_COMPILE_LIB}")
-set(ICUDT_LIB "${FASTTOKENIZER_THIRD_LIB_DIR}/icudt.lib")
-set(ICUUC_LIB "${FASTTOKENIZER_THIRD_LIB_DIR}/icuuc.lib")
-
+  set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/core_tokenizers.lib"
+      CACHE FILEPATH "fast_tokenizer compile library." FORCE)
+  set(ICUDT_LIB "${FASTTOKENIZER_THIRD_LIB_DIR}/icudt.lib")
+  set(ICUUC_LIB "${FASTTOKENIZER_THIRD_LIB_DIR}/icuuc.lib")
 elseif(APPLE)
-set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/libcore_tokenizers.dylib"
-    CACHE FILEPATH "fast_tokenizer compile library." FORCE)
+  set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/libcore_tokenizers.dylib"
+      CACHE FILEPATH "fast_tokenizer compile library." FORCE)
+elseif(ANDROID)
+  set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
+      CACHE FILEPATH "fast_tokenizer compile library." FORCE)
 else()
-
-set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
-    CACHE FILEPATH "fast_tokenizer compile library." FORCE)
-message("FASTTOKENIZER_COMPILE_LIB = ${FASTTOKENIZER_COMPILE_LIB}")
+  set(FASTTOKENIZER_COMPILE_LIB "${FASTTOKENIZER_LIB_DIR}/libcore_tokenizers.so"
+      CACHE FILEPATH "fast_tokenizer compile library." FORCE)
 endif(WIN32)
+message("FASTTOKENIZER_COMPILE_LIB = ${FASTTOKENIZER_COMPILE_LIB}")
 
 set(FASTTOKENIZER_URL_BASE "https://bj.bcebos.com/paddlenlp/fast_tokenizer/")
 set(FASTTOKENIZER_VERSION "1.0.0")
@@ -68,6 +75,15 @@ elseif(APPLE)
   else()
     set(FASTTOKENIZER_FILE "fast_tokenizer-osx-x86_64-${FASTTOKENIZER_VERSION}.tgz")
   endif()
+elseif(ANDROID)
+  # check ABI, toolchain
+  if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))
+    message(FATAL_ERROR "FastDeploy with FastTokenizer on Android only support armeabi-v7a, arm64-v8a now.")
+  endif()
+  if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
+     message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with FastTokenizer, but found ${ANDROID_TOOLCHAIN}.")
+  endif()    
+  set(FASTTOKENIZER_FILE "fast_tokenizer-android-${ANDROID_ABI}-${FASTTOKENIZER_VERSION}.tgz")
 else()
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
     set(FASTTOKENIZER_FILE "fast_tokenizer-linux-aarch64-${FASTTOKENIZER_VERSION}.tgz")
@@ -77,18 +93,39 @@ else()
 endif()
 set(FASTTOKENIZER_URL "${FASTTOKENIZER_URL_BASE}${FASTTOKENIZER_FILE}")
 
-ExternalProject_Add(
-  ${FASTTOKENIZER_PROJECT}
-  ${EXTERNAL_PROJECT_LOG_ARGS}
-  URL ${FASTTOKENIZER_URL}
-  PREFIX ${FASTTOKENIZER_PREFIX_DIR}
-  DOWNLOAD_NO_PROGRESS 1
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy_directory ${FASTTOKENIZER_SOURCE_DIR} ${FASTTOKENIZER_INSTALL_DIR}
-  BUILD_BYPRODUCTS ${FASTTOKENIZER_COMPILE_LIB})
+if(ANDROID)
+  ExternalProject_Add(
+    ${FASTTOKENIZER_PROJECT}
+    ${EXTERNAL_PROJECT_LOG_ARGS}
+    URL ${FASTTOKENIZER_URL}
+    PREFIX ${FASTTOKENIZER_PREFIX_DIR}
+    DOWNLOAD_NO_PROGRESS 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND
+      ${CMAKE_COMMAND} -E remove_directory ${FASTTOKENIZER_INSTALL_DIR} &&
+      ${CMAKE_COMMAND} -E make_directory ${FASTTOKENIZER_INSTALL_DIR} &&  
+      ${CMAKE_COMMAND} -E make_directory ${FASTTOKENIZER_INSTALL_DIR}/lib && 
+      ${CMAKE_COMMAND} -E make_directory ${FASTTOKENIZER_INSTALL_DIR}/third_party &&
+      ${CMAKE_COMMAND} -E rename ${FASTTOKENIZER_SOURCE_DIR}/lib/ ${FASTTOKENIZER_INSTALL_DIR}/lib/${ANDROID_ABI} &&
+      ${CMAKE_COMMAND} -E copy_directory ${FASTTOKENIZER_SOURCE_DIR}/include ${FASTTOKENIZER_INSTALL_DIR}/include && 
+      ${CMAKE_COMMAND} -E copy_directory ${FASTTOKENIZER_SOURCE_DIR}/third_party/include ${FASTTOKENIZER_INSTALL_DIR}/third_party/include 
+    BUILD_BYPRODUCTS ${FASTTOKENIZER_COMPILE_LIB})
+else()
+  ExternalProject_Add(
+    ${FASTTOKENIZER_PROJECT}
+    ${EXTERNAL_PROJECT_LOG_ARGS}
+    URL ${FASTTOKENIZER_URL}
+    PREFIX ${FASTTOKENIZER_PREFIX_DIR}
+    DOWNLOAD_NO_PROGRESS 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND
+      ${CMAKE_COMMAND} -E copy_directory ${FASTTOKENIZER_SOURCE_DIR} ${FASTTOKENIZER_INSTALL_DIR}
+    BUILD_BYPRODUCTS ${FASTTOKENIZER_COMPILE_LIB})
+endif()
 
 add_library(fast_tokenizer STATIC IMPORTED GLOBAL)
 set_property(TARGET fast_tokenizer PROPERTY IMPORTED_LOCATION ${FASTTOKENIZER_COMPILE_LIB})

@@ -49,7 +49,8 @@ void StableDiffusionInpaintPipeline::PrepareMaskAndMaskedImage(
       float_mask[i] = 1;
     }
   }
-  image_mask.SetExternalData({1, 1, shape[1] * 8, shape[0] * 8},
+  // NCHW format
+  image_mask.SetExternalData({1, 1, shape[0] * 8, shape[1] * 8},
                              FDDataType::FP32, float_mask.data());
 
   // Set mask_image
@@ -314,9 +315,6 @@ void StableDiffusionInpaintPipeline::Predict(
     vision::FDMat mask_fdmat_t = vision::FDMat::Create((*output_images)[i]);
     vision::RGB2BGR::Run(&mask_fdmat_t, vision::ProcLib::OPENCV);
     mask_fdmat_t.CopyToTensor(&(*output_images)[i]);
-    FDTensor sum;
-    function::Sum((*output_images)[i], &sum, {}, false, true);
-    FDINFO << "sum = " << ((float*)sum.Data())[0] << std::endl;
   }
 }
 }  // namespace fastdeploy
