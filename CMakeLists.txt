@@ -66,6 +66,7 @@ option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
 option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_CANN "Whether to compile for Huawei Ascend deploy with CANN." OFF)
+option(WITH_CANN_PY "Whether to compile for Huawei Ascend deploy with CANN using python." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -143,12 +144,27 @@ if (ENABLE_TIMVX)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
-
 if (WITH_CANN)
   if(NOT ${ENABLE_LITE_BACKEND})
       message(WARNING "While compiling with -DWITH_CANN=ON, will force to set -DENABLE_LITE_BACKEND=ON")
       set(ENABLE_LITE_BACKEND ON)
   endif()
+endif()
+
+if (WITH_CANN_PY)
+  message(WARNING "This is only for CANN python version")
+  if(NOT ${ENABLE_LITE_BACKEND})
+      set(ENABLE_LITE_BACKEND ON)
+  endif()
+  execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite/lib
+  COMMAND sh -c "xargs ${PATCHELF_EXE} --set-rpath '$ORIGIN'" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/paddlelite/lib
+          RESULT_VARIABLE result
+                OUTPUT_VARIABLE curr_out
+                ERROR_VARIABLE  curr_out)
+  if(ret EQUAL "1")
+    message(FATAL_ERROR "Failed to patchelf tensorrt libraries.")
+  endif()
+  message(STATUS "result:${result} out:${curr_out}")
 endif()
 
 
