@@ -230,7 +230,7 @@ bool UIEModel::Initialize() {
 
 void UIEModel::SetValidBackend() {
   // TODO(zhoushunjie): Add lite backend in future
-  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER};
+  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
 }
 
