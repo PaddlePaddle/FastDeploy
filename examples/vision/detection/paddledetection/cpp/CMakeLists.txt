@@ -29,3 +29,18 @@ target_link_libraries(infer_ppyolo_demo ${FASTDEPLOY_LIBS})
 
 add_executable(infer_mask_rcnn_demo ${PROJECT_SOURCE_DIR}/infer_mask_rcnn.cc)
 target_link_libraries(infer_mask_rcnn_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_ssd_demo ${PROJECT_SOURCE_DIR}/infer_ssd.cc)
+target_link_libraries(infer_ssd_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov5_demo ${PROJECT_SOURCE_DIR}/infer_yolov5.cc)
+target_link_libraries(infer_yolov5_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov6_demo ${PROJECT_SOURCE_DIR}/infer_yolov6.cc)
+target_link_libraries(infer_yolov6_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_yolov7_demo ${PROJECT_SOURCE_DIR}/infer_yolov7.cc)
+target_link_libraries(infer_yolov7_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_rtmdet_demo ${PROJECT_SOURCE_DIR}/infer_rtmdet.cc)
+target_link_libraries(infer_rtmdet_demo ${FASTDEPLOY_LIBS})
