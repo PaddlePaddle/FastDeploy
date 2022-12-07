@@ -44,6 +44,19 @@ void SortBoxes(std::vector<std::array<int, 8>>* boxes) {
   }
 }
 
+std::vector<int> ArgSort(const std::vector<float> &array) {
+  const int array_len(array.size());
+  std::vector<int> array_index(array_len, 0);
+  for (int i = 0; i < array_len; ++i)
+    array_index[i] = i;
+
+  std::sort(
+      array_index.begin(), array_index.end(),
+      [&array](int pos1, int pos2) { return (array[pos1] < array[pos2]); });
+
+  return array_index;
+}
+
 }  // namespace ocr
 }  // namespace vision
 }  // namespace fastdeploy
