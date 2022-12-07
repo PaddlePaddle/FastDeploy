@@ -138,7 +138,7 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   external_data_ptr = nullptr;
 }
 
-void FDTensor::SetQuantizationInfo(int32_t &zero_point,std::vector<float> &scale){
+void FDTensor::SetQuantizationInfo(int32_t zero_point,std::vector<float>& scale){
   quantized_parameter_.first = zero_point;
   quantized_parameter_.second = scale;
 }
