@@ -30,15 +30,6 @@ bool RKYOLO::Initialize() {
   return true;
 }
 
-bool RKYOLO::Predict(cv::Mat* im, DetectionResult* result, float conf_threshold, float nms_threshold) {
-  postprocessor_.SetConfThreshold(conf_threshold);
-  postprocessor_.SetNMSThreshold(nms_threshold);
-  if (!Predict(*im, result)) {
-    return false;
-  }
-  return true;
-}
-
 bool RKYOLO::Predict(const cv::Mat& im,
                      DetectionResult* result) {
   std::vector<DetectionResult> results;
