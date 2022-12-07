@@ -349,6 +349,8 @@ public class FaceDetectionResult {
 public class RuntimeOption {
   public void enableLiteFp16(); // 开启fp16精度推理
   public void disableLiteFP16(); // 关闭fp16精度推理
+  public void enableLiteInt8(); // 开启int8精度推理，针对量化模型
+  public void disableLiteInt8(); // 关闭int8精度推理
   public void setCpuThreadNum(int threadNum); // 设置线程数
   public void setLitePowerMode(LitePowerMode mode);  // 设置能耗模式
   public void setLitePowerMode(String modeStr);  // 通过字符串形式设置能耗模式
