@@ -195,56 +195,57 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /**
    * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
    */
-  void SetLiteSubgraphPartitionPath(
+  void SetLiteNNAdapterSubgraphPartitionPath(
       const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
    * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
    */
-  void SetNNAdapterSubgraphPartitionConfigBuffer(
+  void SetLiteNNAdapterSubgraphPartitionConfigBuffer(
       const std::string& nnadapter_subgraph_partition_config_buffer);
 
   /**
    * @brief Set nnadapter device name for Paddle Lite backend.
    */
-  void SetNNAdapterDeviceNames(
+  void SetLiteNNAdapterDeviceNames(
       const std::vector<std::string>& nnadapter_device_names);
 
   /**
    * @brief Set nnadapter context properties for Paddle Lite backend.
    */
-  void  SetNNAdapterContextProperties(
+  void  SetLiteNNAdapterContextProperties(
       const std::string& nnadapter_context_properties);
 
   /**
    * @brief Set nnadapter model cache dir for Paddle Lite backend.
    */
-  void SetNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir);
+  void SetLiteNNAdapterModelCacheDir(
+      const std::string& nnadapter_model_cache_dir);
 
   /**
    * @brief Set nnadapter model cache buffer for Paddle Lite backend.
    */
-  void SetNNAdapterModelCacheBuffers(
+  void SetLiteNNAdapterModelCacheBuffers(
       const std::string& nnadapter_model_cache_token,
       const std::vector<char>& nnadapter_model_cache_buffer);
 
   /**
    * @brief Set nnadapter dynamic shape info for Paddle Lite backend.
    */
-  void SetNNAdapterDynamicShapeInfo(
+  void SetLiteNNAdapterDynamicShapeInfo(
       const std::map<std::string, std::vector<std::vector<int64_t>>>&
           nnadapter_dynamic_shape_info);
 
   /**
    * @brief Set nnadapter mixed precision quantization config path for Paddle Lite backend.
    */
-  void SetNNAdapterMixedPrecisionQuantizationConfigPath(
+  void SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
       const std::string& nnadapter_mixed_precision_quantization_config_path);
 
   /**
    * @brief Set nnadapter mixed precision quantization config buffer for Paddle Lite backend.
    */
-  void SetNNAdapterMixedPrecisionQuantizationConfigBuffer(
+  void SetLiteNNAdapterMixedPrecisionQuantizationConfigBuffer(
       const std::string& nnadapter_mixed_precision_quantization_config_buffer);
 
   /**

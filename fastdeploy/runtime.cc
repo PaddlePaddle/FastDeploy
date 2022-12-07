@@ -363,48 +363,48 @@ void RuntimeOption::SetLiteOptimizedModelDir(
   lite_optimized_model_dir = optimized_model_dir;
 }
 
-void RuntimeOption::SetLiteSubgraphPartitionPath(
+void RuntimeOption::SetLiteNNAdapterSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
   lite_nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
 
-void RuntimeOption::SetNNAdapterSubgraphPartitionConfigBuffer(
+void RuntimeOption::SetLiteNNAdapterSubgraphPartitionConfigBuffer(
       const std::string& nnadapter_subgraph_partition_config_buffer){
   lite_nnadapter_subgraph_partition_config_buffer = nnadapter_subgraph_partition_config_buffer;
 }
 
-void RuntimeOption::SetNNAdapterDeviceNames(const std::vector<std::string>& nnadapter_device_names){
+void RuntimeOption::SetLiteNNAdapterDeviceNames(const std::vector<std::string>& nnadapter_device_names){
   lite_nnadapter_device_names = nnadapter_device_names; 
 }
 
-void RuntimeOption::SetNNAdapterContextProperties(const std::string& nnadapter_context_properties){
+void RuntimeOption::SetLiteNNAdapterContextProperties(const std::string& nnadapter_context_properties){
   lite_nnadapter_context_properties = nnadapter_context_properties; 
 }
 
-void RuntimeOption::SetNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir){
+void RuntimeOption::SetLiteNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir){
   lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
-void RuntimeOption::SetNNAdapterModelCacheBuffers(
+void RuntimeOption::SetLiteNNAdapterModelCacheBuffers(
       const std::string& nnadapter_model_cache_token,
       const std::vector<char>& nnadapter_model_cache_buffer){
   lite_nnadapter_model_cache_token = nnadapter_model_cache_token; 
   lite_nnadapter_model_cache_buffer = nnadapter_model_cache_buffer;
 }
 
-void RuntimeOption::SetNNAdapterDynamicShapeInfo(
+void RuntimeOption::SetLiteNNAdapterDynamicShapeInfo(
       const std::map<std::string, std::vector<std::vector<int64_t>>>&
           nnadapter_dynamic_shape_info){
   lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info; 
 }
 
-void RuntimeOption::SetNNAdapterMixedPrecisionQuantizationConfigPath(
+void RuntimeOption::SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
       const std::string& nnadapter_mixed_precision_quantization_config_path){
         lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
 }
 
-void RuntimeOption::SetNNAdapterMixedPrecisionQuantizationConfigBuffer(
+void RuntimeOption::SetLiteNNAdapterMixedPrecisionQuantizationConfigBuffer(
       const std::string& nnadapter_mixed_precision_quantization_config_buffer){
         lite_nnadapter_mixed_precision_quantization_config_buffer = nnadapter_mixed_precision_quantization_config_buffer;
 }
