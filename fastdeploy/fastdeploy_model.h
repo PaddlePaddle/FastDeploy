@@ -122,7 +122,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   }
 
   virtual std::unique_ptr<FastDeployModel> Clone() {
-    FDERROR << "Clone no support" << std::endl;
+    FDERROR << ModelName() << " doesn't support Cone() now." << std::endl;
     return nullptr;
   }
 
