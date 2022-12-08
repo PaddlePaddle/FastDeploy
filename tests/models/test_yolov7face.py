@@ -22,11 +22,11 @@ import runtime_config as rc
 
 
 def test_detection_yolov7face():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-lite-e.onnx"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
     input_url2 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000570688.jpg"
-    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_result1.pkl"
-    result_url2 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_result2.pkl"
+    result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7face_result1.pkl"
+    result_url2 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7face_result2.pkl"
     fd.download(model_url, "resources")
     fd.download(input_url1, "resources")
     fd.download(input_url2, "resources")
@@ -51,9 +51,6 @@ def test_detection_yolov7face():
         # test single predict
         result1 = model.predict(im1)
         result2 = model.predict(im2)
-
-        print("result1:", result1)
-        print("expect1:", expect1)
 
         diff_boxes_1 = np.fabs(
             np.array(result1.boxes) - np.array(expect1["boxes"]))

@@ -79,10 +79,8 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
                                 static_cast<float>(mat->Width())};
 
-  HWC2CHW::Run(mat);
-  Cast::Run(mat, "float");
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 }
 

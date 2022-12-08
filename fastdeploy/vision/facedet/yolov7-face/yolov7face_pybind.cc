@@ -45,7 +45,7 @@ void BindYOLOv7Face(pybind11::module& m) {
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
         std::vector<vision::FaceDetectionResult> results;
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in Yolov7FacePostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in Yolov7Postprocessor.");
         }
         return results;
       })
@@ -55,7 +55,7 @@ void BindYOLOv7Face(pybind11::module& m) {
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in Yolov7FacePostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in YOLOv7Postprocessor.");
         }
         return results;
       })

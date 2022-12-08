@@ -131,7 +131,6 @@ class YOLOv7Face(FastDeployModel):
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
         super(YOLOv7Face, self).__init__(runtime_option)
 
