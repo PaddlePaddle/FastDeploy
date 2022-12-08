@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "fastdeploy/vision.h"
 
-void InferRKYolo(const std::string& model_file, const std::string& image_file) {
+void RKNPU2Infer(const std::string& model_file, const std::string& image_file) {
   struct timeval start_time, stop_time;
 
   auto option = fastdeploy::RuntimeOption();
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  InferRKYolo(argv[1], argv[2]);
+  RKNPU2Infer(argv[1], argv[2]);
 
   return 0;
 }
