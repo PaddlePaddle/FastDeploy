@@ -21,17 +21,17 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
     return;
   }
 
-  auto im1 = cv::imread(image_file);
-  auto im_bak1 = im1.clone();
+  auto im = cv::imread(image_file);
+  auto im_bak = im.clone();
 
   fastdeploy::vision::FaceDetectionResult res;
-  if (!model.Predict(&im1, &res, 0.3, 0.5)) {
+  if (!model.Predict(&im, &res, 0.3, 0.5)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisFaceDetection(im_bak1, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

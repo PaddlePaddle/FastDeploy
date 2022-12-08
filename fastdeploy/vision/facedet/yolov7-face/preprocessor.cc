@@ -67,13 +67,12 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   // 2. BGR->RGB
   // 3. HWC->CHW
   LetterBox(mat);
-  BGR2RGB::Run(mat);
   // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
   //                std::vector<float>(mat->Channels(), 1.0));
   // Compute `result = mat * alpha + beta` directly by channel
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  Convert::Run(mat, alpha, beta);
+  ConvertAndPermute::Run(mat, alpha, beta, true);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
