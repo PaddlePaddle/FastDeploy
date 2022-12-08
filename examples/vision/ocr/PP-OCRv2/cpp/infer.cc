@@ -33,13 +33,18 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto cls_option = option;
   auto rec_option = option;
 
+  // The cls and rec model can inference a batch of images now.
+  // User could initialize the inference batch size and set them after create PPOCR model.
+  int cls_batch_size = 1;
+  int rec_batch_size = 6;
+
   // If use TRT backend, the dynamic shape will be set as follow.
   // We recommend that users set the length and height of the detection model to a multiple of 32.
   det_option.SetTrtInputShape("x", {1, 3, 64,64}, {1, 3, 640, 640},
                                 {1, 3, 960, 960});
-  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {10, 3, 48, 320}, {32, 3, 48, 1024});
-  rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {10, 3, 32, 320},
-                                {32, 3, 32, 2304});
+  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {cls_batch_size, 3, 48, 320}, {cls_batch_size, 3, 48, 1024});
+  rec_option.SetTrtInputShape("x", {1, 3, 32, 10}, {rec_batch_size, 3, 32, 320},
+                                {rec_batch_size, 3, 32, 2304});
   
   // Users could save TRT cache file to disk as follow. 
   // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
@@ -57,6 +62,12 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   // The classification model is optional, so the PP-OCR can also be connected in series as follows
   // auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &rec_model);
   auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &cls_model, &rec_model);
+
+  // Set inference batch size for cls model and rec model, the value could be -1 and 1 to positive infinity.
+  // When inference batch size is set to -1, it means that the inference batch size 
+  // of the cls and rec models will be the same as the number of boxes detected by the det model.  
+  ppocr_v2.SetClsBatchSize(cls_batch_size);
+  ppocr_v2.SetRecBatchSize(rec_batch_size);
 
   if(!ppocr_v2.Initialized()){
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
