@@ -12,28 +12,36 @@
 ```bash
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.7.0.tgz
-tar xvf fastdeploy-linux-x64-0.7.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.7.0
+wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-x.x.x.tgz # x.x.x >= 1.0.2
+tar xvf fastdeploy-linux-x64-x.x.x.tgz # x.x.x >= 1.0.2
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x # x.x.x >= 1.0.2
 make -j
 
 #下载官方转换好的YOLOv7Face模型文件和测试图片
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
-#模型位于
-https://github.com/hpc203/yolov7-detect-face-onnxrun-cpp-py
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-lite-e.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-tiny-face.onnx
 
-
+#使用yolov7-tiny-face.onnx模型
 # CPU推理
 ./infer_demo yolov7-tiny-face.onnx test_lite_face_detector_3.jpg 0
 # GPU推理
 ./infer_demo yolov7-tiny-face.onnx test_lite_face_detector_3.jpg 1
 # GPU上TensorRT推理
 ./infer_demo yolov7-tiny-face.onnx test_lite_face_detector_3.jpg 2
+
+#使用yolov7-lite-e.onnx模型
+# CPU推理
+./infer_demo yolov7-lite-e.onnx test_lite_face_detector_3.jpg 0
+# GPU推理
+./infer_demo yolov7-lite-e.onnx test_lite_face_detector_3.jpg 1
+# GPU上TensorRT推理
+./infer_demo yolov7-lite-e.onnx test_lite_face_detector_3.jpg 2
 ```
 
 运行完成可视化结果如下图所示
 
-<img width="640" src="https://user-images.githubusercontent.com/67993288/184301839-a29aefae-16c9-4196-bf9d-9c6cf694f02d.jpg">
+<img width="640" src="https://user-images.githubusercontent.com/49013063/206170111-843febb6-67d6-4c46-a121-d87d003bba21.jpg">
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
@@ -62,7 +70,7 @@ YOLOv7Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 #### Predict函数
 
 > ```c++
-> YOLOv5Face::Predict(cv::Mat* im, FaceDetectionResult* result,
+> YOLOv7Face::Predict(cv::Mat* im, FaceDetectionResult* result,
 >                 float conf_threshold = 0.3,
 >                 float nms_iou_threshold = 0.5)
 > ```

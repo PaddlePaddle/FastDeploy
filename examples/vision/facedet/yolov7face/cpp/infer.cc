@@ -24,23 +24,6 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   auto im1 = cv::imread(image_file);
   auto im_bak1 = im1.clone();
 
-  // // batchPredict
-  // auto im2 = cv::imread("./test.jpg");
-  // auto im_bak2 = im2.clone();
-  // std::vector<cv::Mat> imgs{im1, im2};
-  // std::vector<cv::Mat> imgs_bak{im_bak1, im_bak2};
-
-  // std::vector<fastdeploy::vision::FaceDetectionResult> results;
-  // if (!model.BatchPredict(imgs, &results)) {
-  //   std::cerr << "Failed to predict." << std::endl;
-  //   return;
-  // }
-  // for (int i = 0; i < results.size(); ++i) {
-  //   std::cout << results[i].Str() << std::endl;
-  //   auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(imgs_bak[i], results[i]);
-  //   cv::imwrite("vis_result“ + i + ”.jpg", vis_im);
-  // }
-
   fastdeploy::vision::FaceDetectionResult res;
   if (!model.Predict(&im1, &res, 0.3, 0.5)) {
     std::cerr << "Failed to predict." << std::endl;
@@ -48,7 +31,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im_bak1, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im_bak1, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -72,7 +55,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -98,7 +81,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im_bak, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }

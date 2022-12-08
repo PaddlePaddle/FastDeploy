@@ -14,7 +14,6 @@
 
 #include "fastdeploy/vision/facedet/yolov7-face/preprocessor.h"
 #include "fastdeploy/function/concat.h"
-#include "yaml-cpp/yaml.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 
 namespace fastdeploy {
@@ -62,20 +61,7 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
   // Record the shape of image and the shape of preprocessed image
   (*im_info)["input_shape"] = {static_cast<float>(mat->Height()),
                                static_cast<float>(mat->Width())};
-    std::cout << "mat: " << mat->Height() << " " << mat->Width() << std::endl;
-  // process after image load
-  float ratio = std::min(size_[1] * 1.0f / static_cast<float>(mat->Height()),
-                         size_[0] * 1.0f / static_cast<float>(mat->Width()));
-  if (std::fabs(ratio - 1.0f) > 1e-06) {
-    int interp = cv::INTER_AREA;
-    if (ratio > 1.0) {
-      interp = cv::INTER_LINEAR;
-    }
-    int resize_h = int(mat->Height() * ratio);
-    int resize_w = int(mat->Width() * ratio);
-    Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
-  }
-  std::cout << "resize mat: " << mat->Height() << " " << mat->Width() << std::endl;
+
   // yolov7-face's preprocess steps
   // 1. letterbox
   // 2. BGR->RGB
@@ -109,7 +95,6 @@ void Yolov7FacePreprocessor::LetterBox(FDMat* mat) {
 
   int resize_h = int(round(mat->Height() * scale));
   int resize_w = int(round(mat->Width() * scale));
-  // std::cout << resize_h << " " << resize_w << std::endl;
 
   int pad_w = size_[0] - resize_w;
   int pad_h = size_[1] - resize_h;
@@ -122,8 +107,8 @@ void Yolov7FacePreprocessor::LetterBox(FDMat* mat) {
     resize_h = size_[1];
     resize_w = size_[0];
   }
-  // std::cout << pad_h << " " << pad_w << std::endl;
-  //Resize::Run(mat, resize_w, resize_h);
+  Resize::Run(mat, resize_w, resize_h);
+
   if (pad_h > 0 || pad_w > 0) {
     float half_h = pad_h * 1.0 / 2;
     int top = int(round(half_h - 0.1));

@@ -10,19 +10,27 @@
 ```bash
 #下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd examples/vision/facedet/yolov5face/python/
+cd examples/vision/facedet/yolov7face/python/
 
 #下载YOLOv7Face模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx
-#模型位于
-https://github.com/hpc203/yolov7-detect-face-onnxrun-cpp-py
+wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-lite-e.onnx
 
+#使用yolov7-tiny-face.onnx模型
 # CPU推理
 python infer.py --model yolov7-tiny-face.onnx --image test_lite_face_detector_3.jpg --device cpu
 # GPU推理
 python infer.py --model yolov7-tiny-face.onnx --image test_lite_face_detector_3.jpg --device gpu
 # GPU上使用TensorRT推理
 python infer.py --model yolov7-tiny-face.onnx --image test_lite_face_detector_3.jpg --device gpu --use_trt True
+
+#使用yolov7-lite-e.onnx模型
+# CPU推理
+python infer.py --model yolov7-lite-e.onnx --image test_lite_face_detector_3.jpg --device cpu
+# GPU推理
+python infer.py --model yolov7-lite-e.onnx --image test_lite_face_detector_3.jpg --device gpu
+# GPU上使用TensorRT推理
+python infer.py --model yolov7-lite-e.onnx --image test_lite_face_detector_3.jpg --device gpu --use_trt True
 ```
 
 运行完成可视化结果如下图所示
@@ -71,7 +79,6 @@ YOLOv7Face模型加载和初始化，其中model_file为导出的ONNX模型格�
 > > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
 > > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
 > > * **stride**(int): 配合`is_mini_pad`成员变量使用, 默认值为`stride=32`
-> > * **landmarks_per_face**(int): 指定当前模型检测的人脸所带的关键点个数，默认为5.
 
 ## 其它文档
 

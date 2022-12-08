@@ -28,10 +28,10 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
  */
   Yolov7FacePostprocessor();
 
-  /** \brief Process the result of runtime and fill to DetectionResult structure
+  /** \brief Process the result of runtime and fill to FaceDetectionResult structure
    *
-   * \param[in] tensors The inference result from runtime
-   * \param[in] result The output result of detection
+   * \param[in] infer_result The inference result from runtime
+   * \param[in] results The output result of detection
    * \param[in] ims_info The shape info list, record input_shape and output_shape
    * \return true if the postprocess successed, otherwise false
    */
@@ -39,12 +39,12 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
            std::vector<FaceDetectionResult>* results,
            const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info);
 
-  /// Set conf_threshold, default 0.25
+  /// Set conf_threshold, default 0.7
   void SetConfThreshold(const float& conf_threshold) {
     conf_threshold_ = conf_threshold;
   }
 
-  /// Get conf_threshold, default 0.25
+  /// Get conf_threshold, default 0.7
   float GetConfThreshold() const { return conf_threshold_; }
 
   /// Set nms_threshold, default 0.5

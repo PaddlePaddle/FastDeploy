@@ -24,7 +24,7 @@ namespace fastdeploy{
 namespace vision{
 
 namespace facedet{
-/*! @brief YOLOv7Face model object used when to load a YOLOv5Face model exported by YOLOv5Face.
+/*! @brief YOLOv7Face model object used when to load a YOLOv7Face model exported by YOLOv7Face.
  */
 class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
   public:

@@ -30,8 +30,6 @@ Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
 bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result, std::vector<FaceDetectionResult>* results,
                               const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
   int batch = infer_result[0].shape[0];
-
-  std::cout <<"batch size:" << batch << std::endl;
  
   results->resize(batch);
 
@@ -68,9 +66,7 @@ bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result, std
       return true;
     }
   
-    //std::cout << "Before: "<< (*results)[bs].Str() << std::endl;
     utils::NMS(&((*results)[bs]), nms_threshold_);
-    //std::cout << "After NMS: "<< (*results)[bs].Str() << std::endl;
 
     // scale the boxes to the origin image shape
     auto iter_out = ims_info[bs].find("output_shape");
