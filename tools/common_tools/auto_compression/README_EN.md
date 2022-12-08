@@ -121,10 +121,10 @@ FastDeploy currently provides users with compression [config](./configs/) files 
 
 Once obtained the quantized model, developers can deploy it on FastDeploy. Please refer to the following docs for more details
 
-- [YOLOv5 Quantized Model Deployment](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 Quantized Model Deployment](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 Quantized Model Deployment](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 Quantized Model Deployment](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 Quantized Model Deployment](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 Quantized Model Deployment](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas Quantized Model Deployment](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas Quantized Model Deployment](../../../examples/vision/classification/paddleclas/quantize/)
