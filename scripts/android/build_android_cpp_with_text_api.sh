@@ -90,7 +90,7 @@ __build_fastdeploy_android_shared() {
         -DENABLE_LITE_BACKEND=ON \
         -DENABLE_PADDLE_FRONTEND=OFF \
         -DENABLE_FLYCV=ON \
-        -DENABLE_TEXT=OFF \
+        -DENABLE_TEXT=ON \
         -DENABLE_VISION=ON \
         -DENABLE_VISION_VISUALIZE=ON \
         -DBUILD_EXAMPLES=OFF \
@@ -114,5 +114,5 @@ main() {
 main
 
 # Usage:
-# ./scripts/android/build_android_cpp.sh arm64-v8a 21
-# ./scripts/android/build_android_cpp.sh armeabi-v7a 21
+# ./scripts/android/build_android_cpp_with_text_api.sh arm64-v8a 21
+# ./scripts/android/build_android_cpp_with_text_api.sh armeabi-v7a 21
