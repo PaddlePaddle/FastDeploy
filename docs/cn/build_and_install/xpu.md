@@ -8,7 +8,6 @@ FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理
 相关编译选项说明如下：  
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
-|ENABLE_LITE_BACKEND|OFF|编译RK库时需要设置为ON| - |
 |WITH_XPU|OFF|需要在XPU上部署时需要设置为ON| - |
 
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
@@ -45,5 +44,5 @@ python setup.py build
 python setup.py bdist_wheel
 ```  
 
-1. 昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)
+1. 昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 分类模型在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)
 2. 昆仑芯 XPU 上部署 YOLOv5 检测模型请参考：[YOLOv5 检测模型在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/detection/yolov5/xpu/README.md)
