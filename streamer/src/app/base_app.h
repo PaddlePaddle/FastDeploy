@@ -17,12 +17,14 @@
 #include "deepstream/perf.h"
 
 #include <gst/gst.h>
+#include <thread>  // NOLINT
 
 namespace fastdeploy {
 namespace streamer {
 
 enum AppType {
   VIDEO_ANALYTICS,  ///< Video analytics app
+  VIDEO_DECODER,  ///< Video decoder app
 };
 
 struct AppConfig {
@@ -41,12 +43,26 @@ class BaseApp {
   }
   virtual ~BaseApp() = default;
 
-  virtual bool Init() = 0;
+  bool Init(const std::string& config_file);
 
-  virtual bool Run() = 0;
+  bool Run();
+
+  bool RunAsync();
+
+  AppConfig* GetAppConfig() {
+    return &app_config_;
+  }
 
   GstElement* GetPipeline() {
     return pipeline_;
+  }
+
+  GMainLoop* GetLoop() {
+    return loop_;
+  }
+
+  guint GetBusId() {
+    return bus_watch_id_;
   }
 
   void SetupPerfMeasurement();
@@ -54,7 +70,10 @@ class BaseApp {
  protected:
   AppConfig app_config_;
   GstElement* pipeline_;
+  GMainLoop* loop_;
+  guint bus_watch_id_;
   NvDsAppPerfStructInt perf_struct_;
+  std::thread thread_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

@@ -29,16 +29,16 @@ namespace fastdeploy {
 namespace streamer {
 
 struct NvDsAppPerfStruct {
-  gdouble fps[MAX_SOURCE_BINS];
-  gdouble fps_avg[MAX_SOURCE_BINS];
+  gdouble fps[MAX_SOURCE_BINS] = {0};
+  gdouble fps_avg[MAX_SOURCE_BINS] = {0};
   guint num_instances;
 };
 
 typedef void (*perf_callback)(gpointer ctx, NvDsAppPerfStruct* str);
 
 struct NvDsInstancePerfStruct {
-  guint buffer_cnt;
-  guint total_buffer_cnt;
+  guint buffer_cnt = 0;
+  guint total_buffer_cnt = 0;
   struct timeval total_fps_time;
   struct timeval start_fps_time;
   struct timeval last_fps_time;

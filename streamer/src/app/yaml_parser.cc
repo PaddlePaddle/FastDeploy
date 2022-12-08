@@ -18,7 +18,16 @@ YamlParser::YamlParser(const std::string& config_file) {
 void YamlParser::ParseAppConfg(AppConfig& app_config) {
   ValidateConfig();
   auto elem = yaml_config_["app"];
-  app_config.type = AppType::VIDEO_ANALYTICS;
+
+  auto type_str = elem["type"].as<std::string>();
+  if (type_str == "video_analytics") {
+    app_config.type = AppType::VIDEO_ANALYTICS;
+  } else if (type_str == "video_decoder") {
+    app_config.type = AppType::VIDEO_DECODER;
+  } else {
+    FDASSERT(false, "Unsupported app type: %s.", type_str.c_str());
+  }
+
   app_config.enable_perf_measurement = elem["enable-perf-measurement"].as<bool>();
   if (app_config.enable_perf_measurement) {
     app_config.perf_interval_sec = elem["perf-measurement-interval-sec"].as<int>();
@@ -34,16 +43,70 @@ void YamlParser::ValidateConfig() {
   }
 }
 
-bool YamlParser::BuildPipelineFromConfig(GstElement* pipeline) {
-  pipeline_ = pipeline;
+GstElement* YamlParser::BuildPipelineFromConfig() {
+  auto pipeline_desc = YamlToPipelineDescStr();
+  pipeline_ = CreatePipeline(pipeline_desc);
+  return pipeline_;
+}
+
+std::string YamlParser::YamlToPipelineDescStr() {
   for (const auto& elem : yaml_config_) {
     std::string elem_name = elem.first.as<std::string>();
     std::cout << elem_name << std::endl;
-    FDASSERT(AddElement(elem_name, elem.second), "Failed to add element: %s",
-             elem_name.c_str());
+    ParseElement(elem_name, elem.second);
   }
-  LinkElements();
-  return true;
+  std::string pipeline_desc = "";
+  for (size_t i = 0; i < elem_descs_.size(); i++) {
+    pipeline_desc += elem_descs_[i];
+    if (elem_descs_[i].find('!') != std::string::npos) continue;
+    if (i >= elem_descs_.size() - 1) continue;
+    pipeline_desc += "! ";
+  }
+  return pipeline_desc;
+}
+
+void YamlParser::ParseElement(const std::string& name, const YAML::Node& properties) {
+  if (name == "app") return;
+
+  if (name == "nvurisrcbin_list") {
+    ParseNvUriSrcBinList(name, properties);
+    return;
+  }
+
+  std::string elem_desc = name + " ";
+  for (auto it = properties.begin(); it != properties.end(); it++) {
+    elem_desc += ParseProperty(it->first, it->second) + " ";
+  }
+  elem_descs_.push_back(elem_desc);
+}
+
+void YamlParser::ParseNvUriSrcBinList(const std::string& name, const YAML::Node& properties) {
+  std::string elem_name = "nvurisrcbin";
+  
+  auto uri_list = properties["uri-list"].as<std::vector<std::string>>();
+  auto pad_prefix = properties["pad-prefix"].as<std::string>();
+  for (size_t i = 0; i < uri_list.size(); i++) {
+    std::string elem_desc = elem_name + " ";
+    elem_desc += "uri=" + uri_list[i] + " ";
+    for (auto it = properties.begin(); it != properties.end(); it++) {
+      auto prop_name = it->first.as<std::string>();
+      if (prop_name == "uri-list" || prop_name == "pad-prefix") continue;
+      elem_desc += ParseProperty(it->first, it->second) + " ";
+    }
+    elem_desc += "! " + pad_prefix + std::to_string(i) + "  ";
+    elem_descs_.push_back(elem_desc);
+  }
+}
+
+std::string YamlParser::ParseProperty(const YAML::Node& name, const YAML::Node& value) {
+  std::string prop_name = name.as<std::string>();
+  std::string prop_value = value.as<std::string>();
+
+  if (prop_name == "_link_to") {
+    return "! " + prop_value + " ";
+  }
+
+  return prop_name + "=" + prop_value;
 }
 
 bool YamlParser::AddNvUriSrcBins(const YAML::Node& properties) {
@@ -87,6 +150,10 @@ void YamlParser::SetProperty(GstElement* elem, const YAML::Node& name,
   } else if (type_name == "gchararray") {
     auto prop_value = value.as<std::string>();
     g_object_set(G_OBJECT(elem), prop_name.c_str(), prop_value.c_str(), NULL);
+  } else if (type_name == "GstCaps") {
+    auto caps_str = value.as<std::string>();
+    GstCaps* caps = gst_caps_from_string(caps_str.c_str());
+    g_object_set(G_OBJECT(elem), prop_name.c_str(), caps, NULL);
   } else {
     FDASSERT(false, "Unsupported property value type: %s.", type_name.c_str());
   }
@@ -113,11 +180,15 @@ void YamlParser::LinkElements() {
   if (elem_name.rfind("nvstreammux", 0) == 0) {
     FDASSERT(LinkSourePads(unlinked_elements_[0]),
              "Failed to link source pads");
+  } else {
+    unlinked_elements_.insert(unlinked_elements_.begin(), source_bins_[0]);
   }
   for (size_t i = 1; i < unlinked_elements_.size(); i++) {
     FDASSERT(
         gst_element_link(unlinked_elements_[i - 1], unlinked_elements_[i]),
-        "Failed to link elements.");
+        "Failed to link elements %s and %s.",
+        GetElementName(unlinked_elements_[i - 1]).c_str(),
+        GetElementName(unlinked_elements_[i]).c_str());
   }
 }
 

@@ -15,6 +15,7 @@
 #include "fd_streamer.h"
 #include "app/yaml_parser.h"
 #include "app/video_analytics.h"
+#include "app/video_decoder.h"
 #include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
@@ -27,15 +28,36 @@ bool FDStreamer::Init(const std::string& config_file) {
   if (app_config.type == AppType::VIDEO_ANALYTICS) {
     app_ = utils::make_unique<VideoAnalyticsApp>(app_config);
     auto casted_app = dynamic_cast<VideoAnalyticsApp*>(app_.get());
-    casted_app->Init();
-    parser.BuildPipelineFromConfig(casted_app->GetPipeline());
+    casted_app->Init(config_file);
+  } else if (app_config.type == AppType::VIDEO_DECODER) {
+    app_ = utils::make_unique<VideoDecoderApp>(app_config);
+    auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());
+    casted_app->Init(config_file);
+  } else {
+    FDASSERT(false, "Unsupported app type: %d.", app_config.type);
   }
-  app_->SetupPerfMeasurement();
   return true;
 }
 
 bool FDStreamer::Run() {
   return app_->Run();
+}
+
+bool FDStreamer::RunAsync() {
+  return app_->RunAsync();
+}
+
+void FDStreamer::SetupCallback() {
+  AppConfig* app_config = app_->GetAppConfig();
+  if (app_config->type == AppType::VIDEO_DECODER) {
+    auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());
+    casted_app->SetupAppSinkCallback();
+  }
+}
+
+bool FDStreamer::PopTensor(FDTensor& tensor) {
+  auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());
+  return casted_app->PopTensor(tensor);
 }
 
 }  // namespace streamer

@@ -26,17 +26,8 @@ namespace streamer {
 class FASTDEPLOY_DECL VideoAnalyticsApp : public BaseApp {
  public:
   explicit VideoAnalyticsApp(AppConfig& app_config) : BaseApp(app_config) {}
-  /** \brief Init app
-   *
-   * \return true if the app is initialized, otherwise false
-   */
-  bool Init();
-
-  bool Run();
 
  private:
-  GMainLoop* loop_;
-  guint bus_watch_id_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

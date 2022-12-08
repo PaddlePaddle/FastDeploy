@@ -15,6 +15,8 @@
 
 #include "app/base_app.h"
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/core/fd_tensor.h"
+
 #include <memory>
 
 namespace fastdeploy {
@@ -32,6 +34,12 @@ class FASTDEPLOY_DECL FDStreamer {
   bool Init(const std::string& config_file);
 
   bool Run();
+
+  bool RunAsync();
+
+  void SetupCallback();
+
+  bool PopTensor(FDTensor& tensor);
 
  private:
   std::unique_ptr<BaseApp> app_;

@@ -55,5 +55,14 @@ std::vector<std::string> GetSinkElemNames(GstBin* bin) {
   return names;
 }
 
+GstElement* CreatePipeline(const std::string& pipeline_desc) {
+  GError *error = NULL;
+  FDINFO << "Trying to launch pipeline: " << pipeline_desc << std::endl;
+  GstElement* pipeline = gst_parse_launch(pipeline_desc.c_str(), &error);
+  FDASSERT(pipeline != NULL, "Failed parse pipeline, error: %s",
+           error->message);
+  return pipeline;
+}
+
 }  // namespace streamer
 }  // namespace fastdeploy

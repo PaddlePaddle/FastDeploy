@@ -25,10 +25,14 @@ list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
 set(DEPEND_LIBS "")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GSTREAMER gstreamer-1.0>=1.14 REQUIRED)
-pkg_check_modules(GLIB2 glib-2.0 REQUIRED)
-include_directories(${GSTREAMER_INCLUDE_DIRS} ${GLIB2_INCLUDE_DIRS})
-list(APPEND DEPEND_LIBS ${GLIB2_LIBRARIES} ${GSTREAMER_LIBRARIES})
+# pkg_check_modules(GSTREAMER gstreamer-1.0>=1.14 REQUIRED)
+pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
+# pkg_check_modules(GLIB2 glib-2.0 REQUIRED)
+include_directories(${GSTAPP_INCLUDE_DIRS})
+list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
+
+message(STATUS "--------- ${GSTAPP_INCLUDE_DIRS}")
+message(STATUS "+++++++++ ${GSTAPP_LIBRARIES}")
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
@@ -54,3 +58,4 @@ target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
 
 set(FDSTREAMER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/src/)
 add_subdirectory(examples/ppyoloe)
+add_subdirectory(examples/video_decoder)

@@ -14,11 +14,39 @@
 
 #include "app/base_app.h"
 #include "gstreamer/utils.h"
+#include "app/yaml_parser.h"
 
 namespace fastdeploy {
 namespace streamer {
 
 static GMutex fps_lock;
+
+static gboolean bus_watch_callback(GstBus* bus, GstMessage* msg, gpointer data) {
+  GMainLoop* loop = (GMainLoop*)data;
+  switch (GST_MESSAGE_TYPE(msg)) {
+    case GST_MESSAGE_EOS:
+      g_print("End of stream\n");
+      g_main_loop_quit(loop);
+      break;
+    case GST_MESSAGE_ERROR: {
+      gchar* debug;
+      GError* error;
+      gst_message_parse_error(msg, &error, &debug);
+      g_printerr("ERROR from element %s: %s\n",
+          GST_OBJECT_NAME(msg->src), error->message);
+      if (debug)
+        g_printerr("Error details: %s\n", debug);
+      g_free(debug);
+      g_error_free(error);
+      g_main_loop_quit(loop);
+      break;
+    }
+    default:
+      break;
+  }
+  return TRUE;
+}
+
 static void perf_cb(gpointer context, NvDsAppPerfStruct* str) {
   guint numf = str->num_instances;
 
@@ -30,6 +58,56 @@ static void perf_cb(gpointer context, NvDsAppPerfStruct* str) {
   g_mutex_unlock(&fps_lock);
 }
 
+bool BaseApp::Init(const std::string& config_file) {
+  gst_init(NULL, NULL);
+  loop_ = g_main_loop_new(NULL, FALSE);
+
+  YamlParser parser(config_file);
+  pipeline_ = parser.BuildPipelineFromConfig();
+
+  GstBus* bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline_));
+  bus_watch_id_ = gst_bus_add_watch(bus, bus_watch_callback, loop_);
+  gst_object_unref(bus);
+
+  SetupPerfMeasurement();
+  return true;
+}
+
+bool BaseApp::Run() {
+  gst_element_set_state(pipeline_, GST_STATE_PLAYING);
+
+  /* Wait till pipeline encounters an error or EOS */
+  g_print("Running...\n");
+  g_main_loop_run(loop_);
+
+  g_print("Returned, stopping playback\n");
+  gst_element_set_state(pipeline_, GST_STATE_NULL);
+  g_print("Deleting pipeline\n");
+  gst_object_unref(GST_OBJECT(pipeline_));
+  g_source_remove(bus_watch_id_);
+  g_main_loop_unref(loop_);
+  return true;
+}
+
+static void MainLoopThread(BaseApp* app) {
+  g_main_loop_run(app->GetLoop());
+
+  g_print("Returned, stopping playback\n");
+  gst_element_set_state(app->GetPipeline(), GST_STATE_NULL);
+  g_print("Deleting pipeline\n");
+  gst_object_unref(GST_OBJECT(app->GetPipeline()));
+  g_source_remove(app->GetBusId());
+  g_main_loop_unref(app->GetLoop());
+}
+
+bool BaseApp::RunAsync() {
+  gst_element_set_state(pipeline_, GST_STATE_PLAYING);
+  g_print("Running Asynchronous...\n");
+  std::thread t(MainLoopThread, this);
+  thread_ = std::move(t);
+  return true;
+}
+
 void BaseApp::SetupPerfMeasurement() {
   if (!app_config_.enable_perf_measurement) return;
 
@@ -38,6 +116,8 @@ void BaseApp::SetupPerfMeasurement() {
   for (auto& elem_name : elem_names) {
     std::cout << elem_name << std::endl;
     if (elem_name.find("nvvideoencfilesinkbin") != std::string::npos) {
+      elem = gst_bin_get_by_name(GST_BIN(pipeline_), elem_name.c_str());
+    } else if (elem_name.find("appsink") != std::string::npos) {
       elem = gst_bin_get_by_name(GST_BIN(pipeline_), elem_name.c_str());
     }
   }

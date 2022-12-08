@@ -22,11 +22,19 @@ class YamlParser {
 
   void ValidateConfig();
 
-  bool BuildPipelineFromConfig(GstElement* pipeline);
-
-  std::vector<GstElement*> source_bins;
+  GstElement* BuildPipelineFromConfig();
 
  private:
+  std::string YamlToPipelineDescStr();
+
+  void ParseElement(const std::string& name, const YAML::Node& properties);
+
+  void ParseNvUriSrcBinList(const std::string& name,
+                            const YAML::Node& properties);
+
+  static std::string ParseProperty(const YAML::Node& name,
+                                   const YAML::Node& value);
+
   bool AddNvUriSrcBins(const YAML::Node& properties);
   void SetProperty(GstElement* elem, const YAML::Node& name,
                    const YAML::Node& value);
@@ -40,6 +48,8 @@ class YamlParser {
   GstElement* pipeline_;
   std::vector<GstElement*> source_bins_;
   std::vector<GstElement*> unlinked_elements_;
+
+  std::vector<std::string> elem_descs_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

@@ -21,5 +21,6 @@ namespace fastdeploy {
 namespace streamer {
 std::string GetElementName(GstElement* elem);
 std::vector<std::string> GetSinkElemNames(GstBin* bin);
+GstElement* CreatePipeline(const std::string& pipeline_desc);
 }  // namespace streamer
 }  // namespace fastdeploy
