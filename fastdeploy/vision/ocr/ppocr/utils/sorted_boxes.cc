@@ -35,13 +35,16 @@ void SortBoxes(std::vector<std::array<int, 8>>* boxes) {
   if (boxes->size() == 0) {
     return;
   }
-
+  
   for (int i = 0; i < boxes->size() - 1; i++) {
-    if (std::abs((*boxes)[i + 1][1] - (*boxes)[i][1]) < 10 &&
-        ((*boxes)[i + 1][0] < (*boxes)[i][0])) {
-      std::swap((*boxes)[i], (*boxes)[i + 1]);
+    for (int j = i; j >=0 ; j--){
+        if (std::abs((*boxes)[j + 1][1] - (*boxes)[j][1]) < 10 &&
+        ((*boxes)[j + 1][0] < (*boxes)[j][0])) {
+          std::swap((*boxes)[i], (*boxes)[i + 1]);
+        }
     }
   }
+
 }
 
 std::vector<int> ArgSort(const std::vector<float> &array) {
