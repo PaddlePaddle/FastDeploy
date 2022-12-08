@@ -128,3 +128,7 @@ Once obtained the quantized model, developers can deploy it on FastDeploy. Pleas
 - [YOLOv7 Quantized Model Deployment](../../../examples/vision/detection/yolov7/quantize/)
 
 - [PadddleClas Quantized Model Deployment](../../../examples/vision/classification/paddleclas/quantize/)
+
+- [PadddleDetection Quantized Model Deployment](../../../examples/vision/detection/paddledetection/quantize/)
+
+- [PadddleSegmentation Quantized Model Deployment](../../../examples/vision/segmentation/paddleseg/quantize/)
