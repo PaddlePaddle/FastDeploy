@@ -74,11 +74,15 @@ bool PPOCRv2::Initialized() const {
   }
   return true; 
 }
-
 bool PPOCRv2::Predict(cv::Mat* img,
                             fastdeploy::vision::OCRResult* result) {
+  return Predict(*img, result);
+}
+
+bool PPOCRv2::Predict(const cv::Mat& img,
+                            fastdeploy::vision::OCRResult* result) {
   std::vector<fastdeploy::vision::OCRResult> batch_result(1);
-  bool success = BatchPredict({*img},&batch_result);
+  bool success = BatchPredict({img},&batch_result);
   if(!success){
     return success;
   }

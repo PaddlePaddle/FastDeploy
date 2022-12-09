@@ -155,7 +155,7 @@ model.setVerticalScreenFlag(true);
 model.init(modelFile, paramFile, configFile, option);
 // Bitmap读取、模型预测、资源释放 同上 ...
 ```
-更详细的用法请参考 [SegmentationMainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/detection/SegmentationMainActivity.java) 中的用法
+更详细的用法请参考 [SegmentationMainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/segmentation/SegmentationMainActivity.java) 中的用法
 
 ## 替换 FastDeploy SDK和模型  
 替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-sdk-xxx.aar`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/portrait_pp_humansegv2_lite_256x144_inference_model`。  
