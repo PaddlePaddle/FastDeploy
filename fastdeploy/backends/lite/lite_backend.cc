@@ -190,13 +190,17 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
                         std::vector<FDTensor>* outputs,
                         bool copy_to_fd) {                                                
   if (inputs.size() != inputs_desc_.size()) {
-    FDASSERT(false, "[LiteBackend] Size of inputs(%d) should keep same "
-            "with the inputs of this model(%d).", inputs.size(), inputs_desc_.size());
+    FDERROR << "[LiteBackend] Size of inputs(" << inputs.size()
+            << ") should keep same with the inputs of this model("
+            << inputs_desc_.size() << ")." << std::endl;
+    return false;
   }
   for (size_t i = 0; i < inputs.size(); ++i) {
     auto iter = inputs_order_.find(inputs[i].name);
     if (iter == inputs_order_.end()) {
-      FDASSERT(false, "Cannot find input with name: %s in loaded model.", inputs[i].name);
+      FDERROR << "Cannot find input with name:" << inputs[i].name
+              << " in loaded model." << std::endl;
+      return false;
     }
     auto tensor = predictor_->GetInput(iter->second);
     // Adjust dims only, allocate lazy. 

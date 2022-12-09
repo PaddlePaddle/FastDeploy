@@ -68,7 +68,7 @@ FDDataType CTypeToFDDataType() {
   } else if (std::is_same<T, double>::value) {
     return FDDataType::FP64;
   } else if (std::is_same<T, int8_t>::value) {
-    return FDDataType::FP64;
+    return FDDataType::INT8;
   }
   FDASSERT(false, "CTypeToFDDataType only support "
            "int8/int32/int64/float32/float64 now.");
