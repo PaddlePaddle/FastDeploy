@@ -206,24 +206,24 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
     // Adjust dims only, allocate lazy. 
     tensor->Resize(inputs[i].shape); 
     if (inputs[i].dtype == FDDataType::FP32) {
-      tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kARM>(
+      tensor->CopyFromCpu<float, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const float*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT32) {
-      tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kARM>(
+      tensor->CopyFromCpu<int, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const int*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT8) {
-      tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kARM>(
+      tensor->CopyFromCpu<int8_t, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const int8_t*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::UINT8) {
-      tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kARM>(
+      tensor->CopyFromCpu<uint8_t, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const uint8_t*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT64) {
 #ifdef __aarch64__      
-      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kARM>(
+      tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const int64_t*>(const_cast<void*>(
         inputs[i].CpuData())));
 #else 
