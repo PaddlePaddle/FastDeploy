@@ -96,7 +96,7 @@ Install the released version（Latest 1.0.1 for now, Android is 1.0.1）
 
 ## Java SDK
 
-Install the released version（Android is 1.0.1 pre-release）
+Install the released version（Android is 1.0.0 pre-release）
 
 | Platform | File | Description |
 | :--- | :--- | :---- |

@@ -88,7 +88,7 @@ Release版本
 
 ## Java SDK安装
 
-Release版本（Java SDK 目前仅支持Android，版本为1.0.1）  
+Release版本（Java SDK 目前仅支持Android，版本为1.0.0）  
 
 | 平台 | 文件 | 说明 |
 | :--- | :--- | :---- |
