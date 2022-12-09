@@ -1,4 +1,4 @@
-# build java aar package
+# build FastDeploy app
 FASTDEPLOY_DIR=$(pwd)
 JAVA_ANDROID_DIR=${FASTDEPLOY_DIR}/java/android
 JNI_LIB_DIR=${JAVA_ANDROID_DIR}/fastdeploy
@@ -7,7 +7,7 @@ APP_DIR=${JAVA_ANDROID_DIR}/app
 APP_LIBS_DIR=${APP_DIR}/libs
 
 cd ${JAVA_ANDROID_DIR}
-# check aar package
+# check aar package first!
 echo "[INFO] --- JAVA_ANDROID_DIR: ${JAVA_ANDROID_DIR}"
 if [ ! -d "${JNI_LIB_DIR}/build/outputs/aar" ]; then
    echo "-- [ERROR] ${JNI_LIB_DIR} not exists, please build aar package first!"
@@ -28,7 +28,7 @@ if [ -f "${APP_LIBS_DIR}/fastdeploy-android-sdk-latest-dev.aar" ]; then
     echo "[INFO] --- Update aar package done!"
 fi
 # build android app
-echo "[INFO] --- Building FastDeploy Android app ..."
+echo "[INFO] --- Building FastDeploy Android App ..."
 chmod +x gradlew
 ./gradlew app:assembleDebug
 echo "[INFO] --- Built FastDeploy Android app."
