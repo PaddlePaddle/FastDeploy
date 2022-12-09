@@ -1,7 +1,7 @@
 
 # Jetson部署库编译
 
-FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU两种后端推理
+FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU/Paddle Inference两种后端推理
 
 ## C++ SDK编译安装
 
@@ -19,7 +19,7 @@ cd FastDeploy
 mkdir build && cd build
 cmake .. -DBUILD_ON_JETSON=ON \
          -DENABLE_VISION=ON \
-         -DENABLE_PADDLE_BACKEND=ON \
+         -DENABLE_PADDLE_BACKEND=ON \ # 可选项，如若不需要Paddle Inference后端，可关闭
          -DPADDLEINFERENCE_DIRECTORY=/Download/paddle_inference_jetson \
          -DCMAKE_INSTALL_PREFIX=${PWD}/installed_fastdeploy
 make -j8
@@ -48,6 +48,8 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export BUILD_ON_JETSON=ON
 export ENABLE_VISION=ON
+
+# ENABLE_PADDLE_BACKEND & PADDLEINFERENCE_DIRECTORY为可选项
 export ENABLE_PADDLE_BACKEND=ON
 export PADDLEINFERENCE_DIRECTORY=/Download/paddle_inference_jetson
 
