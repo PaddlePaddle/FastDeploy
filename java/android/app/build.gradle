@@ -85,6 +85,10 @@ def FD_JAVA_SDK = [
         [
                 'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-sdk-latest-dev.aar',
                 'dest': 'libs'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/fastdeploy/test/bdasr_V3_20210628_cfe8c44.aar',
+                'dest': 'libs'
         ]
 ]
 
