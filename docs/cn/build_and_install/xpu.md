@@ -22,6 +22,9 @@ mkdir build && cd build
 
 # CMake configuration with KunlunXin xpu toolchain
 cmake -DWITH_XPU=ON  \
+      -DWITH_GPU=OFF  \ # 不编译 GPU
+      -DENABLE_ORT_BACKEND=ON  \ # 可选择开启 ORT 后端
+      -DENABLE_PADDLE_BACKEND=ON  \ # 可选择开启 Paddle 后端
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
       ..
@@ -38,6 +41,9 @@ make install
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export WITH_XPU=ON
+export WITH_GPU=OFF
+export ENABLE_ORT_BACKEND=ON
+export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_VISION=ON
 
 python setup.py build
