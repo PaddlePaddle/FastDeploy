@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # ERNIE 3.0 模型部署
 
 ## 模型详细说明
