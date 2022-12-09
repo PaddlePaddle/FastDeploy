@@ -82,6 +82,7 @@ PPOCRv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 > ```  
 > bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+> bool Predict(const cv::Mat& img, fastdeploy::vision::OCRResult* result);
 > ```
 >
 > 模型预测接口，输入一张图片，返回OCR预测结果
