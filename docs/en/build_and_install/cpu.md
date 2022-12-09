@@ -30,6 +30,11 @@ Prerequisite for Compiling on Linux & Mac:
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -38,7 +43,8 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DENABLE_PADDLE_BACKEND=ON \
          -DENABLE_OPENVINO_BACKEND=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 make -j12
 make install
 ```
@@ -84,6 +90,11 @@ All compilation options are introduced via environment variables
 
 ### Linux & Mac
 
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
@@ -91,6 +102,8 @@ export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_OPENVINO_BACKEND=ON
 export ENABLE_VISION=ON
+# The OPENCV_DIRECTORY is optional, if not exported, a prebuilt OpenCV library will be downloaded
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
 python setup.py bdist_wheel
