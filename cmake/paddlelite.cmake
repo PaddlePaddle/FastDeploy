@@ -58,7 +58,7 @@ elseif(ANDROID)
   endif()  
 else() # Linux
   if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-    set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-linux-arm64-20220920.tgz")
+    set(PADDLELITE_URL "${PADDLELITE_URL_PREFIX}/lite-linux-arm64-20221209.tgz")
   else()
     if(ENABLE_TIMVX)
       set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/test/lite-linux_armhf_1130.tgz")
