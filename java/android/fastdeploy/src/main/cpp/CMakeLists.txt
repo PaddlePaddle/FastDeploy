@@ -45,8 +45,6 @@ add_library(
         fastdeploy_jni/vision/facedet/facedet_utils_jni.cc
         fastdeploy_jni/vision/keypointdetection/pptinypose_jni.cc
         fastdeploy_jni/vision/keypointdetection/keypointdetection_utils_jni.cc
-        fastdeploy_jni/text/ernie/intent_slot_jni.cc
-        fastdeploy_jni/text/ernie/seq_cls_jni.cc
 )
 
 # Searches for a specified prebuilt library and stores the path as a
