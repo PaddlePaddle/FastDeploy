@@ -136,7 +136,7 @@ task downloadAndExtractSDKs(type: DefaultTask) {
             boolean copyFiles = false
             if (!file("${sdk.dest}/${sdkName}").exists()) {
                 // Download the target SDK if not exists
-                if (file("${cachePath}/${sdkName}").exists()) {
+                if (!file("${cachePath}/${sdkName}").exists()) {
                     println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
                     ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
                 }
