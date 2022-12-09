@@ -95,11 +95,13 @@ task downloadAndExtractModels(type: DefaultTask) {
             String[] modelPaths = model.src.split("/")
             String modelName = modelPaths[modelPaths.length - 1]
             String modelPrefix = modelName.substring(0, modelName.length() - 4)
-            // Download the target model if not exists
-            boolean copyFiles = !file("${model.dest}/${modelPrefix}").exists()
-            if (!file("${cachePath}/${modelName}").exists()) {
-                println "[INFO] Downloading ${model.src} -> ${cachePath}/${modelName}"
-                ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
+            boolean copyFiles = false
+            if (!file("${model.dest}/${modelPrefix}").exists()) {
+                // Download the target model if not exists
+                if (!file("${cachePath}/${modelName}").exists()) {
+                    println "[INFO] Downloading ${model.src} -> ${cachePath}/${modelName}"
+                    ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
@@ -127,11 +129,13 @@ task downloadAndExtractSDKs(type: DefaultTask) {
         FD_JAVA_SDK.eachWithIndex { sdk, index ->
             String[] sdkPaths = sdk.src.split("/")
             String sdkName = sdkPaths[sdkPaths.length - 1]
-            // Download the target SDK if not exists
-            boolean copyFiles = !file("${sdk.dest}/${sdkName}").exists()
-            if (!file("${cachePath}/${sdkName}").exists()) {
-                println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
-                ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+            boolean copyFiles = false
+            if (!file("${sdk.dest}/${sdkName}").exists()) {
+                // Download the target SDK if not exists
+                if (file("${cachePath}/${sdkName}").exists()) {
+                    println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
+                    ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
