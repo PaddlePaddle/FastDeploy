@@ -44,7 +44,6 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
     private ImageView back;
     private EventManager asr;
     private Boolean isStartVoice = false;
-    protected boolean enableOffline = false;
     private String voiceTxt = "";
     private int times = 0;
     private final int REQUEST_PERMISSION = 0;
@@ -73,9 +72,6 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
         startIntentBtn = findViewById(R.id.btn_intent);
         startIntentBtn.setOnClickListener(this);
         intentOutput = findViewById(R.id.tv_intent_output);
-        if (enableOffline) {
-            loadOfflineEngine(); // 测试离线命令词请开启, 测试 ASR_OFFLINE_ENGINE_GRAMMER_FILE_PATH 参数时开启
-        }
     }
 
     @Override
@@ -117,7 +113,6 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
 
     @Override
     public void onEvent(String name, String params, byte[] data, int offset, int length) {
-        Log.e("GBD", name + "-----");
         if (name.equals(SpeechConstant.CALLBACK_EVENT_ASR_PARTIAL)) {
             if (params.contains("\"final_result\"")) {
                 if (params.contains("[")) {
@@ -132,9 +127,6 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
         Map<String, Object> params = AuthUtil.getParam();
         String event = null;
         event = SpeechConstant.ASR_START;
-        if (enableOffline) {
-            params.put(SpeechConstant.DECODER, 2);
-        }
         params.put(SpeechConstant.ACCEPT_AUDIO_VOLUME, false);
         (new AutoCheck(getApplicationContext(), new Handler() {
             public void handleMessage(Message msg) {
@@ -146,29 +138,10 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
                     }
                 }
             }
-        }, enableOffline)).checkAsr(params);
+        }, false)).checkAsr(params);
         String json = null;
         json = new JSONObject(params).toString();
         asr.send(event, json, null, 0, 0);
-    }
-
-    /**
-     * enableOffline设为true时，在onCreate中调用
-     * 基于SDK离线命令词1.4 加载离线资源(离线时使用)
-     */
-    private void loadOfflineEngine() {
-        Map<String, Object> params = new LinkedHashMap<String, Object>();
-        params.put(SpeechConstant.DECODER, 2);
-        params.put(SpeechConstant.ASR_OFFLINE_ENGINE_GRAMMER_FILE_PATH, "assets://baidu_speech_grammar.bsg");
-        asr.send(SpeechConstant.ASR_KWS_LOAD_ENGINE, new JSONObject(params).toString(), null, 0, 0);
-    }
-
-    /**
-     * enableOffline为true时，在onDestory中调用，与loadOfflineEngine对应
-     * 基于SDK集成5.1 卸载离线资源步骤(离线时使用)
-     */
-    private void unloadOfflineEngine() {
-        asr.send(SpeechConstant.ASR_KWS_UNLOAD_ENGINE, null, null, 0, 0);
     }
 
     private void stop() {
@@ -185,9 +158,6 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
     protected void onDestroy() {
         super.onDestroy();
         asr.send(SpeechConstant.ASR_CANCEL, "{}", null, 0, 0);
-        if (enableOffline) {
-            unloadOfflineEngine(); // 测试离线命令词请开启, 测试 ASR_OFFLINE_ENGINE_GRAMMER_FILE_PATH 参数时开启
-        }
         asr.unregisterListener(this);
     }
 
