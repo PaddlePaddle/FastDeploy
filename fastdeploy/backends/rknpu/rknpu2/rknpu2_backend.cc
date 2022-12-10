@@ -190,6 +190,8 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED" << std::endl;
     }
 
+    DumpTensorAttr(input_attrs_[i]);
+
     // copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
     std::vector<int> temp_shape{};
@@ -233,6 +235,8 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
                 << "].shape[3] is 1, remove this dim." 
                 << std::endl;
     }
+
+    DumpTensorAttr(output_attrs_[i]);
 
     // copy output_attrs_ to output tensor
     std::string temp_name = output_attrs_[i].name;
@@ -342,7 +346,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
         return false;
       }
       // default output type is depend on model, this requires float32 to compute top5
-      output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
       // set output memory and attribute
       if (ret != RKNN_SUCC) {
@@ -389,6 +392,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
+    std::vector<float>  output_scale = {output_attrs_[i].scale};
+    (*outputs)[i].SetQuantizationInfo(output_attrs_[i].zp, output_scale);
     memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->virt_addr,
            (*outputs)[i].Nbytes());
   }
