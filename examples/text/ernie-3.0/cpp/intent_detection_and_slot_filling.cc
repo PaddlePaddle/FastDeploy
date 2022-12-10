@@ -35,7 +35,7 @@ DEFINE_string(slot_label_path, "", "Path of the slot_label file.");
 DEFINE_string(intent_label_path, "", "Path of the intent_label file.");
 DEFINE_string(device, "cpu",
               "Type of inference device, support 'cpu' or 'gpu'.");
-DEFINE_string(backend, "onnx_runtime",
+DEFINE_string(backend, "paddle",
               "The inference runtime backend, support: ['onnx_runtime', "
               "'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']");
 DEFINE_int32(batch_size, 1, "The batch size of data.");
@@ -159,7 +159,8 @@ struct Predictor {
             const ErnieFastTokenizer& tokenizer,
             const std::unordered_map<int, std::string>& slot_labels,
             const std::unordered_map<int, std::string>& intent_labels)
-      : tokenizer_(tokenizer) {
+      : tokenizer_(tokenizer), slot_labels_(slot_labels),
+        intent_labels_(intent_labels) {
     runtime_.Init(option);
   }
   bool Preprocess(const std::vector<std::string>& texts,
@@ -184,15 +185,10 @@ struct Predictor {
     size_t start = 0;
     int64_t* input_ids_ptr =
         reinterpret_cast<int64_t*>((*inputs)[0].MutableData());
-    int64_t* type_ids_ptr =
-        reinterpret_cast<int64_t*>((*inputs)[1].MutableData());
     for (int i = 0; i < encodings.size(); ++i) {
       auto&& curr_input_ids = encodings[i].GetIds();
-      auto&& curr_type_ids = encodings[i].GetTypeIds();
       std::copy(curr_input_ids.begin(), curr_input_ids.end(),
                 input_ids_ptr + start);
-      std::copy(curr_type_ids.begin(), curr_type_ids.end(),
-                type_ids_ptr + start);
       start += seq_len;
     }
     return true;
@@ -302,6 +298,21 @@ void ReadLabelMapFromTxt(const std::string path,
   }
 }
 
+bool GetFilePath(const std::string& path, const std::string& default_path,
+                 std::string* actual_path) {
+  *actual_path = path;
+  if (!fastdeploy::CheckFileExists(path)) {
+    *actual_path = fastdeploy::PathJoin(FLAGS_model_dir, default_path);
+    if (!fastdeploy::CheckFileExists(*actual_path)) {
+      fastdeploy::FDERROR << "The path `" << *actual_path << "` doesn't exist"
+                          << std::endl;
+      PrintUsage();
+      return false;
+    }
+  }
+  return true;
+}
+
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   auto option = fastdeploy::RuntimeOption();
@@ -310,15 +321,9 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  std::string vocab_path = FLAGS_vocab_path;
-  if (!fastdeploy::CheckFileExists(vocab_path)) {
-    vocab_path = fastdeploy::PathJoin(FLAGS_model_dir, "vocab.txt");
-    if (!fastdeploy::CheckFileExists(vocab_path)) {
-      fastdeploy::FDERROR << "The path of vocab " << vocab_path
-                          << " doesn't exist" << std::endl;
-      PrintUsage();
-      return -1;
-    }
+  std::string vocab_path;
+  if (!GetFilePath(FLAGS_vocab_path, "vocab.txt", &vocab_path)) {
+    return -1;
   }
   ErnieFastTokenizer tokenizer(vocab_path);
   tokenizer.EnableTruncMethod(
@@ -326,8 +331,20 @@ int main(int argc, char* argv[]) {
       fast_tokenizer::core::TruncStrategy::LONGEST_FIRST);
   std::unordered_map<int, std::string> slot_label_map;
   std::unordered_map<int, std::string> intent_label_map;
-  ReadLabelMapFromTxt(FLAGS_slot_label_path, &slot_label_map);
-  ReadLabelMapFromTxt(FLAGS_intent_label_path, &intent_label_map);
+
+  std::string slot_label_path;
+  if (!GetFilePath(FLAGS_slot_label_path, "slots_label.txt",
+                   &slot_label_path)) {
+    return -1;
+  }
+  ReadLabelMapFromTxt(slot_label_path, &slot_label_map);
+
+  std::string intent_label_path;
+  if (!GetFilePath(FLAGS_intent_label_path, "intent_label.txt",
+                   &intent_label_path)) {
+    return -1;
+  }
+  ReadLabelMapFromTxt(intent_label_path, &intent_label_map);
 
   Predictor predictor(option, tokenizer, slot_label_map, intent_label_map);
 
