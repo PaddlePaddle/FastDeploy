@@ -24,7 +24,7 @@ Distillation:
   alpha: 1.0                                  #蒸馏loss所占权重
   loss: soft_label                            #蒸馏loss算法
 
-Quantization:
+QuantAware:
   onnx_format: true                           #是否采用ONNX量化标准格式, 要在FastDeploy上部署, 必须选true
   use_pact: true                              #量化训练是否使用PACT方法
   activation_quantize_type: 'moving_average_abs_max'     #激活量化方式

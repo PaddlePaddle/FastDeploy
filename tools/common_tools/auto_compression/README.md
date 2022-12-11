@@ -6,15 +6,14 @@ FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了�
 
 ### 环境依赖
 
-1.用户参考PaddlePaddle官网, 安装develop版本
+1.用户参考PaddlePaddle官网, 安装Paddle 2.4 版本
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.安装paddleslim-develop版本
+2.安装PaddleSlim 2.4 版本
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### 一键模型自动化压缩工具安装方式

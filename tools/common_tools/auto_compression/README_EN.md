@@ -7,17 +7,14 @@ We take the Yolov5 series as an example to demonstrate how to install and execut
 
 ### Environment Dependencies
 
-1. Install the develop version downloaded from PaddlePaddle official website.
-
+1.Install PaddlePaddle 2.4 version
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.Install PaddleSlim-develop
-
+2.Install PaddleSlim 2.4 version
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### Install Fastdeploy Auto Compression Toolkit
