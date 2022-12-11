@@ -191,9 +191,15 @@ static cv::Mat VisSegmentationCommonCpu(
   for (int i = 0; i < height; i++) {
     for (int j = 0; j < width; j++) {
       int category_id = result.label_map[index++];
-      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      if (category_id == 0) {
+        vis_img.at<cv::Vec3b>(i, j)[0] = im.at<cv::Vec3b>(i, j)[0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = im.at<cv::Vec3b>(i, j)[1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = im.at<cv::Vec3b>(i, j)[2];
+      } else {
+        vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      }
     }
   }
   cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
