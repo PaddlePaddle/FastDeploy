@@ -11,15 +11,14 @@ FastDeploy provides a series of efficient and easy-to-use tools to optimize the 
 Based on PaddleSlim's Auto Compression Toolkit (ACT), FastDeploy provides users with a one-click model automation compression tool that allows users to easily compress the model with a single command. This document will take FastDeploy's one-click model automation compression tool as an example, introduce how to install the tool, and provide the corresponding documentation for usage.
 
 ### Environmental Preparation
-1.Install PaddlePaddle develop version
+1.Install PaddlePaddle 2.4 version
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.Install PaddleSlim dev version
+2.Install PaddleSlim 2.4 version
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 3.Install fastdeploy-tools package
