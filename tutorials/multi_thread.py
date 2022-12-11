@@ -116,7 +116,7 @@ if __name__ == '__main__':
             t = WrapperThread(
                 predict,
                 args=(model.clone(), imgs_list[i * image_num_each_thread:(
-                    i + 1) * image_num_each_thread], i))
+                    i + 1) * image_num_each_thread - 1], i))
         threads.append(t)
         t.start()
 
