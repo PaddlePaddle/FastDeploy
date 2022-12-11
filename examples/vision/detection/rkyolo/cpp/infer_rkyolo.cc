@@ -14,7 +14,6 @@
 #include "fastdeploy/vision.h"
 
 void RKNPU2Infer(const std::string& model_file, const std::string& image_file) {
-  struct timeval start_time, stop_time;
 
   auto option = fastdeploy::RuntimeOption();
   option.UseRKNPU2();

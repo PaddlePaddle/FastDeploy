@@ -45,8 +45,8 @@ model_path: ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet.onnx
 output_folder: ./picodet_s_416_coco_lcnet
 target_platform: RK3568
 normalize:
-  mean: [[0.485,0.456,0.406],[0,0,0]]
-  std: [[0.229,0.224,0.225],[0.003921,0.003921]]
+  mean: [[0.485,0.456,0.406]]
+  std: [[0.229,0.224,0.225]]
 outputs: ['tmp_17','p2o.Concat.9']
 ```
 

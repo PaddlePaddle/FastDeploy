@@ -19,7 +19,7 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file);
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   struct timeval start_time, stop_time;
-  auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3568.rknn";
+  auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3588.rknn";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
 
@@ -36,10 +36,14 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
+  fastdeploy::TimeCounter tc;
+  tc.Start();
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
+  tc.End();
+  std::cout << tc.Duration() << std::endl;
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
