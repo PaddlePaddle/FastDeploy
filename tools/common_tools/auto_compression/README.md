@@ -6,15 +6,14 @@ FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了�
 
 ### 环境依赖
 
-1.用户参考PaddlePaddle官网, 安装develop版本
+1.用户参考PaddlePaddle官网, 安装Paddle 2.4 版本
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.安装paddleslim-develop版本
+2.安装PaddleSlim 2.4 版本
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### 一键模型自动化压缩工具安装方式
@@ -112,14 +111,14 @@ FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文�
 ## 4. FastDeploy 部署量化模型
 用户在获得量化模型之后，即可以使用FastDeploy进行部署, 部署文档请参考:
 具体请用户参考示例文档:
-- [YOLOv5 量化模型部署](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 量化模型部署](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 量化模型部署](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 量化模型部署](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 量化模型部署](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 量化模型部署](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas 量化模型部署](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas 量化模型部署](../../../examples/vision/classification/paddleclas/quantize/)
 
-- [PadddleDetection 量化模型部署](../../examples/vision/detection/paddledetection/quantize/)
+- [PadddleDetection 量化模型部署](../../../examples/vision/detection/paddledetection/quantize/)
 
-- [PadddleSegmentation 量化模型部署](../../examples/vision/segmentation/paddleseg/quantize/)
+- [PadddleSegmentation 量化模型部署](../../../examples/vision/segmentation/paddleseg/quantize/)
