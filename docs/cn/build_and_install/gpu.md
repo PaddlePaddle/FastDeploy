@@ -33,6 +33,11 @@ Linux上编译需满足
 - cuda >= 11.2
 - cudnn >= 8.2
 
+此外更推荐开发者自行安装，编译时通过`-DOPENCV_DIRECTORY`来指定环境中的OpenCV（如若不指定-DOPENCV_DIRECTORY，会自动下载FastDeploy提供的预编译的OpenCV，但在**Linux平台**无法支持Video的读取，以及imshow等可视化界面功能）
+```
+sudo apt-get install libopencv-dev
+```
+
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -46,6 +51,7 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DCUDA_DIRECTORY=/usr/local/cuda \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
          -DENABLE_VISION=ON \
+         -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
          -DENABLE_TEXT=ON
 make -j12
 make install
@@ -115,6 +121,8 @@ export ENABLE_TRT_BACKEND=ON
 export WITH_GPU=ON
 export TRT_DIRECTORY=/Paddle/TensorRT-8.4.1.5
 export CUDA_DIRECTORY=/usr/local/cuda
+# OPENCV_DIRECTORY可选，不指定会在编译过程下载FastDeploy预编译的OpenCV库
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
 
 python setup.py build
 python setup.py bdist_wheel

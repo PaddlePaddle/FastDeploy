@@ -11,15 +11,14 @@ FastDeploy提供了一系列高效易用的工具优化部署体验, 提升推�
 FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了一键模型自动化压缩的工具, 用户可以轻松地通过一行命令对模型进行自动化压缩, 并在FastDeploy上部署压缩后的模型, 提升推理速度. 本文档将以FastDeploy一键模型自动化压缩工具为例, 介绍如何安装此工具, 并提供相应的使用文档.
 
 ### 环境准备
-1.用户参考PaddlePaddle官网, 安装develop版本
+1.用户参考PaddlePaddle官网, 安装Paddle 2.4 版本
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.安装PaddleSlim develop版本
+2.安装PaddleSlim 2.4 版本
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 3.安装fastdeploy-tools工具包

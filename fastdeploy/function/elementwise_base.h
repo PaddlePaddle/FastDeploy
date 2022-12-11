@@ -213,10 +213,12 @@ void CommonElementwiseBroadcastForward(const FDTensor& x, const FDTensor& y,
   GetBroadcastDimsArrays(x_dims, y_dims, x_dims_array.data(),
                          y_dims_array.data(), out_dims_array.data(), max_dim,
                          axis);
-  z->Allocate(out_dims_array, TypeToDataType<OutType>::dtype);
+  FDTensor tmp;
+  tmp.Allocate(out_dims_array, TypeToDataType<OutType>::dtype);
   CommonForwardBroadcastCPU<Functor, T, OutType>(
-      x, y, z, x_dims_array.data(), y_dims_array.data(), out_dims_array.data(),
-      max_dim, func, is_xsize_larger);
+      x, y, &tmp, x_dims_array.data(), y_dims_array.data(),
+      out_dims_array.data(), max_dim, func, is_xsize_larger);
+  *z = std::move(tmp);
 }
 
 template <typename Functor, typename T, typename OutType = T>

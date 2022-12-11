@@ -91,7 +91,7 @@ class SyncGRPCTritonRunner:
 if __name__ == "__main__":
     model_name = "pp_ocr"
     model_version = "1"
-    url = "localhost:9001"
+    url = "localhost:8001"
     runner = SyncGRPCTritonRunner(url, model_name, model_version)
     im = cv2.imread("12.jpg")
     im = np.array([im, ])

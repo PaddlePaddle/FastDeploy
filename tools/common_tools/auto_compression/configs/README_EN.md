@@ -26,7 +26,7 @@ Distillation:
   alpha: 1.0                                  #Distillation loss weight
   loss: soft_label                            #Distillation loss algorithm
 
-Quantization:
+QuantAware:
   onnx_format: true                           #Whether to use ONNX quantization standard format or not, must be true to deploy on FastDeploy
   use_pact: true                              #Whether to use the PACT method for training
   activation_quantize_type: 'moving_average_abs_max'     #Activations quantization methods

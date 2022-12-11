@@ -56,7 +56,7 @@ def FD_CXX_LIB = [
 
 task downloadAndExtractLibs(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting fastdeploy android c++ lib ..."
+        println "[INFO] Downloading and extracting fastdeploy android c++ lib ..."
     }
     doLast {
         String cachePath = "cache"
@@ -67,17 +67,22 @@ task downloadAndExtractLibs(type: DefaultTask) {
             String[] libPaths = lib.src.split("/")
             String libName = libPaths[libPaths.length - 1]
             libName = libName.split("\\.")[0]
-            boolean copyFiles = !file("${lib.dest}/${libName}").exists()
-            if (!file("${cachePath}/${libName}.tgz").exists()) {
-                println "Downloading ${lib.src} -> ${cachePath}/${libName}.tgz"
-                ant.get(src: lib.src, dest: file("${cachePath}/${libName}.tgz"))
+            boolean copyFiles = false
+            if (!file("${lib.dest}/${libName}").exists()) {
+                if (!file("${cachePath}/${libName}.tgz").exists()) {
+                    println "[INFO] Downloading ${lib.src} -> ${cachePath}/${libName}.tgz"
+                    ant.get(src: lib.src, dest: file("${cachePath}/${libName}.tgz"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
+                println "[INFO] Taring ${cachePath}/${libName}.tgz -> ${lib.dest}/${libName}"
                 copy {
                     from tarTree("${cachePath}/${libName}.tgz")
                     into "${lib.dest}"
                 }
+            } else {
+                println "[INFO] ${lib.dest}/${libName} already exists!"
             }
         }
     }

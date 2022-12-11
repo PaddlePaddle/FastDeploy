@@ -86,4 +86,25 @@ FDTensor operator/(const FDTensor& x, const FDTensor& y) {
   return out;
 }
 
+#define INSTANTIATE_OPERATOR(operation_type)                                   \
+  template FDTensor operator operation_type(const FDTensor& x, bool y);        \
+  template FDTensor operator operation_type(const FDTensor& x, uint8_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, int16_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, int y);         \
+  template FDTensor operator operation_type(const FDTensor& x, int64_t y);     \
+  template FDTensor operator operation_type(const FDTensor& x, float y);       \
+  template FDTensor operator operation_type(const FDTensor& x, double y);      \
+  template FDTensor operator operation_type(bool x, const FDTensor& y);        \
+  template FDTensor operator operation_type(uint8_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(int16_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(int x, const FDTensor& y);         \
+  template FDTensor operator operation_type(int64_t x, const FDTensor& y);     \
+  template FDTensor operator operation_type(float x, const FDTensor& y);       \
+  template FDTensor operator operation_type(double x, const FDTensor& y)
+
+INSTANTIATE_OPERATOR(+);
+INSTANTIATE_OPERATOR(-);
+INSTANTIATE_OPERATOR(*);
+INSTANTIATE_OPERATOR(/);
+
 }  // namespace fastdeploy
