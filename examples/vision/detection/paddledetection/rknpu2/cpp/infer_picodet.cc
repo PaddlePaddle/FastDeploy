@@ -15,10 +15,38 @@
 #include <string>
 #include "fastdeploy/vision.h"
 #include <sys/time.h>
-void RKNPU2Infer(const std::string& model_dir, const std::string& image_file);
+
+void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
+  std::string model_file = model_dir + "/picodet_s_416_coco_lcnet.onnx";
+  std::string params_file;
+  std::string config_file = model_dir + "/deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+  auto format = fastdeploy::ModelFormat::ONNX;
+
+  auto model = fastdeploy::vision::detection::PicoDet(
+      model_file, params_file, config_file,option,format);
+  model.GetPostprocessor().ApplyDecodeAndNMS();
+
+  fastdeploy::TimeCounter tc;
+  tc.Start();
+  auto im = cv::imread(image_file);
+  fastdeploy::vision::DetectionResult res;
+  if (!model.Predict(im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
+  tc.End();
+  tc.PrintInfo("PPDet in ONNX");
+
+  cv::imwrite("infer_onnx.jpg", vis_im);
+  std::cout
+      << "Visualized result saved in ./infer_onnx.jpg"
+      << std::endl;
+}
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  struct timeval start_time, stop_time;
   auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3588.rknn";
   auto params_file = "";
   auto config_file = model_dir + "/infer_cfg.yml";
@@ -43,12 +71,12 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
   tc.End();
-  std::cout << tc.Duration() << std::endl;
+  tc.PrintInfo("PPDet in RKNPU2");
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
-  cv::imwrite("picodet_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./picodet_result.jpg" << std::endl;
+  cv::imwrite("infer_rknpu2.jpg", vis_im);
+  std::cout << "Visualized result saved in ./infer_rknpu2.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -59,9 +87,8 @@ int main(int argc, char* argv[]) {
         << std::endl;
     return -1;
   }
-
   RKNPU2Infer(argv[1], argv[2]);
-
+//ONNXInfer(argv[1], argv[2]);
   return 0;
 }
 
