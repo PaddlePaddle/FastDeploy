@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
 
@@ -81,8 +80,7 @@ const void* FDTensor::CpuData() const {
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,
-                               const Device& new_device,
-                               int new_device_id) {
+                               const Device& new_device, int new_device_id) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
@@ -138,6 +136,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   }
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = nullptr;
+}
+
+void FDTensor::SetQuantizationInfo(int32_t zero_point,std::vector<float>& scale){
+  quantized_parameter_.first = zero_point;
+  quantized_parameter_.second = scale;
 }
 
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
@@ -450,6 +453,11 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     other.external_data_ptr = nullptr;
   }
   return *this;
+}
+
+const std::pair<int32_t, std::vector<float>>
+FDTensor::GetQuantizationInfo() const{
+  return quantized_parameter_;
 }
 
 }  // namespace fastdeploy

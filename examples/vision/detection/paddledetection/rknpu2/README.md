@@ -113,5 +113,7 @@ Preprocess:
   type: Resize
 ```
 
+## 其他链接
+- [Cpp部署](./cpp)
 - [Python部署](./python)
 - [视觉模型预测结果](../../../../../docs/api/vision_results/)
