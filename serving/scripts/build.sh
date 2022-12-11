@@ -37,7 +37,7 @@ nvidia-docker run -i --rm --name build_fd \
            nvcr.io/nvidia/tritonserver:21.10-py3-min \
            bash -c \
            'cd /workspace/fastdeploy/python;
-            rm -rf .setuptools-cmake-build dist;
+            rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             apt-get update;
             apt-get install -y --no-install-recommends patchelf python3-dev python3-pip rapidjson-dev;
             ln -s /usr/bin/python3 /usr/bin/python;
@@ -75,7 +75,7 @@ docker run -i --rm --name build_fd \
            paddlepaddle/fastdeploy:21.10-cpu-only-buildbase \
            bash -c \
            'cd /workspace/fastdeploy/python;
-            rm -rf .setuptools-cmake-build dist;
+            rm -rf .setuptools-cmake-build dist build fastdeploy/libs/third_libs;
             ln -s /usr/bin/python3 /usr/bin/python;
             export WITH_GPU=OFF;
             export ENABLE_ORT_BACKEND=OFF;

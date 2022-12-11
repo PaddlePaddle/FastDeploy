@@ -4,14 +4,14 @@ FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工
 
 ## FastDeploy一键模型自动化压缩工具
 FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
-详细教程请见: [一键模型自动化压缩工具](../../../../../tools/auto_compression/)
+详细教程请见: [一键模型自动化压缩工具](../../../../../tools/common_tools/auto_compression/)
 注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此yaml文件, 用户从FP32模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。
 
 ## 下载量化完成的PaddleClas模型
 用户也可以直接下载下表中的量化模型进行部署.
 
 Benchmark表格说明:
-- Rtuntime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
+- Runtime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
 - 端到端时延为模型在实际推理场景中的时延, 包含模型的前后处理.
 - 所测时延均为推理1000次后求得的平均值, 单位是毫秒.
 - INT8 + FP16 为在推理INT8量化模型的同时, 给Runtime 开启FP16推理选项
@@ -33,7 +33,7 @@ Benchmark表格说明:
 | [MobileNetV1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/mobilenetv1_ssld_ptq.tar)        |  Paddle Inference  |    CPU    |     12.29  |   4.68  |     None|None|2.62       |77.89 | 71.36 |离线量化 |
 
 ### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 Top1 | INT8 Top1 | 量化方式   |
+| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 Top1 | INT8 Top1 | 量化方式   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
 | [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | TensorRT         |    GPU    |  4.92| 2.28|2.24|2.23 |      2.21     | 79.12  | 79.06 | 离线量化 |
 | [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar)            | Paddle-TensorRT  |    GPU    |  4.48|None |2.09|2.10 |      2.14   | 79.12  | 79.06 | 离线量化 |

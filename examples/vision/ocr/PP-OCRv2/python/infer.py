@@ -106,6 +106,11 @@ rec_label_file = args.rec_label_file
 # 用户也可根据自行需求分别配置
 runtime_option = build_option(args)
 
+# PPOCR的cls和rec模型现在已经支持推理一个Batch的数据
+# 定义下面两个变量后, 可用于设置trt输入shape, 并在PPOCR模型初始化后, 完成Batch推理设置
+cls_batch_size = 1
+rec_batch_size = 6
+
 # 当使用TRT时，分别给三个模型的runtime设置动态shape,并完成模型的创建.
 # 注意: 需要在检测模型创建完成后，再设置分类模型的动态输入并创建分类模型, 识别模型同理.
 # 如果用户想要自己改动检测模型的输入shape, 我们建议用户把检测模型的长和高设置为32的倍数.
@@ -118,16 +123,18 @@ det_model = fd.vision.ocr.DBDetector(
     det_model_file, det_params_file, runtime_option=det_option)
 
 cls_option = runtime_option
-cls_option.set_trt_input_shape("x", [1, 3, 48, 10], [10, 3, 48, 320],
-                               [64, 3, 48, 1024])
+cls_option.set_trt_input_shape("x", [1, 3, 48, 10],
+                               [cls_batch_size, 3, 48, 320],
+                               [cls_batch_size, 3, 48, 1024])
 # 用户可以把TRT引擎文件保存至本地
 # cls_option.set_trt_cache_file(args.cls_model  + "/cls_trt_cache.trt")
 cls_model = fd.vision.ocr.Classifier(
     cls_model_file, cls_params_file, runtime_option=cls_option)
 
 rec_option = runtime_option
-rec_option.set_trt_input_shape("x", [1, 3, 32, 10], [10, 3, 32, 320],
-                               [64, 3, 32, 2304])
+rec_option.set_trt_input_shape("x", [1, 3, 32, 10],
+                               [rec_batch_size, 3, 32, 320],
+                               [rec_batch_size, 3, 32, 2304])
 # 用户可以把TRT引擎文件保存至本地
 # rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
 rec_model = fd.vision.ocr.Recognizer(
@@ -136,6 +143,12 @@ rec_model = fd.vision.ocr.Recognizer(
 # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
 ppocr_v2 = fd.vision.ocr.PPOCRv2(
     det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+
+# 给cls和rec模型设置推理时的batch size
+# 此值能为-1, 和1到正无穷
+# 当此值为-1时, cls和rec模型的batch size将默认和det模型检测出的框的数量相同
+ppocr_v2.cls_batch_size = cls_batch_size
+ppocr_v2.rec_batch_size = rec_batch_size
 
 # 预测图片准备
 im = cv2.imread(args.image)

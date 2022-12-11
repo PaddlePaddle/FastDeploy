@@ -1,5 +1,9 @@
 # PP-OCR服务化部署示例
 
+在服务化部署前，需确认
+
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+
 ## 介绍
 本文介绍了使用FastDeploy搭建OCR文字识别服务的方法.
 
@@ -43,14 +47,16 @@ tar xvf ch_PP-OCRv3_rec_infer.tar && mv ch_PP-OCRv3_rec_infer 1
 mv 1/inference.pdiparams 1/model.pdiparams && mv 1/inference.pdmodel 1/model.pdmodel
 mv 1 models/rec_runtime/ && rm -rf ch_PP-OCRv3_rec_infer.tar
 
+mkdir models/pp_ocr/1 && mkdir models/rec_pp/1 && mkdir models/cls_pp/1
+
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 mv ppocr_keys_v1.txt models/rec_postprocess/1/
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
-docker run -dit --net=host --name fastdeploy --shm-size="1g" -v $PWD:/ocr_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 bash
+# x.y.z为镜像版本号，需参照serving文档替换为数字
+docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+docker run -dit --net=host --name fastdeploy --shm-size="1g" -v $PWD:/ocr_serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
 docker exec -it -u root fastdeploy bash
 ```
 

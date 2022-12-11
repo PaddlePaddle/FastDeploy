@@ -68,7 +68,7 @@ target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
 
 ## 4. 编译可执行程序
 
-假设当前目录已经准备好`infer_demo.cc`和`CMakeLists.txt`两个文件，目录结构如下所示，即可进行编译
+假设当前目录已经准备好`infer_demo.cc`和`CMakeLists.txt`两个文件，即可进行编译
 
 ### Linux & Mac
 

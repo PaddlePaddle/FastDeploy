@@ -163,5 +163,20 @@ void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
       }));
 }
 
+void Slice(const FDTensor& x, const std::vector<int64_t>& axes,
+           const std::vector<int64_t>& index, FDTensor* out) {
+  std::vector<int64_t> ends = index;
+  for (int i = 0; i < ends.size(); ++i) {
+    ends[i] += 1;
+  }
+  Slice(x, axes, index, ends, out);
+  for (int i = 0; i < axes.size(); ++i) {
+    if (out->Shape().size() <= 1) {
+      break;
+    }
+    out->Squeeze(axes[i]);
+  }
+}
+
 }  // namespace function
 }  // namespace fastdeploy

@@ -164,6 +164,15 @@ TEST(fastdeploy, check_same_dim) {
   check_shape(z.shape, {2, 3, 4});
   check_data(reinterpret_cast<const float*>(z.Data()), maximum_result.data(),
              maximum_result.size());
+
+  x = 1.0f - x;
+  sub_result = {0.157138, 0.353809, 0.862595, 0.885693, 0.340074, 0.464184,
+                0.257084, 0.154395, 0.787718, 0.700299, 0.137829, 0.591059,
+                0.873153, 0.843381, 0.571159, 0.152347, 0.754137, 0.330954,
+                0.121117, 0.323741, 0.333547, 0.67477,  0.586061, 0.165859};
+  check_shape(x.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(x.Data()), sub_result.data(),
+             sub_result.size());
 }
 
 TEST(fastdeploy, check_broadcast_dim1) {
@@ -495,6 +504,15 @@ TEST(fastdeploy, mixed_operation) {
       -0.130613, 0.527984,  -0.046946, -0.176592, -0.583538, 0.348473};
 
   output = a * b + c / d - e;
+  check_shape(output.shape, {2, 3, 4});
+  check_data(reinterpret_cast<const float*>(output.Data()), result.data(),
+             result.size());
+
+  result = {2.854443,  1.87709,   1.585621,  1.012709,  0.332781,  0.998346,
+            0.228024,  2.140475,  0.246941,  0.301517,  1.575438,  0.595582,
+            -0.410393, -0.163718, -0.405571, 0.58563,   -0.177035, 0.263035,
+            0.075725,  0.591098,  0.156365,  -0.106078, -0.475957, 0.626429};
+  output = a + b * c / d - e;
   check_shape(output.shape, {2, 3, 4});
   check_data(reinterpret_cast<const float*>(output.Data()), result.data(),
              result.size());

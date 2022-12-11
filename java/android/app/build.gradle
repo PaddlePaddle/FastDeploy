@@ -5,7 +5,7 @@ android {
 
     defaultConfig {
         applicationId 'com.baidu.paddle.fastdeploy.app.examples'
-        minSdkVersion 15
+        minSdkVersion 16
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 28
         versionCode 1
@@ -19,7 +19,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
 }
 
 dependencies {
@@ -30,6 +29,7 @@ dependencies {
     implementation 'com.android.support:design:28.0.0'
     implementation 'org.jetbrains:annotations:15.0'
     // implementation project(path: ':fastdeploy')
+    implementation project(path: ':ui')
     //noinspection GradleDependency
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
@@ -68,6 +68,10 @@ def FD_MODEL = [
         [
                 'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/portrait_pp_humansegv2_lite_256x144_inference_model.tgz',
                 'dest': 'src/main/assets/models'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_128x96_infer.tgz',
+                'dest': 'src/main/assets/models'
         ]
 ]
 
@@ -75,12 +79,16 @@ def FD_JAVA_SDK = [
         [
                 'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-sdk-latest-dev.aar',
                 'dest': 'libs'
+        ],
+        [
+                'src' : 'https://bj.bcebos.com/fastdeploy/test/bdasr_V3_20210628_cfe8c44.aar',
+                'dest': 'libs'
         ]
 ]
 
 task downloadAndExtractModels(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting fastdeploy models ..."
+        println "[INFO] Downloading and extracting fastdeploy models ..."
     }
     doLast {
         String cachePath = "cache"
@@ -90,19 +98,24 @@ task downloadAndExtractModels(type: DefaultTask) {
         FD_MODEL.eachWithIndex { model, index ->
             String[] modelPaths = model.src.split("/")
             String modelName = modelPaths[modelPaths.length - 1]
-            // Download the target model if not exists
-            boolean copyFiles = !file("${model.dest}").exists()
-            if (!file("${cachePath}/${modelName}").exists()) {
-                println "Downloading ${model.src} -> ${cachePath}/${modelName}"
-                ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
+            String modelPrefix = modelName.substring(0, modelName.length() - 4)
+            boolean copyFiles = false
+            if (!file("${model.dest}/${modelPrefix}").exists()) {
+                // Download the target model if not exists
+                if (!file("${cachePath}/${modelName}").exists()) {
+                    println "[INFO] Downloading ${model.src} -> ${cachePath}/${modelName}"
+                    ant.get(src: model.src, dest: file("${cachePath}/${modelName}"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
-                println "Coping ${cachePath}/${modelName} -> ${model.dest}"
+                println "[INFO] Taring ${cachePath}/${modelName} -> ${model.dest}/${modelPrefix}"
                 copy {
                     from tarTree("${cachePath}/${modelName}")
                     into "${model.dest}"
                 }
+            } else {
+                println "[INFO] ${model.dest}/${modelPrefix} already exists!"
             }
         }
     }
@@ -110,7 +123,7 @@ task downloadAndExtractModels(type: DefaultTask) {
 
 task downloadAndExtractSDKs(type: DefaultTask) {
     doFirst {
-        println "Downloading and extracting fastdeploy android java sdk ..."
+        println "[INFO] Downloading and extracting fastdeploy android java sdk ..."
     }
     doLast {
         String cachePath = "cache"
@@ -120,19 +133,23 @@ task downloadAndExtractSDKs(type: DefaultTask) {
         FD_JAVA_SDK.eachWithIndex { sdk, index ->
             String[] sdkPaths = sdk.src.split("/")
             String sdkName = sdkPaths[sdkPaths.length - 1]
-            // Download the target SDK if not exists
-            boolean copyFiles = !file("${sdk.dest}/${sdkName}").exists()
-            if (!file("${cachePath}/${sdkName}").exists()) {
-                println "Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
-                ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+            boolean copyFiles = false
+            if (!file("${sdk.dest}/${sdkName}").exists()) {
+                // Download the target SDK if not exists
+                if (!file("${cachePath}/${sdkName}").exists()) {
+                    println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
+                    ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
-                println "Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
+                println "[INFO] Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
                 copy {
                     from "${cachePath}/${sdkName}"
                     into "${sdk.dest}"
                 }
+            } else {
+                println "[INFO] ${sdk.dest}/${sdkName} already exists!"
             }
         }
     }
