@@ -26,7 +26,7 @@ tar -xvf ch_PP-OCRv2_det_infer.tar
 wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
 tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
-wgethttps://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
 tar -xvf ch_PP-OCRv2_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
@@ -82,6 +82,7 @@ PPOCRv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 > ```  
 > bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+> bool Predict(const cv::Mat& img, fastdeploy::vision::OCRResult* result);
 > ```
 >
 > 模型预测接口，输入一张图片，返回OCR预测结果
