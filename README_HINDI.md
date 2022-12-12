@@ -333,4 +333,4 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-license"></div>
 
-FastDeploy Apache-2.0 ओपन सोर्स लाइसेंस का पालन करता है।(./LICENSE)。
+FastDeploy निम्नानुसार है [Apache-2.0 खुला स्रोत लाइसेंस](./LICENSE)。
