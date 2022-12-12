@@ -31,9 +31,6 @@ def build_option(args):
 
     if args.device.lower() == "gpu":
         option.use_gpu()
-
-    if args.use_trt:
-        option.use_trt_backend()
     return option
 
 
