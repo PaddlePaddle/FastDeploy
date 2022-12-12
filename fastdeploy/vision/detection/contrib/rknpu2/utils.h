@@ -14,6 +14,11 @@
 #pragma once
 #include <cmath>
 #include <vector>
+
+namespace fastdeploy {
+namespace vision {
+namespace detection {
+
 typedef enum { RKYOLOX = 0, RKYOLOV5, RKYOLOV7, UNKNOWN } ModelType;
 float clamp(float val, int min, int max);
 float Sigmoid(float x);
@@ -21,6 +26,10 @@ float UnSigmoid(float y);
 inline static int32_t __clip(float val, float min, float max);
 int8_t QntF32ToAffine(float f32, int32_t zp, float scale);
 float DeqntAffineToF32(int8_t qnt, int32_t zp, float scale);
-int NMS(int validCount, std::vector<float>& outputLocations,
+int NMS(int valid_count, std::vector<float>& output_locations,
         std::vector<int>& class_id, std::vector<int>& order, float threshold,
         bool class_agnostic);
+
+} // namespace detection
+} // namespace vision
+} // namespace fastdeploy
