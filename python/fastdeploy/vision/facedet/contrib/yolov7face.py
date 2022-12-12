@@ -96,14 +96,14 @@ class Yolov7FacePostprocessor:
     @property
     def conf_threshold(self):
         """
-        confidence threshold for postprocessing, default is 0.25
+        confidence threshold for postprocessing, default is 0.5
         """
         return self._postprocessor.conf_threshold
 
     @property
     def nms_threshold(self):
         """
-        nms threshold for postprocessing, default is 0.5
+        nms threshold for postprocessing, default is 0.45
         """
         return self._postprocessor.nms_threshold
 
@@ -133,20 +133,19 @@ class YOLOv7Face(FastDeployModel):
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        # 初始化后的option保存在self._runtime_option
         super(YOLOv7Face, self).__init__(runtime_option)
 
         self._model = C.vision.facedet.YOLOv7Face(
             model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
+
         assert self.initialized, "YOLOv7Face initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.3, nms_iou_threshold=0.5):
+    def predict(self, input_image, conf_threshold=0.5, nms_iou_threshold=0.45):
         """Detect the location and key points of human faces from an input image
 
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param conf_threshold: confidence threashold for postprocessing, default is 0.3
-        :param nms_iou_threshold: iou threashold for NMS, default is 0.5
+        :param conf_threshold: confidence threashold for postprocessing, default is 0.5
+        :param nms_iou_threshold: iou threashold for NMS, default is 0.45
         :return: FaceDetectionResult
         """
         self.postprocessor.conf_threshold = conf_threshold

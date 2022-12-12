@@ -25,7 +25,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
   auto im_bak = im.clone();
 
   fastdeploy::vision::FaceDetectionResult res;
-  if (!model.Predict(&im, &res, 0.3, 0.5)) {
+  if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }

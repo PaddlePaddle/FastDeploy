@@ -69,7 +69,7 @@ bool YOLOv7Face::Predict(const cv::Mat& im, FaceDetectionResult* result){
 bool YOLOv7Face::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<FaceDetectionResult>* results){
   std::vector<FDMat> fd_images = WrapMat(images);
-  FDASSERT(images.size() == 1, "Only support batch =1 now.");
+  FDASSERT(images.size() == 1, "Only support batch = 1 now.");
   std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, &ims_info)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;

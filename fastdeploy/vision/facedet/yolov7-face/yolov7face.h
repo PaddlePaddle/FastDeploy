@@ -44,13 +44,13 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
    * \param[in] result The output face detection result will be writen to this structure
-   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.25
-   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.5
+   * \param[in] conf_threshold confidence threashold for postprocessing, default is 0.5
+   * \param[in] nms_iou_threshold iou threashold for NMS, default is 0.45
    * \return true if the prediction successed, otherwise false
    */
   virtual bool Predict(cv::Mat* im, FaceDetectionResult* result,
-                       float conf_threshold = 0.25,
-                       float nms_threshold = 0.5);
+                       float conf_threshold = 0.5,
+                       float nms_threshold = 0.45);
   /** \brief Predict the detection result for an input image
    *
    * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format

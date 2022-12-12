@@ -27,7 +27,7 @@ void BindYOLOv7Face(pybind11::module& m) {
         std::vector<FDTensor> outputs;
         std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
         if (!self.Run(&images, &outputs, &ims_info)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in PaddleClasPreprocessor.");
         }
         for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();

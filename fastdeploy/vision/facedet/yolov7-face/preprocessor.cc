@@ -64,12 +64,8 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
   // yolov7-face's preprocess steps
   // 1. letterbox
-  // 2. BGR->RGB
-  // 3. HWC->CHW
+  // 2. convert_and_permute(swap_rb=true)
   LetterBox(mat);
-  // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
-  //                std::vector<float>(mat->Channels(), 1.0));
-  // Compute `result = mat * alpha + beta` directly by channel
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
   ConvertAndPermute::Run(mat, alpha, beta, true);

@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
   bool Run(const std::vector<FDTensor>& infer_result,
            std::vector<FaceDetectionResult>* results,
            const std::vector<std::map<std::string,
-                              std::array<float, 2>>>& ims_info);
+                             std::array<float, 2>>>& ims_info);
 
   /// Set conf_threshold, default 0.7
   void SetConfThreshold(const float& conf_threshold) {
