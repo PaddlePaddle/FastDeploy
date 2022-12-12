@@ -47,17 +47,9 @@ bool FDStreamer::RunAsync() {
   return app_->RunAsync();
 }
 
-void FDStreamer::SetupCallback() {
-  AppConfig* app_config = app_->GetAppConfig();
-  if (app_config->type == AppType::VIDEO_DECODER) {
-    auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());
-    casted_app->SetupAppSinkCallback();
-  }
-}
-
-bool FDStreamer::PopTensor(FDTensor& tensor) {
+bool FDStreamer::TryPullFrame(FDTensor& tensor, int timeout_ms) {
   auto casted_app = dynamic_cast<VideoDecoderApp*>(app_.get());
-  return casted_app->PopTensor(tensor);
+  return casted_app->TryPullFrame(tensor, timeout_ms);
 }
 
 }  // namespace streamer

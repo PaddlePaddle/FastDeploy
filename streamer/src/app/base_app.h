@@ -17,7 +17,7 @@
 #include "deepstream/perf.h"
 
 #include <gst/gst.h>
-#include <thread>  // NOLINT
+#include <future>  // NOLINT
 
 namespace fastdeploy {
 namespace streamer {
@@ -43,11 +43,15 @@ class BaseApp {
   }
   virtual ~BaseApp() = default;
 
-  bool Init(const std::string& config_file);
+  virtual bool Init(const std::string& config_file);
 
   bool Run();
 
   bool RunAsync();
+
+  void Destroy();
+
+  void SetupPerfMeasurement();
 
   AppConfig* GetAppConfig() {
     return &app_config_;
@@ -65,7 +69,9 @@ class BaseApp {
     return bus_watch_id_;
   }
 
-  void SetupPerfMeasurement();
+  bool Destroyed() {
+    return destroyed_;
+  }
 
  protected:
   AppConfig app_config_;
@@ -73,7 +79,8 @@ class BaseApp {
   GMainLoop* loop_;
   guint bus_watch_id_;
   NvDsAppPerfStructInt perf_struct_;
-  std::thread thread_;
+  std::future<void> future_;
+  bool destroyed_ = false;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

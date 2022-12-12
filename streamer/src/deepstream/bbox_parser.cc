@@ -1,3 +1,17 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "nvdsinfer_custom_impl.h"
 #include <algorithm>
 #include <cassert>
@@ -5,12 +19,9 @@
 #include <cstring>
 #include <iostream>
 
-
-static const int NUM_CLASSES_YOLO = 80;
-
-static float clamp(const float val, const float minVal, const float maxVal) {
-  assert(minVal <= maxVal);
-  return std::min(maxVal, std::max(minVal, val));
+static float clamp(const float val, const float min_val, const float max_val) {
+  assert(min_val <= max_val);
+  return std::min(max_val, std::max(min_val, val));
 }
 
 extern "C" bool NvDsInferParseCustomPPYOLOE(
@@ -22,35 +33,29 @@ extern "C" bool NvDsInferParseCustomPPYOLOE(
     std::cerr << "Could not find output layer in bbox parsing" << std::endl;;
     return false;
   }
-  // std::cout << "num of layers: " << outputLayersInfo.size() << std::endl;
-  // std::cout << "num of layers: " << outputLayersInfo[0].layerName << std::endl;
-  // std::cout << "num of layers: " << outputLayersInfo[1].layerName << std::endl;
 
-  if (NUM_CLASSES_YOLO != detectionParams.numClassesConfigured) {
+  int num_classes = outputLayersInfo[0].inferDims.d[0];
+  if (num_classes != detectionParams.numClassesConfigured) {
     std::cerr << "WARNING: Num classes mismatch. Configured:"
               << detectionParams.numClassesConfigured
-              << ", detected by network: " << NUM_CLASSES_YOLO << std::endl;
+              << ", detected by network: " << num_classes << std::endl;
+    assert(-1);
   }
 
+  int num_obj = outputLayersInfo[0].inferDims.d[1];
   float* score_data = (float*)outputLayersInfo[0].buffer;
   float* bbox_data = (float*)outputLayersInfo[1].buffer;
-  // const int dimensions = layer.inferDims.d[1];
-  // int rows = layer.inferDims.numElements / layer.inferDims.d[1];
 
-  // std::cout << outputLayersInfo[0].inferDims.numDims << std::endl;
-  // std::cout << outputLayersInfo[0].inferDims.numElements << " " << outputLayersInfo[0].inferDims.d[0] << " " << outputLayersInfo[0].inferDims.d[1] << std::endl;
-
-  for (int i = 0; i < 8400; i++) {
+  for (int i = 0; i < num_obj; i++) {
     float max_score = -1.0f;
     int class_id = -1;
-    for (int j = 0; j < 80; j++) {
-      float score = score_data[8400 * j + i];
+    for (int j = 0; j < num_classes; j++) {
+      float score = score_data[num_obj * j + i];
       if (score > max_score) {
         max_score = score;
         class_id = j;
       }
     }
-    // if (max_score < conf_thresh) continue;
     NvDsInferParseObjectInfo obj;
     obj.classId = (uint32_t)class_id;
     obj.detectionConfidence = max_score;

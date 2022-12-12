@@ -13,40 +13,22 @@
 // limitations under the License.
 #pragma once
 
-#include "app/base_app.h"
-#include "fastdeploy/utils/utils.h"
-#include "fastdeploy/core/fd_tensor.h"
-
-#include <memory>
+#include "fastdeploy/core/fd_type.h"
+#include <gst/gst.h>
 
 namespace fastdeploy {
 namespace streamer {
+enum PixelFormat {
+  I420,
+  BGR
+};
 
-/*! @brief FDStreamer class, user inferfaces for FastDeploy Streamer
- */
-class FASTDEPLOY_DECL FDStreamer {
- public:
-  /** \brief Init FD streamer
-   *
-   * \param[in] config config file path
-   * \return true if the streamer is initialized, otherwise false
-   */
-  bool Init(const std::string& config_file);
-
-  bool Run();
-
-  bool RunAsync();
-
-  void SetupCallback();
-
-  bool TryPullFrame(FDTensor& tensor, int timeout_ms = 1);
-
-  bool Destroyed() {
-    return app_->Destroyed();
-  }
-
- private:
-  std::unique_ptr<BaseApp> app_;
+struct Frame {
+  int width;
+  int height;
+  PixelFormat format;
+  uint8_t* data = nullptr;
+  Device device = Device::CPU;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

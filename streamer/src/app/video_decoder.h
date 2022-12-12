@@ -18,8 +18,7 @@
 #include "fastdeploy/core/fd_tensor.h"
 
 #include <gst/gst.h>
-#include <mutex>  // NOLINT
-#include <queue>
+#include <gst/app/gstappsink.h>
 
 namespace fastdeploy {
 namespace streamer {
@@ -30,18 +29,13 @@ class FASTDEPLOY_DECL VideoDecoderApp : public BaseApp {
  public:
   explicit VideoDecoderApp(AppConfig& app_config) : BaseApp(app_config) {}
 
-  void SetupAppSinkCallback();
+  bool Init(const std::string& config_file);
 
-  bool PopTensor(FDTensor& tensor);
-
-  void UpdateQueue(uint8_t* data, const std::vector<int64_t>& shape);
+  bool TryPullFrame(FDTensor& tensor, int timeout_ms);
 
  private:
-  int frame_cnt_ = 0;
-  int max_queue_size_ = 60;
-  std::vector<FDTensor> ring_buffers_;
-  std::queue<FDTensor*> tensor_queue_;
-  std::mutex queue_mutex_;
+  void GetAppsinkFromPipeline();
+  GstAppSink* appsink_;
 };
 }  // namespace streamer
 }  // namespace fastdeploy

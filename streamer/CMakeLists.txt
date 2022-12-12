@@ -25,14 +25,9 @@ list(REMOVE_ITEM ALL_STREAMER_SRCS ${DEEPSTREAM_SRCS})
 set(DEPEND_LIBS "")
 
 find_package(PkgConfig REQUIRED)
-# pkg_check_modules(GSTREAMER gstreamer-1.0>=1.14 REQUIRED)
 pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
-# pkg_check_modules(GLIB2 glib-2.0 REQUIRED)
 include_directories(${GSTAPP_INCLUDE_DIRS})
 list(APPEND DEPEND_LIBS ${GSTAPP_LIBRARIES})
-
-message(STATUS "--------- ${GSTAPP_INCLUDE_DIRS}")
-message(STATUS "+++++++++ ${GSTAPP_LIBRARIES}")
 
 include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})

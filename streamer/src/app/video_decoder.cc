@@ -15,82 +15,45 @@
 #include "app/video_decoder.h"
 #include "gstreamer/utils.h"
 
-#include <gst/app/gstappsink.h>
-#include <cuda_runtime_api.h>
-
 namespace fastdeploy {
 namespace streamer {
 
-static int count = 0;
-static GstFlowReturn NewSampleCallback(GstAppSink* appsink, gpointer data) {
-  GstSample* sample = gst_app_sink_pull_sample(appsink);
-  if (sample == NULL) {
-    FDINFO << "Can't pull sample." << std::endl;
-    return GST_FLOW_OK;
-  }
-  auto obj = reinterpret_cast<VideoDecoderApp*>(data);
-  // obj->frame_cnt_++;
-  // std::cout << obj->frame_cnt_ << std::endl;
+bool VideoDecoderApp::Init(const std::string& config_file) {
+  FDINFO << "this " << std::endl;
+  BaseApp::Init(config_file);
+  GetAppsinkFromPipeline();
+  return true;
+}
 
-  GstBuffer* buffer = NULL;
-  GstMapInfo map;
-  const GstStructure* info = NULL;
+bool VideoDecoderApp::TryPullFrame(FDTensor& tensor, int timeout_ms) {
+  GstSample* sample = gst_app_sink_try_pull_sample(appsink_,
+                                                   timeout_ms * GST_MSECOND);
+  if (sample == NULL) {
+    return false;
+  }
   GstCaps* caps = NULL;
-  int sample_width = 0;
-  int sample_height = 0;
+  uint8_t* data = nullptr;
+  Frame frame;
   do {
-    buffer = gst_sample_get_buffer(sample);
-    if (buffer == NULL) {
+    bool ret = GetFrameFromSample(sample, frame);
+    if (!ret) {
       FDERROR << "Failed to get buffer from sample." << std::endl;
       break;
     }
+    FDASSERT(frame.device == Device::CPU,
+             "Currently, only CPU frame is supported");
 
-    gst_buffer_map(buffer, &map, GST_MAP_READ);
-
-    if (map.data == NULL) {
-      FDERROR << "Appsink buffer data is empty." << std::endl;
-      break;
-    }
- 
-    caps = gst_sample_get_caps(sample);
-    if (caps == NULL) {
-      FDERROR << "Failed to get caps from sample." << std::endl;
-      break;
-    }
-
-    FDINFO << "caps: " << gst_caps_to_string(caps) << std::endl;
- 
-    info = gst_caps_get_structure(caps, 0);
-    if (info == NULL) {
-      FDERROR << "Failed to get structure from caps." << std::endl;
-      break;
-    }
-
-    gst_structure_get_int(info, "width", &sample_width);
-    gst_structure_get_int(info, "height", &sample_height);
-
-    FDINFO << "width: " << sample_width << " height: " << sample_height
-           << " size: " << map.memory->size << std::endl;
-
-    std::vector<int64_t> shape = {sample_height, sample_width, 3};
-    obj->UpdateQueue(map.data, shape);
+    std::vector<int64_t> shape = GetFrameShape(frame);
+    tensor.Resize(shape, FDDataType::UINT8, "", frame.device);
+    FDTensor::CopyBuffer(tensor.Data(), frame.data, tensor.Nbytes(),
+                        tensor.device);
   } while (false);
 
-  if (buffer) gst_buffer_unmap(buffer, &map);
   if (sample) gst_sample_unref(sample);
-  return GST_FLOW_OK;
+  return true;
 }
 
-static GstFlowReturn NewPrerollCallback(GstAppSink* appsink, gpointer data) {
-  FDINFO << "new preroll callback" << std::endl;
-  return GST_FLOW_OK;
-}
-
-static void EosCallback(GstAppSink* appsink, gpointer data) {
-  FDINFO << "eos callback" << std::endl;
-}
-
-void VideoDecoderApp::SetupAppSinkCallback() {
+void VideoDecoderApp::GetAppsinkFromPipeline() {
   GstElement* elem = NULL;
   auto elem_names = GetSinkElemNames(GST_BIN(pipeline_));
   for (auto& elem_name : elem_names) {
@@ -99,53 +62,8 @@ void VideoDecoderApp::SetupAppSinkCallback() {
       elem = gst_bin_get_by_name(GST_BIN(pipeline_), elem_name.c_str());
     }
   }
-  FDASSERT(elem != NULL, "Can't find a properly sink bin in the pipeline");
-
-  GstAppSink* appsink = GST_APP_SINK_CAST(elem);
-
-  gst_app_sink_set_emit_signals(appsink, TRUE);
-
-  GstAppSinkCallbacks callbacks = {
-      EosCallback,
-      NewPrerollCallback,
-      NewSampleCallback
-  };
-  gst_app_sink_set_callbacks(appsink, &callbacks,
-                             reinterpret_cast<void*>(this), NULL);
-  
-  ring_buffers_.resize(max_queue_size_);
-  // cudaSetDevice(1);
+  FDASSERT(elem != NULL, "Can't find a appsink in the pipeline");
+  appsink_ = GST_APP_SINK_CAST(elem);
 }
-
-bool VideoDecoderApp::PopTensor(FDTensor& tensor) {
-  std::lock_guard<std::mutex> guard(queue_mutex_);
-  if (tensor_queue_.empty()) return false;
-  
-  auto fst = tensor_queue_.front();
-  tensor.Resize(fst->shape, fst->dtype, "", fst->device);
-  FDTensor::CopyBuffer(tensor.Data(), fst->Data(), fst->Nbytes(), fst->device);
-
-  tensor_queue_.pop();
-  return true;
-}
-
-void VideoDecoderApp::UpdateQueue(uint8_t* data,
-                                  const std::vector<int64_t>& shape) {
-  std::lock_guard<std::mutex> guard(queue_mutex_);
-
-  auto tensor = &ring_buffers_[frame_cnt_ % ring_buffers_.size()];
-  frame_cnt_++;
-  std::cout << "frame: " << frame_cnt_ << std::endl;
-
-  tensor->Resize(shape, FDDataType::UINT8, "", Device::CPU);
-  FDTensor::CopyBuffer(tensor->Data(), data, tensor->Nbytes(), Device::CPU);
-
-  tensor_queue_.push(tensor);
-  if (tensor_queue_.size() == max_queue_size_) {
-    // drop the oldest frame
-    tensor_queue_.pop();
-  }
-}
-
 }  // namespace streamer
 }  // namespace fastdeploy

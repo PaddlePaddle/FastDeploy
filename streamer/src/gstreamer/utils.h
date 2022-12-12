@@ -1,4 +1,3 @@
-
 // Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include "gstreamer/types.h"
 #include "fastdeploy/utils/utils.h"
 #include <gst/gst.h>
 
@@ -22,5 +22,7 @@ namespace streamer {
 std::string GetElementName(GstElement* elem);
 std::vector<std::string> GetSinkElemNames(GstBin* bin);
 GstElement* CreatePipeline(const std::string& pipeline_desc);
+std::vector<int64_t> GetFrameShape(const Frame& frame);
+bool GetFrameFromSample(GstSample* sample, Frame& frame);
 }  // namespace streamer
 }  // namespace fastdeploy

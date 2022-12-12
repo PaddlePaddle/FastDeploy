@@ -64,5 +64,78 @@ GstElement* CreatePipeline(const std::string& pipeline_desc) {
   return pipeline;
 }
 
+std::vector<int64_t> GetFrameShape(const Frame& frame) {
+  if (frame.format == PixelFormat::I420) {
+    return { frame.height * 3 / 2, frame.width, 1 };
+  } else if (frame.format == PixelFormat::BGR) {
+    return { frame.height, frame.width, 3 };
+  } else {
+    FDASSERT(false, "Unsupported format: %d.", frame.format);
+  }
+}
+
+PixelFormat GetPixelFormat(const std::string& format) {
+  if (format == "I420") {
+    return PixelFormat::I420;
+  } else if (format == "BGR") {
+    return PixelFormat::BGR;
+  } else {
+    FDASSERT(false, "Unsupported format: %s.", format.c_str());
+  }
+}
+
+void GetFrameInfo(GstCaps* caps, Frame& frame) {
+  const GstStructure* struc = gst_caps_get_structure(caps, 0);
+  std::string name = gst_structure_get_name(struc);
+
+  if (name.rfind("video", 0) != 0) {
+    FDASSERT(false, "GetFrameInfo only support video caps.");
+  }
+
+  GstCapsFeatures* features = gst_caps_get_features(caps, 0);
+  if (gst_caps_features_contains(features, "memory:NVMM")) {
+    frame.device = Device::GPU;
+  } else {
+    frame.device = Device::CPU;
+  }
+  gst_structure_get_int(struc, "width", &frame.width);
+  gst_structure_get_int(struc, "height", &frame.height);
+  std::string format_str = gst_structure_get_string(struc, "format");
+  frame.format = GetPixelFormat(format_str);
+}
+
+bool GetFrameFromSample(GstSample* sample, Frame& frame) {
+  GstBuffer* buffer = NULL;
+  GstMapInfo map;
+  const GstStructure* info = NULL;
+  GstCaps* caps = NULL;
+  int sample_width = 0;
+  int sample_height = 0;
+  do {
+    buffer = gst_sample_get_buffer(sample);
+    if (buffer == NULL) {
+      FDERROR << "Failed to get buffer from sample." << std::endl;
+      break;
+    }
+
+    gst_buffer_map(buffer, &map, GST_MAP_READ);
+
+    if (map.data == NULL) {
+      FDERROR << "Appsink buffer data is empty." << std::endl;
+      break;
+    }
+ 
+    caps = gst_sample_get_caps(sample);
+    if (caps == NULL) {
+      FDERROR << "Failed to get caps from sample." << std::endl;
+      break;
+    }
+    frame.data = map.data;
+    GetFrameInfo(caps, frame);
+  } while (false);
+  if (buffer) gst_buffer_unmap(buffer, &map);
+  return true;
+}
+
 }  // namespace streamer
 }  // namespace fastdeploy

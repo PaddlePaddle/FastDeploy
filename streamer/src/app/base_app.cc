@@ -80,31 +80,22 @@ bool BaseApp::Run() {
   g_print("Running...\n");
   g_main_loop_run(loop_);
 
-  g_print("Returned, stopping playback\n");
-  gst_element_set_state(pipeline_, GST_STATE_NULL);
-  g_print("Deleting pipeline\n");
-  gst_object_unref(GST_OBJECT(pipeline_));
-  g_source_remove(bus_watch_id_);
-  g_main_loop_unref(loop_);
+  Destroy();
   return true;
 }
 
 static void MainLoopThread(BaseApp* app) {
   g_main_loop_run(app->GetLoop());
-
-  g_print("Returned, stopping playback\n");
-  gst_element_set_state(app->GetPipeline(), GST_STATE_NULL);
-  g_print("Deleting pipeline\n");
-  gst_object_unref(GST_OBJECT(app->GetPipeline()));
-  g_source_remove(app->GetBusId());
-  g_main_loop_unref(app->GetLoop());
+  app->Destroy();
 }
 
 bool BaseApp::RunAsync() {
   gst_element_set_state(pipeline_, GST_STATE_PLAYING);
   g_print("Running Asynchronous...\n");
-  std::thread t(MainLoopThread, this);
-  thread_ = std::move(t);
+  // std::thread t(MainLoopThread, this);
+  // thread_ = std::move(t);
+  std::future<void> fut = std::async(std::launch::async, MainLoopThread, this);
+  future_ = std::move(fut);
   return true;
 }
 
@@ -132,5 +123,16 @@ void BaseApp::SetupPerfMeasurement() {
 
   gst_object_unref(perf_pad);
 }
+
+void BaseApp::Destroy() {
+  g_print("Returned, stopping playback\n");
+  gst_element_set_state(pipeline_, GST_STATE_NULL);
+  g_print("Deleting pipeline\n");
+  gst_object_unref(GST_OBJECT(pipeline_));
+  g_source_remove(bus_watch_id_);
+  g_main_loop_unref(loop_);
+  destroyed_ = true;
+}
+
 }  // namespace streamer
 }  // namespace fastdeploy
