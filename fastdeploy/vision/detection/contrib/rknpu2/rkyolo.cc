@@ -1,3 +1,16 @@
+// Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.  //NOLINT
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "fastdeploy/vision/detection/contrib/rknpu2/rkyolo.h"
 
 namespace fastdeploy {
@@ -26,12 +39,11 @@ bool RKYOLO::Initialize() {
     return false;
   }
   auto size = GetPreprocessor().GetSize();
-  GetPostprocessor().SetHeightAndWeight(size[0],size[1]);
+  GetPostprocessor().SetHeightAndWeight(size[0], size[1]);
   return true;
 }
 
-bool RKYOLO::Predict(const cv::Mat& im,
-                     DetectionResult* result) {
+bool RKYOLO::Predict(const cv::Mat& im, DetectionResult* result) {
   std::vector<DetectionResult> results;
   if (!BatchPredict({im}, &results)) {
     return false;
@@ -50,7 +62,8 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
   }
   auto pad_hw_values_ = preprocessor_.GetPadHWValues();
   postprocessor_.SetPadHWValues(preprocessor_.GetPadHWValues());
-  std::cout << "preprocessor_ scale_ = " << preprocessor_.GetScale()[0] << std::endl;
+  std::cout << "preprocessor_ scale_ = " << preprocessor_.GetScale()[0]
+            << std::endl;
   postprocessor_.SetScale(preprocessor_.GetScale());
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
@@ -59,15 +72,15 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-
   if (!postprocessor_.Run(reused_output_tensors_, results)) {
-    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference results by runtime."
+            << std::endl;
     return false;
   }
 
   return true;
 }
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

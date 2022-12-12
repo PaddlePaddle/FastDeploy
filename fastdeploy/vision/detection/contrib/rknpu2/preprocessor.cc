@@ -57,7 +57,7 @@ void RKYOLOPreprocessor::LetterBox(FDMat* mat) {
     resize_w = size_[0];
   }
 
-  pad_hw_values_.push_back({pad_h,pad_w});
+  pad_hw_values_.push_back({pad_h, pad_w});
 
   if (std::fabs(scale - 1.0f) > 1e-06) {
     Resize::Run(mat, resize_w, resize_h);
@@ -75,17 +75,17 @@ void RKYOLOPreprocessor::LetterBox(FDMat* mat) {
 
 bool RKYOLOPreprocessor::Preprocess(FDMat* mat, FDTensor* output) {
   // process after image load
-//  float ratio = std::min(size_[1] * 1.0f / static_cast<float>(mat->Height()),
-//                         size_[0] * 1.0f / static_cast<float>(mat->Width()));
-//  if (std::fabs(ratio - 1.0f) > 1e-06) {
-//    int interp = cv::INTER_AREA;
-//    if (ratio > 1.0) {
-//      interp = cv::INTER_LINEAR;
-//    }
-//    int resize_h = int(mat->Height() * ratio);
-//    int resize_w = int(mat->Width() * ratio);
-//    Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
-//  }
+  //  float ratio = std::min(size_[1] * 1.0f / static_cast<float>(mat->Height()),
+  //                         size_[0] * 1.0f / static_cast<float>(mat->Width()));
+  //  if (std::fabs(ratio - 1.0f) > 1e-06) {
+  //    int interp = cv::INTER_AREA;
+  //    if (ratio > 1.0) {
+  //      interp = cv::INTER_LINEAR;
+  //    }
+  //    int resize_h = int(mat->Height() * ratio);
+  //    int resize_w = int(mat->Width() * ratio);
+  //    Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
+  //  }
 
   // RKYOLO's preprocess steps
   // 1. letterbox
@@ -93,7 +93,7 @@ bool RKYOLOPreprocessor::Preprocess(FDMat* mat, FDTensor* output) {
   LetterBox(mat);
   BGR2RGB::Run(mat);
   mat->ShareWithTensor(output);
-  output->ExpandDim(0); // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 }
 
@@ -122,6 +122,6 @@ bool RKYOLOPreprocessor::Run(std::vector<FDMat>* images,
   return true;
 }
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy
