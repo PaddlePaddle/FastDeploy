@@ -41,7 +41,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 ### 模型类
 
-PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
+PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，`SSD`,`PaddleYOLOv5`,`PaddleYOLOv6`,`PaddleYOLOv7`,`RTMDet`所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
 ```c++
 fastdeploy::vision::detection::PPYOLOE(
         const string& model_file,
