@@ -75,6 +75,11 @@ def build_option(args):
             option.use_ort_backend()
         elif backend == "paddle":
             option.use_paddle_backend()
+        elif backend == "ov":
+            option.use_openvino_backend()
+            option.set_openvino_device(name="GPU")
+            # change name and shape for models
+            option.set_openvino_shape_info({"images": [1, 3, 640, 640]})
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             if backend == "paddle_trt":
@@ -108,27 +113,109 @@ def build_option(args):
     return option
 
 
-def get_current_memory_mb(gpu_id=None):
-    import pynvml
-    import psutil
-    pid = os.getpid()
-    p = psutil.Process(pid)
-    info = p.memory_full_info()
-    cpu_mem = info.uss / 1024. / 1024.
-    gpu_mem = 0
-    if gpu_id is not None:
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        gpu_mem = meminfo.used / 1024. / 1024.
-    return cpu_mem, gpu_mem
+class StatBase(object):
+    """StatBase"""
+    nvidia_smi_path = "nvidia-smi"
+    gpu_keys = ('index', 'uuid', 'name', 'timestamp', 'memory.total',
+                'memory.free', 'memory.used', 'utilization.gpu',
+                'utilization.memory')
+    nu_opt = ',nounits'
+    cpu_keys = ('cpu.util', 'memory.util', 'memory.used')
 
 
-def get_current_gputil(gpu_id):
-    import GPUtil
-    GPUs = GPUtil.getGPUs()
-    gpu_load = GPUs[gpu_id].load
-    return gpu_load
+class Monitor(StatBase):
+    """Monitor"""
+
+    def __init__(self, use_gpu=False, gpu_id=0, interval=0.1):
+        self.result = {}
+        self.gpu_id = gpu_id
+        self.use_gpu = use_gpu
+        self.interval = interval
+        self.cpu_stat_q = multiprocessing.Queue()
+
+    def start(self):
+        cmd = '%s --id=%s --query-gpu=%s --format=csv,noheader%s -lms 50' % (
+            StatBase.nvidia_smi_path, self.gpu_id, ','.join(StatBase.gpu_keys),
+            StatBase.nu_opt)
+        if self.use_gpu:
+            self.gpu_stat_worker = subprocess.Popen(
+                cmd,
+                stderr=subprocess.STDOUT,
+                stdout=subprocess.PIPE,
+                shell=True,
+                close_fds=True,
+                preexec_fn=os.setsid)
+        # cpu stat
+        pid = os.getpid()
+        self.cpu_stat_worker = multiprocessing.Process(
+            target=self.cpu_stat_func,
+            args=(self.cpu_stat_q, pid, self.interval))
+        self.cpu_stat_worker.start()
+
+    def stop(self):
+        try:
+            if self.use_gpu:
+                os.killpg(self.gpu_stat_worker.pid, signal.SIGUSR1)
+            # os.killpg(p.pid, signal.SIGTERM)
+            self.cpu_stat_worker.terminate()
+            self.cpu_stat_worker.join(timeout=0.01)
+        except Exception as e:
+            print(e)
+            return
+
+        # gpu
+        if self.use_gpu:
+            lines = self.gpu_stat_worker.stdout.readlines()
+            lines = [
+                line.strip().decode("utf-8") for line in lines
+                if line.strip() != ''
+            ]
+            gpu_info_list = [{
+                k: v
+                for k, v in zip(StatBase.gpu_keys, line.split(', '))
+            } for line in lines]
+            if len(gpu_info_list) == 0:
+                return
+            result = gpu_info_list[0]
+            for item in gpu_info_list:
+                for k in item.keys():
+                    if k not in ["name", "uuid", "timestamp"]:
+                        result[k] = max(int(result[k]), int(item[k]))
+                    else:
+                        result[k] = max(result[k], item[k])
+            self.result['gpu'] = result
+
+        # cpu
+        cpu_result = {}
+        if self.cpu_stat_q.qsize() > 0:
+            cpu_result = {
+                k: v
+                for k, v in zip(StatBase.cpu_keys, self.cpu_stat_q.get())
+            }
+        while not self.cpu_stat_q.empty():
+            item = {
+                k: v
+                for k, v in zip(StatBase.cpu_keys, self.cpu_stat_q.get())
+            }
+            for k in StatBase.cpu_keys:
+                cpu_result[k] = max(cpu_result[k], item[k])
+        cpu_result['name'] = cpuinfo.get_cpu_info()['brand_raw']
+        self.result['cpu'] = cpu_result
+
+    def output(self):
+        return self.result
+
+    def cpu_stat_func(self, q, pid, interval=0.0):
+        """cpu stat function"""
+        stat_info = psutil.Process(pid)
+        while True:
+            # pid = os.getpid()
+            cpu_util, mem_util, mem_use = stat_info.cpu_percent(
+            ), stat_info.memory_percent(), round(stat_info.memory_info().rss /
+                                                 1024.0 / 1024.0, 4)
+            q.put([cpu_util, mem_util, mem_use])
+            time.sleep(interval)
+        return
 
 
 if __name__ == '__main__':
@@ -139,6 +226,7 @@ if __name__ == '__main__':
 
     gpu_id = args.device_id
     enable_collect_memory_info = args.enable_collect_memory_info
+    dump_result = dict()
     end2end_statis = list()
     cpu_mem = list()
     gpu_mem = list()
@@ -170,6 +258,16 @@ if __name__ == '__main__':
         else:
             raise Exception("model {} not support now in yolo series".format(
                 args.model))
+        if enable_collect_memory_info:
+            import multiprocessing
+            import subprocess
+            import psutil
+            import signal
+            import cpuinfo
+            enable_gpu = args.device == "gpu"
+            monitor = Monitor(enable_gpu, gpu_id)
+            monitor.start()
+
         model.enable_record_time_of_runtime()
         im_ori = cv2.imread(args.image)
         for i in range(args.iter_num):
@@ -177,31 +275,28 @@ if __name__ == '__main__':
             start = time.time()
             result = model.predict(im)
             end2end_statis.append(time.time() - start)
-            if enable_collect_memory_info:
-                gpu_util.append(get_current_gputil(gpu_id))
-                cm, gm = get_current_memory_mb(gpu_id)
-                cpu_mem.append(cm)
-                gpu_mem.append(gm)
 
         runtime_statis = model.print_statis_info_of_runtime()
 
         warmup_iter = args.iter_num // 5
         end2end_statis_repeat = end2end_statis[warmup_iter:]
         if enable_collect_memory_info:
-            cpu_mem_repeat = cpu_mem[warmup_iter:]
-            gpu_mem_repeat = gpu_mem[warmup_iter:]
-            gpu_util_repeat = gpu_util[warmup_iter:]
+            monitor.stop()
+            mem_info = monitor.output()
+            dump_result["cpu_rss_mb"] = mem_info['cpu'][
+                'memory.used'] if 'cpu' in mem_info else 0
+            dump_result["gpu_rss_mb"] = mem_info['gpu'][
+                'memory.used'] if 'gpu' in mem_info else 0
+            dump_result["gpu_util"] = mem_info['gpu'][
+                'utilization.gpu'] if 'gpu' in mem_info else 0
 
-        dump_result = dict()
         dump_result["runtime"] = runtime_statis["avg_time"] * 1000
         dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
-        if enable_collect_memory_info:
-            dump_result["cpu_rss_mb"] = np.mean(cpu_mem_repeat)
-            dump_result["gpu_rss_mb"] = np.mean(gpu_mem_repeat)
-            dump_result["gpu_util"] = np.mean(gpu_util_repeat)
 
         f.writelines("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
         f.writelines("End2End(ms): {} \n".format(str(dump_result["end2end"])))
+        print("Runtime(ms): {} \n".format(str(dump_result["runtime"])))
+        print("End2End(ms): {} \n".format(str(dump_result["end2end"])))
         if enable_collect_memory_info:
             f.writelines("cpu_rss_mb: {} \n".format(
                 str(dump_result["cpu_rss_mb"])))
@@ -209,6 +304,9 @@ if __name__ == '__main__':
                 str(dump_result["gpu_rss_mb"])))
             f.writelines("gpu_util: {} \n".format(
                 str(dump_result["gpu_util"])))
+            print("cpu_rss_mb: {} \n".format(str(dump_result["cpu_rss_mb"])))
+            print("gpu_rss_mb: {} \n".format(str(dump_result["gpu_rss_mb"])))
+            print("gpu_util: {} \n".format(str(dump_result["gpu_util"])))
     except:
         f.writelines("!!!!!Infer Failed\n")
 

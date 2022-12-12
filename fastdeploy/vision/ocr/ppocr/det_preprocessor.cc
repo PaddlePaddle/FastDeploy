@@ -21,10 +21,6 @@ namespace fastdeploy {
 namespace vision {
 namespace ocr {
 
-DBDetectorPreprocessor::DBDetectorPreprocessor() {
-  initialized_ = true;
-}
-
 std::array<int, 4> OcrDetectorGetInfo(FDMat* img, int max_size_len) {
   int w = img->Width();
   int h = img->Height();
@@ -63,10 +59,6 @@ bool OcrDetectorResizeImage(FDMat* img,
 bool DBDetectorPreprocessor::Run(std::vector<FDMat>* images,
                                  std::vector<FDTensor>* outputs,
                                  std::vector<std::array<int, 4>>* batch_det_img_info_ptr) {
-  if (!initialized_) {
-    FDERROR << "The preprocessor is not initialized." << std::endl;
-    return false;
-  }
   if (images->size() == 0) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;

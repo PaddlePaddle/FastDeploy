@@ -7,17 +7,14 @@ We take the Yolov5 series as an example to demonstrate how to install and execut
 
 ### Environment Dependencies
 
-1. Install the develop version downloaded from PaddlePaddle official website.
-
+1.Install PaddlePaddle 2.4 version
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.Install PaddleSlim-develop
-
+2.Install PaddleSlim 2.4 version
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### Install Fastdeploy Auto Compression Toolkit
@@ -121,10 +118,14 @@ FastDeploy currently provides users with compression [config](./configs/) files 
 
 Once obtained the quantized model, developers can deploy it on FastDeploy. Please refer to the following docs for more details
 
-- [YOLOv5 Quantized Model Deployment](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 Quantized Model Deployment](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 Quantized Model Deployment](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 Quantized Model Deployment](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 Quantized Model Deployment](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 Quantized Model Deployment](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas Quantized Model Deployment](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas Quantized Model Deployment](../../../examples/vision/classification/paddleclas/quantize/)
+
+- [PadddleDetection Quantized Model Deployment](../../../examples/vision/detection/paddledetection/quantize/)
+
+- [PadddleSegmentation Quantized Model Deployment](../../../examples/vision/segmentation/paddleseg/quantize/)
