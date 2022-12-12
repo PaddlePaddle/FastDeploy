@@ -15,9 +15,17 @@
 PROJECT(fd_streamer C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
-# option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
-# option(FD_STREAMER_BUILD_DIR "Path of FD streamer lib.")
+option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")
+include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
+include_directories(${FASTDEPLOY_INCS})
+
+set(FDSTREAMER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/../../../src/)
 include_directories(${FDSTREAMER_INCLUDE_DIR})
+link_directories(${PROJECT_SOURCE_DIR}/../../../build/)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTAPP gstreamer-app-1.0 REQUIRED)
+include_directories(${GSTAPP_INCLUDE_DIRS})
 
 add_executable(streamer_demo main.cc)
 target_link_libraries(streamer_demo fd_streamer)

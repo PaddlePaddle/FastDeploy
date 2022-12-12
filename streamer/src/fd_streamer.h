@@ -28,7 +28,7 @@ class FASTDEPLOY_DECL FDStreamer {
  public:
   /** \brief Init FD streamer
    *
-   * \param[in] config config file path
+   * \param[in] config_file config file path
    * \return true if the streamer is initialized, otherwise false
    */
   bool Init(const std::string& config_file);

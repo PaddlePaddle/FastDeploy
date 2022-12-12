@@ -3,8 +3,8 @@ batch-size=4
 net-scale-factor=0.0039215697906911373
 # 0=RGB, 1=BGR
 model-color-format=0
-# onnx-file=yolov7.onnx
-model-engine-file=model/ppyoloe_fp32_b4.engine
+onnx-file=model/ppyoloe.onnx
+model-engine-file=model/ppyoloe.onnx_b4_gpu0_fp32.engine
 labelfile-path=model/labels.txt
 ## 0=FP32, 1=INT8, 2=FP16 mode
 network-mode=0
@@ -15,7 +15,7 @@ network-type=0
 cluster-mode=2
 maintain-aspect-ratio=1
 parse-bbox-func-name=NvDsInferParseCustomPPYOLOE
-custom-lib-path=../../libfd_streamer.so
+custom-lib-path=../../../../build/libfd_streamer.so
 
 [class-attrs-all]
 nms-iou-threshold=0.45
