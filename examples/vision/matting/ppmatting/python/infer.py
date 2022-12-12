@@ -56,7 +56,7 @@ model = fd.vision.matting.PPMatting(
 # 预测图片抠图结果
 im = cv2.imread(args.image)
 bg = cv2.imread(args.bg)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 # 可视化结果
 vis_im = fd.vision.vis_matting(im, result)
