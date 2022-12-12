@@ -50,7 +50,3 @@ list(APPEND DEPEND_LIBS yaml-cpp)
 
 add_library(fd_streamer SHARED ${ALL_STREAMER_SRCS})
 target_link_libraries(fd_streamer ${FASTDEPLOY_LIBS} ${DEPEND_LIBS})
-
-set(FDSTREAMER_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/src/)
-add_subdirectory(examples/ppyoloe)
-add_subdirectory(examples/video_decoder)
