@@ -1,4 +1,4 @@
-English | 简体中文 | हिंदी | [日本語](README_JPN.md) | 한국인 | Русский язык
+English | 简体中文 | हिंदी | [日本語](README_JPN.md) 
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
