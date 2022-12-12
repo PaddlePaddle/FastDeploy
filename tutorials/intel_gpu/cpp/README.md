@@ -7,6 +7,8 @@ Before deployment, confirm the following two steps
 - 1. The software and hardware environment meet the requirements. Refer to [FastDeploy Environment Requirements] (../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 - 2. Install FastDeploy Python wheel package. Refer to [Install FastDeploy](../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
+**Notice** This doc require FastDeploy version >= 1.0.2, or just use nightly built version.
+
 ```bash
 # Get FastDeploy codes
 git clone https://github.com/PaddlePaddle/FastDeploy.git
