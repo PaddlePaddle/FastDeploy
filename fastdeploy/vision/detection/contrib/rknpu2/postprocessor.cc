@@ -21,32 +21,8 @@ namespace detection {
 
 RKYOLOPostprocessor::RKYOLOPostprocessor() {}
 
-void RKYOLOPostprocessor::SetModelType(ModelType model_type) {
-  model_type_ = model_type;
-  if (model_type == RKYOLOV5) {
-    anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
-                45, 59, 119, 116, 90, 156, 198, 373, 326};
-    anchor_per_branch_ = 3;
-  } else if (model_type == RKYOLOX) {
-    anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
-                45, 59, 119, 116, 90, 156, 198, 373, 326};
-    anchor_per_branch_ = 1;
-  } else if (model_type == RKYOLOV7) {
-    anchors_ = {12, 16, 19,  36,  40,  28,  36,  75,  76,
-                55, 72, 146, 142, 110, 192, 243, 459, 401};
-    anchor_per_branch_ = 3;
-  } else {
-    return;
-  }
-}
-
 bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
                               std::vector<DetectionResult>* results) {
-  if (model_type_ == ModelType::UNKNOWN) {
-    FDERROR << "RKYOLO Only Support YOLOV5,YOLOV7,YOLOX" << std::endl;
-    return false;
-  }
-
   results->resize(tensors[0].shape[0]);
   for (int num = 0; num < tensors[0].shape[0]; ++num) {
     int validCount = 0;
@@ -89,10 +65,13 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
 
     QuickSortIndiceInverse(boxesScore, 0, validCount - 1, indexArray);
 
-    if (model_type_ == RKYOLOV5 || model_type_ == RKYOLOV7) {
+    if (anchor_per_branch_ == 3) {
       NMS(validCount, filterBoxes, classId, indexArray, nms_threshold_, false);
-    } else if (model_type_ == RKYOLOX) {
+    } else if (anchor_per_branch_ == 1) {
       NMS(validCount, filterBoxes, classId, indexArray, nms_threshold_, true);
+    }else{
+      FDERROR << "anchor_per_branch_ only support 3 or 1." << std::endl;
+      return false;
     }
 
     int last_count = 0;
@@ -124,7 +103,6 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
       (*results)[num].scores.push_back(boxesScore[i]);
       last_count++;
     }
-    std::cout << "last_count" << last_count << std::endl;
   }
   return true;
 }
@@ -161,7 +139,7 @@ int RKYOLOPostprocessor::ProcessInt8(int8_t* input, int* anchor, int grid_h,
           float box_conf_f32 = DeqntAffineToF32(box_confidence, zp, scale);
           float class_prob_f32 = DeqntAffineToF32(maxClassProbs, zp, scale);
           float limit_score = 0;
-          if (model_type_ == RKYOLOX) {
+          if (anchor_per_branch_ == 1) {
             limit_score = box_conf_f32 * class_prob_f32;
           } else {
             limit_score = class_prob_f32;
@@ -169,7 +147,7 @@ int RKYOLOPostprocessor::ProcessInt8(int8_t* input, int* anchor, int grid_h,
           //printf("limit score: %f\n", limit_score);
           if (limit_score > conf_threshold_) {
             float box_x, box_y, box_w, box_h;
-            if (model_type_ == RKYOLOX) {
+            if (anchor_per_branch_ == 1) {
               box_x = DeqntAffineToF32(*in_ptr, zp, scale);
               box_y = DeqntAffineToF32(in_ptr[grid_len], zp, scale);
               box_w = DeqntAffineToF32(in_ptr[2 * grid_len], zp, scale);
