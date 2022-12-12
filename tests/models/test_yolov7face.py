@@ -43,7 +43,6 @@ def test_detection_yolov7face():
     with open("resources/yolov7face_result2.pkl", "rb") as f:
         expect2 = pickle.load(f)
 
-    compare diff
     im1 = cv2.imread("./resources/000000014439.jpg")
     im2 = cv2.imread("./resources/000000570688.jpg")
 

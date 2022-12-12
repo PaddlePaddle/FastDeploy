@@ -25,7 +25,7 @@ Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
   conf_threshold_ = 0.7;
   nms_threshold_ = 0.5;
   max_wh_ = 7680.0;
-}
+} 
 
 bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
  std::vector<FaceDetectionResult>* results,

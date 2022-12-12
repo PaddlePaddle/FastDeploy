@@ -56,6 +56,7 @@ bool Yolov7FacePreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
   return true;
 }
 
+
 bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                         std::map<std::string, std::array<float, 2>>* im_info){
   // Record the shape of image and the shape of preprocessed image

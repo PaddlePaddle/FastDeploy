@@ -40,6 +40,7 @@ YOLOv7Face::YOLOv7Face(const std::string& model_file,
   initialized = Initialize();
 }
 
+
 bool YOLOv7Face::Initialize(){
   if (!InitRuntime()){
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
