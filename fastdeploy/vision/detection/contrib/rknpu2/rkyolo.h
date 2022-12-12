@@ -14,7 +14,6 @@
 
 #pragma once
 
-
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/detection/contrib/rknpu2/postprocessor.h"
 #include "fastdeploy/vision/detection/contrib/rknpu2/preprocessor.h"

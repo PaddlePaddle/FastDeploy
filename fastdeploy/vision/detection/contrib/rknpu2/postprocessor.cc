@@ -62,13 +62,15 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
       int grid_h = height_ / stride;
       int grid_w = width_ / stride;
       int* anchor = &(anchors_.data()[i * 2 * anchor_per_branch_]);
-      if (tensors[i].dtype == FDDataType::INT8 || tensors[i].dtype == FDDataType::UINT8) {
+      if (tensors[i].dtype == FDDataType::INT8 ||
+          tensors[i].dtype == FDDataType::UINT8) {
         auto quantization_info = tensors[i].GetQuantizationInfo();
-        validCount = validCount +
-                     ProcessInt8((int8_t*)tensors[i].Data() + skip_address,
-                                 anchor, grid_h, grid_w, stride, filterBoxes,
-                                 boxesScore, classId, conf_threshold_,
-                                 quantization_info.first, quantization_info.second[0]);
+        validCount =
+            validCount + ProcessInt8((int8_t*)tensors[i].Data() + skip_address,
+                                     anchor, grid_h, grid_w, stride,
+                                     filterBoxes, boxesScore, classId,
+                                     conf_threshold_, quantization_info.first,
+                                     quantization_info.second[0]);
       } else {
         FDERROR << "RKYOLO Only Support INT8 Model" << std::endl;
       }
@@ -126,7 +128,6 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
   }
   return true;
 }
-
 
 int RKYOLOPostprocessor::ProcessInt8(int8_t* input, int* anchor, int grid_h,
                                      int grid_w, int stride,
@@ -235,6 +236,6 @@ int RKYOLOPostprocessor::QuickSortIndiceInverse(std::vector<float>& input,
   return low;
 }
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

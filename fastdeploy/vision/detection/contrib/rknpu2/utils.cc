@@ -19,7 +19,6 @@ float Clamp(float val, int min, int max) {
   return val > min ? (val < max ? val : max) : min;
 }
 
-
 float Sigmoid(float x) { return 1.0 / (1.0 + expf(-x)); }
 
 float UnSigmoid(float y) { return -1.0 * logf((1.0 / y) - 1.0); }
@@ -39,40 +38,33 @@ float DeqntAffineToF32(int8_t qnt, int32_t zp, float scale) {
   return ((float)qnt - (float)zp) * scale;
 }
 
-static float CalculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0,
-                              float xmin1, float ymin1, float xmax1, float ymax1)
-{
+static float CalculateOverlap(float xmin0, float ymin0, float xmax0,
+                              float ymax0, float xmin1, float ymin1,
+                              float xmax1, float ymax1) {
   float w = fmax(0.f, fmin(xmax0, xmax1) - fmax(xmin0, xmin1) + 1.0);
   float h = fmax(0.f, fmin(ymax0, ymax1) - fmax(ymin0, ymin1) + 1.0);
   float i = w * h;
-  float u = (xmax0 - xmin0 + 1.0) * (ymax0 - ymin0 + 1.0) + (xmax1 - xmin1 + 1.0) * (ymax1 - ymin1 + 1.0) - i;
+  float u = (xmax0 - xmin0 + 1.0) * (ymax0 - ymin0 + 1.0) +
+            (xmax1 - xmin1 + 1.0) * (ymax1 - ymin1 + 1.0) - i;
   return u <= 0.f ? 0.f : (i / u);
 }
 
-int NMS(int valid_count,
-        std::vector<float> &output_locations,
-        std::vector<int> &class_id,
-        std::vector<int> &order,
-        float threshold,
-        bool class_agnostic)
-{
+int NMS(int valid_count, std::vector<float>& output_locations,
+        std::vector<int>& class_id, std::vector<int>& order, float threshold,
+        bool class_agnostic) {
   // printf("class_agnostic: %d\n", class_agnostic);
-  for (int i = 0; i < valid_count; ++i)
-  {
-    if (order[i] == -1)
-    {
+  for (int i = 0; i < valid_count; ++i) {
+    if (order[i] == -1) {
       continue;
     }
     int n = order[i];
-    for (int j = i + 1; j < valid_count; ++j)
-    {
+    for (int j = i + 1; j < valid_count; ++j) {
       int m = order[j];
-      if (m == -1)
-      {
+      if (m == -1) {
         continue;
       }
 
-      if (!class_agnostic && class_id[n] != class_id[m]){
+      if (!class_agnostic && class_id[n] != class_id[m]) {
         continue;
       }
 
@@ -86,16 +78,16 @@ int NMS(int valid_count,
       float xmax1 = output_locations[m * 4 + 0] + output_locations[m * 4 + 2];
       float ymax1 = output_locations[m * 4 + 1] + output_locations[m * 4 + 3];
 
-      float iou = CalculateOverlap(xmin0, ymin0, xmax0, ymax0, xmin1, ymin1, xmax1, ymax1);
+      float iou = CalculateOverlap(xmin0, ymin0, xmax0, ymax0, xmin1, ymin1,
+                                   xmax1, ymax1);
 
-      if (iou > threshold)
-      {
+      if (iou > threshold) {
         order[j] = -1;
       }
     }
   }
   return 0;
 }
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

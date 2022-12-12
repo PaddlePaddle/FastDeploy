@@ -17,7 +17,6 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-
 RKYOLO::RKYOLO(const std::string& model_file,
                const fastdeploy::RuntimeOption& custom_option,
                const fastdeploy::ModelFormat& model_format) {
@@ -40,12 +39,11 @@ bool RKYOLO::Initialize() {
     return false;
   }
   auto size = GetPreprocessor().GetSize();
-  GetPostprocessor().SetHeightAndWeight(size[0],size[1]);
+  GetPostprocessor().SetHeightAndWeight(size[0], size[1]);
   return true;
 }
 
-bool RKYOLO::Predict(const cv::Mat& im,
-                     DetectionResult* result) {
+bool RKYOLO::Predict(const cv::Mat& im, DetectionResult* result) {
   std::vector<DetectionResult> results;
   if (!BatchPredict({im}, &results)) {
     return false;
@@ -64,7 +62,8 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
   }
   auto pad_hw_values_ = preprocessor_.GetPadHWValues();
   postprocessor_.SetPadHWValues(preprocessor_.GetPadHWValues());
-  std::cout << "preprocessor_ scale_ = " << preprocessor_.GetScale()[0] << std::endl;
+  std::cout << "preprocessor_ scale_ = " << preprocessor_.GetScale()[0]
+            << std::endl;
   postprocessor_.SetScale(preprocessor_.GetScale());
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
@@ -73,15 +72,15 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
-
   if (!postprocessor_.Run(reused_output_tensors_, results)) {
-    FDERROR << "Failed to postprocess the inference results by runtime." << std::endl;
+    FDERROR << "Failed to postprocess the inference results by runtime."
+            << std::endl;
     return false;
   }
 
   return true;
 }
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy

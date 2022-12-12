@@ -19,7 +19,6 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
-
 typedef enum { RKYOLOX = 0, RKYOLOV5, RKYOLOV7, UNKNOWN } ModelType;
 float Clamp(float val, int min, int max);
 float Sigmoid(float x);
@@ -31,6 +30,6 @@ int NMS(int valid_count, std::vector<float>& output_locations,
         std::vector<int>& class_id, std::vector<int>& order, float threshold,
         bool class_agnostic);
 
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy
