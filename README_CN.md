@@ -165,7 +165,7 @@ int main(int argc, char* argv[]) {
   vision::DetectionResult res;
   model.Predict(&im, &res);
 
-  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
+  auto vis_im = vision::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
 }
