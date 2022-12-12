@@ -127,6 +127,7 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
   return true;
 }
 
+
 int RKYOLOPostprocessor::ProcessInt8(int8_t* input, int* anchor, int grid_h,
                                      int grid_w, int stride,
                                      std::vector<float>& boxes,

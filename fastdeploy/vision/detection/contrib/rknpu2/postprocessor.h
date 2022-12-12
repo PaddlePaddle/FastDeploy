@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/contrib/rknpu2/utils.h"

@@ -19,6 +19,7 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
+
 typedef enum { RKYOLOX = 0, RKYOLOV5, RKYOLOV7, UNKNOWN } ModelType;
 float Clamp(float val, int min, int max);
 float Sigmoid(float x);

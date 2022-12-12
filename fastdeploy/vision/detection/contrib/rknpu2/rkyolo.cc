@@ -17,6 +17,7 @@ namespace fastdeploy {
 namespace vision {
 namespace detection {
 
+
 RKYOLO::RKYOLO(const std::string& model_file,
                const fastdeploy::RuntimeOption& custom_option,
                const fastdeploy::ModelFormat& model_format) {

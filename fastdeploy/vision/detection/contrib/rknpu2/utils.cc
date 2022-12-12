@@ -19,6 +19,7 @@ float Clamp(float val, int min, int max) {
   return val > min ? (val < max ? val : max) : min;
 }
 
+
 float Sigmoid(float x) { return 1.0 / (1.0 + expf(-x)); }
 
 float UnSigmoid(float y) { return -1.0 * logf((1.0 / y) - 1.0); }
