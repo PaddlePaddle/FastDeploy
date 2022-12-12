@@ -47,7 +47,7 @@ void BindYOLOv7Face(pybind11::module& m) {
         if (!self.Run(inputs, &results, ims_info)) {
           throw std::runtime_error("Failed to postprocess the runtime result in Yolov7Postprocessor.");
         }
-        return results;
+        return results; 
       })
       .def("run", [](vision::facedet::Yolov7FacePostprocessor& self, std::vector<pybind11::array>& input_array,
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {

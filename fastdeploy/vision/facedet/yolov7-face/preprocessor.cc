@@ -85,7 +85,7 @@ bool Yolov7FacePreprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
 void Yolov7FacePreprocessor::LetterBox(FDMat* mat) {
   float scale =
-      std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width());
+      std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width()); 
   if (!is_scale_up_) {
     scale = std::min(scale, 1.0f);
   }

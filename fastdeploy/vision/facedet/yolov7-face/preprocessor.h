@@ -16,18 +16,17 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
-namespace fastdeploy{
+namespace fastdeploy {
 
-namespace vision{
+namespace vision {
 
-namespace facedet{
+namespace facedet {
 
 class FASTDEPLOY_DECL Yolov7FacePreprocessor{
-
-  public:
+ public:
   /** \brief Create a preprocessor instance for YOLOv7Face serials model
    */
-  explicit Yolov7FacePreprocessor();
+  Yolov7FacePreprocessor();
 
   /** \brief Process the input image and prepare input tensors for runtime
    *
@@ -38,7 +37,7 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::map<std::string, std::array<float, 2>>>* ims_info);
-  
+
   /// Set target size, tuple of (width, height), default size = {640, 640}
   void SetSize(const std::vector<int>& size) { size_ = size; }
 
@@ -51,7 +50,9 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
   }
 
   /// Get padding value, size should be the same as channels
-  std::vector<float> GetPaddingColorValue() const { return padding_color_value_; }
+  std::vector<float> GetPaddingColorValue() const {
+    return padding_color_value_;
+  }
 
   /// Set is_scale_up, if is_scale_up is false, the input image only
   /// can be zoom out, the maximum resize scale cannot exceed 1.0, default true
@@ -62,9 +63,9 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
   /// Get is_scale_up, default true
   bool GetScaleUp() const { return is_scale_up_; }
 
-  protected:
-  bool Preprocess (FDMat * mat, FDTensor* output,
-                   std::map<std::string, std::array<float, 2>>* im_info);
+ protected:
+  bool Preprocess(FDMat * mat, FDTensor* output,
+                  std::map<std::string, std::array<float, 2>>* im_info);
 
   void LetterBox(FDMat* mat);
 
@@ -90,11 +91,10 @@ class FASTDEPLOY_DECL Yolov7FacePreprocessor{
 
   // for offseting the boxes by classes when using NMS
   float max_wh_;
-
 };
 
-}
+}  // namespace facedet
 
-}
+}  // namespace vision
 
-}
+}  // namespace fastdeploy

@@ -19,15 +19,15 @@
 #include "fastdeploy/vision/facedet/yolov7-face/preprocessor.h"
 #include "fastdeploy/vision/facedet/yolov7-face/postprocessor.h"
 
-namespace fastdeploy{
+namespace fastdeploy {
 
-namespace vision{
+namespace vision {
 
-namespace facedet{
+namespace facedet {
 /*! @brief YOLOv7Face model object used when to load a YOLOv7Face model exported by YOLOv7Face.
  */
 class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
-  public:
+ public:
   /** \brief  Set path of model file and the configuration of runtime.
    *
    * \param[in] model_file Path of model file, e.g ./yolov7face.onnx
@@ -38,8 +38,8 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
   YOLOv7Face(const std::string& model_file, const std::string& params_file = "",
               const RuntimeOption& custom_option = RuntimeOption(),
               const ModelFormat& model_format = ModelFormat::ONNX);
-  
-  std::string ModelName(){return "yolov7-face";}
+
+  std::string ModelName() {return "yolov7-face";}
   /** \brief Predict the face detection result for an input image
    *
    * \param[in] im The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
@@ -78,15 +78,14 @@ class FASTDEPLOY_DECL YOLOv7Face: public FastDeployModel{
     return postprocessor_;
   }
 
-  protected:
+ protected:
   bool Initialize();
   Yolov7FacePreprocessor preprocessor_;
   Yolov7FacePostprocessor postprocessor_;
-    
-  };
+};
 
-}//namespace facedet
+}  // namespace facedet
 
-}//namespace vision
+}  // namespace vision
 
-}//namespace fastdeploy
+}  // namespace fastdeploy

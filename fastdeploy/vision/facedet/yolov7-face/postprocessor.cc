@@ -27,7 +27,8 @@ Yolov7FacePostprocessor::Yolov7FacePostprocessor() {
   max_wh_ = 7680.0;
 }
 
-bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result, std::vector<FaceDetectionResult>* results,
+bool Yolov7FacePostprocessor::Run(const std::vector<FDTensor>& infer_result,
+ std::vector<FaceDetectionResult>* results,
                               const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
   int batch = infer_result[0].shape[0];
  

@@ -66,8 +66,8 @@ class Yolov7FacePreprocessor:
     @padding_color_value.setter
     def padding_color_value(self, value):
         assert isinstance(
-            value,
-            list), "The value to set `padding_color_value` must be type of list."
+            value, list
+        ), "The value to set `padding_color_value` must be type of list."
         self._preprocessor.padding_color_value = value
 
     @is_scale_up.setter
@@ -76,6 +76,7 @@ class Yolov7FacePreprocessor:
             value,
             bool), "The value to set `is_scale_up` must be type of bool."
         self._preprocessor.is_scale_up = value
+
 
 class Yolov7FacePostprocessor:
     def __init__(self):
@@ -118,6 +119,7 @@ class Yolov7FacePostprocessor:
             "The value to set `nms_threshold` must be type of float."
         self._postprocessor.nms_threshold = nms_threshold
 
+
 class YOLOv7Face(FastDeployModel):
     def __init__(self,
                  model_file,
@@ -150,7 +152,7 @@ class YOLOv7Face(FastDeployModel):
         self.postprocessor.conf_threshold = conf_threshold
         self.postprocessor.nms_threshold = nms_iou_threshold
         return self._model.predict(input_image)
-    
+
     def batch_predict(self, images):
         """Classify a batch of input image
 

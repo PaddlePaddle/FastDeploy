@@ -16,16 +16,16 @@
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 
-namespace fastdeploy{
+namespace fastdeploy {
 
-namespace vision{
+namespace vision {
 
-namespace facedet{
+namespace facedet {
 
 class FASTDEPLOY_DECL Yolov7FacePostprocessor{
-  public:
-/*! @brief Postprocessor object for YOLOv7Face serials model.
- */
+ public:
+  /*! @brief Postprocessor object for YOLOv7Face serials model.
+   */
   Yolov7FacePostprocessor();
 
   /** \brief Process the result of runtime and fill to FaceDetectionResult structure
@@ -37,7 +37,8 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
    */
   bool Run(const std::vector<FDTensor>& infer_result,
            std::vector<FaceDetectionResult>* results,
-           const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info);
+           const std::vector<std::map<std::string,
+                              std::array<float, 2>>>& ims_info);
 
   /// Set conf_threshold, default 0.7
   void SetConfThreshold(const float& conf_threshold) {
@@ -55,15 +56,13 @@ class FASTDEPLOY_DECL Yolov7FacePostprocessor{
   /// Get nms_threshold, default 0.5
   float GetNMSThreshold() const { return nms_threshold_; }
 
-  protected:
+ protected:
   float conf_threshold_;
   float nms_threshold_;
   bool multi_label_;
   float max_wh_;
 };
 
-} //facedet
-
-} //vision
-
-} //fastdeploy
+}  // namespace facedet
+}  // namespace vision
+}  // namespace fastdeploy

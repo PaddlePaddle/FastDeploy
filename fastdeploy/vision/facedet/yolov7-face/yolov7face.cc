@@ -51,7 +51,7 @@ bool YOLOv7Face::Initialize(){
 bool YOLOv7Face::Predict(cv::Mat* im, FaceDetectionResult* result, float conf_threshold, float nms_threshold){
   postprocessor_.SetConfThreshold(conf_threshold);
   postprocessor_.SetNMSThreshold(nms_threshold);
-  if (!Predict(*im, result)) {
+  if (!Predict(*im, result)) { 
     return false;
   }
   return true;
