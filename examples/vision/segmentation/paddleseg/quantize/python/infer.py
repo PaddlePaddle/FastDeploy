@@ -72,5 +72,5 @@ model = fd.vision.segmentation.PaddleSegModel(
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
