@@ -34,7 +34,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
 
   auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -65,7 +65,7 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
 
   auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -97,7 +97,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file,
 
   auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackgroundMatting(im_bak, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "

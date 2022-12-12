@@ -73,7 +73,7 @@ void InferScrfd(const std::string& device) {
          (dur / CLOCKS_PER_SEC));
 
   std::cout << res.Str() << std::endl;
-  auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
