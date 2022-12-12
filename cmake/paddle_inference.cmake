@@ -13,6 +13,8 @@
 # limitations under the License.
 include(ExternalProject)
 
+option(PADDLEINFERENCE_DIRECTORY "Directory of Paddle Inference library" OFF)
+
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
 set(PADDLEINFERENCE_PREFIX_DIR ${THIRD_PARTY_PATH}/paddle_inference)
 set(PADDLEINFERENCE_SOURCE_DIR
@@ -26,6 +28,10 @@ set(PADDLEINFERENCE_LIB_DIR
     CACHE PATH "paddle_inference lib directory." FORCE)
 set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}"
                       "${PADDLEINFERENCE_LIB_DIR}")
+
+if(PADDLEINFERENCE_DIRECTORY)
+  set(PADDLEINFERENCE_INC_DIR ${PADDLEINFERENCE_DIRECTORY}/paddle/include)
+endif()
 
 include_directories(${PADDLEINFERENCE_INC_DIR})
 if(WIN32)
@@ -47,50 +53,59 @@ else()
 endif(WIN32)
 
 
-set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-set(PADDLEINFERENCE_VERSION "2.4-dev3")
-if(WIN32)
-  if (WITH_GPU)
-    set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
-  else()
-    set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-${PADDLEINFERENCE_VERSION}.zip")
+if(PADDLEINFERENCE_DIRECTORY)
+  if(EXISTS "${THIRD_PARTY_PATH}/install/paddle_inference")
+    file(REMOVE_RECURSE "${THIRD_PARTY_PATH}/install/paddle_inference")
   endif()
-elseif(APPLE)
-  if(CURRENT_OSX_ARCH MATCHES "arm64")
-    message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
-    set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-${PADDLEINFERENCE_VERSION}.tgz")
-  else()
-    set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-${PADDLEINFERENCE_VERSION}.tgz")
-  endif()
+  find_package(Python COMPONENTS Interpreter Development REQUIRED)
+  message(STATUS "Copying ${PADDLEINFERENCE_DIRECTORY} to ${THIRD_PARTY_PATH}/install/paddle_inference ...")
+  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
 else()
-  if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
-    message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
-    set(PADDLEINFERENCE_FILE "paddle_inference-linux-aarch64-${PADDLEINFERENCE_VERSION}.tgz")
-  else()
-    set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-${PADDLEINFERENCE_VERSION}.tgz")
-    if(WITH_GPU)
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.tgz")
+  set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
+  set(PADDLEINFERENCE_VERSION "2.4-dev3")
+  if(WIN32)
+    if (WITH_GPU)
+      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
+    else()
+      set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-${PADDLEINFERENCE_VERSION}.zip")
     endif()
-    if (WITH_IPU)
-        set(PADDLEINFERENCE_VERSION "2.4-dev1")
-        set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-${PADDLEINFERENCE_VERSION}.tgz")
+  elseif(APPLE)
+    if(CURRENT_OSX_ARCH MATCHES "arm64")
+      message(FATAL_ERROR "Paddle Backend doesn't support Mac OSX with Arm64 now.")
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-arm64-${PADDLEINFERENCE_VERSION}.tgz")
+    else()
+      set(PADDLEINFERENCE_FILE "paddle_inference-osx-x86_64-${PADDLEINFERENCE_VERSION}.tgz")
+    endif()
+  else()
+    if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+      message(FATAL_ERROR "Paddle Backend doesn't support linux aarch64 now.")
+      set(PADDLEINFERENCE_FILE "paddle_inference-linux-aarch64-${PADDLEINFERENCE_VERSION}.tgz")
+    else()
+      set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-${PADDLEINFERENCE_VERSION}.tgz")
+      if(WITH_GPU)
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.tgz")
+      endif()
+      if (WITH_IPU)
+          set(PADDLEINFERENCE_VERSION "2.4-dev1")
+          set(PADDLEINFERENCE_FILE "paddle_inference-linux-x64-ipu-${PADDLEINFERENCE_VERSION}.tgz")
+      endif()
     endif()
   endif()
-endif()
-set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
-
-ExternalProject_Add(
-  ${PADDLEINFERENCE_PROJECT}
-  ${EXTERNAL_PROJECT_LOG_ARGS}
-  URL ${PADDLEINFERENCE_URL}
-  PREFIX ${PADDLEINFERENCE_PREFIX_DIR}
-  DOWNLOAD_NO_PROGRESS 1
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  UPDATE_COMMAND ""
-  INSTALL_COMMAND
-	${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
-  BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
+  set(PADDLEINFERENCE_URL "${PADDLEINFERENCE_URL_BASE}${PADDLEINFERENCE_FILE}")
+  
+  ExternalProject_Add(
+    ${PADDLEINFERENCE_PROJECT}
+    ${EXTERNAL_PROJECT_LOG_ARGS}
+    URL ${PADDLEINFERENCE_URL}
+    PREFIX ${PADDLEINFERENCE_PREFIX_DIR}
+    DOWNLOAD_NO_PROGRESS 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND
+  	${CMAKE_COMMAND} -E copy_directory ${PADDLEINFERENCE_SOURCE_DIR} ${PADDLEINFERENCE_INSTALL_DIR}
+    BUILD_BYPRODUCTS ${PADDLEINFERENCE_COMPILE_LIB})
+endif(PADDLEINFERENCE_DIRECTORY)
 
 if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
   add_custom_target(patchelf_paddle_inference ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_inference.py ${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so" DEPENDS ${LIBRARY_NAME})
