@@ -4,7 +4,7 @@ English | [中文](README_CN.md)
 
 Before deployment, confirm the following two steps
 
-- 1. The software and hardware environment meet the requirements. Refer to [FastDeploy Environment Requirements] (../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 1. The software and hardware environment meet the requirements. Refer to [FastDeploy Environment Requirements](../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 - 2. Install FastDeploy Python wheel package. Refer to [Install FastDeploy](../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
