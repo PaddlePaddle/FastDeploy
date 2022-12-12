@@ -38,7 +38,8 @@ float DeqntAffineToF32(int8_t qnt, int32_t zp, float scale) {
   return ((float)qnt - (float)zp) * scale;
 }
 
-static float CalculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0, float xmin1, float ymin1, float xmax1, float ymax1)
+static float CalculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0,
+                              float xmin1, float ymin1, float xmax1, float ymax1)
 {
   float w = fmax(0.f, fmin(xmax0, xmax1) - fmax(xmin0, xmin1) + 1.0);
   float h = fmax(0.f, fmin(ymax0, ymax1) - fmax(ymin0, ymin1) + 1.0);
