@@ -7,6 +7,8 @@ English | [中文](README_CN.md)
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
+**注意** 本文档依赖FastDeploy>=1.0.2版本，或nightly built版本。
+
 ```bash
 # Get FastDeploy codes
 git clone https://github.com/PaddlePaddle/FastDeploy.git
