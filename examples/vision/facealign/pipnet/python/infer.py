@@ -85,7 +85,7 @@ model = fd.vision.facealign.PIPNet(args.model, runtime_option=runtime_option)
 model.num_landmarks = args.num_landmarks
 # for image
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 # 可视化结果
 vis_im = fd.vision.vis_face_alignment(im, result)
