@@ -35,7 +35,10 @@ class FASTDEPLOY_DECL RKYOLOV5 : public RKYOLO {
     valid_cpu_backends = {};
     valid_gpu_backends = {};
     valid_rknpu_backends = {Backend::RKNPU2};
-    GetPostprocessor().SetModelType(ModelType::RKYOLOV5);
+    std::vector<int> anchors = {10, 13, 16,  30,  33, 23,  30,  61,  62,
+                                45, 59, 119, 116, 90, 156, 198, 373, 326};
+    int anchor_per_branch_ = 3;
+    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV5"; }
@@ -58,7 +61,10 @@ class FASTDEPLOY_DECL RKYOLOV7 : public RKYOLO {
     valid_cpu_backends = {};
     valid_gpu_backends = {};
     valid_rknpu_backends = {Backend::RKNPU2};
-    GetPostprocessor().SetModelType(ModelType::RKYOLOV7);
+    std::vector<int> anchors = {12, 16, 19,  36,  40,  28,  36,  75,  76,
+                                55, 72, 146, 142, 110, 192, 243, 459, 401};
+    int anchor_per_branch_ = 3;
+    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV7"; }
@@ -81,7 +87,10 @@ class FASTDEPLOY_DECL RKYOLOX : public RKYOLO {
     valid_cpu_backends = {};
     valid_gpu_backends = {};
     valid_rknpu_backends = {Backend::RKNPU2};
-    GetPostprocessor().SetModelType(ModelType::RKYOLOX);
+    std::vector<int> anchors = {10, 13, 16,  30,  33, 23,  30,  61,  62,
+                                45, 59, 119, 116, 90, 156, 198, 373, 326};
+    int anchor_per_branch_ = 1;
+    GetPostprocessor().SetAnchor(anchors, anchor_per_branch_);
   }
 
   virtual std::string ModelName() const { return "RKYOLOV7"; }
