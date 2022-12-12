@@ -35,6 +35,8 @@ pybind11::dtype FDDataTypeToNumpyDataType(const FDDataType& fd_dtype) {
     dt = pybind11::dtype::of<double>();
   } else if (fd_dtype == FDDataType::UINT8) {
     dt = pybind11::dtype::of<uint8_t>();
+  } else if (fd_dtype == FDDataType::INT8) {
+    dt = pybind11::dtype::of<int8_t>();
   } else if (fd_dtype == FDDataType::FP16) {
     dt = pybind11::dtype::of<float16>();
   } else {
@@ -55,12 +57,14 @@ FDDataType NumpyDataTypeToFDDataType(const pybind11::dtype& np_dtype) {
     return FDDataType::FP64;
   } else if (np_dtype.is(pybind11::dtype::of<uint8_t>())) {
     return FDDataType::UINT8;
+  } else if (np_dtype.is(pybind11::dtype::of<int8_t>())) {
+    return FDDataType::INT8;
   } else if (np_dtype.is(pybind11::dtype::of<float16>())) {
     return FDDataType::FP16;
   }
   FDASSERT(false,
            "NumpyDataTypeToFDDataType() only support "
-           "int32/int64/float32/float64/float16 now.");
+           "int8/int32/int64/float32/float64/float16 now.");
   return FDDataType::FP32;
 }
 
