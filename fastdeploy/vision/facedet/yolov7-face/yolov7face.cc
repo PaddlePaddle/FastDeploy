@@ -40,7 +40,6 @@ YOLOv7Face::YOLOv7Face(const std::string& model_file,
   initialized = Initialize();
 }
 
-
 bool YOLOv7Face::Initialize(){
   if (!InitRuntime()){
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
@@ -91,8 +90,8 @@ bool YOLOv7Face::BatchPredict(const std::vector<cv::Mat>& images,
   return true;
 }
 
-}//namespace facedet
+}  // namespace facedet
 
-}//namespace vision
+}  // namespace vision
 
-}//namespace fastdeploy
+}  // namespace fastdeploy
