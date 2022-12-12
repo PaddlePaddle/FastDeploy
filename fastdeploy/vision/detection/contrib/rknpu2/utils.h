@@ -20,7 +20,7 @@ namespace vision {
 namespace detection {
 
 typedef enum { RKYOLOX = 0, RKYOLOV5, RKYOLOV7, UNKNOWN } ModelType;
-float clamp(float val, int min, int max);
+float Clamp(float val, int min, int max);
 float Sigmoid(float x);
 float UnSigmoid(float y);
 inline static int32_t __clip(float val, float min, float max);

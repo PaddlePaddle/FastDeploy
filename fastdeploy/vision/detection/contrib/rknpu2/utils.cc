@@ -15,7 +15,7 @@
 namespace fastdeploy {
 namespace vision {
 namespace detection {
-float clamp(float val, int min, int max) {
+float Clamp(float val, int min, int max) {
   return val > min ? (val < max ? val : max) : min;
 }
 

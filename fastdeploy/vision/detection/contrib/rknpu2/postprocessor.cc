@@ -110,13 +110,13 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
       float y2 = y1 + filterBoxes[n * 4 + 3];
       int id = classId[n];
       (*results)[num].boxes.emplace_back(std::array<float, 4>{
-          (float)((clamp(x1, 0, width_) - pad_hw_values_[num][1] / 2) /
+          (float)((Clamp(x1, 0, width_) - pad_hw_values_[num][1] / 2) /
                   scale_[num]),
-          (float)((clamp(y1, 0, height_) - pad_hw_values_[num][0] / 2) /
+          (float)((Clamp(y1, 0, height_) - pad_hw_values_[num][0] / 2) /
                   scale_[num]),
-          (float)((clamp(x2, 0, width_) - pad_hw_values_[num][1] / 2) /
+          (float)((Clamp(x2, 0, width_) - pad_hw_values_[num][1] / 2) /
                   scale_[num]),
-          (float)((clamp(y2, 0, height_) - pad_hw_values_[num][0] / 2) /
+          (float)((Clamp(y2, 0, height_) - pad_hw_values_[num][0] / 2) /
                   scale_[0])});
       (*results)[num].label_ids.push_back(id);
       (*results)[num].scores.push_back(boxesScore[i]);
