@@ -15,83 +15,84 @@
 #include <string>
 #include "fastdeploy/vision.h"
 
-void InferHumanPPHumansegv2Lite(const std::string& device = "cpu");
-
-int main() {
-  InferHumanPPHumansegv2Lite("npu");
-  return 0;
-}
-
-fastdeploy::RuntimeOption GetOption(const std::string& device) {
-  auto option = fastdeploy::RuntimeOption();
-  if (device == "npu") {
-    option.UseRKNPU2();
-  } else {
-    option.UseCpu();
-  }
-  return option;
-}
-
-fastdeploy::ModelFormat GetFormat(const std::string& device) {
-  auto format = fastdeploy::ModelFormat::ONNX;
-  if (device == "npu") {
-    format = fastdeploy::ModelFormat::RKNN;
-  } else {
-    format = fastdeploy::ModelFormat::ONNX;
-  }
-  return format;
-}
-
-std::string GetModelPath(std::string& model_path, const std::string& device) {
-  if (device == "npu") {
-    model_path += "rknn";
-  } else {
-    model_path += "onnx";
-  }
-  return model_path;
-}
-
-void InferHumanPPHumansegv2Lite(const std::string& device) {
-  std::string model_file =
-      "./model/Portrait_PP_HumanSegV2_Lite_256x144_infer/"
-      "Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.";
+void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
+  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer.onnx";
   std::string params_file;
-  std::string config_file =
-      "./model/Portrait_PP_HumanSegV2_Lite_256x144_infer/deploy.yaml";
+  std::string config_file = model_dir + "/deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+  auto format = fastdeploy::ModelFormat::ONNX;
 
-  fastdeploy::RuntimeOption option = GetOption(device);
-  fastdeploy::ModelFormat format = GetFormat(device);
-  model_file = GetModelPath(model_file, device);
   auto model = fastdeploy::vision::segmentation::PaddleSegModel(
       model_file, params_file, config_file, option, format);
-
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  auto image_file =
-      "./images/portrait_heng.jpg";
+
+  fastdeploy::TimeCounter tc;
+  tc.Start();
   auto im = cv::imread(image_file);
-
-  if (device == "npu") {
-    model.GetPreprocessor().DisableNormalizeAndPermute();
-  }
-
   fastdeploy::vision::SegmentationResult res;
-  clock_t start = clock();
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  clock_t end = clock();
-  auto dur = (double)(end - start);
-  printf("infer_human_pp_humansegv2_lite_npu use time:%f\n",
-         (dur / CLOCKS_PER_SEC));
-
-  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
-  cv::imwrite("human_pp_humansegv2_lite_npu_result.jpg", vis_im);
+  tc.End();
+  tc.PrintInfo("PPSeg in ONNX");
+
+  cv::imwrite("infer_onnx.jpg", vis_im);
   std::cout
-      << "Visualized result saved in ./human_pp_humansegv2_lite_npu_result.jpg"
+      << "Visualized result saved in ./infer_onnx.jpg"
       << std::endl;
 }
+
+void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
+  std::string model_file = model_dir + "/Portrait_PP_HumanSegV2_Lite_256x144_infer_rk3588.rknn";
+  std::string params_file;
+  std::string config_file = model_dir + "/deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseRKNPU2();
+  auto format = fastdeploy::ModelFormat::RKNN;
+
+  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+      model_file, params_file, config_file, option, format);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
+  model.GetPreprocessor().DisableNormalizeAndPermute();
+
+  fastdeploy::TimeCounter tc;
+  tc.Start();
+  auto im = cv::imread(image_file);
+  fastdeploy::vision::SegmentationResult res;
+  if (!model.Predict(im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res);
+  tc.End();
+  tc.PrintInfo("PPSeg in RKNPU2");
+
+  cv::imwrite("infer_rknn.jpg", vis_im);
+  std::cout
+      << "Visualized result saved in ./infer_rknn.jpg"
+      << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+  if (argc < 3) {
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
+        << std::endl;
+    return -1;
+  }
+
+  RKNPU2Infer(argv[1], argv[2]);
+  ONNXInfer(argv[1], argv[2]);
+  return 0;
+}
+
