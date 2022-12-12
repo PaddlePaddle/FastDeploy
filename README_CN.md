@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文| िंदी | 日本語
+English | 简体中文(README_CN.md)| िंदी | 日本語
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
