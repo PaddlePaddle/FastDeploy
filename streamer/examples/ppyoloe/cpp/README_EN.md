@@ -22,6 +22,7 @@ mv ppyoloe_crn_l_300e_coco_onnx_no_scale_factor/ model/
 
 4. Run
 ```
-
+cp ../nvinfer_config.txt .
+cp ../streamer_cfg.yml .
 ./streamer_demo
 ```
