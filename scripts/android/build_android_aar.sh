@@ -4,7 +4,7 @@ set +x
 
 FASTDEPLOY_DIR=$(pwd)
 BUILT_PACKAGE_DIR=build/Android
-CXX_PACKAGE_PREFIX=fastdeploy-android-latest-dev-shared
+CXX_PACKAGE_PREFIX=fastdeploy-android-latest-shared-dev
 CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/${CXX_PACKAGE_PREFIX}
 ARMV8_CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/arm64-v8a-api-21/install
 ARMV7_CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/armeabi-v7a-api-21/install
