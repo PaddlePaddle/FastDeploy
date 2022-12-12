@@ -362,7 +362,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string trt_serialize_file = "";
   bool trt_enable_fp16 = false;
   bool trt_enable_int8 = false;
-  size_t trt_max_batch_size = 32;
+  size_t trt_max_batch_size = 1;
   size_t trt_max_workspace_size = 1 << 30;
   // ======Only for PaddleTrt Backend=======
   std::vector<std::string> trt_disabled_ops_{};
