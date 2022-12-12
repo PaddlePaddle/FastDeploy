@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-PROJECT(fd_streamer C CXX)
+PROJECT(streamer_ppyoloe C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.10)
 
 option(FASTDEPLOY_INSTALL_DIR "Path of downloaded fastdeploy sdk.")

@@ -5,14 +5,15 @@ app:
 
 nvurisrcbin:
   uri: file:///opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov
-  gpu-id: 1
+  gpu-id: 0
 
 nvvideoconvert:
-  gpu-id: 1
+  gpu-id: 0
 
 capsfilter:
-  # caps: video/x-raw(memory:NVMM),format=(string)BGR
   caps: video/x-raw,format=(string)BGR
 
 appsink:
   sync: true
+  max-buffers: 60
+  drop: false
