@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <string>
+
 #include "fastdeploy/vision.h"
 #ifdef WIN32
 const char sep = '\\';
@@ -20,21 +20,21 @@ const char sep = '/';
 #endif
 
 void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
-  auto params_file = model_dir + sep + "inference.pdiparams";
-  auto config_file = model_dir + sep + "inference_cls.yaml";
-  
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto subgraph_file = model_dir + sep + "subgraph.txt";
+
   fastdeploy::RuntimeOption option;
   option.UseTimVX();
+  option.SetLiteSubgraphPartitionPath(subgraph_file);
 
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
-
+  auto model = fastdeploy::vision::detection::YOLOv5(
+      model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::ClassifyResult res;
+  fastdeploy::vision::DetectionResult res;
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
@@ -42,13 +42,17 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
 
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout << "Usage: infer_demo path/to/quant_model "
                  "path/to/image "
-                 "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg"
+                 "run_option, "
+                 "e.g ./infer_demo ./yolov5s_quant ./000000014439.jpg"
               << std::endl;
     return -1;
   }
