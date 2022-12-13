@@ -19,7 +19,7 @@
 - [Runtime Python使用示例](cn/quick_start/runtime/python.md)
 - [Runtime C++使用示例](cn/quick_start/runtime/cpp.md)
 
-## API文档(进行中)
+## API文档
 
 - [Python API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/)
 - [C++ API文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/)
