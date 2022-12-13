@@ -22,6 +22,7 @@ from .... import c_lib_wrap as C
 class PaddleDetPreprocessor:
     def __init__(self, config_file):
         """Create a preprocessor for PaddleDetection Model from configuration file
+
         :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
         """
         self._preprocessor = C.vision.detection.PaddleDetPreprocessor(
@@ -29,6 +30,7 @@ class PaddleDetPreprocessor:
 
     def run(self, input_ims):
         """Preprocess input images for PaddleDetection Model
+
         :param: input_ims: (list of numpy.ndarray)The input image
         :return: list of FDTensor, include image, scale_factor, im_shape
         """
@@ -38,11 +40,13 @@ class PaddleDetPreprocessor:
 class PaddleDetPostprocessor:
     def __init__(self):
         """Create a postprocessor for PaddleDetection Model
+
         """
         self._postprocessor = C.vision.detection.PaddleDetPostprocessor()
 
     def run(self, runtime_results):
         """Postprocess the runtime results for PaddleDetection Model
+
         :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
         :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
@@ -62,6 +66,7 @@ class PPYOLOE(FastDeployModel):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a PPYOLOE model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -77,6 +82,7 @@ class PPYOLOE(FastDeployModel):
 
     def predict(self, im):
         """Detect an input image
+
         :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: DetectionResult
         """
@@ -86,6 +92,7 @@ class PPYOLOE(FastDeployModel):
 
     def batch_predict(self, images):
         """Detect a batch of input image list
+
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
         :return list of DetectionResult
         """
@@ -94,6 +101,7 @@ class PPYOLOE(FastDeployModel):
 
     def clone(self):
         """Clone PPYOLOE object
+
         :return: a new PPYOLOE object
         """
 
@@ -107,6 +115,7 @@ class PPYOLOE(FastDeployModel):
     @property
     def preprocessor(self):
         """Get PaddleDetPreprocessor object of the loaded model
+
         :return PaddleDetPreprocessor
         """
         return self._model.preprocessor
@@ -114,6 +123,7 @@ class PPYOLOE(FastDeployModel):
     @property
     def postprocessor(self):
         """Get PaddleDetPostprocessor object of the loaded model
+
         :return PaddleDetPostprocessor
         """
         return self._model.postprocessor
@@ -127,6 +137,7 @@ class PPYOLO(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a PPYOLO model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g ppyolo/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ppyolo/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
@@ -143,6 +154,7 @@ class PPYOLO(PPYOLOE):
 
     def clone(self):
         """Clone PPYOLO object
+
         :return: a new PPYOLO object
         """
 
@@ -162,6 +174,7 @@ class PaddleYOLOX(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a YOLOX model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -179,6 +192,7 @@ class PaddleYOLOX(PPYOLOE):
 
     def clone(self):
         """Clone PaddleYOLOX object
+
         :return: a new PaddleYOLOX object
         """
 
@@ -198,6 +212,7 @@ class PicoDet(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a PicoDet model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g picodet/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g picodet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -214,6 +229,7 @@ class PicoDet(PPYOLOE):
 
     def clone(self):
         """Clone PicoDet object
+
         :return: a new PicoDet object
         """
 
@@ -233,6 +249,7 @@ class FasterRCNN(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a FasterRCNN model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g fasterrcnn/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g fasterrcnn/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -250,6 +267,7 @@ class FasterRCNN(PPYOLOE):
 
     def clone(self):
         """Clone FasterRCNN object
+
         :return: a new FasterRCNN object
         """
 
@@ -269,6 +287,7 @@ class YOLOv3(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a YOLOv3 model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g yolov3/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolov3/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -286,6 +305,7 @@ class YOLOv3(PPYOLOE):
 
     def clone(self):
         """Clone YOLOv3 object
+
         :return: a new YOLOv3 object
         """
 
@@ -305,6 +325,7 @@ class MaskRCNN(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a MaskRCNN model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g fasterrcnn/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g fasterrcnn/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -322,6 +343,7 @@ class MaskRCNN(PPYOLOE):
 
     def batch_predict(self, images):
         """Detect a batch of input image list, batch_predict is not supported for maskrcnn now.
+
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
         :return list of DetectionResult
         """
@@ -331,6 +353,7 @@ class MaskRCNN(PPYOLOE):
 
     def clone(self):
         """Clone MaskRCNN object
+
         :return: a new MaskRCNN object
         """
 
@@ -350,6 +373,7 @@ class SSD(PPYOLOE):
                  runtime_option=None,
                  model_format=ModelFormat.PADDLE):
         """Load a SSD model exported by PaddleDetection.
+
         :param model_file: (str)Path of model file, e.g ssd/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ssd/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
@@ -367,6 +391,7 @@ class SSD(PPYOLOE):
 
     def clone(self):
         """Clone SSD object
+
         :return: a new SSD object
         """
 
