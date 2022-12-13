@@ -1,5 +1,4 @@
-English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/README_हिन्दी.md) | [日本語](./docs/docs_i18n/README_日本語.md) | [한국인](./docs/docs_i18n/README_한국어.md) | [Pу́сский язы́к](./docs/docs_i18n/README_Ру́сский_язы́к.md)
-
+[English](../../README_EN.md) | [简体中文](../../README_CN.md) | [हिन्दी](./README_हिन्दी.md) | [日本語](./README_日本語.md) | 한국인 | [Pу́сский язы́к](.//README_Ру́сский_язы́к.md)
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -17,90 +16,90 @@ English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/R
 </p>
 
 <p align="center">
-    <a href="/docs/en/build_and_install"><b> Installation </b></a>
+    <a href="/docs/cn/build_and_install"><b> 설치  </b></a>
     |
-    <a href="docs/README_EN.md"><b> Documents </b></a>
+    <a href="docs/README_CN.md"><b> 문서 사용하기  </b></a>
     |
-    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API Docs </b></a>
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API문서   </b></a>
     |
-    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> Release Notes </b></a>
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> 로그 업데이트 </b></a>
 </p>
 
-**⚡️FastDeploy** is an **Easy-to-use** and **High Performance** AI model deployment toolkit for Cloud, Mobile and Edge with 📦**out-of-the-box and unified experience**, 🔚**end-to-end optimization** for over **🔥150+ Text, Vision, Speech and Cross-modal AI models**.
-Including image classification, object detection, image segmentation, face detection, face recognition, keypoint detection, matting, OCR, NLP, TTS and other tasks to meet developers' industrial deployment needs for **multi-scenario**, **multi-hardware** and **multi-platform**.
+**⚡Fastdeploy** 장면쉽게 유연 한 극,효율적 AI 추리 도구 가 배치 돼 있다.📦 제공 개표 즉의**구름을 단**부처 체험 지원 넘 🔥 150 +**text**,**비전**,**speech**과**다른 모드**모델 🔚 실현에 차 려 단'의 추리 성능 최적화 한다.이미지 분류, 객체 검출, 이미지 분할, 얼굴 검출, 얼굴 인식, 포인트 검출, 퍼팅, OCR, NLP, TTS 등의 작업을 포함하고 있어 개발자의**다중 장면, 다중 하드웨어, 다중 플랫폼**을 위한 산업 배치 요구를 충족시킨다.
 
-| [Image Classification](examples/vision/classification)                                                                                         | [Object Detection](examples/vision/detection)                                                                                                  | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                  | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                                                                                                                                                             |
-|:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                                                                                                                                                             |
-| [**Image Matting**](examples/vision/matting)                                                                                                   | [**Real-Time Matting**](examples/vision/matting)                                                                                               | [**OCR**](examples/vision/ocr)                                                                                                                   | [**Face Alignment**](examples/vision/facealign)                                                                                                                                                                                                                                                                                                                                                                            |
-| <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  > | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">                                                                                                                                                                                                                                                                             |
-| [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                                                                        |
-| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p> |
-
+| [Image Classification](examples/vision/classification)                                                                                         | [Object Detection](examples/vision/detection)                                                                                                  | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                  | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                                                                                                           |
+|:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                                                                                                           |
+| [**Image Matting**](examples/vision/matting)                                                                                                   | [**Real-Time Matting**](examples/vision/matting)                                                                                               | [**OCR**](examples/vision/ocr)                                                                                                                   | [**Face Alignment**](examples/vision/facealign)                                                                                                                                                                                                                                                                                                                          |
+| <img src='https://user-images.githubusercontent.com/54695910/188058231-a5fe1ce1-0a38-460f-9582-e0b881514908.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054691-e4cb1a70-09fe-4691-bc62-5552d50bd853.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054669-a85996ba-f7f3-4646-ae1f-3b7e3e353e7d.gif' height="126px" width="190px"  > | <img src='https://user-images.githubusercontent.com/54695910/188059460-9845e717-c30a-4252-bd80-b7f6d4cf30cb.png' height="126px" width="190px">                                                                                                                                                                                                                           |
+| [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                      |
+| <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p> |
 
 
-## 📣 Recent updates
-- 💥 **Live Preview: Dec 12 - Dec 30, China Standard Time, 20:30,** FastDeploy has joined hands with ten hardware vendor partners to launch the deployment month `The Complete Guide to Deploying Industrial Grade AI Models`.
-  - Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group
+## **지역 사회 교류**
+
+*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
+
+*  **위챗**: QR 코드를 스캔하고 설문지를 기입하여 기술 커뮤니티에 가입하며 커뮤니티 개발자와 함께 배치의 통점과 방안을 토론한다
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/207262688-4225bc39-4337-4966-a5cc-26bd6557d226.jpg"  width = "150" height = "150" />
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
 </div>
 
-## Contents
+## 목록
 
-* **🖥️ Server-side and Cloud Deployment**
-  * [A Quick Start for Python SDK](#fastdeploy-quick-start-python)  
-  * [A Quick Start for C++ SDK](#fastdeploy-quick-start-cpp)
-  * [Supported Server-side and Cloud Model List](#fastdeploy-server-models)
+* **🖥️ 서버측 배포**
 
-* **📱 Mobile and Edge Device Deployment**
+  * [Python SDK 빠른 시작](#fastdeploy-quick-start-python)  
+  * [C++ SDK 시작](#fastdeploy-quick-start-cpp)
+  * [서비스 모델 지원 목록](#fastdeploy-server-models)
 
-  * [Supported Mobile and Edge Model List](#fastdeploy-edge-models)
+* **📲 모바일 및 측면 배치**
 
-* **🌐 Browser and Mini Program Deployment**
+  * [측면 모델 지원 목록](#fastdeploy-edge-models)
 
-  * [Supported Web and Mini Program Model List](#fastdeploy-web-models)
+* **🌐 웹과 애플릿 배포**  
 
+  * [웹 쪽 모델 지원 목록](#fastdeploy-web-models)
 * [Acknowledge](#fastdeploy-acknowledge)  
-
 * [License](#fastdeploy-license)
 
-## 🖥️ Server-side and Cloud Deployment
+## 🖥️ 서비스 배포
 
 <div id="fastdeploy-quick-start-python"></div>
 
 <details close>
-<summary><b>A Quick Start for Python SDK（click to expand）</b></summary><div>
 
-#### Installation
+<summary><b>파이썬 SDK 빠른 시작 (자세한내용은 클릭)</b></summary><div>
 
-##### Prerequisites
+#### 빠른 설치 
 
-- CUDA >= 11.2 、cuDNN >= 8.0  、 Python >= 3.6
+#####  선행의존성
+
+- CUDA >= 11.2、cuDNN >= 8.0、Python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### Install FastDeploy SDK with both CPU and GPU support
+##### GPU 버전을 설치합니다 
 
 ```bash
-pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [Conda Installation (Recommended)](docs/cn/build_and_install/download_prebuilt_libraries.md)
+##### [Conda 설치 (추천) ](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### Install FastDeploy SDK with only CPU support
+##### CPU 버전 설치
 
 ```bash
-pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-#### Python Inference Example
+#### Python 추리 예제  
 
-* Prepare model and picture
+*  모형과 그림을 준비하다 
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -108,39 +107,41 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* Test inference results
+* 테스트 추론 결과
 
 ```python
-# For deployment of GPU/TensorRT, please refer to examples/vision/detection/paddledetection/python
+# GPU/TensorRT 배치 참조 examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
 
-im = cv2.imread("000000014439.jpg")
 model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
-
-result = model.predict(im)
+im = cv2.imread("000000014439.jpg")
+result = model.predict(im.copy())
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
 cv2.imwrite("vis_image.jpg", vis_im)
+
 ```
 
 </div></details>
 
 <div id="fastdeploy-quick-start-cpp"></div>
 
-<details>
-<summary><b>A Quick Start for C++ SDK（click to expand）</b></summary><div>
+<details close>
 
-#### Installation
+<summary><b> C++ SDK 빠른 시작 (클릭 후 자세히 보기) </b></summary><div>
 
-- Please refer to [C++ Prebuilt Libraries Download](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-#### C++ Inference Example
+#### 설치 
 
-* Prepare models and pictures
+[C++ 라이브러리 다운로드](docs/cn/build_and_install/download_prebuilt_libraries.md)참조u
+
+#### C++ 추론 예제
+
+* 모형과 그림을 준비하다
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -148,47 +149,47 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* Test inference results
+* 추리 결과를 테스트하다
 
 ```C++
-// For GPU/TensorRT deployment, please refer to examples/vision/detection/paddledetection/cpp
+// GPU/TensorRT배치 참조examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
   namespace vision = fastdeploy::vision;
-  auto im = cv::imread("000000014439.jpg");
   auto model = vision::detection::PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                           "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                           "ppyoloe_crn_l_300e_coco/infer_cfg.yml");
+  auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
   model.Predict(&im, &res);
 
-  auto vis_im = vision::VisDetection(im, res, 0.5);
+  auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
   return 0;
- }
+}
 ```
 
 </div></details>
 
-For more deployment models, please refer to [Vision Model Deployment Examples](examples/vision) .
+더 많은 배치 사례를 참고하시기 바랍니다 [모델 배포 예제](examples).
 
 <div id="fastdeploy-server-models"></div>
 
-### Server-side and Cloud Model List🔥🔥🔥🔥🔥
+### 서비스 모델 지원 목록🔥🔥🔥🔥🔥
 
-Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Available;
+부호 설명: (1)  ✅: 지원 되여 있어야 한다; (2) ❔:진행 중이다; (3) N/A:지원되지 않습니다;<br>
 
-<details open><summary><b> Server-side and Cloud Model List（click to fold）</b></summary><div>
+<details open><summary><b> 서비스 모델 지원 목록 (누르면 축소 가능)</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png"/>
 </div>
 
-| Task                   | Model                                                                                        | Linux                                            | Linux                    | Win                      | Win                      | Mac                     | Mac                   | Linux                      | Linux            | Linux                       | Linux                       | Linux   |
-|:----------------------:|:--------------------------------------------------------------------------------------------:|:------------------------------------------------:|:------------------------:|:------------------------:|:------------------------:|:-----------------------:|:---------------------:|:--------------------------:| :----------------: |:---------------------------:|:---------------------------:|:-------:|
-| ---                    | ---                                                                                          | <font size=2> X86 CPU                            | <font size=2> NVIDIA GPU | <font size=2> Intel  CPU | <font size=2> NVIDIA GPU | <font size=2> Intel CPU | <font size=2> Arm CPU | <font size=2>  AArch64 CPU | Phytium D2000CPU | <font size=2> NVIDIA Jetson | <font size=2> Graphcore IPU | Serving |
+| 작업 장면                  | 모형                                                                                          | Linux                                            | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux           | Linux         | Linux         | Linux   |
+|:----------------------:|:--------------------------------------------------------------------------------------------:|:------------------------------------------------:|:----------:|:-------:|:----------:|:-------:|:-------:|:-----------:|:---------------:|:-------------:|:-------------:|:-------:|
+| ---                    | ---                                                                                          | X86 CPU                                          | NVIDIA GPU | X86 CPU | NVIDIA GPU | X86 CPU | Arm CPU | AArch64 CPU |  Phytium D2000CPU | NVIDIA Jetson | Graphcore IPU | Serving |
 | Classification         | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas)                           | [✅](./examples/vision/classification/paddleclas) | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
 | Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Classification         | [ltralytics/YOLOv5Cls](examples/vision/classification/yolov5cls)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
@@ -256,26 +257,26 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | ❔                           | ✅       |
 | Speech                 | [PaddleSpeech/PP-TTS](./examples/audio/pp-tts)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
 
+
 </div></details>
 
 <div id="fastdeploy-edge-doc"></div>
 
-## 📱 Mobile and Edge Device Deployment
+## 📲  모바일 및 측면 배치  🔥🔥🔥🔥
 
 <div id="fastdeploy-edge-models"></div>
 
-### Mobile and Edge Model List 🔥🔥🔥🔥
-
-<details open><summary><b> Mobile and Edge Model List（click to fold）</b></summary><div>
+### 측면 모델 지원 목록
+<details open><summary><b>측면 모델 지원 목록 (누르면 축소 가능)</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png" />
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png"  />
 </div>
 
-| Task               | Model                                                                                    | Size (MB) | Linux   | Android | Linux                         | Linux                                | Linux                             | Linux                             | TBD...  |
-|:------------------:|:----------------------------------------------------------------------------------------:|:---------:|:-------:|:-------:|:-----------------------------:|:------------------------------------:|:---------------------------------:|:---------------------------------:|:-------:|
-| ---                | ---                                                                                      | ---       | ARM CPU | ARM CPU | Rockchip-NPU<br>RK3568/RK3588 | Rockchip-NPU<br>RV1109/RV1126/RK1808 | Amlogic-NPU <br>A311D/S905D/C308X | NXP-NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD...｜ |
-| Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |                               |      ✅                                |                                   |                                   |         |
+| 작업 장면             | 모형                                                                                         | 크기(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | TBD...  |
+|:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------:|:-----------------------:|:------------------------------:|:---------------------------:|:--------------------------------:|:-------:|
+| ---                | ---                                                                                       | ---      | ARM CPU | ARM CPU | Rockchip-NPU<br>RK3568/RK3588 | Rockchip-NPU<br>RV1109/RV1126/RK1808 |  Amlogic-NPU <br>A311D/S905D/C308X |  NXP-NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD...｜ |
+| Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |  ❔                             |      ✅                                |                                   |                                   |         |
 | Classification     | [PaddleClas/PP-LCNet](examples/vision/classification/paddleclas)                         | 11.9      | ✅       | ✅       | ❔                             | ✅                                 | --                                | --                                | --      |
 | Classification     | [PaddleClas/PP-LCNetv2](examples/vision/classification/paddleclas)                       | 26.6      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Classification     | [PaddleClas/EfficientNet](examples/vision/classification/paddleclas)                     | 31.4      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
@@ -287,7 +288,6 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | Classification     | [PaddleClas/SqueezeNetV1.1](examples/vision/classification/paddleclas)                   | 5         | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Classification     | [PaddleClas/Inceptionv3](examples/vision/classification/paddleclas)                      | 95.5      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Classification     | [PaddleClas/PP-HGNet](examples/vision/classification/paddleclas)                         | 59        | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
-| Classification     | [PaddleClas/SwinTransformer_224_win7](examples/vision/classification/paddleclas)         | 352.7     | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
 | Detection          | [PaddleDetection/PP-PicoDet_s_320_coco_lcnet](examples/vision/detection/paddledetection) | 4.9       | ✅       | ✅       | ✅                             | ✅                                    | ✅                                 | ✅                                 | --      |
 | Face Detection     | [deepinsight/SCRFD](./examples/vision/facedet/scrfd)                                     | 2.5       | ✅       | ✅       | ✅                             | --                                   | --                                | --                                | --      |
 | Keypoint Detection | [PaddleDetection/PP-TinyPose](examples/vision/keypointdetection/tiny_pose)               | 5.5       | ✅       | ✅       | ❔                             | ❔                                    | ❔                                 | ❔                                 | --      |
@@ -300,15 +300,16 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | OCR                | [PaddleOCR/PP-OCRv2](examples/vision/ocr/PP-OCRv2)                                       | 2.3+4.4   | ✅       | ✅       | ❔                             | --                                   | --                                | --                                | --      |
 | OCR                | [PaddleOCR/PP-OCRv3](examples/vision/ocr/PP-OCRv3)                                       | 2.4+10.6  | ✅       | ❔       | ❔                             | ❔                                    | ❔                                 | ❔                                 | --      |
 
+
 </div></details>
 
-## 🌐 Browser-based Model List
+## 🌐 🌐 웹과 애플 릿 포치
 
 <div id="fastdeploy-web-models"></div>
 
-<details open><summary><b> Browser-based Model List（click to fold）</b></summary><div>
+<details open><summary><b>웹 및 애플릿 배포 지원 목록 (누르면 축소)</b></summary><div>
 
-| Task               | Model                                                                                       | [web_demo](examples/application/js/web_demo) |
+| 작업 장면              | 모형                                                                                          | [web_demo](examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
 | ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
 | Detection          | [FaceDetection](examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
@@ -319,26 +320,16 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
 
 </div></details>
-    
-## 👬 Community
 
- - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas.
-
- - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
-
-    <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "200" height = "200" />
-    </div>
-
-
-## Acknowledge
 
 <div id="fastdeploy-acknowledge"></div>
 
-We sincerely appreciate the open-sourced capabilities in [EasyEdge](https://ai.baidu.com/easyedge/app/openSource) as we adopt it for the SDK generation and download in this project.
+## Acknowledge
+
+이 프로젝트의 SDK 생성 및 다운로드는 EasyEdge (https://ai.baidu.com/easyedge/app/openSource) 의 무료 오픈 기능을 사용하여 진행되었습니다. 이에 감사드립니다.
 
 ## License
 
 <div id="fastdeploy-license"></div>
 
-FastDeploy is provided under the [Apache-2.0](./LICENSE).
+Fastdeploy 컴플라이언스 [Apache e-2.0 오픈 소스 프로토콜](./LICENSE)。
