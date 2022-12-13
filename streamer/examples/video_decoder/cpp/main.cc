@@ -17,7 +17,6 @@
 #include <opencv2/opencv.hpp>
 
 int main(int argc, char* argv[]) {
-
   auto streamer = fastdeploy::streamer::FDStreamer();
   streamer.Init("streamer_cfg.yml");
   streamer.RunAsync();

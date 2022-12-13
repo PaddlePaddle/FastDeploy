@@ -37,6 +37,7 @@ make -j
 ```
 
 3. Build and Run Example
+
 | Example | Brief |
 |:--|:--|
 | [PP-YOLOE](./examples/ppyoloe) | Multiple input videos, PP-YOLOE object detection, NvTracker, Hardware codec, writing to mp4 file |
