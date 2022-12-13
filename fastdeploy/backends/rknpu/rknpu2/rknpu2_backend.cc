@@ -317,10 +317,12 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       }
 
       // Create input tensor memory
+      if(input_attrs_[i].type == RKNN_TENSOR_FLOAT16){
+        input_attrs_[i].pass_through = 1;
+      }
       input_attrs_[i].type = input_type;
       input_attrs_[i].size = inputs[0].Nbytes();
       input_attrs_[i].size_with_stride = inputs[0].Nbytes();
-      input_attrs_[i].pass_through = 0;
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
         FDERROR << "rknn_create_mem input_mems_ error." << std::endl;
