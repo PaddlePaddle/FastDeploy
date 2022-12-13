@@ -10,9 +10,5 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 include_directories(${FASTDEPLOY_INCS})
 
 add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
-# 添加FastDeploy库依赖
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
-  target_link_libraries(infer_demo ${FASTDEPLOY_LIBS} gflags pthread)
-else()
-  target_link_libraries(infer_demo ${FASTDEPLOY_LIBS} gflags)
-endif()
+
+target_link_libraries(infer_demo ${FASTDEPLOY_LIBS} ${GFLAGS_LIBRARIES})

@@ -1,7 +1,7 @@
 
 # Jetson部署库编译
 
-FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU/Paddle Inference两种后端推理
+FastDeploy当前在Jetson仅支持ONNX Runtime CPU和TensorRT GPU/Paddle Inference三种后端推理
 
 ## C++ SDK编译安装
 

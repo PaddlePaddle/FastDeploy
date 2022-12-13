@@ -53,7 +53,6 @@ int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout << "Usage: infer_demo path/to/quant_model "
                  "path/to/image "
-                 "run_option, "
                  "e.g ./infer_demo ./ResNet50_vd_quant ./test.jpeg"
               << std::endl;
     return -1;
