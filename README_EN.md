@@ -1,4 +1,5 @@
-English | [简体中文](README_CN.md)
+English | [简体中文](README_CN.md) | [हिन्दी](./docs/docs_i18n/README_हिन्दी.md) | [日本語](./docs/docs_i18n/README_日本語.md) | [한국인](./docs/docs_i18n/README_한국어.md) | [Pу́сский язы́к](./docs/docs_i18n/README_Ру́сский_язы́к.md)
+
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -36,15 +37,15 @@ Including image classification, object detection, image segmentation, face detec
 | [**Pose Estimation**](examples/vision/keypointdetection)                                                                                       | [**Behavior Recognition**](https://github.com/PaddlePaddle/FastDeploy/issues/6)                                                                | [**NLP**](examples/text)                                                                                                                         | [**Speech**](examples/audio/pp-tts)                                                                                                                                                                                                                                                                                                                                                                                        |
 | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input**:Life was like a box<br> of chocolates, you never<br> know what you're <br>gonna get.<br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="150" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/tacotron2_ljspeech_waveflow_samples_0.2/sentence_1.wav)</p> |
 
-## 👬 Community
 
- - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas.
 
- - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
+## 📣 Recent updates
+- 💥 **Live Preview: Dec 12 - Dec 30, China Standard Time, 20:30,** FastDeploy has joined hands with ten hardware vendor partners to launch the deployment month `The Complete Guide to Deploying Industrial Grade AI Models`.
+  - Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group
 
-    <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "200" height = "200" />
-    </div>
+<div align="center">
+<img src="https://user-images.githubusercontent.com/54695910/207262688-4225bc39-4337-4966-a5cc-26bd6557d226.jpg"  width = "150" height = "150" />
+</div>
 
 ## Contents
 
@@ -318,6 +319,16 @@ Notes: ✅: already supported; ❔: to be supported in the future;  N/A: Not Ava
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
 
 </div></details>
+    
+## 👬 Community
+
+ - **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas.
+
+ - **WeChat**：Scan the QR code below using WeChat, follow the PaddlePaddle official account and fill out the questionnaire to join the WeChat group.
+
+    <div align="center">
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "200" height = "200" />
+    </div>
 
 
 ## Acknowledge
