@@ -77,6 +77,9 @@ void BindPPDet(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
+      .def("clone", [](vision::detection::PPDetBase& self) {
+        return self.Clone();
+      })
       .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
