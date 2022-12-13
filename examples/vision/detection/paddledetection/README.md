@@ -27,6 +27,7 @@
 
 **注意**
 - 在导出模型时不要进行NMS的去除操作，正常导出即可  
+- 如果用于跑原生TensorRT后端（非Paddle Inference后端），不要添加--trt参数
 - 导出模型时，不要添加`fuse_normalize=True`参数
 
 ## 下载预训练模型
