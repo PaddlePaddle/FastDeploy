@@ -90,8 +90,9 @@ class TritonPythonModel:
                                                          self.input_names[1])
             infer_outputs = infer_outputs.as_numpy()
             im_infos = im_infos.as_numpy()
-            im_infos[0] = json.loads(im_infos[0].decode('utf-8').replace("'",
-                                                                         '"'))
+            for i in range(im_infos.shape[0]):
+                im_infos[i] = json.loads(im_infos[i].decode('utf-8').replace(
+                    "'", '"'))
 
             results = self.postprocessor_.run([infer_outputs], im_infos)
             r_str = fd.vision.utils.fd_result_to_json(results)
