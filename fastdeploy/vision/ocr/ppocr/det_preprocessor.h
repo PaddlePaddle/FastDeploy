@@ -26,7 +26,7 @@ class FASTDEPLOY_DECL DBDetectorPreprocessor {
  public:
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
+   * \param[in] images The input data list, all the elements are FDMat
    * \param[in] outputs The output tensors which will feed in runtime
    * \param[in] batch_det_img_info_ptr The output of preprocess
    * \return true if the preprocess successed, otherwise false

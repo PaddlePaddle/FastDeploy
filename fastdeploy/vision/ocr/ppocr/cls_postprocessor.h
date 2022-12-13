@@ -28,8 +28,8 @@ class FASTDEPLOY_DECL ClassifierPostprocessor {
   /** \brief Process the result of runtime and fill to ClassifyResult structure
    *
    * \param[in] tensors The inference result from runtime
-   * \param[in] cls_labels The output result of classification
-   * \param[in] cls_scores The output result of classification
+   * \param[in] cls_labels The output label results of classification model
+   * \param[in] cls_scores The output score results of classification model
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(const std::vector<FDTensor>& tensors,
