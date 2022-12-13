@@ -25,6 +25,8 @@ namespace fastdeploy {
 namespace vision {
 
 #ifdef __ARM_NEON  
+static constexpr int VIS_SEG_OMP_NUM_THREADS = 2;
+
 static inline void QuantizeBlendingWeight8(
   float weight, uint8_t* old_multi_factor, uint8_t* new_multi_factor) {
   // Quantize the weight to boost blending performance.
@@ -53,14 +55,25 @@ static cv::Mat FastVisSegmentationNEON(
   const uint8_t *im_ptr = static_cast<const uint8_t*>(im.data);
 
   if (!quantize_weight) {
-    #pragma omp parallel for num_threads(2) schedule(static)
+    uint8x16_t zerox16 = vdupq_n_u8(0);
+    #pragma omp parallel for proc_bind(close) \
+    num_threads(VIS_SEG_OMP_NUM_THREADS) schedule(static)
     for (int i = 0; i < size - 15; i += 16) {
+      uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr + i * 3);  // 48 bytes
       uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
+      uint8x16_t ibx16 = bgrx16x3.val[0];
+      uint8x16_t igx16 = bgrx16x3.val[1];
+      uint8x16_t irx16 = bgrx16x3.val[2];
       // e.g 0b00000001 << 7 -> 0b10000000 128;
+      uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
+      uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
+      uint8x16_t mrx16 = vshlq_n_u8(labelx16, 3); 
       uint8x16x3_t vbgrx16x3;
-      vbgrx16x3.val[0] = vshlq_n_u8(labelx16, 7); 
-      vbgrx16x3.val[1] = vshlq_n_u8(labelx16, 4); 
-      vbgrx16x3.val[2] = vshlq_n_u8(labelx16, 3); 
+      // Keep the pixels of input im if mask = 0
+      uint8x16_t cezx16 = vceqq_u8(labelx16, zerox16);
+      vbgrx16x3.val[0] = vorrq_u8(vandq_u8(cezx16, ibx16), mbx16);
+      vbgrx16x3.val[1] = vorrq_u8(vandq_u8(cezx16, igx16), mgx16);
+      vbgrx16x3.val[2] = vorrq_u8(vandq_u8(cezx16, irx16), mrx16);
       vst3q_u8(vis_ptr + i * 3, vbgrx16x3);
     }
     for (int i = size - 15; i < size; i++) {
@@ -69,7 +82,7 @@ static cv::Mat FastVisSegmentationNEON(
       vis_ptr[i * 3 + 1] = (label << 4); 
       vis_ptr[i * 3 + 2] = (label << 3); 
     }
-    // Blend colors use opencv
+    // Blend the colors use OpenCV
     cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
     return vis_img;
   }
@@ -87,7 +100,8 @@ static cv::Mat FastVisSegmentationNEON(
   
   if (new_multi_factor == 8) {
     // Only keep mask, no need to blending with origin image.
-    #pragma omp parallel for num_threads(2) schedule(static)
+    #pragma omp parallel for proc_bind(close) \
+    num_threads(VIS_SEG_OMP_NUM_THREADS) schedule(static)
     for (int i = 0; i < size - 15; i += 16) {
       uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
       // e.g 0b00000001 << 7 -> 0b10000000 128;
@@ -109,10 +123,12 @@ static cv::Mat FastVisSegmentationNEON(
     return vis_img;
   }
   
-  uint8x16_t old_mulx16 = vdupq_n_u8(old_multi_factor);
-  uint8x16_t new_mulx16 = vdupq_n_u8(new_multi_factor);
+  uint8x16_t zerox16 = vdupq_n_u8(0);
+  uint8x16_t old_fx16 = vdupq_n_u8(old_multi_factor);
+  uint8x16_t new_fx16 = vdupq_n_u8(new_multi_factor);
   // Blend the two colors together with quantize 'weight'.
-  #pragma omp parallel for num_threads(2) schedule(static)
+  #pragma omp parallel for proc_bind(close) \
+  num_threads(VIS_SEG_OMP_NUM_THREADS) schedule(static)
   for (int i = 0; i < size - 15; i += 16) {
     uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr + i * 3);  // 48 bytes
     uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
@@ -123,21 +139,29 @@ static cv::Mat FastVisSegmentationNEON(
     uint8x16_t mbx16 = vshlq_n_u8(labelx16, 7); 
     uint8x16_t mgx16 = vshlq_n_u8(labelx16, 4); 
     uint8x16_t mrx16 = vshlq_n_u8(labelx16, 3); 
-    // TODO: keep the pixels of input im if mask = 0
-    uint8x16_t ibx16_mshr, igx16_mshr, irx16_mshr;
-    uint8x16_t mbx16_mshr, mgx16_mshr, mrx16_mshr;
     // Moving 7 bits to the right tends to result in zero,
     // So, We choose to shift 3 bits to get an approximation 
-    ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_mulx16);
-    igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_mulx16);   
-    irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_mulx16);
-    mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 3), new_mulx16);
-    mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 3), new_mulx16);
-    mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 3), new_mulx16);  
-    uint8x16x3_t vbgr16x3;
-    vbgr16x3.val[0] = vaddq_u8(ibx16_mshr, mbx16_mshr);
-    vbgr16x3.val[1] = vaddq_u8(igx16_mshr, mgx16_mshr);
-    vbgr16x3.val[2] = vaddq_u8(irx16_mshr, mrx16_mshr);
+    uint8x16_t ibx16_mshr = vmulq_u8(vshrq_n_u8(ibx16, 3), old_fx16);
+    uint8x16_t igx16_mshr = vmulq_u8(vshrq_n_u8(igx16, 3), old_fx16);   
+    uint8x16_t irx16_mshr = vmulq_u8(vshrq_n_u8(irx16, 3), old_fx16);
+    uint8x16_t mbx16_mshr = vmulq_u8(vshrq_n_u8(mbx16, 3), new_fx16);
+    uint8x16_t mgx16_mshr = vmulq_u8(vshrq_n_u8(mgx16, 3), new_fx16);
+    uint8x16_t mrx16_mshr = vmulq_u8(vshrq_n_u8(mrx16, 3), new_fx16);  
+    uint8x16_t qbx16 = vqaddq_u8(ibx16_mshr, mbx16_mshr);
+    uint8x16_t qgx16 = vqaddq_u8(igx16_mshr, mgx16_mshr);
+    uint8x16_t qrx16 = vqaddq_u8(irx16_mshr, mrx16_mshr);
+    // Keep the pixels of input im if label = 0 (means mask = 0)
+    uint8x16_t cezx16 = vceqq_u8(labelx16, zerox16);
+    uint8x16_t abx16 = vandq_u8(cezx16, ibx16);
+    uint8x16_t agx16 = vandq_u8(cezx16, igx16);
+    uint8x16_t arx16 = vandq_u8(cezx16, irx16);
+    uint8x16x3_t vbgr16x3;  
+    // Reset qx values to 0 if label is 0, then, keep mask values 
+    // if label is not 0  
+    uint8x16_t ncezx16 = vmvnq_u8(cezx16); 
+    vbgr16x3.val[0] = vorrq_u8(abx16, vandq_u8(ncezx16, qbx16));
+    vbgr16x3.val[1] = vorrq_u8(agx16, vandq_u8(ncezx16, qgx16));
+    vbgr16x3.val[2] = vorrq_u8(arx16, vandq_u8(ncezx16, qrx16));
     // Store the blended pixels to vis img
     vst3q_u8(vis_ptr + i * 3, vbgr16x3);
   }
@@ -167,9 +191,15 @@ static cv::Mat VisSegmentationCommonCpu(
   for (int i = 0; i < height; i++) {
     for (int j = 0; j < width; j++) {
       int category_id = result.label_map[index++];
-      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      if (category_id == 0) {
+        vis_img.at<cv::Vec3b>(i, j)[0] = im.at<cv::Vec3b>(i, j)[0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = im.at<cv::Vec3b>(i, j)[1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = im.at<cv::Vec3b>(i, j)[2];
+      } else {
+        vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      }
     }
   }
   cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);

@@ -49,7 +49,7 @@ I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 #安装客户端依赖
-python3 -m pip install tritonclient\[all\]
+python3 -m pip install tritonclient[all]
 
 # 发送请求
 python3 yolov5_grpc_client.py

@@ -68,8 +68,8 @@
 
 <div id="fastdeploy-quick-start-python"></div>
 
-<details close> 
-    
+<details close>
+
 <summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
 
 #### 快速安装
@@ -131,7 +131,7 @@ cv2.imwrite("vis_image.jpg", vis_im)
 <div id="fastdeploy-quick-start-cpp"></div>
 
 <details close>
-    
+
 <summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
 
 
@@ -255,7 +255,7 @@ int main(int argc, char* argv[]) {
 | Video Super-Resolution | [PaddleGAN/PP-MSVSR](./examples/vision/sr/ppmsvsr)                                           | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           | ❔       |
 | Information Extraction | [PaddleNLP/UIE](./examples/text/uie)                                                         | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ✅                           | ❔                           |         |
 | NLP                    | [PaddleNLP/ERNIE-3.0](./examples/text/ernie-3.0)                                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | ❔                           | ✅       |
-| Speech                 | [PaddleSpeech/PP-TTS](./examples/text/uie)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
+| Speech                 | [PaddleSpeech/PP-TTS](./examples/audio/pp-tts)                                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ❔                | ❔                           | --                          | ✅       |
 
 
 </div></details>
