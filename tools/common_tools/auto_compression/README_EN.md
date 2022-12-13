@@ -7,17 +7,14 @@ We take the Yolov5 series as an example to demonstrate how to install and execut
 
 ### Environment Dependencies
 
-1. Install the develop version downloaded from PaddlePaddle official website.
-
+1.Install PaddlePaddle 2.4 version
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.Install PaddleSlim-develop
-
+2.Install PaddleSlim 2.4 version
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### Install Fastdeploy Auto Compression Toolkit
@@ -110,6 +107,10 @@ FastDeploy currently provides users with compression [config](./configs/) files 
 | -------------------- | ------------------------------------------------------------ |----------------------------------------- |
 | [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      | [mobilenetv1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_ssld_infer.tgz)           |           |
 | [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |   [resnet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz)          |     |
+| [efficientnetb0_quant](./configs/classification/efficientnetb0_quant.yaml)      |   [efficientnetb0](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)          |     |
+| [mobilenetv3_large_x1_0_quant](./configs/classification/mobilenetv3_large_x1_0_quant.yaml)      |   [mobilenetv3_large_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV3_large_x1_0_ssld_infer.tgz)          |     |
+| [pphgnet_tiny_quant](./configs/classification/pphgnet_tiny_quant.yaml)      |   [pphgnet_tiny](https://bj.bcebos.com/paddlehub/fastdeploy/PPHGNet_tiny_ssld_infer.tgz)          |     |
+| [pplcnetv2_base_quant](./configs/classification/pplcnetv2_base_quant.yaml)      |   [pplcnetv2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)          |     |
 | [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |   [yolov5s](https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx)         |     |
 | [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |  [yolov6s](https://paddle-slim-models.bj.bcebos.com/act/yolov6s.onnx)          |     |
 | [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
@@ -121,10 +122,14 @@ FastDeploy currently provides users with compression [config](./configs/) files 
 
 Once obtained the quantized model, developers can deploy it on FastDeploy. Please refer to the following docs for more details
 
-- [YOLOv5 Quantized Model Deployment](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 Quantized Model Deployment](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 Quantized Model Deployment](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 Quantized Model Deployment](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 Quantized Model Deployment](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 Quantized Model Deployment](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas Quantized Model Deployment](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas Quantized Model Deployment](../../../examples/vision/classification/paddleclas/quantize/)
+
+- [PadddleDetection Quantized Model Deployment](../../../examples/vision/detection/paddledetection/quantize/)
+
+- [PadddleSegmentation Quantized Model Deployment](../../../examples/vision/segmentation/paddleseg/quantize/)
