@@ -57,6 +57,19 @@ class PaddleSegModel(FastDeployModel):
         """
         return self._model.batch_predict(image_list)
 
+    def clone(self):
+        """Clone PaddleSegModel object
+
+        :return: a new PaddleSegModel object
+        """
+
+        class PaddleSegCloneModel(PaddleSegModel):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PaddleSegCloneModel(self._model.clone())
+        return clone_model
+
     @property
     def preprocessor(self):
         """Get PaddleSegPreprocessor object of the loaded model
