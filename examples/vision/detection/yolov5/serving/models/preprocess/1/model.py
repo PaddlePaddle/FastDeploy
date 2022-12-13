@@ -85,7 +85,7 @@ class TritonPythonModel:
         responses = []
         for request in requests:
             data = pb_utils.get_input_tensor_by_name(request,
-                                                     elf.input_names[0])
+                                                     self.input_names[0])
             data = data.as_numpy()
             outputs, im_infos = self.preprocessor_.run(data)
 
@@ -95,7 +95,7 @@ class TritonPythonModel:
                                                           dlpack_tensor)
             output_tensor_1 = pb_utils.Tensor(
                 self.output_names[1], np.array(
-                    im_infos, dtype=np.int32))
+                    im_infos, dtype=np.object))
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[output_tensor_0, output_tensor_1])
             responses.append(inference_response)

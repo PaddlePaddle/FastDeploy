@@ -90,10 +90,14 @@ class TritonPythonModel:
                                                          self.input_names[1])
             infer_outputs = infer_outputs.as_numpy()
             im_infos = im_infos.as_numpy()
+            im_infos[0] = json.loads(im_infos[0].decode('utf-8').replace("'",
+                                                                         '"'))
 
             results = self.postprocessor_.run([infer_outputs], im_infos)
+            r_str = fd.vision.utils.fd_result_to_json(results)
+            r_np = np.array(r_str, dtype=np.object)
 
-            out_tensor = pb_utils.Tensor(self.output_names[0], results)
+            out_tensor = pb_utils.Tensor(self.output_names[0], r_np)
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])
             responses.append(inference_response)
