@@ -148,7 +148,7 @@ if (WITH_XPU)
       message(WARNING "While compiling with -DWITH_XPU=ON, will force to set -DENABLE_LITE_BACKEND=ON")
       set(ENABLE_LITE_BACKEND ON)
   endif()
-  set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-xpu-20221206.tgz")
+  set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221213.tgz")
 endif()
 
 
