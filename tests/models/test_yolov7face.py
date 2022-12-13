@@ -48,8 +48,8 @@ def test_detection_yolov7face():
 
     for i in range(3):
         # test single predict
-        result1 = model.predict(im1)
-        result2 = model.predict(im2)
+        result1 = model.predict(im1, 0.3)
+        result2 = model.predict(im2, 0.3)
 
         diff_boxes_1 = np.fabs(
             np.array(result1.boxes) - np.array(expect1["boxes"]))
