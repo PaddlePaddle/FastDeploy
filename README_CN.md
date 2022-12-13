@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+[English](README_EN.md) | 简体中文 | [हिन्दी](./docs/docs_i18n/README_हिन्दी.md) | [日本語](./docs/docs_i18n/README_日本語.md) | [한국인](./docs/docs_i18n/README_한국어.md) | [Pу́сский язы́к](./docs/docs_i18n/README_Ру́сский_язы́к.md)
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -36,15 +36,14 @@
 | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p> |
 
 
-## **社区交流**
+## 📣 最新消息
 
-*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
-
-*  **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
+- **💥直播预告：2022.12.12 ~ 2022.12.30日每晚20:30，联合十家硬件厂商伙伴，推出部署月《产业级AI模型部署全攻略》**。微信扫描下方二维码，关注公众号并填写问卷后进入官方交流群，与行业精英共同探讨AI部署话题。</font>
 
 <div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
+<img src="https://user-images.githubusercontent.com/54695910/207262688-4225bc39-4337-4966-a5cc-26bd6557d226.jpg"  width = "150" height = "150" />
 </div>
+
 
 ## 目录
 
@@ -321,6 +320,16 @@ int main(int argc, char* argv[]) {
 | OCR                | [PaddleOCR/PP-OCRv3](./examples/application/js/web_demo/src/pages/cv/ocr)                   | ✅                                            |
 
 </div></details>
+
+## **社区交流**
+
+*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
+
+*  **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
+
+<div align="center">
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
+</div>
 
 
 <div id="fastdeploy-acknowledge"></div>
