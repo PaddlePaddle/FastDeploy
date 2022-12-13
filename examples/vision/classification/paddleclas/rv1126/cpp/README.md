@@ -32,7 +32,7 @@ cp -r ILSVRC2012_val_00000010.jpeg images
 4. 编译部署示例，可使入如下命令：
 ```bash
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-tmivx/timvx.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-tmivx ..
+cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-tmivx/toolchain.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-tmivx -DTARGET_ABI=armhf ..
 make -j8
 make install
 # 成功编译之后，会生成 install 文件夹，里面有一个运行 demo 和部署所需的库
