@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <string>
+
 #include "fastdeploy/vision.h"
 #ifdef WIN32
 const char sep = '\\';
@@ -20,21 +20,23 @@ const char sep = '/';
 #endif
 
 void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
-  auto params_file = model_dir + sep + "inference.pdiparams";
-  auto config_file = model_dir + sep + "inference_cls.yaml";
-  
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto config_file = model_dir + sep + "deploy.yaml";
+  auto subgraph_file = model_dir + sep + "subgraph.txt";
+
   fastdeploy::RuntimeOption option;
   option.UseTimVX();
-
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
+  option.SetLiteSubgraphPartitionPath(subgraph_file);
+  
+  auto model = fastdeploy::vision::segmentation::PaddleSegModel(
+      model_file, params_file, config_file,option);
 
   assert(model.Initialized());
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::ClassifyResult res;
+  fastdeploy::vision::SegmentationResult res;
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
@@ -42,6 +44,9 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
 
   std::cout << res.Str() << std::endl;
 
+  auto vis_im = fastdeploy::vision::VisSegmentation(im, res, 0.5);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
