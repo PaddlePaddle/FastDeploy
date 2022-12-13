@@ -50,14 +50,14 @@
 | [ssd_mobilenet_v1_300_120e_voc](https://bj.bcebos.com/paddlehub/fastdeploy/ssd_mobilenet_v1_300_120e_voc.tgz) | 24.9M | Box AP 73.8%| 暂不支持TensorRT、ORT |
 | [ssd_vgg16_300_240e_voc](https://bj.bcebos.com/paddlehub/fastdeploy/ssd_vgg16_300_240e_voc.tgz) | 106.5M | Box AP 77.8%| 暂不支持TensorRT、ORT |
 | [ssdlite_mobilenet_v1_300_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ssdlite_mobilenet_v1_300_coco.tgz) | 29.1M | | 暂不支持TensorRT、ORT |
-| [rtmdet_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/rtmdet_l_300e_coco.tgz) | 224M | Box AP 51.2%| 暂不支持TensorRT |
-| [rtmdet_s_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/rtmdet_s_300e_coco.tgz) | 42M | Box AP 44.5%| 暂不支持TensorRT |
-| [yolov5_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5_l_300e_coco.tgz) | 183M | Box AP 48.9%| 暂不支持TensorRT |
-| [yolov5_s_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5_s_300e_coco.tgz) | 31M | Box AP 37.6%| 暂不支持TensorRT |
-| [yolov6_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_l_300e_coco.tgz) | 229M | Box AP 51.0%| 暂不支持TensorRT |
-| [yolov6_s_400e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_s_400e_coco.tgz) | 68M | Box AP 43.4%| 暂不支持TensorRT |
-| [yolov7_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_l_300e_coco.tgz) | 145M | Box AP 51.0%| 暂不支持TensorRT |
-| [yolov7_x_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_x_300e_coco.tgz) | 277M | Box AP 53.0%| 暂不支持TensorRT |
+| [rtmdet_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/rtmdet_l_300e_coco.tgz) | 224M | Box AP 51.2%|  |
+| [rtmdet_s_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/rtmdet_s_300e_coco.tgz) | 42M | Box AP 44.5%|  |
+| [yolov5_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5_l_300e_coco.tgz) | 183M | Box AP 48.9%|  |
+| [yolov5_s_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5_s_300e_coco.tgz) | 31M | Box AP 37.6%|  |
+| [yolov6_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_l_300e_coco.tgz) | 229M | Box AP 51.0%|  |
+| [yolov6_s_400e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_s_400e_coco.tgz) | 68M | Box AP 43.4%|  |
+| [yolov7_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_l_300e_coco.tgz) | 145M | Box AP 51.0%|  |
+| [yolov7_x_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_x_300e_coco.tgz) | 277M | Box AP 53.0%|  |
 
 ## 详细部署文档
 
