@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文 | [हिन्दी](./docs/docs_i18n/README_हिन्दी.md) | [日本語](./docs/docs_i18n/README_日本語.md) | [한국인](./docs/docs_i18n/README_한국어.md) | [Pу́сский язы́к](./docs/docs_i18n/README_Ру́сский_язы́к.md)
+[English](../../README_EN.md) | [简体中文](../../README_CN.md) | [हिन्दी](./README_हिन्दी.md) | [日本語](./README_日本語.md) | [한국인](./README_한국어.md) | Pу́сский язы́к
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
@@ -16,17 +16,16 @@
 </p>
 
 <p align="center">
-    <a href="/docs/cn/build_and_install"><b> 安装 </b></a>
+    <a href="/docs/cn/build_and_install"><b> Установка </b></a>
     |
-    <a href="docs/README_CN.md"><b> 使用文档 </b></a>
+    <a href="docs/README_CN.md"><b> Использование документации </b></a>
     |
-    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API文档 </b></a>
+    <a href="https://baidu-paddle.github.io/fastdeploy-api/"><b> API документация </b></a>
     |
-    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> 更新日志 </b></a>
+    <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><b> Журнал обновления </b></a>
 </p>
 
-**⚡️FastDeploy**是一款**全场景**、**易用灵活**、**极致高效**的AI推理部署工具。提供📦**开箱即用**的**云边端**部署体验, 支持超过 🔥150+ **Text**, **Vision**, **Speech**和**跨模态**模型，并实现🔚**端到端**的推理性能优化。包括图像分类、物体检测、图像分割、人脸检测、人脸识别、关键点检测、抠图、OCR、NLP、TTS等任务，满足开发者**多场景、多硬件、多平台**的产业部署需求。
-
+**⚡️FastDeploy**- это**всесценарный**,**простой в использовании и гибкий**,**чрезвычайно эффективный**инструмент развертывания выводов ИИ. Он обеспечивает 📦**из коробки**опыт развертывания с поддержкой более 🔥150+ **текстовых**,**зрительных**, **речевых** и **кросс-модальных** моделей и 🔚 **сквозной** оптимизацией производительности вывода. Сюда входят классификация изображений, обнаружение объектов, сегментация изображений, обнаружение лиц, распознавание лиц, обнаружение ключевых точек, распознавание ключей, OCR, NLP, TTS и другие задачи для удовлетворения потребностей разработчиков с **многосценическими, многоаппаратными, многоплатформенными** промышленными развертываниями.
 | [Image Classification](examples/vision/classification)                                                                                         | [Object Detection](examples/vision/detection)                                                                                                  | [Semantic Segmentation](examples/vision/segmentation/paddleseg)                                                                                  | [Potrait Segmentation](examples/vision/segmentation/paddleseg)                                                                                                                                                                                                                                                                                                           |
 |:----------------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
 | <img src='https://user-images.githubusercontent.com/54695910/200465949-da478e1b-21ce-43b8-9f3f-287460e786bd.png' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054680-2f8d1952-c120-4b67-88fc-7d2d7d2378b4.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/188054711-6119f0e7-d741-43b1-b273-9493d103d49f.gif' height="126px" width="190px">   | <img src='https://user-images.githubusercontent.com/54695910/188054718-6395321c-8937-4fa0-881c-5b20deb92aaa.gif' height="126px" width="190px">                                                                                                                                                                                                                           |
@@ -36,69 +35,70 @@
 | <img src='https://user-images.githubusercontent.com/54695910/188054671-394db8dd-537c-42b1-9d90-468d7ad1530e.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/48054808/173034825-623e4f78-22a5-4f14-9b83-dc47aa868478.gif' height="126px" width="190px"> | <img src='https://user-images.githubusercontent.com/54695910/200162475-f5d85d70-18fb-4930-8e7e-9ca065c1d618.gif' height="126px" width="190px">   | <p align="left">**input** ：早上好今天是2020<br>/10/29，最低温度是-3°C。<br><br> <p align="left">**output**: [<img src="https://user-images.githubusercontent.com/54695910/200161645-871e08da-5a31-4736-879c-a88bb171a676.png" width="170" style="max-width: 100%;">](https://paddlespeech.bj.bcebos.com/Parakeet/docs/demos/parakeet_espnet_fs2_pwg_demo/tn_g2p/parakeet/001.wav)</p> |
 
 
-## 📣 最新消息
+## **Обмен сообществами**
 
-- **💥直播预告：2022.12.12 ~ 2022.12.30日每晚20:30，联合十家硬件厂商伙伴，推出部署月《产业级AI模型部署全攻略》**。微信扫描下方二维码，关注公众号并填写问卷后进入官方交流群，与行业精英共同探讨AI部署话题。</font>
+*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
+
+*  **WeChat**: Отсканируйте QR-код и заполните анкету, чтобы присоединиться к техническому сообществу и обсудить болевые точки развертывания и решения с разработчиками сообщества
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/54695910/207262688-4225bc39-4337-4966-a5cc-26bd6557d226.jpg"  width = "150" height = "150" />
+    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
 </div>
 
+## Каталог
 
-## 目录
+* **🖥️Развертывание на стороне сервера**
 
-* **🖥️ 服务器端部署**
+  * [Python SDK Quick Start](#fastdeploy-quick-start-python)  
+  * [C++ SDK Quick Start](#fastdeploy-quick-start-cpp)
+  * [Список поддержки моделей на стороне сервера](#fastdeploy-server-models)
 
-  * [Python SDK快速开始](#fastdeploy-quick-start-python)  
-  * [C++ SDK快速开始](#fastdeploy-quick-start-cpp)
-  * [服务端模型支持列表](#fastdeploy-server-models)
+* **📲 Мобильные и конечные развертывания**
 
-* **📲 移动端和端侧部署**
+  * [Список поддержки конечных моделей](#fastdeploy-edge-models)
 
-  * [端侧模型支持列表](#fastdeploy-edge-models)
+* **🌐 Развертывание веб и апплетов**  
 
-* **🌐 Web和小程序部署**  
-
-  * [Web端模型支持列表](#fastdeploy-web-models)
+  * [Список поддержки веб-моделей](#fastdeploy-web-models)
 * [Acknowledge](#fastdeploy-acknowledge)  
 * [License](#fastdeploy-license)
 
-## 🖥️ 服务端部署
+## 🖥️ Развертывание на стороне сервера
 
 <div id="fastdeploy-quick-start-python"></div>
 
 <details close>
 
-<summary><b>Python SDK快速开始（点开查看详情）</b></summary><div>
+<summary><b> Быстрый старт Python SDK (нажмите для получения подробной информации)</b></summary><div>
 
-#### 快速安装
+#### Быстрая установка
 
-##### 前置依赖
+##### Предварительные зависимости
 
 - CUDA >= 11.2、cuDNN >= 8.0、Python >= 3.6
 - OS: Linux x86_64/macOS/Windows 10
 
-##### 安装GPU版本
+##### Установка версии GPU
 
 ```bash
 pip install numpy opencv-python fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-##### [Conda安装(推荐)](docs/cn/build_and_install/download_prebuilt_libraries.md)
+##### [установка Conda (рекомендуется)](docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 ```bash
 conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=8.2
 ```
 
-##### 安装CPU版本
+#####  Установка CPU процессора
 
 ```bash
 pip install numpy opencv-python fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 ```
 
-#### Python 推理示例
+#### Пример умозаключения в Python 
 
-* 准备模型和图片
+* Подготовка модели и изображений 
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -106,10 +106,10 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* 测试推理结果
+* Проверка результатов вывода
 
 ```python
-# GPU/TensorRT部署参考 examples/vision/detection/paddledetection/python
+# GPU/TensorRT Справочник по развертыванию examples/vision/detection/paddledetection/python
 import cv2
 import fastdeploy.vision as vision
 
@@ -117,7 +117,7 @@ model = vision.detection.PPYOLOE("ppyoloe_crn_l_300e_coco/model.pdmodel",
                                  "ppyoloe_crn_l_300e_coco/model.pdiparams",
                                  "ppyoloe_crn_l_300e_coco/infer_cfg.yml")
 im = cv2.imread("000000014439.jpg")
-result = model.predict(im)
+result = model.predict(im.copy())
 print(result)
 
 vis_im = vision.vis_detection(im, result, score_threshold=0.5)
@@ -131,16 +131,16 @@ cv2.imwrite("vis_image.jpg", vis_im)
 
 <details close>
 
-<summary><b>C++ SDK快速开始（点开查看详情）</b></summary><div>
+<summary><b> C++ SDK Quick Start (нажмите для получения подробной информации)</b></summary><div>
 
 
-#### 安装
+#### Установка 
 
-- 参考[C++预编译库下载](docs/cn/build_and_install/download_prebuilt_libraries.md)文档  
+Обратитесь к документации [C++ prebuilt libraries download](docs/cn/build_and_install/download_prebuilt_libraries.md) 
 
-#### C++ 推理示例
+#### Пример вывода в C++
 
-* 准备模型和图片
+* Подготовка моделей и фотографий
 
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
@@ -148,10 +148,10 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
-* 测试推理结果
+* Результаты рассуждений при тестировании
 
 ```C++
-// GPU/TensorRT部署参考 examples/vision/detection/paddledetection/cpp
+// GPU/TensorRT Ссылка на развертывание examples/vision/detection/paddledetection/cpp
 #include "fastdeploy/vision.h"
 
 int main(int argc, char* argv[]) {
@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
   auto im = cv::imread("000000014439.jpg");
 
   vision::DetectionResult res;
-  model.Predict(im, &res);
+  model.Predict(&im, &res);
 
   auto vis_im = vision::Visualize::VisDetection(im, res, 0.5);
   cv::imwrite("vis_image.jpg", vis_im);
@@ -172,23 +172,23 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-更多部署案例请参考[模型部署示例](examples) .
+Дополнительные примеры развертывания см. в разделе [Примеры развертывания модели] (examples).
 
 <div id="fastdeploy-server-models"></div>
 
-### 服务端模型支持列表 🔥🔥🔥🔥🔥
+### Список поддержки моделей на стороне сервера🔥🔥🔥🔥🔥
 
-符号说明: (1)  ✅: 已经支持; (2) ❔: 正在进行中; (3) N/A: 暂不支持; <br>
+Описание символов: (1)  ✅: Уже поддерживается; (2) ❔:Текущий; (3) N/A:В настоящее время не поддерживается;<br>
 
-<details open><summary><b> 服务端模型支持列表（点击可收缩）</b></summary><div>
+<details open><summary><b> Список поддержки моделей на стороне сервера (нажмите, чтобы уменьшить)</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198619323-c9b1cbce-1c1c-4f92-9737-4805c7c0ff2f.png" />
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png"/>
 </div>
 
-| 任务场景                   | 模型                                                                                           | Linux                                            | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux           | Linux         | Linux         | Linux   |
+| Сценарии миссий                 | Модели                                                                                        | Linux                                            | Linux      | Win     | Win        | Mac     | Mac     | Linux       | Linux           | Linux         | Linux         | Linux   |
 |:----------------------:|:--------------------------------------------------------------------------------------------:|:------------------------------------------------:|:----------:|:-------:|:----------:|:-------:|:-------:|:-----------:|:---------------:|:-------------:|:-------------:|:-------:|
-| ---                    | ---                                                                                          | X86 CPU                                          | NVIDIA GPU | X86 CPU | NVIDIA GPU | X86 CPU | Arm CPU | AArch64 CPU | 飞腾D2000 aarch64 | NVIDIA Jetson | Graphcore IPU | Serving |
+| ---                    | ---                                                                                          | X86 CPU                                          | NVIDIA GPU | X86 CPU | NVIDIA GPU | X86 CPU | Arm CPU | AArch64 CPU |  Phytium D2000CPU | NVIDIA Jetson | Graphcore IPU | Serving |
 | Classification         | [PaddleClas/ResNet50](./examples/vision/classification/paddleclas)                           | [✅](./examples/vision/classification/paddleclas) | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ✅                           | ✅       |
 | Classification         | [TorchVison/ResNet](examples/vision/classification/resnet)                                   | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
 | Classification         | [ltralytics/YOLOv5Cls](examples/vision/classification/yolov5cls)                             | ✅                                                | ✅                        | ✅                        | ✅                        | ✅                       | ✅                     | ✅                          | ✅                | ✅                           | ❔                           | ❔       |
@@ -261,21 +261,20 @@ int main(int argc, char* argv[]) {
 
 <div id="fastdeploy-edge-doc"></div>
 
-## 📲 移动端和端侧部署 🔥🔥🔥🔥
+## 📲 Мобильное и конечное развертывание  🔥🔥🔥🔥
 
 <div id="fastdeploy-edge-models"></div>
 
-### 端侧模型支持列表
-
-<details open><summary><b> 端侧模型支持列表（点击可收缩）</b></summary><div>
+### Список поддержки конечных моделей
+<details open><summary><b>  Список поддержки конечных моделей (нажмите, чтобы уменьшить)</b></summary><div>
 
 <div align="center">
-  <img src="https://user-images.githubusercontent.com/54695910/198619323-c9b1cbce-1c1c-4f92-9737-4805c7c0ff2f.png" />
+  <img src="https://user-images.githubusercontent.com/54695910/198620704-741523c1-dec7-44e5-9f2b-29ddd9997344.png"  />
 </div>
 
-| 任务场景               | 模型                                                                                        | 大小(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | 更新中...  |
+| Сценарии миссий             | Модели                                                                                       | Размер(MB)   | Linux   | Android | Linux     | Linux                   | Linux                          | Linux                       | Linux                            | TBD...  |
 |:------------------:|:-----------------------------------------------------------------------------------------:|:--------:|:-------:|:-------:|:-------:|:-----------------------:|:------------------------------:|:---------------------------:|:--------------------------------:|:-------:|
-| ---                | ---                                                                                       | ---      | ARM CPU | ARM CPU | 瑞芯微NPU<br>RK3568/RK3588 | 瑞芯微NPU<br>RV1109/RV1126/RK1808 | 晶晨NPU <br>A311D/S905D/C308X | 恩智浦NPU<br>i.MX&nbsp;8M&nbsp;Plus | 更新中...｜ |
+| ---                | ---                                                                                       | ---      | ARM CPU | ARM CPU | Rockchip-NPU<br>RK3568/RK3588 | Rockchip-NPU<br>RV1109/RV1126/RK1808 |  Amlogic-NPU <br>A311D/S905D/C308X |  NXP-NPU<br>i.MX&nbsp;8M&nbsp;Plus | TBD...｜ |
 | Classification     | [PaddleClas/ResNet50](examples/vision/classification/paddleclas)                         | 98        | ✅       | ✅       |  ❔                             |      ✅                                |                                   |                                   |         |
 | Classification     | [PaddleClas/PP-LCNet](examples/vision/classification/paddleclas)                         | 11.9      | ✅       | ✅       | ❔                             | ✅                                 | --                                | --                                | --      |
 | Classification     | [PaddleClas/PP-LCNetv2](examples/vision/classification/paddleclas)                       | 26.6      | ✅       | ✅       | ❔                             | ✅                                   | --                                | --                                | --      |
@@ -303,13 +302,13 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-## 🌐 Web和小程序部署
+## 🌐 🌐 Развертывание веб и апплетов
 
 <div id="fastdeploy-web-models"></div>
 
-<details open><summary><b> Web和小程序部署支持列表（点击可收缩）</b></summary><div>
+<details open><summary><b> Список поддержки развертывания веб-приложений и апплетов (нажмите, чтобы уменьшить)</b></summary><div>
 
-| 任务场景               | 模型                                                                                          | [web_demo](examples/application/js/web_demo) |
+| Сценарии миссий              | Модели                                                                                          | [web_demo](examples/application/js/web_demo) |
 |:------------------:|:-------------------------------------------------------------------------------------------:|:--------------------------------------------:|
 | ---                | ---                                                                                         | [Paddle.js](examples/application/js)         |
 | Detection          | [FaceDetection](examples/application/js/web_demo/src/pages/cv/detection)                    | ✅                                            |
@@ -321,25 +320,15 @@ int main(int argc, char* argv[]) {
 
 </div></details>
 
-## **社区交流**
-
-*  **Slack**：Join our [Slack community](https://join.slack.com/t/fastdeployworkspace/shared_invite/zt-1jznah134-3rxY~ytRb8rcPqkn9g~PDg) and chat with other community members about ideas
-
-*  **微信**：扫描二维码，填写问卷加入技术社区，与社区开发者探讨部署的痛点与方案
-
-<div align="center">
-    <img src="https://user-images.githubusercontent.com/54695910/200145290-d5565d18-6707-4a0b-a9af-85fd36d35d13.jpg" width = "220" height = "220" />
-</div>
-
 
 <div id="fastdeploy-acknowledge"></div>
 
 ## Acknowledge
 
-本项目中SDK生成和下载使用了[EasyEdge](https://ai.baidu.com/easyedge/app/openSource)中的免费开放能力，在此表示感谢。
+Для создания и загрузки SDK в этом проекте используются бесплатные и открытые возможности в [EasyEdge](https://ai.baidu.com/easyedge/app/openSource), за что мы хотели бы поблагодарить вас.
 
 ## License
 
 <div id="fastdeploy-license"></div>
 
-FastDeploy遵循[Apache-2.0开源协议](./LICENSE)。
+FastDeploy следует [протоколу Apache-2.0 с открытым исходным кодом](. /LICENSE).
