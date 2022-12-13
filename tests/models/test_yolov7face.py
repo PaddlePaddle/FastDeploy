@@ -34,7 +34,7 @@ def test_detection_yolov7face():
     fd.download(result_url2, "resources")
 
     model_file = "resources/yolov7-lite-e.onnx"
-    model = fd.vision.facedet.YOLOv7_face(
+    model = fd.vision.facedet.YOLOv7Face(
         model_file, runtime_option=rc.test_option)
 
     with open("resources/yolov7face_result1.pkl", "rb") as f:
@@ -62,14 +62,14 @@ def test_detection_yolov7face():
             np.array(result2.scores) - np.array(expect2["scores"]))
 
         assert diff_boxes_1.max(
-        ) < 1e-06, "There's difference in detection boxes 1."
+        ) < 1e-03, "There's difference in detection boxes 1."
         assert diff_scores_1.max(
-        ) < 1e-05, "There's difference in detection score 1."
+        ) < 1e-04, "There's difference in detection score 1."
 
         assert diff_boxes_2.max(
-        ) < 1e-06, "There's difference in detection boxes 2."
+        ) < 1e-03, "There's difference in detection boxes 2."
         assert diff_scores_2.max(
-        ) < 1e-05, "There's difference in detection score 2."
+        ) < 1e-04, "There's difference in detection score 2."
 
         # test batch predict
         results = model.batch_predict([im1, im2])
@@ -86,18 +86,18 @@ def test_detection_yolov7face():
         diff_scores_2 = np.fabs(
             np.array(result2.scores) - np.array(expect2["scores"]))
         assert diff_boxes_1.max(
-        ) < 1e-06, "There's difference in detection boxes 1."
+        ) < 1e-03, "There's difference in detection boxes 1."
         assert diff_scores_1.max(
-        ) < 1e-05, "There's difference in detection score 1."
+        ) < 1e-04, "There's difference in detection score 1."
 
         assert diff_boxes_2.max(
-        ) < 1e-06, "There's difference in detection boxes 2."
+        ) < 1e-03, "There's difference in detection boxes 2."
         assert diff_scores_2.max(
-        ) < 1e-05, "There's difference in detection score 2."
+        ) < 1e-04, "There's difference in detection score 2."
 
 
 def test_detection_yolov7face_runtime():
-    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx"
+    model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-lite-e.onnx"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
     result_url1 = "https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_result1.pkl"
     fd.download(model_url, "resources")
@@ -116,9 +116,7 @@ def test_detection_yolov7face_runtime():
     with open("resources/yolov7_result1.pkl", "rb") as f:
         expect1 = pickle.load(f)
 
-    # compare diff
-    # im1 = cv2.imread("./resources/000000014439.jpg")
-    im1 = cv2.imread("./resources/sample.jpg")
+    im1 = cv2.imread("resources/000000014439.jpg")
 
     for i in range(3):
         # test runtime
@@ -133,9 +131,9 @@ def test_detection_yolov7face_runtime():
             np.array(result1.scores) - np.array(expect1["scores"]))
 
         assert diff_boxes_1.max(
-        ) < 1e-04, "There's difference in detection boxes 1."
+        ) < 1e-03, "There's difference in detection boxes 1."
         assert diff_scores_1.max(
-        ) < 1e-05, "There's difference in detection score 1."
+        ) < 1e-04, "There's difference in detection score 1."
 
 
 if __name__ == "__main__":
