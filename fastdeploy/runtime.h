@@ -102,6 +102,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  void UseSophgo();
+
   void SetExternalStream(void* external_stream);
 
   /*

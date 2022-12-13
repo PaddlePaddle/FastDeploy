@@ -48,6 +48,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
+  /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -142,6 +145,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateGpuBackend();
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
+  bool CreateSophgoNPUBackend();
   bool CreateTimVXBackend();
 
   std::shared_ptr<Runtime> runtime_;

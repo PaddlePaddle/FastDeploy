@@ -102,6 +102,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateRKNPUBackend();
   } else if (runtime_option.device == Device::TIMVX) {
     return CreateTimVXBackend();
+  } else if (runtime_option.device == Device::SOPHGONPU) {
+    return CreateSophgoNPUBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -190,6 +192,30 @@ bool FastDeployModel::CreateRKNPUBackend() {
       continue;
     }
     runtime_option.backend = valid_rknpu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Cannot find an available npu backend to load this model."
+          << std::endl;
+  return false;
+}
+
+bool FastDeployModel::CreateSophgoNPUBackend() {
+  if (valid_sophgonpu_backends.empty()) {
+    FDERROR << "There's no valid npu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_sophgonpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_sophgonpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_sophgonpu_backends[i];
     runtime_ = std::unique_ptr<Runtime>(new Runtime());
     if (!runtime_->Init(runtime_option)) {
       return false;

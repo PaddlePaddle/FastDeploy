@@ -45,6 +45,10 @@
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
 #endif
 
+#ifdef ENABLE_SOPHGO_BACKEND
+#include "fastdeploy/backends/sophgo/sophgo_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -237,6 +241,10 @@ void RuntimeOption::UseTimVX() {
   enable_timvx = true;
   device = Device::TIMVX;
   UseLiteBackend();
+}
+
+void RuntimeOption::UseSophgo() {
+  device = Device::SOPHGONPU;
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
