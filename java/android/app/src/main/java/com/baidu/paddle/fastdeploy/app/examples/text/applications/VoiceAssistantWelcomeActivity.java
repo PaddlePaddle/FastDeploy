@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.ernie.applications;
+package com.baidu.paddle.fastdeploy.app.examples.text.applications;
 
 import android.app.Activity;
 import android.content.Intent;
