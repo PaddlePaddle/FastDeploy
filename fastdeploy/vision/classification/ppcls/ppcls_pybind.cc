@@ -63,6 +63,9 @@ void BindPaddleClas(pybind11::module& m) {
       m, "PaddleClasModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
+      .def("clone", [](vision::classification::PaddleClasModel& self) {
+        return self.Clone();
+      })
       .def("predict", [](vision::classification::PaddleClasModel& self, pybind11::array& data) {
         cv::Mat im = PyArrayToCvMat(data);
         vision::ClassifyResult result;

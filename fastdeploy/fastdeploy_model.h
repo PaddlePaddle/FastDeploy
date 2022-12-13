@@ -112,6 +112,20 @@ class FASTDEPLOY_DECL FastDeployModel {
     std::vector<FDTensor>().swap(reused_output_tensors_);
   }
 
+  virtual fastdeploy::Runtime* CloneRuntime() {
+    return runtime_->Clone();
+  }
+
+  virtual bool SetRuntime(fastdeploy::Runtime* clone_runtime) {
+    runtime_ = std::unique_ptr<Runtime>(clone_runtime);
+    return true;
+  }
+
+  virtual std::unique_ptr<FastDeployModel> Clone() {
+    FDERROR << ModelName() << " doesn't support Cone() now." << std::endl;
+    return nullptr;
+  }
+
  protected:
   virtual bool InitRuntime();
 
