@@ -92,6 +92,7 @@ def build_option(args):
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             if backend == "paddle_trt":
+                option.enable_paddle_trt_collect_shape()
                 option.enable_paddle_to_trt()
             if enable_trt_fp16:
                 option.enable_trt_fp16()
@@ -267,7 +268,6 @@ if __name__ == '__main__':
     f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     try:
-        rec_option = option
         if "OCRv2" in args.model_dir:
             det_option = option
             if args.backend in ["trt", "paddle_trt"]:
@@ -293,16 +293,19 @@ if __name__ == '__main__':
             model = fd.vision.ocr.PPOCRv2(
                 det_model=det_model, cls_model=cls_model, rec_model=rec_model)
         elif "OCRv3" in args.model_dir:
+            det_option = option
             if args.backend in ["trt", "paddle_trt"]:
                 det_option.set_trt_input_shape(
                     "x", [1, 3, 64, 64], [1, 3, 640, 640], [1, 3, 960, 960])
             det_model = fd.vision.ocr.DBDetector(
                 det_model_file, det_params_file, runtime_option=det_option)
+            cls_option = option
             if args.backend in ["trt", "paddle_trt"]:
                 cls_option.set_trt_input_shape(
                     "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 1024])
             cls_model = fd.vision.ocr.Classifier(
                 cls_model_file, cls_params_file, runtime_option=cls_option)
+            rec_option = option
             if args.backend in ["trt", "paddle_trt"]:
                 rec_option.set_trt_input_shape(
                     "x", [1, 3, 48, 10], [10, 3, 48, 320], [64, 3, 48, 2304])

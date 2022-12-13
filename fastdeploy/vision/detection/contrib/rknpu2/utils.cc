@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/vision/detection/contrib/rknpu2/utils.h"
-float clamp(float val, int min, int max) {
+namespace fastdeploy {
+namespace vision {
+namespace detection {
+float Clamp(float val, int min, int max) {
   return val > min ? (val < max ? val : max) : min;
 }
 
@@ -35,59 +38,56 @@ float DeqntAffineToF32(int8_t qnt, int32_t zp, float scale) {
   return ((float)qnt - (float)zp) * scale;
 }
 
-static float CalculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0, float xmin1, float ymin1, float xmax1, float ymax1)
-{
+static float CalculateOverlap(float xmin0, float ymin0, float xmax0,
+                              float ymax0, float xmin1, float ymin1,
+                              float xmax1, float ymax1) {
   float w = fmax(0.f, fmin(xmax0, xmax1) - fmax(xmin0, xmin1) + 1.0);
   float h = fmax(0.f, fmin(ymax0, ymax1) - fmax(ymin0, ymin1) + 1.0);
   float i = w * h;
-  float u = (xmax0 - xmin0 + 1.0) * (ymax0 - ymin0 + 1.0) + (xmax1 - xmin1 + 1.0) * (ymax1 - ymin1 + 1.0) - i;
+  float u = (xmax0 - xmin0 + 1.0) * (ymax0 - ymin0 + 1.0) +
+            (xmax1 - xmin1 + 1.0) * (ymax1 - ymin1 + 1.0) - i;
   return u <= 0.f ? 0.f : (i / u);
 }
 
-int NMS(int validCount,
-        std::vector<float> &outputLocations,
-        std::vector<int> &class_id,
-        std::vector<int> &order,
-        float threshold,
-        bool class_agnostic)
-{
+int NMS(int valid_count, std::vector<float>& output_locations,
+        std::vector<int>& class_id, std::vector<int>& order, float threshold,
+        bool class_agnostic) {
   // printf("class_agnostic: %d\n", class_agnostic);
-  for (int i = 0; i < validCount; ++i)
-  {
-    if (order[i] == -1)
-    {
+  for (int i = 0; i < valid_count; ++i) {
+    if (order[i] == -1) {
       continue;
     }
     int n = order[i];
-    for (int j = i + 1; j < validCount; ++j)
-    {
+    for (int j = i + 1; j < valid_count; ++j) {
       int m = order[j];
-      if (m == -1)
-      {
+      if (m == -1) {
         continue;
       }
 
-      if (!class_agnostic && class_id[n] != class_id[m]){
+      if (!class_agnostic && class_id[n] != class_id[m]) {
         continue;
       }
 
-      float xmin0 = outputLocations[n * 4 + 0];
-      float ymin0 = outputLocations[n * 4 + 1];
-      float xmax0 = outputLocations[n * 4 + 0] + outputLocations[n * 4 + 2];
-      float ymax0 = outputLocations[n * 4 + 1] + outputLocations[n * 4 + 3];
+      float xmin0 = output_locations[n * 4 + 0];
+      float ymin0 = output_locations[n * 4 + 1];
+      float xmax0 = output_locations[n * 4 + 0] + output_locations[n * 4 + 2];
+      float ymax0 = output_locations[n * 4 + 1] + output_locations[n * 4 + 3];
 
-      float xmin1 = outputLocations[m * 4 + 0];
-      float ymin1 = outputLocations[m * 4 + 1];
-      float xmax1 = outputLocations[m * 4 + 0] + outputLocations[m * 4 + 2];
-      float ymax1 = outputLocations[m * 4 + 1] + outputLocations[m * 4 + 3];
+      float xmin1 = output_locations[m * 4 + 0];
+      float ymin1 = output_locations[m * 4 + 1];
+      float xmax1 = output_locations[m * 4 + 0] + output_locations[m * 4 + 2];
+      float ymax1 = output_locations[m * 4 + 1] + output_locations[m * 4 + 3];
 
-      float iou = CalculateOverlap(xmin0, ymin0, xmax0, ymax0, xmin1, ymin1, xmax1, ymax1);
+      float iou = CalculateOverlap(xmin0, ymin0, xmax0, ymax0, xmin1, ymin1,
+                                   xmax1, ymax1);
 
-      if (iou > threshold)
-      {
+      if (iou > threshold) {
         order[j] = -1;
       }
     }
   }
   return 0;
 }
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy
