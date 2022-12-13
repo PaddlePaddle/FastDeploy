@@ -56,6 +56,9 @@ std::string Str(const Device& d) {
     case Device::RKNPU:
       out = "Device::RKNPU";
       break;
+    case Device::SOPHGONPU:
+      out = "Device::SOPHGONPU";
+      break;
     case Device::IPU:
       out = "Device::IPU";
       break;

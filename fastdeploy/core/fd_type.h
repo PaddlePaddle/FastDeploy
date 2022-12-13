@@ -22,7 +22,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX, KUNLUNXIN, ASCEND};
+enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX, KUNLUNXIN, ASCEND, SOPHGONPU};
 
 FASTDEPLOY_DECL std::string Str(const Device& d);
 
@@ -72,6 +72,7 @@ enum ModelFormat {
   ONNX,         ///< Model with ONNX format
   RKNN,         ///< Model with RKNN format
   TORCHSCRIPT,  ///< Model with TorchScript format
+  SOPHGO,       ///< Model with SOPHGO format
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
