@@ -85,6 +85,19 @@ class PaddleClasModel(FastDeployModel):
             model_format)
         assert self.initialized, "PaddleClas model initialize failed."
 
+    def clone(self):
+        """Clone PaddleClasModel object
+
+        :return: a new PaddleClasModel object
+        """
+
+        class PaddleClasCloneModel(PaddleClasModel):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PaddleClasCloneModel(self._model.clone())
+        return clone_model
+
     def predict(self, im, topk=1):
         """Classify an input image
 
