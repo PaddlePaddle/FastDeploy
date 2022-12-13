@@ -37,15 +37,15 @@ def build_option(args):
 
 args = parse_arguments()
 
-# 配置runtime，加载模型
+# Configure runtime and load the model
 runtime_option = build_option(args)
 model = fd.vision.facedet.YOLOv7Face(args.model, runtime_option=runtime_option)
 
-# 预测图片检测结果
+# Predict image detection results
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
-# 预测结果可视化
+# Visualization of prediction Results
 vis_im = fd.vision.vis_face_detection(im, result)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")

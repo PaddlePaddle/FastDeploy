@@ -36,6 +36,7 @@ def test_detection_yolov7face():
     model_file = "resources/yolov7-lite-e.onnx"
     model = fd.vision.facedet.YOLOv7Face(
         model_file, runtime_option=rc.test_option)
+    model.postprocessor.conf_threshold = 0.3
 
     with open("resources/yolov7face_result1.pkl", "rb") as f:
         expect1 = pickle.load(f)
@@ -48,8 +49,8 @@ def test_detection_yolov7face():
 
     for i in range(3):
         # test single predict
-        result1 = model.predict(im1, 0.3)
-        result2 = model.predict(im2, 0.3)
+        result1 = model.predict(im1)
+        result2 = model.predict(im2)
 
         diff_boxes_1 = np.fabs(
             np.array(result1.boxes) - np.array(expect1["boxes"]))
