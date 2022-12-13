@@ -22,15 +22,18 @@ mkdir build && cd build
 
 # CMake configuration with KunlunXin xpu toolchain
 cmake -DWITH_XPU=ON  \
+      -DWITH_GPU=OFF  \
+      -DENABLE_ORT_BACKEND=ON  \
+      -DENABLE_PADDLE_BACKEND=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
-      -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
+      -DENABLE_VISION=ON \
       ..
 
 # Build FastDeploy KunlunXin XPU C++ SDK
 make -j8
 make install
 ```  
-编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
+After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the PadddleLite-based FastDeploy library has been compiled.
 
 ## Python compile
 The compilation command is as follows:
@@ -38,11 +41,14 @@ The compilation command is as follows:
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
 export WITH_XPU=ON
+export WITH_GPU=OFF
+export ENABLE_ORT_BACKEND=ON
+export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_VISION=ON
 
 python setup.py build
 python setup.py bdist_wheel
 ```  
+After the compilation is completed, the compiled `wheel` package will be generated in the `FastDeploy/python/dist` directory, just pip install it directly
 
-1. For deploying the PaddleClas classification model on Kunlun XPU, please refer to: [C++ deployment example of PaddleClas on Kunlun XPU](../../../examples/vision/classification/paddleclas/xpu/README.md)
-2. For deploying YOLOv5 detection model on Kunlun Core XPU, please refer to: [C++ Deployment Example of YOLOv5 Detection Model on Kunlun Core XPU](../../../examples/vision/detection/yolov5/xpu/README.md)
+During the compilation process, if you modify the compilation parameters, in order to avoid the cache impact, you can delete the two subdirectories `build` and `.setuptools-cmake-build` under the `FastDeploy/python` directory and then recompile.

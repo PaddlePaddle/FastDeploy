@@ -18,16 +18,19 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 #下载官方转换好的yolov5模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
+tar -xvf yolov5s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
 # CPU推理
-./infer_demo yolov5s.onnx 000000014439.jpg 0
+./infer_demo yolov5s_infer 000000014439.jpg 0
 # GPU推理
-./infer_demo yolov5s.onnx 000000014439.jpg 1
+./infer_demo yolov5s_infer 000000014439.jpg 1
 # GPU上TensorRT推理
-./infer_demo yolov5s.onnx 000000014439.jpg 2
+./infer_demo yolov5s_infer 000000014439.jpg 2
+# XPU推理
+./infer_demo yolov5s_infer 000000014439.jpg 3
 ```
 
 运行完成可视化结果如下图所示

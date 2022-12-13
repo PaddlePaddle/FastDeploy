@@ -23,7 +23,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
-      .def("use_xpu", &RuntimeOption::UseXPU)
+      .def("use_xpu", &RuntimeOption::UseXpu)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)

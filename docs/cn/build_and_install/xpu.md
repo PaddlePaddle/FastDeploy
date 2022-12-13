@@ -49,6 +49,6 @@ export ENABLE_VISION=ON
 python setup.py build
 python setup.py bdist_wheel
 ```  
+编译完成即会在 `FastDeploy/python/dist` 目录下生成编译后的 `wheel` 包，直接 pip install 即可
 
-1. 昆仑芯 XPU 上部署 PaddleClas 分类模型请参考：[PaddleClas 分类模型在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/classification/paddleclas/xpu/README.md)
-2. 昆仑芯 XPU 上部署 YOLOv5 检测模型请参考：[YOLOv5 检测模型在昆仑芯 XPU 上的 C++ 部署示例](../../../examples/vision/detection/yolov5/xpu/README.md)
+编译过程中，如若修改编译参数，为避免带来缓存影响，可删除 `FastDeploy/python` 目录下的 `build` 和 `.setuptools-cmake-build` 两个子目录后再重新编译

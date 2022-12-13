@@ -238,7 +238,7 @@ void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
 }
 
-void RuntimeOption::UseXPU(int xpu_id, 
+void RuntimeOption::UseXpu(int xpu_id, 
                           int l3_workspace_size,
                           bool locked,
                           bool autotune,

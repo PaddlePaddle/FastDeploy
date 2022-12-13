@@ -124,7 +124,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// \param adaptive_seqlen Is the input of multi_encoder variable length
   /// \param enable_multi_stream Whether to enable the multi stream of xpu.
   ///
-  void UseXPU(int xpu_id = 0,
+  void UseXpu(int xpu_id = 0,
               int l3_workspace_size = 0xfffc00,
               bool locked = false,
               bool autotune = true,
