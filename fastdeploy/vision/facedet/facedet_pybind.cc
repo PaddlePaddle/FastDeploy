@@ -19,6 +19,7 @@ namespace fastdeploy {
 void BindRetinaFace(pybind11::module& m);
 void BindUltraFace(pybind11::module& m);
 void BindYOLOv5Face(pybind11::module& m);
+void BindYOLOv7Face(pybind11::module& m);
 void BindSCRFD(pybind11::module& m);
 
 void BindFaceDet(pybind11::module& m) {
@@ -26,6 +27,7 @@ void BindFaceDet(pybind11::module& m) {
   BindRetinaFace(facedet_module);
   BindUltraFace(facedet_module);
   BindYOLOv5Face(facedet_module);
+  BindYOLOv7Face(facedet_module);
   BindSCRFD(facedet_module);
 }
 }  // namespace fastdeploy
