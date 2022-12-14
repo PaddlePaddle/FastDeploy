@@ -21,12 +21,6 @@ namespace detection {
 
 FastestDetPreprocessor::FastestDetPreprocessor() {
   size_ = {352, 352}; //{h,w}
-  padding_value_ = {114.0, 114.0, 114.0}; //padding area color {B,G,R}
-  is_mini_pad_ = false;
-  is_no_pad_ = true;
-  is_scale_up_ = false;
-  stride_ = 32; //conv stride
-  max_wh_ = 0.0;
 }
 
 bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,

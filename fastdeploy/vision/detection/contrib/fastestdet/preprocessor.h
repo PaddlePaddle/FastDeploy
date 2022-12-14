@@ -58,26 +58,6 @@ class FASTDEPLOY_DECL FastestDetPreprocessor {
 
   // target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> size_;
-
-  // padding value, size should be the same as channels
-  std::vector<float> padding_value_;
-
-  // only pad to the minimum rectange which height and width is times of stride
-  bool is_mini_pad_;
-
-  // while is_mini_pad = false and is_no_pad = true,
-  // will resize the image to the set size
-  bool is_no_pad_;
-
-  // if is_scale_up is false, the input image only can be zoom out,
-  // the maximum resize scale cannot exceed 1.0
-  bool is_scale_up_;
-
-  // padding stride, for is_mini_pad
-  int stride_;
-
-  // for offseting the boxes by classes when using NMS
-  float max_wh_;
 };
 
 }  // namespace detection
