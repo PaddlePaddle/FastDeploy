@@ -17,9 +17,7 @@
 ├── CMakeLists.txt
 ├── build  # 编译文件夹
 ├── image  # 存放图片的文件夹
-├── infer_cpu_npu.cc
-├── infer_cpu_npu.h
-├── main.cc
+├── infer.cc
 ├── model  # 存放模型文件的文件夹
 └── thirdpartys  # 存放sdk的文件夹
 ```
@@ -39,9 +37,8 @@ mkdir thirdpartys
 请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
 fastdeploy-0.7.0目录，请移动它至thirdpartys目录下.
 
-### 拷贝模型文件，以及配置文件至model文件夹
-在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model。
+### 拷贝模型文件至model文件夹
+请参考[SCRFD模型转换文档](../README.md)转换SCRFD ONNX模型到RKNN模型,再将RKNN模型移动到model文件夹。
 
 ### 准备测试图片至image文件夹
 ```bash
@@ -61,6 +58,7 @@ make install
 
 ```bash
 cd ./build/install
+export LD_LIBRARY_PATH=./lib
 ./rknpu_test
 ```
 运行完成可视化结果如下图所示
