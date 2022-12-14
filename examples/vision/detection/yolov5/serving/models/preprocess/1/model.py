@@ -61,21 +61,7 @@ class TritonPythonModel:
             dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
             self.output_dtype.append(dtype)
         print("preprocess output names:", self.output_names)
-
-    def yolov5_preprocess(self, input_data):
-        """
-        According to Triton input, the preprocessing results of YoloV5 model are obtained.
-        """
-        im_infos = []
-        pre_outputs = []
-        for i_batch in input_data:
-            pre_output, im_info = fd.vision.detection.YOLOv5.preprocess(
-                i_batch)
-            pre_outputs.append(pre_output)
-            im_infos.append(im_info)
-        im_infos = np.array(im_infos, dtype=np.object)
-        pre_outputs = np.concatenate(pre_outputs, axis=0)
-        return pre_outputs, im_infos
+        self.preprocessor_ = fd.vision.detection.YOLOv5Preprocessor()
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -97,18 +83,21 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
         for request in requests:
             data = pb_utils.get_input_tensor_by_name(request,
                                                      self.input_names[0])
             data = data.as_numpy()
-            outputs = self.yolov5_preprocess(data)
-            output_tensors = []
-            for idx, output in enumerate(outputs):
-                output_tensors.append(
-                    pb_utils.Tensor(self.output_names[idx], output))
+            outputs, im_infos = self.preprocessor_.run(data)
+
+            # YOLOv5 preprocess has two output
+            dlpack_tensor = outputs[0].to_dlpack()
+            output_tensor_0 = pb_utils.Tensor.from_dlpack(self.output_names[0],
+                                                          dlpack_tensor)
+            output_tensor_1 = pb_utils.Tensor(
+                self.output_names[1], np.array(
+                    im_infos, dtype=np.object))
             inference_response = pb_utils.InferenceResponse(
-                output_tensors=output_tensors)
+                output_tensors=[output_tensor_0, output_tensor_1])
             responses.append(inference_response)
         return responses
 

@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.ernie.applications;
+package com.baidu.paddle.fastdeploy.app.examples.text.applications;
 
 import static com.baidu.paddle.fastdeploy.ui.Utils.isNetworkAvailable;
 
@@ -32,7 +32,6 @@ import com.baidu.speech.asr.SpeechConstant;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
