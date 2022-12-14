@@ -9,15 +9,15 @@
 
 【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../matting)
 
-以Linux上推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.0以上(x.x.x>=1.0.0)
 
 ```bash
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.6.0.tgz
-cd fastdeploy-linux-x64-gpu-0.6.0/examples/vision/segmentation/paddleseg/cpp/
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/../../../../../../../fastdeploy-linux-x64-gpu-0.6.0
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 # 下载Unet模型文件和测试图片
@@ -85,7 +85,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **apply_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 - [模型介绍](../../)
 - [Python部署](../python)

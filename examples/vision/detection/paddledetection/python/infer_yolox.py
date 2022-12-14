@@ -9,10 +9,10 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        required=True,
+        default=None,
         help="Path of PaddleDetection model directory")
     parser.add_argument(
-        "--image", required=True, help="Path of test image file.")
+        "--image", default=None, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
@@ -39,9 +39,14 @@ def build_option(args):
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model_dir, "model.pdmodel")
-params_file = os.path.join(args.model_dir, "model.pdiparams")
-config_file = os.path.join(args.model_dir, "infer_cfg.yml")
+if args.model_dir is None:
+    model_dir = fd.download_model(name='yolox_s_300e_coco')
+else:
+    model_dir = args.model_dir
+
+model_file = os.path.join(model_dir, "model.pdmodel")
+params_file = os.path.join(model_dir, "model.pdiparams")
+config_file = os.path.join(model_dir, "infer_cfg.yml")
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
@@ -49,8 +54,12 @@ model = fd.vision.detection.PaddleYOLOX(
     model_file, params_file, config_file, runtime_option=runtime_option)
 
 # 预测图片检测结果
-im = cv2.imread(args.image)
-result = model.predict(im.copy())
+if args.image is None:
+    image = fd.utils.get_detection_test_image()
+else:
+    image = args.image
+im = cv2.imread(image)
+result = model.predict(im)
 print(result)
 
 # 预测结果可视化

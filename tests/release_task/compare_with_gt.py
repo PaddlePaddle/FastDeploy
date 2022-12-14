@@ -3,31 +3,31 @@ import re
 
 diff_score_threshold = {
     "linux-x64": {
-        "label_diff": 1e-02,
+        "label_diff": 0,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "linux-aarch64": {
-        "label_diff": 1e-02,
+        "label_diff": 0,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 1e-4,
         "boxes_diff": 1e-3
     },
     "osx-x86_64": {
-        "label_diff": 1e-02,
+        "label_diff": 0,
         "score_diff": 1e-4,
         "boxes_diff_ratio": 2e-4,
         "boxes_diff": 1e-3
     },
     "osx-arm64": {
-        "label_diff": 1e-02,
-        "score_diff": 1e-4,
-        "boxes_diff_ratio": 2e-4,
+        "label_diff": 0,
+        "score_diff": 1e-3,
+        "boxes_diff_ratio": 5e-4,
         "boxes_diff": 1e-3
     },
     "win-x64": {
-        "label_diff": 1e-02,
+        "label_diff": 0,
         "score_diff": 5e-4,
         "boxes_diff_ratio": 1e-3,
         "boxes_diff": 1e-3
@@ -133,7 +133,7 @@ def check_result(gt_result, infer_result, args):
         is_diff = True
         boxes_diff_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_bool.txt"
         boxes_diff_ratio_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio.txt"
-        boxes_diff_ratio_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio_bool"
+        boxes_diff_ratio_bool_file = args.platform + "_" + backend + "_" + "boxes_diff_ratio_bool.txt"
         save_numpy_result(boxes_diff_bool_file,
                           boxes_diff > boxes_diff_threshold)
         save_numpy_result(boxes_diff_ratio_file, boxes_diff_ratio)

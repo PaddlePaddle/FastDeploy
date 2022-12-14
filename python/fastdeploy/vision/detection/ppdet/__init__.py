@@ -52,6 +52,11 @@ class PaddleDetPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
+    def apply_decode_and_nms(self):
+        """This function will enable decode and nms in postprocess step.
+        """
+        return self._postprocessor.apply_decode_and_nms()
+
 
 class PPYOLOE(FastDeployModel):
     def __init__(self,
@@ -70,7 +75,6 @@ class PPYOLOE(FastDeployModel):
         """
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PPYOLOE model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PPYOLOE(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
@@ -94,6 +98,19 @@ class PPYOLOE(FastDeployModel):
         """
 
         return self._model.batch_predict(images)
+
+    def clone(self):
+        """Clone PPYOLOE object
+
+        :return: a new PPYOLOE object
+        """
+
+        class PPYOLOEClone(PPYOLOE):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPYOLOEClone(self._model.clone())
+        return clone_model
 
     @property
     def preprocessor(self):
@@ -135,6 +152,19 @@ class PPYOLO(PPYOLOE):
             model_format)
         assert self.initialized, "PPYOLO model initialize failed."
 
+    def clone(self):
+        """Clone PPYOLO object
+
+        :return: a new PPYOLO object
+        """
+
+        class PPYOLOClone(PPYOLO):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPYOLOClone(self._model.clone())
+        return clone_model
+
 
 class PaddleYOLOX(PPYOLOE):
     def __init__(self,
@@ -160,6 +190,19 @@ class PaddleYOLOX(PPYOLOE):
             model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
+    def clone(self):
+        """Clone PaddleYOLOX object
+
+        :return: a new PaddleYOLOX object
+        """
+
+        class PaddleYOLOXClone(PaddleYOLOX):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PaddleYOLOXClone(self._model.clone())
+        return clone_model
+
 
 class PicoDet(PPYOLOE):
     def __init__(self,
@@ -179,11 +222,23 @@ class PicoDet(PPYOLOE):
 
         super(PPYOLOE, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PicoDet model only support model format of ModelFormat.Paddle now."
         self._model = C.vision.detection.PicoDet(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "PicoDet model initialize failed."
+
+    def clone(self):
+        """Clone PicoDet object
+
+        :return: a new PicoDet object
+        """
+
+        class PicoDetClone(PicoDet):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PicoDetClone(self._model.clone())
+        return clone_model
 
 
 class FasterRCNN(PPYOLOE):
@@ -210,6 +265,19 @@ class FasterRCNN(PPYOLOE):
             model_format)
         assert self.initialized, "FasterRCNN model initialize failed."
 
+    def clone(self):
+        """Clone FasterRCNN object
+
+        :return: a new FasterRCNN object
+        """
+
+        class FasterRCNNClone(FasterRCNN):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = FasterRCNNClone(self._model.clone())
+        return clone_model
+
 
 class YOLOv3(PPYOLOE):
     def __init__(self,
@@ -234,6 +302,19 @@ class YOLOv3(PPYOLOE):
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "YOLOv3 model initialize failed."
+
+    def clone(self):
+        """Clone YOLOv3 object
+
+        :return: a new YOLOv3 object
+        """
+
+        class YOLOv3Clone(YOLOv3):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = YOLOv3Clone(self._model.clone())
+        return clone_model
 
 
 class MaskRCNN(PPYOLOE):
@@ -269,3 +350,54 @@ class MaskRCNN(PPYOLOE):
 
         raise Exception(
             "batch_predict is not supported for MaskRCNN model now.")
+
+    def clone(self):
+        """Clone MaskRCNN object
+
+        :return: a new MaskRCNN object
+        """
+
+        class MaskRCNNClone(MaskRCNN):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = MaskRCNNClone(self._model.clone())
+        return clone_model
+
+
+class SSD(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a SSD model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ssd/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ssd/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "SSD model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.SSD(model_file, params_file,
+                                             config_file, self._runtime_option,
+                                             model_format)
+        assert self.initialized, "SSD model initialize failed."
+
+    def clone(self):
+        """Clone SSD object
+
+        :return: a new SSD object
+        """
+
+        class SSDClone(SSD):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = SSDClone(self._model.clone())
+        return clone_model

@@ -7,14 +7,15 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
 
 ```
 mkdir build
 cd build
-wget https://https://bj.bcebos.com/paddlehub/fastdeploy/cpp/fastdeploy-linux-x64-gpu-0.6.0.tgz
-tar xvf fastdeploy-linux-x64-gpu-0.6.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.6.0
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 
@@ -25,7 +26,7 @@ tar -xvf ch_PP-OCRv2_det_infer.tar
 wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
 tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
 
-wgethttps://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
+wget https://paddleocr.bj.bcebos.com/PP-OCRv2/chinese/ch_PP-OCRv2_rec_infer.tar
 tar -xvf ch_PP-OCRv2_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
@@ -81,6 +82,7 @@ PPOCRv2 的初始化，由检测，识别模型串联构成(无分类器)
 
 > ```  
 > bool Predict(cv::Mat* img, fastdeploy::vision::OCRResult* result);
+> bool Predict(const cv::Mat& img, fastdeploy::vision::OCRResult* result);
 > ```
 >
 > 模型预测接口，输入一张图片，返回OCR预测结果

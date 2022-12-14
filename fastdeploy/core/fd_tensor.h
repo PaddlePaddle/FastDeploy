@@ -19,11 +19,17 @@
 #include <vector>
 
 #include "fastdeploy/core/allocate.h"
+#include "fastdeploy/core/fd_scalar.h"
 #include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
+  // These two parameters are general parameters of quantitative model.
+  std::pair<int32_t, std::vector<float>> quantized_parameter_ = {0, {0}};
+  void SetQuantizationInfo(int32_t zero_point, std::vector<float>& scale);
+  const std::pair<int32_t, std::vector<float>> GetQuantizationInfo() const;
+
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};
@@ -57,9 +63,7 @@ struct FASTDEPLOY_DECL FDTensor {
 
   void* Data();
 
-  bool IsShared() {
-    return external_data_ptr != nullptr;
-  }
+  bool IsShared() { return external_data_ptr != nullptr; }
 
   void StopSharing();
 
@@ -78,7 +82,8 @@ struct FASTDEPLOY_DECL FDTensor {
   // So take care with the user buffer
   void SetExternalData(const std::vector<int64_t>& new_shape,
                        const FDDataType& data_type, void* data_buffer,
-                       const Device& new_device = Device::CPU);
+                       const Device& new_device = Device::CPU,
+                       int new_device_id = -1);
 
   // Expand the shape of a Tensor. Insert a new axis that will appear
   // at the `axis` position in the expanded Tensor shape.
@@ -116,6 +121,7 @@ struct FASTDEPLOY_DECL FDTensor {
               const FDDataType& data_type, const std::string& tensor_name = "",
               const Device& new_device = Device::CPU);
 
+  bool Reshape(const std::vector<int64_t>& new_shape);
   // Debug function
   // Use this function to print shape, dtype, mean, max, min
   // prefix will also be printed as tag
@@ -127,6 +133,8 @@ struct FASTDEPLOY_DECL FDTensor {
 
   FDTensor() {}
   explicit FDTensor(const std::string& tensor_name);
+  explicit FDTensor(const char* tensor_name);
+
   // Deep copy
   FDTensor(const FDTensor& other);
   // Move constructor
@@ -137,11 +145,14 @@ struct FASTDEPLOY_DECL FDTensor {
   // Move assignment
   FDTensor& operator=(FDTensor&& other);
 
+  // Scalar to FDTensor
+  explicit FDTensor(const Scalar& scalar);
+
   ~FDTensor() { FreeFn(); }
 
   static void CopyBuffer(void* dst, const void* src, size_t nbytes,
                          const Device& device = Device::CPU,
-                        bool is_pinned_memory = false);
+                         bool is_pinned_memory = false);
 };
 
 }  // namespace fastdeploy

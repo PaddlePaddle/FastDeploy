@@ -20,7 +20,7 @@ COPY --from=full /opt/tritonserver/lib /opt/tritonserver/lib
 COPY --from=full /opt/tritonserver/include /opt/tritonserver/include
 COPY --from=full /opt/tritonserver/backends/python /opt/tritonserver/backends/python
 
-COPY serving/TensorRT-8.4.1.5 /opt/
+COPY serving/TensorRT-8.4.1.5 /opt/TensorRT-8.4.1.5
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \
@@ -33,9 +33,9 @@ RUN apt-get update \
     && apt-get update && apt-get install -y --no-install-recommends datacenter-gpu-manager=1:2.2.9
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev \
+    && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle-gpu paddlenlp faster_tokenizer
+    && python3 -m pip install paddlepaddle-gpu paddlenlp fast-tokenizer-python
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \

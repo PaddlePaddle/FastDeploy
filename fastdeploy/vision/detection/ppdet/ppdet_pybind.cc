@@ -25,7 +25,7 @@ void BindPPDet(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleDetPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in PaddleDetPreprocessor.");
         }
         for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
@@ -39,16 +39,20 @@ void BindPPDet(pybind11::module& m) {
       .def("run", [](vision::detection::PaddleDetPostprocessor& self, std::vector<FDTensor>& inputs) {
         std::vector<vision::DetectionResult> results;
         if (!self.Run(inputs, &results)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleDetPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleDetPostprocessor.");
         }
         return results;
       })
+      .def("apply_decode_and_nms",
+           [](vision::detection::PaddleDetPostprocessor& self){
+             self.ApplyDecodeAndNMS();
+           })
       .def("run", [](vision::detection::PaddleDetPostprocessor& self, std::vector<pybind11::array>& input_array) {
         std::vector<vision::DetectionResult> results;
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleDetPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleDetPostprocessor.");
         }
         return results;
       });
@@ -73,6 +77,9 @@ void BindPPDet(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
+      .def("clone", [](vision::detection::PPDetBase& self) {
+        return self.Clone();
+      })
       .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
@@ -102,6 +109,10 @@ void BindPPDet(pybind11::module& m) {
                           ModelFormat>());
 
   pybind11::class_<vision::detection::MaskRCNN, vision::detection::PPDetBase>(m, "MaskRCNN")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::SSD, vision::detection::PPDetBase>(m, "SSD")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
 }

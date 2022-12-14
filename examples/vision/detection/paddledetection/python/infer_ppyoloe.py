@@ -2,7 +2,6 @@ import cv2
 import os
 
 import fastdeploy as fd
-import fastdeploy.utils
 
 
 def parse_arguments():
@@ -61,7 +60,7 @@ if args.image is None:
 else:
     image = args.image
 im = cv2.imread(image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 
 # 预测结果可视化

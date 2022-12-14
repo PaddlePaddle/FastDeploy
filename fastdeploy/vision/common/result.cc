@@ -80,6 +80,20 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
   }
 }
 
+DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
+  if (&other != this) {
+    boxes = std::move(other.boxes);
+    scores = std::move(other.scores);
+    label_ids = std::move(other.label_ids);
+    contain_masks = std::move(other.contain_masks);
+    if (contain_masks) {
+      masks.clear();
+      masks = std::move(other.masks);
+    }
+  }
+  return *this;
+}
+
 void DetectionResult::Clear() {
   std::vector<std::array<float, 4>>().swap(boxes);
   std::vector<float>().swap(scores);
@@ -259,7 +273,10 @@ std::string FaceAlignmentResult::Str() {
   std::string out;
 
   out = "FaceAlignmentResult: [x, y]\n";
-  for (size_t i = 0; i < landmarks.size(); ++i) {
+  out = out + "There are " +std::to_string(landmarks.size()) + " landmarks, the top 10 are listed as below:\n";
+  int landmarks_size = landmarks.size();
+  size_t result_length = std::min(10, landmarks_size);
+  for (size_t i = 0; i < result_length; ++i) {
     out = out + std::to_string(landmarks[i][0]) + "," +
           std::to_string(landmarks[i][1]) + "\n";
   }
@@ -268,6 +285,13 @@ std::string FaceAlignmentResult::Str() {
 }
 
 void SegmentationResult::Clear() {
+  label_map.clear();
+  score_map.clear();
+  shape.clear();
+  contain_score_map = false;
+}
+
+void SegmentationResult::Free() {
   std::vector<uint8_t>().swap(label_map);
   std::vector<float>().swap(score_map);
   std::vector<int64_t>().swap(shape);
@@ -276,7 +300,7 @@ void SegmentationResult::Clear() {
 
 void SegmentationResult::Reserve(int size) {
   label_map.reserve(size);
-  if (contain_score_map > 0) {
+  if (contain_score_map) {
     score_map.reserve(size);
   }
 }
@@ -315,6 +339,18 @@ std::string SegmentationResult::Str() {
   return out;
 }
 
+SegmentationResult& SegmentationResult::operator=(SegmentationResult&& other) {
+  if (&other != this) {
+    label_map = std::move(other.label_map);
+    shape = std::move(other.shape);
+    contain_score_map = std::move(other.contain_score_map);
+    if (contain_score_map) {
+      score_map.clear();
+      score_map = std::move(other.score_map);
+    }
+  }
+  return *this;
+}
 FaceRecognitionResult::FaceRecognitionResult(const FaceRecognitionResult& res) {
   embedding.assign(res.embedding.begin(), res.embedding.end());
 }
@@ -361,6 +397,13 @@ MattingResult::MattingResult(const MattingResult& res) {
 }
 
 void MattingResult::Clear() {
+  alpha.clear();
+  foreground.clear();
+  shape.clear();
+  contain_foreground = false;
+}
+
+void MattingResult::Free() {
   std::vector<float>().swap(alpha);
   std::vector<float>().swap(foreground);
   std::vector<int64_t>().swap(shape);

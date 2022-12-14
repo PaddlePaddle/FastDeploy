@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <cstring>
-
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
+
+#include <algorithm>
+#include <cstring>
 #ifdef WITH_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -79,11 +80,12 @@ const void* FDTensor::CpuData() const {
 
 void FDTensor::SetExternalData(const std::vector<int64_t>& new_shape,
                                const FDDataType& data_type, void* data_buffer,
-                               const Device& new_device) {
+                               const Device& new_device, int new_device_id) {
   dtype = data_type;
   shape.assign(new_shape.begin(), new_shape.end());
   external_data_ptr = data_buffer;
   device = new_device;
+  device_id = new_device_id;
 }
 
 void FDTensor::ExpandDim(int64_t axis) {
@@ -136,6 +138,11 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   external_data_ptr = nullptr;
 }
 
+void FDTensor::SetQuantizationInfo(int32_t zero_point,std::vector<float>& scale){
+  quantized_parameter_.first = zero_point;
+  quantized_parameter_.second = scale;
+}
+
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
@@ -151,9 +158,63 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape,
   shape.assign(new_shape.begin(), new_shape.end());
 }
 
+bool FDTensor::Reshape(const std::vector<int64_t>& new_shape) {
+  int numel = Numel();
+  const int64_t unk_dim_val = -1;
+  const int64_t copy_dim_val = 0;
+
+  std::vector<int64_t> output_shape(new_shape.size(), 0);
+  int64_t capacity = 1;
+  int unk_dim_idx = -1;
+  for (size_t i = 0; i < new_shape.size(); ++i) {
+    if (new_shape[i] == unk_dim_val) {
+      FDASSERT(unk_dim_idx == -1,
+               "Only one dimension value of 'shape' in ReshapeOp can "
+               "be -1. But received shape = [%s], shape[%d] is also -1.",
+               Str(new_shape).c_str(), i);
+      unk_dim_idx = i;
+    } else if (new_shape[i] == copy_dim_val) {
+      FDASSERT(i < shape.size(),
+               "The index of 0 in `shape` must be less than "
+               "the input tensor X's dimensions. "
+               "But received shape = [%s], shape[%d] = 0, X's shape = [%s], "
+               "X's dimensions = %d.",
+               Str(new_shape).c_str(), i, Str(shape).c_str(), shape.size());
+    } else {
+      FDASSERT(new_shape[i] > 0,
+               "Each dimension value of 'shape' in ReshapeOp must not "
+               "be negative except one unknown dimension. "
+               "But received  shape = [%s], shape[%d] = %d.",
+               Str(new_shape).c_str(), i, new_shape[i]);
+    }
+    capacity *= (new_shape[i] ? new_shape[i] : shape[i]);
+    output_shape[i] = (new_shape[i] ? new_shape[i] : shape[i]);
+  }
+  if (unk_dim_idx != -1) {
+    output_shape[unk_dim_idx] = -numel / capacity;
+    FDASSERT(output_shape[unk_dim_idx] * capacity == -numel,
+             "The 'shape' attribute in ReshapeOp is invalid. "
+             "The input tensor X'size must be divisible by known "
+             "capacity of 'shape'. "
+             "But received X's shape = [%s], X's size = %d, "
+             "'shape' is [%s], known capacity of 'shape' is %d.",
+             Str(shape).c_str(), numel, Str(new_shape).c_str(), capacity);
+  } else {
+    FDASSERT(numel == capacity,
+             "The 'shape' in ReshapeOp is invalid. "
+             "The input tensor X'size must be equal to the capacity of "
+             "'shape'. "
+             "But received X's shape = [%s], X's size = %d, 'shape' is "
+             "[%s], the capacity of 'shape' is %d.",
+             Str(shape).c_str(), numel, Str(shape).c_str(), capacity);
+  }
+  shape = output_shape;
+  return true;
+}
+
 template <typename T>
-void CalculateStatisInfo(const void* src_ptr, int size, double* mean, double* max,
-                         double* min) {
+void CalculateStatisInfo(const void* src_ptr, int size, double* mean,
+                         double* max, double* min) {
   const T* ptr = static_cast<const T*>(src_ptr);
   *mean = 0;
   *max = -99999999;
@@ -213,10 +274,9 @@ bool FDTensor::ReallocFn(size_t nbytes) {
     }
     return buffer_ != nullptr;
 #else
-    FDASSERT(false,
-             "The FastDeploy FDTensor allocator didn't compile under "
-             "-DWITH_GPU=ON,"
-             "so this is an unexpected problem happend.");
+    FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
+                    "-DWITH_GPU=ON,"
+                    "so this is an unexpected problem happend.");
 #endif
   } else {
     if (is_pinned_memory) {
@@ -230,10 +290,9 @@ bool FDTensor::ReallocFn(size_t nbytes) {
       }
       return buffer_ != nullptr;
 #else
-      FDASSERT(false,
-               "The FastDeploy FDTensor allocator didn't compile under "
-               "-DWITH_GPU=ON,"
-               "so this is an unexpected problem happend.");
+      FDASSERT(false, "The FastDeploy FDTensor allocator didn't compile under "
+                      "-DWITH_GPU=ON,"
+                      "so this is an unexpected problem happend.");
 #endif
     }
     buffer_ = realloc(buffer_, nbytes);
@@ -242,7 +301,8 @@ bool FDTensor::ReallocFn(size_t nbytes) {
 }
 
 void FDTensor::FreeFn() {
-  if (external_data_ptr != nullptr) external_data_ptr = nullptr;
+  if (external_data_ptr != nullptr)
+    external_data_ptr = nullptr;
   if (buffer_ != nullptr) {
     if (device == Device::GPU) {
 #ifdef WITH_GPU
@@ -261,6 +321,8 @@ void FDTensor::FreeFn() {
   }
 }
 
+// TODO(liqi): no src_device and dst_device
+// should support copy from cpu or gpu  to cpu or gpu
 void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes,
                           const Device& device, bool is_pinned_memory) {
   if (device == Device::GPU) {
@@ -291,13 +353,45 @@ void FDTensor::CopyBuffer(void* dst, const void* src, size_t nbytes,
 }
 
 FDTensor::FDTensor(const std::string& tensor_name) { name = tensor_name; }
+FDTensor::FDTensor(const char* tensor_name) { name = tensor_name; }
+
+FDTensor::FDTensor(const Scalar& scalar) {
+  Allocate({1}, scalar.dtype());
+  switch (scalar.dtype()) {
+  case FDDataType::BOOL:
+    (reinterpret_cast<bool*>(Data()))[0] = scalar.to<bool>();
+    break;
+  case FDDataType::UINT8:
+    (reinterpret_cast<uint8_t*>(Data()))[0] = scalar.to<uint8_t>();
+    break;
+  case FDDataType::INT8:
+    (reinterpret_cast<int8_t*>(Data()))[0] = scalar.to<int8_t>();
+    break;
+  case FDDataType::INT16:
+    (reinterpret_cast<int16_t*>(Data()))[0] = scalar.to<int16_t>();
+    break;
+  case FDDataType::INT32:
+    (reinterpret_cast<int*>(Data()))[0] = scalar.to<int>();
+    break;
+  case FDDataType::INT64:
+    (reinterpret_cast<int64_t*>(Data()))[0] = scalar.to<int64_t>();
+    break;
+  case FDDataType::FP16:
+    (reinterpret_cast<float16*>(Data()))[0] = scalar.to<float16>();
+    break;
+  case FDDataType::FP32:
+    (reinterpret_cast<float*>(Data()))[0] = scalar.to<float>();
+    break;
+  case FDDataType::FP64:
+    (reinterpret_cast<double*>(Data()))[0] = scalar.to<double>();
+    break;
+  }
+}
 
 FDTensor::FDTensor(const FDTensor& other)
-    : shape(other.shape),
-      name(other.name),
-      dtype(other.dtype),
-      device(other.device),
-      external_data_ptr(other.external_data_ptr) {
+    : shape(other.shape), name(other.name), dtype(other.dtype),
+      device(other.device), external_data_ptr(other.external_data_ptr),
+      device_id(other.device_id) {
   // Copy buffer
   if (other.buffer_ == nullptr) {
     buffer_ = nullptr;
@@ -310,12 +404,10 @@ FDTensor::FDTensor(const FDTensor& other)
 }
 
 FDTensor::FDTensor(FDTensor&& other)
-    : buffer_(other.buffer_),
-      shape(std::move(other.shape)),
-      name(std::move(other.name)),
-      dtype(other.dtype),
-      external_data_ptr(other.external_data_ptr),
-      device(other.device) {
+    : buffer_(other.buffer_), shape(std::move(other.shape)),
+      name(std::move(other.name)), dtype(other.dtype),
+      external_data_ptr(other.external_data_ptr), device(other.device),
+      device_id(other.device_id) {
   other.name = "";
   // Note(zhoushunjie): Avoid double free.
   other.buffer_ = nullptr;
@@ -325,6 +417,7 @@ FDTensor::FDTensor(FDTensor&& other)
 FDTensor& FDTensor::operator=(const FDTensor& other) {
   if (&other != this) {
     // Copy buffer
+    device_id = other.device_id;
     if (other.buffer_ == nullptr) {
       FreeFn();
       buffer_ = nullptr;
@@ -352,6 +445,7 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     name = std::move(other.name);
     dtype = other.dtype;
     device = other.device;
+    device_id = other.device_id;
 
     other.name = "";
     // Note(zhoushunjie): Avoid double free.
@@ -359,6 +453,11 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     other.external_data_ptr = nullptr;
   }
   return *this;
+}
+
+const std::pair<int32_t, std::vector<float>>
+FDTensor::GetQuantizationInfo() const{
+  return quantized_parameter_;
 }
 
 }  // namespace fastdeploy

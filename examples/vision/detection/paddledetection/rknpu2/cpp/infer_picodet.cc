@@ -14,73 +14,81 @@
 #include <iostream>
 #include <string>
 #include "fastdeploy/vision.h"
+#include <sys/time.h>
 
-void InferPicodet(const std::string& device = "cpu");
-
-int main() {
-  InferPicodet("npu");
-  return 0;
-}
-
-fastdeploy::RuntimeOption GetOption(const std::string& device) {
-  auto option = fastdeploy::RuntimeOption();
-  if (device == "npu") {
-    option.UseRKNPU2();
-  } else {
-    option.UseCpu();
-  }
-  return option;
-}
-
-fastdeploy::ModelFormat GetFormat(const std::string& device) {
-  auto format = fastdeploy::ModelFormat::ONNX;
-  if (device == "npu") {
-    format = fastdeploy::ModelFormat::RKNN;
-  } else {
-    format = fastdeploy::ModelFormat::ONNX;
-  }
-  return format;
-}
-
-std::string GetModelPath(std::string& model_path, const std::string& device) {
-  if (device == "npu") {
-    model_path += "rknn";
-  } else {
-    model_path += "onnx";
-  }
-  return model_path;
-}
-
-void InferPicodet(const std::string &device) {
-  std::string model_file = "./model/picodet_s_416_coco_lcnet/picodet_s_416_coco_lcnet_rk3588.";
+void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
+  std::string model_file = model_dir + "/picodet_s_416_coco_lcnet.onnx";
   std::string params_file;
-  std::string config_file = "./model/picodet_s_416_coco_lcnet/infer_cfg.yml";
+  std::string config_file = model_dir + "/deploy.yaml";
+  auto option = fastdeploy::RuntimeOption();
+  option.UseCpu();
+  auto format = fastdeploy::ModelFormat::ONNX;
 
-  fastdeploy::RuntimeOption option = GetOption(device);
-  fastdeploy::ModelFormat format = GetFormat(device);
-  model_file = GetModelPath(model_file, device);
-  auto model = fastdeploy::vision::detection::RKPicoDet(
+  auto model = fastdeploy::vision::detection::PicoDet(
       model_file, params_file, config_file,option,format);
+  model.GetPostprocessor().ApplyDecodeAndNMS();
 
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
+  fastdeploy::TimeCounter tc;
+  tc.Start();
+  auto im = cv::imread(image_file);
+  fastdeploy::vision::DetectionResult res;
+  if (!model.Predict(im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto image_file = "./images/000000014439.jpg";
+  auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
+  tc.End();
+  tc.PrintInfo("PPDet in ONNX");
+
+  cv::imwrite("infer_onnx.jpg", vis_im);
+  std::cout
+      << "Visualized result saved in ./infer_onnx.jpg"
+      << std::endl;
+}
+
+void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
+  auto model_file = model_dir + "/picodet_s_416_coco_lcnet_rk3588.rknn";
+  auto params_file = "";
+  auto config_file = model_dir + "/infer_cfg.yml";
+
+  auto option = fastdeploy::RuntimeOption();
+  option.UseRKNPU2();
+
+  auto format = fastdeploy::ModelFormat::RKNN;
+
+  auto model = fastdeploy::vision::detection::PicoDet(
+      model_file, params_file, config_file,option,format);
+
+  model.GetPostprocessor().ApplyDecodeAndNMS();
+
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
-  clock_t start = clock();
+  fastdeploy::TimeCounter tc;
+  tc.Start();
   if (!model.Predict(&im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  clock_t end = clock();
-  auto dur = static_cast<double>(end - start);
-  printf("picodet_npu use time:%f\n", (dur / CLOCKS_PER_SEC));
+  tc.End();
+  tc.PrintInfo("PPDet in RKNPU2");
 
   std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::VisDetection(im, res,0.5);
-  cv::imwrite("picodet_npu_result.jpg", vis_im);
-  std::cout << "Visualized result saved in ./picodet_npu_result.jpg" << std::endl;
+  cv::imwrite("infer_rknpu2.jpg", vis_im);
+  std::cout << "Visualized result saved in ./infer_rknpu2.jpg" << std::endl;
 }
+
+int main(int argc, char* argv[]) {
+  if (argc < 3) {
+    std::cout
+        << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
+           "e.g ./infer_model ./picodet_model_dir ./test.jpeg"
+        << std::endl;
+    return -1;
+  }
+  RKNPU2Infer(argv[1], argv[2]);
+//ONNXInfer(argv[1], argv[2]);
+  return 0;
+}
+

@@ -35,7 +35,7 @@ class Runtime:
             self.runtime_option._option), "Initialize Runtime Failed!"
 
     def forward(self, *inputs):
-        """Inference with input data for poros
+        """[Only for Poros backend] Inference with input data for poros
 
         :param data: (list[str : numpy.ndarray])The input data list
         :return list of numpy.ndarray
@@ -57,10 +57,38 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, np.ndarray) and not v.data.contiguous:
+                    data[k] = np.ascontiguousarray(data[k])
+
         return self._runtime.infer(data)
 
+    def bind_input_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share input memory
+
+        :param name: (str)The name of input data.
+        :param fdtensor: (fastdeploy.FDTensor)The input FDTensor.
+        """
+        self._runtime.bind_input_tensor(name, fdtensor)
+
+    def zero_copy_infer(self):
+        """No params inference the model.
+
+        the input and output data need to pass through the bind_input_tensor and get_output_tensor interfaces.
+        """
+        self._runtime.infer()
+
+    def get_output_tensor(self, name):
+        """Get output FDTensor by name, no copy and share backend output memory
+
+        :param name: (str)The name of output data.
+        :return fastdeploy.FDTensor
+        """
+        return self._runtime.get_output_tensor(name)
+
     def compile(self, warm_datas):
-        """compile with prewarm data for poros
+        """[Only for Poros backend] compile with prewarm data for poros
 
         :param data: (list[str : numpy.ndarray])The prewarm data list
         :return TorchScript Model
@@ -122,6 +150,9 @@ class RuntimeOption:
     """
 
     def __init__(self):
+        """Initialize a FastDeploy RuntimeOption object.
+        """
+
         self._option = C.RuntimeOption()
 
     @property
@@ -172,7 +203,8 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value, bool), "The value to set `long_to_int` must be type of bool."
+            value,
+            bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -200,6 +232,17 @@ class RuntimeOption:
 
         :param device_id: (int)The index of GPU will be used for inference, default 0
         """
+        if not C.is_built_with_gpu():
+            logging.warning(
+                "The installed fastdeploy-python package is not built with GPU, will force to use CPU. To use GPU, following the commands to install fastdeploy-gpu-python."
+            )
+            logging.warning(
+                "    ================= Install GPU FastDeploy===============")
+            logging.warning("    python -m pip uninstall fastdeploy-python")
+            logging.warning(
+                "    python -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html"
+            )
+            return
         return self._option.use_gpu(device_id)
 
     def use_cpu(self):
@@ -210,8 +253,6 @@ class RuntimeOption:
     def use_rknpu2(self,
                    rknpu2_name=rknpu2.CpuName.RK3588,
                    rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
-        """Inference with CPU
-        """
         return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
     def set_cpu_thread_num(self, thread_num=-1):
@@ -222,6 +263,10 @@ class RuntimeOption:
         return self._option.set_cpu_thread_num(thread_num)
 
     def set_ort_graph_opt_level(self, level=-1):
+        """Set graph optimization level for ONNX Runtime backend
+
+        :param level: (int)Optimization level, -1 means the default setting
+        """
         return self._option.set_ort_graph_opt_level(level)
 
     def use_paddle_backend(self):
@@ -268,6 +313,25 @@ class RuntimeOption:
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
         """
         return self._option.set_paddle_mkldnn(use_mkldnn)
+
+    def set_openvino_device(self, name="CPU"):
+        """Set device name for OpenVINO, default 'CPU', can also be 'AUTO', 'GPU', 'GPU.1'....
+        """
+        return self._option.set_openvino_device(name)
+
+    def set_openvino_shape_info(self, shape_info):
+        """Set shape information of the models' inputs, used for GPU to fix the shape
+
+        :param shape_info: (dict{str, list of int})Shape information of model's inputs, e.g {"image": [1, 3, 640, 640], "scale_factor": [1, 2]}
+        """
+        return self._option.set_openvino_shape_info(shape_info)
+
+    def set_openvino_cpu_operators(self, operators):
+        """While using OpenVINO backend and intel GPU, this interface specifies unsupported operators to run on CPU
+
+        :param operators: (list of string)list of operators' name, e.g ["MulticlasNms"]
+        """
+        return self._option.set_openvino_cpu_operators(operators)
 
     def enable_paddle_log_info(self):
         """Enable print out the debug log information while using Paddle Inference backend, the log information is disabled by default.
@@ -362,10 +426,24 @@ class RuntimeOption:
         return self._option.set_trt_max_batch_size(trt_max_batch_size)
 
     def enable_paddle_trt_collect_shape(self):
+        """Enable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.enable_paddle_trt_collect_shape()
 
     def disable_paddle_trt_collect_shape(self):
+        """Disable collect subgraph shape information while using Paddle Inference with TensorRT
+        """
         return self._option.disable_paddle_trt_collect_shape()
+
+    def delete_paddle_backend_pass(self, pass_name):
+        """Delete pass by name in paddle backend
+        """
+        return self._option.delete_paddle_backend_pass(pass_name)
+
+    def disable_paddle_trt_ops(self, ops):
+        """Disable some ops in paddle trt backend
+        """
+        return self._option.disable_paddle_trt_ops(ops)
 
     def use_ipu(self,
                 device_num=1,
@@ -392,7 +470,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

@@ -1,10 +1,11 @@
 import setuptools
 
 long_description = "fastdeploy-tools is a toolkit for FastDeploy, including auto compression .etc.\n\n"
-long_description += "Usage of auto compression: fastdeploy --auto_compress --config_path=./yolov7_tiny_qat_dis.yaml --method='QAT' --save_dir='./v7_qat_outmodel/' \n"
+long_description += "Usage of auto compression: fastdeploy compress --config_path=./yolov7_tiny_qat_dis.yaml --method='QAT' --save_dir='./v7_qat_outmodel/' \n"
 
 setuptools.setup(
     name="fastdeploy-tools",  # name of package
+    version="0.0.1",  #version of package
     description="A toolkit for FastDeploy.",
     long_description=long_description,
     long_description_content_type="text/plain",

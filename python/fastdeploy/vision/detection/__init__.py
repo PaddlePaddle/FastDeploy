@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .contrib.yolov7 import YOLOv7
+from .contrib.yolov7 import *
 from .contrib.yolor import YOLOR
 from .contrib.scaled_yolov4 import ScaledYOLOv4
 from .contrib.nanodet_plus import NanoDetPlus
@@ -24,3 +24,4 @@ from .contrib.yolov6 import YOLOv6
 from .contrib.yolov7end2end_trt import YOLOv7End2EndTRT
 from .contrib.yolov7end2end_ort import YOLOv7End2EndORT
 from .ppdet import *
+from .contrib.rkyolo import *

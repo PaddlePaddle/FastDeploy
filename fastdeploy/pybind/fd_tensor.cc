@@ -151,8 +151,7 @@ pybind11::capsule FDTensorToDLPack(FDTensor& fd_tensor) {
 
   dlpack_tensor->dl_tensor.dtype = FDToDlpackType(fd_tensor.dtype);
 
-  // TODO(liqi): FDTensor add device_id
-  dlpack_tensor->dl_tensor.device.device_id = 0;
+  dlpack_tensor->dl_tensor.device.device_id = fd_tensor.device_id;
   if(fd_tensor.device == Device::GPU) {
     if (fd_tensor.is_pinned_memory) {
       dlpack_tensor->dl_tensor.device.device_type = DLDeviceType::kDLCUDAHost;
@@ -182,7 +181,8 @@ void BindFDTensor(pybind11::module& m) {
       .def("from_numpy", [](FDTensor& self, pybind11::array& pyarray, bool share_buffer = false) {
         PyArrayToTensor(pyarray, &self, share_buffer);
       })
-      .def("to_dlpack", &FDTensorToDLPack);
+      .def("to_dlpack", &FDTensorToDLPack)
+      .def("print_info", &FDTensor::PrintInfo);
 }
 
 }  // namespace fastdeploy

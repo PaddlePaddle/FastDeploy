@@ -2,13 +2,24 @@
 
 # How to Build CPU Deployment Environment
 
-FastDeploy currently supports the following backend engines on the CPU
+## Build Options
 
-| Backend               | Platform                                             | Supported model format | Description                                                                                      |
-|:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------------ |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64)                           | Paddle                 | The compilation switch `ENABLE_PADDLE_BACKEND` is controlled by ON or OFF. The default is OFF.   |
-| ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | The compilation switch `ENABLE_ORT_BACKEND` is controlled by ON or OFF. The default is OFF.      |
-| OpenVINO              | Windows(x64)<br>Linux(x64)<br>Mac(x86)               | Paddle/ONNX            | The compilation switch `ENABLE_OPENVINO_BACKEND` is controlled by ON or OFF. The default is OFF. |
+Please do not modify other cmake paramters exclude the following options.
+
+| Option                      | Supported Platform | Description                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| ENABLE_ORT_BACKEND      | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate ONNX Runtime backend   |
+| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |               
+| ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64)/Mac OSX(x86) | Default OFF, whether to intergrate OpenVINO backend      |
+| ENABLE_VISION           | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate vision models |
+| ENABLE_TEXT             | Linux(x64/aarch64)/Windows(x64)/Mac OSX(arm64/x86) | Default OFF, whether to intergrate text models |
+
+The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON, use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 ## How to Build and Install C++ SDK
 
@@ -19,6 +30,11 @@ Prerequisite for Compiling on Linux & Mac:
 - gcc/g++ >= 5.4 (8.2 is recommended)
 - cmake >= 3.18.0
 
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
@@ -27,7 +43,8 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DENABLE_PADDLE_BACKEND=ON \
          -DENABLE_OPENVINO_BACKEND=ON \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 make -j12
 make install
 ```
@@ -73,6 +90,11 @@ All compilation options are introduced via environment variables
 
 ### Linux & Mac
 
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
@@ -80,6 +102,8 @@ export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_OPENVINO_BACKEND=ON
 export ENABLE_VISION=ON
+# The OPENCV_DIRECTORY is optional, if not exported, a prebuilt OpenCV library will be downloaded
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
 python setup.py bdist_wheel

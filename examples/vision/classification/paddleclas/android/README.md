@@ -7,8 +7,6 @@
 1. 在本地环境安装好 Android Studio 工具，详细安装方法请见[Android Stuido 官网](https://developer.android.com/studio)。
 2. 准备一部 Android 手机，并开启 USB 调试模式。开启方法: `手机设置 -> 查找开发者选项 -> 打开开发者选项和 USB 调试模式`
 
-**注意**：如果您的 Android Studio 尚未配置 NDK ，请根据 Android Studio 用户指南中的[安装及配置 NDK 和 CMake ](https://developer.android.com/studio/projects/install-ndk)内容，预先配置好 NDK 。您可以选择最新的 NDK 版本，或者使用 FastDeploy Android 预测库版本一样的 NDK
-
 ## 部署步骤
 
 1. 目标检测 PaddleClas Demo 位于 `fastdeploy/examples/vision/classification/paddleclas/android` 目录
@@ -20,17 +18,14 @@
 </p>
 
 > **注意：**
->> 如果您在导入项目、编译或者运行过程中遇到 NDK 配置错误的提示，请打开 ` File > Project Structure > SDK Location`，修改 `Andriod NDK location` 为您本机配置的 NDK 所在路径。本工程默认使用的NDK版本为20.
->> 如果您是通过 Andriod Studio 的 SDK Tools 下载的 NDK (见本章节"环境准备")，可以直接点击下拉框选择默认路径。
->> 还有一种 NDK 配置方法，你可以在 `paddleclas/android/local.properties` 文件中手动完成 NDK 路径配置，如下图所示
->> 如果以上步骤仍旧无法解决 NDK 配置错误，请尝试根据 Andriod Studio 官方文档中的[更新 Android Gradle 插件](https://developer.android.com/studio/releases/gradle-plugin?hl=zh-cn#updating-plugin)章节，尝试更新Android Gradle plugin版本。
+>> 如果您在导入项目、编译或者运行过程中遇到 NDK 配置错误的提示，请打开 ` File > Project Structure > SDK Location`，修改 `Andriod SDK location` 为您本机配置的 SDK 所在路径。
 
 4. 点击 Run 按钮，自动编译 APP 并安装到手机。(该过程会自动下载预编译的 FastDeploy Android 库，需要联网)
 成功后效果如下，图一：APP 安装到手机；图二： APP 打开后的效果，会自动识别图片中的物体并标记；图三：APP设置选项，点击右上角的设置图片，可以设置不同选项进行体验。
 
   | APP 图标 | APP 效果 | APP设置项
   | ---     | --- | --- |
-  | ![app_pic ](https://user-images.githubusercontent.com/31974251/197170082-a2bdd49d-60ea-4df0-af63-18ed898a746e.jpg)   | ![app_res](https://user-images.githubusercontent.com/31974251/197339363-ae7acd5d-88b8-4365-aea5-b27826c6a25f.jpg) |  ![app_setup](https://user-images.githubusercontent.com/31974251/197339378-bb30b108-2d77-4b30-981d-d687b6fca8f6.jpg) |
+  | ![app_pic ](https://user-images.githubusercontent.com/14995488/203484427-83de2316-fd60-4baf-93b6-3755f9b5559d.jpg)   | ![app_res](https://user-images.githubusercontent.com/14995488/203494666-16528cb3-0ce2-48fc-9f9e-37da17b2c2f6.jpg) |  ![app_setup](https://user-images.githubusercontent.com/14995488/203484436-57fdd041-7dcc-4e0e-b6cb-43e5ac1e729b.jpg) |
 
 ## PaddleClasModel Java API 说明  
 - 模型初始化 API: 模型初始化API包含两种方式，方式一是通过构造函数直接初始化；方式二是，通过调用init函数，在合适的程序节点进行初始化。PaddleClasModel初始化参数说明如下：  
@@ -130,7 +125,7 @@ option.enableLiteFp16();
 model.init(modelFile, paramFile, configFile, option);
 // Bitmap读取、模型预测、资源释放 同上 ...
 ```
-更详细的用法请参考 [MainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/examples/MainActivity.java#L207) 中的用法
+更详细的用法请参考 [MainActivity](./app/src/main/java/com/baidu/paddle/fastdeploy/app/examples/classification/ClassificationMainActivity.java) 中的用法
 
 ## 替换 FastDeploy 预测库和模型  
 替换FastDeploy预测库和模型的步骤非常简单。预测库所在的位置为 `app/libs/fastdeploy-android-xxx-shared`，其中 `xxx` 表示当前您使用的预测库版本号。模型所在的位置为，`app/src/main/assets/models/MobileNetV1_x0_25_infer`。  
@@ -145,11 +140,11 @@ set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android
   - 修改 `app/src/main/res/values/strings.xml` 中模型路径的默认值，如：  
 ```xml
 <!-- 将这个路径指修改成您的模型，如 models/MobileNetV2_x0_25_infer -->
-<string name="MODEL_DIR_DEFAULT">models/MobileNetV1_x0_25_infer</string>  
-<string name="LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
+<string name="CLASSIFICATION_MODEL_DIR_DEFAULT">models/MobileNetV1_x0_25_infer</string>  
+<string name="CLASSIFICATION_LABEL_PATH_DEFAULT">labels/imagenet1k_label_list.txt</string>
 ```  
 
-## 如何通过 JNI 在 Native 层接入 FastDeploy C++ API ?  
-如果您对如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
-- [app/src/main/cpp 代码实现](./app/src/main/cpp/)
-- [在 Android 中通过 JNI 使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+## 更多参考文档
+如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:
+- [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
+- [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  

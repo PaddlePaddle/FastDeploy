@@ -1,18 +1,27 @@
 
 # How to Build GPU Deployment Environment
 
-FastDeploy supports Paddle Inference, ONNX Runtime and TensorRT in the GPU environment. It should be noted that users also can use CPU in a GPU environment in Linux & Windows, so users can integrate the OpenVINO backend at the same time.
+## Build Options
 
-| Backend               | Platform                                             | Supported model format | Description                                                                                 |
-|:--------------------- |:---------------------------------------------------- |:---------------------- |:------------------------------------------------------------------------------------------- |
-| Paddle&nbsp;Inference | Windows(x64)<br>Linux(x64)                           | Paddle                 | Support both CPU/GPU, and compilation switch is `ENABLE_PADDLE_BACKEND`. The default is OFF |
-| ONNX&nbsp;Runtime     | Windows(x64)<br>Linux(x64/aarch64)<br>Mac(x86/arm64) | Paddle/ONNX            | Support both CPU/GPU, and compilation switch is `ENABLE_ORT_BACKEND`. The default is OFF    |
-| TensorRT              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support GPU only, and compilation switch is `ENABLE_TRT_BACKEND`. The default is OFF        |
-| OpenVINO              | Windows(x64)<br>Linux(x64)                           | Paddle/ONNX            | Support CPU only, and compilation switch is `ENABLE_OPENVINO_BACKEND`. The default is OFF   |
+Please do not modify other cmake paramters exclude the following options.
 
-Note:
+| Option                      | Supported Platform | Description                                                                        |
+|:------------------------|:------- | :--------------------------------------------------------------------------|
+| ENABLE_ORT_BACKEND      | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate ONNX Runtime backend   |
+| ENABLE_PADDLE_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate Paddle Inference backend             |      
+| ENABLE_TRT_BACKEND   | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate TensorRT backend                             |           
+| ENABLE_OPENVINO_BACKEND | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate OpenVINO backend(Only CPU is supported)      |
+| ENABLE_VISION           | Linux(x64)/Windows(x64) | Default OFF, whether to intergrate vision models |
+| ENABLE_TEXT             | Linux(x64/Windows(x64) | Default OFF, whether to intergrate text models |
+| CUDA_DIRECTORY          | Linux(x64/Windows(x64) | Default /usr/local/cuda，require CUDA>=11.2 |
+| TRT_DIRECTORY | Linux(x64/Windows(x64) | Default empty，require TensorRT>=8.4， e.g. /Download/TensorRT-8.5 |
 
-When the environment is GPU, please set `WITH_GPU` as ON and specify `CUDA_DIRECTORY`. If TensorRT integration is needed, please specify `TRT_DIRECTORY` as well.
+The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON, use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 ## How to Build and Install C++ SDK
 
@@ -24,6 +33,11 @@ Prerequisite for Compiling on Linux:
 - cmake >= 3.18.0
 - cuda >= 11.2
 - cudnn >= 8.2
+
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
@@ -37,7 +51,8 @@ cmake .. -DENABLE_ORT_BACKEND=ON \
          -DTRT_DIRECTORY=/Paddle/TensorRT-8.4.1.5 \
          -DCUDA_DIRECTORY=/usr/local/cuda \
          -DCMAKE_INSTALL_PREFIX=${PWD}/compiled_fastdeploy_sdk \
-         -DENABLE_VISION=ON
+         -DENABLE_VISION=ON \
+         -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 make -j12
 make install
 ```
@@ -97,6 +112,11 @@ Prerequisite for Compiling on Linux:
 
 All compilation options are imported via environment variables
 
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
@@ -108,6 +128,8 @@ export ENABLE_TRT_BACKEND=ON
 export WITH_GPU=ON
 export TRT_DIRECTORY=/Paddle/TensorRT-8.4.1.5
 export CUDA_DIRECTORY=/usr/local/cuda
+# The OPENCV_DIRECTORY is optional, if not exported, a prebuilt OpenCV library will be downloaded
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
 python setup.py bdist_wheel

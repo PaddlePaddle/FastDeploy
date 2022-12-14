@@ -25,12 +25,23 @@ void BindPPOCRv3(pybind11::module& m) {
                           fastdeploy::vision::ocr::Recognizer*>())
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Recognizer*>())
+      .def_property("cls_batch_size", &pipeline::PPOCRv3::GetClsBatchSize, &pipeline::PPOCRv3::SetClsBatchSize)
+      .def_property("rec_batch_size", &pipeline::PPOCRv3::GetRecBatchSize, &pipeline::PPOCRv3::SetRecBatchSize)
       .def("predict", [](pipeline::PPOCRv3& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;
         self.Predict(&mat, &res);
         return res;
+      })
+      .def("batch_predict", [](pipeline::PPOCRv3& self, std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<vision::OCRResult> results;
+        self.BatchPredict(images, &results);
+        return results;
       });
 }
 
@@ -43,12 +54,23 @@ void BindPPOCRv2(pybind11::module& m) {
                           fastdeploy::vision::ocr::Recognizer*>())
       .def(pybind11::init<fastdeploy::vision::ocr::DBDetector*,
                           fastdeploy::vision::ocr::Recognizer*>())
+      .def_property("cls_batch_size", &pipeline::PPOCRv2::GetClsBatchSize, &pipeline::PPOCRv2::SetClsBatchSize)
+      .def_property("rec_batch_size", &pipeline::PPOCRv2::GetRecBatchSize, &pipeline::PPOCRv2::SetRecBatchSize)
       .def("predict", [](pipeline::PPOCRv2& self,
                          pybind11::array& data) {
         auto mat = PyArrayToCvMat(data);
         vision::OCRResult res;
         self.Predict(&mat, &res);
         return res;
+      })
+      .def("batch_predict", [](pipeline::PPOCRv2& self, std::vector<pybind11::array>& data) {
+        std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<vision::OCRResult> results;
+        self.BatchPredict(images, &results);
+        return results;
       });
 }
 

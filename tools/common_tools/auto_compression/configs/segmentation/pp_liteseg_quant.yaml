@@ -1,0 +1,37 @@
+Global:
+  model_dir: ./PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer
+  format: paddle
+  model_filename: model.pdmodel
+  params_filename: model.pdiparams
+  qat_image_path: ./train_stuttgart
+  ptq_image_path: ./val_munster
+  input_list: ['x']
+  qat_preprocess: ppseg_cityscapes_qat_preprocess
+  ptq_preprocess: ppseg_cityscapes_ptq_preprocess
+  qat_batch_size: 16
+
+
+Distillation:
+  alpha: 1.0
+  loss: l2
+  node:
+  - conv2d_94.tmp_0
+
+QuantAware:
+  onnx_format: True
+  quantize_op_types:
+  - conv2d
+  - depthwise_conv2d
+
+PTQ:
+  calibration_method: 'avg'   # option: avg, abs_max, hist, KL, mse
+  skip_tensor_list: None
+
+TrainConfig:
+  epochs: 10
+  eval_iter: 180
+  learning_rate: 0.0005
+  optimizer_builder:
+    optimizer:
+      type: SGD
+    weight_decay: 4.0e-05
