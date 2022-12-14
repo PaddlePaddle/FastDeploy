@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.superscript;
+package com.baidu.paddle.fastdeploy.app.examples.sr;
 
 import static com.baidu.paddle.fastdeploy.ui.Utils.getRealPathFromURI;
 
@@ -21,7 +21,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.AdapterView;
@@ -39,7 +38,7 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class SuperscriptMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener, AdapterView.OnItemSelectedListener, View.OnTouchListener {
+public class SuperResolutionMainActivity extends Activity implements View.OnClickListener, CameraSurfaceView.OnTextureChangedListener, AdapterView.OnItemSelectedListener, View.OnTouchListener {
     CameraSurfaceView svPreview;
     TextView tvStatus;
     ImageButton btnSwitch;
@@ -80,7 +79,7 @@ public class SuperscriptMainActivity extends Activity implements View.OnClickLis
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        setContentView(R.layout.superscript_activity_main);
+        setContentView(R.layout.super_resolution_activity_main);
 
         // Check and request CAMERA and WRITE_EXTERNAL_STORAGE permissions
         if (!checkAllPermissions()) {
@@ -116,7 +115,7 @@ public class SuperscriptMainActivity extends Activity implements View.OnClickLis
                 break;
             case R.id.btn_start:
                 if (multiple == 0) {
-                    new AlertDialog.Builder(SuperscriptMainActivity.this)
+                    new AlertDialog.Builder(SuperResolutionMainActivity.this)
                             .setMessage("请先选择放大倍数。")
                             .setCancelable(true)
                             .show();
@@ -218,7 +217,7 @@ public class SuperscriptMainActivity extends Activity implements View.OnClickLis
                             originBitmap = changeImageScale(2);
                             originImage.setImage(ImageSource.bitmap(originBitmap));
                         } else {
-                            new AlertDialog.Builder(SuperscriptMainActivity.this)
+                            new AlertDialog.Builder(SuperResolutionMainActivity.this)
                                     .setTitle("Empty Result!")
                                     .setMessage("Current picture is empty, please shutting it again!")
                                     .setCancelable(true)
@@ -326,7 +325,7 @@ public class SuperscriptMainActivity extends Activity implements View.OnClickLis
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED) {
-            new AlertDialog.Builder(SuperscriptMainActivity.this)
+            new AlertDialog.Builder(SuperResolutionMainActivity.this)
                     .setTitle("Permission denied")
                     .setMessage("Click to force quit the app, then open Settings->Apps & notifications->Target " +
                             "App->Permissions to grant all of the permissions.")
@@ -334,7 +333,7 @@ public class SuperscriptMainActivity extends Activity implements View.OnClickLis
                     .setPositiveButton("Exit", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            SuperscriptMainActivity.this.finish();
+                            SuperResolutionMainActivity.this.finish();
                         }
                     }).show();
         }

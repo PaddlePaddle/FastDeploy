@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.superscript;
+package com.baidu.paddle.fastdeploy.app.examples.sr;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -10,7 +10,7 @@ import android.view.View;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
 
-public class SuperscriptWelcomeActivity extends Activity {
+public class SuperResolutionWelcomeActivity extends Activity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -21,11 +21,11 @@ public class SuperscriptWelcomeActivity extends Activity {
             );
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
-        setContentView(R.layout.superscript_welcome);
+        setContentView(R.layout.super_resolution_welcome);
     }
 
     public void startActivity(View view) {
-        Intent intent = new Intent(SuperscriptWelcomeActivity.this, SuperscriptMainActivity.class);
+        Intent intent = new Intent(SuperResolutionWelcomeActivity.this, SuperResolutionMainActivity.class);
         startActivity(intent);
     }
 }
