@@ -15,7 +15,7 @@
 #include "fastdeploy/vision.h"
 
 void CpuInfer(const std::string& model_file, const std::string& image_file) {
-  auto model = fastdeploy::vision::detection::YOLOv5Lite(model_file);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -23,14 +23,14 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(&im, &res)) {
+  fastdeploy::vision::FaceDetectionResult res;
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -38,8 +38,7 @@ void CpuInfer(const std::string& model_file, const std::string& image_file) {
 void GpuInfer(const std::string& model_file, const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
   option.UseGpu();
-  auto model =
-      fastdeploy::vision::detection::YOLOv5Lite(model_file, "", option);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -47,14 +46,14 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(&im, &res)) {
+  fastdeploy::vision::FaceDetectionResult res;
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -64,8 +63,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
   option.UseGpu();
   option.UseTrtBackend();
   option.SetTrtInputShape("images", {1, 3, 640, 640});
-  auto model =
-      fastdeploy::vision::detection::YOLOv5Lite(model_file, "", option);
+  auto model = fastdeploy::vision::facedet::YOLOv7Face(model_file, "", option);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
@@ -73,14 +71,14 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
 
   auto im = cv::imread(image_file);
 
-  fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(&im, &res)) {
+  fastdeploy::vision::FaceDetectionResult res;
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
   std::cout << res.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -88,7 +86,7 @@ void TrtInfer(const std::string& model_file, const std::string& image_file) {
 int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_model ./v5Lite-g-sim-640.onnx ./test.jpeg 0"
+                 "e.g ./infer_model yolov5s-face.onnx ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."

@@ -6,21 +6,44 @@ const char sep = '\\';
 const char sep = '/';
 #endif
 
-void predict(fastdeploy::vision::classification::PaddleClasModel *model, int thread_id, const std::string& image_file) {
-  auto im = cv::imread(image_file);
+void Predict(fastdeploy::vision::classification::PaddleClasModel *model, int thread_id, const std::vector<std::string>& images) {
+  for (auto const &image_file : images) {
+      auto im = cv::imread(image_file);
 
-  fastdeploy::vision::ClassifyResult res;
-  if (!model->Predict(im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
+      fastdeploy::vision::ClassifyResult res;
+      if (!model->Predict(im, &res)) {
+        std::cerr << "Failed to predict." << std::endl;
+        return;
+      }
+
+      // print res
+      std::cout << "Thread Id: " << thread_id << std::endl;
+      std::cout << res.Str() << std::endl;
   }
-
-  // print res
-  std::cout << "Thread Id: " << thread_id << std::endl;
-  std::cout << res.Str() << std::endl;
 }
 
-void CpuInfer(const std::string& model_dir, const std::string& image_file, int thread_num) {
+void GetImageList(std::vector<std::vector<std::string>>* image_list, const std::string& image_file_path, int thread_num){
+  std::vector<cv::String> images;
+  cv::glob(image_file_path, images, false);
+  // number of image files in images folder
+  size_t count = images.size(); 
+  size_t num = count / thread_num;
+  for (int i = 0; i < thread_num; i++) {
+    std::vector<std::string> temp_list;
+    if (i == thread_num - 1) {
+      for (size_t j = i*num; j < count; j++){
+        temp_list.push_back(images[j]);
+      }
+    } else {
+      for (size_t j = 0; j < num; j++){
+        temp_list.push_back(images[i * num + j]);
+      }
+    }
+    (*image_list)[i] = temp_list;
+  }
+}
+
+void CpuInfer(const std::string& model_dir, const std::string& image_file_path, int thread_num) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
@@ -39,9 +62,12 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file, int t
     models.emplace_back(std::move(model.Clone()));
   }
 
+  std::vector<std::vector<std::string>> image_list(thread_num);
+  GetImageList(&image_list, image_file_path, thread_num);
+
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; ++i) {
-    threads.emplace_back(predict, models[i].get(), i, image_file);
+    threads.emplace_back(Predict, models[i].get(), i, image_list[i]);
   }
 
   for (int i = 0; i < thread_num; ++i) {
@@ -49,7 +75,7 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file, int t
   }
 }
 
-void GpuInfer(const std::string& model_dir, const std::string& image_file, int thread_num) {
+void GpuInfer(const std::string& model_dir, const std::string& image_file_path, int thread_num) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
@@ -68,9 +94,12 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file, int t
     models.emplace_back(std::move(model.Clone()));
   }
 
+  std::vector<std::vector<std::string>> image_list(thread_num);
+  GetImageList(&image_list, image_file_path, thread_num);
+
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; ++i) {
-    threads.emplace_back(predict, models[i].get(), i, image_file);
+    threads.emplace_back(Predict, models[i].get(), i, image_list[i]);
   }
 
   for (int i = 0; i < thread_num; ++i) {
@@ -78,7 +107,7 @@ void GpuInfer(const std::string& model_dir, const std::string& image_file, int t
   }
 }
 
-void TrtInfer(const std::string& model_dir, const std::string& image_file, int thread_num) {
+void TrtInfer(const std::string& model_dir, const std::string& image_file_path, int thread_num) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
@@ -99,9 +128,12 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file, int t
     models.emplace_back(std::move(model.Clone()));
   }
 
+  std::vector<std::vector<std::string>> image_list(thread_num);
+  GetImageList(&image_list, image_file_path, thread_num);
+
   std::vector<std::thread> threads;
   for (int i = 0; i < thread_num; ++i) {
-    threads.emplace_back(predict, models[i].get(), i, image_file);
+    threads.emplace_back(Predict, models[i].get(), i, image_list[i]);
   }
 
   for (int i = 0; i < thread_num; ++i) {
@@ -112,7 +144,7 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file, int t
 int main(int argc, char **argv) {
   if (argc < 5) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option thread_num, "
-                 "e.g ./infer_demo ./ResNet50_vd ./test.jpeg 0 3"
+                 "e.g ./multi_thread_demo ./ResNet50_vd ./test.jpeg 0 3"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
