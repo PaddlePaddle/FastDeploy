@@ -21,6 +21,7 @@ def get_config():
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", default=True, help="rknntoolkit verbose")
     parser.add_argument("--config_path")
+    parser.add_argument("--target_platform")
     args = parser.parse_args()
     return args
 
@@ -34,30 +35,19 @@ if __name__ == "__main__":
     model = RKNN(config.verbose)
 
     # Config
-    if yaml_config["normalize"] == "None":
-        model.config(target_platform=yaml_config["target_platform"])
-    else:
-        mean_values = [[256 * mean for mean in mean_ls]
-                       for mean_ls in yaml_config["normalize"]["mean"]]
-        std_values = [[256 * std for std in std_ls]
-                      for std_ls in yaml_config["normalize"]["std"]]
-        model.config(
-            mean_values=mean_values,
-            std_values=std_values,
-            target_platform=yaml_config["target_platform"])
+    mean_values = yaml_config["mean"]
+    std_values = yaml_config["std"]
+    model.config(mean_values=mean_values, std_values=std_values, target_platform=config.target_platform)
 
     # Load ONNX model
-    print(type(yaml_config["outputs"]))
-    print("yaml_config[\"outputs\"] = ", yaml_config["outputs"])
-    if yaml_config["outputs"] == "None":
+    if yaml_config["outputs_nodes"] is None:
         ret = model.load_onnx(model=yaml_config["model_path"])
     else:
-        ret = model.load_onnx(
-            model=yaml_config["model_path"], outputs=yaml_config["outputs"])
+        ret = model.load_onnx(model=yaml_config["model_path"], outputs=yaml_config["outputs_nodes"])
     assert ret == 0, "Load model failed!"
 
     # Build model
-    ret = model.build(do_quantization=None)
+    ret = model.build(do_quantization=None, dataset=yaml_config["dataset"])
     assert ret == 0, "Build model failed!"
 
     # Init Runtime
@@ -69,9 +59,8 @@ if __name__ == "__main__":
         os.mkdir(yaml_config["output_folder"])
 
     model_base_name = os.path.basename(yaml_config["model_path"]).split(".")[0]
-    model_device_name = yaml_config["target_platform"].lower()
+    model_device_name = config.target_platform.lower()
     model_save_name = model_base_name + "_" + model_device_name + ".rknn"
-    ret = model.export_rknn(
-        os.path.join(yaml_config["output_folder"], model_save_name))
+    ret = model.export_rknn(os.path.join(yaml_config["output_folder"], model_save_name))
     assert ret == 0, "Export rknn model failed!"
     print("Export OK!")
