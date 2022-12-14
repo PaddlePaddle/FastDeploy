@@ -56,8 +56,6 @@ class FASTDEPLOY_DECL FastestDetPreprocessor {
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  void LetterBox(FDMat* mat);
-
   // target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> size_;
 

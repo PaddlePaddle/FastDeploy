@@ -29,39 +29,6 @@ FastestDetPreprocessor::FastestDetPreprocessor() {
   max_wh_ = 0.0;
 }
 
-void FastestDetPreprocessor::LetterBox(FDMat* mat) {
-  float scale =
-      std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width());
-  if (!is_scale_up_) {
-    scale = std::min(scale, 1.0f);
-  }
-
-  int resize_h = int(round(mat->Height() * scale));
-  int resize_w = int(round(mat->Width() * scale));
-
-  int pad_w = size_[0] - resize_w;  // after resize need padding
-  int pad_h = size_[1] - resize_h;
-  if (is_mini_pad_) {
-    pad_h = pad_h % stride_;
-    pad_w = pad_w % stride_;
-  } else if (is_no_pad_) {
-    pad_h = 0;
-    pad_w = 0;
-    resize_h = size_[1];
-    resize_w = size_[0];
-  }
-  Resize::Run(mat, resize_w, resize_h); //resize
-  if (pad_h > 0 || pad_w > 0) { //padding
-    float half_h = pad_h * 1.0 / 2;
-    int top = int(round(half_h - 0.1));
-    int bottom = int(round(half_h + 0.1));
-    float half_w = pad_w * 1.0 / 2;
-    int left = int(round(half_w - 0.1));
-    int right = int(round(half_w + 0.1));
-    Pad::Run(mat, top, bottom, left, right, padding_value_);
-  }
-}
-
 bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
             std::map<std::string, std::array<float, 2>>* im_info) {
   // Record the shape of image and the shape of preprocessed image
@@ -73,12 +40,15 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
                                             static_cast<float>(mat->Width()));
 
   // fastestdet's preprocess steps
-  // 1. letterbox
-  // 2. convert_and_permute(swap_rb=true)
-  LetterBox(mat);
+  // 1. resize
+  // 2. hwc2chw
+  // 3. convert to float
+  Resize::Run(mat, size_[0], size_[1]); //resize
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
-  ConvertAndPermute::Run(mat, alpha, beta, false); //convert to float and HWC2CHW
+  //convert to float and HWC2CHW
+  HWC2CHW::Run(mat);
+  Convert::Run(mat, alpha, beta);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),

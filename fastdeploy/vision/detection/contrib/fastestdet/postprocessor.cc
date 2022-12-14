@@ -120,24 +120,14 @@ bool FastestDetPostprocessor::Run(
     }
 
     //utils::NMS(&((*results)[bs]), nms_threshold_);
-    FDINFO << "NMS done" << std::endl;
-    FDINFO << "boxes num:" << (*results)[bs].boxes.size() << std::endl;
-    FDINFO << "score thresh:" << conf_threshold_ << std::endl;
     // scale boxes to origin shape
-    //float scale = std::min(out_h / ipt_h, out_w / ipt_w);
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
-      float pad_h = 0.0f;
-      float pad_w = 0.0f;
       int32_t label_id = ((*results)[bs].label_ids)[i];
       // clip box
-      (*results)[bs].boxes[i][0] = (*results)[bs].boxes[i][0] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][1] = (*results)[bs].boxes[i][1] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][2] = (*results)[bs].boxes[i][2] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][3] = (*results)[bs].boxes[i][3] - max_wh_ * label_id;
-      (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0] - pad_w) * ipt_w, 0.0f);
-      (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1] - pad_h) * ipt_h, 0.0f);
-      (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2] - pad_w) * ipt_w, 0.0f);
-      (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3] - pad_h) * ipt_h, 0.0f);
+      (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0]) * ipt_w, 0.0f);
+      (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1]) * ipt_h, 0.0f);
+      (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2]) * ipt_w, 0.0f);
+      (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3]) * ipt_h, 0.0f);
       (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
       (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
