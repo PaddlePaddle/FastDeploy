@@ -598,10 +598,6 @@ install(
   FILES ${PROJECT_SOURCE_DIR}/cmake/gflags.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}/utils
 )
-if(TARGET gflags)
-  install(FILES ${GFLAGS_SOURCE_FILE} 
-          DESTINATION ${CMAKE_INSTALL_PREFIX}/utils)
-endif()
 
 if(NOT WIN32)
   install(
