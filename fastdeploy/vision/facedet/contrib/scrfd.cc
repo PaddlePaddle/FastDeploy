@@ -142,7 +142,6 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
 
   BGR2RGB::Run(mat);
   if (!disable_normalize_) {
-    FDINFO << "do normalize" << std::endl;
     // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
     //                std::vector<float>(mat->Channels(), 1.0));
     // Compute `result = mat * alpha + beta` directly by channel
@@ -154,7 +153,6 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
   }
 
   if(!disable_permute_){
-    FDINFO << "do permute" << std::endl;
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
   }

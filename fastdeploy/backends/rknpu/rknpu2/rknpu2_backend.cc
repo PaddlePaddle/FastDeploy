@@ -314,10 +314,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
           input_attrs_[i].type == RKNN_TENSOR_FLOAT32){
         FDINFO << "The input model is not a quantitative model. "
                   "Close the normalize operation." << std::endl;
-//        input_attrs_[i].pass_through = 1;
       }
 
-//      DumpTensorAttr(input_attrs_[i]);
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
         FDERROR << "rknn_create_mem input_mems_ error." << std::endl;
@@ -345,7 +343,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
       // The data type of output data is changed to FP32
       output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
-//      DumpTensorAttr(output_attrs_[i]);
 
       // default output type is depend on model, this requires float32 to compute top5
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
@@ -377,13 +374,8 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
   }
   
-
   // run rknn
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   ret = rknn_run(ctx, nullptr);
-  tc.End();
-  tc.PrintInfo("RKNN Runtime");
   if (ret != RKNN_SUCC) {
     FDERROR << "rknn run error! ret=" << ret << std::endl;
     return false;
