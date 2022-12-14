@@ -44,14 +44,6 @@ class FASTDEPLOY_DECL FastestDetPreprocessor {
   /// Get target size, tuple of (width, height), default size = {640, 640}
   std::vector<int> GetSize() const { return size_; }
 
-  /// Set padding value, size should be the same as channels
-  void SetPaddingValue(const std::vector<float>& padding_value) {
-    padding_value_ = padding_value;
-  }
-
-  /// Get padding value, size should be the same as channels
-  std::vector<float> GetPaddingValue() const { return padding_value_; }
-
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
