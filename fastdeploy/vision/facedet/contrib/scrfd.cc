@@ -352,33 +352,23 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
                             static_cast<float>(mat.Width())};
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Preprocess");
 
-  tc.Start();
   input_tensors[0].name = InputInfoOfRuntime(0).name;
   std::vector<FDTensor> output_tensors;
   if (!Infer(input_tensors, &output_tensors)) {
     FDERROR << "Failed to inference." << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Infer");
 
-  tc.Start();
   if (!Postprocess(output_tensors, result, im_info, conf_threshold,
                    nms_iou_threshold)) {
     FDERROR << "Failed to post process." << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Postprocess");
   return true;
 }
 
