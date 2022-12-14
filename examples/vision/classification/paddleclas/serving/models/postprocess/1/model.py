@@ -84,7 +84,6 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
         for request in requests:
             infer_outputs = pb_utils.get_input_tensor_by_name(
                 request, self.input_names[0])
