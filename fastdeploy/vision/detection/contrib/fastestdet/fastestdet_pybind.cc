@@ -34,7 +34,7 @@ void BindFastestDet(pybind11::module& m) {
         }
         return make_pair(outputs, ims_info);
       })
-      .def_property("size", &vision::detection::FastestDetPreprocessor::GetSize, &vision::detection::FastestDetPreprocessor::SetSize)
+      .def_property("size", &vision::detection::FastestDetPreprocessor::GetSize, &vision::detection::FastestDetPreprocessor::SetSize);
 
   pybind11::class_<vision::detection::FastestDetPostprocessor>(
       m, "FastestDetPostprocessor")
@@ -58,7 +58,7 @@ void BindFastestDet(pybind11::module& m) {
         return results;
       })
       .def_property("conf_threshold", &vision::detection::FastestDetPostprocessor::GetConfThreshold, &vision::detection::FastestDetPostprocessor::SetConfThreshold)
-      .def_property("nms_threshold", &vision::detection::FastestDetPostprocessor::GetNMSThreshold, &vision::detection::FastestDetPostprocessor::SetNMSThreshold)
+      .def_property("nms_threshold", &vision::detection::FastestDetPostprocessor::GetNMSThreshold, &vision::detection::FastestDetPostprocessor::SetNMSThreshold);
 
   pybind11::class_<vision::detection::FastestDet, FastDeployModel>(m, "FastestDet")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
