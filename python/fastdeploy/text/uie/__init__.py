@@ -86,7 +86,8 @@ class UIEModel(FastDeployModel):
         for result in results:
             uie_result = dict()
             for key, uie_results in result.items():
+                uie_result[key] = list()
                 for uie_res in uie_results:
-                    uie_result[key] = uie_res.get_dict()
+                    uie_result[key].append(uie_res.get_dict())
             new_results += [uie_result]
         return new_results
