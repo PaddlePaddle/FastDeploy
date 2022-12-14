@@ -1,3 +1,5 @@
+English | [中文](../../cn/faq/use_sdk_on_linux.md)
+
 # C++ Deployment on Linux
 
 1. After compilation, and execute the binary file, throw error `error while loading shared libraries`
