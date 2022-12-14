@@ -36,7 +36,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file = model_dir + "/scrfd_500m_bnkps_shape640x640_rk3588.rknn";
+  std::string model_file = model_dir + "/scrfd_500m_bnkps_shape640x640_rk3588_q.rknn";
   std::string params_file;
   auto option = fastdeploy::RuntimeOption();
   option.UseRKNPU2();
@@ -48,7 +48,8 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  model.DisableNormalizeAndPermute();
+  model.DisableNormalize();
+  model.DisablePermute();
 
   fastdeploy::TimeCounter tc;
   tc.Start();
@@ -58,6 +59,7 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
+  std::cout << res.Str() << std::endl;
   auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im, res);
   tc.End();
   tc.PrintInfo("SCRFD in RKNN");
