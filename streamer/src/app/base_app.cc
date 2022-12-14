@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "app/base_app.h"
-#include "gstreamer/utils.h"
 #include "app/yaml_parser.h"
+#include "gstreamer/utils.h"
+#include "gstreamer/perf.h"
 
 namespace fastdeploy {
 namespace streamer {
@@ -47,14 +48,10 @@ static gboolean bus_watch_callback(GstBus* bus, GstMessage* msg, gpointer data) 
   return TRUE;
 }
 
-static void perf_cb(gpointer context, NvDsAppPerfStruct* str) {
-  guint numf = str->num_instances;
-
+static void PerfCallbackFunc(gpointer context, PerfResult* perf) {
   g_mutex_lock(&fps_lock);
-  for (int i = 0; i < numf; i++) {
-    std::cout << "Instance: " << i << ", FPS: " << str->fps[i]
-              << ", total avg.: " << str->fps_avg[i] << std::endl;
-  }
+  std::cout << "FPS: " << perf->fps
+            << ", total avg.: " << perf->fps_avg << std::endl;
   g_mutex_unlock(&fps_lock);
 }
 
@@ -117,9 +114,9 @@ void BaseApp::SetupPerfMeasurement() {
   GstPad* perf_pad = gst_element_get_static_pad(elem, "sink");
   FDASSERT(perf_pad != NULL, "Unable to get sink pad");
 
-  perf_struct_.context = nullptr;
-  enable_perf_measurement(&perf_struct_, perf_pad, 1,
-                          (gulong)(app_config_.perf_interval_sec), 1, perf_cb);
+  perf_ctx_.user_data = nullptr;
+  EnablePerfMeasurement(&perf_ctx_, perf_pad,
+      (gulong)(app_config_.perf_interval_sec), PerfCallbackFunc);
 
   gst_object_unref(perf_pad);
 }

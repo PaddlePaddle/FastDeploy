@@ -14,7 +14,7 @@
 #pragma once
 
 #include "fastdeploy/utils/utils.h"
-#include "deepstream/perf.h"
+#include "gstreamer/types.h"
 
 #include <gst/gst.h>
 #include <future>  // NOLINT
@@ -78,7 +78,7 @@ class BaseApp {
   GstElement* pipeline_;
   GMainLoop* loop_;
   guint bus_watch_id_;
-  NvDsAppPerfStructInt perf_struct_;
+  PerfContext perf_ctx_;
   std::future<void> future_;
   bool destroyed_ = false;
 };

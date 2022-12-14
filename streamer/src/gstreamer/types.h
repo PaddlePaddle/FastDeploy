@@ -14,6 +14,7 @@
 #pragma once
 
 #include "fastdeploy/core/fd_type.h"
+#include "fastdeploy/utils/perf.h"
 #include <gst/gst.h>
 
 namespace fastdeploy {
@@ -30,5 +31,30 @@ struct Frame {
   uint8_t* data = nullptr;
   Device device = Device::CPU;
 };
+
+struct PerfResult {
+  double fps = 0.0;
+  double fps_avg = 0.0;
+};
+
+typedef void (*PerfCallback)(gpointer ctx, PerfResult* str);
+
+struct PerfContext {
+  gulong measurement_interval_ms;
+  gulong perf_measurement_timeout_id;
+  bool stop;
+  gpointer user_data;
+  GMutex lock;
+  PerfCallback callback;
+  GstPad* sink_bin_pad;
+  gulong fps_measure_probe_id;
+  uint64_t buffer_cnt = 0;
+  uint64_t total_buffer_cnt = 0;
+  TimeCounter tc;
+  TimeCounter total_tc;
+  double total_played_duration = 0.0;
+  bool first_buffer_arrived = false;
+};
+
 }  // namespace streamer
 }  // namespace fastdeploy
