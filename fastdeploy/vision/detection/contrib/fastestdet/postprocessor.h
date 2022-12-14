@@ -55,19 +55,9 @@ class FASTDEPLOY_DECL FastestDetPostprocessor {
   /// Get nms_threshold, default 0.45
   float GetNMSThreshold() const { return nms_threshold_; }
 
-  /// Set multi_label, default true
-  void SetMultiLabel(bool multi_label) {
-    multi_label_ = multi_label;
-  }
-
-  /// Get multi_label, default true
-  bool GetMultiLabel() const { return multi_label_; }
-
  protected:
   float conf_threshold_;
   float nms_threshold_;
-  bool multi_label_;
-  float max_wh_;
   float Sigmoid(float x);
   float Tanh(float x);
 };

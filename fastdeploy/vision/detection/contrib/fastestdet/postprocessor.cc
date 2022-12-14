@@ -22,8 +22,6 @@ namespace detection {
 FastestDetPostprocessor::FastestDetPostprocessor() {
   conf_threshold_ = 0.65;
   nms_threshold_ = 0.45;
-  multi_label_ = true;
-  max_wh_ = 0.0;
 }
 float FastestDetPostprocessor::Sigmoid(float x) {
   return 1.0f / (1.0f + exp(-x));
@@ -38,11 +36,6 @@ bool FastestDetPostprocessor::Run(
     const std::vector<std::map<std::string, std::array<float, 2>>> &ims_info) {
   int batch = 1;
 
-  FDINFO << "view infer output" << std::endl;
-  std::vector<FDTensor> debugTensors(tensors);
-  FDTensor debugFDT = debugTensors[0];
-  debugFDT.PrintInfo("view infer output");
-
   results->resize(batch);
 
   for (size_t bs = 0; bs < batch; ++bs) {
@@ -50,24 +43,20 @@ bool FastestDetPostprocessor::Run(
     (*results)[bs].Clear();
     // output (85,22,22) CHW
     const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
-    int output_h = 22; // out map height
-    int output_w = 22; // out map weight
+    int output_h = tensors[0].shape[2]; // out map height
+    int output_w = tensors[0].shape[3]; // out map weight
     auto iter_out = ims_info[bs].find("output_shape");
     auto iter_ipt = ims_info[bs].find("input_shape");
     FDASSERT(iter_out != ims_info[bs].end() && iter_ipt != ims_info[bs].end(),
              "Cannot find input_shape or output_shape from im_info.");
-    float out_h = iter_out->second[0];
-    float out_w = iter_out->second[1];
     float ipt_h = iter_ipt->second[0];
     float ipt_w = iter_ipt->second[1];
-    float img_width=ipt_w;
-    float img_height=ipt_h;
 
     // handle output boxes from out map
     for (int h = 0; h < output_h; h++) {
       for (int w = 0; w < output_w; w++) {
         // object score
-        int obj_score_index = (0 * output_h * output_w) + (h * output_w) + w;
+        int obj_score_index = (h * output_w) + w;
         float obj_score = output[obj_score_index];
 
         // find max class
@@ -75,8 +64,7 @@ bool FastestDetPostprocessor::Run(
         float max_score = 0.0f;
         int class_num = 80;
         for (size_t i = 0; i < class_num; i++) {
-          int obj_score_index =
-              ((5 + i) * output_h * output_w) + (h * output_w) + w;
+          obj_score_index =((5 + i) * output_h * output_w) + (h * output_w) + w;
           float cls_score = output[obj_score_index];
           if (cls_score > max_score) {
             max_score = cls_score;
@@ -106,10 +94,10 @@ bool FastestDetPostprocessor::Run(
 
           // convert from [x, y, w, h] to [x1, y1, x2, y2]
           (*results)[bs].boxes.emplace_back(std::array<float, 4>{
-            cx - box_width / 2.0f + category * max_wh_,
-            cy - box_height / 2.0f + category * max_wh_,
-            cx + box_width / 2.0f + category * max_wh_,
-            cy + box_height / 2.0f + category * max_wh_});
+            cx - box_width / 2.0f,
+            cy - box_height / 2.0f,
+            cx + box_width / 2.0f,
+            cy + box_height / 2.0f});
           (*results)[bs].label_ids.push_back(category);
           (*results)[bs].scores.push_back(score);
         }
