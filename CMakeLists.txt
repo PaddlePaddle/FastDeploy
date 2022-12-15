@@ -144,11 +144,16 @@ if (WITH_TIMVX)
 endif()
 
 if (WITH_XPU)
-  if(NOT ${ENABLE_LITE_BACKEND})
+  if(NOT ENABLE_LITE_BACKEND)
       message(WARNING "While compiling with -DWITH_XPU=ON, will force to set -DENABLE_LITE_BACKEND=ON")
       set(ENABLE_LITE_BACKEND ON)
   endif()
-  set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221213.tgz")
+  if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
+    message(FATAL_ERROR "XPU is only supported on Linux x64 platform")
+  endif()
+  if(NOT PADDLELITE_URL)
+    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221213.tgz")
+  endif()
 endif()
 
 
@@ -597,7 +602,6 @@ install(
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
-
 
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples
