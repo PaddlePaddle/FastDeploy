@@ -11,7 +11,7 @@ FastDeploy provides two examples for these situations in this directory
 
 ## Fixed input shape
 
-While deploying a computer vision model, it includes 3 steps
+While deploying a compute vision model, it includes 3 steps
 - Input a image data, after the preprocessing steps, we get the `tensors` which will be feed to the deeplearning model
 - Inference the model by Runtime with the input `tensors`, and get the output `tensors`
 - Postprocessing the output `tensors`, and get the final results we need, e.g `DetectionResult`, `SegmentationResult`
