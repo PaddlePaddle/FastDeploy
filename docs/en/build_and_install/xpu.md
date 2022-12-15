@@ -8,7 +8,19 @@ The relevant compilation options are described as follows:
 |Compile Options|Default Values|Description|Remarks|  
 |:---|:---|:---|:---|  
 |ENABLE_LITE_BACKEND|OFF|It needs to be set to ON when compiling the RK library| - |  
-|WITH_XPU|OFF|It needs to be set to ON when compiling the KunlunXin XPU library| - |  
+|WITH_XPU|OFF|It needs to be set to ON when compiling the KunlunXin XPU library| - |
+| ENABLE_ORT_BACKEND | OFF | whether to intergrate ONNX Runtime backend | - |
+| ENABLE_PADDLE_BACKEND | OFF | whether to intergrate Paddle Inference backend | - |
+| ENABLE_OPENVINO_BACKEND | OFF | whether to intergrate OpenVINO backend | - |
+| ENABLE_VISION | OFF | whether to intergrate vision models | - |
+| ENABLE_TEXT | OFF | whether to intergrate text models | - |
+
+The configuration for third libraries(Optional, if the following option is not defined, the prebuilt third libraries will download automaticly while building FastDeploy).
+| Option                     | Description                                                                                           |
+| :---------------------- | :--------------------------------------------------------------------------------------------- |
+| ORT_DIRECTORY           | While ENABLE_ORT_BACKEND=ON, use ORT_DIRECTORY to specify your own ONNX Runtime library path.  |
+| OPENCV_DIRECTORY        | While ENABLE_VISION=ON, use OPENCV_DIRECTORY to specify your own OpenCV library path.     |
+| OPENVINO_DIRECTORY      |  While ENABLE_OPENVINO_BACKEND=ON, use OPENVINO_DIRECTORY to specify your own OpenVINO library path.    |
 
 For more compilation options, please refer to [Description of FastDeploy compilation options](./README.md)
 
@@ -27,6 +39,7 @@ cmake -DWITH_XPU=ON  \
       -DENABLE_PADDLE_BACKEND=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
       -DENABLE_VISION=ON \
+      -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
       ..
 
 # Build FastDeploy KunlunXin XPU C++ SDK
@@ -45,6 +58,8 @@ export WITH_GPU=OFF
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_VISION=ON
+# The OPENCV_DIRECTORY is optional, if not exported, a prebuilt OpenCV library will be downloaded
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
 python setup.py bdist_wheel

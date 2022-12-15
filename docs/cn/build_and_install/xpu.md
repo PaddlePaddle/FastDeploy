@@ -45,6 +45,7 @@ cmake -DWITH_XPU=ON  \
       -DENABLE_PADDLE_BACKEND=ON  \ # 可选择开启 Paddle 后端
       -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
+      -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
       ..
 
 # Build FastDeploy KunlunXin XPU C++ SDK
@@ -63,6 +64,8 @@ export WITH_GPU=OFF
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
 export ENABLE_VISION=ON
+# OPENCV_DIRECTORY可选，不指定会自动下载FastDeploy提供的预编译OpenCV库
+export OPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4
 
 python setup.py build
 python setup.py bdist_wheel
