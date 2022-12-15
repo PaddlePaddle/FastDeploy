@@ -4,6 +4,7 @@ import fastdeploy as fd
 import cv2
 import os
 import psutil
+from multiprocessing import Pool
 
 
 def parse_arguments():
@@ -31,6 +32,13 @@ def parse_arguments():
         default=False,
         help="Wether to use tensorrt.")
     parser.add_argument("--thread_num", type=int, default=1, help="thread num")
+    parser.add_argument(
+        "--use_multi_process",
+        type=ast.literal_eval,
+        default=False,
+        help="Wether to use multi process.")
+    parser.add_argument(
+        "--process_num", type=int, default=1, help="process num")
     return parser.parse_args()
 
 
@@ -71,12 +79,19 @@ def build_option(args):
 
 def predict(model, img_list, topk):
     result_list = []
-    # 预测图片分类结果
+    # predict classification result
     for image in img_list:
         im = cv2.imread(image)
         result = model.predict(im, topk)
         result_list.append(result)
     return result_list
+
+
+def process_predict(image):
+    # predict classification result
+    im = cv2.imread(image)
+    result = model.predict(im, args.topk)
+    return result
 
 
 class WrapperThread(Thread):
@@ -95,9 +110,8 @@ class WrapperThread(Thread):
 if __name__ == '__main__':
     args = parse_arguments()
 
-    thread_num = args.thread_num
     imgs_list = get_image_list(args.image_path)
-    # 配置runtime，加载模型
+    # configure runtime and load model
     runtime_option = build_option(args)
 
     model_file = os.path.join(args.model, "inference.pdmodel")
@@ -105,24 +119,38 @@ if __name__ == '__main__':
     config_file = os.path.join(args.model, "inference_cls.yaml")
     model = fd.vision.classification.PaddleClasModel(
         model_file, params_file, config_file, runtime_option=runtime_option)
-    threads = []
-    image_num_each_thread = int(len(imgs_list) / thread_num)
-    for i in range(thread_num):
-        if i == thread_num - 1:
-            t = WrapperThread(
-                predict,
-                args=(model, imgs_list[i * image_num_each_thread:], i))
-        else:
-            t = WrapperThread(
-                predict,
-                args=(model.clone(), imgs_list[i * image_num_each_thread:(
-                    i + 1) * image_num_each_thread - 1], i))
-        threads.append(t)
-        t.start()
+    if args.use_multi_process:
+        results = []
+        process_num = args.process_num
+        with Pool(process_num) as pool:
+            results = pool.map(process_predict, imgs_list)
+        for result in results:
+            print(result)
+    else:
+        threads = []
+        thread_num = args.thread_num
+        image_num_each_thread = int(len(imgs_list) / thread_num)
+        # unless you want independent model in each thread, actually model.clone()
+        # is the same as model when creating thead because of the existence of
+        # GIL(Global Interpreter Lock) in python. In addition, model.clone() will consume
+        # additional memory to store independent member variables
+        for i in range(thread_num):
+            if i == thread_num - 1:
+                t = WrapperThread(
+                    predict,
+                    args=(model.clone(), imgs_list[i * image_num_each_thread:],
+                          args.topk))
+            else:
+                t = WrapperThread(
+                    predict,
+                    args=(model.clone(), imgs_list[i * image_num_each_thread:(
+                        i + 1) * image_num_each_thread - 1], args.topk))
+            threads.append(t)
+            t.start()
 
-    for i in range(thread_num):
-        threads[i].join()
+        for i in range(thread_num):
+            threads[i].join()
 
-    for i in range(thread_num):
-        for result in threads[i].get_result():
-            print('thread:', i, ', result: ', result)
+        for i in range(thread_num):
+            for result in threads[i].get_result():
+                print('thread:', i, ', result: ', result)
