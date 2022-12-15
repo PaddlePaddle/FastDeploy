@@ -23,7 +23,6 @@ void BindRuntime(pybind11::module& m) {
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
-      .def("use_xpu", &RuntimeOption::UseXpu)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
@@ -101,21 +100,7 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("ipu_available_memory_proportion",
                      &RuntimeOption::ipu_available_memory_proportion)
       .def_readwrite("ipu_enable_half_partial",
-                     &RuntimeOption::ipu_enable_half_partial)
-      .def_readwrite("xpu_l3_workspace_size",
-                     &RuntimeOption::xpu_l3_workspace_size)
-      .def_readwrite("xpu_locked",
-                     &RuntimeOption::xpu_locked)
-      .def_readwrite("xpu_autotune",
-                     &RuntimeOption::xpu_autotune)
-      .def_readwrite("xpu_autotune_file",
-                     &RuntimeOption::xpu_autotune_file)
-      .def_readwrite("xpu_precision",
-                     &RuntimeOption::xpu_precision)
-      .def_readwrite("xpu_adaptive_seqlen",
-                     &RuntimeOption::xpu_adaptive_seqlen)
-      .def_readwrite("xpu_enable_multi_stream",
-                     &RuntimeOption::xpu_enable_multi_stream);                              
+                     &RuntimeOption::ipu_enable_half_partial);
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
