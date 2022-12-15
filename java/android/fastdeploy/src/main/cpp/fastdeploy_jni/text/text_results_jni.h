@@ -15,12 +15,16 @@
 #pragma once
 
 #include <jni.h>  // NOLINT
-#include "fastdeploy/text.h"  // NOLINT
 
 namespace fastdeploy {
 namespace jni {
 
-jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_result);
+/**
+ * @param env A Pointer of JNIENV.
+ * @param cxx_result A pointer of cxx 'text::UIEResult'
+ * @return jobject that stands for Java UIEResult
+ */
+jobject NewUIEJavaResultFromCxx(JNIEnv *env, void *cxx_result);
 
 }  // namespace jni
 }  // namespace fastdeploy

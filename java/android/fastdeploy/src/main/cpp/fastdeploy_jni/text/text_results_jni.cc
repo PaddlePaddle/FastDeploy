@@ -16,11 +16,14 @@
 #include "fastdeploy_jni/perf_jni.h"  // NOLINT
 #include "fastdeploy_jni/convert_jni.h"  // NOLINT
 #include "fastdeploy_jni/text/text_results_jni.h" // NOLINT
+#ifdef ENABLE_TEXT
+#include "fastdeploy/text.h"  // NOLINT
+#endif
 
 namespace fastdeploy {
 namespace jni {
 
-jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_result) {
+jobject NewUIEJavaResultFromCxx(JNIEnv *env, void *cxx_result) {
   // Field signatures of Java UIEResult:
   // (1) mStart long:                              J
   // (2) mEnd long:                                J
@@ -28,7 +31,19 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_resu
   // (4) mText String:                             Ljava/lang/String;
   // (5) mRelation HashMap<String, UIEResult[]>:   Ljava/util/HashMap;
   // (6) mInitialized boolean:                     Z
-  const int len = static_cast<int>(cxx_uie_result.text_.size());
+
+  // Return NULL directly if Text API was not enabled. The Text API
+  // is not necessarily enabled. Whether or not it is enabled depends
+  // on the C++ SDK.
+#ifndef ENABLE_TEXT
+  return NULL;
+#else
+  // Allocate Java UIEResult if Text API was enabled.
+  if (cxx_result == nullptr) {
+    return NULL;
+  }
+  auto c_result_ptr = reinterpret_cast<text::UIEResult*>(cxx_result);
+  const int len = static_cast<int>(c_result_ptr->text_.size());
   if (len == 0) {
     return NULL;
   }
@@ -55,20 +70,20 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_resu
   // Allocate for current UIEResult
   // mStart long: J & mEnd   long: J
   env->SetLongField(j_uie_result_obj, j_uie_start_id,
-                    static_cast<jlong>(cxx_uie_result.start_));
+                    static_cast<jlong>(c_result_ptr->start_));
   env->SetLongField(j_uie_result_obj, j_uie_end_id,
-                    static_cast<jlong>(cxx_uie_result.end_));
+                    static_cast<jlong>(c_result_ptr->end_));
   // mProbability double: D
   env->SetDoubleField(j_uie_result_obj, j_uie_probability_id,
-                      static_cast<jdouble>(cxx_uie_result.probability_));
+                      static_cast<jdouble>(c_result_ptr->probability_));
   // mText String: Ljava/lang/String;
   env->SetObjectField(j_uie_result_obj, j_uie_text_id,
-                      ConvertTo<jstring>(env, cxx_uie_result.text_));
+                      ConvertTo<jstring>(env, c_result_ptr->text_));
   // mInitialized boolean: Z
   env->SetBooleanField(j_uie_result_obj, j_uie_initialized_id, JNI_TRUE);
 
   // mRelation HashMap<String, UIEResult[]>: Ljava/util/HashMap;
-  if (cxx_uie_result.relation_.size() > 0) {
+  if (c_result_ptr->relation_.size() > 0) {
     const jclass j_hashmap_clazz = env->FindClass("java/util/HashMap");
     const jmethodID j_hashmap_init = env->GetMethodID(
         j_hashmap_clazz, "<init>", "()V");
@@ -78,7 +93,7 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_resu
     // std::unordered_map<std::string, std::vector<UIEResult>> relation_;
     jobject j_uie_relation_hashmap = env->NewObject(j_hashmap_clazz, j_hashmap_init);
 
-    for (auto&& curr_relation : cxx_uie_result.relation_) {
+    for (auto&& curr_relation : c_result_ptr->relation_) {
       // Processing each key-value cxx uie relation:
       // Key: string, Value: std::vector<UIEResult>
       const auto& curr_c_relation_key = curr_relation.first;
@@ -88,9 +103,10 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_resu
       jobjectArray curr_j_uie_result_obj_arr = env->NewObjectArray(
           curr_c_uie_result_size, j_uie_result_clazz, NULL);
       for (int i = 0; i < curr_c_uie_result_size; ++i) {
-        const text::UIEResult& child_cxx_result = curr_relation.second[i];
+        text::UIEResult* child_cxx_result = (&(curr_relation.second[i]));
         // Recursively generates the curr_j_uie_result_obj
-        jobject curr_j_uie_result_obj = NewUIEJavaResultFromCxx(env, child_cxx_result);
+        jobject curr_j_uie_result_obj = NewUIEJavaResultFromCxx(
+            env, reinterpret_cast<void*>(child_cxx_result));
         env->SetObjectArrayElement(curr_j_uie_result_obj_arr, i, curr_j_uie_result_obj);
         env->DeleteLocalRef(curr_j_uie_result_obj);
       }
@@ -110,6 +126,7 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, const text::UIEResult& cxx_uie_resu
   env->DeleteLocalRef(j_uie_result_clazz);
 
   return j_uie_result_obj;
+#endif
 }
 
 }  // namespace jni
