@@ -163,22 +163,30 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_releaseNative(JNIEnv *env,
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_setSchemaStringNative(
-    JNIEnv *env, jobject thiz, jobjectArray schema) {
+    JNIEnv *env, jobject thiz, jlong cxx_context,
+    jobjectArray schema) {
 #ifndef ENABLE_TEXT
   return JNI_FALSE;
 #else
-  // TODO: implement setSchemaFromStringNative()
+  if (cxx_context == 0) {
+    return JNI_FALSE;
+  }
+  auto c_model_ptr = reinterpret_cast<text::UIEModel *>(cxx_context);
+  auto c_schema = fni::ConvertTo<std::vector<std::string>>(env, schema);
+  c_model_ptr->SetSchema(c_schema);
+
   return JNI_TRUE;
 #endif
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_setSchemaNodeNative(
-    JNIEnv *env, jobject thiz, jobjectArray schema) {
+    JNIEnv *env, jobject thiz, jlong cxx_context,
+    jobjectArray schema) {
 #ifndef ENABLE_TEXT
   return JNI_FALSE;
 #else
-  // TODO: implement setSchemaFromSchemaNodeNative()
+  // TODO: implement setSchemaNodeNative()
   return JNI_TRUE;
 #endif
 }

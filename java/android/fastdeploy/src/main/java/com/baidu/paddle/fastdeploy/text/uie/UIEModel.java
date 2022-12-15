@@ -74,7 +74,7 @@ public class UIEModel {
         if (schema == null || schema.length == 0) {
             return false;
         }
-        return setSchemaStringNative(schema);
+        return setSchemaStringNative(mCxxContext, schema);
     }
 
     // Set schema for Cross task extraction
@@ -82,7 +82,7 @@ public class UIEModel {
         if (schema == null || schema.length == 0) {
             return false;
         }
-        return setSchemaNodeNative(schema);
+        return setSchemaNodeNative(mCxxContext, schema);
     }
 
     // Fetch text information (will call predict from native)
@@ -156,9 +156,11 @@ public class UIEModel {
     private native boolean releaseNative(long CxxContext);
 
     // Set schema from native for different tasks.
-    private native boolean setSchemaStringNative(String[] schema);
+    private native boolean setSchemaStringNative(long CxxContext,
+                                                 String[] schema);
 
-    private native boolean setSchemaNodeNative(SchemaNode[] schema);
+    private native boolean setSchemaNodeNative(long CxxContext,
+                                               SchemaNode[] schema);
 
     // Initializes at the beginning.
     static {
