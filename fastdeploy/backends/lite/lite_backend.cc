@@ -43,33 +43,24 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
   if (option_.enable_int8) {
-    if(option_.enable_xpu) {
-      valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
-    } else {
-      valid_places.push_back(
+    valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-    }
     FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
            << "inference with int8 precision!" << std::endl;    
   }
   if (option_.enable_fp16) {
-    if(option_.enable_xpu){
+    paddle::lite_api::MobileConfig check_fp16_config;
+    // Determine whether the device supports the FP16
+    // instruction set (or whether it is an arm device
+    // of the armv8.2 architecture)
+    supported_fp16_ = check_fp16_config.check_fp16_valid();
+    if (supported_fp16_) {
       valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
+          paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+      FDINFO << "Your device is supported fp16 ! Lite::Backend will "
+             << "inference with fp16 precision!" << std::endl;    
     } else {
-      paddle::lite_api::MobileConfig check_fp16_config;
-      // Determine whether the device supports the FP16
-      // instruction set (or whether it is an arm device
-      // of the armv8.2 architecture)
-      supported_fp16_ = check_fp16_config.check_fp16_valid();
-      if (supported_fp16_) {
-        valid_places.push_back(
-            paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
-        FDINFO << "The device supports FP16, Lite::Backend will inference with FP16 precision." << std::endl;    
-      } else {
-        FDWARNING << "The device doesn't support FP16, will fallback to FP32.";
-      }
+      FDWARNING << "This device is not supported fp16, will skip fp16 option.";
     }
   }
   if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
@@ -90,24 +81,8 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
   }
-  
-  if(option_.enable_xpu){
-    valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
-    valid_places.push_back(
-      paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
-    config_.set_xpu_dev_per_thread(option_.device_id);
-    config_.set_xpu_workspace_l3_size_per_thread(option_.xpu_l3_workspace_size);
-    config_.set_xpu_l3_cache_method(option_.xpu_l3_workspace_size, option_.xpu_locked);
-    config_.set_xpu_conv_autotune(option_.xpu_autotune, option_.xpu_autotune_file);
-    config_.set_xpu_multi_encoder_method(option_.xpu_precision, option_.xpu_adaptive_seqlen);
-    if (option_.xpu_enable_multi_stream) {
-      config_.enable_xpu_multi_stream();
-    }
-  } else {
-    valid_places.push_back(
+  valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
-  }
   config_.set_valid_places(valid_places);
   if (option_.threads > 0) {
     config_.set_threads(option_.threads);
@@ -185,9 +160,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if(!option_.enable_xpu){
-      info.dtype = LiteDataTypeToFD(tensor->precision());
-    }
+    info.dtype = LiteDataTypeToFD(tensor->precision());
     outputs_desc_.emplace_back(info);
   }
 
@@ -266,9 +239,6 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
-    if(outputs_desc_[i].dtype != LiteDataTypeToFD(tensor->precision())){
-      outputs_desc_[i].dtype = LiteDataTypeToFD(tensor->precision());
-    }
     (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),

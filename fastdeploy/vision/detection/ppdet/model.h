@@ -185,7 +185,7 @@ class FASTDEPLOY_DECL PaddleYOLOv5 : public PPDetBase {
                const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
-    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_cpu_backends = {Backend::ORT,Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     initialized = Initialize();
   }
@@ -201,7 +201,7 @@ class FASTDEPLOY_DECL PaddleYOLOv6 : public PPDetBase {
                const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT,Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     initialized = Initialize();
   }
@@ -217,7 +217,7 @@ class FASTDEPLOY_DECL PaddleYOLOv7 : public PPDetBase {
                const ModelFormat& model_format = ModelFormat::PADDLE)
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
-    valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_cpu_backends = {Backend::ORT,Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     initialized = Initialize();
   }
