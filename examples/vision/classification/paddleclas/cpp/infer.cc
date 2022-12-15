@@ -96,32 +96,6 @@ void IpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << res.Str() << std::endl;
 }
 
-void XpuInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
-  auto params_file = model_dir + sep + "inference.pdiparams";
-  auto config_file = model_dir + sep + "inference_cls.yaml";
-
-  auto option = fastdeploy::RuntimeOption();
-  option.UseXpu();
-  auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
-
-  auto im = cv::imread(image_file);
-
-  fastdeploy::vision::ClassifyResult res;
-  if (!model.Predict(im, &res)) {
-    std::cerr << "Failed to predict." << std::endl;
-    return;
-  }
-
-  // print res
-  std::cout << res.Str() << std::endl;
-}
-
 void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
@@ -154,7 +128,7 @@ int main(int argc, char* argv[]) {
                  "e.g ./infer_demo ./ResNet50_vd ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with ipu; 4: run with xpu."
+                 "with gpu; 2: run with gpu and use tensorrt backend."
               << std::endl;
     return -1;
   }
@@ -167,8 +141,6 @@ int main(int argc, char* argv[]) {
     TrtInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 3) {
     IpuInfer(argv[1], argv[2]);
-  } else if (std::atoi(argv[3]) == 4) {
-    XpuInfer(argv[1], argv[2]);
   }
   return 0;
 }
