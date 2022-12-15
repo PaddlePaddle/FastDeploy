@@ -236,7 +236,26 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 void RuntimeOption::UseTimVX() {
   enable_timvx = true;
   device = Device::TIMVX;
-  UseLiteBackend();
+}
+
+void RuntimeOption::UseXpu(int xpu_id, 
+                          int l3_workspace_size,
+                          bool locked,
+                          bool autotune,
+                          const std::string &autotune_file,
+                          const std::string &precision,
+                          bool adaptive_seqlen,
+                          bool enable_multi_stream) {
+  enable_xpu = true;
+  device_id = xpu_id;
+  xpu_l3_workspace_size = l3_workspace_size;
+  xpu_locked=locked;
+  xpu_autotune=autotune;
+  xpu_autotune_file=autotune_file;
+  xpu_precision = precision;
+  xpu_adaptive_seqlen=adaptive_seqlen;
+  xpu_enable_multi_stream=enable_multi_stream;
+  device = Device::XPU;
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -532,8 +551,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::XPU,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::XPU.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -784,6 +803,16 @@ void Runtime::CreateLiteBackend() {
   lite_option.nnadapter_subgraph_partition_config_path =
       option.lite_nnadapter_subgraph_partition_config_path;
   lite_option.enable_timvx = option.enable_timvx;
+  lite_option.enable_xpu = option.enable_xpu;
+  lite_option.device_id  = option.device_id;
+  lite_option.xpu_l3_workspace_size  = option.xpu_l3_workspace_size;
+  lite_option.xpu_locked = option.xpu_locked;
+  lite_option.xpu_autotune = option.xpu_autotune;
+  lite_option.xpu_autotune_file = option.xpu_autotune_file;
+  lite_option.xpu_precision  = option.xpu_precision;
+  lite_option.xpu_adaptive_seqlen = option.xpu_adaptive_seqlen;
+  lite_option.xpu_enable_multi_stream = option.xpu_enable_multi_stream;
+
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();
