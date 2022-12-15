@@ -7,8 +7,8 @@ This document describes how to compile the C++ FastDeploy library based on Paddl
 The relevant compilation options are described as follows:  
 |Compile Options|Default Values|Description|Remarks|  
 |:---|:---|:---|:---|  
-|ENABLE_LITE_BACKEND|OFF|It needs to be set to ON when compiling the RK library| - |  
-|WITH_XPU|OFF|It needs to be set to ON when compiling the KunlunXin XPU library| - |
+| ENABLE_LITE_BACKEND | OFF | It needs to be set to ON when compiling the RK library| - |  
+| WITH_XPU | OFF | It needs to be set to ON when compiling the KunlunXin XPU library| - |
 | ENABLE_ORT_BACKEND | OFF | whether to intergrate ONNX Runtime backend | - |
 | ENABLE_PADDLE_BACKEND | OFF | whether to intergrate Paddle Inference backend | - |
 | ENABLE_OPENVINO_BACKEND | OFF | whether to intergrate OpenVINO backend | - |
@@ -25,6 +25,15 @@ The configuration for third libraries(Optional, if the following option is not d
 For more compilation options, please refer to [Description of FastDeploy compilation options](./README.md)
 
 ## C++ FastDeploy library compilation based on PaddleLite
+- OS: Linux
+- gcc/g++: version >= 8.2
+- cmake: version >= 3.15
+
+It it recommend install OpenCV library manually, and define `-DOPENCV_DIRECTORY` to set path of OpenCV library(If the flag is not defined, a prebuilt OpenCV library will be downloaded automaticly while building FastDeploy, but the prebuilt OpenCV cannot support reading video file or other function e.g `imshow`)
+```
+sudo apt-get install libopencv-dev
+```
+
 The compilation command is as follows:
 ```bash
 # Download the latest source code
