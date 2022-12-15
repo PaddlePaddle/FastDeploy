@@ -152,7 +152,7 @@ if (WITH_XPU)
     message(FATAL_ERROR "XPU is only supported on Linux x64 platform")
   endif()
   if(NOT PADDLELITE_URL)
-    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221213.tgz")
+    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221215.tgz")
   endif()
 endif()
 
