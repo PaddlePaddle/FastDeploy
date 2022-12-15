@@ -35,6 +35,9 @@ def build_option(args):
     if args.device.lower() == "ipu":
         option.use_ipu()
 
+    if args.device.lower() == "xpu":
+        option.use_xpu()
+
     if args.use_trt:
         option.use_trt_backend()
     return option
