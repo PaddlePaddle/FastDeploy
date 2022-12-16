@@ -37,7 +37,7 @@ void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
 }
 
 void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
-  std::string model_file = model_dir + "/scrfd_500m_bnkps_shape640x640_rk3588_q.rknn";
+  std::string model_file = model_dir + "/scrfd_500m_bnkps_shape640x640_rk3588.rknn";
   std::string params_file;
   auto option = fastdeploy::RuntimeOption();
   option.UseRKNPU2();
