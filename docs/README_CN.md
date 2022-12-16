@@ -8,6 +8,7 @@
 - [GPU部署环境编译安装](cn/build_and_install/gpu.md)
 - [CPU部署环境编译安装](cn/build_and_install/cpu.md)
 - [IPU部署环境编译安装](cn/build_and_install/ipu.md)
+- [昆仑芯XPU部署环境编译安装](cn/build_and_install/xpu.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
 - [Android平台部署环境编译安装](cn/build_and_install/android.md)
 - [服务化部署镜像编译安装](../serving/docs/zh_CN/compile.md)

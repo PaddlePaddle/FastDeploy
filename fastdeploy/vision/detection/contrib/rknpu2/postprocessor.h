@@ -72,10 +72,11 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   }
 
   // Set Anchor
-  void SetAnchor(std::vector<int> anchors,int anchor_per_branch){
+  void SetAnchor(std::vector<int> anchors, int anchor_per_branch) {
       anchors_ = anchors;
       anchor_per_branch_ = anchor_per_branch;
-  };
+  }
+
  private:
   std::vector<int> anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
                                45, 59, 119, 116, 90, 156, 198, 373, 326};
