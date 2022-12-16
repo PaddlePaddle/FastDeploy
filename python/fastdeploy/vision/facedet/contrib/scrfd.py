@@ -51,10 +51,6 @@ class SCRFD(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    def disable_normalize_and_permute(self):
-        self.disable_permute()
-        self.disable_normalize()
-
     def disable_normalize(self):
         """
         This function will disable normalize in preprocessing step.

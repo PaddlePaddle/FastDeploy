@@ -58,7 +58,7 @@ make install
 
 ```bash
 cd ./build/install
-export LD_LIBRARY_PATH=./lib
+export LD_LIBRARY_PATH=${PWD}/lib:${LD_LIBRARY_PATH}
 ./rknpu_test
 ```
 运行完成可视化结果如下图所示

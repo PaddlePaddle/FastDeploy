@@ -8,7 +8,7 @@
 ```bash
 wget  https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
 unzip scrfd_500m_bnkps_shape640x640.zip
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/scrfd.yaml
+python  /Path/To/FastDeploy/tools/rknpu2/export.py --config_path tools/rknpu2/config/scrfd.yaml
 ```
 
 
