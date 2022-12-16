@@ -129,59 +129,67 @@ jobject NewUIEJavaResultFromCxx(JNIEnv *env, void *cxx_result) {
 #endif
 }
 
+bool AllocateUIECxxSchemaNodeFromJava(
+    JNIEnv *env, jobject j_schema_node_obj, void *cxx_schema_node) {
+#ifndef ENABLE_TEXT
+  return false;
+#else
+  // Allocate cxx SchemaNode from Java SchemaNode
+  if (cxx_schema_node == nullptr) {
+    return false;
+  }
+  text::SchemaNode* c_mutable_schema_node_ptr =
+      reinterpret_cast<text::SchemaNode*>(cxx_schema_node);
+
+  const jclass j_schema_node_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/text/uie/SchemaNode");
+  if (!env->IsInstanceOf(j_schema_node_obj, j_schema_node_clazz)) {
+    return false;
+  }
+
+  const jfieldID j_schema_node_name_id = env->GetFieldID(
+      j_schema_node_clazz, "mName", "Ljava/lang/String;");
+  const jfieldID j_schema_node_child_id = env->GetFieldID(
+      j_schema_node_clazz, "mChildren",
+      "Ljava/util/ArrayList;");
+
+  // Java ArrayList in JNI
+  const jclass j_array_list_clazz = env->FindClass(
+      "java/util/ArrayList");
+  const jmethodID j_array_list_get = env->GetMethodID(
+      j_array_list_clazz,"get", "(I)Ljava/lang/Object;");
+  const jmethodID j_array_list_size = env->GetMethodID(
+      j_array_list_clazz,"size", "()I");
+
+  // mName String:          Ljava/lang/String;
+  c_mutable_schema_node_ptr->name_ = ConvertTo<std::string>(
+      env, reinterpret_cast<jstring>(env->GetObjectField(
+          j_schema_node_obj, j_schema_node_name_id)));
+
+  // mChildren ArrayList:   Ljava/util/ArrayList;
+  jobject j_schema_node_child_array_list = env->GetObjectField(
+      j_schema_node_obj, j_schema_node_child_id); // ArrayList
+  const int j_schema_node_child_size = static_cast<int>(
+      env->CallIntMethod(j_schema_node_child_array_list,
+                         j_array_list_size));
+
+  // Recursively add child if child size > 0
+  if (j_schema_node_child_size > 0) {
+    for (int i = 0; i < j_schema_node_child_size; ++i) {
+      text::SchemaNode curr_c_schema_node_child;
+      jobject curr_j_schema_node_child = env->CallObjectMethod(
+          j_schema_node_child_array_list, j_array_list_get, i);
+      if (AllocateUIECxxSchemaNodeFromJava(
+          env, curr_j_schema_node_child, reinterpret_cast<void*>(
+              &curr_c_schema_node_child))) {
+        c_mutable_schema_node_ptr->AddChild(curr_c_schema_node_child);
+      }
+    }
+  }
+
+  return true;
+#endif
+}
+
 }  // namespace jni
 }  // namespace fastdeploy
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

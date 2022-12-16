@@ -51,14 +51,17 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_bindNative(JNIEnv *env,
   auto c_max_length = static_cast<size_t>(max_length);
   auto c_schema = fni::ConvertTo<std::vector<std::string>>(env, schema);
   auto c_runtime_option = fni::NewCxxRuntimeOption(env, runtime_option);
-
+  auto c_schema_language = static_cast<text::SchemaLanguage>(schema_language);
+  auto c_paddle_model_format = fastdeploy::ModelFormat::PADDLE;
   auto c_model_ptr = new text::UIEModel(c_model_file,
                                         c_params_file,
                                         c_vocab_file,
                                         c_position_prob,
                                         c_max_length,
                                         c_schema,
-                                        c_runtime_option);
+                                        c_runtime_option,
+                                        c_paddle_model_format,
+                                        c_schema_language);
   INITIALIZED_OR_RETURN(c_model_ptr)
 
 #ifdef ENABLE_RUNTIME_PERF
@@ -88,53 +91,73 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_predictNative(JNIEnv *env,
   if (results.empty()) {
     return NULL;
   }
-  // Push to HashMap Array
-  const jclass j_hashmap_clazz = env->FindClass("java/util/HashMap");
+  // Push results to HashMap array
+  const char* j_hashmap_put_signature =
+      "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
+  const jclass j_hashmap_clazz = env->FindClass(
+      "java/util/HashMap");
+  const jclass j_uie_result_clazz = env->FindClass(
+      "com/baidu/paddle/fastdeploy/text/UIEResult");
+  // Get HashMap method id
   const jmethodID j_hashmap_init = env->GetMethodID(
       j_hashmap_clazz, "<init>", "()V");
   const jmethodID j_hashmap_put = env->GetMethodID(
-      j_hashmap_clazz,"put",
-      "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-  const int c_uie_result_size = static_cast<int>(results.size());
+      j_hashmap_clazz,"put", j_hashmap_put_signature);
+
+  const int c_uie_result_hashmap_size = results.size();
   jobjectArray j_hashmap_uie_result_arr = env->NewObjectArray(
-      c_uie_result_size, j_hashmap_clazz, NULL);
+      c_uie_result_hashmap_size, j_hashmap_clazz, NULL);
 
-  const jclass j_uie_result_clazz = env->FindClass(
-      "com/baidu/paddle/fastdeploy/text/UIEResult");
+  for (int i = 0; i < c_uie_result_hashmap_size; ++i) {
+    auto& curr_c_uie_result_map = results[i];
 
-  for (int i = 0; i < c_uie_result_size; ++i) {
-    auto& curr_uie_result_map = results[i];
+    // Convert unordered_map<string, vector<UIEResult>>
+    // -> HashMap<String, UIEResult[]>
+    jobject curr_j_uie_result_hashmap = env->NewObject(
+        j_hashmap_clazz, j_hashmap_init);
 
-    // From: std::unordered_map<std::string, std::vector<text::UIEResult>>
-    //   To: HashMap<String, UIEResult[]>
-    jobject curr_j_uie_result_hashmap = env->NewObject(j_hashmap_clazz, j_hashmap_init);
+    for (auto&& curr_c_uie_result: curr_c_uie_result_map) {
 
-    for (auto&& curr_uie_result: curr_uie_result_map) {
-      const auto& curr_uie_key = curr_uie_result.first;
-      jstring curr_inner_j_uie_key = fni::ConvertTo<jstring>(env, curr_uie_key);
-      // Convert std::vector<UIEResult> -> Java UIEResult[]
-      const int curr_inner_c_uie_result_num = curr_uie_result.second.size();
-      if (curr_inner_c_uie_result_num > 0) {
-        jobjectArray curr_inner_j_uie_result_arr = env->NewObjectArray(
-            curr_inner_c_uie_result_num, j_uie_result_clazz, NULL);
-        for (int j = 0; j < curr_inner_c_uie_result_num; ++j) {
-          text::UIEResult* inner_cxx_uie_result = (&(curr_uie_result.second[j]));
-          jobject curr_inner_j_uie_result_obj = fni::NewUIEJavaResultFromCxx(
-              env, reinterpret_cast<void *>(inner_cxx_uie_result));
-          env->SetObjectArrayElement(curr_inner_j_uie_result_arr, j,
+      const auto& curr_inner_c_uie_key = curr_c_uie_result.first;
+      jstring curr_inner_j_uie_key = fni::ConvertTo<jstring>(
+          env, curr_inner_c_uie_key); // Key of HashMap
+
+      if (curr_c_uie_result.second.size() > 0) {
+        // Value of HashMap: HashMap<String, UIEResult[]>
+        jobjectArray curr_inner_j_uie_result_values =
+            env->NewObjectArray(curr_c_uie_result.second.size(),
+                                j_uie_result_clazz,
+                                NULL);
+
+        // Convert vector<UIEResult> -> Java UIEResult[]
+        for (int j = 0; j < curr_c_uie_result.second.size(); ++j) {
+
+          text::UIEResult* inner_cxx_uie_result = (
+              &(curr_c_uie_result.second[j]));
+
+          jobject curr_inner_j_uie_result_obj =
+              fni::NewUIEJavaResultFromCxx(
+                  env, reinterpret_cast<void *>(inner_cxx_uie_result));
+
+          env->SetObjectArrayElement(curr_inner_j_uie_result_values, j,
                                      curr_inner_j_uie_result_obj);
           env->DeleteLocalRef(curr_inner_j_uie_result_obj);
         }
-        // Set element of 'curr_j_uie_result_hashmap': HashMap<String, UIEResult[]>
-        env->CallObjectMethod(curr_j_uie_result_hashmap, j_hashmap_put, curr_inner_j_uie_key,
-                              curr_inner_j_uie_result_arr);
+
+        // Set element of 'curr_j_uie_result_hashmap':
+        // HashMap<String, UIEResult[]>
+        env->CallObjectMethod(
+            curr_j_uie_result_hashmap, j_hashmap_put,
+            curr_inner_j_uie_key, curr_inner_j_uie_result_values);
 
         env->DeleteLocalRef(curr_inner_j_uie_key);
-        env->DeleteLocalRef(curr_inner_j_uie_result_arr);
-      }
-    }
-    // Set current HashMap<String, UIEResult[]> to HashMap[]
-    env->SetObjectArrayElement(j_hashmap_uie_result_arr, i, curr_j_uie_result_hashmap);
+        env->DeleteLocalRef(curr_inner_j_uie_result_values);
+      } // end if
+    } // end for
+
+    // Set current HashMap<String, UIEResult[]> to HashMap[i]
+    env->SetObjectArrayElement(j_hashmap_uie_result_arr, i,
+                               curr_j_uie_result_hashmap);
     env->DeleteLocalRef(curr_j_uie_result_hashmap);
   }
 
@@ -186,7 +209,36 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_setSchemaNodeNative(
 #ifndef ENABLE_TEXT
   return JNI_FALSE;
 #else
-  // TODO: implement setSchemaNodeNative()
+  if (schema == NULL) {
+    return JNI_FALSE;
+  }
+  const int j_schema_size = env->GetArrayLength(schema);
+  if (j_schema_size == 0) {
+    return JNI_FALSE;
+  }
+  if (cxx_context == 0) {
+    return JNI_FALSE;
+  }
+  auto c_model_ptr = reinterpret_cast<text::UIEModel *>(cxx_context);
+
+  std::vector<text::SchemaNode> c_schema;
+  for (int i = 0; i < j_schema_size; ++i) {
+    jobject curr_j_schema_node = env->GetObjectArrayElement(schema, i);
+    text::SchemaNode curr_c_schema_node;
+    if (fni::AllocateUIECxxSchemaNodeFromJava(
+        env, curr_j_schema_node, reinterpret_cast<void *>(
+            &curr_c_schema_node))) {
+      c_schema.push_back(curr_c_schema_node);
+    }
+    env->DeleteLocalRef(curr_j_schema_node);
+  }
+
+  if (c_schema.empty()) {
+    return JNI_FALSE;
+  }
+
+  c_model_ptr->SetSchema(c_schema);
+
   return JNI_TRUE;
 #endif
 }

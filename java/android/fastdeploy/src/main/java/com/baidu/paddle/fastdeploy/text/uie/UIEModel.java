@@ -71,7 +71,8 @@ public class UIEModel {
 
     // Set schema for Named Entity Recognition
     public boolean setSchema(String[] schema) {
-        if (schema == null || schema.length == 0) {
+        if (schema == null || schema.length == 0
+                || mCxxContext == 0) {
             return false;
         }
         return setSchemaStringNative(mCxxContext, schema);
@@ -79,7 +80,8 @@ public class UIEModel {
 
     // Set schema for Cross task extraction
     public boolean setSchema(SchemaNode[] schema) {
-        if (schema == null || schema.length == 0) {
+        if (schema == null || schema.length == 0
+                || mCxxContext == 0) {
             return false;
         }
         return setSchemaNodeNative(mCxxContext, schema);

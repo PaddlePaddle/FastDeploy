@@ -26,5 +26,15 @@ namespace jni {
  */
 jobject NewUIEJavaResultFromCxx(JNIEnv *env, void *cxx_result);
 
+/**
+ * Allocate one cxx SchemaNode from Java SchemaNode
+ * @param env A Pointer of JNIENV.
+ * @param j_schema_node_obj jobject that stands for Java SchemaNode
+ * @param cxx_schema_node A pointer of cxx 'text::SchemaNode'
+ * @return true if success, false if failed.
+ */
+bool AllocateUIECxxSchemaNodeFromJava(
+    JNIEnv *env, jobject j_schema_node_obj, void *cxx_schema_node);
+
 }  // namespace jni
 }  // namespace fastdeploy
