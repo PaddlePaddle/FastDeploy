@@ -56,11 +56,11 @@ model = fd.vision.matting.PPMatting(
 # 预测图片抠图结果
 im = cv2.imread(args.image)
 bg = cv2.imread(args.bg)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 # 可视化结果
 vis_im = fd.vision.vis_matting(im, result)
-vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
+vis_im_with_bg = fd.vision.swap_background(im, bg, result)
 cv2.imwrite("visualized_result_fg.jpg", vis_im)
 cv2.imwrite("visualized_result_replaced_bg.jpg", vis_im_with_bg)
 print(

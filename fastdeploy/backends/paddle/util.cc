@@ -79,7 +79,7 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     } else if (fd_tensor->dtype == FDDataType::INT64) {
       tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
       return;
-    }
+    } 
     FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
             Str(fd_tensor->dtype).c_str());
   } else {
@@ -87,14 +87,29 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     int size = 0;
     // TODO(liqi): The tensor->data interface of paddle don't return device id
     //               and don't support return void*.
-    auto* out_data = tensor->data<uint8_t>(&place, &size);
+    void* out_data = nullptr;
+    if (fd_dtype == FDDataType::FP32) {
+      out_data = tensor->data<float>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT32) {
+      out_data = tensor->data<int>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT64) {
+      out_data = tensor->data<int64_t>(&place, &size);
+    } else if (fd_dtype == FDDataType::INT8) {
+      out_data = tensor->data<int8_t>(&place, &size);
+    } else if (fd_dtype == FDDataType::UINT8) {
+      out_data = tensor->data<uint8_t>(&place, &size);
+    } else {
+      FDASSERT(false, "Unexpected data type(%s) while infer shared with PaddleBackend.",
+          Str(fd_dtype).c_str());
+    }
     Device device = Device::CPU;
     if(place == paddle_infer::PlaceType::kGPU) {
       device = Device::GPU;
     }
+    fd_tensor->name = tensor->name();
     fd_tensor->SetExternalData(
         shape, fd_dtype,
-        reinterpret_cast<void*>(out_data), device);
+        out_data, device);
   }
 }
 

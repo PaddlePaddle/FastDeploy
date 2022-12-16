@@ -27,6 +27,7 @@ set(OPENCV_DIRECTORY "@OPENCV_DIRECTORY@")
 set(ORT_DIRECTORY "@ORT_DIRECTORY@")
 set(OPENVINO_DIRECTORY "@OPENVINO_DIRECTORY@")
 set(RKNN2_TARGET_SOC "@RKNN2_TARGET_SOC@")
+set(WITH_XPU @WITH_XPU@)
 
 set(FASTDEPLOY_LIBS "")
 set(FASTDEPLOY_INCS "")
@@ -35,9 +36,12 @@ list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/include)
 # Note(zhoushunjie): include some useful utils function
 include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
 
-if(NOT CMAKE_CXX_STANDARD)
+# Set C++11 as standard for the whole project
+if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
-endif()
+  set(CMAKE_CXX_FLAGS "-Wno-format")
+  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+endif(NOT MSVC)
 
 if(ANDROID)
   add_library(fastdeploy STATIC IMPORTED GLOBAL)
@@ -210,11 +214,18 @@ endif()
 
 if (ENABLE_TEXT)
   if(ANDROID)
-    message(FATAL_ERROR "Not support fastdeploy text APIs with Android now!")
+    if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
+      message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with FastTokenizer, but found ${ANDROID_TOOLCHAIN}.")
+    endif()
+    add_library(core_tokenizers STATIC IMPORTED GLOBAL)
+    set_property(TARGET core_tokenizers PROPERTY IMPORTED_LOCATION
+                ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/fast_tokenizer/lib/${ANDROID_ABI}/libcore_tokenizers.so)
+    list(APPEND FASTDEPLOY_LIBS core_tokenizers)
+  else()
+    # Add dependency libs later: Linux/Mac/Win/...
+    find_library(FAST_TOKENIZER_LIB core_tokenizers ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/fast_tokenizer/lib NO_DEFAULT_PATH)
+    list(APPEND FASTDEPLOY_LIBS ${FAST_TOKENIZER_LIB})
   endif()
-  # Add dependency libs later
-  find_library(FAST_TOKENIZER_LIB core_tokenizers ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/fast_tokenizer/lib NO_DEFAULT_PATH)
-  list(APPEND FASTDEPLOY_LIBS ${FAST_TOKENIZER_LIB})
   list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/fast_tokenizer/include)
   list(APPEND FASTDEPLOY_INCS ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/fast_tokenizer/third_party/include)
 endif()
@@ -225,6 +236,10 @@ if(ENABLE_PADDLE_FRONTEND)
   endif()
   find_library(PADDLE2ONNX_LIB paddle2onnx  ${CMAKE_CURRENT_LIST_DIR}/third_libs/install/paddle2onnx/lib NO_DEFAULT_PATH)
   list(APPEND FASTDEPLOY_LIBS ${PADDLE2ONNX_LIB})
+endif()
+
+if(WITH_XPU)
+  list(APPEND FASTDEPLOY_LIBS -lpthread -lrt -ldl)
 endif()
 
 remove_duplicate_libraries(FASTDEPLOY_LIBS)

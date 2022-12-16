@@ -57,10 +57,35 @@ class Runtime:
         """
         assert isinstance(data, dict) or isinstance(
             data, list), "The input data should be type of dict or list."
-        for k, v in data.items():
-            if not v.data.contiguous:
-                data[k] = np.ascontiguousarray(data[k])
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, np.ndarray) and not v.data.contiguous:
+                    data[k] = np.ascontiguousarray(data[k])
+
         return self._runtime.infer(data)
+
+    def bind_input_tensor(self, name, fdtensor):
+        """Bind FDTensor by name, no copy and share input memory
+
+        :param name: (str)The name of input data.
+        :param fdtensor: (fastdeploy.FDTensor)The input FDTensor.
+        """
+        self._runtime.bind_input_tensor(name, fdtensor)
+
+    def zero_copy_infer(self):
+        """No params inference the model.
+
+        the input and output data need to pass through the bind_input_tensor and get_output_tensor interfaces.
+        """
+        self._runtime.infer()
+
+    def get_output_tensor(self, name):
+        """Get output FDTensor by name, no copy and share backend output memory
+
+        :param name: (str)The name of output data.
+        :return fastdeploy.FDTensor
+        """
+        return self._runtime.get_output_tensor(name)
 
     def compile(self, warm_datas):
         """[Only for Poros backend] compile with prewarm data for poros
@@ -178,7 +203,8 @@ class RuntimeOption:
     @long_to_int.setter
     def long_to_int(self, value):
         assert isinstance(
-            value, bool), "The value to set `long_to_int` must be type of bool."
+            value,
+            bool), "The value to set `long_to_int` must be type of bool."
         self._option.long_to_int = value
 
     @use_nvidia_tf32.setter
@@ -218,6 +244,34 @@ class RuntimeOption:
             )
             return
         return self._option.use_gpu(device_id)
+
+    def use_xpu(self,
+                device_id=0,
+                l3_workspace_size=16 * 1024 * 1024,
+                locked=False,
+                autotune=True,
+                autotune_file="",
+                precision="int16",
+                adaptive_seqlen=False,
+                enable_multi_stream=False):
+        """Inference with XPU
+
+        :param device_id: (int)The index of XPU will be used for inference, default 0
+        :param l3_workspace_size: (int)The size of the video memory allocated by the l3 cache, the maximum is 16M, default 16M
+        :param locked: (bool)Whether the allocated L3 cache can be locked. If false, it means that the L3 cache is not locked,
+                        and the allocated L3 cache can be shared by multiple models, and multiple models
+        :param autotune: (bool)Whether to autotune the conv operator in the model.
+                        If true, when the conv operator of a certain dimension is executed for the first time,
+                        it will automatically search for a better algorithm to improve the performance of subsequent conv operators of the same dimension.
+        :param autotune_file: (str)Specify the path of the autotune file. If autotune_file is specified,
+                        the algorithm specified in the file will be used and autotune will not be performed again.
+        :param precision: (str)Calculation accuracy of multi_encoder
+        :param adaptive_seqlen: (bool)adaptive_seqlen Is the input of multi_encoder variable length
+        :param enable_multi_stream: (bool)Whether to enable the multi stream of xpu.
+        """
+        return self._option.use_xpu(device_id, l3_workspace_size, locked,
+                                    autotune, autotune_file, precision,
+                                    adaptive_seqlen, enable_multi_stream)
 
     def use_cpu(self):
         """Inference with CPU
@@ -409,6 +463,16 @@ class RuntimeOption:
         """
         return self._option.disable_paddle_trt_collect_shape()
 
+    def delete_paddle_backend_pass(self, pass_name):
+        """Delete pass by name in paddle backend
+        """
+        return self._option.delete_paddle_backend_pass(pass_name)
+
+    def disable_paddle_trt_ops(self, ops):
+        """Disable some ops in paddle trt backend
+        """
+        return self._option.disable_paddle_trt_ops(ops)
+
     def use_ipu(self,
                 device_num=1,
                 micro_batch_size=1,
@@ -434,7 +498,8 @@ class RuntimeOption:
                 continue
             if hasattr(getattr(self._option, attr), "__call__"):
                 continue
-            message += "  {} : {}\t\n".format(attr, getattr(self._option, attr))
+            message += "  {} : {}\t\n".format(attr,
+                                              getattr(self._option, attr))
         message.strip("\n")
         message += ")"
         return message

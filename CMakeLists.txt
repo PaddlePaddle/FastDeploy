@@ -37,9 +37,10 @@ include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
 if(NOT MSVC)
   set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "-Wno-format")
+  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 endif(NOT MSVC)
 
-if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT ENABLE_TIMVX))
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID) AND (NOT WITH_TIMVX))
   include(${PROJECT_SOURCE_DIR}/cmake/patchelf.cmake)
 endif()
 
@@ -63,7 +64,8 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
-option(ENABLE_TIMVX "Whether to compile for TIMVX deploy." OFF)
+option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
+option(WITH_XPU "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -137,8 +139,21 @@ set(HEAD_DIR "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}")
 include_directories(${HEAD_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-if (ENABLE_TIMVX)
+if (WITH_TIMVX)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
+endif()
+
+if (WITH_XPU)
+  if(NOT ENABLE_LITE_BACKEND)
+      message(WARNING "While compiling with -DWITH_XPU=ON, will force to set -DENABLE_LITE_BACKEND=ON")
+      set(ENABLE_LITE_BACKEND ON)
+  endif()
+  if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
+    message(FATAL_ERROR "XPU is only supported on Linux x64 platform")
+  endif()
+  if(NOT PADDLELITE_URL)
+    set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221215.tgz")
+  endif()
 endif()
 
 
@@ -425,13 +440,6 @@ if(ENABLE_VISION)
   endif()
 endif()
 
-if(ANDROID OR IOS)
-  if(ENABLE_TEXT)
-    set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
-    message(STATUS "Found Android or IOS, force ENABLE_TEXT OFF. We do not support fast_tokenizer with Android/IOS now.")
-  endif()
-endif()
-
 if(ENABLE_TEXT)
   add_definitions(-DENABLE_TEXT)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TEXT_SRCS})
@@ -488,6 +496,8 @@ set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${FASTDEPLOY_VERSION})
 if(MSVC)
   # disable warnings for dll export
   target_compile_options(${LIBRARY_NAME} PRIVATE "$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CXX>>:/wd4251>$<$<BUILD_INTERFACE:$<COMPILE_LANGUAGE:CUDA>>:-Xcompiler=/wd4251>")
+  file(GLOB FD_FILES_REQUIRE_BIGOBJ ${CSRCS_DIR_NAME}/fastdeploy/function/reduce.cc)
+  set_source_files_properties(${FD_FILES_REQUIRE_BIGOBJ} PROPERTIES COMPILE_FLAGS "/bigobj")
 endif()
 
 # extra depend libs for android
@@ -506,8 +516,12 @@ target_link_libraries(${LIBRARY_NAME} ${DEPEND_LIBS})
 
 if(WIN32)
   if(ENABLE_VISION)
-    add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
-    add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+    if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+      add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+    else()
+      add_custom_target(copy_yaml_library ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/third_party/yaml-cpp/Release  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/lib DEPENDS ${LIBRARY_NAME})
+      add_custom_target(copy_yaml_include ALL COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/third_party/yaml-cpp/include  ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/yaml-cpp/include DEPENDS ${LIBRARY_NAME})
+    endif()
   endif()
 endif()
 
@@ -588,7 +602,6 @@ install(
   ${PROJECT_SOURCE_DIR}/cmake/utils.cmake
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
-
 
 install(
   DIRECTORY ${PROJECT_SOURCE_DIR}/examples

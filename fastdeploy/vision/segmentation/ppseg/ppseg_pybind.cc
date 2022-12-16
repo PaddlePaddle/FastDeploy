@@ -47,6 +47,9 @@ void BindPPSeg(pybind11::module& m) {
       m, "PaddleSegModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
+      .def("clone", [](vision::segmentation::PaddleSegModel& self) {
+        return self.Clone();
+      })
       .def("predict",
            [](vision::segmentation::PaddleSegModel& self,
               pybind11::array& data) {
