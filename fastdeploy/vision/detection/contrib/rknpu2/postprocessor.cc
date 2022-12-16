@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/vision/detection/contrib/rknpu2/postprocessor.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -44,7 +43,10 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
                                  anchor, grid_h, grid_w, stride, filterBoxes,
                                  boxesScore, classId, conf_threshold_);
       } else {
-        FDERROR << "RKYOLO Only Support FP32 Model" << std::endl;
+        FDERROR << "RKYOLO Only Support FP32 Model."
+            << "But the result's type is "
+            << Str(tensors[i].dtype)
+            << std::endl;
       }
     }
 
