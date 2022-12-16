@@ -22,7 +22,7 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX};
+enum FASTDEPLOY_DECL Device { CPU, GPU, RKNPU, IPU, TIMVX, XPU};
 
 FASTDEPLOY_DECL std::string Str(const Device& d);
 
