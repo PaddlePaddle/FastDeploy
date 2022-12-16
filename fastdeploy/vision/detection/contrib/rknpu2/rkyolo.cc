@@ -56,25 +56,17 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
                           std::vector<DetectionResult>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
 
-  fastdeploy::TimeCounter tc;
-  tc.Start();
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Preprocessor in RKNN");
 
-  tc.Start();
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Infer in RKNN");
 
-  tc.Start();
   auto pad_hw_values_ = preprocessor_.GetPadHWValues();
   postprocessor_.SetPadHWValues(preprocessor_.GetPadHWValues());
   postprocessor_.SetScale(preprocessor_.GetScale());
@@ -83,9 +75,6 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
             << std::endl;
     return false;
   }
-  tc.End();
-  tc.PrintInfo("Postprocessor in RKNN");
-
   return true;
 }
 
