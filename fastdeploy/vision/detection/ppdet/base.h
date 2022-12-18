@@ -45,6 +45,12 @@ class FASTDEPLOY_DECL PPDetBase : public FastDeployModel {
           const RuntimeOption& custom_option = RuntimeOption(),
           const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /** \brief Clone a new PaddleDetModel with less memory usage when multiple instances of the same model are created
+   *
+   * \return new PaddleDetModel* type unique pointer
+   */
+  virtual std::unique_ptr<PPDetBase> Clone() const;
+
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleDetection/BaseModel"; }
 

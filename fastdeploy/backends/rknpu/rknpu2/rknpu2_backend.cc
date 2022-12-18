@@ -340,10 +340,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
         FDERROR << "rknn_create_mem output_mems_ error." << std::endl;
         return false;
       }
-
-      // The data type of output data is changed to FP32
-      output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
-
       // default output type is depend on model, this requires float32 to compute top5
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
 

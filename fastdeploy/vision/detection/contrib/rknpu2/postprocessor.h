@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
 #include "fastdeploy/vision/detection/contrib/rknpu2/utils.h"
@@ -54,9 +55,6 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   /// Get nms_threshold, default 0.45
   float GetNMSThreshold() const { return nms_threshold_; }
 
-  // Set model_type
-  void SetModelType(ModelType model_type);
-
   // Set height and weight
   void SetHeightAndWeight(int& height, int& width) {
     height_ = height;
@@ -69,10 +67,17 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   }
 
   // Set scale
-  void SetScale(std::vector<float> scale) { scale_ = scale; }
+  void SetScale(std::vector<float> scale) {
+    scale_ = scale;
+  }
+
+  // Set Anchor
+  void SetAnchor(std::vector<int> anchors, int anchor_per_branch) {
+      anchors_ = anchors;
+      anchor_per_branch_ = anchor_per_branch;
+  }
 
  private:
-  ModelType model_type_ = ModelType::UNKNOWN;
   std::vector<int> anchors_ = {10, 13, 16,  30,  33, 23,  30,  61,  62,
                                45, 59, 119, 116, 90, 156, 198, 373, 326};
   int strides_[3] = {8, 16, 32};

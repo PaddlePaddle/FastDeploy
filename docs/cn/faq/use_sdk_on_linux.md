@@ -1,3 +1,6 @@
+[English](../../en/faq/use_sdk_on_linux.md) | 中文
+
+
 # Linux上C++部署
 
 1. 编译完成运行，提示找不到.so文件

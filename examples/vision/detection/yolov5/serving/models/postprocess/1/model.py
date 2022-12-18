@@ -61,31 +61,7 @@ class TritonPythonModel:
             dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
             self.output_dtype.append(dtype)
         print("postprocess output names:", self.output_names)
-
-    def yolov5_postprocess(self, infer_outputs, im_infos):
-        """
-        Parameters
-        ----------
-        infer_outputs : numpy.array
-          Contains the batch of inference results
-        im_infos : numpy.array(b'{}')
-         Returns
-        -------
-        numpy.array
-           yolov5 postprocess result
-        """
-        results = []
-        for i_batch in range(len(im_infos)):
-            new_infer_output = infer_outputs[i_batch:i_batch + 1]
-            new_im_info = im_infos[i_batch].decode('utf-8').replace("'", '"')
-            new_im_info = json.loads(new_im_info)
-
-            result = fd.vision.detection.YOLOv5.postprocess(
-                [new_infer_output, ], new_im_info)
-
-            r_str = fd.vision.utils.fd_result_to_json(result)
-            results.append(r_str)
-        return np.array(results, dtype=np.object)
+        self.postprocessor_ = fd.vision.detection.YOLOv5Postprocessor()
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
@@ -107,7 +83,6 @@ class TritonPythonModel:
           be the same as `requests`
         """
         responses = []
-        # print("num:", len(requests), flush=True)
         for request in requests:
             infer_outputs = pb_utils.get_input_tensor_by_name(
                 request, self.input_names[0])
@@ -115,10 +90,15 @@ class TritonPythonModel:
                                                          self.input_names[1])
             infer_outputs = infer_outputs.as_numpy()
             im_infos = im_infos.as_numpy()
+            for i in range(im_infos.shape[0]):
+                im_infos[i] = json.loads(im_infos[i].decode('utf-8').replace(
+                    "'", '"'))
 
-            results = self.yolov5_postprocess(infer_outputs, im_infos)
+            results = self.postprocessor_.run([infer_outputs], im_infos)
+            r_str = fd.vision.utils.fd_result_to_json(results)
+            r_np = np.array(r_str, dtype=np.object)
 
-            out_tensor = pb_utils.Tensor(self.output_names[0], results)
+            out_tensor = pb_utils.Tensor(self.output_names[0], r_np)
             inference_response = pb_utils.InferenceResponse(
                 output_tensors=[out_tensor, ])
             responses.append(inference_response)
