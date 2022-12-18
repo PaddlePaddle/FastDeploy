@@ -20,7 +20,17 @@
 
 namespace fastdeploy {
 namespace vision {
-                            
+
+cv::Mat SwapBackgroundNEON(const cv::Mat& im, 
+                           const cv::Mat& background, 
+                           const MattingResult& result, 
+                           bool remove_small_connected_area = false);
+
+cv::Mat SwapBackgroundNEON(const cv::Mat& im,
+                           const cv::Mat& background,
+                           const SegmentationResult& result,
+                           int background_label);    
+
 }  // namespace vision
 }  // namespace fastdeploy
 
