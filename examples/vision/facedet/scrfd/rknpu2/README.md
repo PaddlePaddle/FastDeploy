@@ -6,7 +6,7 @@
 
 下面以scrfd_500m_bnkps_shape640x640为例子，快速的转换SCRFD ONNX模型为RKNN量化模型。 以下命令在Ubuntu18.04下执行:
 ```bash
-wget  https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
+wget  https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/scrfd_500m_bnkps_shape640x640.zip
 unzip scrfd_500m_bnkps_shape640x640.zip
 python  /Path/To/FastDeploy/tools/rknpu2/export.py \
         --config_path tools/rknpu2/config/scrfd.yaml \
