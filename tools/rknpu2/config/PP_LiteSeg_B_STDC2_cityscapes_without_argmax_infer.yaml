@@ -1,0 +1,15 @@
+mean:
+  -
+    - 128.5
+    - 128.5
+    - 128.5
+std:
+  -
+    - 128.5
+    - 128.5
+    - 128.5
+model_path: ./PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer/PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.onnx
+outputs_nodes:
+do_quantization: False
+dataset: "./datasets.txt"
+output_folder: "./"
