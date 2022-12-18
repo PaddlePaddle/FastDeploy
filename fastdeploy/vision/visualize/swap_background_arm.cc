@@ -14,7 +14,7 @@
 
 #ifdef ENABLE_VISION_VISUALIZE
 
-#include "fastdeploy/vision/visualize/segmentation_arm.h"
+#include "fastdeploy/vision/visualize/swap_background_arm.h"
 #ifdef __ARM_NEON
 #include <arm_neon.h>
 #endif
