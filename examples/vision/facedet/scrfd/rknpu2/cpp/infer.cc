@@ -60,7 +60,7 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-  auto vis_im = fastdeploy::vision::Visualize::VisFaceDetection(im, res);
+  auto vis_im = fastdeploy::vision::VisFaceDetection(im, res);
   tc.End();
   tc.PrintInfo("SCRFD in RKNN");
 
