@@ -30,7 +30,7 @@ paddle2onnx --model_dir Portrait_PP_HumanSegV2_Lite_256x144_infer \
 # 将ONNX模型目录拷贝到Fastdeploy根目录
 cp -r ./Portrait_PP_HumanSegV2_Lite_256x144_infer /path/to/Fastdeploy
 # 转换模型,模型将生成在Portrait_PP_HumanSegV2_Lite_256x144_infer目录下
-python /PathToFastDeploy/tools/rknpu2/export.py \
+python tools/rknpu2/export.py \
         --config_path tools/rknpu2/config/Portrait_PP_HumanSegV2_Lite_256x144_infer.yaml \
         --target_platform rk3588
 ```

@@ -178,9 +178,14 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   // get input info and copy to input tensor info
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     input_attrs_[i].index = i;
+
     // query info
-    ret = rknn_query(ctx, RKNN_QUERY_INPUT_ATTR, &(input_attrs_[i]),
+    ret = rknn_query(ctx,
+                     RKNN_QUERY_INPUT_ATTR,
+                     &(input_attrs_[i]),
                      sizeof(rknn_tensor_attr));
+    DumpTensorAttr(input_attrs_[i]);
+
     if (ret != RKNN_SUCC) {
       printf("rknn_init error! ret=%d\n", ret);
       return false;
@@ -214,8 +219,12 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     output_attrs_[i].index = i;
     // query info
-    ret = rknn_query(ctx, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs_[i]),
+    ret = rknn_query(ctx,
+                     RKNN_QUERY_OUTPUT_ATTR,
+                     &(output_attrs_[i]),
                      sizeof(rknn_tensor_attr));
+    DumpTensorAttr(output_attrs_[i]);
+
     if (ret != RKNN_SUCC) {
       FDERROR << "rknn_query fail! ret = " << ret << std::endl;
       return false;
@@ -254,7 +263,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
 void RKNPU2Backend::DumpTensorAttr(rknn_tensor_attr& attr) {
   printf("index=%d, name=%s, n_dims=%d, dims=[%d, %d, %d, %d], "
          "n_elems=%d, size=%d, fmt=%s, type=%s, "
-         "qnt_type=%s, zp=%d, scale=%f, pass_through=%d",
+         "qnt_type=%s, zp=%d, scale=%f, pass_through=%d\n",
          attr.index, attr.name, attr.n_dims, attr.dims[0], attr.dims[1],
          attr.dims[2], attr.dims[3], attr.n_elems, attr.size,
          get_format_string(attr.fmt), get_type_string(attr.type),
@@ -315,7 +324,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
         FDINFO << "The input model is not a quantitative model. "
                   "Close the normalize operation." << std::endl;
       }
-      DumpTensorAttr(input_attrs_[i]);
 
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
@@ -344,7 +352,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
       // The data type of output data is changed to FP32
       output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
-      DumpTensorAttr(output_attrs_[i]);
 
       // default output type is depend on model, this requires float32 to compute top5
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
