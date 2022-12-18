@@ -12,4 +12,4 @@ model_path: ./PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer/PP_LiteSeg_B_ST
 outputs_nodes:
 do_quantization: False
 dataset: "./datasets.txt"
-output_folder: "./"
+output_folder: "./PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer"

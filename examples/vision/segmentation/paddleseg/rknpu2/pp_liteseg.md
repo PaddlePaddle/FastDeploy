@@ -51,12 +51,6 @@ Deploy:
   output_dtype: float32
   output_op: none
   params: model.pdiparams
-  transforms:
-  - target_size:
-    - 256
-    - 144
-    type: Resize
-  - type: Normalize
 ```
 
 **修改后的yaml文件**
@@ -65,16 +59,10 @@ Deploy:
   input_shape:
   - 1
   - 3
-  - 144
-  - 256
+  - 512
+  - 1024
   model: model.pdmodel
   output_dtype: float32
   output_op: none
   params: model.pdiparams
-  transforms:
-  - target_size:
-    - 256
-    - 144
-    type: Resize
-  - type: Normalize
 ```
