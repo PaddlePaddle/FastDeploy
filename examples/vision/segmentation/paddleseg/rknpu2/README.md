@@ -26,7 +26,6 @@ RKNPU部署模型前需要将Paddle模型转换成RKNN模型，具体步骤如�
 ## 模型转换example
 
 * [PPHumanSeg](./pp_humanseg.md)
-* [PPLiteSeg](./pp_liteseg.md)
 
 ## 详细部署文档
 - [RKNN总体部署教程](../../../../../docs/cn/faq/rknpu2/rknpu2.md)
