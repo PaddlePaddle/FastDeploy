@@ -102,6 +102,37 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  ///
+  /// \brief Turn on XPU.
+  ///
+  /// \param xpu_id the XPU card to use (default is 0).
+  /// \param l3_workspace_size The size of the video memory allocated by the l3
+  ///         cache, the maximum is 16M.
+  /// \param locked Whether the allocated L3 cache can be locked. If false,
+  ///       it means that the L3 cache is not locked, and the allocated L3
+  ///       cache can be shared by multiple models, and multiple models
+  ///       sharing the L3 cache will be executed sequentially on the card.
+  /// \param autotune Whether to autotune the conv operator in the model. If
+  ///       true, when the conv operator of a certain dimension is executed
+  ///       for the first time, it will automatically search for a better
+  ///       algorithm to improve the performance of subsequent conv operators
+  ///       of the same dimension.
+  /// \param autotune_file Specify the path of the autotune file. If
+  ///       autotune_file is specified, the algorithm specified in the
+  ///       file will be used and autotune will not be performed again.
+  /// \param precision Calculation accuracy of multi_encoder
+  /// \param adaptive_seqlen Is the input of multi_encoder variable length
+  /// \param enable_multi_stream Whether to enable the multi stream of xpu.
+  ///
+  void UseXpu(int xpu_id = 0,
+              int l3_workspace_size = 0xfffc00,
+              bool locked = false,
+              bool autotune = true,
+              const std::string& autotune_file = "",
+              const std::string& precision = "int16",
+              bool adaptive_seqlen = false,
+              bool enable_multi_stream = false);
+
   void SetExternalStream(void* external_stream);
 
   /*
@@ -354,6 +385,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
+  bool enable_xpu = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
@@ -385,6 +417,15 @@ struct FASTDEPLOY_DECL RuntimeOption {
       fastdeploy::rknpu2::CpuName::RK3588;
   fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
       fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
+
+  // ======Only for XPU Backend=======
+  int xpu_l3_workspace_size = 0xfffc00;
+  bool xpu_locked = false;
+  bool xpu_autotune = true;
+  std::string xpu_autotune_file = "";
+  std::string xpu_precision = "int16";
+  bool xpu_adaptive_seqlen = false;
+  bool xpu_enable_multi_stream = false;
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty

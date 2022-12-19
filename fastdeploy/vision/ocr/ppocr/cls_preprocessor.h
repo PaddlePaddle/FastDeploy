@@ -26,8 +26,8 @@ class FASTDEPLOY_DECL ClassifierPreprocessor {
  public:
   /** \brief Process the input image and prepare input tensors for runtime
    *
-   * \param[in] images The input image data list, all the elements are returned by cv::imread()
-   * \param[in] outputs The output tensors which will feed in runtime
+   * \param[in] images The input data list, all the elements are FDMat
+   * \param[in] outputs The output tensors which will be fed into runtime
    * \return true if the preprocess successed, otherwise false
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
