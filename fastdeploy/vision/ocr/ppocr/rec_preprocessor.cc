@@ -44,10 +44,10 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
 
 void OcrRecognizerResizeImageOnAscend(FDMat* mat,
                               const std::vector<int>& rec_image_shape) {
-
+  
+  int img_h, img_w;
   img_h = rec_image_shape[1]; 
   img_w = rec_image_shape[2];  
-
 
   if (mat->Width() >= img_w) {
     Resize::Run(mat, img_w, img_h); // Reszie W to 320
