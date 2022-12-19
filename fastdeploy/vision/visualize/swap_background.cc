@@ -18,6 +18,7 @@
 #include "fastdeploy/vision/visualize/swap_background_arm.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -61,6 +62,7 @@ static cv::Mat SwapBackgroundCommonCpu(
   uchar* background_data = static_cast<uchar*>(background_copy.data);
   uchar* im_data = static_cast<uchar*>(im.data);
   float* alpha_data = reinterpret_cast<float*>(alpha.data);
+  
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       float alpha_val = alpha_data[i * width + j];
@@ -102,6 +104,7 @@ static cv::Mat SwapBackgroundCommonCpu(
   uchar* background_data = static_cast<uchar*>(background_copy.data);
   uchar* im_data = static_cast<uchar*>(im.data);
   float keep_value = 0.f;
+
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       int category_id = result.label_map[i * width + j];
@@ -118,6 +121,7 @@ static cv::Mat SwapBackgroundCommonCpu(
       }
     }
   }
+
   return vis_img;
 }
 
@@ -128,10 +132,10 @@ cv::Mat SwapBackground(const cv::Mat& im, const cv::Mat& background,
   // TODO: Support SSE/AVX on x86_64 platforms                        
 #ifdef __ARM_NEON 
   return SwapBackgroundNEON(im, background, result, 
-                            remove_small_connected_area);
+                            remove_small_connected_area);                       
 #else  
   return SwapBackgroundCommonCpu(im, background, result, 
-                                 remove_small_connected_area);
+                                 remove_small_connected_area);                          
 #endif    
 }
 
@@ -139,7 +143,8 @@ cv::Mat SwapBackground(const cv::Mat& im, const cv::Mat& background,
                        const SegmentationResult& result, int background_label) {
   // TODO: Support SSE/AVX on x86_64 platforms                        
 #ifdef __ARM_NEON 
-  return SwapBackgroundNEON(im, background, result, background_label);
+  // return SwapBackgroundNEON(im, background, result, background_label);
+  return SwapBackgroundCommonCpu(im, background, result, background_label);
 #else  
   return SwapBackgroundCommonCpu(im, background, result, background_label);
 #endif    

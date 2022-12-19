@@ -18,6 +18,7 @@
 #ifdef __ARM_NEON
 #include <arm_neon.h>
 #endif
+#include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -112,28 +113,29 @@ cv::Mat SwapBackgroundNEON(const cv::Mat& im,
       float32x4_t flbgx4 = vcvtq_f32_u32(lbgx4);
       float32x4_t flbrx4 = vcvtq_f32_u32(lbrx4);
       
-      // alpha
-      float32x4_t alpv0 = vld1q_f32(alpha_data + i);
-      float32x4_t alpv1 = vld1q_f32(alpha_data + i + 4);
-      float32x4_t ralpv0 = vsubq_f32(vdupq_n_f32(1.0f), alpv0);
-      float32x4_t ralpv1 = vsubq_f32(vdupq_n_f32(1.0f), alpv1);
+      // alpha load from little end
+      float32x4_t lalpx4 = vld1q_f32(alpha_data + i); // low bits
+      float32x4_t halpx4 = vld1q_f32(alpha_data + i + 4); // high bits
+      float32x4_t rlalpx4 = vsubq_f32(vdupq_n_f32(1.0f), lalpx4);
+      float32x4_t rhalpx4 = vsubq_f32(vdupq_n_f32(1.0f), halpx4);
 
       // blending 
-      float32x4_t fhvbx4 = vaddq_f32(vmulq_f32(fhibx4, alpv0), vmulq_f32(fhbbx4, ralpv0));
-      float32x4_t fhvgx4 = vaddq_f32(vmulq_f32(fhigx4, alpv0), vmulq_f32(fhbgx4, ralpv0));
-      float32x4_t fhvrx4 = vaddq_f32(vmulq_f32(fhirx4, alpv0), vmulq_f32(fhbrx4, ralpv0));
-      float32x4_t flvbx4 = vaddq_f32(vmulq_f32(flibx4, alpv1), vmulq_f32(flbbx4, ralpv1));
-      float32x4_t flvgx4 = vaddq_f32(vmulq_f32(fligx4, alpv1), vmulq_f32(flbgx4, ralpv1));
-      float32x4_t flvrx4 = vaddq_f32(vmulq_f32(flirx4, alpv1), vmulq_f32(flbrx4, ralpv1));
+      float32x4_t fhvbx4 = vaddq_f32(vmulq_f32(fhibx4, halpx4), vmulq_f32(fhbbx4, rhalpx4));
+      float32x4_t fhvgx4 = vaddq_f32(vmulq_f32(fhigx4, halpx4), vmulq_f32(fhbgx4, rhalpx4));
+      float32x4_t fhvrx4 = vaddq_f32(vmulq_f32(fhirx4, halpx4), vmulq_f32(fhbrx4, rhalpx4));
+      float32x4_t flvbx4 = vaddq_f32(vmulq_f32(flibx4, lalpx4), vmulq_f32(flbbx4, rlalpx4));
+      float32x4_t flvgx4 = vaddq_f32(vmulq_f32(fligx4, lalpx4), vmulq_f32(flbgx4, rlalpx4));
+      float32x4_t flvrx4 = vaddq_f32(vmulq_f32(flirx4, lalpx4), vmulq_f32(flbrx4, rlalpx4));
 
       // f32 -> u32 -> u16 -> u8
       uint8x8x3_t vbgrx8x3;
-      vbgrx8x3.val[0] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(fhvbx4)), 
-                                               vmovn_u32(vcvtq_u32_f32(flvbx4))));
-      vbgrx8x3.val[1] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(fhvgx4)), 
-                                               vmovn_u32(vcvtq_u32_f32(flvgx4))));
-      vbgrx8x3.val[2] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(fhvrx4)), 
-                                               vmovn_u32(vcvtq_u32_f32(flvrx4))));
+      // combine low 64 bits and high 64 bits into one 128 neon register
+      vbgrx8x3.val[0] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(flvbx4)), 
+                                               vmovn_u32(vcvtq_u32_f32(fhvbx4))));
+      vbgrx8x3.val[1] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(flvgx4)), 
+                                               vmovn_u32(vcvtq_u32_f32(fhvgx4))));
+      vbgrx8x3.val[2] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(flvrx4)), 
+                                               vmovn_u32(vcvtq_u32_f32(fhvrx4))));                                         
       vst3_u8(vis_data + i * 3, vbgrx8x3);
    }
 

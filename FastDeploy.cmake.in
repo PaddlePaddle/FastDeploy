@@ -248,6 +248,11 @@ if(WITH_XPU)
   list(APPEND FASTDEPLOY_LIBS -lpthread -lrt -ldl)
 endif()
 
+if(ANDROID)
+  find_library(log-lib log)
+  list(APPEND FASTDEPLOY_LIBS ${log-lib})
+endif()
+
 remove_duplicate_libraries(FASTDEPLOY_LIBS)
 
 # Print compiler information
