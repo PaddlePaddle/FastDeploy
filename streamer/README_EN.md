@@ -22,7 +22,7 @@ docker pull nvcr.io/nvidia/deepstream:6.1.1-devel
 
 ## Build
 
-1. [Build FastDeploy](../../docs/en/build_and_install), or download [FastDeploy prebuilt libraries](../../docs/en/build_and_install/download_prebuilt_libraries.md)
+1. [Build FastDeploy](../docs/en/build_and_install), or download [FastDeploy prebuilt libraries](../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 2. Build Streamer
 ```

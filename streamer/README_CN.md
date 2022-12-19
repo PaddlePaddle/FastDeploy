@@ -23,7 +23,7 @@ docker pull nvcr.io/nvidia/deepstream:6.1.1-devel
 
 ## 编译和运行
 
-1. [编译FastDeploy](../../docs/cn/build_and_install), 或直接下载[FastDeploy预编译库](../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+1. [编译FastDeploy](../docs/cn/build_and_install), 或直接下载[FastDeploy预编译库](../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 2. 编译Streamer
 ```
