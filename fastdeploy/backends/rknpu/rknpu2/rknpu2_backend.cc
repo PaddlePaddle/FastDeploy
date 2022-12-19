@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
-#include "fastdeploy/utils/perf.h"
+
 namespace fastdeploy {
 RKNPU2Backend::~RKNPU2Backend() {
   // Release memory uniformly here
@@ -221,7 +221,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       return false;
     }
 
-    // If the output dimension is 3, the runtime will automatically change it to 4. 
+    // If the output dimension is 3, the runtime will automatically change it to 4.
     // Obviously, this is wrong, and manual correction is required here.
     int n_dims = output_attrs_[i].n_dims;
     if((n_dims == 4) && (output_attrs_[i].dims[3] == 1)){
@@ -254,12 +254,11 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
 void RKNPU2Backend::DumpTensorAttr(rknn_tensor_attr& attr) {
   printf("index=%d, name=%s, n_dims=%d, dims=[%d, %d, %d, %d], "
          "n_elems=%d, size=%d, fmt=%s, type=%s, "
-         "qnt_type=%s, zp=%d, scale=%f, pass_through=%d",
+         "qnt_type=%s, zp=%d, scale=%f\n",
          attr.index, attr.name, attr.n_dims, attr.dims[0], attr.dims[1],
          attr.dims[2], attr.dims[3], attr.n_elems, attr.size,
          get_format_string(attr.fmt), get_type_string(attr.type),
-         get_qnt_type_string(attr.qnt_type), attr.zp, attr.scale,
-         attr.pass_through);
+         get_qnt_type_string(attr.qnt_type), attr.zp, attr.scale);
 }
 
 TensorInfo RKNPU2Backend::GetInputInfo(int index) {
@@ -310,12 +309,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       input_attrs_[i].type = input_type;
       input_attrs_[i].size = inputs[0].Nbytes();
       input_attrs_[i].size_with_stride = inputs[0].Nbytes();
-      if(input_attrs_[i].type == RKNN_TENSOR_FLOAT16 ||
-          input_attrs_[i].type == RKNN_TENSOR_FLOAT32){
-        FDINFO << "The input model is not a quantitative model. "
-                  "Close the normalize operation." << std::endl;
-      }
-
+      input_attrs_[i].pass_through = 0;
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
       if (input_mems_[i] == nullptr) {
         FDERROR << "rknn_create_mem input_mems_ error." << std::endl;
@@ -346,7 +340,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
 
       // default output type is depend on model, this requires float32 to compute top5
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
-
       // set output memory and attribute
       if (ret != RKNN_SUCC) {
         FDERROR << "output tensor memory rknn_set_io_mem fail! ret=" << ret
@@ -373,7 +366,7 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
   }
-  
+
   // run rknn
   ret = rknn_run(ctx, nullptr);
   if (ret != RKNN_SUCC) {
@@ -391,8 +384,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    std::vector<float>  output_scale = {output_attrs_[i].scale};
-    (*outputs)[i].SetQuantizationInfo(output_attrs_[i].zp, output_scale);
     memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->virt_addr,
            (*outputs)[i].Nbytes());
   }
