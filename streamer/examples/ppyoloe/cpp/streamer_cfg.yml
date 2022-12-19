@@ -1,0 +1,46 @@
+app:
+  type: video_analytics
+  enable-perf-measurement: true
+  perf-measurement-interval-sec: 5
+
+nvurisrcbin_list:
+  uri-list:
+  - file:///opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov
+  - file:///opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov
+  - file:///opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov
+  - file:///opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov
+  pad-prefix: mux.sink_
+  gpu-id: 0
+
+nvstreammux:
+  name: mux
+  gpu-id: 0
+  batch-size: 4
+  width: 1920
+  height: 1080
+  batched-push-timeout: 40000  # 40ms
+
+nvinfer:
+  gpu-id: 0
+  config-file-path: nvinfer_config.txt
+
+nvtracker:
+  gpu-id: 0
+  tracker-width: 640
+  tracker-height: 640
+  ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
+  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
+  enable-batch-process: true
+
+nvmultistreamtiler:
+  gpu-id: 0
+  rows: 2
+  columns: 2
+
+nvosdbin:
+  gpu-id: 0
+
+nvvideoencfilesinkbin:
+  gpu-id: 0
+  bitrate: 4000
+  output-file: out.mp4
