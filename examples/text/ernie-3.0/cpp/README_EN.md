@@ -1,3 +1,4 @@
+English | [简体中文](README_CN.md)
 # Example of ERNIE 3.0 models C++ Deployment
 
 Before deployment, two steps require confirmation.
