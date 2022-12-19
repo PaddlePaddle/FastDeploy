@@ -1,20 +1,20 @@
 import fastdeploy as fd
 import cv2
+import os
 
 
 def parse_arguments():
     import argparse
     import ast
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model", default=None, help="Path of yolov5 onnx model.")
+    parser.add_argument("--model", default=None, help="Path of yolov5 model.")
     parser.add_argument(
         "--image", default=None, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'cpu' or 'gpu' or 'xpu'.")
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -25,6 +25,8 @@ def parse_arguments():
 
 def build_option(args):
     option = fd.RuntimeOption()
+    if args.device.lower() == "xpu":
+        option.use_xpu()
 
     if args.device.lower() == "gpu":
         option.use_gpu()
@@ -37,14 +39,15 @@ def build_option(args):
 
 args = parse_arguments()
 
-if args.model is None:
-    model = fd.download_model(name='YOLOv5s')
-else:
-    model = args.model
-
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.YOLOv5(model, runtime_option=runtime_option)
+model_file = os.path.join(args.model, "model.pdmodel")
+params_file = os.path.join(args.model, "model.pdiparams")
+model = fd.vision.detection.YOLOv5(
+    model_file,
+    params_file,
+    runtime_option=runtime_option,
+    model_format=fd.ModelFormat.PADDLE)
 
 # 预测图片检测结果
 if args.image is None:
