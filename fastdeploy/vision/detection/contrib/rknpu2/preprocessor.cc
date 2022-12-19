@@ -30,16 +30,11 @@ RKYOLOPreprocessor::RKYOLOPreprocessor() {
 }
 
 void RKYOLOPreprocessor::LetterBox(FDMat* mat) {
-  std::cout << "mat->Height() = " << mat->Height() << std::endl;
-  std::cout << "mat->Width() = " << mat->Width() << std::endl;
-
   float scale =
       std::min(size_[1] * 1.0 / mat->Height(), size_[0] * 1.0 / mat->Width());
-  std::cout << "RKYOLOPreprocessor scale_ = " << scale << std::endl;
   if (!is_scale_up_) {
     scale = std::min(scale, 1.0f);
   }
-  std::cout << "RKYOLOPreprocessor scale_ = " << scale << std::endl;
   scale_.push_back(scale);
 
   int resize_h = int(round(mat->Height() * scale));
@@ -74,19 +69,6 @@ void RKYOLOPreprocessor::LetterBox(FDMat* mat) {
 }
 
 bool RKYOLOPreprocessor::Preprocess(FDMat* mat, FDTensor* output) {
-  // process after image load
-  //  float ratio = std::min(size_[1] * 1.0f / static_cast<float>(mat->Height()),
-  //                         size_[0] * 1.0f / static_cast<float>(mat->Width()));
-  //  if (std::fabs(ratio - 1.0f) > 1e-06) {
-  //    int interp = cv::INTER_AREA;
-  //    if (ratio > 1.0) {
-  //      interp = cv::INTER_LINEAR;
-  //    }
-  //    int resize_h = int(mat->Height() * ratio);
-  //    int resize_w = int(mat->Width() * ratio);
-  //    Resize::Run(mat, resize_w, resize_h, -1, -1, interp);
-  //  }
-
   // RKYOLO's preprocess steps
   // 1. letterbox
   // 2. convert_and_permute(swap_rb=true)

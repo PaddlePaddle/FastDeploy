@@ -60,11 +60,6 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
-  auto pad_hw_values_ = preprocessor_.GetPadHWValues();
-  postprocessor_.SetPadHWValues(preprocessor_.GetPadHWValues());
-  std::cout << "preprocessor_ scale_ = " << preprocessor_.GetScale()[0]
-            << std::endl;
-  postprocessor_.SetScale(preprocessor_.GetScale());
 
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
@@ -72,12 +67,14 @@ bool RKYOLO::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
 
+  auto pad_hw_values_ = preprocessor_.GetPadHWValues();
+  postprocessor_.SetPadHWValues(preprocessor_.GetPadHWValues());
+  postprocessor_.SetScale(preprocessor_.GetScale());
   if (!postprocessor_.Run(reused_output_tensors_, results)) {
     FDERROR << "Failed to postprocess the inference results by runtime."
             << std::endl;
     return false;
   }
-
   return true;
 }
 
