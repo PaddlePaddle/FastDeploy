@@ -30,6 +30,10 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 1
 # GPU上TensorRT推理
 ./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 2
+# IPU推理
+./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 3
+# KunlunXin XPU推理
+./infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg 4
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
