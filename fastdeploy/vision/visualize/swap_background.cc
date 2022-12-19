@@ -62,7 +62,7 @@ static cv::Mat SwapBackgroundCommonCpu(
   uchar* background_data = static_cast<uchar*>(background_copy.data);
   uchar* im_data = static_cast<uchar*>(im.data);
   float* alpha_data = reinterpret_cast<float*>(alpha.data);
-  
+
   for (size_t i = 0; i < height; ++i) {
     for (size_t j = 0; j < width; ++j) {
       float alpha_val = alpha_data[i * width + j];
@@ -144,7 +144,7 @@ cv::Mat SwapBackground(const cv::Mat& im, const cv::Mat& background,
   // TODO: Support SSE/AVX on x86_64 platforms                        
 #ifdef __ARM_NEON 
   // return SwapBackgroundNEON(im, background, result, background_label);
-  return SwapBackgroundCommonCpu(im, background, result, background_label);
+  return SwapBackgroundNEON(im, background, result, background_label);
 #else  
   return SwapBackgroundCommonCpu(im, background, result, background_label);
 #endif    
