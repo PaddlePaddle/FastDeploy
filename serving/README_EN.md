@@ -20,7 +20,7 @@ FastDeploy builds an end-to-end serving deployment based on [Triton Inference Se
 CPU images only support Paddle/ONNX models for serving deployment on CPUs, and supported inference backends include OpenVINO, Paddle Inference, and ONNX Runtime
 
 ```shell
-docker pull paddlepaddle/fastdeploy:1.0.0-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.1-cpu-only-21.10
 ```
 
 #### GPU Image
@@ -28,7 +28,7 @@ docker pull paddlepaddle/fastdeploy:1.0.0-cpu-only-21.10
 GPU images support Paddle/ONNX models for serving deployment on GPU and CPU, and supported inference backends including OpenVINO, TensorRT, Paddle Inference, and ONNX Runtime
 
 ```
-docker pull paddlepaddle/fastdeploy:1.0.0-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.1-gpu-cuda11.4-trt8.4-21.10
 ```
 
 Users can also compile the image by themselves according to their own needs, referring to the following documents:
