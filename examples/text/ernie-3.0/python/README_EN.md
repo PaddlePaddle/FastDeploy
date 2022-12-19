@@ -9,40 +9,40 @@ Before deployment, two steps require confirmation.
 
 This directory provides deployment examples that seq_cls_inferve.py fast finish text classification tasks on CPU/GPU.
 
-## 依赖安装
+## Dependency Installation
 
-本项目提供的Python版本的预测器Predictor基于PaddleNLP提供的AutoTokenizer进行分词，并利用fast_tokenizer加速分词, 执行以下命令进行安装。
+The Python Predictor in this project uses AutoTokenizer provided by PaddleNLP to conduct word segmentation and fast_tokenizer to speed up word segmentation. Run the following command to install it.
 
 ```bash
 pip install -r requirements.txt
 ```
 
 
-## 文本分类任务
+## Text Classification Tasks
 
-### 快速开始
+### A Quick Start
 
-以下示例展示如何基于FastDeploy库完成ERNIE 3.0 Medium模型在CLUE Benchmark 的[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上进行文本分类任务的Python预测部署。
+The following example shows how to employ FastDeploy library to complete Python predictive deployment of ERNIE 3.0 Medium model on [AFQMC Dataset](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)of CLUE Benchmark for text classification tasks. 
 
 ```bash
 
-# 下载部署示例代码
+# Download the deployment example code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/examples/text/ernie-3.0/python
 
-# 下载AFQMC数据集的微调后的ERNIE 3.0模型
+# Download fine-tuned ERNIE 3.0 models for AFQMC dataset
 wget https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz
 tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 
-# CPU 推理
+# CPU Inference
 python seq_cls_infer.py --device cpu --model_dir ernie-3.0-medium-zh-afqmc
 
-# GPU 推理
+# GPU Inference
 python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
 ```
+The result returned after running is as follows:
 
-运行完成后返回的结果如下：
 
 ```bash
 [INFO] fastdeploy/runtime.cc(469)::Init	Runtime initialized with Backend::ORT in Device::CPU.
@@ -50,24 +50,24 @@ Batch id:0, example id:0, sentence1:花呗收款额度限制, sentence2:收钱�
 Batch id:1, example id:0, sentence1:花呗支持高铁票支付吗, sentence2:为什么友付宝不支持花呗付款, label:0, similarity:0.9979
 ```
 
-### 参数说明
+### Parameter Description
 
-`seq_cls_infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
+`seq_cls_infer.py`supports more command-line arguments in addition to the preceding example. The following is a description of every command-line argument
 
-| 参数 |参数说明 |
+| Parameter | Parameter Description |
 |----------|--------------|
-|--model_dir | 指定部署模型的目录， |
-|--batch_size |最大可测的 batch size，默认为 1|
-|--max_length |最大序列长度，默认为 128|
-|--device | 运行的设备，可选范围: ['cpu', 'gpu']，默认为'cpu' |
-|--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'onnx_runtime' |
-|--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |
-|--use_fast| 是否使用FastTokenizer加速分词阶段。默认为True|
+|--model_dir | Specify the directory where the model is to be deployed |
+|--batch_size |Maximum measurable batch size, default 1|
+|--max_length |Maximum sequence length, default 128|
+|--device | Running devices, optional range: ['cpu', 'gpu'], default 'cpu' |
+|--backend | Supported inference backend, optional range: ['onnx_runtime', 'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']，default 'onnx_runtime' |
+|--use_fp16 | Whether to use FP16 mode for inference.Enabled when using tensorrt and paddle tensorrt backend, and default is False |
+|--use_fast| Whether to use FastTokenizer to speed up the tokenization, and default is True|
 
-## 相关文档
+## Related Documents
 
-[ERNIE 3.0模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE 3.0 Model detailed introduction](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
-[ERNIE 3.0模型导出方法](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+[ERNIE 3.0 Model Export Method](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
-[ERNIE 3.0模型C++部署方法](../cpp/README.md)
+[ERNIE 3.0 Model C++ Deployment Method](../cpp/README.md)
