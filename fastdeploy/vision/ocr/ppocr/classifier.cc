@@ -32,6 +32,7 @@ Classifier::Classifier(const std::string& model_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_cann_backends = {Backend::LITE};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -77,6 +78,12 @@ bool Classifier::BatchPredict(const std::vector<cv::Mat>& images,
     return false;
   }
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
+  
+  for (int i = 0 ; i < reused_input_tensors_.size() ; i ++){
+    std::cout<<"begin to print tensor info in CLS"<<std::endl;
+    reused_input_tensors_[i].PrintInfo("TensorInfo[i] IN CLS: ") ;
+  }
+
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
