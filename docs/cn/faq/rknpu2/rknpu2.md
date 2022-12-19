@@ -16,21 +16,12 @@ ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型�
 |------------------|-------------------|-------------------------------|--------------------|
 | Detection        | Picodet           | Picodet-s                     | 162/112            |
 | Detection        | RKYOLOV5          | YOLOV5-S-Relu(int8)           | -/57               |
+| Detection        | RKYOLOX           | -                             | -/-                |
+| Detection        | RKYOLOV7          | -                             | -/-                |
 | Segmentation     | Unet              | Unet-cityscapes               | -/-                |
-| Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes | -/-                |
-| Segmentation     | PP-HumanSegV2Lite | portrait                      | 53/50              |
-| Segmentation     | PP-HumanSegV2Lite | human                         | 53/50              |
-| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 112/108            |
-
-## TODO
-以下为TODO计划，表示还正在准备支持，但是还存在问题或还可以改进的模型。
-
-| 任务场景             | 模型      | 模型版本(表示已经测试的版本)     | ARM CPU/RKNN速度(ms) |
-|------------------|---------|---------------------|--------------------|
-| Detection        | PPYOLOE | PPYOLOE(int8)       | -/-                |
-| Detection        | YOLOv5  | YOLOv5-s_v6.2(int8) | -/-                |
-| Face Recognition | ArcFace | ArcFace_r18         | 600/3              |
-| Face Recognition | cosFace | cosFace_r18         | 600/3              |
+| Segmentation     | PP-HumanSegV2Lite | portrait                      | 53/43              |
+| Segmentation     | PP-HumanSegV2Lite | human                         | 53/43              |
+| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 108/42             |
 
 ## RKNPU2 Backend推理使用教程
 
