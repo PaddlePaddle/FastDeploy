@@ -98,22 +98,22 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     }
 
     if(!option_.nnadapter_context_properties.empty()){
-      config_.set_nnadapter_context_properties(nnadapter_context_properties);
+      config_.set_nnadapter_context_properties(option_.nnadapter_context_properties);
     }
 
     if(!option_.nnadapter_model_cache_dir.empty()){
-      config_.set_nnadapter_model_cache_dir(nnadapter_model_cache_dir);
+      config_.set_nnadapter_model_cache_dir(option_.nnadapter_model_cache_dir);
     }
 
     if(!option_.nnadapter_mixed_precision_quantization_config_path.empty()){
       config_.set_nnadapter_mixed_precision_quantization_config_path(
-        nnadapter_mixed_precision_quantization_config_path
+        option_.nnadapter_mixed_precision_quantization_config_path
       );
     }
 
     if(!option_.nnadapter_subgraph_partition_config_path.empty()){
-      config_.nnadapter_subgraph_partition_config_path(
-        nnadapter_subgraph_partition_config_path
+      config_.set_nnadapter_subgraph_partition_config_path(
+        option_.nnadapter_subgraph_partition_config_path
       );
     }
 
