@@ -52,7 +52,7 @@ struct LiteBackendOption {
     nnadapter_dynamic_shape_info = {{" ", {{0}}}};
   std::string nnadapter_mixed_precision_quantization_config_path = "";
   bool enable_timvx = false;
-  bool enable_cann = false;
+  bool enable_ascend = false;
   bool enable_xpu = false;
   int device_id = 0;
   int xpu_l3_workspace_size = 0xfffc00;

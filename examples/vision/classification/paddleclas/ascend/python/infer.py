@@ -18,10 +18,9 @@ def parse_arguments():
 
 
 def build_option():
-    option = fd.RuntimeOption()
 
-    option.use_cann()
-    option.set_lite_nnadapter_device_names(["huawei_ascend_npu"])
+    option = fd.RuntimeOption()
+    option.use_ascend()
 
     return option
 

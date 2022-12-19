@@ -29,7 +29,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
-    valid_cann_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     valid_xpu_backends = {Backend::LITE};
     valid_ipu_backends = {Backend::PDINFER};
   } else if (model_format == ModelFormat::ONNX) {

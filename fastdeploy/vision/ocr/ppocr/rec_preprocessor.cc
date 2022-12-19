@@ -91,7 +91,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
       real_index = indices[i];
     }
     FDMat* mat = &(images->at(real_index));
-#if defined(WITH_CANN) || defined(WITH_CANN_PY)
+#if defined(WITH_ASCEND) || defined(WITH_ASCEND_PYTHON)
     OcrRecognizerResizeImageOnAscend(mat, rec_image_shape_); 
 #else
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);

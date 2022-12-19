@@ -56,8 +56,7 @@ if os.getenv("BUILD_ON_CPU", "OFF") == "ON":
 setup_configs = dict()
 setup_configs["ENABLE_RKNPU2_BACKEND"] = os.getenv("ENABLE_RKNPU2_BACKEND",
                                                    "OFF")
-setup_configs["WITH_CANN"] = os.getenv("WITH_CANN", "OFF")
-setup_configs["WITH_CANN_PY"] = os.getenv("WITH_CANN_PY", "OFF")
+setup_configs["WITH_ASCEND_PYTHON"] = os.getenv("WITH_ASCEND_PYTHON", "OFF")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "OFF")
 setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
