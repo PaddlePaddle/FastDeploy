@@ -52,6 +52,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
   bool use_cann = (runtime_option.device == Device::CANN); 
+  bool use_xpu = (runtime_option.device == Device::XPU);
 
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
@@ -71,6 +72,10 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   } else if (use_cann) {
     if (!IsSupported(valid_cann_backends, runtime_option.backend)) {
       FDERROR << "The valid cann backends of model " << ModelName() << " are " << Str(valid_cann_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+  } else if (use_xpu) {
+    if (!IsSupported(valid_xpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid xpu backends of model " << ModelName() << " are " << Str(valid_xpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
   } else if(use_ipu) {
@@ -110,6 +115,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateTimVXBackend();
   } else if (runtime_option.device == Device::CANN) {
     return CreateCANNBackend();
+  } else if (runtime_option.device == Device::XPU) {
+    return CreateXPUBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -119,7 +126,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return false;
 #endif
   }
-  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/CANN now." << std::endl;
+  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/XPU/CANN now." << std::endl;
   return false;
 }
 
@@ -233,6 +240,30 @@ bool FastDeployModel::CreateTimVXBackend() {
   return false;
 }
 
+bool FastDeployModel::CreateXPUBackend() {
+  if (valid_xpu_backends.size() == 0) {
+    FDERROR << "There's no valid xpu backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_xpu_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_xpu_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_xpu_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
+
 bool FastDeployModel::CreateCANNBackend() {
   if (valid_cann_backends.size() == 0) {
     FDERROR << "There's no valid cann backends for model: " << ModelName()
@@ -255,6 +286,7 @@ bool FastDeployModel::CreateCANNBackend() {
   FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
   return false;
 }
+
 
 bool FastDeployModel::CreateIpuBackend() {
   if (valid_ipu_backends.size() == 0) {

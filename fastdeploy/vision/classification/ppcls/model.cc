@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/classification/ppcls/model.h"
+#include "fastdeploy/utils/unique_ptr.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -29,6 +30,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
     valid_cann_backends = {Backend::LITE};
+    valid_xpu_backends = {Backend::LITE};
     valid_ipu_backends = {Backend::PDINFER};
   } else if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
@@ -40,6 +42,12 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
   initialized = Initialize();
+}
+
+std::unique_ptr<PaddleClasModel>  PaddleClasModel::Clone() const {
+  std::unique_ptr<PaddleClasModel> clone_model = utils::make_unique<PaddleClasModel>(PaddleClasModel(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
 }
 
 bool PaddleClasModel::Initialize() {

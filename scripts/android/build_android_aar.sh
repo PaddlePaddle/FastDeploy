@@ -2,20 +2,15 @@
 set -e
 set +x
 
-PACKAGE_VERSION=$1
 FASTDEPLOY_DIR=$(pwd)
 BUILT_PACKAGE_DIR=build/Android
-CXX_PACKAGE_PREFIX=fastdeploy-android-${PACKAGE_VERSION}-shared
+CXX_PACKAGE_PREFIX=fastdeploy-android-latest-shared-dev
 CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/${CXX_PACKAGE_PREFIX}
 ARMV8_CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/arm64-v8a-api-21/install
 ARMV7_CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/armeabi-v7a-api-21/install
 
 # check package name
 echo "[INFO] --- FASTDEPLOY_DIR: ${FASTDEPLOY_DIR}"
-if [ "$PACKAGE_VERSION" = "dev" ]; then
-    CXX_PACKAGE_PREFIX=fastdeploy-android-latest-shared-dev
-    CXX_PACKAGE_NAME=${BUILT_PACKAGE_DIR}/fastdeploy-android-latest-shared-dev
-fi
 
 # check arm v7 & v8 c++ sdk
 if [ ! -d "${BUILT_PACKAGE_DIR}" ]; then
@@ -76,4 +71,4 @@ echo "[INFO] --- Built java aar package!"
 ls -lh ${JNI_LIB_DIR}/build/outputs/aar/
 
 # Usage:
-# ./scripts/android/build_android_aar.sh dev
+# ./scripts/android/build_android_aar.sh

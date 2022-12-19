@@ -90,7 +90,7 @@ __build_fastdeploy_android_shared() {
         -DENABLE_LITE_BACKEND=ON \
         -DENABLE_PADDLE_FRONTEND=OFF \
         -DENABLE_FLYCV=ON \
-        -DENABLE_TEXT=ON \
+        -DENABLE_TEXT=OFF \
         -DENABLE_VISION=ON \
         -DENABLE_VISION_VISUALIZE=ON \
         -DBUILD_EXAMPLES=ON \

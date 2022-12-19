@@ -54,7 +54,7 @@ bool Recognizer::Initialize() {
   return true;
 }
 
-bool Recognizer::Predict(cv::Mat& img, std::string* text, float* rec_score) {
+bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {
   std::vector<std::string> texts(1);
   std::vector<float> rec_scores(1);
   bool success = BatchPredict({img}, &texts, &rec_scores);

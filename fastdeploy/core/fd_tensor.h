@@ -25,6 +25,7 @@
 namespace fastdeploy {
 
 struct FASTDEPLOY_DECL FDTensor {
+
   // std::vector<int8_t> data;
   void* buffer_ = nullptr;
   std::vector<int64_t> shape = {0};

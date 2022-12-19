@@ -73,7 +73,7 @@ if args.video is not None:
     # for video
     cap = cv2.VideoCapture(args.video)
     # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
     composition = cv2.VideoWriter(output_composition, fourcc, 20.0,
                                   (1080, 1920))
     alpha = cv2.VideoWriter(output_alpha, fourcc, 20.0, (1080, 1920))
@@ -86,7 +86,7 @@ if args.video is not None:
             break
         result = model.predict(frame)
         vis_im = fd.vision.vis_matting(frame, result)
-        vis_im_with_bg = fd.vision.swap_background_matting(frame, bg, result)
+        vis_im_with_bg = fd.vision.swap_background(frame, bg, result)
         alpha.write(vis_im)
         composition.write(vis_im_with_bg)
         cv2.waitKey(30)
@@ -100,11 +100,11 @@ if args.video is not None:
 if args.image is not None:
     # for image
     im = cv2.imread(args.image)
-    result = model.predict(im.copy())
+    result = model.predict(im)
     print(result)
     # 可视化结果
     vis_im = fd.vision.vis_matting(im, result)
-    vis_im_with_bg = fd.vision.swap_background_matting(im, bg, result)
+    vis_im_with_bg = fd.vision.swap_background(im, bg, result)
     cv2.imwrite("visualized_result_fg.jpg", vis_im)
     cv2.imwrite("visualized_result_replaced_bg.jpg", vis_im_with_bg)
     print(

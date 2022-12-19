@@ -40,6 +40,12 @@ class FASTDEPLOY_DECL PaddleClasModel : public FastDeployModel {
                   const RuntimeOption& custom_option = RuntimeOption(),
                   const ModelFormat& model_format = ModelFormat::PADDLE);
 
+  /** \brief Clone a new PaddleClasModel with less memory usage when multiple instances of the same model are created
+   *
+   * \return new PaddleClasModel* type unique pointer
+   */
+  virtual std::unique_ptr<PaddleClasModel> Clone() const;
+
   /// Get model's name
   virtual std::string ModelName() const { return "PaddleClas/Model"; }
 

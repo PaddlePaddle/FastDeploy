@@ -43,11 +43,21 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
              const ModelFormat& model_format = ModelFormat::PADDLE);
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_cls"; }
-  virtual bool Predict(cv::Mat& img, int32_t* cls_label, float* cls_score);
+
+  /** \brief Predict the input image and get OCR classification model cls_result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] cls_label The label result of cls model will be written in to this param.
+   * \param[in] cls_score The score result of cls model will be written in to this param.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img,
+                      int32_t* cls_label, float* cls_score);
   /** \brief BatchPredict the input image and get OCR classification model cls_result.
    *
    * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
-   * \param[in] cls_results The output of OCR classification model cls_result will be writen to this structure.
+   * \param[in] cls_labels The label results of cls model will be written in to this vector.
+   * \param[in] cls_scores The score results of cls model will be written in to this vector.
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
