@@ -27,7 +27,7 @@ YOLOv7::YOLOv7(const std::string& model_file, const std::string& params_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-    valid_cann_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;

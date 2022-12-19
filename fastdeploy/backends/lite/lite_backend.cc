@@ -89,9 +89,34 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
         paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-  }else if(option_.enable_cann){
-    config_.set_nnadapter_device_names(option_.nnadapter_device_names);
-    config_.set_nnadapter_context_properties(option_.nnadapter_context_properties);
+  }else if(option_.enable_ascend){
+    
+    if(!option_.nnadapter_device_names.empty()){
+      config_.set_nnadapter_device_names(option_.nnadapter_device_names);
+    } else {
+      config_.set_nnadapter_device_names({"huawei_ascend_npu"});
+    }
+
+    if(!option_.nnadapter_context_properties.empty()){
+      config_.set_nnadapter_context_properties(nnadapter_context_properties);
+    }
+
+    if(!option_.nnadapter_model_cache_dir.empty()){
+      config_.set_nnadapter_model_cache_dir(nnadapter_model_cache_dir);
+    }
+
+    if(!option_.nnadapter_mixed_precision_quantization_config_path.empty()){
+      config_.set_nnadapter_mixed_precision_quantization_config_path(
+        nnadapter_mixed_precision_quantization_config_path
+      );
+    }
+
+    if(!option_.nnadapter_subgraph_partition_config_path.empty()){
+      config_.nnadapter_subgraph_partition_config_path(
+        nnadapter_subgraph_partition_config_path
+      );
+    }
+
     valid_places.push_back(
           paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
     valid_places.push_back(

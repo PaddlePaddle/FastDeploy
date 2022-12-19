@@ -2,8 +2,8 @@
 
 export GLOG_v=5
 # 设置本demo的环境变量
-# 正确设置fastdeploy-cann的安装路径
-FASTDEPLOY_INSTALL_DIR="../../../../../../build/fastdeploy-cann/"
+# 正确设置fastdeploy-ascend的安装路径
+FASTDEPLOY_INSTALL_DIR="../../../../../../build/fastdeploy-ascend/"
 # 设置fastdeploy,opencv和paddlelite相关的环境变量
 export LD_LIBRARY_PATH=$FASTDEPLOY_INSTALL_DIR/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/opencv/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/paddlelite/lib/:$LD_LIBRARY_PATH
 

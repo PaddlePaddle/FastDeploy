@@ -102,8 +102,8 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
-  /// Use CANN to inference
-  void UseCANN();
+  /// Use Huawei Ascend to inference
+  void UseAscend();
 
   ///
   /// \brief Turn on XPU.
@@ -224,46 +224,46 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   /**
-   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   * @brief Set subgraph partition path for Paddle Lite backend.
    */
-  void SetLiteNNAdapterSubgraphPartitionPath(
+  void SetLiteSubgraphPartitionPath(
       const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
-   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   * @brief Set subgraph partition path for Paddle Lite backend.
    */
-  void SetLiteNNAdapterSubgraphPartitionConfigBuffer(
+  void SetLiteSubgraphPartitionConfigBuffer(
       const std::string& nnadapter_subgraph_partition_config_buffer);
 
   /**
-   * @brief Set nnadapter device name for Paddle Lite backend.
+   * @brief Set device name for Paddle Lite backend.
    */
-  void SetLiteNNAdapterDeviceNames(
+  void SetLiteDeviceNames(
       const std::vector<std::string>& nnadapter_device_names);
 
   /**
-   * @brief Set nnadapter context properties for Paddle Lite backend.
+   * @brief Set context properties for Paddle Lite backend.
    */
-  void  SetLiteNNAdapterContextProperties(
+  void  SetLiteContextProperties(
       const std::string& nnadapter_context_properties);
 
   /**
-   * @brief Set nnadapter model cache dir for Paddle Lite backend.
+   * @brief Set model cache dir for Paddle Lite backend.
    */
-  void SetLiteNNAdapterModelCacheDir(
+  void SetLiteModelCacheDir(
       const std::string& nnadapter_model_cache_dir);
 
   /**
-   * @brief Set nnadapter dynamic shape info for Paddle Lite backend.
+   * @brief Set dynamic shape info for Paddle Lite backend.
    */
-  void SetLiteNNAdapterDynamicShapeInfo(
+  void SetLiteDynamicShapeInfo(
       const std::map<std::string, std::vector<std::vector<int64_t>>>&
           nnadapter_dynamic_shape_info);
 
   /**
-   * @brief Set nnadapter mixed precision quantization config path for Paddle Lite backend.
+   * @brief Set mixed precision quantization config path for Paddle Lite backend.
    */
-  void SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
+  void SetLiteMixedPrecisionQuantizationConfigPath(
       const std::string& nnadapter_mixed_precision_quantization_config_path);
 
   /**
@@ -434,7 +434,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
 
   bool enable_timvx = false;
-  bool enable_cann = false;
+  bool enable_ascend = false;
   bool enable_xpu = false;
 
   // ======Only for Trt Backend=======

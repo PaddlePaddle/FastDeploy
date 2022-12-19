@@ -69,8 +69,8 @@ cd FastDeploy
 mkdir build && cd build
 
 # CMake configuration with CANN
-cmake -DWITH_CANN=ON  \
-      -DCMAKE_INSTALL_PREFIX=fastdeploy-cann \
+cmake -DWITH_ASCEND=ON  \
+      -DCMAKE_INSTALL_PREFIX=fastdeploy-ascend \
       -DENABLE_VISION=ON \
       ..
 
@@ -78,7 +78,7 @@ cmake -DWITH_CANN=ON  \
 make -j8
 make install
 ```  
-编译完成之后，会在当前的build目录下生成 fastdeploy-cann 目录，表示基于 PadddleLite CANN 的 FastDeploy 库编译完成。
+编译完成之后，会在当前的build目录下生成 fastdeploy-ascend 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
 
 ## 四.基于 PaddleLite 的 Python FastDeploy 库编译
 搭建好编译环境之后，编译命令如下：
@@ -86,7 +86,7 @@ make install
 # Download the latest source code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export WITH_CANN_PY=ON
+export WITH_ASCEND_PYTHON=ON
 export ENABLE_VISION=ON
 
 python setup.py build

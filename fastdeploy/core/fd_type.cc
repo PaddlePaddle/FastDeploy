@@ -62,8 +62,8 @@ std::string Str(const Device& d) {
     case Device::TIMVX:
       out = "Device::TIMVX";
       break;
-    case Device::CANN:
-      out = "Device::CANN";
+    case Device::ASCEND:
+      out = "Device::ASCEND";
       break;
     case Device::XPU:
       out = "Device::XPU";
@@ -91,8 +91,8 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
   case Device::XPU:
     out << "Device::XPU";
     break;
-  case Device::CANN:
-    out << "Device::CANN";
+  case Device::ASCEND:
+    out << "Device::ASCEND";
     break;
   default:
     out << "Device::UNKOWN";

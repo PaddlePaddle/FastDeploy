@@ -32,7 +32,7 @@ Classifier::Classifier(const std::string& model_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-    valid_cann_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;

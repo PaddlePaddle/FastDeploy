@@ -15,7 +15,7 @@
 # 编译当前demo
 mkdir build
 cd build
-cmake .. -DFASTDEPLOY_INSTALL_DIR=../../../../../../build/fastdeploy-cann
+cmake .. -DFASTDEPLOY_INSTALL_DIR=../../../../../../build/fastdeploy-ascend
 make -j8
 cd ..
 
