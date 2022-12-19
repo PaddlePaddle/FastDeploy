@@ -73,6 +73,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
     if (!IsSupported(valid_cann_backends, runtime_option.backend)) {
       FDERROR << "The valid cann backends of model " << ModelName() << " are " << Str(valid_cann_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
       return false;
+    }
   } else if (use_xpu) {
     if (!IsSupported(valid_xpu_backends, runtime_option.backend)) {
       FDERROR << "The valid xpu backends of model " << ModelName() << " are " << Str(valid_xpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
