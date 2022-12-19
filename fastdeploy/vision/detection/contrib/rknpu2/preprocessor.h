@@ -18,7 +18,6 @@
 
 namespace fastdeploy {
 namespace vision {
-
 namespace detection {
 /*! @brief Preprocessor object for YOLOv5 serials model.
  */

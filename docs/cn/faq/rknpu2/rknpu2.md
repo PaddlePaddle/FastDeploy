@@ -15,6 +15,7 @@ ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型�
 | 任务场景             | 模型                | 模型版本(表示已经测试的版本)               | ARM CPU/RKNN速度(ms) |
 |------------------|-------------------|-------------------------------|--------------------|
 | Detection        | Picodet           | Picodet-s                     | 162/112            |
+| Detection        | RKYOLOV5          | YOLOV5-S-Relu(int8)           | -/57               |
 | Segmentation     | Unet              | Unet-cityscapes               | -/-                |
 | Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes | -/-                |
 | Segmentation     | PP-HumanSegV2Lite | portrait                      | 53/50              |

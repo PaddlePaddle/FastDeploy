@@ -85,12 +85,12 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   int width_ = 0;
   int anchor_per_branch_ = 0;
 
-  // Process Int8 Model
-  int ProcessInt8(int8_t* input, int* anchor, int grid_h, int grid_w,
-                  int stride, std::vector<float>& boxes,
-                  std::vector<float>& boxScores, std::vector<int>& classId,
-                  float threshold, int32_t zp, float scale);
-
+  int ProcessFP16(float *input, int *anchor, int grid_h,
+              int grid_w, int stride,
+              std::vector<float> &boxes,
+              std::vector<float> &boxScores,
+              std::vector<int> &classId,
+              float threshold);
   // Model
   int QuickSortIndiceInverse(std::vector<float>& input, int left, int right,
                              std::vector<int>& indices);
@@ -100,8 +100,8 @@ class FASTDEPLOY_DECL RKYOLOPostprocessor {
   std::vector<float> scale_;
   float nms_threshold_ = 0.45;
   float conf_threshold_ = 0.25;
-  int prob_box_size = 85;
-  int obj_class_num = 80;
+  int prob_box_size_ = 85;
+  int obj_class_num_ = 80;
   int obj_num_bbox_max_size = 200;
 };
 

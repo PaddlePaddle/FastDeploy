@@ -138,11 +138,6 @@ void FDTensor::Resize(const std::vector<int64_t>& new_shape) {
   external_data_ptr = nullptr;
 }
 
-void FDTensor::SetQuantizationInfo(int32_t zero_point,std::vector<float>& scale){
-  quantized_parameter_.first = zero_point;
-  quantized_parameter_.second = scale;
-}
-
 void FDTensor::Resize(const std::vector<int64_t>& new_shape,
                       const FDDataType& data_type,
                       const std::string& tensor_name,
@@ -453,11 +448,6 @@ FDTensor& FDTensor::operator=(FDTensor&& other) {
     other.external_data_ptr = nullptr;
   }
   return *this;
-}
-
-const std::pair<int32_t, std::vector<float>>
-FDTensor::GetQuantizationInfo() const{
-  return quantized_parameter_;
 }
 
 }  // namespace fastdeploy
