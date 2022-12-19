@@ -1,3 +1,5 @@
+[English](README_EN.md)| 简体中文
+
 # ERNIE 3.0 模型Python部署示例
 
 在部署前，需确认以下两个步骤
