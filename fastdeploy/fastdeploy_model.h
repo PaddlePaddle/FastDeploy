@@ -45,9 +45,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
-  /** Model's valid cann backends. This member defined all the cann backends have successfully tested for the model
+  /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
    */
-  std::vector<Backend> valid_cann_backends = {};
+  std::vector<Backend> valid_ascend_backends = {};
   /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_xpu_backends = {};
@@ -150,7 +150,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateRKNPUBackend();
   bool CreateTimVXBackend();
   bool CreateXPUBackend();
-  bool CreateCANNBackend();
+  bool CreateASCENDBackend();
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;

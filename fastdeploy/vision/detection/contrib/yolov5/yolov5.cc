@@ -29,7 +29,7 @@ YOLOv5::YOLOv5(const std::string& model_file, const std::string& params_file,
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
     valid_xpu_backends = {Backend::LITE};
     valid_timvx_backends = {Backend::LITE};
-    valid_cann_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
   }
   runtime_option = custom_option;
   runtime_option.model_format = model_format;

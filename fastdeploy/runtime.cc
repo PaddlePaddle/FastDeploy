@@ -258,9 +258,9 @@ void RuntimeOption::UseXpu(int xpu_id,
   device = Device::XPU;
 }
 
-void RuntimeOption::UseCANN(){
-  enable_cann = true;
-  device = Device::CANN;
+void RuntimeOption::UseAscend(){
+  enable_ascend = true;
+  device = Device::ASCEND;
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -382,37 +382,37 @@ void RuntimeOption::SetLiteOptimizedModelDir(
   lite_optimized_model_dir = optimized_model_dir;
 }
 
-void RuntimeOption::SetLiteNNAdapterSubgraphPartitionPath(
+void RuntimeOption::SetLiteSubgraphPartitionPath(
     const std::string& nnadapter_subgraph_partition_config_path) {
   lite_nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
 
-void RuntimeOption::SetLiteNNAdapterSubgraphPartitionConfigBuffer(
+void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
       const std::string& nnadapter_subgraph_partition_config_buffer){
   lite_nnadapter_subgraph_partition_config_buffer = nnadapter_subgraph_partition_config_buffer;
 }
 
-void RuntimeOption::SetLiteNNAdapterDeviceNames(const std::vector<std::string>& nnadapter_device_names){
+void RuntimeOption::SetLiteDeviceNames(const std::vector<std::string>& nnadapter_device_names){
   lite_nnadapter_device_names = nnadapter_device_names; 
 }
 
-void RuntimeOption::SetLiteNNAdapterContextProperties(const std::string& nnadapter_context_properties){
+void RuntimeOption::SetLiteContextProperties(const std::string& nnadapter_context_properties){
   lite_nnadapter_context_properties = nnadapter_context_properties; 
 }
 
-void RuntimeOption::SetLiteNNAdapterModelCacheDir(const std::string& nnadapter_model_cache_dir){
+void RuntimeOption::SetLiteModelCacheDir(const std::string& nnadapter_model_cache_dir){
   lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
 }
 
 
-void RuntimeOption::SetLiteNNAdapterDynamicShapeInfo(
+void RuntimeOption::SetLiteDynamicShapeInfo(
       const std::map<std::string, std::vector<std::vector<int64_t>>>&
           nnadapter_dynamic_shape_info){
   lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info; 
 }
 
-void RuntimeOption::SetLiteNNAdapterMixedPrecisionQuantizationConfigPath(
+void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
       const std::string& nnadapter_mixed_precision_quantization_config_path){
         lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
 }
@@ -586,7 +586,7 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::XPU || option.device == Device::CANN,
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::XPU || option.device == Device::ASCEND,
              "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::XPU.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
@@ -843,7 +843,7 @@ void Runtime::CreateLiteBackend() {
   lite_option.nnadapter_dynamic_shape_info = option.lite_nnadapter_dynamic_shape_info;
   lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
   lite_option.enable_timvx = option.enable_timvx;
-  lite_option.enable_cann = option.enable_cann;
+  lite_option.enable_ascend = option.enable_ascend;
   lite_option.enable_xpu = option.enable_xpu;
   lite_option.device_id  = option.device_id;
   lite_option.xpu_l3_workspace_size  = option.xpu_l3_workspace_size;
