@@ -38,10 +38,26 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
     resize_w = int(ceilf(img_h * ratio));
   }
   Resize::Run(mat, resize_w, img_h);
-
   std::vector<float> value = {0, 0, 0};
   Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), value);
 }
+
+void OcrRecognizerResizeImageOnAscend(FDMat* mat,
+                              const std::vector<int>& rec_image_shape) {
+
+  img_h = rec_image_shape[1]; 
+  img_w = rec_image_shape[2];  
+
+
+  if (mat->Width() >= img_w) {
+    Resize::Run(mat, img_w, img_h); // Reszie W to 320
+  } else {
+    Resize::Run(mat, mat->Width(), img_h);
+    Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {0,0,0});
+    // Pad to 320
+  }
+}
+
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
   return Run(images, outputs, 0, images->size(), {});
@@ -75,7 +91,11 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
       real_index = indices[i];
     }
     FDMat* mat = &(images->at(real_index));
+#if defined(WITH_CANN) || defined(WITH_CANN_PY)
+    OcrRecognizerResizeImageOnAscend(mat, rec_image_shape_); 
+#else
     OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);
+#endif
     NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
   }
   // Only have 1 output Tensor.
