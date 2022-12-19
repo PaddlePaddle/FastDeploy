@@ -37,6 +37,7 @@
 #include "fastdeploy/vision/facedet/contrib/scrfd.h"
 #include "fastdeploy/vision/facedet/contrib/ultraface.h"
 #include "fastdeploy/vision/facedet/contrib/yolov5face.h"
+#include "fastdeploy/vision/facedet/yolov7-face/yolov7face.h"
 #include "fastdeploy/vision/faceid/contrib/adaface.h"
 #include "fastdeploy/vision/faceid/contrib/arcface.h"
 #include "fastdeploy/vision/faceid/contrib/cosface.h"
