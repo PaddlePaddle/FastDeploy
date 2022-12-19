@@ -426,12 +426,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_nnadapter_subgraph_partition_config_path = "";
   // and other nnadapter settings for CxxConfig
   std::string lite_nnadapter_subgraph_partition_config_buffer = "";
-  std::vector<std::string> lite_nnadapter_device_names = {""};
   std::string lite_nnadapter_context_properties = "";
   std::string lite_nnadapter_model_cache_dir = "";
-  std::map<std::string, std::vector<std::vector<int64_t>>>
-    lite_nnadapter_dynamic_shape_info = {{" ", {{0}}}};
   std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    lite_nnadapter_dynamic_shape_info = {{"", {{0}}}};
+  std::vector<std::string> lite_nnadapter_device_names = {};
 
   bool enable_timvx = false;
   bool enable_ascend = false;

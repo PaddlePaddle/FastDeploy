@@ -89,12 +89,13 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
         paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
-  }else if(option_.enable_ascend){
-    
-    if(!option_.nnadapter_device_names.empty()){
-      config_.set_nnadapter_device_names(option_.nnadapter_device_names);
-    } else {
+  } 
+  
+  if(option_.enable_ascend){
+    if(option_.nnadapter_device_names.empty()){
       config_.set_nnadapter_device_names({"huawei_ascend_npu"});
+    } else {
+      config_.set_nnadapter_device_names(option_.nnadapter_device_names);
     }
 
     if(!option_.nnadapter_context_properties.empty()){
@@ -118,7 +119,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
     }
 
     valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
     valid_places.push_back(
