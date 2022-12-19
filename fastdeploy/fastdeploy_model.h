@@ -151,7 +151,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateTimVXBackend();
   bool CreateXPUBackend();
   bool CreateCANNBackend();
+
   std::shared_ptr<Runtime> runtime_;
+  bool runtime_initialized_ = false;
   // whether to record inference time
   bool enable_record_time_of_runtime_ = false;
 
