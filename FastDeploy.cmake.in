@@ -248,6 +248,8 @@ if(WITH_XPU)
   list(APPEND FASTDEPLOY_LIBS -lpthread -lrt -ldl)
 endif()
 
+
+# log lib for Android
 if(ANDROID)
   find_library(log-lib log)
   list(APPEND FASTDEPLOY_LIBS ${log-lib})
