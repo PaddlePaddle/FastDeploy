@@ -190,7 +190,6 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED" << std::endl;
     }
 
-    DumpTensorAttr(input_attrs_[i]);
 
     // copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
@@ -199,16 +198,13 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
     for (int j = 0; j < input_attrs_[i].n_dims; j++) {
       temp_shape[j] = (int)input_attrs_[i].dims[j];
     }
-    FDDataType temp_dtype =
-        fastdeploy::RKNPU2Backend::RknnTensorTypeToFDDataType(
-            input_attrs_[i].type);
+    FDDataType temp_dtype = fastdeploy::RKNPU2Backend::RknnTensorTypeToFDDataType(input_attrs_[i].type);
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     inputs_desc_[i] = temp_input_info;
   }
 
   // Get detailed output parameters
-  output_attrs_ =
-      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
+  output_attrs_ = (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
   memset(output_attrs_, 0, io_num.n_output * sizeof(rknn_tensor_attr));
   outputs_desc_.resize(io_num.n_output);
 
@@ -225,18 +221,12 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       return false;
     }
 
-    // If the output dimension is 3, the runtime will automatically change it to 4. 
+    // If the output dimension is 3, the runtime will automatically change it to 4.
     // Obviously, this is wrong, and manual correction is required here.
     int n_dims = output_attrs_[i].n_dims;
     if((n_dims == 4) && (output_attrs_[i].dims[3] == 1)){
       n_dims--;
-      FDWARNING << "The output[" 
-                << i
-                << "].shape[3] is 1, remove this dim." 
-                << std::endl;
     }
-
-    DumpTensorAttr(output_attrs_[i]);
 
     // copy output_attrs_ to output tensor
     std::string temp_name = output_attrs_[i].name;
@@ -246,9 +236,8 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       temp_shape[j] = (int)output_attrs_[i].dims[j];
     }
 
-    FDDataType temp_dtype =
-        fastdeploy::RKNPU2Backend::RknnTensorTypeToFDDataType(
-            output_attrs_[i].type);
+    // The data type of output data is changed to FP32
+    FDDataType temp_dtype = FDDataType::FP32;
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     outputs_desc_[i] = temp_input_info;
   }
@@ -345,9 +334,10 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
         FDERROR << "rknn_create_mem output_mems_ error." << std::endl;
         return false;
       }
-      if(output_attrs_[i].type == RKNN_TENSOR_FLOAT16){
-        output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
-      }
+
+      // The data type of output data is changed to FP32
+      output_attrs_[i].type = RKNN_TENSOR_FLOAT32;
+
       // default output type is depend on model, this requires float32 to compute top5
       ret = rknn_set_io_mem(ctx, output_mems_[i], &output_attrs_[i]);
       // set output memory and attribute
@@ -376,7 +366,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       return false;
     }
   }
-  
 
   // run rknn
   ret = rknn_run(ctx, nullptr);
@@ -395,8 +384,6 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     }
     (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
-    std::vector<float>  output_scale = {output_attrs_[i].scale};
-    (*outputs)[i].SetQuantizationInfo(output_attrs_[i].zp, output_scale);
     memcpy((*outputs)[i].MutableData(), (float*)output_mems_[i]->virt_addr,
            (*outputs)[i].Nbytes());
   }
