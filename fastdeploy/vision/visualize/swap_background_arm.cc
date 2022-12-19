@@ -21,7 +21,8 @@
 
 namespace fastdeploy {
 namespace vision {
-static constexpr int _OMP_NUM_THREADS = 2;
+
+static constexpr int _OMP_THREADS = 2;
 
 cv::Mat SwapBackgroundNEON(const cv::Mat& im, 
                            const cv::Mat& background, 
@@ -65,20 +66,19 @@ cv::Mat SwapBackgroundNEON(const cv::Mat& im,
       cv::resize(alpha, alpha, cv::Size(width, height));
    }
 
-   uchar* vis_data = static_cast<uchar*>(vis_img.data);
-   uchar* background_data = static_cast<uchar*>(background_ref.data);
-   uchar* im_data = static_cast<uchar*>(im.data);
-   float* alpha_data = reinterpret_cast<float*>(alpha.data);
+   uint8_t* vis_data = static_cast<uint8_t*>(vis_img.data);
+   const uint8_t* background_data = static_cast<const uint8_t*>(background_ref.data);
+   const uint8_t* im_data = static_cast<const uint8_t*>(im.data);
+   const float* alpha_data = reinterpret_cast<const float*>(alpha.data);
 
-   int32_t size = static_cast<int32_t>(height * width);
-   #pragma omp parallel for proc_bind(close) \
-   num_threads(_OMP_NUM_THREADS) schedule(static)
+   const int32_t size = static_cast<int32_t>(height * width);
+   #pragma omp parallel for proc_bind(close) num_threads(_OMP_THREADS)
    for(int i = 0; i < size - 7; i += 8) {
-      uint8x8x3_t bgrx8x3 = vld3_u8(im_data + i * 3);  // 24 bytes
+      uint8x8x3_t ibgrx8x3 = vld3_u8(im_data + i * 3);  // 24 bytes
       // u8 -> u16 -> u32 -> f32
-      uint16x8_t ibx8 = vmovl_u8(bgrx8x3.val[0]);
-      uint16x8_t igx8 = vmovl_u8(bgrx8x3.val[1]);
-      uint16x8_t irx8 = vmovl_u8(bgrx8x3.val[2]);
+      uint16x8_t ibx8 = vmovl_u8(ibgrx8x3.val[0]);
+      uint16x8_t igx8 = vmovl_u8(ibgrx8x3.val[1]);
+      uint16x8_t irx8 = vmovl_u8(ibgrx8x3.val[2]);
       uint8x8x3_t bbgrx8x3 = vld3_u8(background_data + i * 3);  // 24 bytes
       uint16x8_t bbx8 = vmovl_u8(bbgrx8x3.val[0]);
       uint16x8_t bgx8 = vmovl_u8(bbgrx8x3.val[1]);
@@ -134,7 +134,7 @@ cv::Mat SwapBackgroundNEON(const cv::Mat& im,
                                                vmovn_u32(vcvtq_u32_f32(flvgx4))));
       vbgrx8x3.val[2] = vmovn_u16(vcombine_u16(vmovn_u32(vcvtq_u32_f32(fhvrx4)), 
                                                vmovn_u32(vcvtq_u32_f32(flvrx4))));
-       vst3_u8(vis_data + i * 3, vbgrx8x3);
+      vst3_u8(vis_data + i * 3, vbgrx8x3);
    }
 
    for (int i = size - 7; i < size; i++) {
@@ -157,7 +157,71 @@ cv::Mat SwapBackgroundNEON(const cv::Mat& im,
 #ifndef __ARM_NEON  
    FDASSERT(false, "FastDeploy was not compiled with Arm NEON support!")
 #else
-   return im; // TODO: qiuyanjun
+   FDASSERT((!im.empty()), "Image can't be empty!");
+   FDASSERT((im.channels() == 3), "Only support 3 channels image mat!");
+   FDASSERT((!background.empty()), "Background image can't be empty!");
+   FDASSERT((background.channels() == 3),
+            "Only support 3 channels background image mat!");
+   int out_h = static_cast<int>(result.shape[0]);
+   int out_w = static_cast<int>(result.shape[1]);
+   int height = im.rows;
+   int width = im.cols;
+   int bg_height = background.rows;
+   int bg_width = background.cols;
+   auto vis_img = cv::Mat(height, width, CV_8UC3);  
+   
+   cv::Mat background_ref;
+   if ((bg_height != height) || (bg_width != width)) {
+      cv::resize(background, background_ref, cv::Size(width, height));
+   } else {
+      background_ref = background; // ref only
+   }
+   if ((background_ref).type() != CV_8UC3) {
+      (background_ref).convertTo((background_ref), CV_8UC3);
+   }
+   
+   uint8_t* vis_data = static_cast<uint8_t*>(vis_img.data);
+   const uint8_t* background_data = static_cast<const uint8_t*>(background_ref.data);
+   const uint8_t* im_data = static_cast<const uint8_t*>(im.data);
+   const uint8_t *label_data = static_cast<const uint8_t*>(result.label_map.data());
+
+   const uint8_t background_label_ = static_cast<uint8_t>(background_label);
+   const int32_t size = static_cast<int32_t>(height * width);
+
+   uint8x16_t backgroundx16 = vdupq_n_u8(background_label_);
+   #pragma omp parallel for proc_bind(close) num_threads(_OMP_THREADS)
+   for (int i = 0; i < size - 15; i += 16) {
+      uint8x16x3_t ibgr16x3 = vld3q_u8(im_data + i * 3); // 48 bytes
+      uint8x16x3_t bbgr16x3 = vld3q_u8(background_data + i * 3);
+      uint8x16_t labelx16 = vld1q_u8(label_data + i); // 16 bytes
+      // Set mask bit = 1 if label != background_label
+      uint8x16_t nkeepx16 = vceqq_u8(labelx16, backgroundx16);
+      uint8x16_t keepx16 = vmvnq_u8(nkeepx16); // keep_value = 1
+      uint8x16x3_t vbgr16x3;
+      vbgr16x3.val[0] = vorrq_u8(vandq_u8(ibgr16x3.val[0], keepx16), 
+                                 vandq_u8(bbgr16x3.val[0], nkeepx16));
+      vbgr16x3.val[1] = vorrq_u8(vandq_u8(ibgr16x3.val[1], keepx16), 
+                                 vandq_u8(bbgr16x3.val[1], nkeepx16));
+      vbgr16x3.val[2] = vorrq_u8(vandq_u8(ibgr16x3.val[2], keepx16), 
+                                 vandq_u8(bbgr16x3.val[2], nkeepx16));
+      // Store the blended pixels to vis img
+      vst3q_u8(vis_data + i * 3, vbgr16x3);
+   }
+
+   for (int i = size - 15; i < size; i++) {
+      uint8_t label = label_data[i];
+      if (label != background_label_) {
+         vis_data[i * 3 + 0] = im_data[i * 3 + 0];
+         vis_data[i * 3 + 1] = im_data[i * 3 + 1];
+         vis_data[i * 3 + 2] = im_data[i * 3 + 2];
+      } else {
+         vis_data[i * 3 + 0] = background_data[i * 3 + 0];
+         vis_data[i * 3 + 1] = background_data[i * 3 + 1];
+         vis_data[i * 3 + 2] = background_data[i * 3 + 2];
+      }
+   }
+
+   return vis_img;
 #endif
 }
 

@@ -22,7 +22,7 @@
 namespace fastdeploy {
 namespace vision {
 
-static constexpr int _OMP_NUM_THREADS = 2;
+static constexpr int _OMP_THREADS = 2;
 
 static inline void QuantizeBlendingWeight8(
   float weight, uint8_t* old_multi_factor, uint8_t* new_multi_factor) {
@@ -56,8 +56,7 @@ cv::Mat VisSegmentationNEON(
 
   if (!quantize_weight) {
     uint8x16_t zerox16 = vdupq_n_u8(0);
-    #pragma omp parallel for proc_bind(close) \
-    num_threads(_OMP_NUM_THREADS) schedule(static)
+    #pragma omp parallel for proc_bind(close) num_threads(_OMP_THREADS)
     for (int i = 0; i < size - 15; i += 16) {
       uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr + i * 3);  // 48 bytes
       uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
@@ -100,8 +99,7 @@ cv::Mat VisSegmentationNEON(
   
   if (new_multi_factor == 8) {
     // Only keep mask, no need to blending with origin image.
-    #pragma omp parallel for proc_bind(close) \
-    num_threads(_OMP_NUM_THREADS) schedule(static)
+    #pragma omp parallel for proc_bind(close) num_threads(_OMP_THREADS)
     for (int i = 0; i < size - 15; i += 16) {
       uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
       // e.g 0b00000001 << 7 -> 0b10000000 128;
@@ -127,8 +125,7 @@ cv::Mat VisSegmentationNEON(
   uint8x16_t old_fx16 = vdupq_n_u8(old_multi_factor);
   uint8x16_t new_fx16 = vdupq_n_u8(new_multi_factor);
   // Blend the two colors together with quantize 'weight'.
-  #pragma omp parallel for proc_bind(close) \
-  num_threads(_OMP_NUM_THREADS) schedule(static)
+  #pragma omp parallel for proc_bind(close) num_threads(_OMP_THREADS)
   for (int i = 0; i < size - 15; i += 16) {
     uint8x16x3_t bgrx16x3 = vld3q_u8(im_ptr + i * 3);  // 48 bytes
     uint8x16_t labelx16 = vld1q_u8(label_ptr + i); // 16 bytes
