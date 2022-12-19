@@ -53,6 +53,15 @@ struct LiteBackendOption {
   std::string nnadapter_mixed_precision_quantization_config_path = "";
   bool enable_timvx = false;
   bool enable_cann = false;
+  bool enable_xpu = false;
+  int device_id = 0;
+  int xpu_l3_workspace_size = 0xfffc00;
+  bool xpu_locked = false;
+  bool xpu_autotune = true;
+  std::string xpu_autotune_file = "";
+  std::string xpu_precision = "int16";
+  bool xpu_adaptive_seqlen = false;
+  bool xpu_enable_multi_stream = false;
 };
 
 // Convert data type from paddle lite to fastdeploy
