@@ -14,7 +14,9 @@ FastDeploy Streamer（FDStreamer）是一个AI多媒体流处理框架，以Pipe
 - GStreamer的底层的element/plugin包括GStreamer框架内置的plugin（例如appsink、x265）、第三方SDK的plugin（例如DeepStream的nvinfer、nvtracker），以及FDStreamer提供的plugin（计划中）
 - GStreamer plugin的底层会调用编解码硬件、CPU、GPU、NPU以及其他AI芯片等
 
-<img src='https://user-images.githubusercontent.com/15235574/208360353-49433f71-165d-43a8-bbc4-1461ab16544b.png' height="360px">
+<p align="center">
+<img src='https://user-images.githubusercontent.com/15235574/208364121-b7c46635-7e86-4232-a62f-4934f650995a.png' height="360px">
+</p>
 
 ## 准备环境
 

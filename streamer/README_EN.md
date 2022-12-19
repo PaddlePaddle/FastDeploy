@@ -20,7 +20,9 @@ The following figure is the architecture diagram of FDStreamer. The parts marked
 - The underlying elements/plugins of GStreamer include plugins built into the GStreamer framework (such as appsink, x265), plugins from 3rd SDKs (such as DeepStream’s nvinfer, nvtracker), and plugins provided by FDStreamer (under planning)
 - GStreamer plugins run on different hardwares, such as codec hardware, CPU, GPU, NPU and other AI chips.
 
-<img src='https://user-images.githubusercontent.com/15235574/208360353-49433f71-165d-43a8-bbc4-1461ab16544b.png' height="360px">
+<p align="center">
+<img src='https://user-images.githubusercontent.com/15235574/208364121-b7c46635-7e86-4232-a62f-4934f650995a.png' height="360px">
+</p>
 
 ## Environment
 
