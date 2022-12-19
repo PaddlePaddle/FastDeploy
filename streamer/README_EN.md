@@ -14,7 +14,7 @@ The following figure is the architecture diagram of FDStreamer. The parts marked
 - GStreamer plugins run on different hardwares, such as codec hardware, CPU, GPU, NPU and other AI chips.
 
 <p align="center">
-<img src='https://user-images.githubusercontent.com/15235574/208364121-b7c46635-7e86-4232-a62f-4934f650995a.png' height="360px">
+<img src='https://user-images.githubusercontent.com/15235574/208366363-d1cb5b74-d4fe-431c-ab57-07f97c27731d.png' height="360px">
 </p>
 
 ## Environment

@@ -15,7 +15,7 @@ FastDeploy Streamer（FDStreamer）是一个AI多媒体流处理框架，以Pipe
 - GStreamer plugin的底层会调用编解码硬件、CPU、GPU、NPU以及其他AI芯片等
 
 <p align="center">
-<img src='https://user-images.githubusercontent.com/15235574/208364121-b7c46635-7e86-4232-a62f-4934f650995a.png' height="360px">
+<img src='https://user-images.githubusercontent.com/15235574/208366363-d1cb5b74-d4fe-431c-ab57-07f97c27731d.png' height="360px">
 </p>
 
 ## 准备环境
