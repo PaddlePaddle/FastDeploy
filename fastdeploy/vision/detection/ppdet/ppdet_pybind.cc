@@ -77,6 +77,9 @@ void BindPPDet(pybind11::module& m) {
              self.BatchPredict(images, &results);
              return results;
            })
+      .def("clone", [](vision::detection::PPDetBase& self) {
+        return self.Clone();
+      })
       .def_property_readonly("preprocessor", &vision::detection::PPDetBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::detection::PPDetBase::GetPostprocessor);
 
@@ -112,5 +115,21 @@ void BindPPDet(pybind11::module& m) {
   pybind11::class_<vision::detection::SSD, vision::detection::PPDetBase>(m, "SSD")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>());
+
+  pybind11::class_<vision::detection::PaddleYOLOv5, vision::detection::PPDetBase>(m, "PaddleYOLOv5")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::PaddleYOLOv6, vision::detection::PPDetBase>(m, "PaddleYOLOv6")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::PaddleYOLOv7, vision::detection::PPDetBase>(m, "PaddleYOLOv7")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+
+  pybind11::class_<vision::detection::RTMDet, vision::detection::PPDetBase>(m, "RTMDet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());                               
 }
 }  // namespace fastdeploy

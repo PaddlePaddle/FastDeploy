@@ -51,7 +51,7 @@ bool Classifier::Initialize() {
   return true;
 }
 
-bool Classifier::Predict(cv::Mat& img, int32_t* cls_label, float* cls_score) {
+bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label, float* cls_score) {
   std::vector<int32_t> cls_labels(1);
   std::vector<float> cls_scores(1);
   bool success = BatchPredict({img}, &cls_labels, &cls_scores);
