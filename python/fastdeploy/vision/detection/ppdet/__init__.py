@@ -501,3 +501,203 @@ class RTMDet(PPYOLOE):
             model_file, params_file, config_file, self._runtime_option,
             model_format)
         assert self.initialized, "RTMDet model initialize failed."
+
+
+class CascadeRCNN(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a CascadeRCNN model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g cascadercnn/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g cascadercnn/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "CascadeRCNN model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.CascadeRCNN(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "CascadeRCNN model initialize failed."
+
+
+class PSSDet(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a PSSDet model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g pssdet/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g pssdet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "PSSDet model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.PSSDet(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PSSDet model initialize failed."
+
+
+class RetinaNet(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a RetinaNet model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g retinanet/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g retinanet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "RetinaNet model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.RetinaNet(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "RetinaNet model initialize failed."
+
+
+class PPYOLOESOD(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a PPYOLOESOD model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ppyoloesod/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ppyoloesod/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "PPYOLOESOD model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.PPYOLOESOD(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "PPYOLOESOD model initialize failed."
+
+
+class FCOS(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a FCOS model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g fcos/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g fcos/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "FCOS model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.FCOS(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "FCOS model initialize failed."
+
+
+class TTFNet(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a TTFNet model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ttfnet/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ttfnet/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "TTFNet model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.TTFNet(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "TTFNet model initialize failed."
+
+
+class TOOD(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a TOOD model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g tood/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g tood/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "TOOD model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.TOOD(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "TOOD model initialize failed."
+
+
+class GFL(PPYOLOE):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.PADDLE):
+        """Load a GFL model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g gfl/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g gfl/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PPYOLOE, self).__init__(runtime_option)
+
+        assert model_format == ModelFormat.PADDLE, "GFL model only support model format of ModelFormat.Paddle now."
+        self._model = C.vision.detection.GFL(
+            model_file, params_file, config_file, self._runtime_option,
+            model_format)
+        assert self.initialized, "GFL model initialize failed."     
