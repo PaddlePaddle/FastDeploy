@@ -28,6 +28,7 @@ void BindTracking(pybind11::module& m);
 void BindKeyPointDetection(pybind11::module& m);
 void BindHeadPose(pybind11::module& m);
 void BindSR(pybind11::module& m);
+void BindGenerationModel(pybind11::module& m);
 #ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
 #endif
@@ -213,6 +214,7 @@ void BindVision(pybind11::module& m) {
   BindKeyPointDetection(m);
   BindHeadPose(m);
   BindSR(m);
+  BindGenerationModel(m);
 #ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
 #endif
