@@ -52,7 +52,7 @@ cmake -DWITH_XPU=ON  \
 make -j8
 make install
 ```  
-编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
+编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 Paddle Lite 的 FastDeploy 库编译完成。
 
 ## Python 编译
 编译命令如下：
