@@ -1,42 +1,41 @@
-English | [简体中文](README.md) 
+[English](README_EN.md) | 简体中文
+# 通用信息抽取 UIE C++部署示例
 
-# Universal Information Extraction UIE C++ Deployment Example
+本目录下提供`infer.cc`快速完成[UIE模型](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/uie)在CPU/GPU的示例。
 
-This directory provides `infer.cc` quickly complete the example on CPU/GPU by [UIE Model](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/uie)
+在部署前，需确认以下两个步骤
 
-Before deployment, two steps need to be confirmed.
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-- 1. The software and hardware environment meets the requirements. Please refer to [FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. Download precompiled deployment library and samples code based on the develop environment. Please refer to [FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-
-## A Quick Start
-Take uie-base model inference on Linux as an example, execute the following command in this directory to complete the compilation test. FastDeploy version 0.7.0 or above is required to support this model (x.x.x>=0.7.0).
+## 快速开始
+以Linux上uie-base模型推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)。
 
 ```
 mkdir build
 cd build
-# Download FastDeploy precompiled library. Users can choose proper versions in the `FastDeploy预编译库` mentioned above.
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# Download the uie-base model and vocabulary
+# 下载uie-base模型以及词表
 wget https://bj.bcebos.com/fastdeploy/models/uie/uie-base.tgz
 tar -xvfz uie-base.tgz
 
 
-# CPU Inference
+# CPU 推理
 ./infer_demo uie-base 0
 
-# GPU Inference
+# GPU 推理
 ./infer_demo uie-base 1
 
-# Use OpenVINO for inference
+# 使用OpenVINO推理
 ./infer_demo uie-base 1 2
 ```
 
-The results after running are as follows (only the output of the NER task is captured).
+运行完成后返回结果如下所示(仅截取NER任务的输出)。
 ```bash
 [INFO] fastdeploy/fastdeploy_runtime.cc(264)::Init      Runtime initialized with Backend::PDINFER in device Device::CPU.
 After init predictor
@@ -60,11 +59,11 @@ The result:
     end: 31
 ```
 
-## The way to use the UIE model in each extraction task
+## UIE模型各抽取任务使用方式
 
-In the UIE model, schema represents the structured information to be extracted, so the UIE model can support different information extraction tasks by setting different schemas.
+在UIE模型中，schema代表要抽取的结构化信息，所以UIE模型可通过设置不同的schema支持不同信息抽取任务。
 
-### Initialize UIEModel
+### 初始化UIEModel
 
 ```c++
 std::string model_dir = "uie-base";
@@ -82,9 +81,9 @@ auto predictor =
                                 {"时间", "选手", "赛事名称"}, option);
 ```
 
-### Entity Extraction
+### 实体抽取
 
-The initialization stage sets the schema```["time", "player", "event name"]``` to extract the time, player and event name from the input text.
+初始化阶段将schema设置为```["时间", "选手", "赛事名称"]```，可对输入的文本抽取时间、选手以及赛事名称三个信息。
 
 ```c++
 // Named Entity Recognition
@@ -115,7 +114,7 @@ results.clear();
 //     end: 31
 ```
 
-For example, if the target entity types are "肿瘤的大小", "肿瘤的个数", "肝癌级别" and "脉管内癌栓分级", the following statements can be executed.
+例如抽取的目标实体类型是"肿瘤的大小"、"肿瘤的个数"、"肝癌级别"和"脉管内癌栓分级", 则可编写如下语句：
 
 ```c++
 predictor.SetSchema(
@@ -156,11 +155,11 @@ results.clear();
 
 ```
 
-### Relation Extraction
+### 关系抽取
 
-Relation Extraction (RE) refers to identifying entities from text and extracting semantic relationships between them to obtain triadic information, i.e. <subject, predicate, object>.
+关系抽取（Relation Extraction，简称RE），是指从文本中识别实体并抽取实体之间的语义关系，进而获取三元组信息，即<主体，谓语，客体>。
 
-For example, if we take "contest name" as the extracted entity, and the relations are "主办方", "承办方" and "已举办次数", then we can write the following statements.
+例如以"竞赛名称"作为抽取主体，抽取关系类型为"主办方"、"承办方"和"已举办次数", 则可编写如下语句：
 
 ```c++
 predictor.SetSchema(
@@ -216,11 +215,11 @@ results.clear();
 //             end: 72
 ```
 
-### Event Extraction
+### 事件抽取
 
-Event Extraction (EE) refers to extracting predefined Trigger and Argument from natural language texts and combining them into structured event information.
+事件抽取 (Event Extraction, 简称EE)，是指从自然语言文本中抽取预定义的事件触发词(Trigger)和事件论元(Argument)，组合为相应的事件结构化信息。
 
-For example, if the targets are"地震强度", "时间", "震中位置" and "引源深度" for the event "地震", we can execute the following codes.
+例如抽取的目标是"地震"事件的"地震强度"、"时间"、"震中位置"和"震源深度"这些信息，则可编写如下代码：
 
 ```c++
 predictor.SetSchema({SchemaNode(
@@ -266,11 +265,11 @@ results.clear();
 //             end: 22
 ```
 
-### Opinion Extraction
+### 评论观点抽取
 
-opinion extraction refers to the extraction of evaluation dimensions and opinions contained in the text.
+评论观点抽取，是指抽取文本中包含的评价维度、观点词。
 
-For example, if the extraction target is the evaluation dimensions and their corresponding opinions and sentiment tendencies. We can execute the following codes：
+例如抽取的目标是文本中包含的评价维度及其对应的观点词和情感倾向，可编写以下代码：
 
 ```c++
 predictor.SetSchema({SchemaNode(
@@ -321,10 +320,9 @@ results.clear();
 //             end: 22
 ```
 
-### Sentiment Classification
+### 情感分类
 
-Sentence-level sentiment classification, i.e., determining a sentence has a "positive" sentiment or "negative" sentiment. We can execute the following codes:
-
+句子级情感倾向分类，即判断句子的情感倾向是“正向”还是“负向”，可编写以下代码：
 
 ```c++
 predictor.SetSchema(SchemaNode("情感倾向[正向，负向]"));
@@ -339,10 +337,9 @@ results.clear();
 //     probability: 0.999002
 ```
 
-### Cross-task Extraction
+### 跨任务抽取
 
-or example, in a legal scenario where both entity extraction and relation extraction need to be performed. We can execute the following codes:
-
+例如在法律场景同时对文本进行实体抽取和关系抽取，可编写以下代码：
 
 ```c++
 predictor.SetSchema({SchemaNode("法院", {}),
@@ -388,24 +385,24 @@ results.clear();
 //             end: 46
 ```
 
-## UIEModel C++ Interface
+## UIEModel C++接口
 
-### SchemaNode Structure
-Represent the structure of UIE model target mode.
+### SchemaNode 结构
+表示UIE模型目标模式的结构。
 
 ```c++
 SchemaNode(const std::string& name,
            const std::vector<SchemaNode>& children = {});
 ```
-**Parameter**
+**参数**
 
-> * **name**(str): information requiring extraction.
-> * **children**(str): the current node needs to extract the sub-information associated with the original information.
+> * **name**(str): 需要抽取的信息。
+> * **children**(str): 当前节点需抽取信息关联的子信息。
 
-### UIEModel Structure
-The UIE model structure for information extraction task.
+### UIEModel 结构
+用于信息抽取任务的UIE模型结构。
 
-#### Initialized Function
+#### 初始化函数
 ```c++
 UIEModel(
     const std::string& model_file, const std::string& params_file,
@@ -433,21 +430,21 @@ UIEModel(
     SchemaLanguage schema_language = SchemaLanguage::ZH);
 ```
 
-UIEModel loading and initialization. Among them, model_file, params_file are Paddle inference documents exported by trained models. Please refer to [模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)。
+UIE模型加载和初始化，其中model_file, params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)。
 
-**Parameter**
+**参数**
 
-> * **model_file**(str): Model file path
-> * **params_file**(str): Parameter file path
-> * **vocab_file**(str):  Vocabulary file
-> * **position_prob**(str): Position probability. The model will output positions with probability greater than `position_prob`, default is 0.5
-> * **max_length**(int):  Maximized length of input text. Input text subscript exceeding `max_length` will be truncated. Default is 128
-> * **schema**(list(SchemaNode) | SchemaNode | list(str)): Target information for extraction tasks
-> * **runtime_option**(RuntimeOption): Backend inference configuration, the default is None, i.e., the default configuration
-> * **model_format**(ModelFormat): Model format, and default is Paddle format
-> * **schema_language** (SchemaLanguage): Schema language, and default is ZH（Chinese）. Currently supported language：ZH（Chinese），EN（English）
+> * **model_file**(str): 模型文件路径
+> * **params_file**(str): 参数文件路径
+> * **vocab_file**(str): 词表文件路径
+> * **position_prob**(str): 位置概率，模型将输出位置概率大于`position_prob`的位置，默认为0.5
+> * **max_length**(int): 输入文本的最大长度。输入文本下标超过`max_length`的部分将被截断。默认为128
+> * **schema**(list(SchemaNode) | SchemaNode | list(str)): 抽取任务的目标模式。
+> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
+> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **schema_language** (SchemaLanguage): Schema 语言，默认为ZH（中文），目前支持的语言种类包括：ZH（中文），EN（英文）。
 
-#### SetSchema Function
+#### SetSchema函数
 
 ```c++
 void SetSchema(const std::vector<std::string>& schema);
@@ -455,22 +452,21 @@ void SetSchema(const std::vector<SchemaNode>& schema);
 void SetSchema(const SchemaNode& schema);
 ```
 
-**Parameter**
-> * **schema**(list(SchemaNode) | SchemaNode | list(str)): Input data, in a text pattern to be extracted.
+**参数**
+> * **schema**(list(SchemaNode) | SchemaNode | list(str)): 输入数据，待抽取文本模式。
 
-#### Predict Function
+#### Predict函数
 
 ```c++
 void Predict(
     const std::vector<std::string>& texts,
     std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>* results);
 ```
-**Parameter**
+**参数**
 
-> * **texts**(list(str)): text list
-> * **results**(list(dict())): UIE model extraction results
-
-## Related Documents
+> * **texts**(list(str)): 文本列表
+> * **results**(list(dict())): UIE模型抽取结果。
+## 相关文档
 
 [UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
 
