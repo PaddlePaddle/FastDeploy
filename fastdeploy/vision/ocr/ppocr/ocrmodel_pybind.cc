@@ -172,6 +172,7 @@ void BindPPOCRModel(pybind11::module& m) {
     .def_readwrite("mean", &vision::ocr::RecognizerPreprocessor::mean_)
     .def_readwrite("scale", &vision::ocr::RecognizerPreprocessor::scale_)
     .def_readwrite("is_scale", &vision::ocr::RecognizerPreprocessor::is_scale_)
+    .def_readwrite("static_shape", &vision::ocr::RecognizerPreprocessor::static_shape_) 
     .def("run", [](vision::ocr::RecognizerPreprocessor& self, std::vector<pybind11::array>& im_list) {
       std::vector<vision::FDMat> images;
       for (size_t i = 0; i < im_list.size(); ++i) {
