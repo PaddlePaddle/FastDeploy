@@ -18,7 +18,7 @@ namespace fastdeploy {
 void BindInsightFace(pybind11::module& m) {
   pybind11::class_<vision::faceid::InsightFaceRecognitionPreprocessor>(
       m, "InsightFaceRecognitionPreprocessor")
-      .def(pybind11::init<std::string>())
+      .def(pybind11::init())
       .def("run", [](vision::faceid::InsightFaceRecognitionPreprocessor& self,
                      std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
@@ -37,7 +37,7 @@ void BindInsightFace(pybind11::module& m) {
 
   pybind11::class_<vision::faceid::InsightFaceRecognitionPostprocessor>(
       m, "InsightFaceRecognitionPostprocessor")
-      .def(pybind11::init<int>())
+      .def(pybind11::init())
       .def("run", [](vision::faceid::InsightFaceRecognitionPostprocessor& self, std::vector<FDTensor>& inputs) {
         std::vector<vision::FaceRecognitionResult> results;
         if (!self.Run(inputs, &results)) {
@@ -54,10 +54,10 @@ void BindInsightFace(pybind11::module& m) {
         }
         return results;
       });
-  
+
   pybind11::class_<vision::faceid::InsightFaceRecognitionBase, FastDeployModel>(
       m, "InsightFaceRecognitionBase")
-      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption, ModelFormat>())
+      .def(pybind11::init<std::string, std::string, RuntimeOption, ModelFormat>())
       .def("predict", [](vision::faceid::InsightFaceRecognitionBase& self, pybind11::array& data) {
         cv::Mat im = PyArrayToCvMat(data);
         vision::FaceRecognitionResult result;
@@ -77,9 +77,6 @@ void BindInsightFace(pybind11::module& m) {
       .def_property_readonly("postprocessor", &vision::faceid::InsightFaceRecognitionBase::GetPostprocessor);
 
   pybind11::class_<vision::faceid::ArcFace, vision::faceid::InsightFaceRecognitionBase>(m, "ArcFace")
-      .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
-
-  pybind11::class_<vision::faceid::AdaFace, vision::faceid::InsightFaceRecognitionBase>(m, "AdaFace")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
 
   pybind11::class_<vision::faceid::CosFace, vision::faceid::InsightFaceRecognitionBase>(m, "CosFace")

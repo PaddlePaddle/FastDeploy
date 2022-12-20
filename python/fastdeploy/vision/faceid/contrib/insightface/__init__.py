@@ -18,13 +18,11 @@ from python.fastdeploy import c_lib_wrap as C
 
 
 class InsightFaceRecognitionPreprocessor:
-    def __init__(self, config_file):
+    def __init__(self):
         """Create a preprocessor for PaddleDetection Model from configuration file
-
-        :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
         """
         self._preprocessor = C.vision.faceid.InsightFaceRecognitionPreprocessor(
-            config_file)
+        )
 
     def run(self, input_ims):
         """Preprocess input images for PaddleDetection Model
@@ -56,14 +54,12 @@ class InsightFaceRecognitionBase(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file,
-                 config_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a PPYOLOE model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -113,14 +109,12 @@ class ArcFace(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
                  params_file,
-                 config_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a YOLOX model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -136,14 +130,12 @@ class CosFace(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
                  params_file,
-                 config_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a YOLOX model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -159,14 +151,12 @@ class PartialFC(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
                  params_file,
-                 config_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a YOLOX model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -182,14 +172,12 @@ class VPL(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
                  params_file,
-                 config_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a YOLOX model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
-        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
