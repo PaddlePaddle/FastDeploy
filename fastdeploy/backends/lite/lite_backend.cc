@@ -92,6 +92,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   } 
   
   if(option_.enable_ascend){
+    
     if(option_.nnadapter_device_names.empty()){
       config_.set_nnadapter_device_names({"huawei_ascend_npu"});
     } else {
