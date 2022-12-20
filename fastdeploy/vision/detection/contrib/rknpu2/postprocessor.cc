@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "fastdeploy/vision/detection/contrib/rknpu2/postprocessor.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -38,17 +37,16 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
       int grid_h = height_ / stride;
       int grid_w = width_ / stride;
       int* anchor = &(anchors_.data()[i * 2 * anchor_per_branch_]);
-      if (tensors[i].dtype == FDDataType::INT8 ||
-          tensors[i].dtype == FDDataType::UINT8) {
-        auto quantization_info = tensors[i].GetQuantizationInfo();
-        validCount =
-            validCount + ProcessInt8((int8_t*)tensors[i].Data() + skip_address,
-                                     anchor, grid_h, grid_w, stride,
-                                     filterBoxes, boxesScore, classId,
-                                     conf_threshold_, quantization_info.first,
-                                     quantization_info.second[0]);
+      if (tensors[i].dtype == FDDataType::FP32) {
+        validCount = validCount +
+                     ProcessFP16((float*)tensors[i].Data() + skip_address,
+                                 anchor, grid_h, grid_w, stride, filterBoxes,
+                                 boxesScore, classId, conf_threshold_);
       } else {
-        FDERROR << "RKYOLO Only Support INT8 Model" << std::endl;
+        FDERROR << "RKYOLO Only Support FP32 Model."
+            << "But the result's type is "
+            << Str(tensors[i].dtype)
+            << std::endl;
       }
     }
 
@@ -69,7 +67,7 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
       NMS(validCount, filterBoxes, classId, indexArray, nms_threshold_, false);
     } else if (anchor_per_branch_ == 1) {
       NMS(validCount, filterBoxes, classId, indexArray, nms_threshold_, true);
-    }else{
+    } else {
       FDERROR << "anchor_per_branch_ only support 3 or 1." << std::endl;
       return false;
     }
@@ -107,60 +105,57 @@ bool RKYOLOPostprocessor::Run(const std::vector<FDTensor>& tensors,
   return true;
 }
 
-int RKYOLOPostprocessor::ProcessInt8(int8_t* input, int* anchor, int grid_h,
+int RKYOLOPostprocessor::ProcessFP16(float* input, int* anchor, int grid_h,
                                      int grid_w, int stride,
                                      std::vector<float>& boxes,
                                      std::vector<float>& boxScores,
-                                     std::vector<int>& classId, float threshold,
-                                     int32_t zp, float scale) {
+                                     std::vector<int>& classId,
+                                     float threshold) {
+
   int validCount = 0;
   int grid_len = grid_h * grid_w;
-  float thres = threshold;
-  auto thres_i8 = QntF32ToAffine(thres, zp, scale);
+  // float thres_sigmoid = threshold;
   for (int a = 0; a < anchor_per_branch_; a++) {
     for (int i = 0; i < grid_h; i++) {
       for (int j = 0; j < grid_w; j++) {
-        int8_t box_confidence =
-            input[(prob_box_size * a + 4) * grid_len + i * grid_w + j];
-        if (box_confidence >= thres_i8) {
-          int offset = (prob_box_size * a) * grid_len + i * grid_w + j;
-          int8_t* in_ptr = input + offset;
+        float box_confidence =
+            input[(prob_box_size_ * a + 4) * grid_len + i * grid_w + j];
+        if (box_confidence >= threshold) {
+          int offset = (prob_box_size_ * a) * grid_len + i * grid_w + j;
+          float* in_ptr = input + offset;
 
-          int8_t maxClassProbs = in_ptr[5 * grid_len];
+          float maxClassProbs = in_ptr[5 * grid_len];
           int maxClassId = 0;
-          for (int k = 1; k < obj_class_num; ++k) {
-            int8_t prob = in_ptr[(5 + k) * grid_len];
+          for (int k = 1; k < obj_class_num_; ++k) {
+            float prob = in_ptr[(5 + k) * grid_len];
             if (prob > maxClassProbs) {
               maxClassId = k;
               maxClassProbs = prob;
             }
           }
-
-          float box_conf_f32 = DeqntAffineToF32(box_confidence, zp, scale);
-          float class_prob_f32 = DeqntAffineToF32(maxClassProbs, zp, scale);
+          float box_conf_f32 = (box_confidence);
+          float class_prob_f32 = (maxClassProbs);
           float limit_score = 0;
           if (anchor_per_branch_ == 1) {
-            limit_score = box_conf_f32 * class_prob_f32;
-          } else {
             limit_score = class_prob_f32;
+          } else {
+            limit_score = box_conf_f32 * class_prob_f32;
           }
-          //printf("limit score: %f\n", limit_score);
+          // printf("limit score: %f", limit_score);
           if (limit_score > conf_threshold_) {
             float box_x, box_y, box_w, box_h;
             if (anchor_per_branch_ == 1) {
-              box_x = DeqntAffineToF32(*in_ptr, zp, scale);
-              box_y = DeqntAffineToF32(in_ptr[grid_len], zp, scale);
-              box_w = DeqntAffineToF32(in_ptr[2 * grid_len], zp, scale);
-              box_h = DeqntAffineToF32(in_ptr[3 * grid_len], zp, scale);
-              box_w = exp(box_w) * stride;
-              box_h = exp(box_h) * stride;
+              box_x = *in_ptr;
+              box_y = (in_ptr[grid_len]);
+              box_w = exp(in_ptr[2 * grid_len]) * stride;
+              box_h = exp(in_ptr[3 * grid_len]) * stride;
             } else {
-              box_x = DeqntAffineToF32(*in_ptr, zp, scale) * 2.0 - 0.5;
-              box_y = DeqntAffineToF32(in_ptr[grid_len], zp, scale) * 2.0 - 0.5;
-              box_w = DeqntAffineToF32(in_ptr[2 * grid_len], zp, scale) * 2.0;
-              box_h = DeqntAffineToF32(in_ptr[3 * grid_len], zp, scale) * 2.0;
-              box_w = box_w * box_w;
-              box_h = box_h * box_h;
+              box_x = *in_ptr * 2.0 - 0.5;
+              box_y = (in_ptr[grid_len]) * 2.0 - 0.5;
+              box_w = (in_ptr[2 * grid_len]) * 2.0;
+              box_h = (in_ptr[3 * grid_len]) * 2.0;
+              box_w *= box_w;
+              box_h *= box_h;
             }
             box_x = (box_x + j) * (float)stride;
             box_y = (box_y + i) * (float)stride;
