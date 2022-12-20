@@ -17,6 +17,7 @@
 #include "fastdeploy_jni/convert_jni.h"  // NOLINT
 #include "fastdeploy_jni/runtime_option_jni.h"  // NOLINT
 #include "fastdeploy_jni/text/text_results_jni.h" // NOLINT
+#include "fastdeploy_jni/text/uie/uie_utils_jni.h" // NOLINT
 #ifdef ENABLE_TEXT
 #include "fastdeploy/text.h"  // NOLINT
 #endif
@@ -84,13 +85,24 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_predictNative(JNIEnv *env,
   }
   auto c_model_ptr = reinterpret_cast<text::UIEModel *>(cxx_context);
   auto c_texts = fni::ConvertTo<std::vector<std::string>>(env, texts);
-  std::vector<std::unordered_map<std::string, std::vector<text::UIEResult>>> results;
-  auto t = fni::GetCurrentTime();
-  c_model_ptr->Predict(c_texts, &results);
-  PERF_TIME_OF_RUNTIME(c_model_ptr, t)
-  if (results.empty()) {
+  if (c_texts.empty()) {
+    LOGE("c_texts is empty!");
     return NULL;
   }
+  LOGD("c_texts: %s", fni::UIETextsStr(c_texts).c_str());
+
+  std::vector<std::unordered_map<
+      std::string, std::vector<text::UIEResult>>> c_results;
+
+  auto t = fni::GetCurrentTime();
+  c_model_ptr->Predict(c_texts, &c_results);
+  PERF_TIME_OF_RUNTIME(c_model_ptr, t)
+
+  if (c_results.empty()) {
+    return NULL;
+  }
+  LOGD("c_results: %s", fni::UIEResultsStr(c_results).c_str());
+
   // Push results to HashMap array
   const char* j_hashmap_put_signature =
       "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;";
@@ -104,12 +116,12 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_predictNative(JNIEnv *env,
   const jmethodID j_hashmap_put = env->GetMethodID(
       j_hashmap_clazz,"put", j_hashmap_put_signature);
 
-  const int c_uie_result_hashmap_size = results.size();
+  const int c_uie_result_hashmap_size = c_results.size();
   jobjectArray j_hashmap_uie_result_arr = env->NewObjectArray(
       c_uie_result_hashmap_size, j_hashmap_clazz, NULL);
 
   for (int i = 0; i < c_uie_result_hashmap_size; ++i) {
-    auto& curr_c_uie_result_map = results[i];
+    auto& curr_c_uie_result_map = c_results[i];
 
     // Convert unordered_map<string, vector<UIEResult>>
     // -> HashMap<String, UIEResult[]>

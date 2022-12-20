@@ -47,6 +47,7 @@ add_library(
         fastdeploy_jni/vision/keypointdetection/keypointdetection_utils_jni.cc
         fastdeploy_jni/text/text_results_jni.cc
         fastdeploy_jni/text/uie/uie_model_jni.cc
+        fastdeploy_jni/text/uie/uie_utils_jni.cc
 )
 
 # Searches for a specified prebuilt library and stores the path as a

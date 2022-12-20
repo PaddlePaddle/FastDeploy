@@ -1,7 +1,5 @@
 package com.baidu.paddle.fastdeploy.text;
 
-import android.support.annotation.NonNull;
-import java.util.Arrays;
 import java.util.HashMap;
 
 public class UIEResult {
