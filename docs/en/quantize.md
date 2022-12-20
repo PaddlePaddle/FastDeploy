@@ -68,7 +68,7 @@ The data in the table above are the Runtime inference performance in FastDeploy 
 
 
 
-### PaddleClas系列
+### PaddleClas Series
 | Model                 |Inference Backend            |Deployment Hardware    | Inference Time Delay in FP32    | Inference Time Delay in INT8  | Acceleration Ratio    | FP32 Top1 | INT8 Top1 |Quantization Method   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |
 | [ResNet50_vd](../../examples/vision/classification/paddleclas/quantize/)            | ONNX Runtime         |    CPU    |  77.20       |  40.08     |     1.93        | 79.12  | 78.87|  Offline quantization|
