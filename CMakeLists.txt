@@ -262,7 +262,6 @@ endif()
 
 if(ENABLE_POROS_BACKEND)
   set(CMAKE_CXX_STANDARD 14)
-  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
   add_definitions(-DENABLE_POROS_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_POROS_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/poros.cmake)
