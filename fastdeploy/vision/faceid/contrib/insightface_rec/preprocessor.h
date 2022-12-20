@@ -36,6 +36,25 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
+  /// Set size.
+  void SetSize(std::vector<int>& size){
+    size_ = size;
+  };
+
+  /// Set alpha.
+  void SetAlpha(std::vector<float>& alpha){
+    alpha_ = alpha;
+  };
+
+  /// Set beta.
+  void SetBeta(std::vector<float>& beta){
+    beta_ = beta;
+  };
+
+  /// Set beta.
+  void SetPermute(bool permute){
+    permute_ = permute;
+  };
  protected:
   bool Preprocess(FDMat * mat, FDTensor* output);
   // Argument for image preprocessing step, tuple of (width, height),
@@ -49,7 +68,7 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPreprocessor {
   std::vector<float> beta_;
   // Argument for image preprocessing step, whether to swap the B and R channel,
   // such as BGR->RGB, default true.
-  bool swap_rb_;
+  bool permute_;
 };
 
 }  // namespace detection

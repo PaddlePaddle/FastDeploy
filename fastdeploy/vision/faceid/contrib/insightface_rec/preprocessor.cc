@@ -23,7 +23,7 @@ InsightFaceRecognitionPreprocessor::InsightFaceRecognitionPreprocessor() {
   size_ = {112, 112};
   alpha_ = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
   beta_ = {-1.f, -1.f, -1.f};  // RGB
-  swap_rb_ = true;
+  permute_ = true;
 }
 
 bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
@@ -39,7 +39,7 @@ bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* outpu
   if (resize_h != mat->Height() || resize_w != mat->Width()) {
     Resize::Run(mat, resize_w, resize_h);
   }
-  if (swap_rb_) {
+  if (permute_) {
     BGR2RGB::Run(mat);
   }
 
