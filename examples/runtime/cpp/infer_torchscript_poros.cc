@@ -23,7 +23,6 @@ void build_test_data(std::vector<std::vector<fd::FDTensor>> &prewarm_datas, bool
         for (size_t i = 0; i < inputs_data.size(); ++i) {
             inputs_data[i] = std::rand() % 1000 / 1000.0f;
         }
-        // prewarm_datas[0][0].SetExternalData({1, 3, 224, 224}, fd::FDDataType::FP32, inputs_data.data());
         prewarm_datas[0][0].Resize({1, 3, 224, 224}, fd::FDDataType::FP32);
         fd::FDTensor::CopyBuffer(prewarm_datas[0][0].Data(),
                inputs_data.data(),
