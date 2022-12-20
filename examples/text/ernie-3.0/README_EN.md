@@ -24,7 +24,7 @@
 
 ## Export Deployment Models
 
-Before deployment, it is required to export trained ERNIE models into deployment models. The export steps can be found in the document [Export Model] (https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0).
+Before deployment, it is required to export trained ERNIE models into deployment models. The export steps can be found in the document [Export Model](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0).
 
 ## Download Fine-tuning Models
 
