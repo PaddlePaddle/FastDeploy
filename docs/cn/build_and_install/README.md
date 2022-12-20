@@ -15,6 +15,7 @@
 - [瑞芯微RK3588部署环境](rknpu2.md)
 - [晶晨A311D部署环境](a311d.md)
 - [昆仑芯XPU部署环境](xpu.md)
+- [华为昇腾部署环境](huawei_ascend.md)
 
 
 ## FastDeploy编译选项说明
