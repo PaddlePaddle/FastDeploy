@@ -1,25 +1,24 @@
-English | [简体中文](README.md) 
+[English](README.md) | 简体中文
 
-# Example of UIE Serving Deployment
+# UIE 服务化部署示例
 
-Before serving deployment, you need to confirm:
+在服务化部署前，需确认
 
-- 1. You can refer to [FastDeploy服务化部署](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands for serving images.
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
 
-## Prepare models
+## 准备模型
 
-Download the UIE-Base model (if you have trained models, skip this step):
+下载UIE-Base模型(如果有已训练好的模型，跳过此步骤):
 ```bash
-# Download UIE model documents and vocabulary. Taking the uie-base model as an example
+# 下载UIE模型文件和词表，以uie-base模型为例
 wget https://bj.bcebos.com/fastdeploy/models/uie/uie-base.tgz
 tar -xvfz uie-base.tgz
 
-# Move the model to the model repository directory
+# 将下载的模型移动到模型仓库目录
 mv uie-base/* models/uie/1/
 ```
 
-After download and move, the models directory is as follows:
-
+模型下载移动好之后，目录结构如下:
 ```
 models
 └── uie
@@ -31,24 +30,24 @@ models
     └── config.pbtxt
 ```
 
-## Pull and run images.
+## 拉取并运行镜像
 ```bash
-# x.y.z represent image versions. You can refer to the serving documents to replace them with numbers
-# GPU Image
+# x.y.z为镜像版本号，需参照serving文档替换为数字
+# GPU镜像
 docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
-# CPU Image
+# CPU镜像
 docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
-# Run the container. The container name is fd_serving, and the current directory is mounted as the container's /uie_serving directory
+# 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /uie_serving 目录
 docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v `pwd`/:/uie_serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
 
-# Start the service (it will have scheduling privileges for all GPU cards without setting the CUDA_VISIBLE_DEVICES environment variable)
+# 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/uie_serving/models --backend-config=python,shm-default-byte-size=10485760
 ```
 
->> **Attention**: When appearing "Address already in use", please use `--grpc-port`specified port numbers to start the service. Meanwhile you should change the requesting port numbers in grpc_client.py
+>> **注意**: 当出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改grpc_client.py中的请求端口号
 
-When starting the service, the following output will be displayed:
+服务启动成功后， 会有以下输出:
 ```
 ......
 I0928 04:51:15.784517 206 grpc_server.cc:4117] Started GRPCInferenceService at 0.0.0.0:8001
@@ -57,22 +56,22 @@ I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0
 ```
 
 
-## Client Requests
-Client requests can execute script requests locally and in the container.
+## 客户端请求
+客户端请求可以在本地执行脚本请求；也可以在容器中执行。
 
-Dependencies should be installed to execute the script locally:
+本地执行脚本需要先安装依赖:
 ```
 pip install grpcio
 pip install tritonclient[all]
 
-# If bash cannot recognize the brackets, you can use the following command to install dependencies:
+# 如果bash无法识别括号，可以使用如下指令安装:
 pip install tritonclient\[all\]
 
-# Send Requests
+# 发送请求
 python3 grpc_client.py
 ```
 
-When the request is sent successfully, the result is returned and printed out:
+发送请求成功后，会返回结果并打印输出:
 ```
 1. Named Entity Recognition Task--------------
 The extraction schema: ['时间', '选手', '赛事名称']
@@ -141,6 +140,6 @@ results:
 ```
 
 
-## Configuration Modification
+## 配置修改
 
-The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
+当前默认配置在GPU上运行Paddle引擎,如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
