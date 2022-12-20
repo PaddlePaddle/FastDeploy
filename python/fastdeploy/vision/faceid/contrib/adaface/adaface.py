@@ -13,32 +13,31 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-import logging
-from .... import FastDeployModel, ModelFormat
-from .... import c_lib_wrap as C
+from python.fastdeploy import FastDeployModel, ModelFormat
+from python.fastdeploy import c_lib_wrap as C
 
 
-class PartialFC(FastDeployModel):
+class AdaFace(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
                  runtime_option=None,
-                 model_format=ModelFormat.ONNX):
-        """Load a PartialFC model exported by InsigtFace.
+                 model_format=ModelFormat.PADDLE):
+        """Load a AdaFace model exported by InsigtFace.
 
-        :param model_file: (str)Path of model file, e.g ./partial_fc.onnx
+        :param model_file: (str)Path of model file, e.g ./adaface.onnx
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(PartialFC, self).__init__(runtime_option)
+        super(AdaFace, self).__init__(runtime_option)
 
-        self._model = C.vision.faceid.PartialFC(
+        self._model = C.vision.faceid.AdaFace(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "PartialFC initialize failed."
+        assert self.initialized, "AdaFace initialize failed."
 
     def predict(self, input_image):
         """ Predict the face recognition result for an input image
@@ -68,6 +67,7 @@ class PartialFC(FastDeployModel):
     def beta(self):
         """
         Argument for image preprocessing step, beta values for normalization, default beta = {-1.f, -1.f, -1.f}
+
         """
         return self._model.beta
 
@@ -87,29 +87,29 @@ class PartialFC(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, (list, tuple)),\
+        assert isinstance(wh, (list, tuple)), \
             "The value to set `size` must be type of tuple or list."
-        assert len(wh) == 2,\
+        assert len(wh) == 2, \
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
-            len(wh))
+                len(wh))
         self._model.size = wh
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, (list, tuple)),\
+        assert isinstance(value, (list, tuple)), \
             "The value to set `alpha` must be type of tuple or list."
-        assert len(value) == 3,\
+        assert len(value) == 3, \
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
-            len(value))
+                len(value))
         self._model.alpha = value
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, (list, tuple)),\
+        assert isinstance(value, (list, tuple)), \
             "The value to set `beta` must be type of tuple or list."
-        assert len(value) == 3,\
+        assert len(value) == 3, \
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
-            len(value))
+                len(value))
         self._model.beta = value
 
     @swap_rb.setter

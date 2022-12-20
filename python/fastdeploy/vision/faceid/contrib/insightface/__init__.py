@@ -13,4 +13,8 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .contrib import *
+import arcface
+import cosface
+import insightface_rec
+import partial_fc
+import vpl

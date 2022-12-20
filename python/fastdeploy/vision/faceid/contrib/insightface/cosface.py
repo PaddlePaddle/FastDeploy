@@ -14,31 +14,31 @@
 
 from __future__ import absolute_import
 import logging
-from .... import FastDeployModel, ModelFormat
-from .... import c_lib_wrap as C
+from python.fastdeploy import FastDeployModel, ModelFormat
+from python.fastdeploy import c_lib_wrap as C
 
 
-class InsightFaceRecognitionModel(FastDeployModel):
+class CosFace(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a InsightFace model exported by InsigtFace.
+        """Load a CosFace model exported by InsigtFace.
 
-        :param model_file: (str)Path of model file, e.g ./arcface.onnx
+        :param model_file: (str)Path of model file, e.g ./cosface.onnx
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(InsightFaceRecognitionModel, self).__init__(runtime_option)
+        super(CosFace, self).__init__(runtime_option)
 
-        self._model = C.vision.faceid.InsightFaceRecognitionModel(
+        self._model = C.vision.faceid.CosFace(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "InsightFaceRecognitionModel initialize failed."
+        assert self.initialized, "CosFace initialize failed."
 
     def predict(self, input_image):
         """ Predict the face recognition result for an input image
@@ -48,7 +48,7 @@ class InsightFaceRecognitionModel(FastDeployModel):
         """
         return self._model.predict(input_image)
 
-    # 一些跟InsightFaceRecognitionModel模型有关的属性封装
+    # 一些跟模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [112, 112]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):

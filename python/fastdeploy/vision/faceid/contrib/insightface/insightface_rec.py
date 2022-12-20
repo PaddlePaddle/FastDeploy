@@ -13,31 +13,32 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from .... import FastDeployModel, ModelFormat
-from .... import c_lib_wrap as C
+import logging
+from python.fastdeploy import FastDeployModel, ModelFormat
+from python.fastdeploy import c_lib_wrap as C
 
 
-class AdaFace(FastDeployModel):
+class InsightFaceRecognitionModel(FastDeployModel):
     def __init__(self,
                  model_file,
                  params_file="",
                  runtime_option=None,
-                 model_format=ModelFormat.PADDLE):
-        """Load a AdaFace model exported by InsigtFace.
+                 model_format=ModelFormat.ONNX):
+        """Load a InsightFace model exported by InsigtFace.
 
-        :param model_file: (str)Path of model file, e.g ./adaface.onnx
+        :param model_file: (str)Path of model file, e.g ./arcface.onnx
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
         # 调用基函数进行backend_option的初始化
         # 初始化后的option保存在self._runtime_option
-        super(AdaFace, self).__init__(runtime_option)
+        super(InsightFaceRecognitionModel, self).__init__(runtime_option)
 
-        self._model = C.vision.faceid.AdaFace(
+        self._model = C.vision.faceid.InsightFaceRecognitionModel(
             model_file, params_file, self._runtime_option, model_format)
         # 通过self.initialized判断整个模型的初始化是否成功
-        assert self.initialized, "AdaFace initialize failed."
+        assert self.initialized, "InsightFaceRecognitionModel initialize failed."
 
     def predict(self, input_image):
         """ Predict the face recognition result for an input image
@@ -47,7 +48,7 @@ class AdaFace(FastDeployModel):
         """
         return self._model.predict(input_image)
 
-    # 一些跟模型有关的属性封装
+    # 一些跟InsightFaceRecognitionModel模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [112, 112]改变预处理时resize的大小（前提是模型支持）
     @property
     def size(self):
@@ -67,7 +68,6 @@ class AdaFace(FastDeployModel):
     def beta(self):
         """
         Argument for image preprocessing step, beta values for normalization, default beta = {-1.f, -1.f, -1.f}
-
         """
         return self._model.beta
 
@@ -87,29 +87,29 @@ class AdaFace(FastDeployModel):
 
     @size.setter
     def size(self, wh):
-        assert isinstance(wh, (list, tuple)), \
+        assert isinstance(wh, (list, tuple)),\
             "The value to set `size` must be type of tuple or list."
-        assert len(wh) == 2, \
+        assert len(wh) == 2,\
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
-                len(wh))
+            len(wh))
         self._model.size = wh
 
     @alpha.setter
     def alpha(self, value):
-        assert isinstance(value, (list, tuple)), \
+        assert isinstance(value, (list, tuple)),\
             "The value to set `alpha` must be type of tuple or list."
-        assert len(value) == 3, \
+        assert len(value) == 3,\
             "The value to set `alpha` must contatins 3 elements for each channels, but now it contains {} elements.".format(
-                len(value))
+            len(value))
         self._model.alpha = value
 
     @beta.setter
     def beta(self, value):
-        assert isinstance(value, (list, tuple)), \
+        assert isinstance(value, (list, tuple)),\
             "The value to set `beta` must be type of tuple or list."
-        assert len(value) == 3, \
+        assert len(value) == 3,\
             "The value to set `beta` must contatins 3 elements for each channels, but now it contains {} elements.".format(
-                len(value))
+            len(value))
         self._model.beta = value
 
     @swap_rb.setter

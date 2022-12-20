@@ -15,20 +15,10 @@
 #include "fastdeploy/pybind/main.h"
 
 namespace fastdeploy {
-void BindAdaFace(pybind11::module& m);
-void BindArcFace(pybind11::module& m);
-void BindInsightFaceRecognitionModel(pybind11::module& m);
-void BindCosFace(pybind11::module& m);
-void BindPartialFC(pybind11::module& m);
-void BindVPL(pybind11::module& m);
+void BindInsightFaceRecognitionBase(pybind11::module& m);
 
 void BindFaceId(pybind11::module& m) {
   auto faceid_module = m.def_submodule("faceid", "Face recognition models.");
-  BindInsightFaceRecognitionModel(faceid_module);
-  BindAdaFace(faceid_module);
-  BindArcFace(faceid_module);
-  BindCosFace(faceid_module);
-  BindPartialFC(faceid_module);
-  BindVPL(faceid_module);
+  BindInsightFaceRecognitionBase(faceid_module);
 }
 }  // namespace fastdeploy
