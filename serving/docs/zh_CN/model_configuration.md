@@ -82,7 +82,7 @@ FastDeploy后端目前支持*cpu*和*gpu*推理，*cpu*上支持*paddle*、*onnx
 
 
 #### 配置使用Paddle引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置,具体例子可参照[PP-OCRv3例子中Runtime配置](../../../examples/vision/ocr/PP-OCRv3/serving/models/cls_runtime/config.pbtxt):
 
 ```
 optimization {
@@ -112,7 +112,7 @@ optimization {
 ```
 
 ### 配置使用ONNXRuntime引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置，具体例子可参照[YOLOv5的Runtime配置](../../../examples/vision/detection/yolov5/serving/models/runtime/config.pbtxt):
 
 ```
 optimization {
