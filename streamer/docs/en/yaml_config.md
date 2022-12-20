@@ -8,21 +8,21 @@ In other words, FDStreamer YAML configuration file can be parsed into an AppConf
 
 `AppConfig` describes the configuration information at the application level, including App type, whether to enable performance measurement, etc. For details, please refer to the definition of the AppConfig structure in [base_app.h](../../src/app/base_app.h).
 
-GStreamer PIPELINE-DESCRIPTION String is a string defined by the GStreamer framework to describe the Pipeline. Developers can use the command-line tool `gst-launch-1.0` provided by GStreamer to test and verify the PIPELINE-DESCRIPTION string. More information can be found in [GStreamer Pipeline Description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html?gi-language=c#pipeline-description).
-
-PIPELINE-DESCRIPTION is composed of Element, Property, Link, etc. Developers can use the command-line tool `gst-inspect-1.0` provided by GStreamer to search for Elements, check Element Properties, etc.
+GStreamer PIPELINE-DESCRIPTION String is a string defined by the GStreamer framework to describe the Pipeline. Developers can use the command-line tool `gst-launch-1.0` provided by GStreamer to test and verify the PIPELINE-DESCRIPTION string.PIPELINE-DESCRIPTION is composed of Element, Property, Link, etc. Developers can use the command-line tool `gst-inspect-1.0` provided by GStreamer to search for Elements, check Element Properties, etc.More information can be found in [GStreamer Pipeline Description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html?gi-language=c#pipeline-description).
 
 Rules:
 - A configuration module of the FDStreamer YAML configuration file, called a `Node`, which consists of a Node name and several Node properties, and the number of Node properties can be 0.
 - The first Node must be `app`, used to define AppConfig.
-- Except for the special Node, other Node name must be the name of the GStreamer Element, which can be found by `gst-inspect-1.0` tool.
-- Except for the special Node properties, other Node property names must be the name of GStreamer Element Properties, which can be checked by `gst-inspect-1.0` tool.
+- Except for the [special Node](#special-node-and-property), other Node name must be the name of the GStreamer Element, which can be found by `gst-inspect-1.0` tool.
+- Except for the [special Node and properties](#special-node-and-property), other Node property names must be the name of GStreamer Element Properties, which can be checked by `gst-inspect-1.0` tool.
 
 Through the above rules, we can cover all the GStreamer Elements. As long as it can be found by the `gst-inspect-1.0` tool, it can be written into the YAML configuration file of FDStreamer. We can flexibly configure Properties, replace Elements and even modify the Pipeline structure.
 
 ## Example
 
-In the following YAML configuration, except for the app Node, the rest are GStreamer Elements, and the Node name and properties can be queried through the `gst-inspect-1.0` tool. The corresponding GStreamer Pipeline is: `nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=0 ! nvvideoconvert gpu-id=0 ! capsfilter caps="video/x-raw,format=(string)BGR" ! appsink sync=true max-buffers=60 drop=false`
+In the following YAML configuration, theare are 5 Nodes, i.e app, nvurisrcbin, nvvideoconvert, capsfilter and appsink.
+
+Except for the app Node, the rest are GStreamer Elements, and the Node name and properties can be queried through the `gst-inspect-1.0` tool. The corresponding GStreamer Pipeline is: `nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=0 ! nvvideoconvert gpu-id=0 ! capsfilter caps="video/x-raw,format=(string)BGR" ! appsink sync=true max-buffers=60 drop=false`
 
 ```
 app:
@@ -46,7 +46,7 @@ appsink:
   drop: false
 ```
 
-The following example has 4 nvurisrcbins connected to one nvstreammux. The corresponding GStreamer Pipeline is: `nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_0  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_1  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_2  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_3  nvstreammux name=mux gpu-id=1 batch-size=4`
+The following example has a nvurisrcbin_list Node, which contains 4 nvurisrcbins, and these 4 nvurisrcbins are connected to one nvstreammux. The corresponding GStreamer Pipeline is: `nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_0  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_1  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_2  nvurisrcbin uri=file:///opt/sample_ride_bike.mov gpu-id=1 ! mux.sink_3  nvstreammux name=mux gpu-id=1 batch-size=4`
 
 ```
 nvurisrcbin_list:
