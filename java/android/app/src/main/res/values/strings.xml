@@ -8,6 +8,7 @@
     <string name="facedet_app_name">EasyEdge</string>
     <string name="segmentation_app_name">EasyEdge</string>
     <string name="voice_assistant_app_name">voice assistant</string>
+    <string name="super_resolution_app_name">Super Resolution</string>
     <string name="start_ui_activity">开始使用</string>
     <!-- Keys for PreferenceScreen -->
     <string name="CHOOSE_PRE_INSTALLED_MODEL_KEY">CHOOSE_INSTALLED_MODEL_KEY</string>
@@ -41,6 +42,8 @@
     <string name="SEGMENTATION_MODEL_DIR_DEFAULT">models/portrait_pp_humansegv2_lite_256x144_inference_model</string>
     <!-- keypointdetection values   -->
     <string name="KEYPOINT_DETECTION_MODEL_DIR_DEFAULT">models/PP_TinyPose_128x96_infer</string>
+    <string name="VOICE_ASSISTANT_MODEL_DIR_DEFAULT">models</string>
+    <string name="SUPER_RESOLUTION_MODEL_DIR_DEFAULT">models</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">实时识别</string>
