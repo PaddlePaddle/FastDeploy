@@ -8,7 +8,7 @@ This document describes how to compile PaddleLite-based C++ and Python FastDeplo
 For more compilation options, please refer to the [FastDeploy compilation options description](./README.md)
 
 ##  Huawei Ascend Environment Preparation
-- Atlas 300I Pro [Spec Sheet](https://e.huawei.com/cn/products/cloud-computing-dc/atlas/atlas-300i-pro)
+- Atlas 300I Pro, see detailes at [Spec Sheet](https://e.huawei.com/cn/products/cloud-computing-dc/atlas/atlas-300i-pro)
 - Install the driver and firmware package (Driver and Firmware) for the Atlas 300I Pro
 - Download the matching driver and firmware package at:
   - https://www.hiascend.com/hardware/firmware-drivers?tag=community（Community Edition）
