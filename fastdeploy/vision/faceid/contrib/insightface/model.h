@@ -14,6 +14,7 @@
 
 #pragma once
 #include "fastdeploy/vision/faceid/contrib/insightface/base.h"
+
 namespace fastdeploy {
 namespace vision {
 namespace faceid {

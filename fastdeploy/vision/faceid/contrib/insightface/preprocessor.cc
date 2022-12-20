@@ -25,7 +25,7 @@ InsightFaceRecognitionPreprocessor::InsightFaceRecognitionPreprocessor() {
   beta_ = {-1.f, -1.f, -1.f};  // RGB
   permute_ = true;
 }
-
+ 
 bool InsightFaceRecognitionPreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
 
   // face recognition model's preprocess steps in insightface

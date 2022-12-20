@@ -13,8 +13,95 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-import arcface
-import cosface
-import insightface_rec
-import partial_fc
-import vpl
+
+
+class InsightFaceRecognitionPreprocessor:
+    def __init__(self, config_file):
+        """Create a preprocessor for PaddleDetection Model from configuration file
+
+        :param config_file: (str)Path of configuration file, e.g ppyoloe/infer_cfg.yml
+        """
+        self._preprocessor = C.vision.faceid.InsightFaceRecognitionPreprocessor(
+            config_file)
+
+    def run(self, input_ims):
+        """Preprocess input images for PaddleDetection Model
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor, include image, scale_factor, im_shape
+        """
+        return self._preprocessor.run(input_ims)
+
+
+class InsightFaceRecognitionPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for PaddleDetection Model
+
+        """
+        self._postprocessor = C.vision.faceid.InsightFaceRecognitionPostprocessor(
+        )
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for PaddleDetection Model
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
+
+
+class InsightFaceRecognitionBase(FastDeployModel):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a PPYOLOE model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.InsightFaceRecognitionBase(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "PPYOLOE model initialize failed."
+
+    def predict(self, im):
+        """Detect an input image
+
+        :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: DetectionResult
+        """
+
+        assert im is not None, "The input image data is None."
+        return self._model.predict(im)
+
+    def batch_predict(self, images):
+        """Detect a batch of input image list
+
+        :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return list of DetectionResult
+        """
+
+        return self._model.batch_predict(images)
+
+    @property
+    def preprocessor(self):
+        """Get PaddleDetPreprocessor object of the loaded model
+
+        :return PaddleDetPreprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get PaddleDetPostprocessor object of the loaded model
+
+        :return PaddleDetPostprocessor
+        """
+        return self._model.postprocessor

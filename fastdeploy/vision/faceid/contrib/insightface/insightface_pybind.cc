@@ -75,14 +75,19 @@ void BindInsightFace(pybind11::module& m) {
       })
       .def_property_readonly("preprocessor", &vision::faceid::InsightFaceRecognitionBase::GetPreprocessor)
       .def_property_readonly("postprocessor", &vision::faceid::InsightFaceRecognitionBase::GetPostprocessor);
+
   pybind11::class_<vision::faceid::ArcFace, vision::faceid::InsightFaceRecognitionBase>(m, "ArcFace")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
+
   pybind11::class_<vision::faceid::AdaFace, vision::faceid::InsightFaceRecognitionBase>(m, "AdaFace")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
+
   pybind11::class_<vision::faceid::CosFace, vision::faceid::InsightFaceRecognitionBase>(m, "CosFace")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
+
   pybind11::class_<vision::faceid::PartialFC, vision::faceid::InsightFaceRecognitionBase>(m, "PartialFC")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
+
   pybind11::class_<vision::faceid::VPL, vision::faceid::InsightFaceRecognitionBase>(m, "VPL")
       .def(pybind11::init<std::string, std::string, RuntimeOption,ModelFormat>());
 }
