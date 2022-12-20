@@ -13,6 +13,7 @@ English | [中文](../../cn/build_and_install/README.md)
 - [Build and Install on Nvidia Jetson Platform](jetson.md)
 - [Build and Install on Android Platform](android.md)
 - [Build and Install on RV1126 Platform](rv1126.md)
+- [Build and Install on RK3588 Platform](rknpu2.md)
 - [Build and Install on A311D Platform](a311d.md)
 - [Build and Install on KunlunXin XPU Platform](xpu.md)
 
