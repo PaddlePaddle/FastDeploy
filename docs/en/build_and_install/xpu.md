@@ -55,7 +55,7 @@ cmake -DWITH_XPU=ON  \
 make -j8
 make install
 ```  
-After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the PadddleLite-based FastDeploy library has been compiled.
+After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the Padddle Lite based FastDeploy library has been compiled.
 
 ## Python compile
 The compilation command is as follows:
