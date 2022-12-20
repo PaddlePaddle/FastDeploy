@@ -11,3 +11,12 @@ include_directories(${FASTDEPLOY_INCS})
 
 add_executable(infer_arcface_demo ${PROJECT_SOURCE_DIR}/infer_arcface.cc)
 target_link_libraries(infer_arcface_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_cosface_demo ${PROJECT_SOURCE_DIR}/infer_cosface.cc)
+target_link_libraries(infer_cosface_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_vpl_demo ${PROJECT_SOURCE_DIR}/infer_vpl.cc)
+target_link_libraries(infer_vpl_demo ${FASTDEPLOY_LIBS})
+
+add_executable(infer_partial_fc_demo ${PROJECT_SOURCE_DIR}/infer_partial_fc.cc)
+target_link_libraries(infer_partial_fc_demo ${FASTDEPLOY_LIBS})
