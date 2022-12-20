@@ -27,6 +27,17 @@
             android:layout_marginTop="50px"
             android:text="@string/voice_assistant_app_name"
             android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:layout_marginRight="10dp"
+            android:background="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/btn_settings" />
     </com.baidu.paddle.fastdeploy.ui.layout.ActionBarLayout>
 
     <LinearLayout
