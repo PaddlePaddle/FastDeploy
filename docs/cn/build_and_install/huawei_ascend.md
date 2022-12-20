@@ -9,7 +9,7 @@ FastDeploy基于 Paddle-Lite 后端, 支持在华为昇腾NPU上进行部署推�
 
 
 ## 一.华为昇腾环境准备
-- Atlas 300I Pro 推理卡[规格说明书](https://e.huawei.com/cn/products/cloud-computing-dc/atlas/atlas-300i-pro)
+- Atlas 300I Pro 推理卡, 详情见[规格说明书](https://e.huawei.com/cn/products/cloud-computing-dc/atlas/atlas-300i-pro)
 - 安装Atlas 300I Pro 推理卡的驱动和固件包（Driver 和 Firmware)
 - 配套驱动和固件包下载：
   - https://www.hiascend.com/hardware/firmware-drivers?tag=community（社区版）
@@ -95,5 +95,5 @@ python setup.py bdist_wheel
 #编译完成后,请用户自行安装当前目录的dist文件夹内的whl包.
 ```
 
-华为昇腾NPU 上使用C++部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/ascend/cpp/README.md)
-华为昇腾NPU 上使用Python部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/ascend/python/README.md)
+- 华为昇腾NPU 上使用C++部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/ascend/cpp/README.md)
+- 华为昇腾NPU 上使用Python部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/ascend/python/README.md)
