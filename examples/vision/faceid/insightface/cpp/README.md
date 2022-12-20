@@ -103,7 +103,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 #### Predict函数
 
 > ```c++
-> ArcFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
+> ArcFace::Predict(cv::Mat& im, FaceRecognitionResult* result)
 > ```
 >
 > 模型预测接口，输入图像直接输出检测结果。
