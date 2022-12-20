@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/faceid/contrib/insightface_rec/base.h"
+#include "fastdeploy/vision/faceid/contrib/adaface/adaface.h"
 
 namespace fastdeploy {
 namespace vision {
 namespace faceid {
 
-InsightFaceRecognitionBase::InsightFaceRecognitionBase(
+AdaFace::AdaFace(
     const std::string& model_file, const std::string& params_file,
     const fastdeploy::RuntimeOption& custom_option,
     const fastdeploy::ModelFormat& model_format) {
@@ -37,7 +37,7 @@ InsightFaceRecognitionBase::InsightFaceRecognitionBase(
   initialized = Initialize();
 }
 
-bool InsightFaceRecognitionBase::Initialize() {
+bool AdaFace::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
     return false;
@@ -45,7 +45,7 @@ bool InsightFaceRecognitionBase::Initialize() {
   return true;
 }
 
-bool InsightFaceRecognitionBase::Predict(const cv::Mat& im,
+bool AdaFace::Predict(const cv::Mat& im,
                                          FaceRecognitionResult* result) {
   std::vector<FaceRecognitionResult> results;
   if (!BatchPredict({im}, &results)) {
@@ -55,7 +55,7 @@ bool InsightFaceRecognitionBase::Predict(const cv::Mat& im,
   return true;
 }
 
-bool InsightFaceRecognitionBase::BatchPredict(const std::vector<cv::Mat>& images,
+bool AdaFace::BatchPredict(const std::vector<cv::Mat>& images,
                                               std::vector<FaceRecognitionResult>* results){
   std::vector<FDMat> fd_images = WrapMat(images);
   FDASSERT(images.size() == 1, "Only support batch = 1 now.");

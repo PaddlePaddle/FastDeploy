@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/faceid/contrib/insightface_rec/preprocessor.h"
+#include "fastdeploy/vision/faceid/contrib/insightface/preprocessor.h"
 
 namespace fastdeploy {
 namespace vision {

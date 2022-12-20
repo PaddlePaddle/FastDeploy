@@ -15,8 +15,8 @@
 #pragma once
 
 #include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/vision/faceid/contrib/insightface_rec/postprocessor.h"
-#include "fastdeploy/vision/faceid/contrib/insightface_rec/preprocessor.h"
+#include "fastdeploy/vision/faceid/contrib/insightface/postprocessor.h"
+#include "fastdeploy/vision/faceid/contrib/insightface/preprocessor.h"
 
 namespace fastdeploy {
 namespace vision {
