@@ -12,6 +12,7 @@
 - [瑞芯微RV1126部署环境编译安装](cn/build_and_install/rv1126.md)
 - [瑞芯微RK3588部署环境编译安装](cn/build_and_install/rknpu2.md)
 - [晶晨A311D部署环境编译安装](cn/build_and_install/a311d.md)
+- [华为昇腾部署环境编译安装](cn/build_and_install/huawei_ascend.md)
 - [Jetson部署环境编译安装](cn/build_and_install/jetson.md)
 - [Android平台部署环境编译安装](cn/build_and_install/android.md)
 - [服务化部署镜像编译安装](../serving/docs/zh_CN/compile.md)

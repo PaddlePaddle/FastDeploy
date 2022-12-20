@@ -12,6 +12,7 @@
 - [Build and Install on RV1126 Platform](en/build_and_install/rv1126.md)
 - [Build and Install on RK3588 Platform](en/build_and_install/rknpu2.md)
 - [Build and Install on A311D Platform](en/build_and_install/a311d.md)
+- [Build and Install on Huawei Ascend Platform](en/build_and_install/huawei_ascend.md)
 - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
 - [Build and Install FastDeploy Library on Android Platform](en/build_and_install/android.md)
 - [Build and Install FastDeploy Serving Deployment Image](../serving/docs/EN/compile-en.md)
