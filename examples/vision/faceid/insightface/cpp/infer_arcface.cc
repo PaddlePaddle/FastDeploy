@@ -16,11 +16,7 @@
 
 void CpuInfer(const std::string& model_file,
               const std::vector<std::string>& image_file) {
-  auto model = fastdeploy::vision::faceid::ArcFace(model_file);
-  if (!model.Initialized()) {
-    std::cerr << "Failed to initialize." << std::endl;
-    return;
-  }
+  auto model = fastdeploy::vision::faceid::ArcFace(model_file,"");
 
   cv::Mat face0 = cv::imread(image_file[0]);
   cv::Mat face1 = cv::imread(image_file[1]);
@@ -30,8 +26,8 @@ void CpuInfer(const std::string& model_file,
   fastdeploy::vision::FaceRecognitionResult res1;
   fastdeploy::vision::FaceRecognitionResult res2;
 
-  if ((!model.Predict(&face0, &res0)) || (!model.Predict(&face1, &res1)) ||
-      (!model.Predict(&face2, &res2))) {
+  if ((!model.Predict(face0, &res0)) || (!model.Predict(face1, &res1)) ||
+      (!model.Predict(face2, &res2))) {
     std::cerr << "Prediction Failed." << std::endl;
   }
 
@@ -42,9 +38,9 @@ void CpuInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.l2_normalize);
+      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.l2_normalize);
+      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
@@ -67,8 +63,8 @@ void GpuInfer(const std::string& model_file,
   fastdeploy::vision::FaceRecognitionResult res1;
   fastdeploy::vision::FaceRecognitionResult res2;
 
-  if ((!model.Predict(&face0, &res0)) || (!model.Predict(&face1, &res1)) ||
-      (!model.Predict(&face2, &res2))) {
+  if ((!model.Predict(face0, &res0)) || (!model.Predict(face1, &res1)) ||
+      (!model.Predict(face2, &res2))) {
     std::cerr << "Prediction Failed." << std::endl;
   }
 
@@ -79,9 +75,9 @@ void GpuInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.l2_normalize);
+      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.l2_normalize);
+      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
@@ -106,8 +102,8 @@ void TrtInfer(const std::string& model_file,
   fastdeploy::vision::FaceRecognitionResult res1;
   fastdeploy::vision::FaceRecognitionResult res2;
 
-  if ((!model.Predict(&face0, &res0)) || (!model.Predict(&face1, &res1)) ||
-      (!model.Predict(&face2, &res2))) {
+  if ((!model.Predict(face0, &res0)) || (!model.Predict(face1, &res1)) ||
+      (!model.Predict(face2, &res2))) {
     std::cerr << "Prediction Failed." << std::endl;
   }
 
@@ -118,9 +114,9 @@ void TrtInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.l2_normalize);
+      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.l2_normalize);
+      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
