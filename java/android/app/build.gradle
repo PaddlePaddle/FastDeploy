@@ -73,6 +73,10 @@ def FD_MODEL = [
         [
                 'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_128x96_infer.tgz',
                 'dest': 'src/main/assets/models'
+        ],
+        [
+                'src': 'https://bj.bcebos.com/paddlehub/fastdeploy/uie-nano.tgz',
+                'dest': 'src/main/assets/models'
         ]
 ]
 
