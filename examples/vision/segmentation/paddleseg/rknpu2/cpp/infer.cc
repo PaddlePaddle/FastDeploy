@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
   }
 
   RKNPU2Infer(argv[1], argv[2]);
-  ONNXInfer(argv[1], argv[2]);
+//  ONNXInfer(argv[1], argv[2]);
   return 0;
 }
 

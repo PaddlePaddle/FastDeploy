@@ -41,14 +41,18 @@ class PPTinyPose(FastDeployModel):
             model_format)
         assert self.initialized, "PPTinyPose model initialize failed."
 
-    def predict(self, input_image):
+    def predict(self, input_image, detection_result=None):
         """Detect keypoints in an input image
 
         :param im: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param detection_result: (DetectionResult)Pre-detected boxes result, default is None
         :return: KeyPointDetectionResult
         """
         assert input_image is not None, "The input image data is None."
-        return self._model.predict(input_image)
+        if detection_result:
+            return self._model.predict(input_image, detection_result)
+        else:
+            return self._model.predict(input_image)
 
     @property
     def use_dark(self):

@@ -23,7 +23,6 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
   }
   model.size = {256, 256};
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
@@ -32,9 +31,9 @@ void CpuInfer(const std::string& model_file, const std::string& image_file,
     return;
   }
 
-  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -54,7 +53,6 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
   model.size = {256, 256};
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
@@ -63,9 +61,9 @@ void GpuInfer(const std::string& model_file, const std::string& image_file,
     return;
   }
 
-  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "
@@ -86,7 +84,6 @@ void TrtInfer(const std::string& model_file, const std::string& image_file,
   }
   model.size = {256, 256};
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
   cv::Mat bg = cv::imread(background_file);
 
   fastdeploy::vision::MattingResult res;
@@ -95,9 +92,9 @@ void TrtInfer(const std::string& model_file, const std::string& image_file,
     return;
   }
 
-  auto vis_im = fastdeploy::vision::VisMatting(im_bak, res);
+  auto vis_im = fastdeploy::vision::VisMatting(im, res);
   auto vis_im_with_bg =
-      fastdeploy::vision::Visualize::SwapBackgroundMatting(im_bak, bg, res);
+      fastdeploy::vision::SwapBackground(im, bg, res);
   cv::imwrite("visualized_result.jpg", vis_im_with_bg);
   cv::imwrite("visualized_result_fg.jpg", vis_im);
   std::cout << "Visualized result save in ./visualized_result_replaced_bg.jpg "

@@ -1,3 +1,5 @@
+[English](../../en/faq/use_sdk_on_windows.md) | 中文
+
 # 在 Windows 使用 FastDeploy C++ SDK
 
 ## 目录
