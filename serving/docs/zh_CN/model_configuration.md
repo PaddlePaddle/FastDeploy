@@ -168,3 +168,38 @@ optimization {
   }
 }
 ```
+
+配置TensorRT动态shape的格式如下，可参照[PaddleCls例子中Runtime配置](../../../examples/vision/classification/paddleclas/serving/models/runtime/config.pbtxt):
+```
+optimization {
+  execution_accelerators {
+  gpu_execution_accelerator : [ {
+    # use TRT engine
+    name: "tensorrt",
+    # use fp16 on TRT engine
+    parameters { key: "precision" value: "trt_fp16" }
+  },
+  {
+    # Configure the minimum shape of dynamic shape
+    name: "min_shape"
+    # All input name and minimum shape
+    parameters { key: "input1" value: "1 3 224 224" }
+    parameters { key: "input2" value: "1 10" }
+  },
+  {
+    # Configure the optimal shape of dynamic shape
+    name: "opt_shape"
+    # All input name and optimal shape
+    parameters { key: "input1" value: "2 3 224 224" }
+    parameters { key: "input2" value: "2 20" }
+  },
+  {
+    # Configure the maximum shape of dynamic shape
+    name: "max_shape"
+    # All input name and maximum shape
+    parameters { key: "input1" value: "8 3 224 224" }
+    parameters { key: "input2" value: "8 30" }
+  }
+  ]
+}}
+```
