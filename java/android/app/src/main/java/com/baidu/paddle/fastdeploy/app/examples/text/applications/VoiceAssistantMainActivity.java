@@ -6,6 +6,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -18,6 +19,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -40,6 +42,7 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
     private TextView voiceOutput;
     private Button startIntentBtn;
     private TextView intentOutput;
+    private ImageButton btnSettings;
     private ImageView back;
     private EventManager asr;
     private Boolean isStartVoice = false;
@@ -71,6 +74,8 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
         startIntentBtn = findViewById(R.id.btn_intent);
         startIntentBtn.setOnClickListener(this);
         intentOutput = findViewById(R.id.tv_intent_output);
+        btnSettings = findViewById(R.id.btn_settings);
+        btnSettings.setOnClickListener(this);
     }
 
     @Override
@@ -93,6 +98,9 @@ public class VoiceAssistantMainActivity extends Activity implements View.OnClick
                     startVoiceBtn.setText("开始录音");
                     stop();
                 }
+                break;
+            case R.id.btn_settings:
+                startActivity(new Intent(VoiceAssistantMainActivity.this, VoiceAssistantSettingsActivity.class));
                 break;
             case R.id.iv_back:
                 finish();
