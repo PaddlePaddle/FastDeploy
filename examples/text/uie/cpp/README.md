@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # 通用信息抽取 UIE C++部署示例
 
 本目录下提供`infer.cc`快速完成[UIE模型](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/uie)在CPU/GPU的示例。
