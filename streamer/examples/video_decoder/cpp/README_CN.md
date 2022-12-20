@@ -4,7 +4,7 @@
 
 ## 编译和运行
 
-1. 需要先FastDeploy Streamer, 请参考[README](../../../README.md)
+1. 需要先FastDeploy Streamer, 请参考[README](../../../)
 
 2. 编译Example
 ```

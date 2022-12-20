@@ -62,16 +62,12 @@ make install
 
 ```bash
 cd ./build/install
-./rknpu_test
+./rknpu_test model/Portrait_PP_HumanSegV2_Lite_256x144_infer/ images/portrait_heng.jpg
 ```
-
-## 运行结果展示
-运行后将在install文件夹下生成human_pp_humansegv2_lite_npu_result.jpg文件，如下图:
-![](https://user-images.githubusercontent.com/58363586/198875853-72821ad1-d4f7-41e3-b616-bef43027de3c.jpg)
 
 ## 注意事项
 RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
-需要先调用DisableNormalizePermute(C++)或`disable_normalize_permute(Python)，在预处理阶段禁用归一化以及数据格式的转换。
+需要先调用DisableNormalizeAndPermute(C++)或`disable_normalize_and_permute(Python)，在预处理阶段禁用归一化以及数据格式的转换。
 
 - [模型介绍](../../)
 - [Python部署](../python)

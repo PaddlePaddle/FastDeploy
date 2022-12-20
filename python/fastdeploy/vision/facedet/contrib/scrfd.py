@@ -51,11 +51,17 @@ class SCRFD(FastDeployModel):
         return self._model.predict(input_image, conf_threshold,
                                    nms_iou_threshold)
 
-    def disable_normalize_and_permute(self):
+    def disable_normalize(self):
         """
-        This function will disable normalize and hwc2chw in preprocessing step.
+        This function will disable normalize in preprocessing step.
         """
-        self._model.disable_normalize_and_permute()
+        self._model.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._model.disable_permute()
 
     # 一些跟SCRFD模型有关的属性封装
     # 多数是预处理相关，可通过修改如model.size = [640, 640]改变预处理时resize的大小（前提是模型支持）

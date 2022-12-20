@@ -12,6 +12,7 @@
 - [Jetson部署环境](jetson.md)
 - [Android平台部署环境](android.md)
 - [瑞芯微RV1126部署环境](rv1126.md)
+- [瑞芯微RK3588部署环境](rknpu2.md)
 - [晶晨A311D部署环境](a311d.md)
 - [昆仑芯XPU部署环境](xpu.md)
 

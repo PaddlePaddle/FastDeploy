@@ -22,9 +22,9 @@ cp -r FastDeploy/build/fastdeploy-tmivx/ FastDeploy/examples/vision/classificati
 3. 在当前路径下载部署所需的模型和示例图片：
 ```bash
 mkdir models && mkdir images
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
-tar -xvf ResNet50_vd_infer.tgz
-cp -r ResNet50_vd_infer models
+wget https://bj.bcebos.com/paddlehub/fastdeploy/resnet50_vd_ptq.tar
+tar -xvf resnet50_vd_ptq.tar
+cp -r resnet50_vd_ptq models
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 cp -r ILSVRC2012_val_00000010.jpeg images
 ```
@@ -38,12 +38,12 @@ make install
 # 成功编译之后，会生成 install 文件夹，里面有一个运行 demo 和部署所需的库
 ```
 
-5. 基于 adb 工具部署 ResNet50_vd 分类模型到 Rockchip RV1126，可使用如下命令：
+5. 基于 adb 工具部署 ResNet50 分类模型到 Rockchip RV1126，可使用如下命令：
 ```bash
 # 进入 install 目录
 cd FastDeploy/examples/vision/classification/paddleclas/rv1126/cpp/build/install/
 # 如下命令表示：bash run_with_adb.sh 需要运行的demo 模型路径 图片路径 设备的DEVICE_ID
-bash run_with_adb.sh infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg $DEVICE_ID
+bash run_with_adb.sh infer_demo resnet50_vd_ptq ILSVRC2012_val_00000010.jpeg $DEVICE_ID
 ```
 
 部署成功后运行结果如下：
