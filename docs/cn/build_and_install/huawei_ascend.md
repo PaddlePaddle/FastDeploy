@@ -1,6 +1,6 @@
 # 华为昇腾NPU 部署环境编译准备
 
-FastDeploy基于 Paddle-Lite 后端支持在华为昇腾NPU上进行部署推理。
+FastDeploy基于 Paddle-Lite 后端, 支持在华为昇腾NPU上进行部署推理。
 更多详细的信息请参考：[PaddleLite部署示例](https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/docs/demo_guides/huawei_ascend_npu.md)。
 
 本文档介绍如何在ARM Linux操作系统环境下, 编译基于 PaddleLite 的 C++ 与 Python 的FastDeploy源码, 生成目标硬件为华为昇腾NPU的预测库。
@@ -8,7 +8,7 @@ FastDeploy基于 Paddle-Lite 后端支持在华为昇腾NPU上进行部署推理
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
 
-## 一.设备环境的准备
+## 一.华为昇腾环境准备
 - Atlas 300I Pro 推理卡[规格说明书](https://e.huawei.com/cn/products/cloud-computing-dc/atlas/atlas-300i-pro)
 - 安装Atlas 300I Pro 推理卡的驱动和固件包（Driver 和 Firmware)
 - 配套驱动和固件包下载：
@@ -68,13 +68,13 @@ git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy  
 mkdir build && cd build
 
-# CMake configuration with CANN
+# CMake configuration with Ascend
 cmake -DWITH_ASCEND=ON  \
       -DCMAKE_INSTALL_PREFIX=fastdeploy-ascend \
       -DENABLE_VISION=ON \
       ..
 
-# Build FastDeploy CANN C++ SDK
+# Build FastDeploy Ascend C++ SDK
 make -j8
 make install
 ```  
