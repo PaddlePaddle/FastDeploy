@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/xpu.md) | 简体中文
+
 # 昆仑芯 XPU 部署环境编译安装
 
 FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理。
