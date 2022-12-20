@@ -24,11 +24,14 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.examples.text.applications.VoiceAssistantMainActivity;
+import com.baidu.paddle.fastdeploy.app.examples.text.applications.VoiceAssistantSettingsActivity;
 import com.davemorrissey.labs.subscaleview.ImageSource;
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 
@@ -44,6 +47,7 @@ public class SuperResolutionMainActivity extends Activity implements View.OnClic
     private Spinner spinner;
     private Button start;
     private Button reset;
+    private ImageButton btnSettings;
     private ImageView albumSelect;
     private int multiple = 0;
     private boolean isAlbumSelect = false;
@@ -99,6 +103,9 @@ public class SuperResolutionMainActivity extends Activity implements View.OnClic
                         startMultiple(4, "super_pic_4.jpg");
                     }
                 }
+                break;
+            case R.id.btn_settings:
+                startActivity(new Intent(SuperResolutionMainActivity.this, SuperResolutionSettingsActivity.class));
                 break;
             case R.id.btn_reset:
                 originImage.resetScaleAndCenter();
@@ -186,6 +193,8 @@ public class SuperResolutionMainActivity extends Activity implements View.OnClic
         reset.setOnClickListener(this);
         albumSelect = findViewById(R.id.album_select);
         albumSelect.setOnClickListener(this);
+        btnSettings = findViewById(R.id.btn_settings);
+        btnSettings.setOnClickListener(this);
     }
 
     @Override
