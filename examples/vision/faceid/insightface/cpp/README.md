@@ -1,6 +1,10 @@
 # InsightFace C++部署示例
-本目录下提供infer_xxx.cc快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
-以ArcFace为例提供`infer_arcface.cc`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+
+FaceDeploy中提供的faceid模型包括AdaFace,ArcFace,CosFace,VPL,Partial_FC。
+本目录下提供infer_arcface.cc快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+如需运行其他模型，至于调整模型名字即可
+
+## 部署前的准备工作
 
 在部署前，需确认以下两个步骤
 
@@ -8,6 +12,10 @@
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
 以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+
+## 正式部署模型
+
+请逐行输入以下命令:
 
 ```bash
 mkdir build
@@ -45,7 +53,6 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
 ## InsightFace C++接口
-
 ### ArcFace类
 
 ```c++
