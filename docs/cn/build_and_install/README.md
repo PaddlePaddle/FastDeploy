@@ -27,7 +27,6 @@
 | ENABLE_LITE_BACKEND     | 默认OFF，是否编译集成Paddle Lite后端(编译Android库时需要设置为ON)                          |
 | ENABLE_RKNPU2_BACKEND   | 默认OFF，是否编译集成RKNPU2后端(RK3588/RK3568/RK3566上推荐打开)                           |
 | WITH_ASCEND             | 默认OFF，当在华为昇腾NPU上部署时, 需要设置为ON                                              |
-| ENABLE_TIMVX            | 默认OFF，需要在RV1126/RV1109上部署时，需设置为ON                                          |
 | WITH_XPU                | 默认OFF，当在昆仑芯XPU上部署时，需设置为ON                                                |
 | WITH_TIMVX              | 默认OFF，需要在RV1126/RV1109/A311D上部署时，需设置为ON                                   |
 | ENABLE_TRT_BACKEND      | 默认OFF，是否编译集成TensorRT后端(GPU上推荐打开)                                          |
