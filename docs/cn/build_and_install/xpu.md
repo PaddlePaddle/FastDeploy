@@ -1,9 +1,9 @@
 # 昆仑芯 XPU 部署环境编译安装
 
-FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理。
-更多详细的信息请参考：[PaddleLite部署示例](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
+FastDeploy 基于 Paddle Lite 后端支持在昆仑芯 XPU 上进行部署推理。
+更多详细的信息请参考：[Paddle Lite部署示例](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
 
-本文档介绍如何编译基于 PaddleLite 的 C++ FastDeploy 编译库。
+本文档介绍如何编译基于 Paddle Lite 的 C++ FastDeploy 编译库。
 
 相关编译选项说明如下：  
 |编译选项|默认值|说明|备注|  
@@ -23,7 +23,7 @@ FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理
 | OPENVINO_DIRECTORY      | 当开启OpenVINO后端时, 用于指定用户本地的OpenVINO库路径；如果不指定，编译过程会自动下载OpenVINO库             |
 更多编译选项请参考[FastDeploy编译选项说明](./README.md)
 
-## 基于 PaddleLite 的 C++ FastDeploy 库编译
+## 基于 Paddle Lite 的 C++ FastDeploy 库编译
 - OS: Linux
 - gcc/g++: version >= 8.2
 - cmake: version >= 3.15
