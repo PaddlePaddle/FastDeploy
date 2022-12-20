@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from __future__ import absolute_import
+from python.fastdeploy import FastDeployModel, ModelFormat
+from python.fastdeploy import c_lib_wrap as C
 
 
 class InsightFaceRecognitionPreprocessor:
@@ -105,3 +107,95 @@ class InsightFaceRecognitionBase(FastDeployModel):
         :return PaddleDetPostprocessor
         """
         return self._model.postprocessor
+
+
+class ArcFace(InsightFaceRecognitionBase):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a YOLOX model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(ArcFace, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.ArcFace(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "PaddleYOLOX model initialize failed."
+
+
+class CosFace(InsightFaceRecognitionBase):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a YOLOX model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(CosFace, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.CosFace(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "PaddleYOLOX model initialize failed."
+
+
+class PartialFC(InsightFaceRecognitionBase):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a YOLOX model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(PartialFC, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.PartialFC(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "PaddleYOLOX model initialize failed."
+
+
+class VPL(InsightFaceRecognitionBase):
+    def __init__(self,
+                 model_file,
+                 params_file,
+                 config_file,
+                 runtime_option=None,
+                 model_format=ModelFormat.ONNX):
+        """Load a YOLOX model exported by PaddleDetection.
+
+        :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param config_file: (str)Path of configuration file for deployment, e.g ppyoloe/infer_cfg.yml
+        :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
+        :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
+        """
+
+        super(VPL, self).__init__(runtime_option)
+
+        self._model = C.vision.detection.VPL(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "PaddleYOLOX model initialize failed."
