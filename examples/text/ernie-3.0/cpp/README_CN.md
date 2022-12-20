@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+[English](README.md) | 简体中文
 # ERNIE 3.0 模型C++部署示例
 
 在部署前，需确认以下两个步骤
