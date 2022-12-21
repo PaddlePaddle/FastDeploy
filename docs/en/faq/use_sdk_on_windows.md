@@ -57,7 +57,7 @@ Please refer to source code compilation: [build_and_install](../build_and_instal
 ### 2.2 Prepare Model Files and Test Images
 Model files and test images can be downloaded from the link below and unzipped
 ```text
-https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (下载后解压缩)
+https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (please unzip it after downloading)
 https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
