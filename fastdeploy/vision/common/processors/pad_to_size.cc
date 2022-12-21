@@ -129,7 +129,7 @@ bool PadToSize::ImplByFlyCV(Mat* mat) {
   fcv::Mat new_im;
   // top, bottom, left, right
   fcv::copy_make_border(*im, new_im, 0, height_ - origin_h, 0,
-                        width_ - origin_w, fcv::BorderTypes::BORDER_CONSTANT,
+                        width_ - origin_w, fcv::BorderType::BORDER_CONSTANT,
                         value);
   mat->SetMat(new_im);
   mat->SetHeight(height_);
