@@ -28,27 +28,23 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPostprocessor {
    */
   InsightFaceRecognitionPostprocessor();
 
-  /** \brief Process the result of runtime and fill to DetectionResult structure
+  /** \brief Process the result of runtime and fill to FaceRecognitionResult structure
    *
    * \param[in] tensors The inference result from runtime
    * \param[in] result The output result of FaceRecognitionResult
    * \return true if the postprocess successed, otherwise false
    */
   bool Run(std::vector<FDTensor>& infer_result,
-            std::vector<FaceRecognitionResult>* results);
+           std::vector<FaceRecognitionResult>* results);
 
-  void SetL2Normalize(bool& l2_normalize){
-    l2_normalize_ = l2_normalize;
-  }
+  void SetL2Normalize(bool& l2_normalize) { l2_normalize_ = l2_normalize; }
 
-  bool GetL2Normalize(){
-    return l2_normalize_;
-  }
+  bool GetL2Normalize() { return l2_normalize_; }
 
-  private:
-   bool l2_normalize_;
+ private:
+  bool l2_normalize_;
 };
 
-}  // namespace detection
+}  // namespace faceid
 }  // namespace vision
 }  // namespace fastdeploy
