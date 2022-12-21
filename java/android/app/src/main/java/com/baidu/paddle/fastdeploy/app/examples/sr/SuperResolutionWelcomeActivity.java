@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.segmentation;
+package com.baidu.paddle.fastdeploy.app.examples.sr;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -10,7 +10,8 @@ import android.view.View;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
 
-public class SegmentationWelcomeActivity extends Activity {
+public class SuperResolutionWelcomeActivity extends Activity {
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -24,7 +25,7 @@ public class SegmentationWelcomeActivity extends Activity {
     }
 
     public void startActivity(View view) {
-        Intent intent = new Intent(SegmentationWelcomeActivity.this, SegmentationMainActivity.class);
+        Intent intent = new Intent(SuperResolutionWelcomeActivity.this, SuperResolutionMainActivity.class);
         startActivity(intent);
     }
 }
