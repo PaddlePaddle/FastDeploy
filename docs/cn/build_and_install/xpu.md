@@ -2,7 +2,7 @@
 
 # 昆仑芯 XPU 部署环境编译安装
 
-FastDeploy 基于 Paddle-Lite 后端支持在昆仑芯 XPU 上进行部署推理。
+FastDeploy 基于 Paddle Lite 后端支持在昆仑芯 XPU 上进行部署推理。
 更多详细的信息请参考：[PaddleLite部署示例](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
 
 本文档介绍如何编译基于 PaddleLite 的 C++ FastDeploy 编译库。
