@@ -43,6 +43,7 @@ enum Backend {
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,      ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,    ///< RKNPU2, support RKNN format model, Rockchip NPU only
+  SOPHGONPU2,   ///< SOPHGONPU2, support SOPHGO format model, Rockchip NPU only
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -122,6 +123,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
+
+  /// Set SOPHGO Runtime as inference backend, support CPU/GPU
+  void UseSophgoBackend();
 
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
@@ -466,6 +470,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateOpenVINOBackend();
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
+  void CreateSophgoNPUBackend();
   std::unique_ptr<BaseBackend> backend_;
   std::vector<FDTensor> input_tensors_;
   std::vector<FDTensor> output_tensors_;

@@ -74,6 +74,9 @@ std::vector<Backend> GetAvailableBackends() {
 #ifdef ENABLE_RKNPU2_BACKEND
   backends.push_back(Backend::RKNPU2);
 #endif
+#ifdef ENABLE_SOPHGO_BACKEND
+  backends.push_back(Backend::SOPHGONPU2);
+#endif
   return backends;
 }
 
@@ -162,6 +165,15 @@ bool CheckModelFormat(const std::string& model_file,
           << model_file << std::endl;
       return false;
     }
+  }else if (model_format == ModelFormat::SOPHGO) {
+    if (model_file.size() < 7 || 
+        model_file.substr(model_file.size() -7, 7) != ".bmodel") {
+      FDERROR
+          << "With model format of ModelFormat::SOPHGO, the model file "
+             "should ends with `.bmodel`, but now it's "
+          << model_file << std::endl;
+      return false;     
+    }
   } else {
     FDERROR
         << "Only support model format with frontend ModelFormat::PADDLE / "
@@ -189,6 +201,10 @@ ModelFormat GuessModelFormat(const std::string& model_file) {
              model_file.substr(model_file.size() - 5, 5) == ".rknn") {
     FDINFO << "Model Format: RKNN." << std::endl;
     return ModelFormat::RKNN;
+  } else if (model_file.size() > 7 &&
+             model_file.substr(model_file.size() - 7, 7) == ".bmodel") {
+    FDINFO << "Model Format: SOPHGO." << std::endl;
+    return ModelFormat::SOPHGO;
   }
 
   FDERROR << "Cannot guess which model format you are using, please set "
@@ -245,6 +261,7 @@ void RuntimeOption::UseTimVX() {
 
 void RuntimeOption::UseSophgo() {
   device = Device::SOPHGONPU;
+  UseSophgoBackend();
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -279,6 +296,15 @@ void RuntimeOption::UseOrtBackend() {
   backend = Backend::ORT;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with OrtBackend.");
+#endif
+}
+
+// use sophgoruntime backend
+void RuntimeOption::UseSophgoBackend() {
+#ifdef ENABLE_SOPHGO_BACKEND
+  backend = Backend::SOPHGONPU2;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with SophgoBackend.");
 #endif
 }
 
@@ -552,7 +578,15 @@ bool Runtime::Init(const RuntimeOption& _option) {
 
     FDINFO << "Runtime initialized with Backend::RKNPU2 in "
            << Str(option.device) << "." << std::endl;
-  } else {
+  } else if (option.backend == Backend::SOPHGONPU2) {
+    FDASSERT(option.device == Device::SOPHGONPU,
+             "Backend::SOPHGO only supports Device::SOPHGO");
+    CreateSophgoNPUBackend();
+
+    FDINFO << "Runtime initialized with Backend::SOPHGO in "
+           << Str(option.device) << "." << std::endl;
+  }  
+  else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
                "backend now."
@@ -819,6 +853,21 @@ void Runtime::CreateRKNPU2Backend() {
 #else
   FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
                   "ENABLE_RKNPU2_BACKEND=ON.");
+#endif
+}
+
+void Runtime::CreateSophgoNPUBackend() {
+#ifdef ENABLE_SOPHGO_BACKEND
+  auto sophgo_option = SophgoBackendOption();
+  FDASSERT(option.model_format == ModelFormat::SOPHGO,
+           "SophgoBackend only support model format of ModelFormat::SOPHGO");
+  backend_ = utils::make_unique<SophgoBackend>();
+  auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
+  FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
+           "Load model from nb file failed while initializing LiteBackend.");
+#else
+  FDASSERT(false, "SophgoBackend is not available, please compiled with "
+                  "ENABLE_SOPHGO_BACKEND=ON.");
 #endif
 }
 

@@ -20,15 +20,15 @@ const char sep = '/';
 #endif
 
 void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
-  auto model_file = model_dir + sep + "inference.pdmodel";
+  auto model_file = model_dir + sep + "resnet50_1684x_f32.bmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
   
   fastdeploy::RuntimeOption option;
   option.UseSophgo();
-
+  auto model_format = fastdeploy::ModelFormat::SOPHGO;
   auto model = fastdeploy::vision::classification::PaddleClasModel(
-      model_file, params_file, config_file, option);
+      model_file, params_file, config_file, option, model_format);
 
   assert(model.Initialized());
 
