@@ -64,7 +64,7 @@ Parameter | description
 --modelPath | The model file path, used when the weight file is merged.
 --paramPath | The weight file path，used when the weight file is merged.
 --outputDir | `Necessary`, the output model directory generated after converting.
---disableOptimize | Whether to disable optimize model, `1`is to disable, `0`is use optimize(need to install PaddleLite), default 0.
+--disableOptimize | Whether to disable optimize model, `1`is to disable, `0`is use optimize(need to install Paddle Lite), default 0.
 --logModelInfo | Whether to print model structure information， `0` means not to print, `1` means to print, default 0.
 --sliceDataSize | Shard size (in KB) of each weight file. Default size is 4096.
 --useGPUOpt | Whether to use gpu opt, default is False.
