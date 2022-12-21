@@ -82,12 +82,10 @@ public class UIEModel {
 
     // Set schema for Cross task extraction
     public boolean setSchema(SchemaNode[] schema) {
-        Log.d("[FastDeploy][Java]", "setSchema: start");
         if (schema == null || schema.length == 0
                 || mCxxContext == 0) {
             return false;
         }
-        Log.d("[FastDeploy][Java]", "setSchemaNodeNative: start");
         return setSchemaNodeNative(mCxxContext, schema);
     }
 
