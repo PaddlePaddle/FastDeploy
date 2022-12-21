@@ -36,27 +36,31 @@ class FASTDEPLOY_DECL AdaFacePreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
+  /// Get Size
+  std::vector<int> GetSize() { return size_; }
+
   /// Set size.
-  void SetSize(std::vector<int>& size){
-    size_ = size;
-  };
+  void SetSize(std::vector<int>& size) { size_ = size; }
+
+  /// Get alpha
+  std::vector<float> GetAlpha() { return alpha_; }
 
   /// Set alpha.
-  void SetAlpha(std::vector<float>& alpha){
-    alpha_ = alpha;
-  };
+  void SetAlpha(std::vector<float>& alpha) { alpha_ = alpha; }
+
+  /// Get beta
+  std::vector<float> GetBeta() { return beta_; }
 
   /// Set beta.
-  void SetBeta(std::vector<float>& beta){
-    beta_ = beta;
-  };
+  void SetBeta(std::vector<float>& beta) { beta_ = beta; }
 
-  /// Set beta.
-  void SetPermute(bool permute){
-    permute_ = permute;
-  };
+  bool GetPermute() { return permute_; }
+
+  /// Set permute.
+  void SetPermute(bool permute) { permute_ = permute; }
+
  protected:
-  bool Preprocess(FDMat * mat, FDTensor* output);
+  bool Preprocess(FDMat* mat, FDTensor* output);
   // Argument for image preprocessing step, tuple of (width, height),
   // decide the target size after resize, default (112, 112)
   std::vector<int> size_;
@@ -71,6 +75,6 @@ class FASTDEPLOY_DECL AdaFacePreprocessor {
   bool permute_;
 };
 
-}  // namespace detection
+}  // namespace faceid
 }  // namespace vision
 }  // namespace fastdeploy

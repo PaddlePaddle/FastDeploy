@@ -32,11 +32,42 @@ class InsightFaceRecognitionPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
+    @property
+    def size(self):
+        """
+        Argument for image preprocessing step, tuple of (width, height),
+        decide the target size after resize, default (112, 112)
+        """
+        return self._preprocessor.size
+
+    @property
+    def alpha(self):
+        """
+        Argument for image preprocessing step, alpha values for normalization,
+        default alpha = {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
+        """
+        return self._preprocessor.alpha
+
+    @property
+    def beta(self):
+        """
+        Argument for image preprocessing step, beta values for normalization,
+        default beta = {-1.f, -1.f, -1.f}
+        """
+        return self._preprocessor.beta
+
+    @property
+    def permute(self):
+        """
+        Argument for image preprocessing step, whether to swap the B and R channel,
+        such as BGR->RGB, default true.
+        """
+        return self._preprocessor.permute
+
 
 class InsightFaceRecognitionPostprocessor:
     def __init__(self):
         """Create a postprocessor for InsightFaceRecognition Model
-
         """
         self._postprocessor = C.vision.faceid.InsightFaceRecognitionPostprocessor(
         )

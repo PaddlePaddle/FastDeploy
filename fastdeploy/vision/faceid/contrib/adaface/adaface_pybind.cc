@@ -33,7 +33,15 @@ void BindAdaFace(pybind11::module& m) {
           outputs[i].StopSharing();
         }
         return outputs;
-      });
+      })
+      .def_property("permute", &vision::faceid::AdaFacePreprocessor::GetPermute,
+                    &vision::faceid::AdaFacePreprocessor::SetPermute)
+      .def_property("alpha", &vision::faceid::AdaFacePreprocessor::GetAlpha,
+                    &vision::faceid::AdaFacePreprocessor::SetAlpha)
+      .def_property("beta", &vision::faceid::AdaFacePreprocessor::GetBeta,
+                    &vision::faceid::AdaFacePreprocessor::SetBeta)
+      .def_property("size", &vision::faceid::AdaFacePreprocessor::GetSize,
+                    &vision::faceid::AdaFacePreprocessor::SetSize);
 
   pybind11::class_<vision::faceid::AdaFacePostprocessor>(
       m, "AdaFacePostprocessor")

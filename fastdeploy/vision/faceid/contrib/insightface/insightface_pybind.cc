@@ -33,7 +33,15 @@ void BindInsightFace(pybind11::module& m) {
           outputs[i].StopSharing();
         }
         return outputs;
-      });
+      })
+      .def_property("permute", &vision::faceid::InsightFaceRecognitionPreprocessor::GetPermute,
+                    &vision::faceid::InsightFaceRecognitionPreprocessor::SetPermute)
+      .def_property("alpha", &vision::faceid::InsightFaceRecognitionPreprocessor::GetAlpha,
+                    &vision::faceid::InsightFaceRecognitionPreprocessor::SetAlpha)
+      .def_property("beta", &vision::faceid::InsightFaceRecognitionPreprocessor::GetBeta,
+                    &vision::faceid::InsightFaceRecognitionPreprocessor::SetBeta)
+      .def_property("size", &vision::faceid::InsightFaceRecognitionPreprocessor::GetSize,
+                    &vision::faceid::InsightFaceRecognitionPreprocessor::SetSize);
 
   pybind11::class_<vision::faceid::InsightFaceRecognitionPostprocessor>(
       m, "InsightFaceRecognitionPostprocessor")
