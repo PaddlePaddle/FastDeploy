@@ -1,3 +1,5 @@
+English | [中文](../../cn/build_and_install/android.md)
+
 # How to Build FastDeploy Android C++ SDK
 
 FastDeploy supports Paddle-Lite backend on Android. It supports both armeabi-v7a and arm64-v8a cpu architectures, and supports fp16 precision inference on the armv8.2 architecture. The relevant compilation options are described as follows:
