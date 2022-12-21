@@ -18,11 +18,12 @@
 
 2. 将编译后的库拷贝到当前目录，可使用如下命令：
 ```bash
-cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/detection/yolov5/rv1126/cpp
+cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/detection/paddledetection/rv1126/cpp
 ```
 
 3. 在当前路径下载部署所需的模型和示例图片：
 ```bash
+cd FastDeploy/examples/vision/detection/paddledetection/rv1126/cpp
 mkdir models && mkdir images
 wget https://bj.bcebos.com/fastdeploy/models/ppyoloe_noshare_qat.tar.gz
 tar -xvf ppyoloe_noshare_qat.tar.gz
@@ -33,6 +34,7 @@ cp -r 000000014439.jpg images
 
 4. 编译部署示例，可使入如下命令：
 ```bash
+cd FastDeploy/examples/vision/detection/paddledetection/rv1126/cpp
 mkdir build && cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-timvx/toolchain.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-timvx -DTARGET_ABI=armhf ..
 make -j8

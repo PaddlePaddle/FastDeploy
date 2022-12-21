@@ -22,6 +22,7 @@ cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/detection/yo
 
 3. 在当前路径下载部署所需的模型和示例图片：
 ```bash
+cd FastDeploy/examples/vision/detection/yolov5/a311d/cpp
 mkdir models && mkdir images
 wget https://bj.bcebos.com/fastdeploy/models/yolov5s_ptq_model.tar.gz
 tar -xvf yolov5s_ptq_model.tar.gz
@@ -32,6 +33,7 @@ cp -r 000000014439.jpg images
 
 4. 编译部署示例，可使入如下命令：
 ```bash
+cd FastDeploy/examples/vision/detection/yolov5/a311d/cpp
 mkdir build && cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-timvx/toolchain.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-timvx -DTARGET_ABI=arm64 ..
 make -j8
