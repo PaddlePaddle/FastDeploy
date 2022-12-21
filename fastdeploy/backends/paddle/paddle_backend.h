@@ -47,6 +47,12 @@ struct PaddleBackendOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
 
+  std::string model_buffer_ = "";
+  std::string params_buffer_ = "";
+  size_t model_buffer_size_ = 0;
+  size_t params_buffer_size_ = 0;
+  bool model_from_memory_ = false;
+
 #ifdef WITH_GPU
   bool use_gpu = true;
 #else
