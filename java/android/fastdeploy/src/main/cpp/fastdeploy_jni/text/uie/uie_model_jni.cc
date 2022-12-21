@@ -99,6 +99,7 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_predictNative(JNIEnv *env,
   PERF_TIME_OF_RUNTIME(c_model_ptr, t)
 
   if (c_results.empty()) {
+    LOGE("c_results is empty!");
     return NULL;
   }
   LOGD("c_results: %s", fni::UIEResultsStr(c_results).c_str());
@@ -144,12 +145,12 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_predictNative(JNIEnv *env,
         // Convert vector<UIEResult> -> Java UIEResult[]
         for (int j = 0; j < curr_c_uie_result.second.size(); ++j) {
 
-          text::UIEResult* inner_cxx_uie_result = (
+          text::UIEResult* inner_c_uie_result = (
               &(curr_c_uie_result.second[j]));
 
           jobject curr_inner_j_uie_result_obj =
               fni::NewUIEJavaResultFromCxx(
-                  env, reinterpret_cast<void *>(inner_cxx_uie_result));
+                  env, reinterpret_cast<void *>(inner_c_uie_result));
 
           env->SetObjectArrayElement(curr_inner_j_uie_result_values, j,
                                      curr_inner_j_uie_result_obj);
@@ -208,8 +209,12 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_setSchemaStringNative(
   }
   auto c_model_ptr = reinterpret_cast<text::UIEModel *>(cxx_context);
   auto c_schema = fni::ConvertTo<std::vector<std::string>>(env, schema);
+  if (c_schema.empty()) {
+    LOGE("c_schema is empty!");
+    return JNI_FALSE;
+  }
+  LOGD("c_schema is: %s", fni::UIESchemasStr(c_schema).c_str());
   c_model_ptr->SetSchema(c_schema);
-
   return JNI_TRUE;
 #endif
 }
@@ -246,6 +251,7 @@ Java_com_baidu_paddle_fastdeploy_text_uie_UIEModel_setSchemaNodeNative(
   }
 
   if (c_schema.empty()) {
+    LOGE("c_schema is empty!");
     return JNI_FALSE;
   }
 

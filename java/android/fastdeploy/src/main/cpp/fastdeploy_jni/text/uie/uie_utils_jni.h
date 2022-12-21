@@ -31,6 +31,8 @@ std::string UIEResultsStr(
         std::string, std::vector<text::UIEResult>>>& results);
 
 std::string UIETextsStr(const std::vector<std::string>& texts);
+
+std::string UIESchemasStr(const std::vector<std::string>& schemas);
 #endif
 
 }  // namespace jni

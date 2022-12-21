@@ -12,7 +12,7 @@ public class SchemaNode {
     // predictor.SetSchema({c_node_0, c_node_1});
     // predictor.Predict({"xxx"}, &results);
     public String mName;
-    public ArrayList<SchemaNode> mChildren;
+    public ArrayList<SchemaNode> mChildren = new ArrayList<SchemaNode>();
 
     public SchemaNode() {
     }
@@ -27,6 +27,9 @@ public class SchemaNode {
     }
 
     public SchemaNode(String name, ArrayList<SchemaNode> children) {
+        if (children == null) {
+            return;
+        }
         mName = name;
         mChildren.addAll(children);
     }

@@ -39,6 +39,14 @@ std::string UIETextsStr(const std::vector<std::string>& texts) {
   }
   return str;
 }
+
+std::string UIESchemasStr(const std::vector<std::string>& schemas) {
+  std::string str = "";
+  for (const auto& s: schemas) {
+    str += (s + ";");
+  }
+  return str;
+}
 #endif
 
 }  // namespace jni
