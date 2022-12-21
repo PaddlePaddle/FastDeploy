@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-from python.fastdeploy import FastDeployModel, ModelFormat
-from python.fastdeploy import c_lib_wrap as C
+from ..... import FastDeployModel, ModelFormat
+from ..... import c_lib_wrap as C
 
 
 class InsightFaceRecognitionPreprocessor:
@@ -49,11 +49,18 @@ class InsightFaceRecognitionPostprocessor:
         """
         return self._postprocessor.run(runtime_results)
 
+    @property
+    def l2_normalize(self):
+        """
+        confidence threshold for postprocessing, default is 0.5
+        """
+        return self._postprocessor.l2_normalize
+
 
 class InsightFaceRecognitionBase(FastDeployModel):
     def __init__(self,
                  model_file,
-                 params_file,
+                 params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a InsightFaceRecognitionBase model exported by PaddleDetection.
@@ -64,10 +71,8 @@ class InsightFaceRecognitionBase(FastDeployModel):
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
         super(InsightFaceRecognitionBase, self).__init__(runtime_option)
-
         self._model = C.vision.faceid.InsightFaceRecognitionBase(
             model_file, params_file, self._runtime_option, model_format)
-        assert self.initialized, "PPYOLOE model initialize failed."
 
     def predict(self, im):
         """Detect an input image
@@ -108,7 +113,7 @@ class InsightFaceRecognitionBase(FastDeployModel):
 class ArcFace(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
-                 params_file,
+                 params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a ArcFace model exported by PaddleDetection.
@@ -119,17 +124,16 @@ class ArcFace(InsightFaceRecognitionBase):
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
-        super(ArcFace, self).__init__(runtime_option)
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
 
         self._model = C.vision.faceid.ArcFace(
             model_file, params_file, self._runtime_option, model_format)
-        assert self.initialized, "PaddleYOLOX model initialize failed."
 
 
 class CosFace(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
-                 params_file,
+                 params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a CosFace model exported by PaddleDetection.
@@ -140,17 +144,16 @@ class CosFace(InsightFaceRecognitionBase):
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
-        super(CosFace, self).__init__(runtime_option)
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
 
         self._model = C.vision.faceid.CosFace(
             model_file, params_file, self._runtime_option, model_format)
-        assert self.initialized, "PaddleYOLOX model initialize failed."
 
 
 class PartialFC(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
-                 params_file,
+                 params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a PartialFC model exported by PaddleDetection.
@@ -161,17 +164,16 @@ class PartialFC(InsightFaceRecognitionBase):
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
-        super(PartialFC, self).__init__(runtime_option)
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
 
         self._model = C.vision.faceid.PartialFC(
             model_file, params_file, self._runtime_option, model_format)
-        assert self.initialized, "PaddleYOLOX model initialize failed."
 
 
 class VPL(InsightFaceRecognitionBase):
     def __init__(self,
                  model_file,
-                 params_file,
+                 params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a VPL model exported by PaddleDetection.
@@ -182,8 +184,7 @@ class VPL(InsightFaceRecognitionBase):
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
-        super(VPL, self).__init__(runtime_option)
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
 
         self._model = C.vision.faceid.VPL(model_file, params_file,
                                           self._runtime_option, model_format)
-        assert self.initialized, "PaddleYOLOX model initialize failed."

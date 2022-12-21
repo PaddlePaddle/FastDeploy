@@ -53,7 +53,9 @@ void BindInsightFace(pybind11::module& m) {
           throw std::runtime_error("Failed to postprocess the runtime result in InsightFaceRecognitionPostprocessor.");
         }
         return results;
-      });
+      })
+      .def_property("l2_normalize", &vision::faceid::InsightFaceRecognitionPostprocessor::GetL2Normalize,
+                    &vision::faceid::InsightFaceRecognitionPostprocessor::SetL2Normalize);
 
   pybind11::class_<vision::faceid::InsightFaceRecognitionBase, FastDeployModel>(
       m, "InsightFaceRecognitionBase")
