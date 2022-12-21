@@ -1,6 +1,6 @@
 # Android部署库编译
 
-FastDeploy当前在Android仅支持Paddle-Lite后端推理，支持armeabi-v7a和arm64-v8a两种cpu架构，在armv8.2架构的arm设备支持fp16精度推理。相关编译选项说明如下：  
+FastDeploy当前在Android仅支持Paddle Lite后端推理，支持armeabi-v7a和arm64-v8a两种cpu架构，在armv8.2架构的arm设备支持fp16精度推理。相关编译选项说明如下：  
 
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
