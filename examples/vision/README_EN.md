@@ -1,3 +1,5 @@
+English | [简体中文](README_CN.md) 
+
 # Visual Model Deployment
 
 This directory provides the deployment of various visual models, including the following task types
