@@ -21,12 +21,12 @@ struct MOTResult{
 };
 ```
 
-- **boxes**: Member variable, which indicates the coordinates of all detected target boxes in a single frame. `boxes.size()` indicates the number of boxes, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
-- **ids**: Member variable, which indicates the ids of all targets in a single frame, where the element number is the same as `boxes.size()`.
-- **scores**: Member variable, which indicates the confidence level of all targets detected in a single frame, the number of elements is the same as `boxes.size()`.
-- **class_ids**: Member variable, which indicates all target classes detected in a single frame, where the element number is the same as `boxes.size()`.
-- **Clear()**: Member function, used to clear the results stored in the structure.
-- **Str()**: Member function, used to output the information in the structure as string (for Debug).
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single frame. `boxes.size()` indicates the number of boxes, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **ids**: Member variable which indicates the ids of all targets in a single frame, where the element number is the same as `boxes.size()`.
+- **scores**: Member variable which indicates the confidence level of all targets detected in a single frame, where the number of elements is the same as `boxes.size()`.
+- **class_ids**: Member variable which indicates all target classes detected in a single frame, where the element number is the same as `boxes.size()`.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
 ## Python Definition
 
@@ -34,8 +34,8 @@ struct MOTResult{
 fastdeploy.vision.MOTResult
 ```
 
-- **boxes**(list of list(float)): Member variable, which indicates the coordinates of all detected target boxes in a single frame. It is a list, each element of which box is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
-- **ids**(list of list(float)): Member variable, which indicates the ids of all targets in a single frame, where the element number is the same as `boxes`.
-- **scores**(list of float): Member variable, which indicates the confidence level of all targets detected in a single frame.
-- **class_ids**(list of float): Member variable, which indicates all target classes detected in a single frame.
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, each element of which box is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **ids**(list of list(float)): Member variable which indicates the ids of all targets in a single frame, where the element number is the same as `boxes`.
+- **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single frame.
+- **class_ids**(list of float): Member variable which indicates all target classes detected in a single frame.
 
