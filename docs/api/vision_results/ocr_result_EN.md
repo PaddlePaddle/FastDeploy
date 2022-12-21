@@ -1,5 +1,5 @@
 English | [中文](ocr_result.md)
-# OCRResult, OCR prediction result
+# OCR prediction result
 
 The OCRResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the text box detected in the image, text box orientation classification, and the text content.
 
