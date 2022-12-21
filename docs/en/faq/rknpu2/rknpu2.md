@@ -13,25 +13,18 @@ The following tests are at end-to-end speed, and the test environment is as foll
 * ARM CPU is tested on ONNX
 * with single-core NPU
 
-| Mission Scenario             | Model                | Model Version(tested version)               | ARM CPU/RKNN speed(ms) |
+
+| Mission Scenario               | Model                | Model Version(tested version)               | ARM CPU/RKNN speed(ms) |
 |------------------|-------------------|-------------------------------|--------------------|
 | Detection        | Picodet           | Picodet-s                     | 162/112            |
 | Detection        | RKYOLOV5          | YOLOV5-S-Relu(int8)           | -/57               |
+| Detection        | RKYOLOX           | -                             | -/-                |
+| Detection        | RKYOLOV7          | -                             | -/-                |
 | Segmentation     | Unet              | Unet-cityscapes               | -/-                |
-| Segmentation     | PP-LiteSeg        | PP_LiteSeg_T_STDC1_cityscapes | -/-                |
-| Segmentation     | PP-HumanSegV2Lite | portrait                      | 53/50              |
-| Segmentation     | PP-HumanSegV2Lite | human                         | 53/50              |
-| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 112/108            |
+| Segmentation     | PP-HumanSegV2Lite | portrait                      | 133/43             |
+| Segmentation     | PP-HumanSegV2Lite | human                         | 133/43             |
+| Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 108/42             |
 
-## TODO
-Here is the TODO list, which indicates models that are being prepared for support, but still have issues or can still be improved.
-
-| Mission Scenario             | Model      | Model Version(tested version)     | ARM CPU/RKNN speed(ms) |
-|------------------|---------|---------------------|--------------------|
-| Detection        | PPYOLOE | PPYOLOE(int8)       | -/-                |
-| Detection        | YOLOv5  | YOLOv5-s_v6.2(int8) | -/-                |
-| Face Recognition | ArcFace | ArcFace_r18         | 600/3              |
-| Face Recognition | cosFace | cosFace_r18         | 600/3              |
 
 ## How to use RKNPU2 Backend to Infer Models
 
