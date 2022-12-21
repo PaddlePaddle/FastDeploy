@@ -118,15 +118,17 @@ class ArcFace(InsightFaceRecognitionBase):
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a ArcFace model exported by PaddleDetection.
-
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
 
-        super(ArcFace, self).__init__(model_file, params_file, runtime_option,
-                                      model_format)
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
+
+        self._model = C.vision.faceid.ArcFace(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "InsightFaceRecognitionBase model initialize failed."
 
 
 class CosFace(InsightFaceRecognitionBase):
@@ -136,14 +138,17 @@ class CosFace(InsightFaceRecognitionBase):
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a CosFace model exported by PaddleDetection.
-
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        super(CosFace, self).__init__(model_file, params_file, runtime_option,
-                                      model_format)
+
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
+
+        self._model = C.vision.faceid.CosFace(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "InsightFaceRecognitionBase model initialize failed."
 
 
 class PartialFC(InsightFaceRecognitionBase):
@@ -153,14 +158,17 @@ class PartialFC(InsightFaceRecognitionBase):
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a PartialFC model exported by PaddleDetection.
-
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        super(PartialFC, self).__init__(model_file, params_file,
-                                        runtime_option, model_format)
+
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
+
+        self._model = C.vision.faceid.PartialFC(
+            model_file, params_file, self._runtime_option, model_format)
+        assert self.initialized, "InsightFaceRecognitionBase model initialize failed."
 
 
 class VPL(InsightFaceRecognitionBase):
@@ -170,11 +178,14 @@ class VPL(InsightFaceRecognitionBase):
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
         """Load a VPL model exported by PaddleDetection.
-
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        super(VPL, self).__init__(model_file, params_file, runtime_option,
-                                  model_format)
+
+        super(InsightFaceRecognitionBase, self).__init__(runtime_option)
+
+        self._model = C.vision.faceid.VPL(model_file, params_file,
+                                          self._runtime_option, model_format)
+        assert self.initialized, "InsightFaceRecognitionBase model initialize failed."
