@@ -29,7 +29,7 @@ struct FaceDetectionResult {
 
 `fastdeploy.vision.FaceDetectionResult`
 
-- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, each element of which box is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
 - **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single image.
 - **landmarks**(list of list(float)): Member variable which indicates the keypoints of all faces detected in a single image.
 - **landmarks_per_face**(int): Member variable which indicates the number of keypoints in each face box.

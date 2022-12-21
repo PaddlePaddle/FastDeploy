@@ -34,7 +34,7 @@ struct MOTResult{
 fastdeploy.vision.MOTResult
 ```
 
-- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, each element of which box is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
 - **ids**(list of list(float)): Member variable which indicates the ids of all targets in a single frame, where the element number is the same as `boxes`.
 - **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single frame.
 - **class_ids**(list of float): Member variable which indicates all target classes detected in a single frame.
