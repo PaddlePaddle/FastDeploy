@@ -16,9 +16,10 @@
 
 namespace fastdeploy {
 void BindInsightFace(pybind11::module& m);
-
+void BindAdaFace(pybind11::module& m);
 void BindFaceId(pybind11::module& m) {
   auto faceid_module = m.def_submodule("faceid", "Face recognition models.");
   BindInsightFace(faceid_module);
+  BindAdaFace(faceid_module);
 }
 }  // namespace fastdeploy
