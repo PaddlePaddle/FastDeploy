@@ -63,7 +63,7 @@ python convertToPaddleJSModel.py --inputDir=<fluid_model_directory> --outputDir=
 --modelPath | fluid 模型文件所在路径，使用合并参数文件时使用该参数
 --paramPath | fluid 参数文件所在路径，使用合并参数文件时使用该参数
 --outputDir | `必要参数`， Paddle.js 模型输出路径
---disableOptimize | 是否关闭模型优化， `1` 为关闭优化，`0` 为开启优化（需安装 PaddleLite ），默认执行优化
+--disableOptimize | 是否关闭模型优化， `1` 为关闭优化，`0` 为开启优化（需安装 Paddle Lite ），默认执行优化
 --logModelInfo | 是否打印模型结构信息， `0` 为不打印， `1` 为打印，默认不打印
 --sliceDataSize | 分片输出 Paddle.js 参数文件时，每片文件的大小，单位：KB，默认 4096
 --useGPUOpt | 是否开启模型 GPU 优化，默认不开启（当模型准备运行在 webgl/webgpu 计算方案时，可以设置为 True 开启，在 wasm/plainjs 方案，则不用开启）
