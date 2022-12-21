@@ -372,7 +372,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Paddle-Lite Backend=====
+  // ======Only for Paddle Lite Backend=====
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
