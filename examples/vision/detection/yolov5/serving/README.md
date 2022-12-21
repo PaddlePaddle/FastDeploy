@@ -63,4 +63,4 @@ output_name: detction_result
 
 ## 配置修改
 
-当前默认配置在GPU上运行ONNXRuntime引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+当前默认配置在CPU上运行ONNXRuntime引擎， 如果要在GPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
