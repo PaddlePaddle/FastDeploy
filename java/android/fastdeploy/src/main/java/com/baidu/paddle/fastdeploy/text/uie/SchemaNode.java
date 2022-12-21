@@ -27,9 +27,6 @@ public class SchemaNode {
     }
 
     public SchemaNode(String name, ArrayList<SchemaNode> children) {
-        if (children == null) {
-            return;
-        }
         mName = name;
         mChildren.addAll(children);
     }
