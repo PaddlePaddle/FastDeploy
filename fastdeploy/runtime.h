@@ -24,9 +24,9 @@
 #include <map>
 #include <vector>
 
+#include "backends/rknpu/rknpu2/rknpu2_config.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/perf.h"
-#include "backends/rknpu/rknpu2/rknpu2_config.h"
 
 /** \brief All C++ FastDeploy APIs are defined inside this namespace
 *
@@ -35,14 +35,14 @@ namespace fastdeploy {
 
 /*! Inference backend supported in FastDeploy */
 enum Backend {
-  UNKNOWN,   ///< Unknown inference backend
-  ORT,     ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
-  TRT,      ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
+  UNKNOWN,  ///< Unknown inference backend
+  ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
+  TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
   PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
   POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,     ///< Paddle Lite, support Paddle format model, ARM CPU only
-  RKNPU2,   ///< RKNPU2, support RKNN format model, Rockchip NPU only
+  LITE,      ///< Paddle Lite, support Paddle format model, ARM CPU only
+  RKNPU2,    ///< RKNPU2, support RKNN format model, Rockchip NPU only
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -88,19 +88,64 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     const std::string& params_path = "",
                     const ModelFormat& format = ModelFormat::PADDLE);
 
+  /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
+   *
+   * \param[in] model_buffer The memory buffer of model
+   * \param[in] model_buffer_size The size of the model data
+   * \param[in] params_buffer The memory buffer of the combined parameters file
+   * \param[in] params_buffer_size The size of the combined parameters data
+   * \param[in] format Format of the loaded model
+   */
+  void SetModelBuffer(const char * model_buffer,
+                      size_t model_buffer_size,
+                      const char * params_buffer,
+                      size_t params_buffer_size,
+                      const ModelFormat& format = ModelFormat::PADDLE);
+
   /// Use cpu to inference, the runtime will inference on CPU by default
   void UseCpu();
 
   /// Use Nvidia GPU to inference
   void UseGpu(int gpu_id = 0);
 
-  void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name
-                             = fastdeploy::rknpu2::CpuName::RK3588,
-                 fastdeploy::rknpu2::CoreMask rknpu2_core
-                             = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
+  void UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name =
+                     fastdeploy::rknpu2::CpuName::RK3588,
+                 fastdeploy::rknpu2::CoreMask rknpu2_core =
+                     fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_0);
 
   /// Use TimVX to inference
   void UseTimVX();
+
+  ///
+  /// \brief Turn on XPU.
+  ///
+  /// \param xpu_id the XPU card to use (default is 0).
+  /// \param l3_workspace_size The size of the video memory allocated by the l3
+  ///         cache, the maximum is 16M.
+  /// \param locked Whether the allocated L3 cache can be locked. If false,
+  ///       it means that the L3 cache is not locked, and the allocated L3
+  ///       cache can be shared by multiple models, and multiple models
+  ///       sharing the L3 cache will be executed sequentially on the card.
+  /// \param autotune Whether to autotune the conv operator in the model. If
+  ///       true, when the conv operator of a certain dimension is executed
+  ///       for the first time, it will automatically search for a better
+  ///       algorithm to improve the performance of subsequent conv operators
+  ///       of the same dimension.
+  /// \param autotune_file Specify the path of the autotune file. If
+  ///       autotune_file is specified, the algorithm specified in the
+  ///       file will be used and autotune will not be performed again.
+  /// \param precision Calculation accuracy of multi_encoder
+  /// \param adaptive_seqlen Is the input of multi_encoder variable length
+  /// \param enable_multi_stream Whether to enable the multi stream of xpu.
+  ///
+  void UseXpu(int xpu_id = 0,
+              int l3_workspace_size = 0xfffc00,
+              bool locked = false,
+              bool autotune = true,
+              const std::string& autotune_file = "",
+              const std::string& precision = "int16",
+              bool adaptive_seqlen = false,
+              bool enable_multi_stream = false);
 
   void SetExternalStream(void* external_stream);
 
@@ -116,9 +161,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UsePaddleBackend();
 
   /// Wrapper function of UsePaddleBackend()
-  void UsePaddleInferBackend() {
-    return UsePaddleBackend();
-  }
+  void UsePaddleInferBackend() { return UsePaddleBackend(); }
 
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
@@ -136,9 +179,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void UseLiteBackend();
 
   /// Wrapper function of UseLiteBackend()
-  void UsePaddleLiteBackend() {
-    return UseLiteBackend();
-  }
+  void UsePaddleLiteBackend() { return UseLiteBackend(); }
 
   /// Set mkldnn switch while using Paddle Inference as inference backend
   void SetPaddleMKLDNN(bool pd_mkldnn = true);
@@ -177,7 +218,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set shape info for OpenVINO
    */
   void SetOpenVINOShapeInfo(
-    const std::map<std::string, std::vector<int64_t>>& shape_info) {
+      const std::map<std::string, std::vector<int64_t>>& shape_info) {
     ov_shape_infos = shape_info;
   }
 
@@ -197,7 +238,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
    * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
    */
   void SetLiteSubgraphPartitionPath(
-    const std::string& nnadapter_subgraph_partition_config_path);
+      const std::string& nnadapter_subgraph_partition_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -275,6 +316,11 @@ struct FASTDEPLOY_DECL RuntimeOption {
    */
   void DisablePaddleTrtCollectShape();
 
+  /**
+   * @brief Prevent ops running in paddle trt backend
+   */
+  void DisablePaddleTrtOPs(const std::vector<std::string>& ops);
+
   /*
    * @brief Set number of streams by the OpenVINO backends
    */
@@ -340,7 +386,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Paddle-Lite Backend=====
+  // ======Only for Paddle Lite Backend=====
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
@@ -353,6 +399,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
   bool enable_timvx = false;
+  bool enable_xpu = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
@@ -361,8 +408,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string trt_serialize_file = "";
   bool trt_enable_fp16 = false;
   bool trt_enable_int8 = false;
-  size_t trt_max_batch_size = 32;
+  size_t trt_max_batch_size = 1;
   size_t trt_max_workspace_size = 1 << 30;
+  // ======Only for PaddleTrt Backend=======
+  std::vector<std::string> trt_disabled_ops_{};
 
   // ======Only for Poros Backend=======
   bool is_dynamic = false;
@@ -378,15 +427,30 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::vector<std::string> ov_cpu_operators;
 
   // ======Only for RKNPU2 Backend=======
-  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_
-            = fastdeploy::rknpu2::CpuName::RK3588;
-  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_
-            = fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
+  fastdeploy::rknpu2::CpuName rknpu2_cpu_name_ =
+      fastdeploy::rknpu2::CpuName::RK3588;
+  fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
+      fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
-  std::string model_file = "";  // Path of model file
+  // ======Only for XPU Backend=======
+  int xpu_l3_workspace_size = 0xfffc00;
+  bool xpu_locked = false;
+  bool xpu_autotune = true;
+  std::string xpu_autotune_file = "";
+  std::string xpu_precision = "int16";
+  bool xpu_adaptive_seqlen = false;
+  bool xpu_enable_multi_stream = false;
+
+  std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   // format of input model
   ModelFormat model_format = ModelFormat::AUTOREC;
+
+  std::string model_buffer_ = "";
+  std::string params_buffer_ = "";
+  size_t model_buffer_size_ = 0;
+  size_t params_buffer_size_ = 0;
+  bool model_from_memory_ = false;
 };
 
 /*! @brief Runtime object used to inference the loaded model on different devices
@@ -450,8 +514,7 @@ struct FASTDEPLOY_DECL Runtime {
    * \param[in] stream CUDA Stream, defualt param is nullptr
    * \return new Runtime* by this clone
    */
-  Runtime* Clone(void* stream = nullptr,
-                 int device_id = -1);
+  Runtime* Clone(void* stream = nullptr, int device_id = -1);
 
   RuntimeOption option;
 

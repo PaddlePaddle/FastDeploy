@@ -45,14 +45,27 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
              const ModelFormat& model_format = ModelFormat::PADDLE);
   /// Get model's name
   std::string ModelName() const { return "ppocr/ocr_rec"; }
+  /** \brief Predict the input image and get OCR recognition model result.
+   *
+   * \param[in] img The input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
+   * \param[in] text The text result of rec model will be written into this parameter.
+   * \param[in] rec_score The sccore result of rec model will be written into this parameter.
+   * \return true if the prediction is successed, otherwise false.
+   */
+  virtual bool Predict(const cv::Mat& img, std::string* text, float* rec_score);
   /** \brief BatchPredict the input image and get OCR recognition model result.
    *
    * \param[in] images The list of input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format.
-   * \param[in] rec_results The output of OCR recognition model result will be writen to this structure.
+   * \param[in] texts The list of text results of rec model will be written into this vector.
+   * \param[in] rec_scores The list of sccore result of rec model will be written into this vector.
    * \return true if the prediction is successed, otherwise false.
    */
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
                std::vector<std::string>* texts, std::vector<float>* rec_scores);
+  virtual bool BatchPredict(const std::vector<cv::Mat>& images,
+               std::vector<std::string>* texts, std::vector<float>* rec_scores,
+               size_t start_index, size_t end_index,
+               const std::vector<int>& indices);
 
   RecognizerPreprocessor preprocessor_;
   RecognizerPostprocessor postprocessor_;

@@ -49,7 +49,7 @@ I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 #安装客户端依赖
-python3 -m pip install tritonclient\[all\]
+python3 -m pip install tritonclient[all]
 
 # 发送请求
 python3 yolov5_grpc_client.py
@@ -63,4 +63,4 @@ output_name: detction_result
 
 ## 配置修改
 
-当前默认配置在GPU上运行ONNXRuntime引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+当前默认配置在CPU上运行ONNXRuntime引擎， 如果要在GPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)

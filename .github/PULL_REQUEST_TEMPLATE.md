@@ -4,7 +4,7 @@
 ### PR types(PR类型)
 <!-- One of PR types [ Model | Backend | Serving | Quantization | Doc | Bug Fix | Other] -->
 
-### Describe
+### Description
 <!-- Describe what this PR does -->
 
 

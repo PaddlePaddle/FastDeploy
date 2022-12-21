@@ -47,6 +47,8 @@ tar xvf ch_PP-OCRv3_rec_infer.tar && mv ch_PP-OCRv3_rec_infer 1
 mv 1/inference.pdiparams 1/model.pdiparams && mv 1/inference.pdmodel 1/model.pdmodel
 mv 1 models/rec_runtime/ && rm -rf ch_PP-OCRv3_rec_infer.tar
 
+mkdir models/pp_ocr/1 && mkdir models/rec_pp/1 && mkdir models/cls_pp/1
+
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 mv ppocr_keys_v1.txt models/rec_postprocess/1/
 

@@ -67,10 +67,12 @@ task downloadAndExtractLibs(type: DefaultTask) {
             String[] libPaths = lib.src.split("/")
             String libName = libPaths[libPaths.length - 1]
             libName = libName.split("\\.")[0]
-            boolean copyFiles = !file("${lib.dest}/${libName}").exists()
-            if (!file("${cachePath}/${libName}.tgz").exists()) {
-                println "[INFO] Downloading ${lib.src} -> ${cachePath}/${libName}.tgz"
-                ant.get(src: lib.src, dest: file("${cachePath}/${libName}.tgz"))
+            boolean copyFiles = false
+            if (!file("${lib.dest}/${libName}").exists()) {
+                if (!file("${cachePath}/${libName}.tgz").exists()) {
+                    println "[INFO] Downloading ${lib.src} -> ${cachePath}/${libName}.tgz"
+                    ant.get(src: lib.src, dest: file("${cachePath}/${libName}.tgz"))
+                }
                 copyFiles = true
             }
             if (copyFiles) {
