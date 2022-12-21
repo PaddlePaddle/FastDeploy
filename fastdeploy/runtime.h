@@ -88,6 +88,20 @@ struct FASTDEPLOY_DECL RuntimeOption {
                     const std::string& params_path = "",
                     const ModelFormat& format = ModelFormat::PADDLE);
 
+  /** \brief Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
+   *
+   * \param[in] model_buffer The memory buffer of model
+   * \param[in] model_buffer_size The size of the model data
+   * \param[in] params_buffer The memory buffer of the combined parameters file
+   * \param[in] params_buffer_size The size of the combined parameters data
+   * \param[in] format Format of the loaded model
+   */
+  void SetModelBuffer(const char * model_buffer,
+                      size_t model_buffer_size,
+                      const char * params_buffer,
+                      size_t params_buffer_size,
+                      const ModelFormat& format = ModelFormat::PADDLE);
+
   /// Use cpu to inference, the runtime will inference on CPU by default
   void UseCpu();
 
@@ -412,7 +426,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   float ipu_available_memory_proportion = 1.0;
   bool ipu_enable_half_partial = false;
 
-  // ======Only for Paddle-Lite Backend=====
+  // ======Only for Paddle Lite Backend=====
   // 0: LITE_POWER_HIGH 1: LITE_POWER_LOW 2: LITE_POWER_FULL
   // 3: LITE_POWER_NO_BIND 4: LITE_POWER_RAND_HIGH
   // 5: LITE_POWER_RAND_LOW
@@ -481,6 +495,12 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string params_file = "";  // Path of parameters file, can be empty
   // format of input model
   ModelFormat model_format = ModelFormat::AUTOREC;
+
+  std::string model_buffer_ = "";
+  std::string params_buffer_ = "";
+  size_t model_buffer_size_ = 0;
+  size_t params_buffer_size_ = 0;
+  bool model_from_memory_ = false;
 };
 
 /*! @brief Runtime object used to inference the loaded model on different devices
