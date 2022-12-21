@@ -20,7 +20,7 @@ wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
 wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
 
 # CPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
+python3 infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
 # GPU推理
 python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
 # GPU上使用TensorRT推理

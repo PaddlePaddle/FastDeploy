@@ -19,13 +19,13 @@ from python.fastdeploy import c_lib_wrap as C
 
 class InsightFaceRecognitionPreprocessor:
     def __init__(self):
-        """Create a preprocessor for PaddleDetection Model from configuration file
+        """Create a preprocessor for InsightFaceRecognition Model
         """
         self._preprocessor = C.vision.faceid.InsightFaceRecognitionPreprocessor(
         )
 
     def run(self, input_ims):
-        """Preprocess input images for PaddleDetection Model
+        """Preprocess input images for InsightFaceRecognition Model
 
         :param: input_ims: (list of numpy.ndarray)The input image
         :return: list of FDTensor, include image, scale_factor, im_shape
@@ -35,7 +35,7 @@ class InsightFaceRecognitionPreprocessor:
 
 class InsightFaceRecognitionPostprocessor:
     def __init__(self):
-        """Create a postprocessor for PaddleDetection Model
+        """Create a postprocessor for InsightFaceRecognition Model
 
         """
         self._postprocessor = C.vision.faceid.InsightFaceRecognitionPostprocessor(
@@ -56,7 +56,7 @@ class InsightFaceRecognitionBase(FastDeployModel):
                  params_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a PPYOLOE model exported by PaddleDetection.
+        """Load a InsightFaceRecognitionBase model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -65,7 +65,7 @@ class InsightFaceRecognitionBase(FastDeployModel):
         """
         super(InsightFaceRecognitionBase, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.InsightFaceRecognitionBase(
+        self._model = C.vision.faceid.InsightFaceRecognitionBase(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "PPYOLOE model initialize failed."
 
@@ -111,7 +111,7 @@ class ArcFace(InsightFaceRecognitionBase):
                  params_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a YOLOX model exported by PaddleDetection.
+        """Load a ArcFace model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -121,7 +121,7 @@ class ArcFace(InsightFaceRecognitionBase):
 
         super(ArcFace, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.ArcFace(
+        self._model = C.vision.faceid.ArcFace(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
@@ -132,7 +132,7 @@ class CosFace(InsightFaceRecognitionBase):
                  params_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a YOLOX model exported by PaddleDetection.
+        """Load a CosFace model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -142,7 +142,7 @@ class CosFace(InsightFaceRecognitionBase):
 
         super(CosFace, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.CosFace(
+        self._model = C.vision.faceid.CosFace(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
@@ -153,7 +153,7 @@ class PartialFC(InsightFaceRecognitionBase):
                  params_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a YOLOX model exported by PaddleDetection.
+        """Load a PartialFC model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -163,7 +163,7 @@ class PartialFC(InsightFaceRecognitionBase):
 
         super(PartialFC, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.PartialFC(
+        self._model = C.vision.faceid.PartialFC(
             model_file, params_file, self._runtime_option, model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
 
@@ -174,7 +174,7 @@ class VPL(InsightFaceRecognitionBase):
                  params_file,
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a YOLOX model exported by PaddleDetection.
+        """Load a VPL model exported by PaddleDetection.
 
         :param model_file: (str)Path of model file, e.g yolox/model.pdmodel
         :param params_file: (str)Path of parameters file, e.g yolox/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
@@ -184,6 +184,6 @@ class VPL(InsightFaceRecognitionBase):
 
         super(VPL, self).__init__(runtime_option)
 
-        self._model = C.vision.detection.VPL(
-            model_file, params_file, self._runtime_option, model_format)
+        self._model = C.vision.faceid.VPL(model_file, params_file,
+                                          self._runtime_option, model_format)
         assert self.initialized, "PaddleYOLOX model initialize failed."
