@@ -2,9 +2,9 @@ English | [中文](../../cn/build_and_install/xpu.md)
 
 # How to Build KunlunXin XPU Deployment Environment
 
-FastDeploy supports deployment AI on KunlunXin XPU based on Paddle Lite backend. For more detailed information, please refer to: [PaddleLite Deployment Example](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
+FastDeploy supports deployment AI on KunlunXin XPU based on Paddle Lite backend. For more detailed information, please refer to: [Paddle Lite Deployment Example](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。
 
-This document describes how to compile the C++ FastDeploy library based on PaddleLite.
+This document describes how to compile the C++ FastDeploy library based on Paddle Lite.
 
 The relevant compilation options are described as follows:  
 |Compile Options|Default Values|Description|Remarks|  
@@ -26,7 +26,7 @@ The configuration for third libraries(Optional, if the following option is not d
 
 For more compilation options, please refer to [Description of FastDeploy compilation options](./README.md)
 
-## C++ FastDeploy library compilation based on PaddleLite
+## C++ FastDeploy library compilation based on Paddle Lite
 - OS: Linux
 - gcc/g++: version >= 8.2
 - cmake: version >= 3.15
@@ -57,7 +57,7 @@ cmake -DWITH_XPU=ON  \
 make -j8
 make install
 ```  
-After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the PadddleLite-based FastDeploy library has been compiled.
+After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the Padddle Lite based FastDeploy library has been compiled.
 
 ## Python compile
 The compilation command is as follows:
