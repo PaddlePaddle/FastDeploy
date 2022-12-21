@@ -36,6 +36,7 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionBase {
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    initialized = Initialize();
   }
 
   virtual std::string ModelName() const { return "ArcFace"; }
@@ -59,6 +60,7 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionBase {
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    initialized = Initialize();
   }
 
   virtual std::string ModelName() const { return "CosFace"; }
@@ -81,6 +83,7 @@ class FASTDEPLOY_DECL PartialFC : public InsightFaceRecognitionBase {
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    initialized = Initialize();
   }
 
   virtual std::string ModelName() const { return "PartialFC"; }
@@ -103,6 +106,7 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionBase {
                           Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    initialized = Initialize();
   }
 
   virtual std::string ModelName() const { return "VPL"; }

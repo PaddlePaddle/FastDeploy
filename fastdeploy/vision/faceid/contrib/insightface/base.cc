@@ -34,7 +34,6 @@ InsightFaceRecognitionBase::InsightFaceRecognitionBase(
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   runtime_option.params_file = params_file;
-  initialized = Initialize();
 }
 
 bool InsightFaceRecognitionBase::Initialize() {
