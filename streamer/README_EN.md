@@ -8,7 +8,7 @@ FastDeploy Streamer (FDStreamer) is an AI multimedia stream processing framework
 
 The following figure is the architecture diagram of FDStreamer. The parts marked in green have been implemented, while the parts not marked are still under planning.
 
-- Users can use a simple API and a YAML configuration file to start FDStreamer APP, such as video analytics APP, video decoder APP.
+- Users can use a simple API and a [YAML configuration file](docs/en/yaml_config.md) to start FDStreamer APP, such as video analytics APP, video decoder APP.
 - FDStreamer APP calls GStreamer API to build Pipeline, handle callback functions, etc.
 - The underlying elements/plugins of GStreamer include plugins built into the GStreamer framework (such as appsink, x265), plugins from 3rd SDKs (such as DeepStream’s nvinfer, nvtracker), and plugins provided by FDStreamer (under planning)
 - GStreamer plugins run on different hardwares, such as codec hardware, CPU, GPU, NPU and other AI chips.

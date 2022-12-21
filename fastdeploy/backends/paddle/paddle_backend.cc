@@ -99,17 +99,22 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
             << std::endl;
     return false;
   }
-  config_.SetModel(model_file, params_file);
-  config_.EnableMemoryOptim();
-  BuildOption(option);
 
   // The input/output information get from predictor is not right, use PaddleReader instead now
   std::string contents;
-  if (!ReadBinaryFromFile(model_file, &contents)) {
-    return false;
-  }
-  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
 
+  if (option.model_from_memory_) {
+    config_.SetModelBuffer(model_file.c_str(), option.model_buffer_size_, params_file.c_str(), option.params_buffer_size_);
+    contents = model_file;
+  } else {
+    config_.SetModel(model_file, params_file);
+    if (!ReadBinaryFromFile(model_file, &contents)) {
+      return false;
+    }
+  }
+  config_.EnableMemoryOptim();
+  BuildOption(option);
+  auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
   // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to int8 mode
   if (reader.is_quantize_model) {
     if (option.use_gpu) {
@@ -167,13 +172,20 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
 #ifdef ENABLE_TRT_BACKEND
   if (option.collect_shape) {
     // Set the shape info file.
-    auto curr_model_dir = GetDirFromPath(model_file);
+    std::string curr_model_dir = "./";
+    if (!option.model_from_memory_) {
+      curr_model_dir = GetDirFromPath(model_file);
+    }
     std::string shape_range_info =
         PathJoin(curr_model_dir, "shape_range_info.pbtxt");
     if (!CheckFileExists(shape_range_info)) {
       FDINFO << "Start generating shape range info file." << std::endl;
       paddle_infer::Config analysis_config;
-      analysis_config.SetModel(model_file, params_file);
+      if (option.model_from_memory_) {
+        analysis_config.SetModelBuffer(model_file.c_str(), option.model_buffer_size_, params_file.c_str(), option.params_buffer_size_);
+      } else {
+        analysis_config.SetModel(model_file, params_file);
+      }
       analysis_config.CollectShapeRangeInfo(shape_range_info);
       auto predictor_tmp = paddle_infer::CreatePredictor(analysis_config);
       std::map<std::string, std::vector<int>> max_shape;
