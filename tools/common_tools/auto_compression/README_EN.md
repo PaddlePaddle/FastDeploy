@@ -103,7 +103,7 @@ To complete the quantization, developers only need to provide a customized model
 ## 3. FastDeploy One-Click Model Auto Compression Config file examples
 FastDeploy currently provides users with compression [config](./configs/) files of multiple models, and the corresponding FP32 model, Users can directly download and experience it.
 
-| Config文件                | 待压缩的FP32模型 | 备注                                                       |
+| Config file                | FP32 model | Note                                                       |
 | -------------------- | ------------------------------------------------------------ |----------------------------------------- |
 | [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      | [mobilenetv1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_ssld_infer.tgz)           |           |
 | [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |   [resnet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz)          |     |
