@@ -20,9 +20,11 @@ void BindRuntime(pybind11::module& m) {
   pybind11::class_<RuntimeOption>(m, "RuntimeOption")
       .def(pybind11::init())
       .def("set_model_path", &RuntimeOption::SetModelPath)
+      .def("set_model_buffer", &RuntimeOption::SetModelBuffer)
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
+      .def("use_xpu", &RuntimeOption::UseXpu)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
@@ -66,7 +68,10 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("params_file", &RuntimeOption::params_file)
       .def_readwrite("model_format", &RuntimeOption::model_format)
       .def_readwrite("backend", &RuntimeOption::backend)
-      .def_readwrite("backend", &RuntimeOption::external_stream_)
+      .def_readwrite("external_stream", &RuntimeOption::external_stream_)
+      .def_readwrite("model_from_memory", &RuntimeOption::model_from_memory_)
+      .def_readwrite("model_buffer_size", &RuntimeOption::model_buffer_size_)
+      .def_readwrite("params_buffer_size", &RuntimeOption::params_buffer_size_)
       .def_readwrite("cpu_thread_num", &RuntimeOption::cpu_thread_num)
       .def_readwrite("device_id", &RuntimeOption::device_id)
       .def_readwrite("device", &RuntimeOption::device)
@@ -100,7 +105,21 @@ void BindRuntime(pybind11::module& m) {
       .def_readwrite("ipu_available_memory_proportion",
                      &RuntimeOption::ipu_available_memory_proportion)
       .def_readwrite("ipu_enable_half_partial",
-                     &RuntimeOption::ipu_enable_half_partial);
+                     &RuntimeOption::ipu_enable_half_partial)
+      .def_readwrite("xpu_l3_workspace_size",
+                     &RuntimeOption::xpu_l3_workspace_size)
+      .def_readwrite("xpu_locked",
+                     &RuntimeOption::xpu_locked)
+      .def_readwrite("xpu_autotune",
+                     &RuntimeOption::xpu_autotune)
+      .def_readwrite("xpu_autotune_file",
+                     &RuntimeOption::xpu_autotune_file)
+      .def_readwrite("xpu_precision",
+                     &RuntimeOption::xpu_precision)
+      .def_readwrite("xpu_adaptive_seqlen",
+                     &RuntimeOption::xpu_adaptive_seqlen)
+      .def_readwrite("xpu_enable_multi_stream",
+                     &RuntimeOption::xpu_enable_multi_stream);                              
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)

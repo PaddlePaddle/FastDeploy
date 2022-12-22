@@ -82,7 +82,7 @@ FastDeploy后端目前支持*cpu*和*gpu*推理，*cpu*上支持*paddle*、*onnx
 
 
 #### 配置使用Paddle引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。Paddle引擎中，还可以进行如下配置,具体例子可参照[PP-OCRv3例子中Runtime配置](../../../examples/vision/ocr/PP-OCRv3/serving/models/cls_runtime/config.pbtxt):
 
 ```
 optimization {
@@ -112,7 +112,7 @@ optimization {
 ```
 
 ### 配置使用ONNXRuntime引擎
-除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置:
+除去配置 *Instance Groups*，决定模型运行在CPU还是GPU上。ONNXRuntime引擎中，还可以进行如下配置，具体例子可参照[YOLOv5的Runtime配置](../../../examples/vision/detection/yolov5/serving/models/runtime/config.pbtxt):
 
 ```
 optimization {
@@ -167,4 +167,39 @@ optimization {
     ]
   }
 }
+```
+
+配置TensorRT动态shape的格式如下，可参照[PaddleCls例子中Runtime配置](../../../examples/vision/classification/paddleclas/serving/models/runtime/config.pbtxt):
+```
+optimization {
+  execution_accelerators {
+  gpu_execution_accelerator : [ {
+    # use TRT engine
+    name: "tensorrt",
+    # use fp16 on TRT engine
+    parameters { key: "precision" value: "trt_fp16" }
+  },
+  {
+    # Configure the minimum shape of dynamic shape
+    name: "min_shape"
+    # All input name and minimum shape
+    parameters { key: "input1" value: "1 3 224 224" }
+    parameters { key: "input2" value: "1 10" }
+  },
+  {
+    # Configure the optimal shape of dynamic shape
+    name: "opt_shape"
+    # All input name and optimal shape
+    parameters { key: "input1" value: "2 3 224 224" }
+    parameters { key: "input2" value: "2 20" }
+  },
+  {
+    # Configure the maximum shape of dynamic shape
+    name: "max_shape"
+    # All input name and maximum shape
+    parameters { key: "input1" value: "8 3 224 224" }
+    parameters { key: "input2" value: "8 30" }
+  }
+  ]
+}}
 ```
