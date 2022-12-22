@@ -1,3 +1,5 @@
+[English](README_EN.md) | 简体中文
+
 # YOLOv5准备部署模型
 
 - YOLOv5 v7.0部署模型实现来自[YOLOv5](https://github.com/ultralytics/yolov5/tree/v7.0),和[基于COCO的预训练模型](https://github.com/ultralytics/yolov5/releases/tag/v7.0)
