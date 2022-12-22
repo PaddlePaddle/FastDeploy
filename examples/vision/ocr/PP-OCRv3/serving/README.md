@@ -49,8 +49,8 @@ mv ppocr_keys_v1.txt models/rec_postprocess/1/
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
 
-docker pull paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10
-docker run -dit --net=host --name fastdeploy --shm-size="1g" -v $PWD:/ocr_serving paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 bash
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+docker run -dit --net=host --name fastdeploy --shm-size="1g" -v $PWD:/ocr_servingregistry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
 docker exec -it -u root fastdeploy bash
 ```
 
