@@ -49,8 +49,9 @@ dependencies {
 
 def FD_CXX_LIB = [
         [
-                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-latest-shared-dev.tgz',
-                'dest': 'libs'
+                'src' : 'https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz',
+                'dest': 'libs',
+                'name': 'fastdeploy-android-latest-shared-dev'
         ]
 ]
 
@@ -63,26 +64,47 @@ task downloadAndExtractLibs(type: DefaultTask) {
         if (!file("${cachePath}").exists()) {
             mkdir "${cachePath}"
         }
+
         FD_CXX_LIB.eachWithIndex { lib, index ->
+
             String[] libPaths = lib.src.split("/")
+            String sdkName = lib.name
             String libName = libPaths[libPaths.length - 1]
-            libName = libName.split("\\.")[0]
+            libName = libName.substring(0, libName.indexOf("tgz") - 1)
+            String cacheName = cachePath + "/" + "${libName}.tgz"
+
+            String libDir = lib.dest + "/" + libName
+            String sdkDir = lib.dest + "/" + sdkName
+
             boolean copyFiles = false
-            if (!file("${lib.dest}/${libName}").exists()) {
-                if (!file("${cachePath}/${libName}.tgz").exists()) {
-                    println "[INFO] Downloading ${lib.src} -> ${cachePath}/${libName}.tgz"
-                    ant.get(src: lib.src, dest: file("${cachePath}/${libName}.tgz"))
+            if (!file("${sdkDir}").exists()) {
+                // Download lib and rename to sdk name later.
+                if (!file("${cacheName}").exists()) {
+                    println "[INFO] Downloading ${lib.src} -> ${cacheName}"
+                    ant.get(src: lib.src, dest: file("${cacheName}"))
                 }
                 copyFiles = true
             }
+
             if (copyFiles) {
-                println "[INFO] Taring ${cachePath}/${libName}.tgz -> ${lib.dest}/${libName}"
-                copy {
-                    from tarTree("${cachePath}/${libName}.tgz")
-                    into "${lib.dest}"
+                println "[INFO] Taring ${cacheName} -> ${libDir}"
+                copy { from(tarTree("${cacheName}")) into("${lib.dest}") }
+                if (!libName.equals(sdkName)) {
+                    if (file("${sdkDir}").exists()) {
+                        delete("${sdkDir}")
+                        println "[INFO] Remove old ${sdkDir}"
+                    }
+                    mkdir "${sdkDir}"
+                    println "[INFO] Coping ${libDir} -> ${sdkDir}"
+                    copy { from("${libDir}") into("${sdkDir}") }
+                    delete("${libDir}")
+                    println "[INFO] Removed ${libDir}"
+                    println "[INFO] Update ${sdkDir} done!"
                 }
             } else {
-                println "[INFO] ${lib.dest}/${libName} already exists!"
+                println "[INFO] ${sdkDir} already exists!"
+                println "[WARN] Please delete ${cacheName} and ${sdkDir} " +
+                        "if you want to UPDATE ${sdkName} c++ lib. Then, rebuild this sdk."
             }
         }
     }
