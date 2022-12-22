@@ -1,3 +1,5 @@
+[English](README_EN.md) | 简体中文
+
 # YOLOv7End2EndORT 准备部署模型
 
 YOLOv7End2EndORT 部署实现来自[YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。注意，YOLOv7End2EndORT是专门用于推理YOLOv7中导出模型带[ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) 版本的End2End模型，不带nms的模型推理请使用YOLOv7类，而 [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) 版本的End2End模型请使用YOLOv7End2EndTRT进行推理。
