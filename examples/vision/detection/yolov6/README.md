@@ -1,3 +1,5 @@
+[English](README_EN.md) | 简体中文
+
 # YOLOv6准备部署模型
 
 
