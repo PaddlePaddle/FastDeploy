@@ -109,7 +109,10 @@ FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文�
 | [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
 | [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | 支持PPYOLOE的s,m,l,x系列模型, 从PaddleDetection导出模型时正常导出, 不要去除NMS |
 | [ppyoloe_plus_withNMS_quant](./configs/detection/ppyoloe_plus_withNMS_quant.yaml)       |  [ppyoloe_plus_s](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_plus_crn_s_80e_coco.tar)    | 支持PPYOLOE+的s,m,l,x系列模型, 从PaddleDetection导出模型时正常导出, 不要去除NMS |
-| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |       |
+| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |
+| [deeplabv3_resnet_quant](./configs/segmentation/deeplabv3_resnet_quant.yaml)    |   [deeplabv3_resnet101](https://bj.bcebos.com/paddlehub/fastdeploy/Deeplabv3_ResNet101_OS8_cityscapes_without_argmax_infer.tgz)        |       |
+| [fcn_hrnet_quant](./configs/segmentation/fcn_hrnet_quant.yaml)    |   [fcn_hrnet](https://bj.bcebos.com/paddlehub/fastdeploy/FCN_HRNet_W18_cityscapes_without_argmax_infer.tgz)        |       |
+| [unet_quant](./configs/segmentation/unet_quant.yaml)    |   [unet](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz)        |       |      |
 
 
 
