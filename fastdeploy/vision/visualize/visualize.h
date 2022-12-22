@@ -161,9 +161,26 @@ FASTDEPLOY_DECL cv::Mat VisOcr(const cv::Mat& im, const OCRResult& ocr_result);
 FASTDEPLOY_DECL cv::Mat VisMOT(const cv::Mat& img, const MOTResult& results,
                                float score_threshold = 0.0f,
                                tracking::TrailRecorder* recorder = nullptr);
-FASTDEPLOY_DECL cv::Mat SwapBackground(
-    const cv::Mat& im, const cv::Mat& background, const MattingResult& result,
-    bool remove_small_connected_area = false);
+/** \brief Swap the image background with MattingResult
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] background the background image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the MattingResult produced by model
+ * \param[in] remove_small_connected_area if remove_small_connected_area==true, the visualized result will not include the small connected areas
+ * \return cv::Mat type stores the visualized results
+ */
+FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
+                                      const cv::Mat& background,
+                                      const MattingResult& result,
+                                      bool remove_small_connected_area = false);
+/** \brief Swap the image background with SegmentationResult
+ *
+ * \param[in] im the input image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] background the background image data, comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+ * \param[in] result the SegmentationResult produced by model
+ * \param[in] background_label the background label number in SegmentationResult
+ * \return cv::Mat type stores the visualized results
+ */
 FASTDEPLOY_DECL cv::Mat SwapBackground(const cv::Mat& im,
                                        const cv::Mat& background,
                                        const SegmentationResult& result,
