@@ -83,7 +83,7 @@ def FD_MODEL = [
 
 def FD_JAVA_SDK = [
         [
-                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-sdk-latest-dev.aar',
+                'src' : 'https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-0.0.0.aar',
                 'dest': 'libs'
         ],
         [

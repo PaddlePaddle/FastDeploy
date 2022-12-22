@@ -49,7 +49,7 @@ dependencies {
 
 def FD_CXX_LIB = [
         [
-                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-latest-shared-dev.tgz',
+                'src' : 'https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-with-text-0.0.0-shared.tgz',
                 'dest': 'libs'
         ]
 ]
