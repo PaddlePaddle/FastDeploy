@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/client-en.md)
 # 客户端访问说明
 本文以访问使用fastdeployserver部署的yolov5模型为例，讲述客户端如何请求服务端进行推理服务。关于如何使用fastdeployserver部署yolov5模型，可以参考文档[yolov5服务化部署](../../../examples/vision/detection/yolov5/serving)
 

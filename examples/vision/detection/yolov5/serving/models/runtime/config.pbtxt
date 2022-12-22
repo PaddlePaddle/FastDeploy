@@ -18,7 +18,7 @@ input [
 # The output of the model is configured in the same format as the input
 output [
   {
-    name: "output"
+    name: "output0"
     data_type: TYPE_FP32
     dims: [ -1, -1 ]
   }
