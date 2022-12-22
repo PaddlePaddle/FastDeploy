@@ -78,7 +78,7 @@ task downloadAndExtractLibs(type: DefaultTask) {
 
             boolean copyFiles = false
             if (!file("${sdkDir}").exists()) {
-                // Download from lib link and rename to sdk name later.
+                // Download lib and rename to sdk name later.
                 if (!file("${cacheName}").exists()) {
                     println "[INFO] Downloading ${lib.src} -> ${cacheName}"
                     ant.get(src: lib.src, dest: file("${cacheName}"))
