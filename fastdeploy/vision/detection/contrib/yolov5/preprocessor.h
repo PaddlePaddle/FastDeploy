@@ -61,6 +61,23 @@ class FASTDEPLOY_DECL YOLOv5Preprocessor {
   /// Get is_scale_up, default true
   bool GetScaleUp() const { return is_scale_up_; }
 
+  /// Set is_mini_pad, pad to the minimum rectange
+  /// which height and width is times of stride
+  void SetMiniPad(bool is_mini_pad) {
+    is_mini_pad_ = is_mini_pad;
+  }
+
+  /// Get is_mini_pad, default false
+  bool GetMiniPad() const { return is_mini_pad_; }
+
+  /// Set padding stride, only for mini_pad mode
+  void SetStride(int stride) {
+    stride_ = stride;
+  }
+
+  /// Get padding stride, default 32
+  bool GetStride() const { return stride_; }
+
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
