@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.sr;
+package com.baidu.paddle.fastdeploy.app.examples.facealign;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -16,9 +16,9 @@ import com.baidu.paddle.fastdeploy.ui.view.AppCompatPreferenceActivity;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity implements
+public class FaceAlignSettingsActivity extends AppCompatPreferenceActivity implements
         SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String TAG = SuperResolutionSettingsActivity.class.getSimpleName();
+    private static final String TAG = FaceAlignSettingsActivity.class.getSimpleName();
 
     static public int selectedModelIdx = -1;
     static public String modelDir = "";
@@ -40,7 +40,7 @@ public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        addPreferencesFromResource(R.xml.super_resolution_setting);
+        addPreferencesFromResource(R.xml.face_align_settings);
         ActionBar supportActionBar = getSupportActionBar();
         if (supportActionBar != null) {
             supportActionBar.setDisplayHomeAsUpEnabled(true);
@@ -51,7 +51,7 @@ public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity
         preInstalledCPUThreadNums = new ArrayList<String>();
         preInstalledCPUPowerModes = new ArrayList<String>();
         preInstalledEnableLiteFp16s = new ArrayList<String>();
-        preInstalledModelDirs.add(getString(R.string.SUPER_RESOLUTION_MODEL_DIR_DEFAULT));
+        preInstalledModelDirs.add(getString(R.string.FACE_ALIGN_MODEL_DIR_DEFAULT));
         preInstalledCPUThreadNums.add(getString(R.string.CPU_THREAD_NUM_DEFAULT));
         preInstalledCPUPowerModes.add(getString(R.string.CPU_POWER_MODE_DEFAULT));
         preInstalledEnableLiteFp16s.add(getString(R.string.ENABLE_LITE_FP16_MODE_DEFAULT));
@@ -77,7 +77,7 @@ public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity
         SharedPreferences sharedPreferences = getPreferenceScreen().getSharedPreferences();
 
         String selected_model_dir = sharedPreferences.getString(getString(R.string.CHOOSE_PRE_INSTALLED_MODEL_KEY),
-                getString(R.string.SUPER_RESOLUTION_MODEL_DIR_DEFAULT));
+                getString(R.string.FACE_ALIGN_MODEL_DIR_DEFAULT));
         int selected_model_idx = lpChoosePreInstalledModel.findIndexOfValue(selected_model_dir);
         if (selected_model_idx >= 0 && selected_model_idx < preInstalledModelDirs.size() && selected_model_idx != selectedModelIdx) {
             SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -91,7 +91,7 @@ public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity
         }
 
         String model_dir = sharedPreferences.getString(getString(R.string.MODEL_DIR_KEY),
-                getString(R.string.SUPER_RESOLUTION_MODEL_DIR_DEFAULT));
+                getString(R.string.FACE_ALIGN_MODEL_DIR_DEFAULT));
         String cpu_thread_num = sharedPreferences.getString(getString(R.string.CPU_THREAD_NUM_KEY),
                 getString(R.string.CPU_THREAD_NUM_DEFAULT));
         String cpu_power_mode = sharedPreferences.getString(getString(R.string.CPU_POWER_MODE_KEY),
@@ -114,7 +114,7 @@ public class SuperResolutionSettingsActivity extends AppCompatPreferenceActivity
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(ctx);
 
         String model_dir = sharedPreferences.getString(ctx.getString(R.string.MODEL_DIR_KEY),
-                ctx.getString(R.string.SUPER_RESOLUTION_MODEL_DIR_DEFAULT));
+                ctx.getString(R.string.FACE_ALIGN_MODEL_DIR_DEFAULT));
         settingsChanged |= !modelDir.equalsIgnoreCase(model_dir);
         modelDir = model_dir;
 

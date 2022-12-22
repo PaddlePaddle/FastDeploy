@@ -1,4 +1,4 @@
-package com.baidu.paddle.fastdeploy.app.examples.sr;
+package com.baidu.paddle.fastdeploy.app.examples.facealign;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -9,9 +9,9 @@ import android.support.annotation.Nullable;
 import android.view.View;
 
 import com.baidu.paddle.fastdeploy.app.examples.R;
+import com.baidu.paddle.fastdeploy.app.examples.segmentation.SegmentationMainActivity;
 
-public class SuperResolutionWelcomeActivity extends Activity {
-
+public class FaceAlignWelcomeActivity extends Activity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -21,11 +21,11 @@ public class SuperResolutionWelcomeActivity extends Activity {
             );
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
-        setContentView(R.layout.super_resolution_welcome);
+        setContentView(R.layout.face_align_welcome);
     }
 
     public void startActivity(View view) {
-        Intent intent = new Intent(SuperResolutionWelcomeActivity.this, SuperResolutionMainActivity.class);
+        Intent intent = new Intent(FaceAlignWelcomeActivity.this, FaceAlignMainActivity.class);
         startActivity(intent);
     }
 }

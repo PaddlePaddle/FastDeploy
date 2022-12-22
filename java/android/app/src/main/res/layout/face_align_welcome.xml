@@ -24,7 +24,7 @@
             android:layout_marginTop="120dp"
             android:background="@color/colorStartBtn"
             android:gravity="center"
-            android:text="Super Resolution"
+            android:text="FaceAlign"
             android:textColor="@color/colorTextWrite"
             android:textSize="30sp" />
 
