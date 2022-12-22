@@ -1,3 +1,5 @@
+English | [中文](../../cn/build_and_install/xpu.md)
+
 # How to Build KunlunXin XPU Deployment Environment
 
 FastDeploy supports deployment AI on KunlunXin XPU based on Paddle Lite backend. For more detailed information, please refer to: [Paddle Lite Deployment Example](https://www.paddlepaddle.org.cn/lite/develop/demo_guides/kunlunxin_xpu.html#xpu)。

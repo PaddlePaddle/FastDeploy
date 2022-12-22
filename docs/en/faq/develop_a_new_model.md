@@ -1,3 +1,4 @@
+English | [中文](../../cn/faq/develop_a_new_model.md)
 # How to Integrate New Model on FastDeploy
 
  How to add a new model on FastDeploy, including C++/Python deployment?  Here, we take the ResNet50 model in torchvision v0.12.0 as an example, introducing external [Model Integration](#modelsupport) on FastDeploy. The whole process only needs 3 steps.

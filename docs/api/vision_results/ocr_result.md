@@ -1,3 +1,4 @@
+中文 ｜ [English](ocr_result_EN.md)
 # OCRResult OCR预测结果
 
 OCRResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测和识别出来的文本框，文本框方向分类，以及文本框内的文本内容
