@@ -1,3 +1,4 @@
+中文 ｜ [English](face_alignment_result_EN.md)
 # FaceAlignmentResult 人脸对齐(人脸关键点检测)结果
 
 FaceAlignmentResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸landmarks。

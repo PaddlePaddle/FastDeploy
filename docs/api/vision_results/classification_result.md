@@ -1,3 +1,4 @@
+中文 ｜ [English](classification_result_EN.md)
 # ClassifyResult 图像分类结果
 
 ClassifyResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像的分类结果和置信度。
