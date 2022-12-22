@@ -86,14 +86,63 @@ class TritonPythonModel:
           be the same as `requests`
         """
         #Pre-processing code that calls the execute function for each prediction.
-        #FastDeploy provides python pre and post processing functions for some models, so you don't need to program them.
+        #FastDeploy provides pre and post processing python functions for some models, so you don't need to program them.
         #Please use fd.vision.detection.YOLOv5.preprocess(data) for calling.
-        #用户也可以自行编写需要的处理逻辑
+        #You can write your own processing logic
         
     def finalize(self):
         """`finalize` is called only once when the model is being unloaded.
         Implementing `finalize` function is optional. This function allows
         the model to perform any necessary clean ups before exit.
         """
-        #你的析构代码，finalize只在模型卸载的时候被调用1次
+        #Destructor code, it is only called when the model is being unloaded
+```
+
+Initialization operations are generally in function `initialize` , and this function is only executed once when the Python model service is being loaded.
+
+Destructive release operations are generally in function `finalize`, and this function is only executed once when the Python model service is being unloaded.
+
+The pre and post processing logic is generally designed in function `execute`, and this function is executed once each time the server receives a client request.
+
+The input parameter `requests` of the function `execute`, is a collection of InferenceRequest. When [Dynamic Batching](#Dynamic-Batching) is not enabled, the length of requests is 1, i.e. there is only one InferenceRequest.
+
+The return parameter `responses` of the function `execute` must be a collection of InferenceResponse, with the length usually the same as the length of `requests`, that is, N InferenceRequest must return N InferenceResponse.
+
+You can write your own code in the `execute` function for data pre-processing or post-processing. For convenience, FastDeploy provides pre and post processing python functions for some models. You can write:
+
+```
+import fastdeploy as fd
+fd.vision.detection.YOLOv5.preprocess(data)
+```
+
+## Dynamic Batching
+The principle of dynamic batching is shown in the figure. When the user request concurrency is high while the GPU utilization is low, the throughput performance can be improved by merging different user requests into a large Batch for model prediction.
+<p align="center">
+    <br>
+<img src='https://user-images.githubusercontent.com/35565423/204285444-1f9aaf24-05c2-4aae-bbd5-47dc3582dc01.png'>
+    <br>
+</p>
+
+Enabling dynamic batching is as simple as adding the lines `dynamic_batching{}` to the end of config.pbtxt. Please note that the maximum batch size should not exceed `max_batch_size`.
+
+**Note**: The field `ensemble_scheduling` and the field `dynamic_batching` should not coexist. That is, dynamic batching is not available for **Ensemble Model Service**, since **Ensemble Model Service** itself is just a combination of multiple model services.
+
+## Multi-Model Instance
+The principle of multi-model instance is shown in the figure below. When pre and post processing (which usually does not support Batch) becomes the performance bottleneck of the whole service, it is possible to improve the latency performance by adding **Python Model Service** instances for pre and post processing.
+
+Of course, you can also turn on multiple **Runtime Model Service** instances to improve GPU utilization.
+<p align="center">
+    <br>
+<img src='https://user-images.githubusercontent.com/35565423/204268809-6ea95a9f-e014-468a-8597-98b67ebc7381.png'>
+    <br>
+</p>
+
+It is simple to set a multi-model instance, just write:
+```
+instance_group [
+  {
+      count: 3
+      kind: KIND_CPU
+  }
+]
 ```
