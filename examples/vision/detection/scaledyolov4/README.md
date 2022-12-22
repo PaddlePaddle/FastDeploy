@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # ScaledYOLOv4准备部署模型
 
 - ScaledYOLOv4部署实现来自[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)的代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/ScaledYOLOv4)。
