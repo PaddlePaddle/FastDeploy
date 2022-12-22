@@ -107,13 +107,13 @@ bool SophgoBackend::LoadModel(void* model) {
  ***************************************************************/
 bool SophgoBackend::GetModelInputOutputInfos() {
   inputs_desc_.resize(net_info_->input_num);
+  bm_shape_t* input_shapes = net_info_->stages->input_shapes;
   for(int idx=0; idx<net_info_->input_num; idx++){
-    bm_shape_t* input_shapes = net_info_->stages[idx].input_shapes;
     std::string temp_name = (net_info_->input_names)[idx];
     std::vector<int> temp_shape{};
-    temp_shape.resize(input_shapes->num_dims);
-    for(int i=0; i<input_shapes->num_dims; i++){
-      temp_shape[i] = input_shapes->dims[i];
+    temp_shape.resize(input_shapes[idx].num_dims);
+    for(int i=0; i<input_shapes[idx].num_dims; i++){
+      temp_shape[i] = input_shapes[idx].dims[i];
     }
     bm_data_type_t* input_dtypes = net_info_->input_dtypes;
     //FDDataType temp_dtype = FDDataType::FP32; //add SophgoType2FDDataType fun
@@ -123,13 +123,13 @@ bool SophgoBackend::GetModelInputOutputInfos() {
   }
 
   outputs_desc_.resize(net_info_->output_num);
+  bm_shape_t* output_shapes = net_info_->stages->output_shapes;
   for(int idx=0; idx<net_info_->output_num; idx++){
-    bm_shape_t* output_shapes = net_info_->stages[idx].output_shapes;
     std::string temp_name1 = (net_info_->output_names)[idx];
     std::vector<int> temp_shape1{};
-    temp_shape1.resize(output_shapes->num_dims);
-    for(int i=0; i<output_shapes->num_dims; i++){
-      temp_shape1[i] = output_shapes->dims[i];
+    temp_shape1.resize(output_shapes[idx].num_dims);
+    for(int i=0; i<output_shapes[idx].num_dims; i++){
+      temp_shape1[i] = output_shapes[idx].dims[i];
     }
     bm_data_type_t* output_dtypes = net_info_->output_dtypes;
     //FDDataType temp_dtype1 = FDDataType::FP32; //add SophgoType2FDDataType fun
@@ -167,11 +167,12 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   bm_tensor_t input_tensors[input_size];
   bm_status_t status = BM_SUCCESS;
 
+  bm_data_type_t* input_dtypes = net_info_->input_dtypes;
   for(int i=0;i<input_size;i++){
     status = bm_malloc_device_byte(handle_, 
     &input_tensors[i].device_mem,net_info_->max_input_bytes[i]);
     assert(BM_SUCCESS == status);
-    input_tensors[i].dtype = BM_FLOAT32;
+    input_tensors[i].dtype = input_dtypes[i];
     input_tensors[i].st_mode = BM_STORE_1N;
     input_tensors[i].shape = *(net_info_->stages[i].input_shapes);
     unsigned int input_byte = bmrt_tensor_bytesize(&input_tensors[i]);
@@ -194,22 +195,24 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   assert(status == BM_SUCCESS);
 
   outputs->resize(outputs_desc_.size());
+  bm_data_type_t* output_dtypes = net_info_->output_dtypes;
   for(int i=0;i<output_size;i++){
     int temp_bytesize = bmrt_tensor_bytesize(&output_tensors[i]); //Byte
-    float* temp_out = (float*)malloc(temp_bytesize);
-    bm_memcpy_d2s_partial(handle_, temp_out, output_tensors[0].device_mem, temp_bytesize);
+    float *temp_out = (float *)malloc(temp_bytesize);
+    bm_memcpy_d2s_partial(handle_, temp_out, output_tensors[i].device_mem, temp_bytesize);
 
     std::vector<int64_t> temp_shape;
     temp_shape.resize(outputs_desc_[i].shape.size());
     for (int j = 0; j < outputs_desc_[i].shape.size(); ++j) {
         temp_shape[j] = outputs_desc_[i].shape[j];
-      }
+    }
       (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype, outputs_desc_[i].name);
 
       std::vector<float>  output_scale = {net_info_->output_scales[i]};
       (*outputs)[i].SetQuantizationInfo(0, output_scale); //??? how to get zero_point?
 
       memcpy((*outputs)[i].MutableData(), temp_out, (*outputs)[i].Nbytes());
+      free(temp_out);
   }
 
   return true;
