@@ -1,3 +1,6 @@
+
+[English](../../en/faq/develop_a_new_model.md) | 中文
+
 # FastDeploy集成新模型流程
 
 在FastDeploy里面新增一个模型，包括增加C++/Python的部署支持。 本文以torchvision v0.12.0中的ResNet50模型为例，介绍使用FastDeploy做外部[模型集成](#modelsupport)，具体包括如下3步。
