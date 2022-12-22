@@ -1,13 +1,4 @@
-#!/bin/bash
-
-export GLOG_v=5
-# 设置本demo的环境变量
-# 正确设置fastdeploy-ascend的安装路径
-FASTDEPLOY_INSTALL_DIR="../../../../../../build/fastdeploy-ascend/"
-# 设置fastdeploy,opencv和paddlelite相关的环境变量
-export LD_LIBRARY_PATH=$FASTDEPLOY_INSTALL_DIR/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/opencv/lib/:$FASTDEPLOY_INSTALL_DIR/third_libs/install/paddlelite/lib/:$LD_LIBRARY_PATH
-
-# 设置昇腾相关环境变量
+# Set huawei ascend toolkit correctly.
 HUAWEI_ASCEND_TOOLKIT_HOME="/usr/local/Ascend/ascend-toolkit/latest"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/stub:$HUAWEI_ASCEND_TOOLKIT_HOME/acllib/lib64:$HUAWEI_ASCEND_TOOLKIT_HOME/atc/lib64:$HUAWEI_ASCEND_TOOLKIT_HOME/opp/op_proto/built-in
 export PYTHONPATH=$PYTHONPATH:$HUAWEI_ASCEND_TOOLKIT_HOME/fwkacllib/python/site-packages:$HUAWEI_ASCEND_TOOLKIT_HOME/acllib/python/site-packages:$HUAWEI_ASCEND_TOOLKIT_HOME/toolkit/python/site-packages:$HUAWEI_ASCEND_TOOLKIT_HOME/atc/python/site-packages:$HUAWEI_ASCEND_TOOLKIT_HOME/pyACL/python/site-packages/acl
@@ -18,7 +9,4 @@ export TOOLCHAIN_HOME=$HUAWEI_ASCEND_TOOLKIT_HOME/toolkit
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=3
 
-chmod +x ./$BUILD_DIR
-
-# 运行本demo, 输入的参数分别为模型路径和图片路径
-./build/infer_demo ResNet50_vd_infer ILSVRC2012_val_00000010.jpeg
+echo "===== Finish Initializing Environment for Ascend Deployment ====="
