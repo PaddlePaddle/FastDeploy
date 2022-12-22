@@ -1,3 +1,4 @@
+中文 ｜ [English](mot_result_EN.md)
 # MOTResult 多目标跟踪结果
 
 MOTResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明多目标跟踪中的检测出来的目标框、目标跟踪id、目标类别和目标置信度。
