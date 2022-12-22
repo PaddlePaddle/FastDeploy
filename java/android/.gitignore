@@ -5,14 +5,14 @@
 cache
 build
 app/cache
-app/libs/fastdeploy*
+app/libs/*
 app/.cxx
 app/build
 app/src/main/assets/models/*
 app/.gradle
 app/.idea
 fastdeploy/cache
-fastdeploy/libs/fastdeploy*
+fastdeploy/libs/*
 fastdeploy/.cxx
 fastdeploy/build
 fastdeploy/src/main/assets/models/*

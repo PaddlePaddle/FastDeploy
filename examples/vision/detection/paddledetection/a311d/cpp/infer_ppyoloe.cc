@@ -24,7 +24,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto params_file = model_dir + sep + "model.pdiparams";
   auto config_file = model_dir + sep + "infer_cfg.yml";
   auto subgraph_file = model_dir + sep + "subgraph.txt";
-
+  fastdeploy::vision::EnableFlyCV(); 
   fastdeploy::RuntimeOption option;
   option.UseTimVX();
   option.SetLiteSubgraphPartitionPath(subgraph_file);
