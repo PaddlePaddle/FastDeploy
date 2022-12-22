@@ -3,10 +3,10 @@ English | [简体中文](README.md)
 # NanoDetPlus Ready-to-deploy Model
 
 
-- NanoDetPlus deployment is based on the code of [NanoDetPlus](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) and coco's [预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1).
+- NanoDetPlus deployment is based on the code of [NanoDetPlus](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) and coco's [Pre-trained Model](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1).
 
-  - （1）The *.onnx provided by [官方库](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1) can directly conduct the deployment；
-  - （2）Models trained by developers should export ONNX models. Please refer to [详细部署文档](#详细部署文档) for deployment.
+  - （1）The *.onnx provided by [official repository](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1) can directly conduct the deployment；
+  - （2）Models trained by developers should export ONNX models. Please refer to [Detailed Deployment Documents](#详细部署文档) for deployment.
 
 ## Download Pre-trained ONNX Model
 
