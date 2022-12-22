@@ -88,16 +88,16 @@ task downloadAndExtractLibs(type: DefaultTask) {
 
             if (copyFiles) {
                 println "[INFO] Taring ${cacheName} -> ${libDir}"
-                copy { from tarTree("${cacheName}") into "${lib.dest}" }
+                copy { from(tarTree("${cacheName}")) into("${lib.dest}") }
                 if (!libName.equals(sdkName)) {
                     if (file("${sdkDir}").exists()) {
-                        delete "${sdkDir}"
+                        delete("${sdkDir}")
                         println "[INFO] Remove old ${sdkDir}"
                     }
                     mkdir "${sdkDir}"
                     println "[INFO] Coping ${libDir} -> ${sdkDir}"
-                    copy { from "${libDir}" into "${sdkDir}" }
-                    delete "${libDir}"
+                    copy { from("${libDir}") into("${sdkDir}") }
+                    delete("${libDir}")
                     println "[INFO] Removed ${libDir}"
                     println "[INFO] Update ${sdkDir} done!"
                 }
