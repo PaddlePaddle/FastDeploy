@@ -76,19 +76,21 @@ def FD_MODEL = [
                 'dest': 'src/main/assets/models'
         ],
         [
-                'src': 'https://bj.bcebos.com/paddlehub/fastdeploy/uie-nano.tgz',
+                'src' : 'https://bj.bcebos.com/paddlehub/fastdeploy/uie-nano.tgz',
                 'dest': 'src/main/assets/models'
         ]
 ]
 
 def FD_JAVA_SDK = [
         [
-                'src' : 'https://bj.bcebos.com/fastdeploy/test/fastdeploy-android-sdk-latest-dev.aar',
-                'dest': 'libs'
+                'src' : 'https://bj.bcebos.com/fastdeploy/dev/android/fastdeploy-android-sdk-with-text-0.0.0.aar',
+                'dest': 'libs',
+                'name': 'fastdeploy-android-sdk-latest-dev.aar'
         ],
         [
                 'src' : 'https://bj.bcebos.com/fastdeploy/test/bdasr_V3_20210628_cfe8c44.aar',
-                'dest': 'libs'
+                'dest': 'libs',
+                'name': 'bdasr_V3_20210628_cfe8c44.aar'
         ]
 ]
 
@@ -116,10 +118,7 @@ task downloadAndExtractModels(type: DefaultTask) {
             }
             if (copyFiles) {
                 println "[INFO] Taring ${cachePath}/${modelName} -> ${model.dest}/${modelPrefix}"
-                copy {
-                    from tarTree("${cachePath}/${modelName}")
-                    into "${model.dest}"
-                }
+                copy { from(tarTree("${cachePath}/${modelName}")) into("${model.dest}") }
             } else {
                 println "[INFO] ${model.dest}/${modelPrefix} already exists!"
             }
@@ -134,26 +133,25 @@ task downloadAndExtractSDKs(type: DefaultTask) {
     doLast {
         String cachePath = "cache"
         if (!file("${cachePath}").exists()) {
-            mkdir "${cachePath}"
+            mkdir("${cachePath}")
         }
         FD_JAVA_SDK.eachWithIndex { sdk, index ->
             String[] sdkPaths = sdk.src.split("/")
-            String sdkName = sdkPaths[sdkPaths.length - 1]
+            String cacheName = sdkPaths[sdkPaths.length - 1]
+            String sdkName = sdk.name
+
             boolean copyFiles = false
             if (!file("${sdk.dest}/${sdkName}").exists()) {
                 // Download the target SDK if not exists
-                if (!file("${cachePath}/${sdkName}").exists()) {
-                    println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${sdkName}"
-                    ant.get(src: sdk.src, dest: file("${cachePath}/${sdkName}"))
+                if (!file("${cachePath}/${cacheName}").exists()) {
+                    println "[INFO] Downloading ${sdk.src} -> ${cachePath}/${cacheName}"
+                    ant.get(src: sdk.src, dest: file("${cachePath}/${cacheName}"))
                 }
                 copyFiles = true
             }
             if (copyFiles) {
-                println "[INFO] Coping ${cachePath}/${sdkName} -> ${sdk.dest}/${sdkName}"
-                copy {
-                    from "${cachePath}/${sdkName}"
-                    into "${sdk.dest}"
-                }
+                println "[INFO] Rename ${cachePath}/${cacheName} -> ${sdk.dest}/${sdkName}"
+                copy { from("${cachePath}/${cacheName}") into("${sdk.dest}") rename("${cacheName}", "${sdkName}") }
             } else {
                 println "[INFO] ${sdk.dest}/${sdkName} already exists!"
             }
