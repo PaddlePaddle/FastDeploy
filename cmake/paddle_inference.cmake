@@ -40,16 +40,22 @@ if(WIN32)
       CACHE FILEPATH "paddle_inference compile library." FORCE)
   set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/mkldnn.lib")
   set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5md.lib")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/paddle2onnx.lib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/onnxruntime.lib")
 elseif(APPLE)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.dylib"
       CACHE FILEPATH "paddle_inference compile library." FORCE)
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.dylib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.dylib")
 else()
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so"
       CACHE FILEPATH "paddle_inference compile library." FORCE)
   set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
   set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.so")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.so")
 endif(WIN32)
 
 
@@ -128,4 +134,14 @@ if (NOT APPLE)
   set_property(TARGET external_omp PROPERTY IMPORTED_LOCATION
                                           ${OMP_LIB})
   add_dependencies(external_omp ${PADDLEINFERENCE_PROJECT})
+
+  add_library(external_p2o STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_p2o PROPERTY IMPORTED_LOCATION
+	  ${P2O_LIB})
+  add_dependencies(external_p2o ${PADDLEINFERENCE_PROJECT})
+
+  add_library(external_ort STATIC IMPORTED GLOBAL)
+  set_property(TARGET external_ort PROPERTY IMPORTED_LOCATION
+	  ${ORT_LIB})
+  add_dependencies(external_ort ${PADDLEINFERENCE_PROJECT})
 endif()

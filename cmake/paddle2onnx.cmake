@@ -62,7 +62,9 @@ else()
     set(PADDLE2ONNX_FILE "paddle2onnx-linux-x64-${PADDLE2ONNX_VERSION}.tgz")
   endif()
 endif()
-set(PADDLE2ONNX_URL "${PADDLE2ONNX_URL_BASE}${PADDLE2ONNX_FILE}")
+
+set(PADDLE2ONNX_URL "https://bj.bcebos.com/fastdeploy/third_libs/paddle2onnx.tgz")
+set(PADDLE2ONNX_COMPILE_LIB "${PADDLE2ONNX_INSTALL_DIR}/lib/libpaddle2onnx2.so")
 
 ExternalProject_Add(
   ${PADDLE2ONNX_PROJECT}
