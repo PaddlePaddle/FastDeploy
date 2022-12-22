@@ -14,6 +14,7 @@
 # limitations under the License.
 import hashlib
 import typing
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Request
@@ -36,7 +37,8 @@ class HttpRouterManager(BaseRouterManager):
         # Url path to register the model
         paths = [f"/{task_name}"]
         for path in paths:
-            logger.info("   Transformer model request [path]={} is genereated.".format(path))
+            logging.info("FastDeploy Model request [path]={} is genereated.".
+                         format(path))
 
         # Unique name to create the pydantic model
         unique_name = hashlib.md5(task_name.encode()).hexdigest()
@@ -45,19 +47,18 @@ class HttpRouterManager(BaseRouterManager):
         req_model = create_model(
             "RequestModel" + unique_name,
             data=(typing.Any, ...),
-            __base__=RequestBase,
-        )
+            __base__=RequestBase, )
 
         # Create response model
         resp_model = create_model(
             "ResponseModel" + unique_name,
             result=(typing.Any, ...),
-            __base__=ResponseBase,
-        )
+            __base__=ResponseBase, )
 
         # Template predict endpoint function to dynamically serve different models
         def predict(request: Request, inference_request: req_model):
-            result = self._app._model_manager.predict(inference_request.data, inference_request.parameters)
+            result = self._app._model_manager.predict(
+                inference_request.data, inference_request.parameters)
             return {"result": result}
 
         # Register the route and add to the app
@@ -70,7 +71,5 @@ class HttpRouterManager(BaseRouterManager):
                 summary=f"{task_name.title()}",
                 response_model=resp_model,
                 response_model_exclude_unset=True,
-                response_model_exclude_none=True,
-            )
+                response_model_exclude_none=True, )
         self._app.include_router(router)
-

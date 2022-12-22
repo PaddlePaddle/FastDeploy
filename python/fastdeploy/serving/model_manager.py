@@ -23,14 +23,11 @@ from .utils import lock_predictor
 
 
 class ModelManager:
-    def __init__(self, task_name, model_path, runtime_option, model_handler):
-        self._task_name = task_name
-        self._model_path = model_path
-        self._runtime_option = runtime_option
+    def __init__(self, model_handler, model_name, **kwargs):
         self._model_handler = model_handler
-        self._register()
+        self._register(model_name, **kwargs)
 
-    def _register(self):
+    def _register(self, model_name, **kwargs):
         # Get the model handler
         if not issubclass(self._model_handler, BaseModelHandler):
             raise TypeError(
@@ -40,9 +37,9 @@ class ModelManager:
 
         # Create the model predictor
         # TODO: Create multiple predictors to run on different GPUs or different CPU threads
-        device = get_env_device()
         predictor_list = []
-        predictor = Predictor(self._model_path, self._runtime_option)
+        predictor = Predictor(model_name, **kwargs)
+        print("hhhhh", predictor)
         predictor_list.append(predictor)
 
         self._predictor_list = predictor_list
@@ -51,12 +48,14 @@ class ModelManager:
         t = time.time()
         t = int(round(t * 1000))
         predictor_id = t % len(self._predictor_list)
-        logging.info("The predictor id: {} is selected by running the model.".format(predictor_id))
+        logging.info("The predictor id: {} is selected by running the model.".
+                     format(predictor_id))
         return predictor_id
 
     def predict(self, data, parameters):
         predictor_id = self._get_predict_id()
         with lock_predictor(self._predictor_list[predictor_id]._lock):
-            model_output = self._model_handler(self._predictor_list[predictor_id], data, parameters)
+            print("aaaaaaaaaa", self._predictor_list[predictor_id])
+            model_output = self._model_handler(
+                self._predictor_list[predictor_id], data, parameters)
             return model_output
-

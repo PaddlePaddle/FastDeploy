@@ -26,7 +26,3 @@ class BaseRouterManager(abc.ABC):
     @abc.abstractmethod
     def register_models_router(self):
         return NotImplemented
-
-    @abc.abstractmethod
-    def register_taskflow_router(self):
-        return NotImplemented

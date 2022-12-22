@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .base_handler import BaseModelHandler
+import cv2
 
 
 class VisionModelHandler(BaseModelHandler):
@@ -23,6 +24,9 @@ class VisionModelHandler(BaseModelHandler):
     def process(cls, predictor, data, parameters):
         print(data)
 
+        im = cv2.imread("000000014439.jpg")
+        result = predictor.predict(im)
+        print(result)
+
         out_dict = {"result": ""}
         return out_dict
-

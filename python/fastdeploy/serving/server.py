@@ -29,9 +29,7 @@ class SimpleServer(FastAPI):
         self._service_name = "FastDeploy SimpleServer"
         self._service_type = None
 
-    def register(
-        self, task_name, model_name, **kwargs
-    ):
+    def register(self, task_name, model_handler, model_name, **kwargs):
         """
         The register function for the SimpleServer, the main register argrument as follows:
 
@@ -40,10 +38,7 @@ class SimpleServer(FastAPI):
             model_name(str): FastDeploy model name, e.g. fd.vision.detection.PPYOLO
         """
         self._server_type = "models"
-        model_manager = ModelManager(
-            task_name, model_name, **kwargs
-        )
+        model_manager = ModelManager(model_handler, model_name, **kwargs)
         self._model_manager = model_manager
         # Register transformers model server router
         self._router_manager.register_models_router(task_name)
-

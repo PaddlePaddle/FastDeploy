@@ -14,16 +14,22 @@
 # limitations under the License.
 
 import fastdeploy as fd
+import threading
 
 
 class Predictor:
     def __init__(self, model_name, **kwargs):
         self._model_name = model_name
-        self._model = self._create_model()
+        # self._model = self._create_model(model_name, **kwargs)
+        self._model = fd.vision.detection.PPYOLOE(**kwargs)
+        self._lock = threading.Lock()
+        print("init", self._model)
 
-    def _create_predictor(self, model_name, **kwargs):
-        self._model = eval(model_name)(**kwargs)
+    def _create_model(self, model_name, **kwargs):
+        # self._model = eval(model_name)(**kwargs)
+        self._model = fd.vision.detection.PPYOLOE(**kwargs)
+        print(self._model)
 
-    del predict(self, data):
+    def predict(self, data):
+        print(self._model)
         return self._model.predict(data)
-

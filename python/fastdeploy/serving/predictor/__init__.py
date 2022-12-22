@@ -12,5 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .base_handler import BaseModelHandler
-from .vision_model_handler import VisionModelHandler
+from .predictor import Predictor
