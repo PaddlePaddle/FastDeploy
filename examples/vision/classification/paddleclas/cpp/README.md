@@ -41,7 +41,7 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前准备环境变量:
+如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前初始化部署环境:
 - [如何使用华为昇腾NPU部署](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
 
 ## PaddleClas C++接口
