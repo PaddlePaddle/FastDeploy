@@ -1,3 +1,6 @@
+
+[English](../../en/faq/tensorrt_tricks.md) | 中文
+
 # TensorRT使用问题
 
 ## 1. 运行TensorRT过程中，出现如下日志提示 
