@@ -54,6 +54,20 @@ class YOLOv5Preprocessor:
         """
         return self._preprocessor.is_scale_up
 
+    @property
+    def is_mini_pad(self):
+        """
+        is_mini_pad for preprocessing, pad to the minimum rectange which height and width is times of stride, default false
+        """
+        return self._preprocessor.is_mini_pad
+
+    @property
+    def stride(self):
+        """
+        stride for preprocessing, only for mini_pad mode, default 32
+        """
+        return self._preprocessor.stride
+
     @size.setter
     def size(self, wh):
         assert isinstance(wh, (list, tuple)),\
@@ -76,6 +90,19 @@ class YOLOv5Preprocessor:
             value,
             bool), "The value to set `is_scale_up` must be type of bool."
         self._preprocessor.is_scale_up = value
+
+    @is_mini_pad.setter
+    def is_mini_pad(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `is_mini_pad` must be type of bool."
+        self._preprocessor.is_mini_pad = value
+
+    @stride.setter
+    def stride(self, value):
+        assert isinstance(
+            stride, int), "The value to set `stride` must be type of int."
+        self._preprocessor.stride = value
 
 
 class YOLOv5Postprocessor:
