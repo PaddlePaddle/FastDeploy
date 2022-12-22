@@ -1,3 +1,5 @@
+[English](../../../en/faq/rknpu2/export.md) | 中文
+
 # 导出模型指南
 
 ## 简介

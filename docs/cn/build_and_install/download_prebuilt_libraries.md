@@ -1,3 +1,5 @@
+[English](../../en/build_and_install/download_prebuilt_libraries.md) | 简体中文
+
 # 预编译库安装
 
 FastDeploy提供各平台预编译库，供开发者直接下载安装使用。当然FastDeploy编译也非常容易，开发者也可根据自身需求编译FastDeploy。

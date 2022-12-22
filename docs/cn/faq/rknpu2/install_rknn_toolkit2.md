@@ -1,3 +1,4 @@
+[English](../../../en/faq/rknpu2/install_rknn_toolkit2.md) | 中文
 # 安装rknn_toolkit2仓库
 
 ## 下载rknn_toolkit2
