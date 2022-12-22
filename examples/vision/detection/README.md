@@ -1,3 +1,5 @@
+[English](README_EN.md) | 简体中文
+
 # 目标检测模型
 
 FastDeploy目前支持如下目标检测模型部署
