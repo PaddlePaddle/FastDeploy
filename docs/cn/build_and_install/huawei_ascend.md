@@ -78,7 +78,7 @@ cmake -DWITH_ASCEND=ON  \
 make -j8
 make install
 ```  
-编译完成之后，会在当前的build目录下生成 fastdeploy-ascend 目录，表示基于 PadddleLite 的 FastDeploy 库编译完成。
+编译完成之后，会在当前的build目录下生成 fastdeploy-ascend 目录，表示基于 Paddle Lite 的 FastDeploy 库编译完成。
 
 ## 四.基于 Paddle Lite 的 Python FastDeploy 库编译
 搭建好编译环境之后，编译命令如下：

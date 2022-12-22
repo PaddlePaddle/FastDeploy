@@ -3,7 +3,7 @@
 Based on the Paddle-Lite backend, FastDeploy supports model inference on Huawei's Ascend NPU.
 For more detailed information, please refer to: [Paddle Lite Deployment Example](https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/docs/demo_guides/huawei_ascend_npu.md).
 
-This document describes how to compile Paddle Lite-based C++ and Python FastDeploy source code under ARM Linux OS environment to generate prediction libraries for Huawei Sunrise NPU as the target hardware.
+This document describes how to compile C++ and Python FastDeploy source code under ARM Linux OS environment to generate prediction libraries for Huawei Sunrise NPU as the target hardware.
 
 For more compilation options, please refer to the [FastDeploy compilation options description](./README.md)
 
@@ -76,7 +76,7 @@ cmake -DWITH_ASCEND=ON  \
 make -j8
 make install
 ```  
-When the compilation is complete, the fastdeploy-ascend directory is created in the current build directory, indicating that the PadddleLite-based FastDeploy library has been compiled.
+When the compilation is complete, the fastdeploy-ascend directory is created in the current build directory, indicating that the FastDeploy library has been compiled.
 
 ## Compiling Python FastDeploy Libraries Based on Paddle Lite
 
