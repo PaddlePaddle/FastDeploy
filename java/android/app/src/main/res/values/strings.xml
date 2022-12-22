@@ -1,13 +1,15 @@
 <resources>
     <!-- Default App name -->
-    <string name="app_name">EasyEdge</string>
+    <string name="app_name">FastDeploy</string>
     <!-- Other App name -->
-    <string name="detection_app_name">EasyEdge</string>
-    <string name="ocr_app_name">EasyEdge</string>
-    <string name="classification_app_name">EasyEdge</string>
-    <string name="facedet_app_name">EasyEdge</string>
-    <string name="segmentation_app_name">EasyEdge</string>
-    <string name="voice_assistant_app_name">voice assistant</string>
+    <string name="detection_app_name">FastDeploy Detection</string>
+    <string name="ocr_app_name">FastDeploy OCR</string>
+    <string name="classification_app_name">FastDeploy Classification</string>
+    <string name="facedet_app_name">FastDeploy Face Detection</string>
+    <string name="segmentation_app_name">FastDeploy Segmentation</string>
+    <string name="voice_assistant_app_name">FastDeploy Voice Assistant</string>
+    <string name="super_resolution_app_name">FastDeploy Super Resolution</string>
+    <string name="uie_app_name">FastDeploy UIE</string>
     <string name="start_ui_activity">开始使用</string>
     <!-- Keys for PreferenceScreen -->
     <string name="CHOOSE_PRE_INSTALLED_MODEL_KEY">CHOOSE_INSTALLED_MODEL_KEY</string>
@@ -41,6 +43,9 @@
     <string name="SEGMENTATION_MODEL_DIR_DEFAULT">models/portrait_pp_humansegv2_lite_256x144_inference_model</string>
     <!-- keypointdetection values   -->
     <string name="KEYPOINT_DETECTION_MODEL_DIR_DEFAULT">models/PP_TinyPose_128x96_infer</string>
+    <string name="VOICE_ASSISTANT_MODEL_DIR_DEFAULT">models</string>
+    <string name="SUPER_RESOLUTION_MODEL_DIR_DEFAULT">models</string>
+    <string name="UIE_MODEL_DIR_DEFAULT">models/uie-nano</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">实时识别</string>
@@ -53,4 +58,9 @@
     <string name="operation_confidence_control">阈值控制</string>
     <string name="operation_retry">重新识别</string>
     <string name="operation_save">保存结果</string>
+    <!-- NLP Text values -->
+    <string name="UIE_SCHEMA_HINT">请输入需要的信息模式，如: 时间，选手，赛事名称</string>
+    <string name="UIE_SCHEMA_DEFAULT">时间, 选手, 赛事名称</string>
+    <string name="UIE_INPUT_TEXTS_HINT">请输入需要分析的文本，如：2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！</string>
+    <string name="UIE_INPUT_TEXTS_DEFAULT">2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！</string>
 </resources>
