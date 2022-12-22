@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # ResNet准备部署模型
 
 - ResNet部署实现来自[Torchvision](https://github.com/pytorch/vision/tree/v0.12.0)的代码，和[基于ImageNet2012的预训练模型](https://github.com/pytorch/vision/tree/v0.12.0)。
