@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/compile-en.md)
 # 服务化部署镜像编译
 
 本文档介绍如何制作FastDploy镜像

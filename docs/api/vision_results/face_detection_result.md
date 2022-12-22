@@ -1,3 +1,4 @@
+中文 | [English](face_detection_result_EN.md)
 # FaceDetectionResult 人脸检测结果
 
 FaceDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸检测出来的目标框、人脸landmarks，目标置信度和每张人脸的landmark数量。
