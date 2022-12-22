@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # YOLOv5Lite准备部署模型
 
 - YOLOv5Lite部署实现来自[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
