@@ -16,17 +16,32 @@
 
 namespace fastdeploy {
 void BindAnimeGAN(pybind11::module& m) {
-  pybind11::class_<vision::styletransfer::AnimeGAN, FastDeployModel>(m, "AnimeGAN")
+  pybind11::class_<vision::generation::AnimeGAN, FastDeployModel>(m, "AnimeGAN")
       .def(pybind11::init<std::string, std::string, RuntimeOption,
                           ModelFormat>())
       .def("predict",
-           [](vision::styletransfer::AnimeGAN& self, pybind11::array& data) {
+           [](vision::generation::AnimeGAN& self, pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
              cv::Mat res;
-             self.Predict(&mat, &res);
+             self.Predict(mat, &res);
              auto ret = pybind11::array_t<unsigned char>(
                    {res.rows, res.cols, res.channels()}, res.data);
              return ret;
-           });
+           })
+      .def("batch_predict",
+           [](vision::generation::AnimeGAN& self, std::vector<pybind11::array>& data) {
+            std::vector<cv::Mat> images;
+        for (size_t i = 0; i < data.size(); ++i) {
+          images.push_back(PyArrayToCvMat(data[i]));
+        }
+        std::vector<cv::Mat> results;
+        self.BatchPredict(images, &results);
+        std::vector<pybind11::array_t<unsigned char>> ret;
+        for(size_t i = 0; i < results.size(); ++i){
+          ret.push_back(pybind11::array_t<unsigned char>(
+                   {results[i].rows, results[i].cols, results[i].channels()}, results[i].data));
+        }
+        return ret;
+        });
 }
 }  // namespace fastdeploy

@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/generation/contrib/animegan.h"
+#include "fastdeploy/function/functions.h"
 
 namespace fastdeploy {
 namespace vision {
-namespace styletransfer {
+namespace generation {
 
 AnimeGAN::AnimeGAN(const std::string& model_file, const std::string& params_file,
            const RuntimeOption& custom_option,
@@ -42,53 +43,96 @@ bool AnimeGAN::Initialize() {
 }
 
 
-bool AnimeGAN::Preprocess(Mat* mat, FDTensor* output) {
+bool AnimeGAN::Preprocess(std::vector<Mat>& images, std::vector<FDTensor>* outputs) {
   // 1. BGR2RGB
   // 2. Convert(opencv style) or Normalize
-  BGR2RGB::Run(mat);
-  Cast::Run(mat, "float");
-  Convert::Run(mat, {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f}, {-1.f, -1.f, -1.f});
-  mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  for (size_t i = 0; i < images.size(); ++i) {
+      auto ret = BGR2RGB::Run(&images[i]);
+      if (!ret) {
+        FDERROR << "Failed to processs image:" << i << " in "
+                << "BGR2RGB" << "." << std::endl;
+        return false;
+      }
+      ret = Cast::Run(&images[i], "float");
+      if (!ret) {
+        FDERROR << "Failed to processs image:" << i << " in "
+                << "Cast" << "." << std::endl;
+        return false;
+      }
+      ret = Convert::Run(&images[i], {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f}, {-1.f, -1.f, -1.f});
+      if (!ret) {
+        FDERROR << "Failed to processs image:" << i << " in "
+                << "Cast" << "." << std::endl;
+        return false;
+      }
+    }
+  outputs->resize(1);
+  // Concat all the preprocessed data to a batch tensor
+  std::vector<FDTensor> tensors(images.size()); 
+  for (size_t i = 0; i < images.size(); ++i) {
+    images[i].ShareWithTensor(&(tensors[i]));
+    tensors[i].ExpandDim(0);
+  }
+  if (tensors.size() == 1) {
+    (*outputs)[0] = std::move(tensors[0]);
+  } else {
+    function::Concat(tensors, &((*outputs)[0]), 0);
+  }
   return true;
 }
 
 bool AnimeGAN::Postprocess(std::vector<FDTensor>& infer_results,
-                           cv::Mat* result) {
+                           std::vector<cv::Mat>* results) {
+  // 1. Reverse normalization
+  // 2. RGB2BGR
   FDTensor& output_tensor = infer_results.at(0);  
   std::vector<int64_t> shape  = output_tensor.Shape(); // n, h, w, c
-  Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, output_tensor.Data());
+  int size = shape[1] * shape[2] * shape[3];
+  results->resize(shape[0]);
+  float* infer_result_data = reinterpret_cast<float*>(output_tensor.Data());
+  for(size_t i = 0; i < results->size(); ++i){
+  float* data = new float[shape[1]*shape[2]*3];
+  std::memcpy(reinterpret_cast<char*>(data), reinterpret_cast<char*>(infer_result_data+i*size), sizeof(float)*shape[1]*shape[2]*3);
+  Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, data);
   Convert::Run(&result_mat, {127.5f, 127.5f, 127.5f}, {127.5f, 127.5f, 127.5f});
   // tmp data type is float[0-1.0],convert to uint type
   auto temp = result_mat.GetOpenCVMat();
   cv::Mat res = cv::Mat::zeros(temp->size(), CV_8UC3);
   temp->convertTo(res, CV_8UC3, 1);
-  res.copyTo(*result);
+  Mat fd_image = WrapMat(res);
+  BGR2RGB::Run(&fd_image);
+  res = *(fd_image.GetOpenCVMat());
+  res.copyTo(results->at(i));
+  }
   return true;
 }
 
 
-bool AnimeGAN::Predict(cv::Mat* img, cv::Mat* result) {
-  Mat mat(*img);
-  std::vector<FDTensor> processed_data(1);
+bool AnimeGAN::Predict(cv::Mat& img, cv::Mat* result) {
+  std::vector<cv::Mat> results;
+  if (!BatchPredict({img}, &results)) {
+    return false;
+  }
+  *result = std::move(results[0]);
+  return true;
+}
 
-  if (!Preprocess(&mat, &(processed_data[0]))) {
+bool AnimeGAN::BatchPredict(const std::vector<cv::Mat>& images, std::vector<cv::Mat>* results) {
+  std::vector<FDMat> fd_images = WrapMat(images);
+  std::vector<FDTensor> processed_data(1);
+  if (!Preprocess(fd_images, &(processed_data))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
   }
   std::vector<FDTensor> infer_result(1);
   processed_data[0].name = InputInfoOfRuntime(0).name;
-  // LOG(INFO) << processed_data[0].name;
-  // for(auto index = processed_data[0].Shape().begin(); index < processed_data[0].Shape().end(); index++){
-  //   LOG(INFO) << *index;
-  // }
+
   if (!Infer(processed_data, &infer_result)) {
-    FDERROR << "Failed to inference while using model:" << ModelName() << "."
-            << std::endl;
+    FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result, result)) {
+  if (!Postprocess(infer_result, results)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;
@@ -96,6 +140,6 @@ bool AnimeGAN::Predict(cv::Mat* img, cv::Mat* result) {
   return true;
 }
 
-}  // namespace styletransfer
+}  // namespace generation
 }  // namespace vision
 }  // namespace fastdeploy

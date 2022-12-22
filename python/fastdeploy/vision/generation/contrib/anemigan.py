@@ -47,3 +47,11 @@ class AnimeGAN(FastDeployModel):
         :return: style transfer result
         """
         return self._model.predict(input_image)
+
+    def batch_predict(self, input_images):
+        """ Predict the style transfer result for multiple input images
+
+        :param input_images: (list of numpy.ndarray)The list of input image data, each image is a 3-D array with layout HWC, BGR format
+        :return: a list of style transfer results
+        """
+        return self._model.batch_predict(input_images)

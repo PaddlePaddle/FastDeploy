@@ -20,7 +20,7 @@ namespace fastdeploy {
 
 namespace vision {
 
-namespace styletransfer {
+namespace generation {
 /*! @brief AnimeGAN model object is used when load a AnimeGAN model.
  */
 class FASTDEPLOY_DECL AnimeGAN : public FastDeployModel {
@@ -44,17 +44,26 @@ class FASTDEPLOY_DECL AnimeGAN : public FastDeployModel {
    * \param[in] result The output style transfer result will be writen to this structure
    * \return true if the prediction successed, otherwise false
    */
-  bool Predict(cv::Mat* img, cv::Mat* result);
+  bool Predict(cv::Mat& img, cv::Mat* result);
+
+  /** \brief Predict the style transfer result for a batch of input images
+   *
+   * \param[in] images The list of input images, each element comes from cv::imread(), is a 3-D array with layout HWC, BGR format
+   * \param[in] results The list of output style transfer results will be writen to this structure
+   * \return true if the batch prediction successed, otherwise false
+   */
+  bool BatchPredict(const std::vector<cv::Mat>& images,
+       std::vector<cv::Mat>* results);
 
  private:
   bool Initialize();
 
-  bool Preprocess(Mat* mat, FDTensor* output);
+  bool Preprocess(std::vector<Mat>& images, std::vector<FDTensor>* output);
 
   bool Postprocess(std::vector<FDTensor>& infer_results,
-                           cv::Mat* result);
+                           std::vector<cv::Mat>* results);
 };
 
-}  // namespace styletransfer
+}  // namespace generation
 }  // namespace vision
 }  // namespace fastdeploy
