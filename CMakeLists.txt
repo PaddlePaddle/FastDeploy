@@ -621,6 +621,13 @@ else()
   )
 endif()
 
+if(WITH_ASCEND)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/ascend_init.sh
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
+
 ############################### Building: FastDeploy Python Wheel #############################
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
