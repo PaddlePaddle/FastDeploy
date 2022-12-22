@@ -138,6 +138,15 @@ def swap_background(im_data,
                     result,
                     remove_small_connected_area=False,
                     background_label=0):
+    """Swap the image background with MattingResult or SegmentationResult
+
+    :param im_data: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+    :param background: (numpy.ndarray)The background image data, 3-D array with layout HWC, BGR format
+    :param result: The result produced by model, MattingResult or SegmentationResult
+    :param remove_small_connected_area: (bool) If remove_small_connected_area==True, the visualized result will not include the small connected areas
+    :param background_label: (int)The background label number in SegmentationResult
+    :return: (numpy.ndarray) image with visualized results
+    """
     if isinstance(result, C.vision.MattingResult):
         return C.vision.swap_background(im_data, background, result,
                                         remove_small_connected_area)
