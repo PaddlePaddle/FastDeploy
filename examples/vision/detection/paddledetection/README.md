@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleDetection模型部署
 
 ## 模型版本说明
