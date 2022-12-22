@@ -41,8 +41,8 @@ bool FastestDetPostprocessor::Run(
   for (size_t bs = 0; bs < batch; ++bs) {
 
     (*results)[bs].Clear();
-    // output (85,22,22) CHW
-    const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
+    // output (1,85,22,22) CHW
+    const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2]*tensors[0].shape[3];
     int output_h = tensors[0].shape[2]; // out map height
     int output_w = tensors[0].shape[3]; // out map weight
     auto iter_out = ims_info[bs].find("output_shape");
@@ -107,21 +107,26 @@ bool FastestDetPostprocessor::Run(
       return true;
     }
 
-    //utils::NMS(&((*results)[bs]), nms_threshold_);
     // scale boxes to origin shape
     for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
-      int32_t label_id = ((*results)[bs].label_ids)[i];
-      // clip box
-      (*results)[bs].boxes[i][0] = std::max(((*results)[bs].boxes[i][0]) * ipt_w, 0.0f);
-      (*results)[bs].boxes[i][1] = std::max(((*results)[bs].boxes[i][1]) * ipt_h, 0.0f);
-      (*results)[bs].boxes[i][2] = std::max(((*results)[bs].boxes[i][2]) * ipt_w, 0.0f);
-      (*results)[bs].boxes[i][3] = std::max(((*results)[bs].boxes[i][3]) * ipt_h, 0.0f);
+      (*results)[bs].boxes[i][0] = ((*results)[bs].boxes[i][0]) * ipt_w;
+      (*results)[bs].boxes[i][1] = ((*results)[bs].boxes[i][1]) * ipt_h;
+      (*results)[bs].boxes[i][2] = ((*results)[bs].boxes[i][2]) * ipt_w;
+      (*results)[bs].boxes[i][3] = ((*results)[bs].boxes[i][3]) * ipt_h;
       (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
       (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
       (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
       (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
     }
+    //NMS
     utils::NMS(&((*results)[bs]), nms_threshold_);
+    //clip box
+    for (size_t i = 0; i < (*results)[bs].boxes.size(); ++i) {
+      (*results)[bs].boxes[i][0] = std::max((*results)[bs].boxes[i][0], 0.0f);
+      (*results)[bs].boxes[i][1] = std::max((*results)[bs].boxes[i][1], 0.0f);
+      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
+      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
+    }
   }
   return true;
 }
