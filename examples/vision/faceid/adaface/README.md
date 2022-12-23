@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # AdaFace准备部署模型
 
 - [PaddleClas](https://github.com/PaddlePaddle/PaddleClas/)
