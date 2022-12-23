@@ -250,7 +250,7 @@ if __name__ == '__main__':
                 model = fd.vision.detection.YOLOX(
                     model_file, runtime_option=option)
             else:
-                model_file = os.path.join(args.model, "model.pdmodel")
+                model_fil = os.path.join(args.model, "model.pdmodel")
                 params_file = os.path.join(args.model, "model.pdiparams")
                 model = fd.vision.detection.YOLOX(
                     model_file,
