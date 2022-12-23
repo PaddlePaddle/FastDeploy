@@ -34,6 +34,8 @@ tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 # GPU 推理
 ./seq_cls_infer_demo --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
+# XPU 推理
+./seq_cls_infer_demo --device xpu --model_dir ernie-3.0-medium-zh-afqmc
 ```
 
 运行完成后返回的结果如下：

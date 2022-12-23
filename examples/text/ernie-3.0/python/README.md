@@ -38,6 +38,9 @@ python seq_cls_infer.py --device cpu --model_dir ernie-3.0-medium-zh-afqmc
 # GPU 推理
 python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
+# XPU 推理
+python seq_cls_infer.py --device xpu --model_dir ernie-3.0-medium-zh-afqmc
+
 ```
 
 运行完成后返回的结果如下：
