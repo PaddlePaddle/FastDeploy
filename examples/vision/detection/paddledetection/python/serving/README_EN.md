@@ -20,7 +20,8 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 # Install uvicorn
 pip install uvicorn
 
-# Launch server, it's configurable to use GPU and TensorRT
+# Launch server, it's configurable to use GPU and TensorRT,
+# and run 'uvicorn --help' to check how to specify IP and port, etc.
 # CPU
 MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu uvicorn server:app
 # GPU
@@ -38,6 +39,6 @@ cd FastDeploy/examples/vision/detection/paddledetection/python/serving
 # Download test image
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# Send request and get inference result
+# Send request and get inference result (Please adapt the IP and port if necessary)
 python client.py
 ```

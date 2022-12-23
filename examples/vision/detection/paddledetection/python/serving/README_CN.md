@@ -20,7 +20,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 # 安装uvicorn
 pip install uvicorn
 
-# 启动服务，可选择是否使用GPU和TensorRT
+# 启动服务，可选择是否使用GPU和TensorRT，可根据uvicorn --help配置IP、端口号等
 # CPU
 MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu uvicorn server:app
 # GPU
@@ -38,6 +38,6 @@ cd FastDeploy/examples/vision/detection/paddledetection/python/serving
 # 下载测试图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# 请求服务，获取推理结果
+# 请求服务，获取推理结果（如有必要，请修改脚本中的IP和端口号）
 python client.py
 ```
