@@ -1,6 +1,6 @@
 # PaddleDetection C++部署示例
 
-本目录下提供`infer_xxxxx.cc`快速完成PPDetection模型在Rockchip板子上上通过二代NPU加速部署的示例。
+本目录下提供`infer_picodet.cc`快速完成PPDetection模型在Rockchip板子上上通过二代NPU加速部署的示例。
 
 在部署前，需确认以下两个步骤:
 
@@ -17,9 +17,7 @@
 ├── CMakeLists.txt
 ├── build  # 编译文件夹
 ├── image  # 存放图片的文件夹
-├── infer_cpu_npu.cc
-├── infer_cpu_npu.h
-├── main.cc
+├── infer_picodet.cc
 ├── model  # 存放模型文件的文件夹
 └── thirdpartys  # 存放sdk的文件夹
 ```

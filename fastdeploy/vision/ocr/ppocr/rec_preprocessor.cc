@@ -39,7 +39,7 @@ void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
   }
   Resize::Run(mat, resize_w, img_h);
 
-  std::vector<float> value = {0, 0, 0};
+  std::vector<float> value = {127, 127, 127};
   Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), value);
 }
 
