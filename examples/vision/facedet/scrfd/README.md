@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # SCRFD准备部署模型
 
 
