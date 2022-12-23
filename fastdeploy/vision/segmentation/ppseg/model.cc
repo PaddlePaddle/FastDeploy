@@ -25,10 +25,20 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format) : preprocessor_(config_file),
                                                         postprocessor_(config_file) {
-  valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
-  valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-  valid_rknpu_backends = {Backend::RKNPU2};
-  valid_timvx_backends = {Backend::LITE};
+  if(model_format == ModelFormat::ONNX) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
+    valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  }
+  else if (model_format == ModelFormat::SOPHGO) {
+    valid_cpu_backends = {Backend::SOPHGONPU2};
+    valid_gpu_backends = {Backend::SOPHGONPU2, Backend::SOPHGONPU2};
+  } else{
+    valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_rknpu_backends = {Backend::RKNPU2};
+    valid_timvx_backends = {Backend::LITE};
+  }
+  
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
