@@ -16,7 +16,7 @@
 
 void CpuInfer(const std::string& model_file,
               const std::vector<std::string>& image_file) {
-  auto model = fastdeploy::vision::faceid::AdaFace(model_file,"");
+  auto model = fastdeploy::vision::faceid::AdaFace(model_file, "");
 
   cv::Mat face0 = cv::imread(image_file[0]);
   cv::Mat face1 = cv::imread(image_file[1]);
@@ -38,9 +38,11 @@ void CpuInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res1.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res2.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
@@ -75,9 +77,11 @@ void GpuInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res1.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res2.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
@@ -114,9 +118,11 @@ void TrtInfer(const std::string& model_file,
   std::cout << "--- [Face 2]:" << res2.Str();
 
   float cosine01 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res1.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res1.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   float cosine02 = fastdeploy::vision::utils::CosineSimilarity(
-      res0.embedding, res2.embedding, model.GetPostprocessor().GetL2Normalize());
+      res0.embedding, res2.embedding,
+      model.GetPostprocessor().GetL2Normalize());
   std::cout << "Detect Done! Cosine 01: " << cosine01
             << ", Cosine 02:" << cosine02 << std::endl;
 }
@@ -124,7 +130,7 @@ void TrtInfer(const std::string& model_file,
 int main(int argc, char* argv[]) {
   if (argc < 6) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
-                 "e.g ./infer_arcface_demo ms1mv3_arcface_r100.onnx "
+                 "e.g ./infer_adaface_demo ms1mv3_arcface_r100.onnx "
                  "test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG "
                  "test_lite_focal_arcface_2.JPG 0"
               << std::endl;

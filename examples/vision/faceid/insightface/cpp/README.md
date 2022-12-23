@@ -12,9 +12,9 @@
 ```bash
 mkdir build
 cd build
-wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-0.3.0.tgz
-tar xvf fastdeploy-linux-x64-0.3.0.tgz
-cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-0.3.0
+wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
+tar xvf fastdeploy-linux-x64-x.x.x.tgz
+cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 #下载官方转换好的ArcFace模型文件和测试图片
@@ -112,16 +112,22 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
-### 类成员变量
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### 修改预处理以及后处理的参数
+预处理和后处理的参数的需要通过修改InsightFaceRecognitionPostprocessor，InsightFaceRecognitionPreprocessor的成员变量来进行修改。
 
+#### InsightFaceRecognitionPreprocessor成员变量(预处理参数)
+> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112],
+      通过InsightFaceRecognitionPreprocessor::SetSize(std::vector<int>& size)来进行修改
+> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5],
+      通过InsightFaceRecognitionPreprocessor::SetAlpha(std::vector<float>& alpha)来进行修改
+> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f],
+      通过InsightFaceRecognitionPreprocessor::SetBeta(std::vector<float>& beta)来进行修改
+> > * **permute**(bool): 预处理是否将BGR转换成RGB，默认true,
+      通过InsightFaceRecognitionPreprocessor::SetPermute(bool permute)来进行修改
 
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
-> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
-> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
-> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认true
-> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false
+#### InsightFaceRecognitionPostprocessor成员变量(后处理参数)
+> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
+      InsightFaceRecognitionPostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
 
 - [模型介绍](../../)
 - [Python部署](../python)

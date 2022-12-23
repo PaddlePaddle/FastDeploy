@@ -98,11 +98,15 @@ AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式�
 #### 预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-
+#### AdaFacePreprocessor的成员变量
+以下变量为AdaFacePreprocessor的成员变量
 > > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
 > > * **alpha**(list[float]): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
 > > * **beta**(list[float]): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
 > > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认True
+
+#### AdaFacePostprocessor的成员变量
+以下变量为AdaFacePostprocessor的成员变量
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认False
 
 

@@ -40,10 +40,10 @@ class AdaFacePostprocessor:
         self._postprocessor = C.vision.faceid.AdaFacePostprocessor()
 
     def run(self, runtime_results):
-        """Postprocess the runtime results for PaddleDetection Model
+        """Postprocess the runtime results for PaddleClas Model
 
         :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
-        :return: list of ClassifyResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        :return: list of FaceRecognitionResult(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
         """
         return self._postprocessor.run(runtime_results)
 
@@ -61,10 +61,10 @@ class AdaFace(FastDeployModel):
                  params_file="",
                  runtime_option=None,
                  model_format=ModelFormat.ONNX):
-        """Load a AdaFace model exported by PaddleDetection.
+        """Load a AdaFace model exported by PaddleClas.
 
-        :param model_file: (str)Path of model file, e.g ppyoloe/model.pdmodel
-        :param params_file: (str)Path of parameters file, e.g ppyoloe/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
+        :param model_file: (str)Path of model file, e.g adaface/model.pdmodel
+        :param params_file: (str)Path of parameters file, e.g adaface/model.pdiparams, if the model_fomat is ModelFormat.ONNX, this param will be ignored, can be set as empty string
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
@@ -94,16 +94,16 @@ class AdaFace(FastDeployModel):
 
     @property
     def preprocessor(self):
-        """Get PaddleDetPreprocessor object of the loaded model
+        """Get AdaFacePreprocessor object of the loaded model
 
-        :return PaddleDetPreprocessor
+        :return AdaFacePreprocessor
         """
         return self._model.preprocessor
 
     @property
     def postprocessor(self):
-        """Get PaddleDetPostprocessor object of the loaded model
+        """Get AdaFacePostprocessor object of the loaded model
 
-        :return PaddleDetPostprocessor
+        :return AdaFacePostprocessor
         """
         return self._model.postprocessor

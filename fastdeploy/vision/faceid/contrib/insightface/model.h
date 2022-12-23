@@ -22,8 +22,8 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionBase {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
-   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] model_file Path of model file, e.g ArcFace/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g ArcFace/model.pdiparams, if the model format is ONNX, this parameter will be ignored
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
@@ -46,8 +46,8 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionBase {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
-   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] model_file Path of model file, e.g CosFace/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g CosFace/model.pdiparams, if the model format is ONNX, this parameter will be ignored
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
@@ -69,8 +69,8 @@ class FASTDEPLOY_DECL PartialFC : public InsightFaceRecognitionBase {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
-   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] model_file Path of model file, e.g PartialFC/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g PartialFC/model.pdiparams, if the model format is ONNX, this parameter will be ignored
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */
@@ -92,8 +92,8 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionBase {
  public:
   /** \brief Set path of model file and configuration file, and the configuration of runtime
    *
-   * \param[in] model_file Path of model file, e.g picodet/model.pdmodel
-   * \param[in] params_file Path of parameter file, e.g picodet/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] model_file Path of model file, e.g VPL/model.pdmodel
+   * \param[in] params_file Path of parameter file, e.g VPL/model.pdiparams, if the model format is ONNX, this parameter will be ignored
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in `valid_cpu_backends`
    * \param[in] model_format Model format of the loaded model, default is Paddle format
    */

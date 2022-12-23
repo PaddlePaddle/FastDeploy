@@ -24,7 +24,7 @@ AdaFacePostprocessor::AdaFacePostprocessor() {
 }
 
 bool AdaFacePostprocessor::Run(std::vector<FDTensor>& infer_result,
-                                              std::vector<FaceRecognitionResult>* results) {
+                               std::vector<FaceRecognitionResult>* results) {
   if (infer_result[0].dtype != FDDataType::FP32) {
     FDERROR << "Only support post process with float32 data." << std::endl;
     return false;
@@ -43,7 +43,6 @@ bool AdaFacePostprocessor::Run(std::vector<FDTensor>& infer_result,
       return false;
     }
     (*results)[bs].Clear();
-    (*results)[bs].Reserve(infer_result[0].shape[1]);
     (*results)[bs].Resize(embedding_tensor.Numel());
 
     // Copy the raw embedding vector directly without L2 normalize

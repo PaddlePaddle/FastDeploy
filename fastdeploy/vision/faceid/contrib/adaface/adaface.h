@@ -27,8 +27,8 @@ class FASTDEPLOY_DECL AdaFace : public FastDeployModel {
  public:
   /** \brief  Set path of model file and the configuration of runtime.
    *
-   * \param[in] model_file Path of model file, e.g ./arcface.onnx
-   * \param[in] params_file Path of parameter file, e.g arcface/model.pdiparams, if the model format is ONNX, this parameter will be ignored
+   * \param[in] model_file Path of model file, e.g ./adaface.onnx
+   * \param[in] params_file Path of parameter file, e.g adaface/model.pdiparams, if the model format is ONNX, this parameter will be ignored
    * \param[in] custom_option RuntimeOption for inference, the default will use cpu, and choose the backend defined in "valid_cpu_backends"
    * \param[in] model_format Model format of the loaded model, default is ONNX format
    */

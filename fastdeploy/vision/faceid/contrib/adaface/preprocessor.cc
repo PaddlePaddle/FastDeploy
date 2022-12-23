@@ -48,16 +48,17 @@ bool AdaFacePreprocessor::Preprocess(FDMat * mat, FDTensor* output) {
   Cast::Run(mat, "float");
 
   mat->ShareWithTensor(output);
-  output->shape.insert(output->shape.begin(), 1);  // reshape to n, h, w, c
+  output->ExpandDim(0);  // reshape to n, h, w, c
   return true;
 }
 
 bool AdaFacePreprocessor::Run(std::vector<FDMat>* images,
-                                             std::vector<FDTensor>* outputs) {
+                              std::vector<FDTensor>* outputs) {
   if (images->empty()) {
     FDERROR << "The size of input images should be greater than 0." << std::endl;
     return false;
   }
+  FDASSERT(images->size() == 1, "Only support batch = 1 now.");
   outputs->resize(1);
   // Concat all the preprocessed data to a batch tensor
   std::vector<FDTensor> tensors(images->size());
@@ -67,10 +68,7 @@ bool AdaFacePreprocessor::Run(std::vector<FDMat>* images,
       return false;
     }
   }
-
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  }
+  (*outputs)[0] = std::move(tensors[0]);
   return true;
 }
 }  // namespace faceid

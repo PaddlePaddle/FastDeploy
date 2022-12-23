@@ -46,17 +46,19 @@ bool AdaFace::Initialize() {
 }
 
 bool AdaFace::Predict(const cv::Mat& im,
-                                         FaceRecognitionResult* result) {
+                      FaceRecognitionResult* result) {
   std::vector<FaceRecognitionResult> results;
   if (!BatchPredict({im}, &results)) {
     return false;
   }
-  *result = std::move(results[0]);
+  if(!results.empty()){
+    *result = std::move(results[0]);
+  }
   return true;
 }
 
 bool AdaFace::BatchPredict(const std::vector<cv::Mat>& images,
-                                              std::vector<FaceRecognitionResult>* results){
+                           std::vector<FaceRecognitionResult>* results){
   std::vector<FDMat> fd_images = WrapMat(images);
   FDASSERT(images.size() == 1, "Only support batch = 1 now.");
   if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {

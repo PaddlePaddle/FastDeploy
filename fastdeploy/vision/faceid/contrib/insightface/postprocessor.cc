@@ -43,7 +43,6 @@ bool InsightFaceRecognitionPostprocessor::Run(std::vector<FDTensor>& infer_resul
       return false;
     }
     (*results)[bs].Clear();
-    (*results)[bs].Reserve(infer_result[0].shape[1]);
     (*results)[bs].Resize(embedding_tensor.Numel());
 
     // Copy the raw embedding vector directly without L2 normalize
