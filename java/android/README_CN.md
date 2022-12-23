@@ -1,4 +1,4 @@
-简体中文 | [English](README_EN.md)
+简体中文 | [English](README.md)
 
 # FastDeploy Android AAR 包使用文档  
 FastDeploy Android SDK 目前支持图像分类、目标检测、OCR文字识别、语义分割和人脸检测等任务，对更多的AI任务支持将会陆续添加进来。以下为各个任务对应的API文档，在Android下使用FastDeploy中集成的模型，只需以下几个步骤：  
