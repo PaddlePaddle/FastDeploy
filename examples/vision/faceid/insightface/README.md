@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # InsightFace准备部署模型
 
 - [InsightFace](https://github.com/deepinsight/insightface/commit/babb9a5)
