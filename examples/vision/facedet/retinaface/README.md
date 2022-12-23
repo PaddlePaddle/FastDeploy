@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # RetinaFace准备部署模型
 
 - [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
