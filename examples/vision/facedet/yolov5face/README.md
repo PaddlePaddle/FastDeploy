@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # YOLOv5Face准备部署模型
 
 - [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
