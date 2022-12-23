@@ -166,7 +166,7 @@ int main(int argc, char* argv[]) {
     GpuInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 2) {
     TrtInfer(argv[1], argv[2], argv[3]);
-  } else if (std::atoi(argv[4]) == 2) {
+  } else if (std::atoi(argv[4]) == 3) {
     XpuInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
