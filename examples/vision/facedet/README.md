@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # 人脸检测模型
 
 FastDeploy目前支持如下人脸检测模型部署
