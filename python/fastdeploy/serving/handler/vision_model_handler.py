@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .base_handler import BaseModelHandler
-import cv2
+from ..utils import base64_to_cv2
+from ...vision.utils import fd_result_to_json
 
 
 class VisionModelHandler(BaseModelHandler):
@@ -22,11 +23,8 @@ class VisionModelHandler(BaseModelHandler):
 
     @classmethod
     def process(cls, predictor, data, parameters):
-        print(data)
-
-        im = cv2.imread("000000014439.jpg")
+        # TODO: support batch predict
+        im = base64_to_cv2(data['image'])
         result = predictor.predict(im)
-        print(result)
-
-        out_dict = {"result": ""}
-        return out_dict
+        r_str = fd_result_to_json(result)
+        return r_str

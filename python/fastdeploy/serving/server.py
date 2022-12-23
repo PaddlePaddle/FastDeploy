@@ -29,16 +29,18 @@ class SimpleServer(FastAPI):
         self._service_name = "FastDeploy SimpleServer"
         self._service_type = None
 
-    def register(self, task_name, model_handler, model_name, **kwargs):
+    def register(self, task_name, model_handler, predictor):
         """
         The register function for the SimpleServer, the main register argrument as follows:
 
         Args:
-            task_name(str): The server name for the route.
-            model_name(str): FastDeploy model name, e.g. fd.vision.detection.PPYOLO
+            task_name(str): API URL path.
+            model_handler: To process request data, run predictor,
+                and can also add your custom post processing on top of the predictor result
+            predictor: To run model predict
         """
         self._server_type = "models"
-        model_manager = ModelManager(model_handler, model_name, **kwargs)
+        model_manager = ModelManager(model_handler, predictor)
         self._model_manager = model_manager
-        # Register transformers model server router
+        # Register model server router
         self._router_manager.register_models_router(task_name)

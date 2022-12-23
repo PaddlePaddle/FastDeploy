@@ -62,3 +62,23 @@ def fd_result_to_json(result):
         assert False, "{} Conversion to JSON format is not supported".format(
             type(result))
     return {}
+
+
+def json_to_mask(result):
+    mask = C.vision.Mask()
+    mask.data = result['data']
+    mask.shape = result['shape']
+    return mask
+
+
+def json_to_detection(result):
+    masks = []
+    for mask in result['masks']:
+        masks.append(json_to_mask(json.loads(mask)))
+    det_result = C.vision.DetectionResult()
+    det_result.boxes = result['boxes']
+    det_result.scores = result['scores']
+    det_result.label_ids = result['label_ids']
+    det_result.masks = masks
+    det_result.contain_masks = result['contain_masks']
+    return det_result

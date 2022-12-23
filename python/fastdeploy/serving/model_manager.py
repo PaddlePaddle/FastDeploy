@@ -17,45 +17,41 @@ import os
 import time
 import json
 import logging
-from .predictor import Predictor
+import threading
+# from .predictor import Predictor
 from .handler import BaseModelHandler
 from .utils import lock_predictor
 
 
 class ModelManager:
-    def __init__(self, model_handler, model_name, **kwargs):
+    def __init__(self, model_handler, predictor):
         self._model_handler = model_handler
-        self._register(model_name, **kwargs)
+        self._predictors = []
+        self._predictor_locks = []
+        self._register(predictor)
 
-    def _register(self, model_name, **kwargs):
+    def _register(self, predictor):
         # Get the model handler
         if not issubclass(self._model_handler, BaseModelHandler):
             raise TypeError(
                 "The model_handler must be subclass of BaseModelHandler, please check the type."
             )
-        self._model_handler = self._model_handler.process
 
-        # Create the model predictor
         # TODO: Create multiple predictors to run on different GPUs or different CPU threads
-        predictor_list = []
-        predictor = Predictor(model_name, **kwargs)
-        print("hhhhh", predictor)
-        predictor_list.append(predictor)
-
-        self._predictor_list = predictor_list
+        self._predictors.append(predictor)
+        self._predictor_locks.append(threading.Lock())
 
     def _get_predict_id(self):
         t = time.time()
         t = int(round(t * 1000))
-        predictor_id = t % len(self._predictor_list)
+        predictor_id = t % len(self._predictors)
         logging.info("The predictor id: {} is selected by running the model.".
                      format(predictor_id))
         return predictor_id
 
     def predict(self, data, parameters):
         predictor_id = self._get_predict_id()
-        with lock_predictor(self._predictor_list[predictor_id]._lock):
-            print("aaaaaaaaaa", self._predictor_list[predictor_id])
-            model_output = self._model_handler(
-                self._predictor_list[predictor_id], data, parameters)
+        with lock_predictor(self._predictor_locks[predictor_id]):
+            model_output = self._model_handler.process(
+                self._predictors[predictor_id], data, parameters)
             return model_output

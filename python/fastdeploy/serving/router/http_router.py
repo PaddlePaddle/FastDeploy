@@ -17,7 +17,7 @@ import typing
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Extra, create_model
 
 from .base_router import BaseRouterManager
@@ -57,8 +57,13 @@ class HttpRouterManager(BaseRouterManager):
 
         # Template predict endpoint function to dynamically serve different models
         def predict(request: Request, inference_request: req_model):
-            result = self._app._model_manager.predict(
-                inference_request.data, inference_request.parameters)
+            try:
+                result = self._app._model_manager.predict(
+                    inference_request.data, inference_request.parameters)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error occurred while running predict: {str(e)}")
             return {"result": result}
 
         # Register the route and add to the app
