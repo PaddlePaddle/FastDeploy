@@ -38,17 +38,17 @@ class FASTDEPLOY_DECL FastestDetPreprocessor {
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs,
            std::vector<std::map<std::string, std::array<float, 2>>>* ims_info);
 
-  /// Set target size, tuple of (width, height), default size = {640, 640}
+  /// Set target size, tuple of (width, height), default size = {352, 352}
   void SetSize(const std::vector<int>& size) { size_ = size; }
 
-  /// Get target size, tuple of (width, height), default size = {640, 640}
+  /// Get target size, tuple of (width, height), default size = {352, 352}
   std::vector<int> GetSize() const { return size_; }
 
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output,
                   std::map<std::string, std::array<float, 2>>* im_info);
 
-  // target size, tuple of (width, height), default size = {640, 640}
+  // target size, tuple of (width, height), default size = {352, 352}
   std::vector<int> size_;
 };
 

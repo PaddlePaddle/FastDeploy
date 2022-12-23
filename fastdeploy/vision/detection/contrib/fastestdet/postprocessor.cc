@@ -42,7 +42,7 @@ bool FastestDetPostprocessor::Run(
 
     (*results)[bs].Clear();
     // output (1,85,22,22) CHW
-    const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2]*tensors[0].shape[3];
+    const float* output = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2] * tensors[0].shape[3];
     int output_h = tensors[0].shape[2]; // out map height
     int output_w = tensors[0].shape[3]; // out map weight
     auto iter_out = ims_info[bs].find("output_shape");
@@ -62,7 +62,7 @@ bool FastestDetPostprocessor::Run(
         // find max class
         int category = 0;
         float max_score = 0.0f;
-        int class_num = 80;
+        int class_num = tensors[0].shape[1]-5;
         for (size_t i = 0; i < class_num; i++) {
           obj_score_index =((5 + i) * output_h * output_w) + (h * output_w) + w;
           float cls_score = output[obj_score_index];
@@ -113,10 +113,6 @@ bool FastestDetPostprocessor::Run(
       (*results)[bs].boxes[i][1] = ((*results)[bs].boxes[i][1]) * ipt_h;
       (*results)[bs].boxes[i][2] = ((*results)[bs].boxes[i][2]) * ipt_w;
       (*results)[bs].boxes[i][3] = ((*results)[bs].boxes[i][3]) * ipt_h;
-      (*results)[bs].boxes[i][0] = std::min((*results)[bs].boxes[i][0], ipt_w);
-      (*results)[bs].boxes[i][1] = std::min((*results)[bs].boxes[i][1], ipt_h);
-      (*results)[bs].boxes[i][2] = std::min((*results)[bs].boxes[i][2], ipt_w);
-      (*results)[bs].boxes[i][3] = std::min((*results)[bs].boxes[i][3], ipt_h);
     }
     //NMS
     utils::NMS(&((*results)[bs]), nms_threshold_);

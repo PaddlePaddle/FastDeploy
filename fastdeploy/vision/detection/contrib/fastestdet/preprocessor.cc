@@ -50,10 +50,6 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
   mat->ShareWithTensor(output);
   output->ExpandDim(0);  // reshape to n, h, w, c
-  
-  //FDINFO << "view preprocess output" << std::endl;
-  output->PrintInfo("output");
-
   return true;
 }
 

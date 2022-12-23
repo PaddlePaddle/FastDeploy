@@ -27,7 +27,7 @@ void BindFastestDet(pybind11::module& m) {
         std::vector<FDTensor> outputs;
         std::vector<std::map<std::string, std::array<float, 2>>> ims_info;
         if (!self.Run(&images, &outputs, &ims_info)) {
-          throw std::runtime_error("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
+          throw std::runtime_error("raise Exception('Failed to preprocess the input data in FastestDetPreprocessor.')");
         }
         for (size_t i = 0; i < outputs.size(); ++i) {
           outputs[i].StopSharing();
@@ -43,7 +43,7 @@ void BindFastestDet(pybind11::module& m) {
                      const std::vector<std::map<std::string, std::array<float, 2>>>& ims_info) {
         std::vector<vision::DetectionResult> results;
         if (!self.Run(inputs, &results, ims_info)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in FastestDetPostprocessor.')");
+          throw std::runtime_error("raise Exception('Failed to postprocess the runtime result in FastestDetPostprocessor.')");
         }
         return results;
       })

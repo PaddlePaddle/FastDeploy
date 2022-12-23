@@ -43,7 +43,7 @@ model = fd.vision.detection.FastestDet(args.model, runtime_option=runtime_option
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print("result output: ")
 print(result)
 

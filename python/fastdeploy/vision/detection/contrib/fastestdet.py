@@ -35,14 +35,9 @@ class FastestDetPreprocessor:
     @property
     def size(self):
         """
-        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [640, 640]
+        Argument for image preprocessing step, the preprocess image size, tuple of (width, height), default size = [352, 352]
         """
         return self._preprocessor.size
-
-    @property
-    def padding_value(self):
-        #  padding value, size should be the same as channels
-        return self._preprocessor.padding_value
 
     @size.setter
     def size(self, wh):
@@ -52,13 +47,6 @@ class FastestDetPreprocessor:
             "The value to set `size` must contatins 2 elements means [width, height], but now it contains {} elements.".format(
             len(wh))
         self._preprocessor.size = wh
-
-    @padding_value.setter
-    def padding_value(self, value):
-        assert isinstance(
-            value,
-            list), "The value to set `padding_value` must be type of list."
-        self._preprocessor.padding_value = value
 
 
 class FastestDetPostprocessor:
@@ -90,13 +78,6 @@ class FastestDetPostprocessor:
         """
         return self._postprocessor.nms_threshold
 
-    @property
-    def multi_label(self):
-        """
-        multi_label for postprocessing, default is true
-        """
-        return self._postprocessor.multi_label
-
     @conf_threshold.setter
     def conf_threshold(self, conf_threshold):
         assert isinstance(conf_threshold, float),\
@@ -108,13 +89,6 @@ class FastestDetPostprocessor:
         assert isinstance(nms_threshold, float),\
             "The value to set `nms_threshold` must be type of float."
         self._postprocessor.nms_threshold = nms_threshold
-
-    @multi_label.setter
-    def multi_label(self, value):
-        assert isinstance(
-            value,
-            bool), "The value to set `multi_label` must be type of bool."
-        self._postprocessor.multi_label = value
 
 
 class FastestDet(FastDeployModel):
@@ -139,21 +113,8 @@ class FastestDet(FastDeployModel):
 
         assert self.initialized, "FastestDet initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.65, nms_iou_threshold=0.45):
-        """Detect an input image
-
-        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-        :param conf_threshold: confidence threshold for postprocessing, default is 0.65
-        :param nms_iou_threshold: iou threshold for NMS, default is 0.45
-        :return: DetectionResult
-        """
-
-        self.postprocessor.conf_threshold = conf_threshold
-        self.postprocessor.nms_threshold = nms_iou_threshold
-        return self._model.predict(input_image)
-
     def batch_predict(self, images):
-        assert len(images) == 1,"FastestDet is not support batch predict"
+        assert len(images) == 1,"FastestDet is only support 1 image in batch_predict"
         """Classify a batch of input image
 
         :param im: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
