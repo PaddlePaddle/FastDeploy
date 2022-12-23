@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # 头部姿态模型
 
 FastDeploy目前支持如下头部姿态模型部署
