@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/model_repository-en.md)
 # 模型仓库(Model Repository)
 
 FastDeploy启动服务时指定模型仓库中一个或多个模型部署服务。当服务运行时，可以用[Model Management](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_management.md)中描述的方式修改服务中的模型。

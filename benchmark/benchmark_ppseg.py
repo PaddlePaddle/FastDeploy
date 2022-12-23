@@ -82,7 +82,21 @@ def build_option(args):
             option.set_openvino_shape_info({"x": [1, 3, 512, 512]})
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
+            if "Deeplabv3_ResNet101" in args.model or "FCN_HRNet_W18" in args.model or "Unet_cityscapes" in args.model or "PP_LiteSeg_B_STDC2_cityscapes" in args.model:
+                option.set_trt_input_shape("x", [1, 3, 1024, 2048],
+                                           [1, 3, 1024,
+                                            2048], [1, 3, 1024, 2048])
+            elif "Portrait_PP_HumanSegV2_Lite_256x144" in args.model:
+                option.set_trt_input_shape("x", [1, 3, 144, 256],
+                                           [1, 3, 144, 256], [1, 3, 144, 256])
+            elif "PP_HumanSegV1_Server" in args.model:
+                option.set_trt_input_shape("x", [1, 3, 512, 512],
+                                           [1, 3, 512, 512], [1, 3, 512, 512])
+            else:
+                option.set_trt_input_shape("x", [1, 3, 192, 192],
+                                           [1, 3, 192, 192], [1, 3, 192, 192])
             if backend == "paddle_trt":
+                option.enable_paddle_trt_collect_shape()
                 option.enable_paddle_to_trt()
             if enable_trt_fp16:
                 option.enable_trt_fp16()
@@ -238,7 +252,8 @@ if __name__ == '__main__':
             args.device + "_" + str(args.cpu_num_thread) + ".txt"
     else:
         if args.enable_trt_fp16:
-            file_path = args.model + "_model_" + args.backend + "_fp16_" + args.device + ".txt"
+            file_path = args.model + "_model_" + \
+                args.backend + "_fp16_" + args.device + ".txt"
         else:
             file_path = args.model + "_model_" + args.backend + "_" + args.device + ".txt"
     f = open(file_path, "w")

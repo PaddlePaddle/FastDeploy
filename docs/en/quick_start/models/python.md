@@ -1,3 +1,5 @@
+English | [中文](../../../cn/quick_start/models/python.md)
+
 # Python Deployment
 
 Make sure that FastDeploy is installed in the development environment. Refer to [FastDeploy Installation](../../build_and_install/) to install the pre-built FastDeploy, or build and install according to your own needs.
