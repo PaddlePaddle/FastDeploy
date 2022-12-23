@@ -11,7 +11,7 @@ Now FastDeploy supports the deployment of the following models
 
 - [FaceLandmark1000 Model](https://github.com/Single430/FaceLandmark1000)
 
-## Download Pre-trained Model
+## Download Pre-trained Models
 
 For developers' testing, models exported by FaceLandmark are provided below. Developers can download and use them directly. 
 
