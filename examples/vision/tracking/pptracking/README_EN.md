@@ -27,10 +27,10 @@ For developers' testing, PP-Tracking’s pedestrian tracking pendant model is pr
 
 **Statement**
 - Only JDE models are supported（JDE，FairMOT，MCFairMOT)；
-- 目前暂不支持SDE模型的部署，待PaddleDetection官方更新SED部署代码后，对SDE模型进行支持。
+- SDE model deployment is not supported at present. Its deployment can be allowed after PaddleDetection officially updates SED deployment code.
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
