@@ -250,7 +250,7 @@ class FASTDEPLOY_DECL CascadeRCNN : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
     initialized = Initialize();
   }
 
@@ -266,7 +266,7 @@ class FASTDEPLOY_DECL PSSDet : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
     initialized = Initialize();
   }
 
@@ -282,7 +282,7 @@ class FASTDEPLOY_DECL RetinaNet : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
     initialized = Initialize();
   }
 
@@ -330,7 +330,7 @@ class FASTDEPLOY_DECL TTFNet : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
     initialized = Initialize();
   }
 
@@ -346,7 +346,7 @@ class FASTDEPLOY_DECL TOOD : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
+    valid_gpu_backends = {Backend::PDINFER};
     initialized = Initialize();
   }
 
@@ -362,7 +362,7 @@ class FASTDEPLOY_DECL GFL : public PPDetBase {
       : PPDetBase(model_file, params_file, config_file, custom_option,
                 model_format) {
     valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER};
     initialized = Initialize();
   }
 
