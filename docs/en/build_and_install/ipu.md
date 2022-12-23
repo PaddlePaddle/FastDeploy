@@ -1,3 +1,4 @@
+English | [中文](../../cn/build_and_install/ipu.md)
 
 # How to Build IPU Deployment Environment
 

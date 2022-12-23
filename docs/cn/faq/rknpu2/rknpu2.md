@@ -1,3 +1,4 @@
+[English](../../../en/faq/rknpu2/rknpu2.md) | 中文
 # RKNPU2模型部署
 
 ## 安装环境
