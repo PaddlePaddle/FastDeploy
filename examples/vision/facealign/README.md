@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # 人脸对齐(人脸关键点检测）模型
 
 FastDeploy目前支持如下人脸对齐(关键点检测）模型部署
