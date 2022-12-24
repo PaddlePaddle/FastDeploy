@@ -79,7 +79,7 @@ class PaddleClasModel(FastDeployModel):
 
         super(PaddleClasModel, self).__init__(runtime_option)
 
-        assert model_format == ModelFormat.PADDLE, "PaddleClasModel only support model format of ModelFormat.PADDLE now."
+        assert model_format in [ModelFormat.PADDLE, ModelFormat.RKNN], "PaddleClasModel only support model format of ModelFormat.PADDLE、RKNN now."
         self._model = C.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)

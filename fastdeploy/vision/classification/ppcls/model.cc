@@ -34,6 +34,11 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
   } else if (model_format == ModelFormat::ONNX) {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};
     valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  } else if (model_format == ModelFormat::RKNN) {
+    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT,
+                        Backend::PDINFER, Backend::LITE};
+    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_rknpu_backends = {Backend::RKNPU2};
   }
   
   runtime_option = custom_option;
