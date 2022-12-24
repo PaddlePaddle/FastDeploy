@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+[English](README.md) | 简体中文
 
 # 通用信息抽取 UIE模型部署
 
