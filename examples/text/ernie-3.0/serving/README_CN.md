@@ -1,33 +1,33 @@
-English | [简体中文](README_CN.md)
+[English](README.md) | 简体中文
 
-# Example of ERNIE 3.0 Serving Deployment
+# ERNIE 3.0 服务化部署示例
 
-Before serving deployment, you need to confirm
+在服务化部署前，需确认
 
-- 1. Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands of serving images.
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
 
-## Prepare Models
+## 准备模型
 
-Download the news classification model and the sequence labeling model of ERNIE 3.0 (if you have trained models, skip this step):
+下载ERNIE 3.0的新闻分类模型、序列标注模型(如果有已训练好的模型，跳过此步骤):
 ```bash
-# Download and decompress the news classification model
+# 下载并解压新闻分类模型
 wget https://paddlenlp.bj.bcebos.com/models/transformers/ernie_3.0/tnews_pruned_infer_model.zip
 unzip tnews_pruned_infer_model.zip
 
-# Move the download model to the model repository directory of classification tasks.
+# 将下载的模型移动到分类任务的模型仓库目录
 mv tnews_pruned_infer_model/float32.pdmodel models/ernie_seqcls_model/1/model.pdmodel
 mv tnews_pruned_infer_model/float32.pdiparams models/ernie_seqcls_model/1/model.pdiparams
 
-# Download and decompress the sequence labelling model
+# 下载并解压序列标注模型
 wget https://paddlenlp.bj.bcebos.com/models/transformers/ernie_3.0/msra_ner_pruned_infer_model.zip
 unzip msra_ner_pruned_infer_model.zip
 
-# Move the download model to the model repository directory of sequence labeling task.
+# 将下载的模型移动到序列标注任务的模型仓库目录
 mv msra_ner_pruned_infer_model/float32.pdmodel models/ernie_tokencls_model/1/model.pdmodel
 mv msra_ner_pruned_infer_model/float32.pdiparams models/ernie_tokencls_model/1/model.pdiparams
 ```
 
-After download and move, the models directory of the classification tasks is as follows:
+模型下载移动好之后，分类任务的models目录结构如下:
 ```
 models
 ├── ernie_seqcls                      # 分类任务的pipeline
@@ -47,20 +47,20 @@ models
     └── config.pbtxt
 ```
 
-## Pull and Run Images
+## 拉取并运行镜像
 ```bash
-# x.y.z represent image versions. Please refer to the serving document to replace them with numbers
-# GPU Image
+# x.y.z为镜像版本号，需参照serving文档替换为数字
+# GPU镜像
 docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
-# CPU Image
+# CPU镜像
 docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
-# Running
+# 运行
 docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 bash
 ```
 
-## Deployment Models
-The serving directory contains the configuration to start the pipeline service and the code to send the prediction request, including 
+## 部署模型
+serving目录包含启动pipeline服务的配置和发送预测请求的代码，包括：
 
 ```
 models                    # 服务化启动需要的模型仓库，包含模型和服务配置文件
@@ -68,13 +68,12 @@ seq_cls_rpc_client.py     # 新闻分类任务发送pipeline预测请求的脚�
 token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚本
 ```
 
-*Attention*:Attention: When starting the service, each python backend process of Server requests 64M memory by default, and the docker started by default cannot start more than one python backend node. There are two solutions:
+*注意*:启动服务时，Server的每个python后端进程默认申请`64M`内存，默认启动的docker无法启动多个python后端节点。有两个解决方案：
+- 1.启动容器时设置`shm-size`参数, 比如:`docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash`
+- 2.启动服务时设置python后端的`shm-default-byte-size`参数, 设置python后端的默认内存为10M： `tritonserver --model-repository=/models --backend-config=python,shm-default-byte-size=10485760`
 
-- 1.Set the `shm-size` parameter when starting the container, for example, `docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash`
-- 2.Set the `shm-default-byte-size` parameter of python backend when starting the service. Set the default memory of python backend to 10M： `tritonserver --model-repository=/models --backend-config=python,shm-default-byte-size=10485760`
-
-### Classification Task
-Execute the following command in the container to start the service:
+### 分类任务
+在容器内执行下面命令启动服务:
 ```
 # 默认启动models下所有模型
 fastdeployserver --model-repository=/models
@@ -104,8 +103,8 @@ I0601 07:15:15.923604 8059 http_server.cc:2815] Started HTTPService at 0.0.0.0:8
 I0601 07:15:15.964984 8059 http_server.cc:167] Started Metrics Service at 0.0.0.0:8002
 ```
 
-### Sequence Labelling Task
-Execute the following command in the container to start the sequence labelling service:
+### 序列标注任务
+在容器内执行下面命令启动序列标注服务:
 ```
 fastdeployserver --model-repository=/models --model-control-mode=explicit --load-model=ernie_tokencls --backend-config=python,shm-default-byte-size=10485760
 ```
@@ -131,20 +130,20 @@ I0601 07:15:15.923604 8059 http_server.cc:2815] Started HTTPService at 0.0.0.0:8
 I0601 07:15:15.964984 8059 http_server.cc:167] Started Metrics Service at 0.0.0.0:8002
 ```
 
-## Client Requests
-Client requests can execute script requests locally and in the container.
+## 客户端请求
+客户端请求可以在本地执行脚本请求；也可以在容器中执行。
 
-Dependencies should be installed to execute the script locally:
+本地执行脚本需要先安装依赖:
 ```
 pip install grpcio
 pip install tritonclient[all]
 
-# If bash cannot recognize the brackets, you can use the following command to install dependencies:
+# 如果bash无法识别括号，可以使用如下指令安装:
 pip install tritonclient\[all\]
 ```
 
-### Classification Task
-Attention: The proxy need turning off when executing client requests. The ip address in the main function (the machine where you start services) should be modified as appropriate.
+### 分类任务
+注意执行客户端请求时关闭代理，并根据实际情况修改main函数中的ip地址(启动服务所在的机器)
 ```
 python seq_cls_grpc_client.py
 ```
@@ -155,8 +154,8 @@ python seq_cls_grpc_client.py
 acc: 0.5731
 ```
 
-### Sequence Labeling Task
-Attention: The proxy need turning off when executing client requests. The ip address in the main function (the machine where you start services) should be modified as appropriate.
+### 序列标注任务
+注意执行客户端请求时关闭代理，并根据实际情况修改main函数中的ip地址(启动服务所在的机器)
 ```
 python token_cls_grpc_client.py
 ```
@@ -174,4 +173,5 @@ entity: 华夏   label: LOC   pos: [14, 15]
 ```
 
 ## 配置修改
-The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/zh_CN/model_configuration.md)
+
+当前分类任务(ernie_seqcls_model/config.pbtxt)默认配置在CPU上运行OpenVINO引擎; 序列标注任务默认配置在GPU上运行Paddle引擎。如果要在CPU/GPU或其他推理引擎上运行, 需要修改配置，详情请参考[配置文档](../../../../serving/docs/zh_CN/model_configuration.md)
