@@ -113,6 +113,19 @@ class FastestDet(FastDeployModel):
 
         assert self.initialized, "FastestDet initialize failed."
 
+    def predict(self, input_image, conf_threshold=0.65, nms_iou_threshold=0.45):
+        """Detect an input image
+
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :param conf_threshold: confidence threshold for postprocessing, default is 0.65
+        :param nms_iou_threshold: iou threshold for NMS, default is 0.45
+        :return: DetectionResult
+        """
+
+        self.postprocessor.conf_threshold = conf_threshold
+        self.postprocessor.nms_threshold = nms_iou_threshold
+        return self._model.predict(input_image)
+
     def batch_predict(self, images):
         assert len(images) == 1,"FastestDet is only support 1 image in batch_predict"
         """Classify a batch of input image
