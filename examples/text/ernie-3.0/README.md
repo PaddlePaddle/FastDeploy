@@ -30,7 +30,7 @@ Before deployment, it is required to export trained ERNIE models into deployment
 
 ### Classification Task
 
-For developers' testing, the fine-tuned ERNIE 3.0-Medium Model on text classification [AFQMC dataset] (https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip) is provided below. Developers can download it directly.
+For developers' testing, the fine-tuned ERNIE 3.0-Medium Model on text classification [AFQMC dataset](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip) is provided below. Developers can download it directly.
 
 - [ERNIE 3.0 Medium AFQMC](https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz)
 
