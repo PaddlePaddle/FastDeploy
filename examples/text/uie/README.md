@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 ## Introduction to the Model Version
 
-- [PaddleNLP 通用信息抽取UIE](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/uie)
+- [PaddleNLP Universal Information Extraction（UIE）](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/uie)
 
 ## A List of Supported Models
 
@@ -19,7 +19,7 @@ English | [简体中文](README_CN.md)
 
 ## Export Deployment Models
 
-Before deployment, you need to export the UIE model into the deployment model. Please refer to [导出模型](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/uie#47-%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
+Before deployment, you need to export the UIE model into the deployment model. Please refer to [Export Model](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/uie#47-%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)
 
 ## Download Pre-trained Models
 
