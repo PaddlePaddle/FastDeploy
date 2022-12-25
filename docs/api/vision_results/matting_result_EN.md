@@ -1,6 +1,6 @@
 English | [中文](matting_result.md)
 
-# MattingResult keying results
+# Matting Result 
 
 The MattingResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the predicted value of alpha transparency predicted and the predicted foreground, etc.
 

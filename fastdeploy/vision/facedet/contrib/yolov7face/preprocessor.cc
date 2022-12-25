@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/yolov7-face/preprocessor.h"
+#include "fastdeploy/vision/facedet/contrib/yolov7face/preprocessor.h"
 #include "fastdeploy/function/concat.h"
 #include "fastdeploy/vision/common/processors/mat.h"
 

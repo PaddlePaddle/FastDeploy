@@ -1,7 +1,7 @@
 English | [中文](../zh_CN/compile.md)
 # FastDeploy Serving Deployment Image Compilation
 
-How to create a FastDploy image
+This article is about how to create a FastDploy image.
 
 ## GPU Image
 
