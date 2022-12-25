@@ -10,8 +10,10 @@
 ```
 # 我们默认的昇腾工具包的路径如下,
 # HUAWEI_ASCEND_TOOLKIT_HOME="/usr/local/Ascend/ascend-toolkit/latest"
+# HUAWEI_ASCEND_DRIVER_PATH="/usr/local/Ascend/driver"
 # 如果用户的安装目录与他不同, 需要自己先手动export.
-# export HUAWEI_ASCEND_TOOLKIT_HOME="user_path"
+# export HUAWEI_ASCEND_TOOLKIT_HOME="Your_ascend_toolkit_path"
+# export HUAWEI_ASCEND_DRIVER_PATH="Your_ascend_driver_path"
 
 source fastdeploy-ascend/fastdeploy_init.sh
 ```

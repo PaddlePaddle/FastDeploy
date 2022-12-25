@@ -10,8 +10,10 @@ Users can use the following script (located in the directory of the compiled Fas
 ```
 # The path to our default Ascend Toolkit is as follows,
 # HUAWEI_ASCEND_TOOLKIT_HOME="/usr/local/Ascend/ascend-toolkit/latest"
+# HUAWEI_ASCEND_DRIVER_PATH="/usr/local/Ascend/driver"
 # If the user's installation directory is different from this, you need to export it manually first.
-# export HUAWEI_ASCEND_TOOLKIT_HOME="user_path"
+# export HUAWEI_ASCEND_TOOLKIT_HOME="Your_ascend_toolkit_path"
+# export HUAWEI_ASCEND_DRIVER_PATH="Your_ascend_driver_path"
 
 source fastdeploy-ascend/fastdeploy_init.sh
 ```
