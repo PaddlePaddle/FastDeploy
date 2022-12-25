@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/vision/facedet/yolov7-face/postprocessor.h"
+#include "fastdeploy/vision/facedet/contrib/yolov7face/postprocessor.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
