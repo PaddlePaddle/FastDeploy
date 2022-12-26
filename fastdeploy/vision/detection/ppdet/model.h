@@ -40,6 +40,7 @@ class FASTDEPLOY_DECL PicoDet : public PPDetBase {
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -67,6 +68,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -92,6 +94,7 @@ class FASTDEPLOY_DECL PPYOLO : public PPDetBase {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -110,6 +113,7 @@ class FASTDEPLOY_DECL YOLOv3 : public PPDetBase {
                         Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -128,6 +132,7 @@ class FASTDEPLOY_DECL PaddleYOLOX : public PPDetBase {
                         Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -179,6 +184,7 @@ class FASTDEPLOY_DECL SSD : public PPDetBase {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
     valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
