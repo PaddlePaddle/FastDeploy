@@ -6,7 +6,7 @@ PaddleDetection模型导出和预训练模型下载请看[PaddleDetection模型�
 
 在服务化部署前，需确认
 
-- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README.md)
+- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
 
 
 ## 启动服务
@@ -52,7 +52,7 @@ CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models
 
 >> 由于mask_rcnn模型多一个输出，部署mask_rcnn需要将后处理目录(models/postprocess)中的mask_config.pbtxt重命名为config.pbtxt
 
->> 拉取镜像请看[服务化部署主文档](../../../../../serving/README.md)
+>> 拉取镜像请看[服务化部署主文档](../../../../../serving/README_CN.md)
 
 >> 执行fastdeployserver启动服务出现"Address already in use", 请使用`--grpc-port`指定grpc端口号来启动服务，同时更改客户端示例中的请求端口号.
 
@@ -75,7 +75,7 @@ I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 #安装客户端依赖
-python3 -m pip install tritonclient\[all\]
+python3 -m pip install tritonclient[all]
 
 # 发送请求
 python3 paddledet_grpc_client.py

@@ -42,7 +42,7 @@ def build_option(args):
         if backend == "ort":
             option.use_ort_backend()
         elif backend == "paddle":
-            option.use_paddle_backend()
+            option.use_paddle_infer_backend()
         elif backend in ["trt", "paddle_trt"]:
             option.use_trt_backend()
             option.set_trt_input_shape("input", [1, 3, 112, 112])
@@ -62,7 +62,7 @@ def build_option(args):
         elif backend == "ov":
             option.use_openvino_backend()
         elif backend == "paddle":
-            option.use_paddle_backend()
+            option.use_paddle_infer_backend()
         elif backend == "default":
             return option
         else:
@@ -85,7 +85,7 @@ model = fd.vision.facealign.PIPNet(args.model, runtime_option=runtime_option)
 model.num_landmarks = args.num_landmarks
 # for image
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 # 可视化结果
 vis_im = fd.vision.vis_face_alignment(im, result)

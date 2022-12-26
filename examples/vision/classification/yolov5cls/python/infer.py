@@ -47,5 +47,5 @@ model = fd.vision.classification.YOLOv5Cls(
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy(), args.topk)
+result = model.predict(im, args.topk)
 print(result)

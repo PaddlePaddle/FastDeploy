@@ -17,7 +17,7 @@ Distillation:
   - softmax_0.tmp_0
 
 
-Quantization:
+QuantAware:
   use_pact: true
   activation_bits: 8
   is_full_quantize: false

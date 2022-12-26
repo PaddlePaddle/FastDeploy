@@ -1,63 +1,42 @@
 # source this file to import libraries
 
-CURRENT_EXE_DIR=$(pwd)
+PLATFORM=`uname`
+FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE}
+if [ "$PLATFORM" == "Linux" ];then
+    FASTDEPLOY_LIBRARY_PATH=`readlink -f ${FASTDEPLOY_LIBRARY_PATH}`
+fi
+FASTDEPLOY_LIBRARY_PATH=${FASTDEPLOY_LIBRARY_PATH%/*}
 
-cd $(dirname $BASH_SOURCE)
-INSTALLED_PREBUILT_FASTDEPLOY_DIR=$(pwd)
+echo "=============== Information ======================"
+echo "FastDeploy Library Path: $FASTDEPLOY_LIBRARY_PATH"
+echo "Platform: $PLATFORM"
+echo "=================================================="
 
+# Find all the .so files' path
+ALL_SO_FILES=`find $FASTDEPLOY_LIBRARY_PATH -name "*.so*"`
+for SO_FILE in $ALL_SO_FILES;do
+    LIBS_DIRECOTRIES[${#LIBS_DIRECOTRIES[@]}]=${SO_FILE%/*}
+done
 
-echo "Import environment variable from FastDeploy..."
+# Find all the .dylib files' path
+ALL_DYLIB_FILES=`find $FASTDEPLOY_LIBRARY_PATH -name "*.dylib*"`
+for DYLIB_FILE in $ALL_DYLIB_FILES;do
+    LIBS_DIRECOTRIES[${#LIBS_DIRECOTRIES[@]}]=${DYLIB_FILE%/*}
+done
 
-export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/lib:${LD_LIBRARY_PATH}
-echo "FastDeploy Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/lib"
+# Remove the dumplicate directories
+LIBS_DIRECOTRIES=($(awk -v RS=' ' '!a[$1]++' <<< ${LIBS_DIRECOTRIES[@]}))
 
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/fast_tokenizer ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/fast_tokenizer/lib:${LD_LIBRARY_PATH}
-	echo "FastTokenizer Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/fast_tokenizer/lib"
+IMPORT_PATH=""
+for LIB_DIR in ${LIBS_DIRECOTRIES[@]};do
+    echo "Find Library Directory: $LIB_DIR"
+    IMPORT_PATH=${LIB_DIR}":"$IMPORT_PATH
+done
+
+if [ -f "ascend_init.sh" ]
+then
+    source ascend_init.sh
 fi
 
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle2onnx ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle2onnx/lib:${LD_LIBRARY_PATH}
-	echo "Paddle2ONNX Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle2onnx/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/onnxruntime ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/onnxruntime/lib:${LD_LIBRARY_PATH}
-	echo "ONNX Runtime Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/onnxruntime/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/opencv ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/opencv/lib:${LD_LIBRARY_PATH}
-	echo "OpenCV Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/opencv/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/runtime/lib:${LD_LIBRARY_PATH}
-	echo "OpenVINO Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/openvino/runtime/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/tensorrt ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/tensorrt/lib:${LD_LIBRARY_PATH}
-	echo "TensorRT Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/tensorrt/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/paddle/lib:${LD_LIBRARY_PATH}
-	echo "Paddle Inference Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/paddle/lib"
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:${LD_LIBRARY_PATH}
-	echo "MKLDNN Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/third_party/install/mkldnn/lib"
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/third_party/install/mklml/lib:${LD_LIBRARY_PATH}
-	echo "MKLML Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddle_inference/third_party/install/mklml/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv/lib:${LD_LIBRARY_PATH}
-	echo "Fly Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/flycv/lib"
-fi
-
-if [ -d ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite ]; then
-	export LD_LIBRARY_PATH=${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib:${LD_LIBRARY_PATH}
-	echo "Paddle Lite Lib: ${INSTALLED_PREBUILT_FASTDEPLOY_DIR}/third_libs/install/paddlelite/lib"
-fi
-
-cd ${CURRENT_EXE_DIR}
+echo "[Execute] Will try to export all the library directories to environments, if not work, please try to export these path by your self."
+export LD_LIBRARY_PATH=${IMPORT_PATH}:$LD_LIBRARY_PATH

@@ -13,6 +13,7 @@ FastDeploy Runtime 推理示例如下
 | python/infer_onnx_openvino.py | Python | Deploy ONNX model with OpenVINO(CPU) |
 | python/infer_onnx_tensorrt.py | Python | Deploy ONNX model with TensorRT(GPU) |
 | python/infer_onnx_onnxruntime.py | Python | Deploy ONNX model with ONNX Runtime(CPU/GPU) |
+| python/infer_torchscript_poros.py | Python | Deploy TorchScript model with Poros Runtime(CPU/GPU) |
 
 ## C++ 示例
 
@@ -25,6 +26,7 @@ FastDeploy Runtime 推理示例如下
 | cpp/infer_onnx_openvino.cc | C++ | Deploy ONNX model with OpenVINO(CPU) |
 | cpp/infer_onnx_tensorrt.cc | C++ | Deploy ONNX model with TensorRT(GPU) |
 | cpp/infer_onnx_onnxruntime.cc | C++ | Deploy ONNX model with ONNX Runtime(CPU/GPU) |
+| cpp/infer_torchscript_poros.cc | C++ | Deploy TorchScript model with Poros Runtime(CPU/GPU) |
 
 ## 详细部署文档
 

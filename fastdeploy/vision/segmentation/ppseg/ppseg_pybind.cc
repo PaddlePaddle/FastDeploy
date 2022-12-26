@@ -15,22 +15,92 @@
 
 namespace fastdeploy {
 void BindPPSeg(pybind11::module& m) {
+  pybind11::class_<vision::segmentation::PaddleSegPreprocessor>(
+      m, "PaddleSegPreprocessor")
+      .def(pybind11::init<std::string>())
+      .def("run",
+           [](vision::segmentation::PaddleSegPreprocessor& self,
+              std::vector<pybind11::array>& im_list) {
+             std::vector<vision::FDMat> images;
+             for (size_t i = 0; i < im_list.size(); ++i) {
+                images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+              }
+             // Record the shape of input images
+             std::map<std::string, std::vector<std::array<int, 2>>> imgs_info;
+             std::vector<FDTensor> outputs;
+             if (!self.Run(&images, &outputs, &imgs_info)) {
+              throw std::runtime_error("Failed to preprocess the input data in PaddleSegPreprocessor.");
+             }
+             for (size_t i = 0; i < outputs.size(); ++i) {
+               outputs[i].StopSharing();
+             }
+             return make_pair(outputs, imgs_info);;
+           })
+      .def("disable_normalize_and_permute",
+                     &vision::segmentation::PaddleSegPreprocessor::DisableNormalizeAndPermute)
+                     
+      .def_property("is_vertical_screen",
+                     &vision::segmentation::PaddleSegPreprocessor::GetIsVerticalScreen,
+		     &vision::segmentation::PaddleSegPreprocessor::SetIsVerticalScreen);
+
   pybind11::class_<vision::segmentation::PaddleSegModel, FastDeployModel>(
       m, "PaddleSegModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
+      .def("clone", [](vision::segmentation::PaddleSegModel& self) {
+        return self.Clone();
+      })
       .def("predict",
            [](vision::segmentation::PaddleSegModel& self,
               pybind11::array& data) {
              auto mat = PyArrayToCvMat(data);
-             vision::SegmentationResult* res = new vision::SegmentationResult();
-             self.Predict(&mat, res);
+             vision::SegmentationResult res;
+             self.Predict(&mat, &res);
              return res;
            })
-      .def("disable_normalize_and_permute",&vision::segmentation::PaddleSegModel::DisableNormalizeAndPermute)
-      .def_readwrite("apply_softmax",
-                     &vision::segmentation::PaddleSegModel::apply_softmax)
-      .def_readwrite("is_vertical_screen",
-                     &vision::segmentation::PaddleSegModel::is_vertical_screen);
+      .def("batch_predict",
+           [](vision::segmentation::PaddleSegModel& self, std::vector<pybind11::array>& data) {
+             std::vector<cv::Mat> images;
+             for (size_t i = 0; i < data.size(); ++i) {
+              images.push_back(PyArrayToCvMat(data[i]));
+             }
+             std::vector<vision::SegmentationResult> results;
+             self.BatchPredict(images, &results);
+             return results;
+           })
+      .def_property_readonly("preprocessor", &vision::segmentation::PaddleSegModel::GetPreprocessor)
+      .def_property_readonly("postprocessor", &vision::segmentation::PaddleSegModel::GetPostprocessor);
+
+  pybind11::class_<vision::segmentation::PaddleSegPostprocessor>(
+      m, "PaddleSegPostprocessor")
+      .def(pybind11::init<std::string>())
+      .def("run", 
+           [](vision::segmentation::PaddleSegPostprocessor& self, 
+              std::vector<FDTensor>& inputs,
+              const std::map<std::string, std::vector<std::array<int, 2>>>& imgs_info) {
+        std::vector<vision::SegmentationResult> results;
+        if (!self.Run(inputs, &results, imgs_info)) {
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleSegPostprocessor.");
+        }
+        return results;
+      })
+      .def("run",
+           [](vision::segmentation::PaddleSegPostprocessor& self,
+              std::vector<pybind11::array>& input_array,
+              const std::map<std::string, std::vector<std::array<int, 2>>>& imgs_info) {
+        std::vector<vision::SegmentationResult> results;
+        std::vector<FDTensor> inputs;
+        PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
+        if (!self.Run(inputs, &results, imgs_info)) {
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleSegPostprocessor.");
+        }
+        return results;
+      })
+      .def_property("apply_softmax",
+                    &vision::segmentation::PaddleSegPostprocessor::GetApplySoftmax,
+		    &vision::segmentation::PaddleSegPostprocessor::SetApplySoftmax)
+      .def_property("store_score_map",
+                    &vision::segmentation::PaddleSegPostprocessor::GetStoreScoreMap,
+		    &vision::segmentation::PaddleSegPostprocessor::SetStoreScoreMap);
 }
 }  // namespace fastdeploy

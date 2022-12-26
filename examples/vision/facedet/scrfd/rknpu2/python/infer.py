@@ -45,11 +45,12 @@ model = fd.vision.facedet.SCRFD(
     runtime_option=runtime_option,
     model_format=fd.ModelFormat.RKNN)
 
-model.disable_normalize_and_permute()
+model.disable_normalize()
+model.disable_permute()
 
 # 预测图片分割结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy())
+result = model.predict(im)
 print(result)
 
 # 可视化结果

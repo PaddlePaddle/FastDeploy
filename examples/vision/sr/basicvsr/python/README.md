@@ -17,11 +17,11 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/BasicVSR_reds_x4.tar
 tar -xvf BasicVSR_reds_x4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 # CPU推理
-python infer.py --model BasicVSR_reds_x4 --video person.mp4 --frame_num 2 --device cpu
+python infer.py --model BasicVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device cpu
 # GPU推理
-python infer.py --model BasicVSR_reds_x4 --video person.mp4 --frame_num 2 --device gpu
+python infer.py --model BasicVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model BasicVSR_reds_x4 --video person.mp4 --frame_num 2 --device gpu --use_trt True
+python infer.py --model BasicVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device gpu --use_trt True
 ```
 
 ## BasicVSR Python接口

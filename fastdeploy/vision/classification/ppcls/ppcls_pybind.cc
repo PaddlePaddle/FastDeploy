@@ -25,7 +25,7 @@ void BindPaddleClas(pybind11::module& m) {
         }
         std::vector<FDTensor> outputs;
         if (!self.Run(&images, &outputs)) {
-          pybind11::eval("raise Exception('Failed to preprocess the input data in PaddleClasPreprocessor.')");
+          throw std::runtime_error("Failed to preprocess the input data in PaddleClasPreprocessor.");
         }
         if (!self.WithGpu()) {
           for (size_t i = 0; i < outputs.size(); ++i) {
@@ -44,7 +44,7 @@ void BindPaddleClas(pybind11::module& m) {
       .def("run", [](vision::classification::PaddleClasPostprocessor& self, std::vector<FDTensor>& inputs) {
         std::vector<vision::ClassifyResult> results;
         if (!self.Run(inputs, &results)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleClasPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleClasPostprocessor.");
         }
         return results;
       })
@@ -53,7 +53,7 @@ void BindPaddleClas(pybind11::module& m) {
         std::vector<FDTensor> inputs;
         PyArrayToTensorList(input_array, &inputs, /*share_buffer=*/true);
         if (!self.Run(inputs, &results)) {
-          pybind11::eval("raise Exception('Failed to postprocess the runtime result in PaddleClasPostprocessor.')");
+          throw std::runtime_error("Failed to postprocess the runtime result in PaddleClasPostprocessor.");
         }
         return results;
       })
@@ -63,6 +63,9 @@ void BindPaddleClas(pybind11::module& m) {
       m, "PaddleClasModel")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
                           ModelFormat>())
+      .def("clone", [](vision::classification::PaddleClasModel& self) {
+        return self.Clone();
+      })
       .def("predict", [](vision::classification::PaddleClasModel& self, pybind11::array& data) {
         cv::Mat im = PyArrayToCvMat(data);
         vision::ClassifyResult result;

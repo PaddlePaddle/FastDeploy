@@ -15,14 +15,17 @@
 #ifdef ENABLE_VISION_VISUALIZE
 
 #include "fastdeploy/vision/visualize/visualize.h"
+#include "fastdeploy/vision/visualize/segmentation_arm.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
-                        float weight) {
+static cv::Mat VisSegmentationCommonCpu(
+  const cv::Mat& im, const SegmentationResult& result,
+  float weight) {
+  // Use the native c++ version without any optimization.
   auto color_map = GenerateColorMap(1000);
   int64_t height = result.shape[0];
   int64_t width = result.shape[1];
@@ -32,13 +35,29 @@ cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
   for (int i = 0; i < height; i++) {
     for (int j = 0; j < width; j++) {
       int category_id = result.label_map[index++];
-      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      if (category_id == 0) {
+        vis_img.at<cv::Vec3b>(i, j)[0] = im.at<cv::Vec3b>(i, j)[0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = im.at<cv::Vec3b>(i, j)[1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = im.at<cv::Vec3b>(i, j)[2];
+      } else {
+        vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
+        vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
+        vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
+      }
     }
   }
   cv::addWeighted(im, 1.0 - weight, vis_img, weight, 0, vis_img);
   return vis_img;
+}
+
+cv::Mat VisSegmentation(const cv::Mat& im, const SegmentationResult& result,
+                        float weight) {
+  // TODO: Support SSE/AVX on x86_64 platforms                        
+#ifdef __ARM_NEON 
+  return VisSegmentationNEON(im, result, weight, true);
+#else  
+  return VisSegmentationCommonCpu(im, result, weight);
+#endif  
 }
 
 cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
@@ -46,23 +65,12 @@ cv::Mat Visualize::VisSegmentation(const cv::Mat& im,
   FDWARNING << "DEPRECATED: fastdeploy::vision::Visualize::VisSegmentation is "
                "deprecated, please use fastdeploy::vision:VisSegmentation "
                "function instead."
-            << std::endl;
-  auto color_map = GetColorMap();
-  int64_t height = result.shape[0];
-  int64_t width = result.shape[1];
-  auto vis_img = cv::Mat(height, width, CV_8UC3);
-
-  int64_t index = 0;
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      int category_id = result.label_map[index++];
-      vis_img.at<cv::Vec3b>(i, j)[0] = color_map[3 * category_id + 0];
-      vis_img.at<cv::Vec3b>(i, j)[1] = color_map[3 * category_id + 1];
-      vis_img.at<cv::Vec3b>(i, j)[2] = color_map[3 * category_id + 2];
-    }
-  }
-  cv::addWeighted(im, .5, vis_img, .5, 0, vis_img);
-  return vis_img;
+            << std::endl;     
+#ifdef __ARM_NEON 
+  return VisSegmentationNEON(im, result, 0.5f, true);
+#else  
+  return VisSegmentationCommonCpu(im, result, 0.5f);
+#endif  
 }
 
 }  // namespace vision

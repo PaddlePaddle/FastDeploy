@@ -1,33 +1,40 @@
+English | [中文](../../cn/faq/use_sdk_on_windows.md)
+
 # Using the FastDeploy C++ SDK on Windows Platform
 
 ## Contents
-- [1. Environment Dependent](#Environment)  
-- [2. Download FastDeploy Windows 10 C++ SDK](#Download)  
-- [3. Various ways to use C++ SDK on Windows Platform](#CommandLine)
-  - [3.1 Using the C++ SDK from the Command Line](#CommandLine)  
-    - [3.1.1 Build the example on the Windows Platform command line terminal](#CommandLine)  
-    - [3.1.2 Run the Executable to Get Inference Results](#CommandLine)  
-  - [3.2 Visual Studio 2019 Creates sln Project Using C++ SDK](#VisualStudio2019Sln)  
-    - [3.2.1 Visual Studio 2019 creates sln project project](#VisualStudio2019Sln1)  
-    - [3.2.2 Copy the code of infer_ppyoloe.cc from examples to the project](#VisualStudio2019Sln2)  
-    - [3.2.3 Set the project configuration to "Release x64" configuration](#VisualStudio2019Sln3)  
-    - [3.2.4 Configure Include Header File Path](#VisualStudio2019Sln4)  
-    - [3.2.5 Configure Lib Path and Add Library Files](#VisualStudio2019Sln5)  
-    - [3.2.6 Build the Project and Run to Get the Result](#VisualStudio2019Sln6)
-  - [3.3 Visual Studio 2019 Create CMake project using C++ SDK](#VisualStudio2019)
-    - [3.3.1 Visual Studio 2019 Creates a CMake Project](#VisualStudio20191)  
-    - [3.3.2 Configure FastDeploy C++ SDK in CMakeLists](#VisualStudio20192)  
-    - [3.3.3 Generate project cache and Modify CMakeSetting.json Configuration](#VisualStudio20193)  
-    - [3.3.4 Generate executable file, Run to Get the Result](#VisualStudio20194)  
-- [4. Multiple methods to Configure the Required Dependencies for the Exe Runtime](#CommandLineDeps1)
-  - [4.1 Use Fastdeploy_init.bat for Configuration (Recommended)](#CommandLineDeps1)
-    - [4.1.1 fastdeploy_init.bat User's Manual](#CommandLineDeps11)
-    - [4.1.2 fastdeploy_init.bat View all dll, lib and include paths in the SDK](#CommandLineDeps12)
-    - [4.1.3 fastdeploy_init.bat Installs all the dlls in the SDK to the specified directory](#CommandLineDeps13)
-    - [4.1.4 fastdeploy_init.bat Configures SDK Environment Variables](#CommandLineDeps14)
-  - [4.2 Modify CMakeLists.txt, One Line of Command Configuration (Recommended)](#CommandLineDeps2)  
-  - [4.3 Command Line Setting Environment Variables](#CommandLineDeps3)  
-  - [4.4 Manually Copy the Dependency Library to the Exe Directory](#CommandLineDeps4)  
+
+- [Using the FastDeploy C++ SDK on Windows Platform](#using-the-fastdeploy-c-sdk-on-windows-platform)
+  - [Contents](#contents)
+  - [1. Environment Dependent](#1-environment-dependent)
+  - [2. Download FastDeploy Windows 10 C++ SDK](#2-download-fastdeploy-windows-10-c-sdk)
+    - [2.1 Download the Pre-built Library or Build the Latest SDK from Source](#21-download-the-pre-built-library-or-build-the-latest-sdk-from-source)
+    - [2.2 Prepare Model Files and Test Images](#22-prepare-model-files-and-test-images)
+  - [3. Various ways to use C++ SDK on Windows Platform](#3-various-ways-to-use-c-sdk-on-windows-platform)
+    - [3.1 SDK usage method 1：Using the C++ SDK from the Command Line](#31-sdk-usage-method-1using-the-c-sdk-from-the-command-line)
+      - [3.1.1 Build PPYOLOE on Windows Platform](#311-build-ppyoloe-on-windows-platform)
+      - [3.1.2 Run Demo](#312-run-demo)
+    - [3.2 SDK usage method 2: Visual Studio 2019 creates sln project using C++ SDK](#32-sdk-usage-method-2-visual-studio-2019-creates-sln-project-using-c-sdk)
+      - [3.2.1 Step 1：Visual Studio 2019 creates sln project project](#321-step-1visual-studio-2019-creates-sln-project-project)
+      - [3.2.2 Step 2：Copy the code of infer\_ppyoloe.cc from examples to the project](#322-step-2copy-the-code-of-infer_ppyoloecc-from-examples-to-the-project)
+      - [3.2.3 Step 3：Set the project configuration to "Release x64" configuration](#323-step-3set-the-project-configuration-to-release-x64-configuration)
+      - [3.2.4 Step 4：Configure Include Header File Path](#324-step-4configure-include-header-file-path)
+      - [3.2.5 Step 5：Configure Lib Path and Add Library Files](#325-step-5configure-lib-path-and-add-library-files)
+      - [3.2.6 Step 6：Build the Project and Run to Get the Result](#326-step-6build-the-project-and-run-to-get-the-result)
+    - [3.3 Visual Studio 2019 Create CMake project using C++ SDK](#33-visual-studio-2019-create-cmake-project-using-c-sdk)
+      - [3.3.1 Step 1： Visual Studio 2019 Creates a CMake Project](#331-step-1-visual-studio-2019-creates-a-cmake-project)
+      - [3.3.2 Step 2：Configure FastDeploy C++ SDK in CMakeLists](#332-step-2configure-fastdeploy-c-sdk-in-cmakelists)
+      - [3.3.3 Step 3：Generate project cache and Modify CMakeSetting.json Configuration](#333-step-3generate-project-cache-and-modify-cmakesettingjson-configuration)
+      - [3.3.4 Step 4：Generate executable file, Run to Get the Result](#334-step-4generate-executable-file-run-to-get-the-result)
+  - [4. Multiple methods to Configure the Required Dependencies for the Exe Runtime](#4-multiple-methods-to-configure-the-required-dependencies-for-the-exe-runtime)
+    - [4.1  Use method 1：Use Fastdeploy\_init.bat for Configuration (Recommended)](#41--use-method-1use-fastdeploy_initbat-for-configuration-recommended)
+      - [4.1.1 fastdeploy\_init.bat User's Manual](#411-fastdeploy_initbat-users-manual)
+      - [4.1.2 fastdeploy\_init.bat View all dll, lib and include paths in the SDK](#412-fastdeploy_initbat-view-all-dll-lib-and-include-paths-in-the-sdk)
+      - [4.1.3 fastdeploy\_init.bat Installs all the dlls in the SDK to the specified directory](#413-fastdeploy_initbat-installs-all-the-dlls-in-the-sdk-to-the-specified-directory)
+      - [4.1.4 fastdeploy\_init.bat Configures SDK Environment Variables](#414-fastdeploy_initbat-configures-sdk-environment-variables)
+    - [4.2  Use method 2：Modify CMakeLists.txt, One Line of Command Configuration (Recommended)](#42--use-method-2modify-cmakeliststxt-one-line-of-command-configuration-recommended)
+    - [4.3  Use method 3：Command Line Setting Environment Variables](#43--use-method-3command-line-setting-environment-variables)
+    - [4.4 Use method 4：Manually Copy the Dependency Library to the Exe Directory](#44-use-method-4manually-copy-the-dependency-library-to-the-exe-directory)
 
 
 ## 1. Environment Dependent
@@ -50,7 +57,7 @@ Please refer to source code compilation: [build_and_install](../build_and_instal
 ### 2.2 Prepare Model Files and Test Images
 Model files and test images can be downloaded from the link below and unzipped
 ```text
-https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (下载后解压缩)
+https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz # (please unzip it after downloading)
 https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 ```
 
@@ -85,7 +92,7 @@ In particular, for the configuration method of the dependency library required b
 
 ### 3.2 SDK usage method 2: Visual Studio 2019 creates sln project using C++ SDK
 
-This section is for non-CMake users and describes how to create a sln project in Visual Studio 2019 to use FastDeploy C++ SDK. CMake users please read the next section directly. In addition, this section is a special thanks to "Awake to the Southern Sky" for his tutorial on FastDeploy: [How to deploy PaddleDetection target detection model on Windows using FastDeploy C++].(https://www.bilibili.com/read/cv18807232)
+This section is for non-CMake users and describes how to create a sln project in Visual Studio 2019 to use FastDeploy C++ SDK. CMake users please read the next section directly. In addition, this section is a special thanks to "Awake to the Southern Sky" for his tutorial on FastDeploy: [How to deploy PaddleDetection target detection model on Windows using FastDeploy C++](https://www.bilibili.com/read/cv18807232).
 
 <div id="VisualStudio2019Sln"></div>  
 
@@ -185,7 +192,7 @@ Compile successfully, you can see the exe saved in：
 D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe  
 ```  
 
-（2）Execute the executable file and get the inference result. First you need to copy all the dlls to the directory where the exe is located. At the same time, you also need to download and extract the pyoloe model files and test images, and then copy them to the directory where the exe is located. Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [various methods to configure the exe to run the required dependency library](#CommandLineDeps)  
+（2）Execute the executable file and get the inference result. First you need to copy all the dlls to the directory where the exe is located. At the same time, you also need to download and extract the pyoloe model files and test images, and then copy them to the directory where the exe is located. Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [various methods to configure the exe to run the required dependency library](#CommandLineDeps).  
 
 ![image](https://user-images.githubusercontent.com/31974251/192829545-3ea36bfc-9a54-492b-984b-2d5d39094d47.png)  
 
@@ -324,7 +331,7 @@ Open the saved image to view the visualization results at：
 <img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
 </div>
 
-Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [a variety of methods to configure the exe to run the required dependency library](#CommandLineDeps)
+Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [a variety of methods to configure the exe to run the required dependency library](#CommandLineDeps).
 
 ## 4. Multiple methods to Configure the Required Dependencies for the Exe Runtime
 <div id="CommandLineDeps"></div>  

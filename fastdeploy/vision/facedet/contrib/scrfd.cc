@@ -141,7 +141,7 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
                    is_scale_up, stride);
 
   BGR2RGB::Run(mat);
-  if(!this->disable_normalize_and_permute_){
+  if (!disable_normalize_) {
     // Normalize::Run(mat, std::vector<float>(mat->Channels(), 0.0),
     //                std::vector<float>(mat->Channels(), 1.0));
     // Compute `result = mat * alpha + beta` directly by channel
@@ -150,6 +150,9 @@ bool SCRFD::Preprocess(Mat* mat, FDTensor* output,
     std::vector<float> alpha = {1.f / 128.f, 1.f / 128.f, 1.f / 128.f};
     std::vector<float> beta = {-127.5f / 128.f, -127.5f / 128.f, -127.5f / 128.f};
     Convert::Run(mat, alpha, beta);
+  }
+
+  if(!disable_permute_){
     HWC2CHW::Run(mat);
     Cast::Run(mat, "float");
   }
@@ -347,7 +350,6 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
                             static_cast<float>(mat.Width())};
   im_info["output_shape"] = {static_cast<float>(mat.Height()),
                              static_cast<float>(mat.Width())};
-
   if (!Preprocess(&mat, &input_tensors[0], &im_info)) {
     FDERROR << "Failed to preprocess input image." << std::endl;
     return false;
@@ -367,8 +369,13 @@ bool SCRFD::Predict(cv::Mat* im, FaceDetectionResult* result,
   }
   return true;
 }
-void SCRFD::DisableNormalizeAndPermute(){
-  this->disable_normalize_and_permute_ = true;
+
+void SCRFD::DisableNormalize() {
+  disable_normalize_=true;
+}
+
+void SCRFD::DisablePermute() {
+  disable_permute_=true;
 }
 }  // namespace facedet
 }  // namespace vision

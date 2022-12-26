@@ -17,7 +17,8 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu' or 'ipu'.")
+        help="Type of inference device, support 'cpu' or 'gpu' or 'ipu' or 'xpu' or 'ascend' ."
+    )
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -34,6 +35,12 @@ def build_option(args):
 
     if args.device.lower() == "ipu":
         option.use_ipu()
+
+    if args.device.lower() == "xpu":
+        option.use_xpu()
+
+    if args.device.lower() == "ascend":
+        option.use_ascend()
 
     if args.use_trt:
         option.use_trt_backend()
@@ -53,5 +60,5 @@ model = fd.vision.classification.PaddleClasModel(
 
 # 预测图片分类结果
 im = cv2.imread(args.image)
-result = model.predict(im.copy(), args.topk)
+result = model.predict(im, args.topk)
 print(result)

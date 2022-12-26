@@ -1,3 +1,5 @@
+[English](../../../en/quick_start/models/cpp.md) | 中文
+
 # C++部署
 
 确认开发环境已准备FastDeploy C++部署库，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。
@@ -68,7 +70,7 @@ target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
 
 ## 4. 编译可执行程序
 
-假设当前目录已经准备好`infer_demo.cc`和`CMakeLists.txt`两个文件，目录结构如下所示，即可进行编译
+假设当前目录已经准备好`infer_demo.cc`和`CMakeLists.txt`两个文件，即可进行编译
 
 ### Linux & Mac
 
