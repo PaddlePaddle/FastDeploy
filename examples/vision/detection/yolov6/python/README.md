@@ -12,7 +12,7 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/yolov6/python/
 
-https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
 tar -xf yolov6s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 

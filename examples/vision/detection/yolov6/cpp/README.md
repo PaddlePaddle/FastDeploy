@@ -19,7 +19,7 @@ cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 #下载Paddle模型文件和测试图片
-https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
 tar -xf yolov6s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
