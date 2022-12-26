@@ -1,6 +1,7 @@
 import fastdeploy as fd
 import cv2
 import os
+from fastdeploy import ModelFormat
 
 
 def parse_arguments():
@@ -8,41 +9,39 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_dir",
-        required=True,
-        help="Path of PaddleDetection model directory")
+        "--model", required=True, help="Path of yolov6 onnx model.")
     parser.add_argument(
         "--image", required=True, help="Path of test image file.")
     parser.add_argument(
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'xpu', 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'cpu', 'xpu' or 'gpu'.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
+    if args.device.lower() == "gpu":
+        option.use_gpu(0)
+
     if args.device.lower() == "xpu":
         option.use_xpu()
 
-    if args.device.lower() == "gpu":
-        option.use_gpu()
     return option
 
 
 args = parse_arguments()
 
-model_file = os.path.join(args.model_dir, "model.pdmodel")
-params_file = os.path.join(args.model_dir, "model.pdiparams")
-config_file = os.path.join(args.model_dir, "infer_cfg.yml")
-
+model_file = os.path.join(args.model, "model.pdmodel")
+params_file = os.path.join(args.model, "model.pdiparams")
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.SSD(model_file,
-                                params_file,
-                                config_file,
-                                runtime_option=runtime_option)
+model = fd.vision.detection.YOLOv6(
+    model_file,
+    params_file,
+    runtime_option=runtime_option,
+    model_format=ModelFormat.PADDLE)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
@@ -50,6 +49,6 @@ result = model.predict(im)
 print(result)
 
 # 预测结果可视化
-vis_im = fd.vision.vis_detection(im, result, score_threshold=0.5)
+vis_im = fd.vision.vis_detection(im, result)
 cv2.imwrite("visualized_result.jpg", vis_im)
 print("Visualized result save in ./visualized_result.jpg")
