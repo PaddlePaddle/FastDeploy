@@ -51,6 +51,13 @@ tar zxvf mobilefacenet_adaface.tgz -C ./
               test_lite_focal_arcface_2.JPG \
               2
 
+# XPU推理
+./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+              mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
+              test_lite_focal_arcface_0.JPG \
+              test_lite_focal_arcface_1.JPG \
+              test_lite_focal_arcface_2.JPG \
+              3
 ```
 
 运行完成可视化结果如下图所示

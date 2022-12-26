@@ -32,10 +32,14 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionBase {
           const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_rknpu_backends = {Backend::RKNPU2};
+    if (model_format == ModelFormat::ONNX) {
+      valid_cpu_backends = {Backend::ORT};
+      valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else {
+      valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+      valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+      valid_xpu_backends = {Backend::LITE};
+    }
     initialized = Initialize();
   }
 
@@ -56,10 +60,14 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionBase {
           const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_rknpu_backends = {Backend::RKNPU2};
+    if (model_format == ModelFormat::ONNX) {
+      valid_cpu_backends = {Backend::ORT};
+      valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else {
+      valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+      valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+      valid_xpu_backends = {Backend::LITE};
+    }
     initialized = Initialize();
   }
 
@@ -79,10 +87,14 @@ class FASTDEPLOY_DECL PartialFC : public InsightFaceRecognitionBase {
           const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_rknpu_backends = {Backend::RKNPU2};
+    if (model_format == ModelFormat::ONNX) {
+      valid_cpu_backends = {Backend::ORT};
+      valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else {
+      valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+      valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+      valid_xpu_backends = {Backend::LITE};
+    }
     initialized = Initialize();
   }
 
@@ -102,10 +114,14 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionBase {
             const ModelFormat& model_format = ModelFormat::ONNX)
       : InsightFaceRecognitionBase(model_file, params_file, custom_option,
                                    model_format) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
-                          Backend::LITE};
-    valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
-    valid_rknpu_backends = {Backend::RKNPU2};
+    if (model_format == ModelFormat::ONNX) {
+      valid_cpu_backends = {Backend::ORT};
+      valid_gpu_backends = {Backend::ORT, Backend::TRT};
+    } else {
+      valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
+      valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+      valid_xpu_backends = {Backend::LITE};
+    }
     initialized = Initialize();
   }
 

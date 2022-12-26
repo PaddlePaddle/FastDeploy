@@ -17,7 +17,7 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'xpu', 'cpu' or 'gpu'.")
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -28,6 +28,9 @@ def parse_arguments():
 
 def build_option(args):
     option = fd.RuntimeOption()
+
+    if args.device.lower() == "xpu":
+        option.use_xpu()
 
     if args.device.lower() == "gpu":
         option.use_gpu()
