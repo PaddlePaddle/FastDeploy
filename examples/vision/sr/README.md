@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # sr 模型部署
 
 FastDeploy目前支持如下超分模型部署
