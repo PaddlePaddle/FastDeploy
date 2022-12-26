@@ -40,7 +40,7 @@ python seq_cls_infer.py --device cpu --model_dir ernie-3.0-medium-zh-afqmc
 # GPU Inference
 python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
-# XPU 推理
+# XPU Inference
 python seq_cls_infer.py --device xpu --model_dir ernie-3.0-medium-zh-afqmc
 
 ```
