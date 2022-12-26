@@ -14,7 +14,7 @@
 
 ## 导出部署模型
 
-在部署前，需要先将训练好的BasicVSR导出成部署模型，导出BasicVSR导出模型步骤，参考文档[导出模型](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)。
+在部署前，需要先将训练好的BasicVSR导出成部署模型，导出BasicVSR模型步骤，参考文档[导出模型](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)。
 
 
 | 模型                                                                          | 参数大小   | 精度    | 备注 |
