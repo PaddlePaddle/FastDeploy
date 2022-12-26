@@ -22,7 +22,7 @@ pip install -r requirements.txt
 
 ### A Quick Start
 
-The following example shows how to employ FastDeploy library to complete Python predictive deployment of ERNIE 3.0 Medium model on [AFQMC Dataset](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)of CLUE Benchmark for text classification tasks. 
+The following example shows how to employ FastDeploy library to complete Python predictive deployment of ERNIE 3.0 Medium model on [AFQMC Dataset](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)of CLUE Benchmark for text classification tasks.
 
 ```bash
 
@@ -39,6 +39,9 @@ python seq_cls_infer.py --device cpu --model_dir ernie-3.0-medium-zh-afqmc
 
 # GPU Inference
 python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
+
+# XPU Inference
+python seq_cls_infer.py --device xpu --model_dir ernie-3.0-medium-zh-afqmc
 
 ```
 The result returned after running is as follows:
