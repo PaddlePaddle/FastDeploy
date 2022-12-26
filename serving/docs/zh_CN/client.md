@@ -14,7 +14,7 @@ fastdeployserver实现了由[kserve](https://github.com/kserve/kserve)提出的�
 
 访问方式： GET `v2/models/${MODEL_NAME}[/versions/${MODEL_VERSION}]`
 
-使用GET请求该url路径可以获取参与服务的模型的元信息，其中`${MODEL_NAME}`表示模型的名字，${MODEL_VERSION}表示模型的版本。服务器会把模型的元信息以json格式返回，返回的格式为一个字典，以$metadata_model_response表示返回的对象，各字段和内容形式表示如下：
+使用GET请求该url路径可以获取参与服务的模型的元信息，其中`${MODEL_NAME}`表示模型的名字，`${MODEL_VERSION}`表示模型的版本。服务器会把模型的元信息以json格式返回，返回的格式为一个字典，以`$metadata_model_response`表示返回的对象，各字段和内容形式表示如下：
 
 ```json
 $metadata_model_response =
