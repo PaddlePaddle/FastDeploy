@@ -16,8 +16,8 @@
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
 #include "fastdeploy/vision/common/result.h"
-#include "fastdeploy/vision/facedet/yolov7-face/preprocessor.h"
-#include "fastdeploy/vision/facedet/yolov7-face/postprocessor.h"
+#include "fastdeploy/vision/facedet/contrib/yolov7face/preprocessor.h"
+#include "fastdeploy/vision/facedet/contrib/yolov7face/postprocessor.h"
 
 namespace fastdeploy {
 

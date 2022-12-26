@@ -34,6 +34,7 @@ Recognizer::Recognizer(const std::string& model_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_ascend_backends = {Backend::LITE}; 
   }
 
   runtime_option = custom_option;
@@ -83,6 +84,7 @@ bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
+
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;

@@ -1,10 +1,11 @@
 # source this file to import libraries
 
 PLATFORM=`uname`
-FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE%/*}
+FASTDEPLOY_LIBRARY_PATH=${BASH_SOURCE}
 if [ "$PLATFORM" == "Linux" ];then
     FASTDEPLOY_LIBRARY_PATH=`readlink -f ${FASTDEPLOY_LIBRARY_PATH}`
 fi
+FASTDEPLOY_LIBRARY_PATH=${FASTDEPLOY_LIBRARY_PATH%/*}
 
 echo "=============== Information ======================"
 echo "FastDeploy Library Path: $FASTDEPLOY_LIBRARY_PATH"
@@ -31,6 +32,11 @@ for LIB_DIR in ${LIBS_DIRECOTRIES[@]};do
     echo "Find Library Directory: $LIB_DIR"
     IMPORT_PATH=${LIB_DIR}":"$IMPORT_PATH
 done
+
+if [ -f "ascend_init.sh" ]
+then
+    source ascend_init.sh
+fi
 
 echo "[Execute] Will try to export all the library directories to environments, if not work, please try to export these path by your self."
 export LD_LIBRARY_PATH=${IMPORT_PATH}:$LD_LIBRARY_PATH
