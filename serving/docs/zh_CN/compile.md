@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/compile-en.md)
 # 服务化部署镜像编译
 
 本文档介绍如何制作FastDploy镜像
@@ -12,8 +13,9 @@ cd serving
 bash scripts/build.sh
 
 # 退出到FastDeploy主目录，制作镜像
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.6.0-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
+docker build -t paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 -f serving/Dockerfile .
 ```
 
 ## 制作CPU镜像
@@ -24,8 +26,9 @@ cd serving
 bash scripts/build.sh OFF
 
 # 退出到FastDeploy主目录，制作镜像
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.6.0-cpu-only-21.10 -f serving/Dockerfile_cpu .
+docker build -t paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 -f serving/Dockerfile_cpu .
 ```
 
 ## 制作IPU镜像
@@ -36,6 +39,7 @@ cd serving
 bash scripts/build_fd_ipu.sh
 
 # 退出到FastDeploy主目录，制作镜像
+# x.y.z为FastDeploy版本号，可根据情况自己确定。比如: 1.0.0
 cd ../
-docker build -t paddlepaddle/fastdeploy:0.6.0-ipu-only-21.10 -f serving/Dockerfile_ipu .
+docker build -t paddlepaddle/fastdeploy:x.y.z-ipu-only-21.10 -f serving/Dockerfile_ipu .
 ```

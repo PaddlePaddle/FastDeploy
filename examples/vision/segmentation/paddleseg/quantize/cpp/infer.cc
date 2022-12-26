@@ -34,7 +34,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto im_bak = im.clone();
 
   fastdeploy::vision::SegmentationResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -43,28 +43,6 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
 
 }
 
-// int main(int argc, char* argv[]) {
-//   if (argc < 3) {
-//     std::cout
-//         << "Usage: infer_demo path/to/model_dir path/to/image run_option, "
-//            "e.g ./infer_model ./ppseg_model_dir ./test.jpeg 0"
-//         << std::endl;
-//     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-//                  "with gpu; 2: run with gpu and use tensorrt backend."
-//               << std::endl;
-//     return -1;
-//   }
-
-//   fastdeploy::RuntimeOption option;
-//   option.UseCpu();
-//   option.UsePaddleBackend();
-//   std::cout<<"Xyy-debug, enable Paddle Backend==!";
-
-//   std::string model_dir = argv[1];
-//   std::string test_image = argv[2];
-//   InitAndInfer(model_dir, test_image, option);
-//   return 0;
-// }
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
@@ -86,11 +64,9 @@ int main(int argc, char* argv[]) {
   if (flag == 0) {
     option.UseCpu();
     option.UseOrtBackend();
-    std::cout<<"Use ORT!"<<std::endl;
   } else if (flag == 1) {
     option.UseCpu();
-    option.UsePaddleBackend();
-    std::cout<<"Use PP!"<<std::endl;
+    option.UsePaddleInferBackend();
   }
 
   std::string model_dir = argv[1];

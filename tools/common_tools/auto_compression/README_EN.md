@@ -7,17 +7,14 @@ We take the Yolov5 series as an example to demonstrate how to install and execut
 
 ### Environment Dependencies
 
-1. Install the develop version downloaded from PaddlePaddle official website.
-
+1.Install PaddlePaddle 2.4 version
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.Install PaddleSlim-develop
-
+2.Install PaddleSlim 2.4 version
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### Install Fastdeploy Auto Compression Toolkit
@@ -46,12 +43,12 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2. Run fastdeploy --auto_compress command to compress the model
+##### 2. Run fastdeploy compress command to compress the model
 
 The following command is to quantize the yolov5s model, if developers want to quantize other models, replace the config_path with other model configuration files in the configs folder.
 
 ```shell
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
 
 [notice] PTQ is short for post-training quantization
@@ -83,14 +80,14 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2.Use fastdeploy --auto_compress command to compress models
+##### 2.Use fastdeploy compress command to compress models
 
 The following command is to quantize the yolov5s model, if developers want to quantize other models, replace the config_path with other model configuration files in the configs folder.
 
 ```shell
 # Please specify the single card GPU before training, otherwise it may get stuck during the training process.
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.Parameters
@@ -106,25 +103,37 @@ To complete the quantization, developers only need to provide a customized model
 ## 3. FastDeploy One-Click Model Auto Compression Config file examples
 FastDeploy currently provides users with compression [config](./configs/) files of multiple models, and the corresponding FP32 model, Users can directly download and experience it.
 
-| Config文件                | 待压缩的FP32模型 | 备注                                                       |
+| Config file                | FP32 model | Note                                                       |
 | -------------------- | ------------------------------------------------------------ |----------------------------------------- |
 | [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      | [mobilenetv1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_ssld_infer.tgz)           |           |
 | [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |   [resnet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz)          |     |
+| [efficientnetb0_quant](./configs/classification/efficientnetb0_quant.yaml)      |   [efficientnetb0](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)          |     |
+| [mobilenetv3_large_x1_0_quant](./configs/classification/mobilenetv3_large_x1_0_quant.yaml)      |   [mobilenetv3_large_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV3_large_x1_0_ssld_infer.tgz)          |     |
+| [pphgnet_tiny_quant](./configs/classification/pphgnet_tiny_quant.yaml)      |   [pphgnet_tiny](https://bj.bcebos.com/paddlehub/fastdeploy/PPHGNet_tiny_ssld_infer.tgz)          |     |
+| [pplcnetv2_base_quant](./configs/classification/pplcnetv2_base_quant.yaml)      |   [pplcnetv2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)          |     |
 | [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |   [yolov5s](https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx)         |     |
 | [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |  [yolov6s](https://paddle-slim-models.bj.bcebos.com/act/yolov6s.onnx)          |     |
 | [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
 | [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | Support PPYOLOE's s,m,l,x series models, export the model normally when exporting the model from PaddleDetection, do not remove NMS |
 | [ppyoloe_plus_withNMS_quant](./configs/detection/ppyoloe_plus_withNMS_quant.yaml)       |  [ppyoloe_plus_s](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_plus_crn_s_80e_coco.tar)    | Support PPYOLOE+'s s,m,l,x series models, export the model normally when exporting the model from PaddleDetection, do not remove NMS |
 | [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |       |
+| [deeplabv3_resnet_quant](./configs/segmentation/deeplabv3_resnet_quant.yaml)    |   [deeplabv3_resnet101](https://bj.bcebos.com/paddlehub/fastdeploy/Deeplabv3_ResNet101_OS8_cityscapes_without_argmax_infer.tgz)        |       |
+| [fcn_hrnet_quant](./configs/segmentation/fcn_hrnet_quant.yaml)    |   [fcn_hrnet](https://bj.bcebos.com/paddlehub/fastdeploy/FCN_HRNet_W18_cityscapes_without_argmax_infer.tgz)        |       |
+| [unet_quant](./configs/segmentation/unet_quant.yaml)    |   [unet](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz)        |       |      |
+
 
 ## 3. Deploy quantized models on FastDeploy
 
 Once obtained the quantized model, developers can deploy it on FastDeploy. Please refer to the following docs for more details
 
-- [YOLOv5 Quantized Model Deployment](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 Quantized Model Deployment](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 Quantized Model Deployment](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 Quantized Model Deployment](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 Quantized Model Deployment](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 Quantized Model Deployment](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas Quantized Model Deployment](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas Quantized Model Deployment](../../../examples/vision/classification/paddleclas/quantize/)
+
+- [PadddleDetection Quantized Model Deployment](../../../examples/vision/detection/paddledetection/quantize/)
+
+- [PadddleSegmentation Quantized Model Deployment](../../../examples/vision/segmentation/paddleseg/quantize/)

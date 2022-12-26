@@ -14,14 +14,9 @@
 
 #ifndef NON_64_PLATFORM
 
-#include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
-#include <algorithm>
-#include <cmath>
-#include "fastdeploy/core/fd_tensor.h"
-#include "fastdeploy/utils/utils.h"
+#include "adaptive_pool2d.h"
 
 namespace fastdeploy {
-
 struct OrtTensorDimensions : std::vector<int64_t> {
   OrtTensorDimensions(Ort::CustomOpApi ort, const OrtValue* value) {
     OrtTensorTypeAndShapeInfo* info = ort.GetTensorTypeAndShape(value);
@@ -81,7 +76,7 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
       context, 0, output_size_.data(), output_size_.size());
   
   float* output_data = ort_.GetTensorMutableData<float>(output);
-  if(this->provider_ == "CUDAExecutionProvider"){
+  if(!strcmp(this->provider_, "CUDAExecutionProvider")){
 #ifdef WITH_GPU
     auto compute_stream = ort_.KernelContext_GetGPUComputeStream(context);
     CudaAdaptivePool(input_size, output_size_, output_data, input_data, compute_stream, pooling_type_);
@@ -90,7 +85,7 @@ void AdaptivePool2dKernel::Compute(OrtKernelContext* context) {
             << "Will force to use CPU to run." << std::endl;
   CpuAdaptivePool(input_size, output_size_, input_data, output_data);
 #endif
-  }else{
+  } else {
     CpuAdaptivePool(input_size, output_size_, input_data, output_data);
   }
 }

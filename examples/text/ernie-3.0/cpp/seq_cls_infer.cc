@@ -32,7 +32,7 @@ const char sep = '/';
 DEFINE_string(model_dir, "", "Directory of the inference model.");
 DEFINE_string(vocab_path, "", "Path of the vocab file.");
 DEFINE_string(device, "cpu",
-              "Type of inference device, support 'cpu' or 'gpu'.");
+              "Type of inference device, support 'cpu', 'xpu' or 'gpu'.");
 DEFINE_string(backend, "onnx_runtime",
               "The inference runtime backend, support: ['onnx_runtime', "
               "'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']");
@@ -55,7 +55,16 @@ void PrintUsage() {
 }
 
 bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
-  if (FLAGS_device == "gpu") {
+  std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
+  std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
+  fastdeploy::FDINFO << "model_path = " << model_path
+                     << ", param_path = " << param_path << std::endl;
+  option->SetModelPath(model_path, param_path);
+
+  if (FLAGS_device == "xpu") {
+    option->UseXpu();
+    return true;
+  } else if (FLAGS_device == "gpu") {
     option->UseGpu();
   } else if (FLAGS_device == "cpu") {
     option->UseCpu();
@@ -69,7 +78,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
   if (FLAGS_backend == "onnx_runtime") {
     option->UseOrtBackend();
   } else if (FLAGS_backend == "paddle") {
-    option->UsePaddleBackend();
+    option->UsePaddleInferBackend();
   } else if (FLAGS_backend == "openvino") {
     option->UseOpenVINOBackend();
   } else if (FLAGS_backend == "tensorrt" ||
@@ -97,11 +106,7 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
                         << FLAGS_backend << "'" << std::endl;
     return false;
   }
-  std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
-  std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
-  fastdeploy::FDINFO << "model_path = " << model_path
-                     << ", param_path = " << param_path << std::endl;
-  option->SetModelPath(model_path, param_path);
+  
   return true;
 }
 

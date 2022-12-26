@@ -18,6 +18,134 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+def sort_boxes(boxes):
+    return C.vision.ocr.sort_boxes(boxes)
+
+
+class DBDetectorPreprocessor:
+    def __init__(self):
+        """Create a preprocessor for DBDetectorModel
+        """
+        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for DBDetectorModel
+        :param: input_ims: (list of numpy.ndarray) The input image
+        :return: pair(list of FDTensor, list of std::array<int, 4>)
+        """
+        return self._preprocessor.run(input_ims)
+
+    @property
+    def max_side_len(self):
+        return self._preprocessor.max_side_len
+
+    @max_side_len.setter
+    def max_side_len(self, value):
+        assert isinstance(
+            value, int), "The value to set `max_side_len` must be type of int."
+        self._preprocessor.max_side_len = value
+
+    @property
+    def is_scale(self):
+        return self._preprocessor.is_scale
+
+    @is_scale.setter
+    def is_scale(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_scale` must be type of bool."
+        self._preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._preprocessor.mean = value
+
+
+class DBDetectorPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for DBDetectorModel
+        """
+        self._postprocessor = C.vision.ocr.DBDetectorPostprocessor()
+
+    def run(self, runtime_results, batch_det_img_info):
+        """Postprocess the runtime results for DBDetectorModel
+        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
+        :param: batch_det_img_info: (list of std::array<int, 4>)The output of det_preprocessor
+        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results, batch_det_img_info)
+
+    @property
+    def det_db_thresh(self):
+        return self._postprocessor.det_db_thresh
+
+    @det_db_thresh.setter
+    def det_db_thresh(self, value):
+        assert isinstance(
+            value,
+            float), "The value to set `det_db_thresh` must be type of float."
+        self._postprocessor.det_db_thresh = value
+
+    @property
+    def det_db_box_thresh(self):
+        return self._postprocessor.det_db_box_thresh
+
+    @det_db_box_thresh.setter
+    def det_db_box_thresh(self, value):
+        assert isinstance(
+            value, float
+        ), "The value to set `det_db_box_thresh` must be type of float."
+        self._postprocessor.det_db_box_thresh = value
+
+    @property
+    def det_db_unclip_ratio(self):
+        return self._postprocessor.det_db_unclip_ratio
+
+    @det_db_unclip_ratio.setter
+    def det_db_unclip_ratio(self, value):
+        assert isinstance(
+            value, float
+        ), "The value to set `det_db_unclip_ratio` must be type of float."
+        self._postprocessor.det_db_unclip_ratio = value
+
+    @property
+    def det_db_score_mode(self):
+        return self._postprocessor.det_db_score_mode
+
+    @det_db_score_mode.setter
+    def det_db_score_mode(self, value):
+        assert isinstance(
+            value,
+            str), "The value to set `det_db_score_mode` must be type of str."
+        self._postprocessor.det_db_score_mode = value
+
+    @property
+    def use_dilation(self):
+        return self._postprocessor.use_dilation
+
+    @use_dilation.setter
+    def use_dilation(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `use_dilation` must be type of bool."
+        self._postprocessor.use_dilation = value
+
+
 class DBDetector(FastDeployModel):
     def __init__(self,
                  model_file="",
@@ -35,88 +163,223 @@ class DBDetector(FastDeployModel):
 
         if (len(model_file) == 0):
             self._model = C.vision.ocr.DBDetector()
+            self._runnable = False
         else:
             self._model = C.vision.ocr.DBDetector(
                 model_file, params_file, self._runtime_option, model_format)
             assert self.initialized, "DBDetector initialize failed."
+            self._runnable = True
 
-    # 一些跟DBDetector模型有关的属性封装
-    '''
+    def predict(self, input_image):
+        """Predict an input image
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: boxes
+        """
+        if self._runnable:
+            return self._model.predict(input_image)
+        return False
+
+    def batch_predict(self, images):
+        """Predict a batch of input image
+        :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return: batch_boxes
+        """
+        if self._runnable:
+            return self._model.batch_predict(images)
+        return False
+
+    @property
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
+
+    # Det Preprocessor Property
+    @property
+    def max_side_len(self):
+        return self._model.preprocessor.max_side_len
+
+    @max_side_len.setter
+    def max_side_len(self, value):
+        assert isinstance(
+            value, int), "The value to set `max_side_len` must be type of int."
+        self._model.preprocessor.max_side_len = value
+
+    @property
+    def is_scale(self):
+        return self._model.preprocessor.is_scale
+
+    @is_scale.setter
+    def is_scale(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_scale` must be type of bool."
+        self._model.preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._model.preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._model.preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._model.preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._model.preprocessor.mean = value
+
+    # Det Ppstprocessor Property
     @property
     def det_db_thresh(self):
-        return self._model.det_db_thresh
+        return self._model.postprocessor.det_db_thresh
 
     @det_db_thresh.setter
     def det_db_thresh(self, value):
         assert isinstance(
             value,
             float), "The value to set `det_db_thresh` must be type of float."
-        self._model.det_db_thresh = value
+        self._model.postprocessor.det_db_thresh = value
 
     @property
     def det_db_box_thresh(self):
-        return self._model.det_db_box_thresh
+        return self._model.postprocessor.det_db_box_thresh
 
     @det_db_box_thresh.setter
     def det_db_box_thresh(self, value):
         assert isinstance(
             value, float
         ), "The value to set `det_db_box_thresh` must be type of float."
-        self._model.det_db_box_thresh = value
+        self._model.postprocessor.det_db_box_thresh = value
 
     @property
     def det_db_unclip_ratio(self):
-        return self._model.det_db_unclip_ratio
+        return self._model.postprocessor.det_db_unclip_ratio
 
     @det_db_unclip_ratio.setter
     def det_db_unclip_ratio(self, value):
         assert isinstance(
             value, float
         ), "The value to set `det_db_unclip_ratio` must be type of float."
-        self._model.det_db_unclip_ratio = value
+        self._model.postprocessor.det_db_unclip_ratio = value
 
     @property
     def det_db_score_mode(self):
-        return self._model.det_db_score_mode
+        return self._model.postprocessor.det_db_score_mode
 
     @det_db_score_mode.setter
     def det_db_score_mode(self, value):
         assert isinstance(
             value,
             str), "The value to set `det_db_score_mode` must be type of str."
-        self._model.det_db_score_mode = value
+        self._model.postprocessor.det_db_score_mode = value
 
     @property
     def use_dilation(self):
-        return self._model.use_dilation
+        return self._model.postprocessor.use_dilation
 
     @use_dilation.setter
     def use_dilation(self, value):
         assert isinstance(
             value,
             bool), "The value to set `use_dilation` must be type of bool."
-        self._model.use_dilation = value
+        self._model.postprocessor.use_dilation = value
 
-    @property
-    def max_side_len(self):
-        return self._model.max_side_len
 
-    @max_side_len.setter
-    def max_side_len(self, value):
-        assert isinstance(
-            value, int), "The value to set `max_side_len` must be type of int."
-        self._model.max_side_len = value
+class ClassifierPreprocessor:
+    def __init__(self):
+        """Create a preprocessor for ClassifierModel
+        """
+        self._preprocessor = C.vision.ocr.ClassifierPreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for ClassifierModel
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
 
     @property
     def is_scale(self):
-        return self._model.max_wh
+        return self._preprocessor.is_scale
 
     @is_scale.setter
     def is_scale(self, value):
         assert isinstance(
             value, bool), "The value to set `is_scale` must be type of bool."
-        self._model.is_scale = value
-    '''
+        self._preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._preprocessor.mean = value
+
+    @property
+    def cls_image_shape(self):
+        return self._preprocessor.cls_image_shape
+
+    @cls_image_shape.setter
+    def cls_image_shape(self, value):
+        assert isinstance(
+            value,
+            list), "The value to set `cls_image_shape` must be type of list."
+        self._preprocessor.cls_image_shape = value
+
+
+class ClassifierPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for ClassifierModel
+        """
+        self._postprocessor = C.vision.ocr.ClassifierPostprocessor()
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for ClassifierModel
+        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
+        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
+
+    @property
+    def cls_thresh(self):
+        return self._postprocessor.cls_thresh
+
+    @cls_thresh.setter
+    def cls_thresh(self, value):
+        assert isinstance(
+            value,
+            float), "The value to set `cls_thresh` must be type of float."
+        self._postprocessor.cls_thresh = value
 
 
 class Classifier(FastDeployModel):
@@ -136,44 +399,181 @@ class Classifier(FastDeployModel):
 
         if (len(model_file) == 0):
             self._model = C.vision.ocr.Classifier()
+            self._runnable = False
         else:
             self._model = C.vision.ocr.Classifier(
                 model_file, params_file, self._runtime_option, model_format)
             assert self.initialized, "Classifier initialize failed."
+            self._runnable = True
 
-    '''
+    def predict(self, input_image):
+        """Predict an input image
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: cls_label, cls_score
+        """
+        if self._runnable:
+            return self._model.predict(input_image)
+        return False
+
+    def batch_predict(self, images):
+        """Predict a batch of input image
+        :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return: list of cls_label, list of cls_score
+        """
+        if self._runnable:
+            return self._model.batch_predict(images)
+        return False
+
     @property
-    def cls_thresh(self):
-        return self._model.cls_thresh
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
+
+    @property
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
+
+    # Cls Preprocessor Property
+    @property
+    def is_scale(self):
+        return self._model.preprocessor.is_scale
+
+    @is_scale.setter
+    def is_scale(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_scale` must be type of bool."
+        self._model.preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._model.preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._model.preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._model.preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._model.preprocessor.mean = value
 
     @property
     def cls_image_shape(self):
-        return self._model.cls_image_shape
+        return self._model.preprocessor.cls_image_shape
 
+    @cls_image_shape.setter
+    def cls_image_shape(self, value):
+        assert isinstance(
+            value,
+            list), "The value to set `cls_image_shape` must be type of list."
+        self._model.preprocessor.cls_image_shape = value
+
+    # Cls Postprocessor Property
     @property
-    def cls_batch_num(self):
-        return self._model.cls_batch_num
+    def cls_thresh(self):
+        return self._model.postprocessor.cls_thresh
 
     @cls_thresh.setter
     def cls_thresh(self, value):
         assert isinstance(
             value,
             float), "The value to set `cls_thresh` must be type of float."
-        self._model.cls_thresh = value
+        self._model.postprocessor.cls_thresh = value
 
-    @cls_image_shape.setter
-    def cls_image_shape(self, value):
-        assert isinstance(
-            value, list), "The value to set `cls_thresh` must be type of list."
-        self._model.cls_image_shape = value
 
-    @cls_batch_num.setter
-    def cls_batch_num(self, value):
+class RecognizerPreprocessor:
+    def __init__(self):
+        """Create a preprocessor for RecognizerModel
+        """
+        self._preprocessor = C.vision.ocr.RecognizerPreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for RecognizerModel
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+    @property
+    def static_shape(self):
+        return self._preprocessor.static_shape
+
+    @static_shape.setter
+    def static_shape(self, value):
         assert isinstance(
             value,
-            int), "The value to set `cls_batch_num` must be type of int."
-        self._model.cls_batch_num = value
-    '''
+            bool), "The value to set `static_shape` must be type of bool."
+        self._preprocessor.static_shape = value
+
+    @property
+    def is_scale(self):
+        return self._preprocessor.is_scale
+
+    @is_scale.setter
+    def is_scale(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_scale` must be type of bool."
+        self._preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._preprocessor.mean = value
+
+    @property
+    def rec_image_shape(self):
+        return self._preprocessor.rec_image_shape
+
+    @rec_image_shape.setter
+    def rec_image_shape(self, value):
+        assert isinstance(
+            value,
+            list), "The value to set `rec_image_shape` must be type of list."
+        self._preprocessor.rec_image_shape = value
+
+
+class RecognizerPostprocessor:
+    def __init__(self, label_path):
+        """Create a postprocessor for RecognizerModel
+        :param label_path: (str)Path of label file
+        """
+        self._postprocessor = C.vision.ocr.RecognizerPostprocessor(label_path)
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for RecognizerModel
+        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
+        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
+        """
+        return self._postprocessor.run(runtime_results)
 
 
 class Recognizer(FastDeployModel):
@@ -195,44 +595,99 @@ class Recognizer(FastDeployModel):
 
         if (len(model_file) == 0):
             self._model = C.vision.ocr.Recognizer()
+            self._runnable = False
         else:
             self._model = C.vision.ocr.Recognizer(
                 model_file, params_file, label_path, self._runtime_option,
                 model_format)
             assert self.initialized, "Recognizer initialize failed."
+            self._runnable = True
 
-    '''
+    def predict(self, input_image):
+        """Predict an input image
+        :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+        :return: rec_text, rec_score
+        """
+        if self._runnable:
+            return self._model.predict(input_image)
+        return False
+
+    def batch_predict(self, images):
+        """Predict a batch of input image
+        :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
+        :return: list of rec_text, list of rec_score
+        """
+        if self._runnable:
+            return self._model.batch_predict(images)
+        return False
+
     @property
-    def rec_img_h(self):
-        return self._model.rec_img_h
+    def preprocessor(self):
+        return self._model.preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self._model.preprocessor = value
 
     @property
-    def rec_img_w(self):
-        return self._model.rec_img_w
+    def postprocessor(self):
+        return self._model.postprocessor
+
+    @postprocessor.setter
+    def postprocessor(self, value):
+        self._model.postprocessor = value
 
     @property
-    def rec_batch_num(self):
-        return self._model.rec_batch_num
+    def static_shape(self):
+        return self._model.preprocessor.static_shape
 
-    @rec_img_h.setter
-    def rec_img_h(self, value):
-        assert isinstance(
-            value, int), "The value to set `rec_img_h` must be type of int."
-        self._model.rec_img_h = value
-
-    @rec_img_w.setter
-    def rec_img_w(self, value):
-        assert isinstance(
-            value, int), "The value to set `rec_img_w` must be type of int."
-        self._model.rec_img_w = value
-
-    @rec_batch_num.setter
-    def rec_batch_num(self, value):
+    @static_shape.setter
+    def static_shape(self, value):
         assert isinstance(
             value,
-            int), "The value to set `rec_batch_num` must be type of int."
-        self._model.rec_batch_num = value
-    '''
+            bool), "The value to set `static_shape` must be type of bool."
+        self._model.preprocessor.static_shape = value
+
+    @property
+    def is_scale(self):
+        return self._model.preprocessor.is_scale
+
+    @is_scale.setter
+    def is_scale(self, value):
+        assert isinstance(
+            value, bool), "The value to set `is_scale` must be type of bool."
+        self._model.preprocessor.is_scale = value
+
+    @property
+    def scale(self):
+        return self._model.preprocessor.scale
+
+    @scale.setter
+    def scale(self, value):
+        assert isinstance(
+            value, list), "The value to set `scale` must be type of list."
+        self._model.preprocessor.scale = value
+
+    @property
+    def mean(self):
+        return self._model.preprocessor.mean
+
+    @mean.setter
+    def mean(self, value):
+        assert isinstance(
+            value, list), "The value to set `mean` must be type of list."
+        self._model.preprocessor.mean = value
+
+    @property
+    def rec_image_shape(self):
+        return self._model.preprocessor.rec_image_shape
+
+    @rec_image_shape.setter
+    def rec_image_shape(self, value):
+        assert isinstance(
+            value,
+            list), "The value to set `rec_image_shape` must be type of list."
+        self._model.preprocessor.rec_image_shape = value
 
 
 class PPOCRv3(FastDeployModel):
@@ -253,7 +708,6 @@ class PPOCRv3(FastDeployModel):
 
     def predict(self, input_image):
         """Predict an input image
-
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
         :return: OCRResult
         """
@@ -264,8 +718,29 @@ class PPOCRv3(FastDeployModel):
         :param images: (list of numpy.ndarray) The input image list, each element is a 3-D array with layout HWC, BGR format
         :return: OCRBatchResult
         """
-
         return self.system.batch_predict(images)
+
+    @property
+    def cls_batch_size(self):
+        return self.system.cls_batch_size
+
+    @cls_batch_size.setter
+    def cls_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `cls_batch_size` must be type of int."
+        self.system.cls_batch_size = value
+
+    @property
+    def rec_batch_size(self):
+        return self.system.rec_batch_size
+
+    @rec_batch_size.setter
+    def rec_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `rec_batch_size` must be type of int."
+        self.system.rec_batch_size = value
 
 
 class PPOCRSystemv3(PPOCRv3):
@@ -311,6 +786,28 @@ class PPOCRv2(FastDeployModel):
 
         return self.system.batch_predict(images)
 
+    @property
+    def cls_batch_size(self):
+        return self.system.cls_batch_size
+
+    @cls_batch_size.setter
+    def cls_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `cls_batch_size` must be type of int."
+        self.system.cls_batch_size = value
+
+    @property
+    def rec_batch_size(self):
+        return self.system.rec_batch_size
+
+    @rec_batch_size.setter
+    def rec_batch_size(self, value):
+        assert isinstance(
+            value,
+            int), "The value to set `rec_batch_size` must be type of int."
+        self.system.rec_batch_size = value
+
 
 class PPOCRSystemv2(PPOCRv2):
     def __init__(self, det_model=None, cls_model=None, rec_model=None):
@@ -321,93 +818,3 @@ class PPOCRSystemv2(PPOCRv2):
 
     def predict(self, input_image):
         return super(PPOCRSystemv2, self).predict(input_image)
-
-
-class DBDetectorPreprocessor:
-    def __init__(self):
-        """Create a preprocessor for DBDetectorModel
-        """
-        self._preprocessor = C.vision.ocr.DBDetectorPreprocessor()
-
-    def run(self, input_ims):
-        """Preprocess input images for DBDetectorModel
-        :param: input_ims: (list of numpy.ndarray) The input image
-        :return: pair(list of FDTensor, list of std::array<int, 4>)
-        """
-        return self._preprocessor.run(input_ims)
-
-
-class DBDetectorPostprocessor:
-    def __init__(self):
-        """Create a postprocessor for DBDetectorModel
-        """
-        self._postprocessor = C.vision.ocr.DBDetectorPostprocessor()
-
-    def run(self, runtime_results, batch_det_img_info):
-        """Postprocess the runtime results for DBDetectorModel
-        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
-        :param: batch_det_img_info: (list of std::array<int, 4>)The output of det_preprocessor
-        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
-        """
-        return self._postprocessor.run(runtime_results, batch_det_img_info)
-
-
-class RecognizerPreprocessor:
-    def __init__(self):
-        """Create a preprocessor for RecognizerModel
-        """
-        self._preprocessor = C.vision.ocr.RecognizerPreprocessor()
-
-    def run(self, input_ims):
-        """Preprocess input images for RecognizerModel
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
-        """
-        return self._preprocessor.run(input_ims)
-
-
-class RecognizerPostprocessor:
-    def __init__(self, label_path):
-        """Create a postprocessor for RecognizerModel
-        :param label_path: (str)Path of label file
-        """
-        self._postprocessor = C.vision.ocr.RecognizerPostprocessor(label_path)
-
-    def run(self, runtime_results):
-        """Postprocess the runtime results for RecognizerModel
-        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
-        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
-        """
-        return self._postprocessor.run(runtime_results)
-
-
-class ClassifierPreprocessor:
-    def __init__(self):
-        """Create a preprocessor for ClassifierModel
-        """
-        self._preprocessor = C.vision.ocr.ClassifierPreprocessor()
-
-    def run(self, input_ims):
-        """Preprocess input images for ClassifierModel
-        :param: input_ims: (list of numpy.ndarray)The input image
-        :return: list of FDTensor
-        """
-        return self._preprocessor.run(input_ims)
-
-
-class ClassifierPostprocessor:
-    def __init__(self):
-        """Create a postprocessor for ClassifierModel
-        """
-        self._postprocessor = C.vision.ocr.ClassifierPostprocessor()
-
-    def run(self, runtime_results):
-        """Postprocess the runtime results for ClassifierModel
-        :param: runtime_results: (list of FDTensor or list of pyArray)The output FDTensor results from runtime
-        :return: list of Result(If the runtime_results is predict by batched samples, the length of this list equals to the batch size)
-        """
-        return self._postprocessor.run(runtime_results)
-
-
-def sort_boxes(boxes):
-    return C.vision.ocr.sort_boxes(boxes)

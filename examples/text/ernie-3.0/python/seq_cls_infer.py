@@ -35,8 +35,8 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        choices=['gpu', 'cpu'],
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        choices=['gpu', 'cpu', 'xpu'],
+        help="Type of inference device, support 'cpu', 'xpu' or 'gpu'.")
     parser.add_argument(
         "--backend",
         type=str,
@@ -94,12 +94,16 @@ class ErnieForSequenceClassificationPredictor(object):
         model_path = os.path.join(args.model_dir, "infer.pdmodel")
         params_path = os.path.join(args.model_dir, "infer.pdiparams")
         option.set_model_path(model_path, params_path)
+        if args.device == 'xpu':
+            option.use_xpu()
+            option.use_paddle_lite_backend()
+            return fd.Runtime(option)
         if args.device == 'cpu':
             option.use_cpu()
         else:
             option.use_gpu()
         if args.backend == 'paddle':
-            option.use_paddle_backend()
+            option.use_paddle_infer_backend()
         elif args.backend == 'onnx_runtime':
             option.use_ort_backend()
         elif args.backend == 'openvino':

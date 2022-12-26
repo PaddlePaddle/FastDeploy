@@ -32,6 +32,8 @@ DBDetector::DBDetector(const std::string& model_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE};
   }
 
   runtime_option = custom_option;
@@ -45,14 +47,6 @@ DBDetector::DBDetector(const std::string& model_file,
 bool DBDetector::Initialize() {
   if (!InitRuntime()) {
     FDERROR << "Failed to initialize fastdeploy backend." << std::endl;
-    return false;
-  }
-  return true;
-}
-
-bool DBDetector::Predict(cv::Mat* img,
-                         std::vector<std::array<int, 8>>* boxes_result) {
-  if (!Predict(*img, boxes_result)) {
     return false;
   }
   return true;

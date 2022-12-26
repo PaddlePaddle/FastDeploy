@@ -1,3 +1,4 @@
+[English](../../en/build_and_install/rknpu2.md) | 简体中文
 # RK2代NPU部署库编译
 
 ## 写在前面

@@ -6,15 +6,14 @@ FastDeploy基于PaddleSlim的Auto Compression Toolkit(ACT), 给用户提供了�
 
 ### 环境依赖
 
-1.用户参考PaddlePaddle官网, 安装develop版本
+1.用户参考PaddlePaddle官网, 安装Paddle 2.4 版本
 ```
 https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html
 ```
 
-2.安装paddleslim-develop版本
+2.安装PaddleSlim 2.4 版本
 ```bash
-git clone https://github.com/PaddlePaddle/PaddleSlim.git & cd PaddleSlim
-python setup.py install
+pip install paddleslim==2.4.0
 ```
 
 ### 一键模型自动化压缩工具安装方式
@@ -40,10 +39,10 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_val_320.tar.gz
 tar -xvf COCO_val_320.tar.gz
 ```
 
-##### 2.使用fastdeploy --auto_compress命令，执行一键模型自动化压缩:
+##### 2.使用fastdeploy compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model/'
 ```
 
 ##### 3.参数说明
@@ -74,12 +73,12 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/COCO_train_320.tar
 tar -xvf COCO_train_320.tar
 ```
 
-##### 2.使用fastdeploy --auto_compress命令，执行一键模型自动化压缩:
+##### 2.使用fastdeploy compress命令，执行一键模型自动化压缩:
 以下命令是对yolov5s模型进行量化, 用户若想量化其他模型, 替换config_path为configs文件夹下的其他模型配置文件即可.
 ```shell
 # 执行命令默认为单卡训练，训练前请指定单卡GPU, 否则在训练过程中可能会卡住.
 export CUDA_VISIBLE_DEVICES=0
-fastdeploy --auto_compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
+fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='QAT' --save_dir='./yolov5s_qat_model/'
 ```
 
 ##### 3.参数说明
@@ -100,26 +99,33 @@ FastDeploy目前为用户提供了多个模型的压缩[config](./configs/)文�
 | -------------------- | ------------------------------------------------------------ |----------------------------------------- |
 | [mobilenetv1_ssld_quant](./configs/classification/mobilenetv1_ssld_quant.yaml)      | [mobilenetv1_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV1_ssld_infer.tgz)           |           |
 | [resnet50_vd_quant](./configs/classification/resnet50_vd_quant.yaml)      |   [resnet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz)          |     |
+| [efficientnetb0_quant](./configs/classification/efficientnetb0_quant.yaml)      |   [efficientnetb0](https://bj.bcebos.com/paddlehub/fastdeploy/EfficientNetB0_small_infer.tgz)          |     |
+| [mobilenetv3_large_x1_0_quant](./configs/classification/mobilenetv3_large_x1_0_quant.yaml)      |   [mobilenetv3_large_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/MobileNetV3_large_x1_0_ssld_infer.tgz)          |     |
+| [pphgnet_tiny_quant](./configs/classification/pphgnet_tiny_quant.yaml)      |   [pphgnet_tiny](https://bj.bcebos.com/paddlehub/fastdeploy/PPHGNet_tiny_ssld_infer.tgz)          |     |
+| [pplcnetv2_base_quant](./configs/classification/pplcnetv2_base_quant.yaml)      |   [pplcnetv2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)          |     |
 | [yolov5s_quant](./configs/detection/yolov5s_quant.yaml)       |   [yolov5s](https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx)         |     |
 | [yolov6s_quant](./configs/detection/yolov6s_quant.yaml)       |  [yolov6s](https://paddle-slim-models.bj.bcebos.com/act/yolov6s.onnx)          |     |
 | [yolov7_quant](./configs/detection/yolov7_quant.yaml)        | [yolov7](https://paddle-slim-models.bj.bcebos.com/act/yolov7.onnx)           |      |
 | [ppyoloe_withNMS_quant](./configs/detection/ppyoloe_withNMS_quant.yaml)       |  [ppyoloe_l](https://bj.bcebos.com/v1/paddle-slim-models/act/ppyoloe_crn_l_300e_coco.tar)    | 支持PPYOLOE的s,m,l,x系列模型, 从PaddleDetection导出模型时正常导出, 不要去除NMS |
 | [ppyoloe_plus_withNMS_quant](./configs/detection/ppyoloe_plus_withNMS_quant.yaml)       |  [ppyoloe_plus_s](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_plus_crn_s_80e_coco.tar)    | 支持PPYOLOE+的s,m,l,x系列模型, 从PaddleDetection导出模型时正常导出, 不要去除NMS |
-| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |       |
+| [pp_liteseg_quant](./configs/segmentation/pp_liteseg_quant.yaml)    |   [pp_liteseg](https://bj.bcebos.com/paddlehub/fastdeploy/PP_LiteSeg_T_STDC1_cityscapes_without_argmax_infer.tgz)        |
+| [deeplabv3_resnet_quant](./configs/segmentation/deeplabv3_resnet_quant.yaml)    |   [deeplabv3_resnet101](https://bj.bcebos.com/paddlehub/fastdeploy/Deeplabv3_ResNet101_OS8_cityscapes_without_argmax_infer.tgz)        |       |
+| [fcn_hrnet_quant](./configs/segmentation/fcn_hrnet_quant.yaml)    |   [fcn_hrnet](https://bj.bcebos.com/paddlehub/fastdeploy/FCN_HRNet_W18_cityscapes_without_argmax_infer.tgz)        |       |
+| [unet_quant](./configs/segmentation/unet_quant.yaml)    |   [unet](https://bj.bcebos.com/paddlehub/fastdeploy/Unet_cityscapes_without_argmax_infer.tgz)        |       |      |
 
 
 
 ## 4. FastDeploy 部署量化模型
 用户在获得量化模型之后，即可以使用FastDeploy进行部署, 部署文档请参考:
 具体请用户参考示例文档:
-- [YOLOv5 量化模型部署](../../examples/vision/detection/yolov5/quantize/)
+- [YOLOv5 量化模型部署](../../../examples/vision/detection/yolov5/quantize/)
 
-- [YOLOv6 量化模型部署](../../examples/vision/detection/yolov6/quantize/)
+- [YOLOv6 量化模型部署](../../../examples/vision/detection/yolov6/quantize/)
 
-- [YOLOv7 量化模型部署](../../examples/vision/detection/yolov7/quantize/)
+- [YOLOv7 量化模型部署](../../../examples/vision/detection/yolov7/quantize/)
 
-- [PadddleClas 量化模型部署](../../examples/vision/classification/paddleclas/quantize/)
+- [PadddleClas 量化模型部署](../../../examples/vision/classification/paddleclas/quantize/)
 
-- [PadddleDetection 量化模型部署](../../examples/vision/detection/paddledetection/quantize/)
+- [PadddleDetection 量化模型部署](../../../examples/vision/detection/paddledetection/quantize/)
 
-- [PadddleSegmentation 量化模型部署](../../examples/vision/segmentation/paddleseg/quantize/)
+- [PadddleSegmentation 量化模型部署](../../../examples/vision/segmentation/paddleseg/quantize/)

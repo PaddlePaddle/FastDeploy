@@ -20,7 +20,7 @@ import math
 import time
 
 
-def eval_segmentation(model, data_dir):
+def eval_segmentation(model, data_dir, batch_size=1):
     import cv2
     from .utils import Cityscapes
     from .utils import f1_score, calculate_area, mean_iou, accuracy, kappa
@@ -39,6 +39,8 @@ def eval_segmentation(model, data_dir):
     start_time = 0
     end_time = 0
     average_inference_time = 0
+    im_list = []
+    label_list = []
     for image_label_path, i in zip(file_list,
                                    trange(
                                        image_num, desc="Inference Progress")):
@@ -46,19 +48,31 @@ def eval_segmentation(model, data_dir):
             start_time = time.time()
         im = cv2.imread(image_label_path[0])
         label = cv2.imread(image_label_path[1], cv2.IMREAD_GRAYSCALE)
-        result = model.predict(im)
+        label_list.append(label)
+        if batch_size == 1:
+            result = model.predict(im)
+            results = [result]
+        else:
+            im_list.append(im)
+            # If the batch_size is not satisfied, the remaining pictures are formed into a batch
+            if (i + 1) % batch_size != 0 and i != image_num - 1:
+                continue
+            results = model.batch_predict(im_list)
         if i == image_num - 1:
             end_time = time.time()
-        average_inference_time = round(
-            (end_time - start_time) / (image_num - twenty_percent_image_num),
-            4)
-        pred = np.array(result.label_map).reshape(result.shape[0],
-                                                  result.shape[1])
-        intersect_area, pred_area, label_area = calculate_area(pred, label,
-                                                               num_classes)
-        intersect_area_all = intersect_area_all + intersect_area
-        pred_area_all = pred_area_all + pred_area
-        label_area_all = label_area_all + label_area
+            average_inference_time = round(
+                (end_time - start_time) /
+                (image_num - twenty_percent_image_num), 4)
+        for result, label in zip(results, label_list):
+            pred = np.array(result.label_map).reshape(result.shape[0],
+                                                      result.shape[1])
+            intersect_area, pred_area, label_area = calculate_area(pred, label,
+                                                                   num_classes)
+            intersect_area_all = intersect_area_all + intersect_area
+            pred_area_all = pred_area_all + pred_area
+            label_area_all = label_area_all + label_area
+        im_list.clear()
+        label_list.clear()
 
     class_iou, miou = mean_iou(intersect_area_all, pred_area_all,
                                label_area_all)

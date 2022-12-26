@@ -15,11 +15,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".segmentation.SegmentationMainActivity">
+        <activity android:name=".segmentation.SegmentationWelcomeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
+        <activity
+            android:name=".segmentation.SegmentationMainActivity"
+            android:label="Settings">
         </activity>
         <activity
             android:name=".segmentation.SegmentationSettingsActivity"

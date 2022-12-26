@@ -34,6 +34,8 @@ Recognizer::Recognizer(const std::string& model_file,
   } else {
     valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
+    valid_xpu_backends = {Backend::LITE};
+    valid_ascend_backends = {Backend::LITE}; 
   }
 
   runtime_option = custom_option;
@@ -53,20 +55,44 @@ bool Recognizer::Initialize() {
   return true;
 }
 
+bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {
+  std::vector<std::string> texts(1);
+  std::vector<float> rec_scores(1);
+  bool success = BatchPredict({img}, &texts, &rec_scores);
+  if (!success) {
+    return success;
+  }
+  *text = std::move(texts[0]);
+  *rec_score = rec_scores[0];
+  return true;
+}
+
 bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
                               std::vector<std::string>* texts, std::vector<float>* rec_scores) {
+  return BatchPredict(images, texts, rec_scores, 0, images.size(), {});
+}
+
+bool Recognizer::BatchPredict(const std::vector<cv::Mat>& images,
+                              std::vector<std::string>* texts, std::vector<float>* rec_scores,
+                              size_t start_index, size_t end_index, const std::vector<int>& indices) {
+  size_t total_size = images.size();
+  if (indices.size() != 0 && indices.size() != total_size) {
+    FDERROR << "indices.size() should be 0 or images.size()." << std::endl;
+    return false;
+  }
   std::vector<FDMat> fd_images = WrapMat(images);
-  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_)) {
+  if (!preprocessor_.Run(&fd_images, &reused_input_tensors_, start_index, end_index, indices)) {
     FDERROR << "Failed to preprocess the input image." << std::endl;
     return false;
   }
+
   reused_input_tensors_[0].name = InputInfoOfRuntime(0).name;
   if (!Infer(reused_input_tensors_, &reused_output_tensors_)) {
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
 
-  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores)) {
+  if (!postprocessor_.Run(reused_output_tensors_, texts, rec_scores, start_index, total_size, indices)) {
     FDERROR << "Failed to postprocess the inference cls_results by runtime." << std::endl;
     return false;
   }

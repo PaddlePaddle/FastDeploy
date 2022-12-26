@@ -9,7 +9,7 @@
 
 【注意】如你部署的为**PP-Matting**、**PP-HumanMatting**以及**ModNet**请参考[Matting模型部署](../../../matting)
 
-以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.0以上(x.x.x>=1.0.0)
 
 ```bash
 mkdir build
@@ -32,6 +32,8 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
+# XPU推理
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 3
 ```
 
 运行完成可视化结果如下图所示
@@ -85,7 +87,7 @@ PaddleSegModel模型加载和初始化，其中model_file为导出的Paddle模�
 > > * **is_vertical_screen**(bool): PP-HumanSeg系列模型通过设置此参数为`true`表明输入图片是竖屏，即height大于width的图片
 
 #### 后处理参数
-> > * **appy_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
+> > * **apply_softmax**(bool): 当模型导出时，并未指定`apply_softmax`参数，可通过此设置此参数为`true`，将预测的输出分割标签（label_map）对应的概率结果(score_map)做softmax归一化处理
 
 - [模型介绍](../../)
 - [Python部署](../python)
