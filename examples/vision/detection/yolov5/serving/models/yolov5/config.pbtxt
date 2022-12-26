@@ -41,7 +41,7 @@ ensemble_scheduling {
         value: "infer_input"
       }
       output_map {
-        key: "output"
+        key: "output0"
         value: "infer_output"
       }
     },

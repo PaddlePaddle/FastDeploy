@@ -39,6 +39,7 @@ class FASTDEPLOY_DECL RecognizerPreprocessor {
   std::vector<float> mean_ = {0.5f, 0.5f, 0.5f};
   std::vector<float> scale_ = {0.5f, 0.5f, 0.5f};
   bool is_scale_ = true;
+  bool static_shape_ = false;
 };
 
 }  // namespace ocr

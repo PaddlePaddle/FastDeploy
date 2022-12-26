@@ -222,10 +222,28 @@ class RuntimeOption:
 
         :param model_path: (str)Path of model file
         :param params_path: (str)Path of parameters file
-        :param model_format: (ModelFormat)Format of model, support ModelFormat.PADDLE/ModelFormat.ONNX
+        :param model_format: (ModelFormat)Format of model, support ModelFormat.PADDLE/ModelFormat.ONNX/ModelFormat.TORCHSCRIPT
         """
         return self._option.set_model_path(model_path, params_path,
                                            model_format)
+
+    def set_model_buffer(self,
+                         model_buffer,
+                         model_buffer_size,
+                         params_buffer,
+                         params_buffer_size,
+                         model_format=ModelFormat.PADDLE):
+        """Specify the memory buffer of model and parameter. Used when model and params are loaded directly from memory
+
+        :param model_buffer: (bytes)The memory buffer of model
+        :param model_buffer_size: (unsigned int)The size of the model data.
+        :param params_buffer: (bytes)The memory buffer of the combined parameters file
+        :param params_buffer_size: (unsigned inst)The size of the combined parameters data
+        :param model_format: (ModelFormat)Format of model, support ModelFormat.PADDLE/ModelFormat.ONNX/ModelFormat.TORCHSCRIPT
+        """
+        return self._option.set_model_buffer(model_buffer, model_buffer_size,
+                                             params_buffer, params_buffer_size,
+                                             model_format)
 
     def use_gpu(self, device_id=0):
         """Inference with Nvidia GPU
@@ -283,6 +301,11 @@ class RuntimeOption:
                    rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
         return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
+    def use_ascend(self):
+        """Inference with Huawei Ascend NPU
+        """
+        return self._option.use_ascend()
+
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
 
@@ -336,6 +359,46 @@ class RuntimeOption:
         """Wrapper function of use_lite_backend(), use Paddle Lite backend, support inference Paddle model on ARM CPU.
         """
         return self.use_lite_backend()
+
+    def set_lite_device_names(self, device_names):
+        """Set nnadapter device name for Paddle Lite backend.
+        """
+        return self._option.set_lite_device_names(device_names)
+
+    def set_lite_context_properties(self, context_properties):
+        """Set nnadapter context properties for Paddle Lite backend.
+        """
+        return self._option.set_lite_context_properties(context_properties)
+
+    def set_lite_model_cache_dir(self, model_cache_dir):
+        """Set nnadapter model cache dir for Paddle Lite backend.
+        """
+        return self._option.set_lite_model_cache_dir(model_cache_dir)
+
+    def set_lite_dynamic_shape_info(self, dynamic_shape_info):
+        """ Set nnadapter dynamic shape info for Paddle Lite backend.
+        """
+        return self._option.set_lite_dynamic_shape_info(dynamic_shape_info)
+
+    def set_lite_subgraph_partition_path(self, subgraph_partition_path):
+        """ Set nnadapter subgraph partition path for Paddle Lite backend.
+        """
+        return self._option.set_lite_subgraph_partition_path(
+            subgraph_partition_path)
+
+    def set_lite_subgraph_partition_config_buffer(self,
+                                                  subgraph_partition_buffer):
+        """ Set nnadapter subgraph partition buffer for Paddle Lite backend.
+        """
+        return self._option.set_lite_subgraph_partition_config_buffer(
+            subgraph_partition_buffer)
+
+    def set_lite_mixed_precision_quantization_config_path(
+            self, mixed_precision_quantization_config_path):
+        """ Set nnadapter mixed precision quantization config path for Paddle Lite backend..
+        """
+        return self._option.set_lite_mixed_precision_quantization_config_path(
+            mixed_precision_quantization_config_path)
 
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.
