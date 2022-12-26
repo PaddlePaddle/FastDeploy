@@ -46,13 +46,13 @@ python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                  --device gpu \
                  --use_trt True
 
-# XPU推理
+# 昆仑芯XPU推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
                 --face test_lite_focal_arcface_0.JPG \
                 --face_positive test_lite_focal_arcface_1.JPG \
                 --face_negative test_lite_focal_arcface_2.JPG \
-                 --device xpu
+                 --device kunlunxin
 ```
 
 运行完成可视化结果如下图所示

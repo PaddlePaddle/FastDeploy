@@ -47,10 +47,10 @@ void CpuInfer(const std::string &model_file, const std::string &params_file,
             << ", Cosine 02:" << cosine02 << std::endl;
 }
 
-void XpuInfer(const std::string &model_file, const std::string &params_file,
+void KunlunXinInfer(const std::string &model_file, const std::string &params_file,
               const std::vector<std::string> &image_file) {
   auto option = fastdeploy::RuntimeOption();
-  option.UseXpu();
+  option.UseKunlunXin();
   auto model = fastdeploy::vision::faceid::AdaFace(model_file, params_file);
   if (!model.Initialized()) {
     std::cerr << "Failed to initialize." << std::endl;
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
                  "test_lite_focal_AdaFace_2.JPG 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with xpu."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
   } else if (std::atoi(argv[6]) == 2) {
     TrtInfer(argv[1], argv[2], image_files);
   } else if (std::atoi(argv[6]) == 3) {
-    CpuInfer(argv[1], argv[2], image_files);
+    KunlunXinInfer(argv[1], argv[2], image_files);
   }
   return 0;
 }

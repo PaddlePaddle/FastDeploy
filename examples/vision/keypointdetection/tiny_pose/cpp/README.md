@@ -32,7 +32,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/hrnet_demo.jpg
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 1
 # GPU上TensorRT推理
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 2
-# XPU推理
+# 昆仑芯XPU推理
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 3
 ```
 

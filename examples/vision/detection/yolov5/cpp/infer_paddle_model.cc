@@ -102,11 +102,11 @@ void TrtInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-void XpuInfer(const std::string& model_dir, const std::string& image_file) {
+void KunlunXinInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   fastdeploy::RuntimeOption option;
-  option.UseXpu();
+  option.UseKunlunXin();
   auto model = fastdeploy::vision::detection::YOLOv5(
       model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
 
@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
   } else if (std::atoi(argv[3]) == 2) {
     TrtInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 3) {
-    XpuInfer(argv[1], argv[2]);
+    KunlunXinInfer(argv[1], argv[2]);
   }
   return 0;
 }
