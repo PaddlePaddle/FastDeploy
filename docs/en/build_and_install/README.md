@@ -28,9 +28,10 @@ English | [中文](../../cn/build_and_install/README.md)
 | ENABLE_OPENVINO_BACKEND | Default OFF，whether to enable OpenVINO backend(CPU) |
 | ENABLE_VISION | Default OFF，whether to enable vision models deployment module |
 | ENABLE_TEXT | Default OFF，whether to enable text models deployment module |
-| WITH_GPU | Default OFF, if build on GPU, this need to be ON |
-| WITH_XPU | Default OFF，if deploy on KunlunXin XPU，this need to be ON |
-| WITH_TIMVX | Default OFF，if deploy on RV1126/RV1109/A311D，this need to be ON |
+| WITH_GPU | Default OFF, if build on GPU, this needs to be ON |
+| WITH_XPU | Default OFF，if deploy on KunlunXin XPU，this needs to be ON |
+| WITH_TIMVX | Default OFF，if deploy on RV1126/RV1109/A311D，this needs to be ON |
+| WITH_ASCEND | Default OFF，if deploy on Huawei Ascend，this needs to be ON |
 | CUDA_DIRECTORY | Default /usr/local/cuda, if build on GPU, this defines the path of CUDA(>=11.2) |
 | TRT_DIRECTORY | If build with ENABLE_TRT_BACKEND=ON, this defines the path of TensorRT(>=8.4) |
 | ORT_DIRECTORY | [Optional] If build with ENABLE_ORT_BACKEND=ON, this flag defines the path of ONNX Runtime, but if this flag is not set, it will download ONNX Runtime library automatically |
