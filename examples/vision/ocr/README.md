@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleOCR 模型部署
 
 ## PaddleOCR为多个模型组合串联任务，包含
