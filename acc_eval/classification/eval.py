@@ -60,7 +60,7 @@ model = fd.vision.classification.PaddleClasModel(
 
 res = fd.vision.evaluation.eval_classify(
     model=model,
-    image_file_path="/xieyunyao/Project/FD_dataset/data/imagenet/",
-    label_file_path="/xieyunyao/Project/FD_dataset/data/imagenet/val_list.txt",
+    image_file_path="../dataset/FD_dataset/data/imagenet/",
+    label_file_path="../dataset/FD_dataset/data/imagenet/val_list.txt",
     topk=1)
 print(res)
