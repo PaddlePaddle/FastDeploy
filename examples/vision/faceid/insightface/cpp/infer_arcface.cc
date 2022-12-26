@@ -131,8 +131,7 @@ int main(int argc, char* argv[]) {
   if (argc < 6) {
     std::cout << "Usage: infer_demo path/to/model path/to/image run_option, "
                  "e.g ./infer_arcface_demo ms1mv3_arcface_r100.onnx "
-                 "test_lite_focal_arcface_0.JPG test_lite_focal_arcface_1.JPG "
-                 "test_lite_focal_arcface_2.JPG 0"
+                 "face_0.jpg face_1.jpg face_2.jpg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
                  "with gpu; 2: run with gpu and use tensorrt backend."
