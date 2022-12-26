@@ -1,5 +1,5 @@
 English | [简体中文](README.md)
-# sr Model Deployment
+# SR Model Deployment
 
 Now FastDeploy supports the deployment of the following SR models
 
