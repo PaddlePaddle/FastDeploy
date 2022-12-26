@@ -48,8 +48,8 @@ model = fd.vision.detection.SSD(model_file,
                                 config_file,
                                 runtime_option=runtime_option)
 
-image_file_path = "/xieyunyao/FD_dataset/data/coco/val2017"
-annotation_file_path = "/xieyunyao/FD_dataset/data/coco/annotations/instances_val2017.json"
+image_file_path = "../dataset/FD_dataset/data/coco/val2017"
+annotation_file_path = "../dataset/FD_dataset/data/coco/annotations/instances_val2017.json"
 
 res = fd.vision.evaluation.eval_detection(model, image_file_path,
                                           annotation_file_path)
