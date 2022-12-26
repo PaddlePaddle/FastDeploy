@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # 抠图模型
 
 FastDeploy目前支持如下抠图模型部署
