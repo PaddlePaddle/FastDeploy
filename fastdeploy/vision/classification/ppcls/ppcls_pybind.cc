@@ -36,6 +36,10 @@ void BindPaddleClas(pybind11::module& m) {
       })
       .def("use_gpu", [](vision::classification::PaddleClasPreprocessor& self, int gpu_id = -1) {
         self.UseGpu(gpu_id);
+      }).def("DisableNormalize", [](vision::classification::PaddleClasPreprocessor& self) {
+        self.DisableNormalize();
+      }).def("DisablePermute", [](vision::classification::PaddleClasPreprocessor& self) {
+        self.DisablePermute();
       });
 
   pybind11::class_<vision::classification::PaddleClasPostprocessor>(

@@ -23,7 +23,7 @@ namespace fastdeploy {
 namespace vision {
 namespace classification {
 
-PaddleClasPreprocessor::PaddleClasPreprocessor(const std::string& config_file) {
+PaddleClasPreprocessor::PaddleClasPreprocessor(const std::string& config_file) : config_file(config_file) {
   FDASSERT(BuildPreprocessPipelineFromConfig(config_file),
            "Failed to create PaddleClasPreprocessor.");
   initialized_ = true;
@@ -57,15 +57,19 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
       int height = op.begin()->second["size"].as<int>();
       processors_.push_back(std::make_shared<CenterCrop>(width, height));
     } else if (op_name == "NormalizeImage") {
-      auto mean = op.begin()->second["mean"].as<std::vector<float>>();
-      auto std = op.begin()->second["std"].as<std::vector<float>>();
-      auto scale = op.begin()->second["scale"].as<float>();
-      FDASSERT((scale - 0.00392157) < 1e-06 && (scale - 0.00392157) > -1e-06,
-               "Only support scale in Normalize be 0.00392157, means the pixel "
-               "is in range of [0, 255].");
-      processors_.push_back(std::make_shared<Normalize>(mean, std));
+      if (!disable_normalize) {
+        auto mean = op.begin()->second["mean"].as<std::vector<float>>();
+        auto std = op.begin()->second["std"].as<std::vector<float>>();
+        auto scale = op.begin()->second["scale"].as<float>();
+        FDASSERT((scale - 0.00392157) < 1e-06 && (scale - 0.00392157) > -1e-06,
+                "Only support scale in Normalize be 0.00392157, means the pixel "
+                "is in range of [0, 255].");
+        processors_.push_back(std::make_shared<Normalize>(mean, std));
+      }
     } else if (op_name == "ToCHWImage") {
-      processors_.push_back(std::make_shared<HWC2CHW>());
+      if (!disable_permute) {
+        processors_.push_back(std::make_shared<HWC2CHW>());
+      }
     } else {
       FDERROR << "Unexcepted preprocess operator: " << op_name << "."
               << std::endl;
@@ -76,6 +80,21 @@ bool PaddleClasPreprocessor::BuildPreprocessPipelineFromConfig(
   // Fusion will improve performance
   FuseTransforms(&processors_);
   return true;
+}
+
+void PaddleClasPreprocessor::DisableNormalize() {
+  this->disable_normalize = true;
+  // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig(config_file)) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
+void PaddleClasPreprocessor::DisablePermute() {
+  this->disable_permute = true;
+  // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig(config_file)) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
 }
 
 void PaddleClasPreprocessor::UseGpu(int gpu_id) {

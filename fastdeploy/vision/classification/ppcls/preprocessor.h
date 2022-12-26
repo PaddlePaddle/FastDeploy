@@ -46,6 +46,11 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
 
   bool WithGpu() { return use_cuda_; }
 
+  // This function will disable normalize in preprocessing step.
+  void DisableNormalize();
+  // This function will disable hwc2chw in preprocessing step.
+  void DisablePermute();
+
  private:
   bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
   std::vector<std::shared_ptr<Processor>> processors_;
@@ -53,6 +58,12 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
   bool use_cuda_ = false;
   // GPU device id
   int device_id_ = -1;
+  // for recording the switch of hwc2chw
+  bool disable_permute = false;
+  // for recording the switch of normalize
+  bool disable_normalize = false;
+  // read config file
+  std::string config_file;
 };
 
 }  // namespace classification
