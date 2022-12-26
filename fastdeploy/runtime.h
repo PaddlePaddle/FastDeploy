@@ -116,6 +116,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  /// Use Huawei Ascend to inference
+  void UseAscend();
+
   ///
   /// \brief Turn on XPU.
   ///
@@ -235,10 +238,47 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   /**
-   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   * @brief Set subgraph partition path for Paddle Lite backend.
    */
   void SetLiteSubgraphPartitionPath(
       const std::string& nnadapter_subgraph_partition_config_path);
+
+  /**
+   * @brief Set subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer);
+
+  /**
+   * @brief Set device name for Paddle Lite backend.
+   */
+  void SetLiteDeviceNames(
+      const std::vector<std::string>& nnadapter_device_names);
+
+  /**
+   * @brief Set context properties for Paddle Lite backend.
+   */
+  void  SetLiteContextProperties(
+      const std::string& nnadapter_context_properties);
+
+  /**
+   * @brief Set model cache dir for Paddle Lite backend.
+   */
+  void SetLiteModelCacheDir(
+      const std::string& nnadapter_model_cache_dir);
+
+  /**
+   * @brief Set dynamic shape info for Paddle Lite backend.
+   */
+  void SetLiteDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info);
+
+  /**
+   * @brief Set mixed precision quantization config path for Paddle Lite backend.
+   */
+  void SetLiteMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -398,7 +438,17 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
+  // and other nnadapter settings for CxxConfig
+  std::string lite_nnadapter_subgraph_partition_config_buffer = "";
+  std::string lite_nnadapter_context_properties = "";
+  std::string lite_nnadapter_model_cache_dir = "";
+  std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    lite_nnadapter_dynamic_shape_info = {{"", {{0}}}};
+  std::vector<std::string> lite_nnadapter_device_names = {};
+
   bool enable_timvx = false;
+  bool enable_ascend = false;
   bool enable_xpu = false;
 
   // ======Only for Trt Backend=======
