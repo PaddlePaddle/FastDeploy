@@ -1,4 +1,4 @@
-[English](../../README_EN.md) | [简体中文](../../README_CN.md) | [हिन्दी](./README_हिन्दी.md) | 日本語 | [한국인](./README_한국어.md) | [Pу́сский язы́к](.//README_Ру́сский_язы́к.md)
+[English](../../README_EN.md) | [简体中文](../../README_CN.md) | [हिन्दी](./README_हिन्दी.md) | 日本語 | [한국인](./README_한국인.md) | [Pу́сский язы́к](.//README_Ру́сский_язы́к.md)
 
 ![⚡️FastDeploy](https://user-images.githubusercontent.com/31974251/185771818-5d4423cd-c94c-4a49-9894-bc7a8d1c29d0.png)
 
