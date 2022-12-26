@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PP-PicoDet + PP-TinyPose 联合部署(Pipeline)
 
 ## 模型版本说明
