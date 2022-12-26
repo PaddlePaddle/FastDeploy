@@ -10,10 +10,10 @@ download_and_decompress(${RKNPU2_URL} ${CMAKE_CURRENT_BINARY_DIR}/${RKNPU2_FILE}
 # set path
 set(RKNPU_RUNTIME_PATH ${THIRD_PARTY_PATH}/install/rknpu2_runtime)
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-else ()
-    message(FATAL_ERROR "[rknpu2.cmake] Only support build rknpu2 in Linux")
-endif ()
+#if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+#else ()
+#    message(FATAL_ERROR "[rknpu2.cmake] Only support build rknpu2 in Linux")
+#endif ()
 
 
 if (EXISTS ${RKNPU_RUNTIME_PATH})

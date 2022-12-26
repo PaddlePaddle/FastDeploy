@@ -8,56 +8,43 @@
 - 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
 - 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
 
 ```bash
+# “如果预编译库不包含本模型，请从最新代码编译SDK”
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
 #下载测试图片
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
+unzip face_demo.zip
 
 # 如果为Paddle模型，运行以下代码
 wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
 tar zxvf mobilefacenet_adaface.tgz -C ./
 # CPU推理
-./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+./infer_adaface_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-              test_lite_focal_arcface_0.JPG \
-              test_lite_focal_arcface_1.JPG \
-              test_lite_focal_arcface_2.JPG \
-              0
+              face_0.jpg face_1.jpg face_2.jpg 0
 
 # GPU推理
-./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+./infer_adaface_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-              test_lite_focal_arcface_0.JPG \
-              test_lite_focal_arcface_1.JPG \
-              test_lite_focal_arcface_2.JPG \
-              1
+              face_0.jpg face_1.jpg face_2.jpg 1
 
 # GPU上TensorRT推理
-./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
+./infer_adaface_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-              test_lite_focal_arcface_0.JPG \
-              test_lite_focal_arcface_1.JPG \
-              test_lite_focal_arcface_2.JPG \
-              2
+              face_0.jpg face_1.jpg face_2.jpg 2
 
 # 昆仑芯XPU推理
 ./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-              test_lite_focal_arcface_0.JPG \
-              test_lite_focal_arcface_1.JPG \
-              test_lite_focal_arcface_2.JPG \
-              3
+              face_0.jpg face_1.jpg face_2.jpg 3
 ```
 
 运行完成可视化结果如下图所示
@@ -101,16 +88,22 @@ AdaFace模型加载和初始化，如果使用PaddleInference推理，model_file
 > > * **im**: 输入图像，注意需为HWC，BGR格式
 > > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
-### 类成员变量
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### 修改预处理以及后处理的参数
+预处理和后处理的参数的需要通过修改AdaFacePostprocessor，AdaFacePreprocessor的成员变量来进行修改。
 
+#### AdaFacePreprocessor成员变量(预处理参数)
+> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112],
+      通过AdaFacePreprocessor::SetSize(std::vector<int>& size)来进行修改
+> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5],
+      通过AdaFacePreprocessor::SetAlpha(std::vector<float>& alpha)来进行修改
+> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f],
+      通过AdaFacePreprocessor::SetBeta(std::vector<float>& beta)来进行修改
+> > * **permute**(bool): 预处理是否将BGR转换成RGB，默认true,
+      通过AdaFacePreprocessor::SetPermute(bool permute)来进行修改
 
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
-> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
-> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
-> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认true
-> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false
+#### AdaFacePostprocessor成员变量(后处理参数)
+> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
+      AdaFacePostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
 
 - [模型介绍](../../)
 - [Python部署](../python)
