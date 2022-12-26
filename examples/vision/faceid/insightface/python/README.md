@@ -19,11 +19,24 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
 unzip face_demo.zip
 
 # CPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face face_0.jpg --face_positive face_1.jpg --face_negative face_2.jpg --device cpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device cpu
 # GPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face face_0.jpg --face_positive face_1.jpg --face_negative face_2.jpg --device gpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device gpu
 # GPU上使用TensorRT推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face face_0.jpg --face_positive face_1.jpg --face_negative face_2.jpg --device gpu --use_trt True
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device gpu \
+                        --use_trt True
 ```
 
 运行完成可视化结果如下图所示

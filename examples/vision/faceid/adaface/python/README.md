@@ -15,9 +15,8 @@ cd examples/vision/faceid/adaface/python/
 
 #下载AdaFace模型文件和测试图片
 #下载测试图片
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
+unzip face_demo.zip
 
 # 如果为Paddle模型，运行以下代码
 wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
@@ -26,25 +25,25 @@ tar zxvf mobilefacenet_adaface.tgz -C ./
 # CPU推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-                --face test_lite_focal_arcface_0.JPG \
-                --face_positive test_lite_focal_arcface_1.JPG \
-                --face_negative test_lite_focal_arcface_2.JPG \
+                --face face_0.jpg \
+                --face_positive face_1.jpg \
+                --face_negative face_2.jpg \
                 --device cpu
 # GPU推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-                --face test_lite_focal_arcface_0.JPG \
-                --face_positive test_lite_focal_arcface_1.JPG \
-                --face_negative test_lite_focal_arcface_2.JPG \
+                --face face_0.jpg \
+                --face_positive face_1.jpg \
+                --face_negative face_2.jpg \
                 --device gpu
 # GPU上使用TensorRT推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
-                --face test_lite_focal_arcface_0.JPG \
-                --face_positive test_lite_focal_arcface_1.JPG \
-                --face_negative test_lite_focal_arcface_2.JPG \
-                 --device gpu \
-                 --use_trt True
+                --face face_0.jpg \
+                --face_positive face_1.jpg \
+                --face_negative face_2.jpg \
+                --device gpu \
+                --use_trt True
 
 # XPU推理
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
