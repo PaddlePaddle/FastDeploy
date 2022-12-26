@@ -65,6 +65,19 @@ The extraction schema: ['肿瘤的大小', '肿瘤的个数', '肝癌级别', '�
 ......
 ```
 
+### Description of command line arguments
+
+`infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
+
+| Argument | Description |
+|----------|--------------|
+|--model_dir | The specified directory of model. |
+|--batch_size | The batch size of inputs. |
+|--max_length | The max length of sequence. Default to 128|
+|--device | The device of runtime, choices: ['cpu', 'gpu']. Default to 'cpu' |
+|--backend | The backend of runtime, choices: ['onnx_runtime', 'paddle_inference', 'openvino', 'tensorrt', 'paddle_tensorrt']. Default to 'paddle_inference'. |
+|--use_fp16 | Whether to use fp16 precision to infer. It can be turned on when 'tensorrt' or 'paddle_tensorrt' backend is selected. Default to False.|
+
 ## The way to use the UIE model in each extraction task
 
 In the UIE model, schema represents the structured information to be extracted, so the UIE model can support different information extraction tasks by setting different schemas.
