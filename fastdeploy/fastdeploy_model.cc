@@ -52,7 +52,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
   bool use_ascend = (runtime_option.device == Device::ASCEND); 
-  bool use_kunlunxin = (runtime_option.device == Device::KunlunXin);
+  bool use_kunlunxin = (runtime_option.device == Device::KUNLUNXIN);
 
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
@@ -116,7 +116,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateTimVXBackend();
   } else if (runtime_option.device == Device::ASCEND) {
     return CreateASCENDBackend();
-  } else if (runtime_option.device == Device::KunlunXin) {
+  } else if (runtime_option.device == Device::KUNLUNXIN) {
     return CreateKunlunXinBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU

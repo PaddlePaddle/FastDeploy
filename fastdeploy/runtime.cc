@@ -280,7 +280,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id,
   kunlunxin_precision = precision;
   kunlunxin_adaptive_seqlen=adaptive_seqlen;
   kunlunxin_enable_multi_stream=enable_multi_stream;
-  device = Device::KunlunXin;
+  device = Device::KUNLUNXIN;
 }
 
 void RuntimeOption::UseAscend(){
@@ -611,8 +611,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::KunlunXin || option.device == Device::ASCEND,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::KunlunXin.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::KUNLUNXIN || option.device == Device::ASCEND,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::KUNLUNXIN.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
