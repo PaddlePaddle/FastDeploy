@@ -32,6 +32,8 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 1
 # GPU上TensorRT推理
 ./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 2
+# XPU推理
+./infer_demo Unet_cityscapes_without_argmax_infer cityscapes_demo.png 3
 ```
 
 运行完成可视化结果如下图所示

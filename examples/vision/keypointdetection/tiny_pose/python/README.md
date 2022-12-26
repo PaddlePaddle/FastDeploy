@@ -25,6 +25,8 @@ python pptinypose_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --imag
 python pptinypose_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --image hrnet_demo.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python pptinypose_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --image hrnet_demo.jpg --device gpu --use_trt True
+# XPU推理
+python pptinypose_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --image hrnet_demo.jpg --device xpu
 ```
 
 运行完成可视化结果如下图所示
