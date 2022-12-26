@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # MODNet准备部署模型
 
 - [MODNet](https://github.com/ZHKKKe/MODNet/commit/28165a4)
