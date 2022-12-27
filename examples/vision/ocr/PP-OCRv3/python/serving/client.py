@@ -1,7 +1,6 @@
 import requests
 import json
 import cv2
-import base64
 import fastdeploy as fd
 
 if __name__ == '__main__':

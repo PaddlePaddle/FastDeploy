@@ -10,7 +10,7 @@ cls_model_dir = os.environ.get('CLS_MODEL_DIR')
 rec_model_dir = os.environ.get('REC_MODEL_DIR')
 rec_label_file = os.environ.get('REC_LABEL_FILE')
 device = os.environ.get('DEVICE', 'cpu')
-use_trt = os.environ.get('USE_TRT', False)
+backend = os.environ.get('BACKEND', 'paddle')
 
 # Prepare models
 # Detection model
@@ -27,14 +27,17 @@ rec_params_file = os.path.join(rec_model_dir, "inference.pdiparams")
 option = fd.RuntimeOption()
 if device.lower() == 'gpu':
     option.use_gpu()
-if use_trt:
+if backend == 'trt':
     option.use_trt_backend()
+else:
+    option.use_paddle_infer_backend()
 
 det_option = option
 det_option.set_trt_input_shape("x", [1, 3, 64, 64], [1, 3, 640, 640],
                                [1, 3, 960, 960])
 
 # det_option.set_trt_cache_file("det_trt_cache.trt")
+print(det_model_file, det_params_file)
 det_model = fd.vision.ocr.DBDetector(
     det_model_file, det_params_file, runtime_option=det_option)
 
