@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleClas 量化模型在 RV1126 上的部署
 目前 FastDeploy 已经支持基于 Paddle Lite 部署 PaddleClas 量化模型到 RV1126 上。
 
