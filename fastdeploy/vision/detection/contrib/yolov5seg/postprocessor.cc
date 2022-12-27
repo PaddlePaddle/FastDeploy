@@ -51,9 +51,9 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     for (size_t i = 0; i < tensors[0].shape[1]; ++i) {
       int s = i * tensors[0].shape[2];
       float cls_conf = data[s + 4];
+      float confidence = data[s + 4];;
       if (multi_label_) {
         for (size_t j = 5; j < tensors[0].shape[2] - mask_nums_; ++j) {
-          float confidence = data[s + 4];
           const float* class_score = data + s + j;
           confidence *= (*class_score);
           // filter boxes by conf_threshold
@@ -79,7 +79,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       } else {
         const float* max_class_score =
             std::max_element(data + s + 5, data + s + tensors[0].shape[2] - mask_nums_);
-        float confidence *= (*max_class_score);
+        confidence *= (*max_class_score);
         // filter boxes by conf_threshold
         if (confidence <= conf_threshold_) {
           continue;
@@ -110,7 +110,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     // deal with mask
     (*results)[bs].masks.resize((*results)[bs].boxes.size());
     const float* data_mask = reinterpret_cast<const float*>(tensors[1].Data()) + bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
-    cv::Mat mask_proto = cv::Mat(tensors[1].shape[0], tensors[1].shape[1] * tensors[1].shape[2], CV_32FC(1), const_cast<void*>(data_mask));
+    cv::Mat mask_proto = cv::Mat(tensors[1].shape[0], tensors[1].shape[1] * tensors[1].shape[2], CV_32FC(1), const_cast<float*>(data_mask));
     // vector to cv::Mat for Matmul
     cv::Mat mask_proposals;
     for (size_t i = 0; i < (*results)[bs].yolo_masks.size(); ++i) {
