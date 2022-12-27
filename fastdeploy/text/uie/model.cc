@@ -745,7 +745,7 @@ void UIEModel::Predict(
       std::vector<std::vector<FDTensor>> inputs_vec(NumInputsOfRuntime());
       int encoding_size = encodings.size();
       std::vector<int> num_or_sections;
-      for (int i = 0; i < encoding_size; ++i) {
+      for (int i = 0; i < encoding_size; i += batch_size_) {
         int actual_batch_size = (std::min)(batch_size_, encoding_size - i);
         num_or_sections.push_back(actual_batch_size);
       }
