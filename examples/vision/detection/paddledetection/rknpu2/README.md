@@ -70,7 +70,7 @@ outputs: ['tmp_17','p2o.Concat.9']
 
 # ONNX模型转RKNN模型
 # 转换模型,模型将生成在picodet_s_320_coco_lcnet_non_postprocess目录下
-python tools/rknpu2/export.py --config_path tools/rknpu2/config/RK3568/picodet_s_416_coco_lcnet.yaml
+python tools/rknpu2/export.py --config_path tools/rknpu2/config/picodet_s_416_coco_lcnet.yaml
 ```
 
 ### 修改模型运行时的配置文件
