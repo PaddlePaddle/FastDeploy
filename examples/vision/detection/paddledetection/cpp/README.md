@@ -33,6 +33,8 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 1
 # GPU上TensorRT推理
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
+# 昆仑芯XPU推理
+./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 3
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
