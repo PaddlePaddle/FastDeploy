@@ -43,7 +43,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
   if (option_.enable_int8) {
-    if(option_.enable_xpu) {
+    if(option_.enable_kunlunxin) {
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
     } else {
@@ -54,7 +54,7 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
            << "inference with int8 precision!" << std::endl;    
   }
   if (option_.enable_fp16) {
-    if(option_.enable_xpu){
+    if(option_.enable_kunlunxin){
       valid_places.push_back(
           paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
     } else {
@@ -127,17 +127,17 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)}); 
   }
   
-  if(option_.enable_xpu){
+  if(option_.enable_kunlunxin){
     valid_places.push_back(
       paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
     valid_places.push_back(
       paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
     config_.set_xpu_dev_per_thread(option_.device_id);
-    config_.set_xpu_workspace_l3_size_per_thread(option_.xpu_l3_workspace_size);
-    config_.set_xpu_l3_cache_method(option_.xpu_l3_workspace_size, option_.xpu_locked);
-    config_.set_xpu_conv_autotune(option_.xpu_autotune, option_.xpu_autotune_file);
-    config_.set_xpu_multi_encoder_method(option_.xpu_precision, option_.xpu_adaptive_seqlen);
-    if (option_.xpu_enable_multi_stream) {
+    config_.set_xpu_workspace_l3_size_per_thread(option_.kunlunxin_l3_workspace_size);
+    config_.set_xpu_l3_cache_method(option_.kunlunxin_l3_workspace_size, option_.kunlunxin_locked);
+    config_.set_xpu_conv_autotune(option_.kunlunxin_autotune, option_.kunlunxin_autotune_file);
+    config_.set_xpu_multi_encoder_method(option_.kunlunxin_precision, option_.kunlunxin_adaptive_seqlen);
+    if (option_.kunlunxin_enable_multi_stream) {
       config_.enable_xpu_multi_stream();
     }
   } else {
@@ -221,7 +221,7 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    if(!option_.enable_xpu){
+    if(!option_.enable_kunlunxin){
       info.dtype = LiteDataTypeToFD(tensor->precision());
     }
     outputs_desc_.emplace_back(info);
