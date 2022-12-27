@@ -5,7 +5,6 @@ import distutils.util
 import sys
 import json
 
-from paddlenlp.utils.log import logger
 import fastdeploy as fd
 from fastdeploy.text import UIEModel, SchemaLanguage
 import pynvml
@@ -60,6 +59,8 @@ def parse_arguments():
         type=distutils.util.strtobool,
         default=False,
         help="Use FP16 mode")
+    parser.add_argument(
+        "--epoch", type=int, default=1, help="The epoch of test")
     return parser.parse_args()
 
 
@@ -153,19 +154,29 @@ def get_dataset(data_path, max_seq_len=512):
     return json_lines
 
 
-def run_inference(ds, uie):
-    for i, sample in enumerate(ds):
+def run_inference(ds, uie, epoch=1, warmup_steps=10):
+    for j, sample in enumerate(ds):
+        if j > warmup_steps:
+            break
         uie.set_schema([sample['prompt']])
         result = uie.predict([sample['content']])
-        if (i + 1) % args.log_interval == 0:
-            runtime_statis = uie.print_statis_info_of_runtime()
-            print(f"Step {i + 1}:")
-            print(runtime_statis)
-            print()
-
+    print(f"Run {warmup_steps} steps to warm up")
+    start = time.time()
+    for ep in range(epoch):
+        curr_start = time.time()
+        for i, sample in enumerate(ds):
+            uie.set_schema([sample['prompt']])
+            result = uie.predict([sample['content']])
+        print(
+            f"Epoch {ep} average time = {(time.time() - curr_start) * 1000.0 / (len(ds)):.4f} ms"
+        )
+    end = time.time()
     runtime_statis = uie.print_statis_info_of_runtime()
     print(f"Final:")
     print(runtime_statis)
+    print(
+        f"Total average time = {(end - start) * 1000.0 / (len(ds) * epoch):.4f} ms"
+    )
     print()
 
 
@@ -189,4 +200,4 @@ if __name__ == '__main__':
         schema_language=SchemaLanguage.ZH)
 
     uie.enable_record_time_of_runtime()
-    run_inference(ds, uie)
+    run_inference(ds, uie, args.epoch)
