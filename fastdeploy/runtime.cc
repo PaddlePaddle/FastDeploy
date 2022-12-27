@@ -660,7 +660,11 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  return backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  for (auto& tensor : output_tensors_) {
+    tensor.device_id = option.device_id;
+  }
+  return result;
 }
 
 void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
