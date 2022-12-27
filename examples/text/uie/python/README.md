@@ -1,32 +1,34 @@
-# 通用信息抽取 UIE Python部署示例
+English | [简体中文](README_CN.md)
 
-在部署前，需确认以下两个步骤
+# Universal Information Extraction UIE Python Deployment Example
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+Before deployment, two steps need to be confirmed.
 
-本目录下提供`infer.py`快速完成UIE模型在CPU/GPU，以及CPU上通过OpenVINO加速CPU端部署示例。执行如下脚本即可完成。
+- 1. The software and hardware environment meets the requirements. Please refer to [FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 2. FastDeploy Python whl pacakage needs installation. Please refer to [FastDeploy Python安装](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-## 快速开始
+This directory provides an example that `infer.py` quickly complete CPU deployment conducted by the UIE model with OpenVINO acceleration on CPU/GPU and CPU.
+
+## A Quick Start
 ```bash
 
-#下载部署示例代码
+# Download deployment sample code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/examples/text/uie/python
 
-# 下载UIE模型文件和词表，以uie-base模型为例
+# Download the UIE model file and word list. Taking the uie-base model as an example.
 wget https://bj.bcebos.com/fastdeploy/models/uie/uie-base.tgz
 tar -xvfz uie-base.tgz
 
-# CPU推理
+# CPU Inference
 python infer.py --model_dir uie-base --device cpu
-# GPU推理
+# GPU Inference
 python infer.py --model_dir uie-base --device gpu
-# 使用OpenVINO推理
+# Use OpenVINO for inference
 python infer.py --model_dir uie-base --device cpu --backend openvino --cpu_num_threads 8
 ```
 
-运行完成后返回结果如下所示(仅截取NER任务的输出)。
+The results after running are as follows(only the output of the NER task is captured).
 ```bash
 1. Named Entity Recognition Task
 The extraction schema: ['时间', '选手', '赛事名称']
@@ -63,11 +65,24 @@ The extraction schema: ['肿瘤的大小', '肿瘤的个数', '肝癌级别', '�
 ......
 ```
 
-## UIE模型各抽取任务使用方式
+### Description of command line arguments
 
-在UIE模型中，schema代表要抽取的结构化信息，所以UIE模型可通过设置不同的schema支持不同信息抽取任务。
+`infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
 
-### 初始化UIEModel
+| Argument | Description |
+|----------|--------------|
+|--model_dir | The specified directory of model. |
+|--batch_size | The batch size of inputs. |
+|--max_length | The max length of sequence. Default to 128|
+|--device | The device of runtime, choices: ['cpu', 'gpu']. Default to 'cpu' |
+|--backend | The backend of runtime, choices: ['onnx_runtime', 'paddle_inference', 'openvino', 'tensorrt', 'paddle_tensorrt']. Default to 'paddle_inference'. |
+|--use_fp16 | Whether to use fp16 precision to infer. It can be turned on when 'tensorrt' or 'paddle_tensorrt' backend is selected. Default to False.|
+
+## The way to use the UIE model in each extraction task
+
+In the UIE model, schema represents the structured information to be extracted, so the UIE model can support different information extraction tasks by setting different schemas.
+
+### Initialize UIEModel
 
 ```python
 import fastdeploy
@@ -91,9 +106,9 @@ uie = UIEModel(
     runtime_option=runtime_option)
 ```
 
-### 实体抽取
+### Entity Extraction
 
-初始化阶段将schema设置为```["时间", "选手", "赛事名称"]```，可对输入的文本抽取时间、选手以及赛事名称三个信息。
+The initialization stage sets the schema```["time", "player", "event name"]``` to extract the time, player and event name from the input text.
 
 ```python
 >>> from pprint import pprint
@@ -117,7 +132,7 @@ uie = UIEModel(
 
 ```
 
-例如抽取的目标实体类型是"肿瘤的大小"、"肿瘤的个数"、"肝癌级别"和"脉管内癌栓分级", 则可执行如下语句：
+For example, if the target entity types are "肿瘤的大小", "肿瘤的个数", "肝癌级别" and "脉管内癌栓分级", the following statements can be executed.
 
 ```python
 >>> schema = ["肿瘤的大小", "肿瘤的个数", "肝癌级别", "脉管内癌栓分级"]
@@ -150,12 +165,11 @@ uie = UIEModel(
 ```
 
 
-### 关系抽取
+### Relation Extraction
 
-关系抽取（Relation Extraction，简称RE），是指从文本中识别实体并抽取实体之间的语义关系，进而获取三元组信息，即<主体，谓语，客体>。
+Relation Extraction (RE) refers to identifying entities from text and extracting semantic relationships between them to obtain triadic information, i.e. <subject, predicate, object>.
 
-例如以"竞赛名称"作为抽取主体，抽取关系类型为"主办方"、"承办方"和"已举办次数", 则可执行如下语句：
-
+For example, if we take "contest name" as the extracted entity, and the relations are "主办方", "承办方" and "已举办次数", then we can execute the following statements.
 ```python
 >>> schema = {"竞赛名称": ["主办方", "承办方", "已举办次数"]}
 >>> uie.set_schema(schema)
@@ -198,11 +212,11 @@ uie = UIEModel(
 #            'text': '2022语言与智能技术竞赛'}}]
 ```
 
-### 事件抽取
+### Event Extraction
 
-事件抽取 (Event Extraction, 简称EE)，是指从自然语言文本中抽取预定义的事件触发词(Trigger)和事件论元(Argument)，组合为相应的事件结构化信息。
+Event Extraction (EE) refers to extracting predefined Trigger and Argument from natural language texts and combining them into structured event information.
 
-例如抽取的目标是"地震"事件的"地震强度"、"时间"、"震中位置"和"震源深度"这些信息，则可执行如下代码：
+For example, if the targets are"地震强度", "时间", "震中位置" and "引源深度" for the event "地震", we can execute the following codes.
 
 ```python
 >>> schema = {"地震触发词": ["地震强度", "时间", "震中位置", "震源深度"]}
@@ -238,11 +252,11 @@ uie = UIEModel(
 #             'text': '地震'}}]
 ```
 
-### 评论观点抽取
+### Opinion Extraction
 
-评论观点抽取，是指抽取文本中包含的评价维度、观点词。
+opinion extraction refers to the extraction of evaluation dimensions and opinions contained in the text.
 
-例如抽取的目标是文本中包含的评价维度及其对应的观点词和情感倾向，可执行以下代码：
+For example, if the extraction target is the evaluation dimensions and their corresponding opinions and sentiment tendencies. We can execute the following codes：
 
 ```python
 >>> schema = {"评价维度": ["观点词", "情感倾向[正向，负向]"]}
@@ -266,9 +280,9 @@ uie = UIEModel(
 #            'text': '性价比'}}]
 ```
 
-### 情感分类
+### Sentiment Classification
 
-句子级情感倾向分类，即判断句子的情感倾向是“正向”还是“负向”，可执行以下代码：
+Sentence-level sentiment classification, i.e., determining a sentence has a "positive" sentiment or "negative" sentiment. We can execute the following codes:
 
 ```python
 >>> schema = ["情感倾向[正向，负向]"]
@@ -283,9 +297,9 @@ uie = UIEModel(
 #                   'text': '正向'}}]
 ```
 
-### 跨任务抽取
+### Cross-task Extraction
 
-例如在法律场景同时对文本进行实体抽取和关系抽取，可执行以下代码：
+For example, in a legal scenario where both entity extraction and relation extraction need to be performed. We can execute the following codes.
 
 ```python
 >>> schema = ["法院", {"原告": "委托代理人"}, {"被告": "委托代理人"}]
@@ -320,7 +334,7 @@ uie = UIEModel(
 #          'text': 'B公司'}}]
 ```
 
-## UIEModel Python接口
+## UIEModel Python Interface
 
 ```python
 fd.text.uie.UIEModel(model_file,
@@ -334,50 +348,50 @@ fd.text.uie.UIEModel(model_file,
                      schema_language=SchemaLanguage.ZH)
 ```
 
-UIEModel模型加载和初始化，其中`model_file`, `params_file`为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2)，`vocab_file`为词表文件，UIE模型的词表可在[UIE配置文件](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py)中下载相应的UIE模型的vocab_file。
+UIEModel loading and initialization. Among them, `model_file`, `params_file` are Paddle inference documents exported by trained models. Please refer to [模型导出](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2).`vocab_file`refers to the vocabulary file. The vocabulary of the UIE model UIE can be downloaded in [UIE配置文件](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py)
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **vocab_file**(str): 词表文件
-> * **position_prob**(str): 位置概率，模型将输出位置概率大于`position_prob`的位置，默认为0.5
-> * **max_length**(int): 输入文本的最大长度。输入文本下标超过`max_length`的部分将被截断。默认为128
-> * **schema**(list|dict): 抽取任务的目标信息。
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
-> * **schema_language**(SchemaLanguage): Schema语言。默认为ZH（中文），目前支持的语言种类包括：ZH（中文），EN（英文）。
+> * **model_file**(str): Model file path
+> * **params_file**(str): Parameter file path
+> * **vocab_file**(str): Vocabulary file
+> * **position_prob**(str): Position probability. The model will output positions with probability greater than `position_prob`, default is 0.5
+> * **max_length**(int): Maximized length of input text. Input text subscript exceeding `max_length` will be truncated. Default is 128
+> * **schema**(list|dict): Target information for extraction tasks
+> * **runtime_option**(RuntimeOption): Backend inference configuration, the default is None, i.e., the default configuration
+> * **model_format**(ModelFormat): Model format, and default is Paddle format
+> * **schema_language**(SchemaLanguage): Schema language, and default is ZH（Chinese）. Currently supported language：ZH（Chinese），EN（English）
 
-### set_schema函数
+### set_schema Function
 
 > ```python
 > set_schema(schema)
 > ```
-> 设置UIE模型的schema接口。
+> Set schema interface of the UIE model.
 >
-> **参数**
-> > * **schema**(list|dict): 输入数据，待抽取文本列表。
+> **Parameter**
+> > * **schema**(list|dict): Enter the data to be extracted from the text.
 >
-> **返回**
-> 空。
+> **Return**
+> Blank.
 
-### predict函数
+### predict Function
 
 > ```python
 > UIEModel.predict(texts, return_dict=False)
 > ```
 >
-> 模型预测接口，输入文本列表直接输出抽取结果。
+> Model prediction interface where input text list directly output extraction results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **texts**(list(str)): 输入数据，待抽取文本列表。
-> > * **return_dict**(bool): 是否以字典形式输出UIE结果，默认为False。
-> **返回**
+> > * **texts**(list(str)): Enter the data to be extracted from the text.
+> > * **return_dict**(bool): Whether to output UIE results in the form of dictionary, and default is False。
+> **Return**
 >
-> > 返回`dict(str, list(fastdeploy.text.C.UIEResult))`。
+> > Return`dict(str, list(fastdeploy.text.C.UIEResult))`。
 
-## 相关文档
+## Related Documents
 
 [UIE模型详细介绍](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md)
 

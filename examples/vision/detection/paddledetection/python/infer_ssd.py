@@ -17,12 +17,15 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'xpu', 'cpu' or 'gpu'.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
+    if args.device.lower() == "xpu":
+        option.use_xpu()
+
     if args.device.lower() == "gpu":
         option.use_gpu()
     return option
@@ -36,8 +39,10 @@ config_file = os.path.join(args.model_dir, "infer_cfg.yml")
 
 # 配置runtime，加载模型
 runtime_option = build_option(args)
-model = fd.vision.detection.SSD(
-    model_file, params_file, config_file, runtime_option=runtime_option)
+model = fd.vision.detection.SSD(model_file,
+                                params_file,
+                                config_file,
+                                runtime_option=runtime_option)
 
 # 预测图片检测结果
 im = cv2.imread(args.image)
