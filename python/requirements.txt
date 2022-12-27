@@ -5,3 +5,4 @@ numpy
 opencv-python
 fastdeploy-tools==0.0.1
 pyyaml
+fastapi

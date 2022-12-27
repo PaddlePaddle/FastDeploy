@@ -40,8 +40,8 @@ python seq_cls_infer.py --device cpu --model_dir ernie-3.0-medium-zh-afqmc
 # GPU Inference
 python seq_cls_infer.py --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
-# XPU Inference
-python seq_cls_infer.py --device xpu --model_dir ernie-3.0-medium-zh-afqmc
+# KunlunXin XPU Inference
+python seq_cls_infer.py --device kunlunxin --model_dir ernie-3.0-medium-zh-afqmc
 
 ```
 The result returned after running is as follows:

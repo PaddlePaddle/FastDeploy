@@ -45,9 +45,9 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-void XpuInfer(const std::string& model_dir, const std::string& image_file) {
+void KunlunXinInfer(const std::string& model_dir, const std::string& image_file) {
   fastdeploy::RuntimeOption option;
-  option.UseXpu();
+  option.UseKunlunXin();
   auto model_file = model_dir + sep + "model.pdmodel";
   auto params_file = model_dir + sep + "model.pdiparams";
   auto model = fastdeploy::vision::detection::YOLOv6(model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
                  "e.g ./infer_model ./yolov6s_infer ./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with xpu."
+                 "with gpu; 2: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
   } else if (std::atoi(argv[3]) == 1) {
     GpuInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 2) {
-    XpuInfer(argv[1], argv[2]);
+    KunlunXinInfer(argv[1], argv[2]);
   }
   return 0;
 }

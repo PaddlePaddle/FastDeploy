@@ -15,16 +15,28 @@ cd examples/vision/faceid/insightface/python/
 
 #下载ArcFace模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_0.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_1.JPG
-wget https://bj.bcebos.com/paddlehub/test_samples/test_lite_focal_arcface_2.JPG
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
+unzip face_demo.zip
 
 # CPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device cpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device cpu
 # GPU推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device gpu
 # GPU上使用TensorRT推理
-python infer_arcface.py --model ms1mv3_arcface_r100.onnx --face test_lite_focal_arcface_0.JPG --face_positive test_lite_focal_arcface_1.JPG --face_negative test_lite_focal_arcface_2.JPG --device gpu --use_trt True
+python infer_arcface.py --model ms1mv3_arcface_r100.onnx \
+                        --face face_0.jpg \
+                        --face_positive face_1.jpg \
+                        --face_negative face_2.jpg \
+                        --device gpu \
+                        --use_trt True
 ```
 
 运行完成可视化结果如下图所示
@@ -82,11 +94,15 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 #### 预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-
+#### AdaFacePreprocessor的成员变量
+以下变量为AdaFacePreprocessor的成员变量
 > > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
 > > * **alpha**(list[float]): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
 > > * **beta**(list[float]): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
 > > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认True
+
+#### AdaFacePostprocessor的成员变量
+以下变量为AdaFacePostprocessor的成员变量
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认False
 
 
