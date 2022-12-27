@@ -1,48 +1,48 @@
 [English](README_EN.md) | 简体中文
-# FaceLandmark1000 C++ Deployment Example
+# FaceLandmark1000 C++部署示例
 
-This directory provides examples that `infer.cc` fast finishes the deployment of FaceLandmark1000 on CPU/GPU and GPU accelerated by TensorRT. 
+本目录下提供`infer.cc`快速完成FaceLandmark1000在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
-Before deployment, two steps require confirmation.
+在部署前，需确认以下两个步骤
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-Taking the CPU inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 1.0.2 or above (x.x.x>=1.0.2), or nightly built version is required to support this model.
+以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本1.0.2以上(x.x.x>=1.0.2), 或使用nightly built版本
 
 ```bash
 mkdir build
 cd build
-# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
+# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# Download the official converted FaceLandmark1000 model file and test images 
+#下载官方转换好的 FaceLandmark1000 模型文件和测试图片
 wget https://bj.bcebos.com/paddlehub/fastdeploy/FaceLandmark1000.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png
 
-# CPU inference
+# CPU推理
 ./infer_demo --model FaceLandmark1000.onnx --image facealign_input.png --device cpu
-# GPU inference
+# GPU推理
 ./infer_demo --model FaceLandmark1000.onnx --image facealign_input.png --device gpu
-# TensorRT Inference on GPU
+# GPU上TensorRT推理
 ./infer_demo --model FaceLandmark1000.onnx --image facealign_input.png --device gpu --backend trt
 ```
 
-The visualized result after running is as follows
+运行完成可视化结果如下图所示
 
 <div width="500">
 <img width="470" height="384" float="left" src="https://user-images.githubusercontent.com/67993288/200761309-90c096e2-c2f3-4140-8012-32ed84e5f389.jpg">
 </div>
 
-The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
+- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-## FaceLandmark1000 C++ Interface 
+## FaceLandmark1000 C++接口
 
-### FaceLandmark1000 Class
+### FaceLandmark1000 类
 
 ```c++
 fastdeploy::vision::facealign::FaceLandmark1000(
@@ -52,35 +52,35 @@ fastdeploy::vision::facealign::FaceLandmark1000(
         const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
-FaceLandmark1000 model loading and initialization, among which model_file is the exported ONNX model format.
+FaceLandmark1000模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
-**Parameter**
+**参数**
 
-> * **model_file**(str): Model file path 
-> * **params_file**(str): Parameter file path. Only passing an empty string when the model is in ONNX format
-> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(ModelFormat): Model format. ONNX format by default
+> * **model_file**(str): 模型文件路径
+> * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
+> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX格式
 
-#### Predict Function
+#### Predict函数
 
 > ```c++
 > FaceLandmark1000::Predict(cv::Mat* im, FaceAlignmentResult* result)
 > ```
 >
-> Model prediction interface. Input images and output landmarks results directly.
+> 模型预测接口，输入图像直接输出landmarks结果。
 >
-> **Parameter**
+> **参数**
 >
-> > * **im**: Input images in HWC or BGR format
-> > * **result**: landmarks result. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for FaceAlignmentResult
+> > * **im**: 输入图像，注意需为HWC，BGR格式
+> > * **result**: landmarks结果, FaceAlignmentResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
-### Class Member Variable
+### 类成员变量
 
-Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
+用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **size**(vector&lt;int&gt;): This parameter changes the size of the resize used during preprocessing, containing two integer elements for [width, height] with default value [128, 128]
+> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[128, 128]
 
-- [Model Description](../../)
-- [Python Deployment](../python)
-- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [模型介绍](../../)
+- [Python部署](../python)
+- [视觉模型预测结果](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
