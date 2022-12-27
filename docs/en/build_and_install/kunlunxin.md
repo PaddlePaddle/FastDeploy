@@ -1,4 +1,4 @@
-English | [中文](../../cn/build_and_install/xpu.md)
+English | [中文](../../cn/build_and_install/kunlunxin.md)
 
 # How to Build KunlunXin XPU Deployment Environment
 
@@ -10,7 +10,7 @@ The relevant compilation options are described as follows:
 |Compile Options|Default Values|Description|Remarks|  
 |:---|:---|:---|:---|  
 | ENABLE_LITE_BACKEND | OFF | It needs to be set to ON when compiling the RK library| - |  
-| WITH_XPU | OFF | It needs to be set to ON when compiling the KunlunXin XPU library| - |
+| WITH_KUNLUNXIN | OFF | It needs to be set to ON when compiling the KunlunXin XPU library| - |
 | ENABLE_ORT_BACKEND | OFF | whether to intergrate ONNX Runtime backend | - |
 | ENABLE_PADDLE_BACKEND | OFF | whether to intergrate Paddle Inference backend | - |
 | ENABLE_OPENVINO_BACKEND | OFF | whether to intergrate OpenVINO backend | - |
@@ -44,11 +44,11 @@ cd FastDeploy
 mkdir build && cd build
 
 # CMake configuration with KunlunXin xpu toolchain
-cmake -DWITH_XPU=ON  \
+cmake -DWITH_KUNLUNXIN=ON  \
       -DWITH_GPU=OFF  \
       -DENABLE_ORT_BACKEND=ON  \
       -DENABLE_PADDLE_BACKEND=ON  \
-      -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
+      -DCMAKE_INSTALL_PREFIX=fastdeploy-kunlunxin \
       -DENABLE_VISION=ON \
       -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
       ..
@@ -57,14 +57,14 @@ cmake -DWITH_XPU=ON  \
 make -j8
 make install
 ```  
-After the compilation is complete, the fastdeploy-xpu directory will be generated, indicating that the Padddle Lite based FastDeploy library has been compiled.
+After the compilation is complete, the fastdeploy-kunlunxin directory will be generated, indicating that the Padddle Lite based FastDeploy library has been compiled.
 
 ## Python compile
 The compilation command is as follows:
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export WITH_XPU=ON
+export WITH_KUNLUNXIN=ON
 export WITH_GPU=OFF
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON
