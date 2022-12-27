@@ -11,7 +11,9 @@ cls_model_dir = 'ch_ppocr_mobile_v2.0_cls_infer'
 rec_model_dir = 'ch_PP-OCRv3_rec_infer'
 rec_label_file = 'ppocr_keys_v1.txt'
 device = 'cpu'
-backend = 'paddle'  # ['paddle', 'trt']
+# backend: ['paddle', 'trt'], you can also use other backends, but need to modify
+# the runtime option below
+backend = 'paddle'
 
 # Prepare models
 # Detection model
