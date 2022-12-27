@@ -35,14 +35,12 @@ bool FastestDetPreprocessor::Preprocess(FDMat* mat, FDTensor* output,
 
   // fastestdet's preprocess steps
   // 1. resize
-  // 2. hwc2chw
-  // 3. convert to float
+  // 2. convert_and_permute(swap_rb=false)
   Resize::Run(mat, size_[0], size_[1]); //resize
   std::vector<float> alpha = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
   std::vector<float> beta = {0.0f, 0.0f, 0.0f};
   //convert to float and HWC2CHW
-  HWC2CHW::Run(mat);
-  Convert::Run(mat, alpha, beta);
+  ConvertAndPermute::Run(mat, alpha, beta, false);
 
   // Record output shape of preprocessed image
   (*im_info)["output_shape"] = {static_cast<float>(mat->Height()),
