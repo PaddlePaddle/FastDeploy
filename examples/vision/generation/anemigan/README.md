@@ -16,6 +16,7 @@ FastDeploy目前支持PaddleHub预训练模型库中如下风格迁移模型的�
 
 ## FastDeploy paddle backend部署和hub速度对比(ips)
 | Device | FastDeploy | Hub |
+| :--- | :--- | :------- |
 |  CPU   |  0.075     | 0.069|
 |  GPU   |  8.33      | 8.26 |
 
