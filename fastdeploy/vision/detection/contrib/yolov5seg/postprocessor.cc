@@ -48,7 +48,6 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     const float* data = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
     // For Mask Proposals
     (*results)[bs].contain_masks = true;
-    std::vector<std::vector<float>> mask_proposals;
     for (size_t i = 0; i < tensors[0].shape[1]; ++i) {
       int s = i * tensors[0].shape[2];
       float cls_conf = data[s + 4];
@@ -110,8 +109,8 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
 
     // deal with mask
     (*results)[bs].masks.resize((*results)[bs].boxes.size());
-    const float* data_mask = reinterpret_cast<const float*>(tensors[1].Data()) + bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
-    cv::Mat mask_proto = cv::Mat(tensors[1].shape[0], tensors[1].shape[1] * tensors[1].shape[2], CV_32FC(1), data_mask); // ref-only, zero copy.
+    float* data_mask = reinterpret_cast<float*>(tensors[1].Data()) + bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
+    cv::Mat mask_proto = cv::Mat(tensors[1].shape[0], tensors[1].shape[1] * tensors[1].shape[2], CV_32FC(1), data_mask);
     // vector to cv::Mat for Matmul
     cv::Mat mask_proposals;
     for (size_t i = 0; i < (*results)[bs].yolo_masks.size(); ++i) {
@@ -166,7 +165,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       int y2 = static_cast<int>(tensors[1].shape[2] - pad_h_mask);
 		  cv::Rect roi(x1, y1, x2, y2);
 		  mask = mask(roi);
-      cv::resize(mask, mask, cv::Size(ipt_w, ipt_h), 0, 0, cv.INTER_LINEAR);
+      cv::resize(mask, mask, cv::Size(ipt_w, ipt_h), 0, 0, cv::INTER_LINEAR);
 		  // crop mask for source img
       int x1_src = static_cast<int>((*results)[bs].boxes[i][0]);
       int y1_src = static_cast<int>((*results)[bs].boxes[i][1]);
