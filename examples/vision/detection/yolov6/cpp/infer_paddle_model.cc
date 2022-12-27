@@ -45,30 +45,30 @@ void CpuInfer(const std::string& model_dir, const std::string& image_file) {
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
 
-// void KunlunXinInfer(const std::string& model_dir, const std::string& image_file) {
-//   fastdeploy::RuntimeOption option;
-//   option.UseKunlunXin();
-//   auto model_file = model_dir + sep + "model.pdmodel";
-//   auto params_file = model_dir + sep + "model.pdiparams";
-//   auto model = fastdeploy::vision::detection::YOLOv6(model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
-//   if (!model.Initialized()) {
-//     std::cerr << "Failed to initialize." << std::endl;
-//     return;
-//   }
+void KunlunXinInfer(const std::string& model_dir, const std::string& image_file) {
+  fastdeploy::RuntimeOption option;
+  option.UseKunlunXin();
+  auto model_file = model_dir + sep + "model.pdmodel";
+  auto params_file = model_dir + sep + "model.pdiparams";
+  auto model = fastdeploy::vision::detection::YOLOv6(model_file, params_file, option, fastdeploy::ModelFormat::PADDLE);
+  if (!model.Initialized()) {
+    std::cerr << "Failed to initialize." << std::endl;
+    return;
+  }
 
-//   auto im = cv::imread(image_file);
+  auto im = cv::imread(image_file);
 
-//   fastdeploy::vision::DetectionResult res;
-//   if (!model.Predict(&im, &res)) {
-//     std::cerr << "Failed to predict." << std::endl;
-//     return;
-//   }
-//   std::cout << res.Str() << std::endl;
+  fastdeploy::vision::DetectionResult res;
+  if (!model.Predict(&im, &res)) {
+    std::cerr << "Failed to predict." << std::endl;
+    return;
+  }
+  std::cout << res.Str() << std::endl;
 
-//   auto vis_im = fastdeploy::vision::VisDetection(im, res);
-//   cv::imwrite("vis_result.jpg", vis_im);
-//   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
-// }
+  auto vis_im = fastdeploy::vision::VisDetection(im, res);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
+}
 
 void GpuInfer(const std::string& model_dir, const std::string& image_file) {
   fastdeploy::RuntimeOption option;
@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
   } else if (std::atoi(argv[3]) == 1) {
     GpuInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 2) {
-    // KunlunXinInfer(argv[1], argv[2]);
+    KunlunXinInfer(argv[1], argv[2]);
   } else if (std::atoi(argv[3]) == 3) {
     AscendInfer(argv[1], argv[2]);
   } 
