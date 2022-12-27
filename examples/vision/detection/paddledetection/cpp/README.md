@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleDetection C++部署示例
 
 本目录下提供`infer_xxx.cc`快速完成PaddleDetection模型包括PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
