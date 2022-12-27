@@ -24,14 +24,9 @@ tar xvf ch_PP-OCRv3_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
-# Launch server, it's configurable to use GPU and TensorRT,
-# and use --host, --port to specify IP and port, etc.
-# CPU
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=cpu fastdeploy simple_serving --app server:app
-# GPU
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=gpu fastdeploy simple_serving --app server:app
-# GPU and TensorRT
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=gpu BACKEND=trt fastdeploy simple_serving --app server:app
+# Launch server, change the configurations in server.py to select hardware, backend, etc.
+# and use --host, --port to specify IP and port
+fastdeploy simple_serving --app server:app
 ```
 
 Client:

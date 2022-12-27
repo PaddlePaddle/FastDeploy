@@ -5,13 +5,13 @@ import logging
 
 logging.getLogger().setLevel(logging.INFO)
 
-# Get arguments from envrionment variables
-det_model_dir = os.environ.get('DET_MODEL_DIR')
-cls_model_dir = os.environ.get('CLS_MODEL_DIR')
-rec_model_dir = os.environ.get('REC_MODEL_DIR')
-rec_label_file = os.environ.get('REC_LABEL_FILE')
-device = os.environ.get('DEVICE', 'cpu')
-backend = os.environ.get('BACKEND', 'paddle')
+# Configurations
+det_model_dir = 'ch_PP-OCRv3_det_infer'
+cls_model_dir = 'ch_ppocr_mobile_v2.0_cls_infer'
+rec_model_dir = 'ch_PP-OCRv3_rec_infer'
+rec_label_file = 'ppocr_keys_v1.txt'
+device = 'cpu'
+backend = 'paddle'  # ['paddle', 'trt']
 
 # Prepare models
 # Detection model

@@ -25,13 +25,9 @@ tar xvf ch_PP-OCRv3_rec_infer.tar
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
-# 启动服务，可选择是否使用GPU和TensorRT，可使用参数--host, --port配置IP、端口号等
-# CPU
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=cpu fastdeploy simple_serving --app server:app
-# GPU
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=gpu fastdeploy simple_serving --app server:app
-# GPU上使用TensorRT （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-DET_MODEL_DIR=ch_PP-OCRv3_det_infer CLS_MODEL_DIR=ch_ppocr_mobile_v2.0_cls_infer REC_MODEL_DIR=ch_PP-OCRv3_rec_infer REC_LABEL_FILE=ppocr_keys_v1.txt DEVICE=gpu BACKEND=trt fastdeploy simple_serving --app server:app
+# 启动服务，可修改server.py中的配置项来指定硬件、后端等
+# 可通过--host、--port指定IP和端口号
+fastdeploy simple_serving --app server:app
 ```
 
 客户端：

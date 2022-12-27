@@ -17,14 +17,9 @@ cd FastDeploy/examples/vision/detection/yolov5/python/serving
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
 tar xvf yolov5s_infer.tar
 
-# Launch server, it's configurable to use GPU and TensorRT,
+# Launch server, change the configurations in server.py to select hardware, backend, etc.
 # and use --host, --port to specify IP and port
-# CPU
-MODEL_DIR=yolov5s_infer DEVICE=cpu fastdeploy simple_serving --app server:app
-# GPU
-MODEL_DIR=yolov5s_infer DEVICE=gpu fastdeploy simple_serving --app server:app
-# GPU and TensorRT
-MODEL_DIR=yolov5s_infer DEVICE=gpu USE_TRT=true fastdeploy simple_serving --app server:app
+fastdeploy simple_serving --app server:app
 ```
 
 Client:

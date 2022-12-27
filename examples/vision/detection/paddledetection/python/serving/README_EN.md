@@ -17,14 +17,9 @@ cd FastDeploy/examples/vision/detection/paddledetection/python/serving
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
-# Launch server, it's configurable to use GPU and TensorRT,
+# Launch server, change the configurations in server.py to select hardware, backend, etc.
 # and use --host, --port to specify IP and port
-# CPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu fastdeploy simple_serving --app server:app
-# GPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu fastdeploy simple_serving --app server:app
-# GPU and TensorRT
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu USE_TRT=true fastdeploy simple_serving --app server:app
+fastdeploy simple_serving --app server:app
 ```
 
 Client:

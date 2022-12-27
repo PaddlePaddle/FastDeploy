@@ -5,10 +5,10 @@ import logging
 
 logging.getLogger().setLevel(logging.INFO)
 
-# Get arguments from envrionment variables
-model_dir = os.environ.get('MODEL_DIR')
-device = os.environ.get('DEVICE', 'cpu')
-use_trt = os.environ.get('USE_TRT', False)
+# Configurations
+model_dir = 'yolov5s_infer'
+device = 'cpu'
+use_trt = False
 
 # Prepare model
 model_file = os.path.join(model_dir, "model.pdmodel")

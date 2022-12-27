@@ -17,13 +17,9 @@ cd FastDeploy/examples/vision/detection/yolov5/python/serving
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
 tar xvf yolov5s_infer.tar
 
-# 启动服务，可选择是否使用GPU和TensorRT，可使用--host、--port配置IP、端口号等
-# CPU
-MODEL_DIR=yolov5s_infer DEVICE=cpu fastdeploy simple_serving --app server:app
-# GPU
-MODEL_DIR=yolov5s_infer DEVICE=gpu fastdeploy simple_serving --app server:app
-# GPU上使用TensorRT （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-MODEL_DIR=yolov5s_infer DEVICE=gpu USE_TRT=true fastdeploy simple_serving --app server:app
+# 启动服务，可修改server.py中的配置项来指定硬件、后端等
+# 可通过--host、--port指定IP和端口号
+fastdeploy simple_serving --app server:app
 ```
 
 客户端：
