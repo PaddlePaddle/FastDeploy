@@ -44,16 +44,24 @@ struct LiteBackendOption {
   // TODO(qiuyanjun): support more options for lite backend.
   // Such as fp16, different device target (kARM/kXPU/kNPU/...)
   std::string nnadapter_subgraph_partition_config_path = "";
+  std::string nnadapter_subgraph_partition_config_buffer = "";
+  std::string nnadapter_context_properties = "";
+  std::string nnadapter_model_cache_dir = "";
+  std::string nnadapter_mixed_precision_quantization_config_path = "";
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    nnadapter_dynamic_shape_info = {{"", {{0}}}};
+  std::vector<std::string> nnadapter_device_names = {};
   bool enable_timvx = false;
-  bool enable_xpu = false;
+  bool enable_ascend = false;
+  bool enable_kunlunxin = false;
   int device_id = 0;
-  int xpu_l3_workspace_size = 0xfffc00;
-  bool xpu_locked = false;
-  bool xpu_autotune = true;
-  std::string xpu_autotune_file = "";
-  std::string xpu_precision = "int16";
-  bool xpu_adaptive_seqlen = false;
-  bool xpu_enable_multi_stream = false;
+  int kunlunxin_l3_workspace_size = 0xfffc00;
+  bool kunlunxin_locked = false;
+  bool kunlunxin_autotune = true;
+  std::string kunlunxin_autotune_file = "";
+  std::string kunlunxin_precision = "int16";
+  bool kunlunxin_adaptive_seqlen = false;
+  bool kunlunxin_enable_multi_stream = false;
 };
 
 // Convert data type from paddle lite to fastdeploy
