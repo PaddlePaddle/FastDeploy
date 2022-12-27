@@ -46,6 +46,8 @@
     <string name="VOICE_ASSISTANT_MODEL_DIR_DEFAULT">models</string>
     <string name="SUPER_RESOLUTION_MODEL_DIR_DEFAULT">models</string>
     <string name="UIE_MODEL_DIR_DEFAULT">models/uie-nano</string>
+    <!-- matting values ... -->
+    <string name="MATTING_MODEL_DIR_DEFAULT">models</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">实时识别</string>
