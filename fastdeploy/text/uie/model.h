@@ -14,14 +14,14 @@
 
 #pragma once
 
+#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
+#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/utils/unique_ptr.h"
 #include <ostream>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "fastdeploy/fastdeploy_model.h"
-#include "fastdeploy/utils/unique_ptr.h"
-#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 
 using namespace paddlenlp;
 
@@ -99,6 +99,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
            size_t max_length, const std::vector<std::string>& schema,
+           int batch_size,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -106,7 +107,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
            SchemaLanguage schema_language = SchemaLanguage::ZH);
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
-           size_t max_length, const SchemaNode& schema,
+           size_t max_length, const SchemaNode& schema, int batch_size,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -115,6 +116,7 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
   UIEModel(const std::string& model_file, const std::string& params_file,
            const std::string& vocab_file, float position_prob,
            size_t max_length, const std::vector<SchemaNode>& schema,
+           int batch_size,
            const fastdeploy::RuntimeOption& custom_option =
                fastdeploy::RuntimeOption(),
            const fastdeploy::ModelFormat& model_format =
@@ -154,10 +156,10 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
       std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
           results,
       std::vector<std::vector<UIEResult*>>* new_relations);
-  void Predict(
-      const std::vector<std::string>& texts,
-      std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
-          results);
+  void
+  Predict(const std::vector<std::string>& texts,
+          std::vector<std::unordered_map<std::string, std::vector<UIEResult>>>*
+              results);
 
  protected:
   using IDX_PROB = std::pair<int64_t, float>;
@@ -190,15 +192,16 @@ struct FASTDEPLOY_DECL UIEModel : public FastDeployModel {
       const SPAN_SET& span_set,
       const std::vector<fast_tokenizer::core::Offset>& offset_mapping,
       std::vector<SpanIdx>* span_idxs, std::vector<float>* probs) const;
-  void ConvertSpanToUIEResult(
-      const std::vector<std::string>& texts,
-      const std::vector<std::string>& prompts,
-      const std::vector<std::vector<SpanIdx>>& span_idxs,
-      const std::vector<std::vector<float>>& probs,
-      std::vector<std::vector<UIEResult>>* results) const;
+  void
+  ConvertSpanToUIEResult(const std::vector<std::string>& texts,
+                         const std::vector<std::string>& prompts,
+                         const std::vector<std::vector<SpanIdx>>& span_idxs,
+                         const std::vector<std::vector<float>>& probs,
+                         std::vector<std::vector<UIEResult>>* results) const;
   std::unique_ptr<Schema> schema_;
   size_t max_length_;
   float position_prob_;
+  int batch_size_;
   SchemaLanguage schema_language_;
   fast_tokenizer::tokenizers_impl::ErnieFastTokenizer tokenizer_;
 };
