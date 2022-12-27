@@ -20,12 +20,12 @@ mv yolov5s.onnx models/runtime/1/model.onnx
 
 # 拉取fastdeploy镜像(x.y.z为镜像版本号，需参照serving文档替换为数字)
 # GPU镜像
-docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 # CPU镜像
-docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /yolov5_serving 目录
-nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/yolov5_serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
 
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/yolov5_serving/models --backend-config=python,shm-default-byte-size=10485760
