@@ -20,7 +20,7 @@ find_package(FastDeploy REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${FastDeploy_INCLUDE_DIRS})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -Ofast -Os -DNDEBUG -fomit-frame-pointer -fno-asynchronous-unwind-tables -fno-unwind-tables")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -Ofast -DNDEBUG -fomit-frame-pointer -fno-asynchronous-unwind-tables -fno-unwind-tables")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden -fvisibility-inlines-hidden -fdata-sections -ffunction-sections")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections -Wl,-z,nocopyreloc")
 
