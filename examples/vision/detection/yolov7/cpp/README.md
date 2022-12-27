@@ -28,6 +28,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_model_demo yolov7_infer 000000014439.jpg 1
 # 昆仑芯XPU推理
 ./infer_paddle_model_demo yolov7_infer 000000014439.jpg 2
+# 华为昇腾推理
+./infer_paddle_model_demo yolov7_infer 000000014439.jpg 3
 ```
 如果想要验证ONNX模型的推理，可以参考如下命令：
 ```bash
