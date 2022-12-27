@@ -14,6 +14,12 @@ FastDeploy目前支持PaddleHub预训练模型库中如下风格迁移模型的�
 |[animegan_v2_paprika_74](https://www.paddlepaddle.org.cn/hubdetail?name=animegan_v2_paprika_74&en_category=GANs)|可将输入的图像转换成今敏红辣椒动漫风格，模型权重转换自AnimeGAN V2官方开源项目|paddle|
 |[animegan_v2_paprika_98](https://www.paddlepaddle.org.cn/hubdetail?name=animegan_v2_paprika_98&en_category=GANs)|可将输入的图像转换成今敏红辣椒动漫风格，模型权重转换自AnimeGAN V2官方开源项目|paddle|
 
+## FastDeploy paddle backend部署和hub速度对比(ips)
+| Device | FastDeploy | Hub |
+|  CPU   |  0.075     | 0.069|
+|  GPU   |  8.33      | 8.26 |
+
+
 
 ## 下载预训练模型
 使用fastdeploy.download_model即可以下载模型, 例如下载animegan_v1_hayao_60
