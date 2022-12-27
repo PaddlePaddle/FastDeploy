@@ -63,6 +63,9 @@ void NMS(DetectionResult* result, float iou_threshold) {
     result->boxes.emplace_back(backup.boxes[i]);
     result->scores.push_back(backup.scores[i]);
     result->label_ids.push_back(backup.label_ids[i]);
+    if (!backup.yolo_masks[i].empty()) {
+      result->yolo_masks.push_back(backup.yolo_masks[i]);
+    }
   }
 }
 

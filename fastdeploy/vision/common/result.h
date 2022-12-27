@@ -107,8 +107,10 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   /** \brief For instance segmentation model, `masks` is the predict mask for all the deteced objects
    */
   std::vector<Mask> masks;
-  //// Shows if the DetectionResult has mask
+  /// Shows if the DetectionResult has mask
   bool contain_masks = false;
+  /// Only for YOLOv5-Seg, 1x32D Tensor represents mask
+  std::vector<std::vector<float>> yolo_masks;
 
   ResultType type = ResultType::DETECTION;
 
