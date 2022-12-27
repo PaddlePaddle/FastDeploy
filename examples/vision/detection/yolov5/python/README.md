@@ -25,6 +25,8 @@ python infer.py --model yolov5s_infer --image 000000014439.jpg --device gpu
 python infer.py --model yolov5s_infer --image 000000014439.jpg --device gpu --use_trt True
 # 昆仑芯XPU推理
 python infer.py --model yolov5s_infer --image 000000014439.jpg --device kunlunxin
+# 华为昇腾推理
+python infer.py --model yolov5s_infer --image 000000014439.jpg --device ascend
 ```
 
 运行完成可视化结果如下图所示
