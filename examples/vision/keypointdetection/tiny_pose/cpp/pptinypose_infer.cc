@@ -110,10 +110,9 @@ void GpuInfer(const std::string& tinypose_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto tinypose_vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
   cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
@@ -145,10 +144,9 @@ void TrtInfer(const std::string& tinypose_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto tinypose_vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.5);
   cv::imwrite("tinypose_vis_result.jpg", tinypose_vis_im);
