@@ -17,17 +17,14 @@ cd FastDeploy/examples/vision/detection/paddledetection/python/serving
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
-# Install uvicorn
-pip install uvicorn
-
 # Launch server, it's configurable to use GPU and TensorRT,
-# and run 'uvicorn --help' to check how to specify IP and port, etc.
+# and use --host, --port to specify IP and port
 # CPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu uvicorn server:app
+MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu fastdeploy simple_serving --app server:app
 # GPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu uvicorn server:app
+MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu fastdeploy simple_serving --app server:app
 # GPU and TensorRT
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu USE_TRT=true uvicorn server:app
+MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu USE_TRT=true fastdeploy simple_serving --app server:app
 ```
 
 Client:
