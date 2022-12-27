@@ -14,7 +14,8 @@
 
 #pragma once
 
-#include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
+#include "fastdeploy/fastdeploy_model.h"
+#include "fastdeploy/vision/detection/contrib/yolov5seg/preprocessor.h"
 #include "fastdeploy/vision/detection/contrib/yolov5seg/postprocessor.h"
 
 namespace fastdeploy {
@@ -22,7 +23,7 @@ namespace vision {
 namespace detection {
 /*! @brief YOLOv5Seg model object used when to load a YOLOv5Seg model exported by YOLOv5.
  */
-class FASTDEPLOY_DECL YOLOv5Seg : public YOLOv5 {
+class FASTDEPLOY_DECL YOLOv5Seg : public FastDeployModel {
  public:
   /** \brief  Set path of model file and the configuration of runtime.
    *
@@ -54,6 +55,11 @@ class FASTDEPLOY_DECL YOLOv5Seg : public YOLOv5 {
   virtual bool BatchPredict(const std::vector<cv::Mat>& imgs,
                             std::vector<DetectionResult>* results);
 
+  /// Get preprocessor reference of YOLOv5Seg
+  virtual YOLOv5SegPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
   /// Get postprocessor reference of YOLOv5Seg
   virtual YOLOv5SegPostprocessor& GetPostprocessor() {
     return postprocessor_;
@@ -61,6 +67,7 @@ class FASTDEPLOY_DECL YOLOv5Seg : public YOLOv5 {
 
  protected:
   bool Initialize();
+  YOLOv5SegPreprocessor preprocessor_;
   YOLOv5SegPostprocessor postprocessor_;
 };
 

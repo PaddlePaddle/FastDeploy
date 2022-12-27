@@ -16,10 +16,10 @@
 
 namespace fastdeploy {
 void BindYOLOv5Seg(pybind11::module& m) {
-  pybind11::class_<vision::detection::YOLOv5Preprocessor>(
+  pybind11::class_<vision::detection::YOLOv5SegPreprocessor>(
       m, "YOLOv5SegPreprocessor")
       .def(pybind11::init<>())
-      .def("run", [](vision::detection::YOLOv5Preprocessor& self, std::vector<pybind11::array>& im_list) {
+      .def("run", [](vision::detection::YOLOv5SegPreprocessor& self, std::vector<pybind11::array>& im_list) {
         std::vector<vision::FDMat> images;
         for (size_t i = 0; i < im_list.size(); ++i) {
           images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
@@ -34,11 +34,11 @@ void BindYOLOv5Seg(pybind11::module& m) {
         }
         return make_pair(outputs, ims_info);
       })
-      .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize, &vision::detection::YOLOv5Preprocessor::SetSize)
-      .def_property("padding_value", &vision::detection::YOLOv5Preprocessor::GetPaddingValue, &vision::detection::YOLOv5Preprocessor::SetPaddingValue)
-      .def_property("is_scale_up", &vision::detection::YOLOv5Preprocessor::GetScaleUp, &vision::detection::YOLOv5Preprocessor::SetScaleUp)
-      .def_property("is_mini_pad", &vision::detection::YOLOv5Preprocessor::GetMiniPad, &vision::detection::YOLOv5Preprocessor::SetMiniPad)
-      .def_property("stride", &vision::detection::YOLOv5Preprocessor::GetStride, &vision::detection::YOLOv5Preprocessor::SetStride);
+      .def_property("size", &vision::detection::YOLOv5SegPreprocessor::GetSize, &vision::detection::YOLOv5SegPreprocessor::SetSize)
+      .def_property("padding_value", &vision::detection::YOLOv5SegPreprocessor::GetPaddingValue, &vision::detection::YOLOv5SegPreprocessor::SetPaddingValue)
+      .def_property("is_scale_up", &vision::detection::YOLOv5SegPreprocessor::GetScaleUp, &vision::detection::YOLOv5SegPreprocessor::SetScaleUp)
+      .def_property("is_mini_pad", &vision::detection::YOLOv5SegPreprocessor::GetMiniPad, &vision::detection::YOLOv5SegPreprocessor::SetMiniPad)
+      .def_property("stride", &vision::detection::YOLOv5SegPreprocessor::GetStride, &vision::detection::YOLOv5SegPreprocessor::SetStride);
 
   pybind11::class_<vision::detection::YOLOv5SegPostprocessor>(
       m, "YOLOv5SegPostprocessor")
