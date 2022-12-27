@@ -4,7 +4,7 @@ import cv2
 import fastdeploy as fd
 
 if __name__ == '__main__':
-    url = "http://127.0.0.1:8000/fd/ppyoloe"
+    url = "http://127.0.0.1:8000/fd/yolov5s"
     headers = {"Content-Type": "application/json"}
 
     im = cv2.imread("000000014439.jpg")
