@@ -1,4 +1,5 @@
 import fastdeploy as fd
+from fastdeploy.serving.server import SimpleServer
 import os
 import logging
 
@@ -33,7 +34,7 @@ model_instance = fd.vision.detection.PPYOLOE(
     runtime_option=option)
 
 # Create server, setup REST API
-app = fd.serving.SimpleServer()
+app = SimpleServer()
 app.register(
     task_name="fd/ppyoloe",
     model_handler=fd.serving.handler.VisionModelHandler,

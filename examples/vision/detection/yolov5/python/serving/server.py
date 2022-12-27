@@ -1,4 +1,5 @@
 import fastdeploy as fd
+from fastdeploy.serving.server import SimpleServer
 import os
 import logging
 
@@ -30,7 +31,7 @@ model_instance = fd.vision.detection.YOLOv5(
     model_format=fd.ModelFormat.PADDLE)
 
 # Create server, setup REST API
-app = fd.serving.SimpleServer()
+app = SimpleServer()
 app.register(
     task_name="fd/yolov5s",
     model_handler=fd.serving.handler.VisionModelHandler,

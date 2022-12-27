@@ -2,18 +2,14 @@ import requests
 import json
 import cv2
 import fastdeploy as fd
+from fastdeploy.serving.utils import cv2_to_base64
 
 if __name__ == '__main__':
     url = "http://127.0.0.1:8000/fd/ppyoloe"
     headers = {"Content-Type": "application/json"}
 
     im = cv2.imread("000000014439.jpg")
-    data = {
-        "data": {
-            "image": fd.serving.utils.cv2_to_base64(im)
-        },
-        "parameters": {}
-    }
+    data = {"data": {"image": cv2_to_base64(im)}, "parameters": {}}
 
     resp = requests.post(url=url, headers=headers, data=json.dumps(data))
     if resp.status_code == 200:

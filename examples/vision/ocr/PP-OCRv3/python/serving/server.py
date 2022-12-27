@@ -1,4 +1,5 @@
 import fastdeploy as fd
+from fastdeploy.serving.server import SimpleServer
 import os
 import logging
 
@@ -70,7 +71,7 @@ ppocr_v3.cls_batch_size = cls_batch_size
 ppocr_v3.rec_batch_size = rec_batch_size
 
 # Create server, setup REST API
-app = fd.serving.SimpleServer()
+app = SimpleServer()
 app.register(
     task_name="fd/ppocrv3",
     model_handler=fd.serving.handler.VisionModelHandler,
