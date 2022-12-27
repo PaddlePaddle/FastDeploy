@@ -66,11 +66,11 @@ void CpuInfer(const std::string& det_model_dir,
             << std::endl;
 }
 
-void XpuInfer(const std::string& det_model_dir,
+void KunlunXinInfer(const std::string& det_model_dir,
               const std::string& tinypose_model_dir,
               const std::string& image_file) {
   auto option = fastdeploy::RuntimeOption();
-  option.UseXpu();
+  option.UseKunlunXin();
   auto det_model_file = det_model_dir + sep + "model.pdmodel";
   auto det_params_file = det_model_dir + sep + "model.pdiparams";
   auto det_config_file = det_model_dir + sep + "infer_cfg.yml";
@@ -229,7 +229,7 @@ int main(int argc, char* argv[]) {
                  "./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with xpu."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
   } else if (std::atoi(argv[4]) == 2) {
     TrtInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 3) {
-    XpuInfer(argv[1], argv[2], argv[3]);
+    KunlunXinInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

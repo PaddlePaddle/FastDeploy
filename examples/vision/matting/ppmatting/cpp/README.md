@@ -31,7 +31,7 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 1
 # GPU上TensorRT推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
-# XPU推理
+# 昆仑芯XPU推理
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 3
 ```
 

@@ -12,7 +12,7 @@
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/yolov6/python/
 
-https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
 tar -xf yolov6s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
@@ -20,8 +20,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device cpu
 # GPU推理
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device gpu
-# XPU推理
-python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device xpu
+# 昆仑芯XPU推理
+python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device kunlunxin
 ```
 如果想要验证ONNX模型的推理，可以参考如下命令：
 ```bash
