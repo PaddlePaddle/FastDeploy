@@ -41,7 +41,7 @@ python infer.py --model_dir stable-diffusion-v1-4/ --scheduler "pndm" --backend 
 python infer.py --model_dir stable-diffusion-v1-5/ --scheduler "euler_ancestral" --backend paddle
 
 # 在昆仑芯XPU上推理
-python infer.py --model_dir stable-diffusion-v1-5/ --scheduler "euler_ancestral" --backend paddle-xpu
+python infer.py --model_dir stable-diffusion-v1-5/ --scheduler "euler_ancestral" --backend paddle-kunlunxin
 ```
 
 #### 参数说明
@@ -52,7 +52,7 @@ python infer.py --model_dir stable-diffusion-v1-5/ --scheduler "euler_ancestral"
 |----------|--------------|
 | --model_dir | 导出后模型的目录。 |
 | --model_format | 模型格式。默认为`'paddle'`，可选列表：`['paddle', 'onnx']`。 |
-| --backend | 推理引擎后端。默认为`paddle`，可选列表：`['onnx_runtime', 'paddle', 'paddle-xpu']`，当模型格式为`onnx`时，可选列表为`['onnx_runtime']`。 |
+| --backend | 推理引擎后端。默认为`paddle`，可选列表：`['onnx_runtime', 'paddle', 'paddle-kunlunxin']`，当模型格式为`onnx`时，可选列表为`['onnx_runtime']`。 |
 | --scheduler | StableDiffusion 模型的scheduler。默认为`'pndm'`。可选列表：`['pndm', 'euler_ancestral']`，StableDiffusio模型对应的scheduler可参考[ppdiffuser模型列表](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers/examples/textual_inversion)。|
 | --unet_model_prefix | UNet模型前缀。默认为`unet`。 |
 | --vae_model_prefix | VAE模型前缀。默认为`vae_decoder`。 |

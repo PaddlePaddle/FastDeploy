@@ -25,8 +25,8 @@ python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infe
 python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --det_model_dir PP_PicoDet_V2_S_Pedestrian_320x320_infer --image 000000018491.jpg --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --det_model_dir PP_PicoDet_V2_S_Pedestrian_320x320_infer --image 000000018491.jpg --device gpu --use_trt True
-# XPU推理
-python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --det_model_dir PP_PicoDet_V2_S_Pedestrian_320x320_infer --image 000000018491.jpg --device xpu
+# 昆仑芯XPU推理
+python det_keypoint_unite_infer.py --tinypose_model_dir PP_TinyPose_256x192_infer --det_model_dir PP_PicoDet_V2_S_Pedestrian_320x320_infer --image 000000018491.jpg --device kunlunxin
 ```
 
 运行完成可视化结果如下图所示

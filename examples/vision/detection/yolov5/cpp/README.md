@@ -29,7 +29,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 1
 # GPU上TensorRT推理
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 2
-# XPU推理
+# 昆仑芯XPU推理
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 3
 ```
 

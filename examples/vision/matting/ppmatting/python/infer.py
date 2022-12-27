@@ -21,7 +21,7 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu', 'xpu' or 'gpu'.")
+        help="Type of inference device, support 'cpu', 'kunlunxin' or 'gpu'.")
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -40,8 +40,8 @@ def build_option(args):
         option.use_trt_backend()
         option.set_trt_input_shape("img", [1, 3, 512, 512])
 
-    if args.device.lower() == "xpu":
-        option.use_xpu()
+    if args.device.lower() == "kunlunxin":
+        option.use_kunlunxin()
     return option
 
 
