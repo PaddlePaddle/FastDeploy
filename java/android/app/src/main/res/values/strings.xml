@@ -41,11 +41,15 @@
     <string name="FACEDET_MODEL_DIR_DEFAULT">models/scrfd_500m_bnkps_shape320x320_pd</string>
     <!-- segmentation values ... -->
     <string name="SEGMENTATION_MODEL_DIR_DEFAULT">models/portrait_pp_humansegv2_lite_256x144_inference_model</string>
+    <!-- face align values ... -->
+    <string name="FACE_ALIGN_MODEL_DIR_DEFAULT">models</string>
     <!-- keypointdetection values   -->
     <string name="KEYPOINT_DETECTION_MODEL_DIR_DEFAULT">models/PP_TinyPose_128x96_infer</string>
     <string name="VOICE_ASSISTANT_MODEL_DIR_DEFAULT">models</string>
     <string name="SUPER_RESOLUTION_MODEL_DIR_DEFAULT">models</string>
     <string name="UIE_MODEL_DIR_DEFAULT">models/uie-nano</string>
+    <!-- matting values ... -->
+    <string name="MATTING_MODEL_DIR_DEFAULT">models</string>
     <!-- Other resources values-->
     <string name="action_bar_take_photo">拍照识别</string>
     <string name="action_bar_realtime">实时识别</string>
