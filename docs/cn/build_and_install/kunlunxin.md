@@ -1,4 +1,4 @@
-[English](../../en/build_and_install/xpu.md) | 简体中文
+[English](../../en/build_and_install/kunlunxin.md) | 简体中文
 
 # 昆仑芯 XPU 部署环境编译安装
 
@@ -10,7 +10,7 @@ FastDeploy 基于 Paddle Lite 后端支持在昆仑芯 XPU 上进行部署推理
 相关编译选项说明如下：  
 |编译选项|默认值|说明|备注|  
 |:---|:---|:---|:---|  
-| WITH_XPU| OFF | 需要在XPU上部署时需要设置为ON | - |
+| WITH_KUNLUNXIN| OFF | 需要在昆仑芯XPU上部署时需要设置为ON | - |
 | ENABLE_ORT_BACKEND | OFF | 是否编译集成ONNX Runtime后端 | - |
 | ENABLE_PADDLE_BACKEND | OFF | 是否编译集成Paddle Inference后端 | - |
 | ENABLE_OPENVINO_BACKEND | OFF | 是否编译集成OpenVINO后端 | - |
@@ -41,11 +41,11 @@ cd FastDeploy
 mkdir build && cd build
 
 # CMake configuration with KunlunXin xpu toolchain
-cmake -DWITH_XPU=ON  \
+cmake -DWITH_KUNLUNXIN=ON  \
       -DWITH_GPU=OFF  \ # 不编译 GPU
       -DENABLE_ORT_BACKEND=ON  \ # 可选择开启 ORT 后端
       -DENABLE_PADDLE_BACKEND=ON  \ # 可选择开启 Paddle 后端
-      -DCMAKE_INSTALL_PREFIX=fastdeploy-xpu \
+      -DCMAKE_INSTALL_PREFIX=fastdeploy-kunlunxin \
       -DENABLE_VISION=ON \ # 是否编译集成视觉模型的部署模块，可选择开启
       -DOPENCV_DIRECTORY=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
       ..
@@ -54,14 +54,14 @@ cmake -DWITH_XPU=ON  \
 make -j8
 make install
 ```  
-编译完成之后，会生成 fastdeploy-xpu 目录，表示基于 Paddle Lite 的 FastDeploy 库编译完成。
+编译完成之后，会生成 fastdeploy-kunlunxin 目录，表示基于 Paddle Lite 的 FastDeploy 库编译完成。
 
 ## Python 编译
 编译命令如下：
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/python
-export WITH_XPU=ON
+export WITH_KUNLUNXIN=ON
 export WITH_GPU=OFF
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_PADDLE_BACKEND=ON

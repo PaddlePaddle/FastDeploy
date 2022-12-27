@@ -41,7 +41,7 @@ tar zxvf mobilefacenet_adaface.tgz -C ./
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 2
 
-# XPU推理
+# 昆仑芯XPU推理
 ./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 3

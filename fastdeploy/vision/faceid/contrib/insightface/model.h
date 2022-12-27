@@ -38,7 +38,7 @@ class FASTDEPLOY_DECL ArcFace : public InsightFaceRecognitionBase {
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-      valid_xpu_backends = {Backend::LITE};
+      valid_kunlunxin_backends = {Backend::LITE};
     }
     initialized = Initialize();
   }
@@ -66,7 +66,7 @@ class FASTDEPLOY_DECL CosFace : public InsightFaceRecognitionBase {
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-      valid_xpu_backends = {Backend::LITE};
+      valid_kunlunxin_backends = {Backend::LITE};
     }
     initialized = Initialize();
   }
@@ -93,7 +93,7 @@ class FASTDEPLOY_DECL PartialFC : public InsightFaceRecognitionBase {
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-      valid_xpu_backends = {Backend::LITE};
+      valid_kunlunxin_backends = {Backend::LITE};
     }
     initialized = Initialize();
   }
@@ -120,7 +120,7 @@ class FASTDEPLOY_DECL VPL : public InsightFaceRecognitionBase {
     } else {
       valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::LITE};
       valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
-      valid_xpu_backends = {Backend::LITE};
+      valid_kunlunxin_backends = {Backend::LITE};
     }
     initialized = Initialize();
   }
