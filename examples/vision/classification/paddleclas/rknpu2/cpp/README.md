@@ -16,9 +16,9 @@
 .
 ├── CMakeLists.txt
 ├── build  # 编译文件夹
-├── image  # 存放图片的文件夹
+├── images  # 存放图片的文件夹
 ├── infer.cc
-├── model  # 存放模型文件的文件夹
+├── ppclas_model_dir  # 存放模型文件的文件夹
 └── thirdpartys  # 存放sdk的文件夹
 ```
 
@@ -26,7 +26,7 @@
 ```bash
 mkdir build
 mkdir images
-mkdir model
+mkdir ppclas_model_dir
 mkdir thirdpartys
 ```
 
@@ -39,7 +39,7 @@ fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
 
 ### 拷贝模型文件，以及配置文件至model文件夹
 在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model，转换方案: ([ResNet50_vd RKNN模型](../python/README.md))。
+转换为RKNN后的模型文件也需要拷贝至model，转换方案: ([ResNet50_vd RKNN模型](../README.md))。
 
 ### 准备测试图片至image文件夹
 ```bash
@@ -59,7 +59,7 @@ make install
 
 ```bash
 cd ./build/install
-./rknpu_test ./model ./images/ILSVRC2012_val_00000010.jpeg
+./rknpu_test ./ppclas_model_dir ./images/ILSVRC2012_val_00000010.jpeg
 ```
 
 ## 运行结果展示
@@ -71,3 +71,8 @@ scores: 0.684570,
 ## 注意事项
 RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
 DisablePermute(C++)或`disable_permute(Python)，在预处理阶段禁用数据格式的转换。
+
+## 其它文档
+- [ResNet50_vd Python 部署](../python)
+- [模型预测结果说明](../../../../../../docs/api/vision_results/)
+- [转换ResNet50_vd RKNN模型文档](../README.md)
