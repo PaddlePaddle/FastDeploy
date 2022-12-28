@@ -13,10 +13,18 @@ tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 # 静态图转ONNX模型，注意，这里的save_file请和压缩包名对齐
-paddle2onnx --model_dir ResNet50_vd_infer --model_filename inference.pdmodel --params_filename inference.pdiparams --save_file ResNet50_vd_infer/ResNet50_vd_infer.onnx --enable_dev_version True --opset_version 12 --enable_onnx_checker True
+paddle2onnx --model_dir ResNet50_vd_infer  \
+            --model_filename inference.pdmodel \
+            --params_filename inference.pdiparams  \
+            --save_file ResNet50_vd_infer/ResNet50_vd_infer.onnx  \
+            --enable_dev_version True  \
+            --opset_version 12  \
+            --enable_onnx_checker True
 
 # 固定shape，注意这里的inputs得对应netron.app展示的 inputs 的 name，有可能是image 或者 x
-python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer.onnx --output_model ResNet50_vd_infer/ResNet50_vd_infer.onnx  --input_shape_dict "{'inputs':[1,3,224,224]}"
+python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
+                               --output_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
+                               --input_shape_dict "{'inputs':[1,3,224,224]}"
 
 # 配置文件 ResNet50_vd_infer_rknn.yaml 如下:
 model_path: ./ResNet50_vd_infer.onnx
