@@ -52,7 +52,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
   void DisablePermute();
 
  private:
-  bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
+  bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
   bool use_cuda_ = false;
@@ -63,7 +63,7 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
   // for recording the switch of normalize
   bool disable_normalize = false;
   // read config file
-  std::string config_file;
+  std::string config_file_;
 };
 
 }  // namespace classification

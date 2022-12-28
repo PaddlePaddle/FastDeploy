@@ -44,7 +44,7 @@ if __name__ == "__main__":
         runtime_option=runtime_option,
         model_format=fd.ModelFormat.RKNN)
     # 禁用通道转换    
-    model.preprocessor.DisablePermute()
+    model.preprocessor.disable_permute()
     im = cv2.imread(args.image)
     result = model.predict(im, topk=1)
     print(result)
