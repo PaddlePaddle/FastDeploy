@@ -263,7 +263,7 @@ void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
 }
 
-void RuntimeOption::UseXpu(int xpu_id, 
+void RuntimeOption::UseKunlunXin(int kunlunxin_id, 
                           int l3_workspace_size,
                           bool locked,
                           bool autotune,
@@ -271,16 +271,16 @@ void RuntimeOption::UseXpu(int xpu_id,
                           const std::string &precision,
                           bool adaptive_seqlen,
                           bool enable_multi_stream) {
-  enable_xpu = true;
-  device_id = xpu_id;
-  xpu_l3_workspace_size = l3_workspace_size;
-  xpu_locked=locked;
-  xpu_autotune=autotune;
-  xpu_autotune_file=autotune_file;
-  xpu_precision = precision;
-  xpu_adaptive_seqlen=adaptive_seqlen;
-  xpu_enable_multi_stream=enable_multi_stream;
-  device = Device::XPU;
+  enable_kunlunxin = true;
+  device_id = kunlunxin_id;
+  kunlunxin_l3_workspace_size = l3_workspace_size;
+  kunlunxin_locked=locked;
+  kunlunxin_autotune=autotune;
+  kunlunxin_autotune_file=autotune_file;
+  kunlunxin_precision = precision;
+  kunlunxin_adaptive_seqlen=adaptive_seqlen;
+  kunlunxin_enable_multi_stream=enable_multi_stream;
+  device = Device::KUNLUNXIN;
 }
 
 void RuntimeOption::UseAscend(){
@@ -611,8 +611,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::XPU || option.device == Device::ASCEND,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::XPU.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::KUNLUNXIN || option.device == Device::ASCEND,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::KUNLUNXIN.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -660,7 +660,11 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  return backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  for (auto& tensor : output_tensors_) {
+    tensor.device_id = option.device_id;
+  }
+  return result;
 }
 
 void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
@@ -882,15 +886,15 @@ void Runtime::CreateLiteBackend() {
   lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
   lite_option.enable_timvx = option.enable_timvx;
   lite_option.enable_ascend = option.enable_ascend;
-  lite_option.enable_xpu = option.enable_xpu;
+  lite_option.enable_kunlunxin = option.enable_kunlunxin;
   lite_option.device_id  = option.device_id;
-  lite_option.xpu_l3_workspace_size  = option.xpu_l3_workspace_size;
-  lite_option.xpu_locked = option.xpu_locked;
-  lite_option.xpu_autotune = option.xpu_autotune;
-  lite_option.xpu_autotune_file = option.xpu_autotune_file;
-  lite_option.xpu_precision  = option.xpu_precision;
-  lite_option.xpu_adaptive_seqlen = option.xpu_adaptive_seqlen;
-  lite_option.xpu_enable_multi_stream = option.xpu_enable_multi_stream;
+  lite_option.kunlunxin_l3_workspace_size  = option.kunlunxin_l3_workspace_size;
+  lite_option.kunlunxin_locked = option.kunlunxin_locked;
+  lite_option.kunlunxin_autotune = option.kunlunxin_autotune;
+  lite_option.kunlunxin_autotune_file = option.kunlunxin_autotune_file;
+  lite_option.kunlunxin_precision  = option.kunlunxin_precision;
+  lite_option.kunlunxin_adaptive_seqlen = option.kunlunxin_adaptive_seqlen;
+  lite_option.kunlunxin_enable_multi_stream = option.kunlunxin_enable_multi_stream;
 
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
