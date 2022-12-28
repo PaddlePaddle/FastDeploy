@@ -1,7 +1,6 @@
 English | [简体中文](README_CN.md)
 
-# PaddleDetection Python Simple Serving Demo
-
+# PP-OCRv3 Python Simple Serving Demo
 
 ## Environment
 
@@ -11,11 +10,19 @@ Server:
 ```bash
 # Download demo code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/ocr/PP-OCRv3/python/serving
 
-# Download PPYOLOE model
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-tar xvf ppyoloe_crn_l_300e_coco.tgz
+# Download models and labels
+wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
+tar xvf ch_PP-OCRv3_det_infer.tar
+
+wget https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar
+tar -xvf ch_ppocr_mobile_v2.0_cls_infer.tar
+
+wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_rec_infer.tar
+tar xvf ch_PP-OCRv3_rec_infer.tar
+
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/ppocr/utils/ppocr_keys_v1.txt
 
 # Launch server, change the configurations in server.py to select hardware, backend, etc.
 # and use --host, --port to specify IP and port
@@ -26,10 +33,10 @@ Client:
 ```bash
 # Download demo code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/ocr/PP-OCRv3/python/serving
 
 # Download test image
-wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
 # Send request and get inference result (Please adapt the IP and port if necessary)
 python client.py
