@@ -39,6 +39,7 @@ class FASTDEPLOY_DECL PicoDet : public PPDetBase {
                         Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_rknpu_backends = {Backend::RKNPU2};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -66,6 +67,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
                         Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
     valid_timvx_backends = {Backend::LITE};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -91,6 +93,7 @@ class FASTDEPLOY_DECL PPYOLO : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -109,6 +112,7 @@ class FASTDEPLOY_DECL YOLOv3 : public PPDetBase {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
                         Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -127,6 +131,7 @@ class FASTDEPLOY_DECL PaddleYOLOX : public PPDetBase {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER,
                         Backend::LITE};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -144,6 +149,7 @@ class FASTDEPLOY_DECL FasterRCNN : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -160,6 +166,7 @@ class FASTDEPLOY_DECL MaskRCNN : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -176,6 +183,7 @@ class FASTDEPLOY_DECL SSD : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::PDINFER, Backend::LITE};
     valid_gpu_backends = {Backend::PDINFER};
+    valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
     initialized = Initialize();
   }
@@ -193,6 +201,7 @@ class FASTDEPLOY_DECL PaddleYOLOv5 : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -209,6 +218,7 @@ class FASTDEPLOY_DECL PaddleYOLOv6 : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -225,6 +235,7 @@ class FASTDEPLOY_DECL PaddleYOLOv7 : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::ORT, Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 
@@ -241,6 +252,7 @@ class FASTDEPLOY_DECL RTMDet : public PPDetBase {
                 model_format) {
     valid_cpu_backends = {Backend::OPENVINO, Backend::ORT, Backend::PDINFER};
     valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
+    valid_kunlunxin_backends = {Backend::LITE};
     initialized = Initialize();
   }
 

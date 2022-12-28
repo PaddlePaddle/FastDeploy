@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
                  "./ppocr_keys_v1.txt ./12.jpg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with gpu and use Paddle-TRT; 4: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -121,6 +121,8 @@ int main(int argc, char* argv[]) {
     option.UseTrtBackend();
     option.EnablePaddleTrtCollectShape();
     option.EnablePaddleToTrt();
+  } else if (flag == 4) {
+    option.UseKunlunXin();
   }
 
   std::string det_model_dir = argv[1];

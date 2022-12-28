@@ -8,7 +8,7 @@
 - [Build and Install FastDeploy Library on GPU Platform](en/build_and_install/gpu.md)
 - [Build and Install FastDeploy Library on CPU Platform](en/build_and_install/cpu.md)
 - [Build and Install FastDeploy Library on IPU Platform](en/build_and_install/ipu.md)
-- [Build and Install FastDeploy Library on KunlunXin XPU Platform](en/build_and_install/xpu.md)
+- [Build and Install FastDeploy Library on KunlunXin XPU Platform](en/build_and_install/kunlunxin.md)
 - [Build and Install on RV1126 Platform](en/build_and_install/rv1126.md)
 - [Build and Install on RK3588 Platform](en/build_and_install/rknpu2.md)
 - [Build and Install on A311D Platform](en/build_and_install/a311d.md)

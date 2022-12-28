@@ -204,7 +204,7 @@ public class UIEMainActivity extends Activity implements View.OnClickListener {
                 option.enableLiteFp16();
             }
             predictor.init(modelFile, paramsFile, vocabFile,
-                    0.3f, 128, schemaTexts,
+                    0.3f, 128, schemaTexts, 64,
                     option, SchemaLanguage.ZH);
         }
     }

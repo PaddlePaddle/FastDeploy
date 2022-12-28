@@ -18,10 +18,24 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-#下载官方转换好的YOLOv6模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx
+#下载Paddle模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_infer.tar
+tar -xf yolov6s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
+# CPU推理
+./infer_paddle_demo yolov6s_infer 000000014439.jpg 0
+# GPU推理
+./infer_paddle_demo yolov6s_infer 000000014439.jpg 1
+# 昆仑芯XPU推理
+./infer_paddle_demo yolov6s_infer 000000014439.jpg 2
+```
+
+如果想要验证ONNX模型的推理，可以参考如下命令：
+```bash
+#下载官方转换好的YOLOv6 ONNX模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # CPU推理
 ./infer_demo yolov6s.onnx 000000014439.jpg 0
