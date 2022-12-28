@@ -59,7 +59,9 @@ bool AnimeGAN::Preprocess(std::vector<Mat>& images, std::vector<FDTensor>* outpu
                 << "Cast" << "." << std::endl;
         return false;
       }
-      ret = Convert::Run(&images[i], {1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f}, {-1.f, -1.f, -1.f});
+      std::vector<float> mean{1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
+      std::vector<float> std {-1.f, -1.f, -1.f};
+      ret = Convert::Run(&images[i], mean, std);
       if (!ret) {
         FDERROR << "Failed to processs image:" << i << " in "
                 << "Cast" << "." << std::endl;
@@ -94,7 +96,9 @@ bool AnimeGAN::Postprocess(std::vector<FDTensor>& infer_results,
   float* data = new float[shape[1]*shape[2]*3];
   std::memcpy(reinterpret_cast<char*>(data), reinterpret_cast<char*>(infer_result_data+i*size), sizeof(float)*shape[1]*shape[2]*3);
   Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, data);
-  Convert::Run(&result_mat, {127.5f, 127.5f, 127.5f}, {127.5f, 127.5f, 127.5f});
+  std::vector<float> mean{127.5f, 127.5f, 127.5f};
+  std::vector<float> std{127.5f, 127.5f, 127.5f};
+  Convert::Run(&result_mat, mean, std);
   // tmp data type is float[0-1.0],convert to uint type
   auto temp = result_mat.GetOpenCVMat();
   cv::Mat res = cv::Mat::zeros(temp->size(), CV_8UC3);
