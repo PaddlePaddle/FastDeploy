@@ -65,6 +65,19 @@ The extraction schema: ['肿瘤的大小', '肿瘤的个数', '肝癌级别', '�
 ......
 ```
 
+### 参数说明
+
+`infer.py` 除了以上示例的命令行参数，还支持更多命令行参数的设置。以下为各命令行参数的说明。
+
+| 参数 |参数说明 |
+|----------|--------------|
+|--model_dir | 指定部署模型的目录 |
+|--batch_size |输入的batch size，默认为 1|
+|--max_length |最大序列长度，默认为 128|
+|--device | 运行的设备，可选范围: ['cpu', 'gpu']，默认为'cpu' |
+|--backend | 支持的推理后端，可选范围: ['onnx_runtime', 'paddle_inference', 'openvino', 'tensorrt', 'paddle_tensorrt']，默认为'paddle_inference' |
+|--use_fp16 | 是否使用FP16模式进行推理。使用tensorrt和paddle_tensorrt后端时可开启，默认为False |
+
 ## UIE模型各抽取任务使用方式
 
 在UIE模型中，schema代表要抽取的结构化信息，所以UIE模型可通过设置不同的schema支持不同信息抽取任务。

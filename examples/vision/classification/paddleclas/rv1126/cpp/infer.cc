@@ -23,7 +23,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file) {
   auto model_file = model_dir + sep + "inference.pdmodel";
   auto params_file = model_dir + sep + "inference.pdiparams";
   auto config_file = model_dir + sep + "inference_cls.yaml";
-  
+  fastdeploy::vision::EnableFlyCV(); 
   fastdeploy::RuntimeOption option;
   option.UseTimVX();
 

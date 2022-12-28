@@ -51,16 +51,16 @@ models
 ```bash
 # x.y.z represent image versions. Please refer to the serving document to replace them with numbers
 # GPU Image
-docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 # CPU Image
-docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # Running
-docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 bash
+docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10 bash
 ```
 
 ## Deployment Models
-The serving directory contains the configuration to start the pipeline service and the code to send the prediction request, including 
+The serving directory contains the configuration to start the pipeline service and the code to send the prediction request, including
 
 ```
 models                    # 服务化启动需要的模型仓库，包含模型和服务配置文件
@@ -70,7 +70,7 @@ token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚�
 
 *Attention*:Attention: When starting the service, each python backend process of Server requests 64M memory by default, and the docker started by default cannot start more than one python backend node. There are two solutions:
 
-- 1.Set the `shm-size` parameter when starting the container, for example, `docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash`
+- 1.Set the `shm-size` parameter when starting the container, for example, `docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/serving/models:/models registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash`
 - 2.Set the `shm-default-byte-size` parameter of python backend when starting the service. Set the default memory of python backend to 10M： `tritonserver --model-repository=/models --backend-config=python,shm-default-byte-size=10485760`
 
 ### Classification Task
