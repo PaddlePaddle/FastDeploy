@@ -72,6 +72,10 @@ def build_option(args):
         option.use_kunlunxin()
         return option
 
+    if args.device.lower() == "ascend":
+        option.use_ascend()
+        return option
+
     if args.backend.lower() == "trt":
         assert args.device.lower(
         ) == "gpu", "TensorRT backend require inference on device GPU."
@@ -112,6 +116,8 @@ runtime_option = build_option(args)
 
 # PPOCR的cls和rec模型现在已经支持推理一个Batch的数据
 # 定义下面两个变量后, 可用于设置trt输入shape, 并在PPOCR模型初始化后, 完成Batch推理设置
+# 当用户要把PP-OCR部署在对动态shape推理支持有限的设备上时,(例如华为昇腾)
+# 需要把cls_batch_size和rec_batch_size都设置为1.
 cls_batch_size = 1
 rec_batch_size = 6
 
@@ -143,6 +149,10 @@ rec_option.set_trt_input_shape("x", [1, 3, 32, 10],
 # rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
 rec_model = fd.vision.ocr.Recognizer(
     rec_model_file, rec_params_file, rec_label_file, runtime_option=rec_option)
+
+# 当用户要把PP-OCR部署在对动态shape推理支持有限的设备上时,(例如华为昇腾)
+# 需要使用下行代码, 来启用rec模型的静态shape推理.
+# rec_model.preprocessor.static_shape_infer = True
 
 # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
 ppocr_v2 = fd.vision.ocr.PPOCRv2(
