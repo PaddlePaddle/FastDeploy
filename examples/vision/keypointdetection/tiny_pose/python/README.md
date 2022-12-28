@@ -57,7 +57,7 @@ PP-TinyPose模型加载和初始化，其中model_file, params_file以及config_
 > PPTinyPose.predict(input_image)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> 模型预测接口，输入图像直接输出检测结果。
 >
 > **参数**
 >
