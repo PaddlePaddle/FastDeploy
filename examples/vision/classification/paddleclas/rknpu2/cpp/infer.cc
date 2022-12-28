@@ -31,24 +31,25 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     return;
   }
   model.GetPreprocessor().DisablePermute();
-
+  fastdeploy::TimeCounter tc;
+  tc.Start();
   auto im = cv::imread(image_file);
-
   fastdeploy::vision::ClassifyResult res;
   if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
-
   // print res
   std::cout << res.Str() << std::endl;
+  tc.End();
+  tc.PrintInfo("PPClas in RKNPU2");
 }
 
 int main(int argc, char* argv[]) {
   if (argc < 3) {
     std::cout
         << "Usage: rknpu_test path/to/model_dir path/to/image run_option, "
-           "e.g ./rknpu_test ./ppclas_model_dir ./images/ILSVRC2012_val_00000010.jpeg
+           "e.g ./rknpu_test ./ppclas_model_dir ./images/ILSVRC2012_val_00000010.jpeg"
         << std::endl;
     return -1;
   }

@@ -1,4 +1,4 @@
-# ResNet50_vd Python部署示例
+# PPClas Python部署示例
 
 在部署前，需确认以下两个步骤
 

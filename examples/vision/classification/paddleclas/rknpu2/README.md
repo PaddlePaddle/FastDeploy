@@ -1,4 +1,4 @@
-# ResNet50_vd模型部署
+# PPClas 模型部署
 
 ## 转换模型
 下面以 ResNet50_vd为例子，教大家如何转换分类模型到RKNN模型。

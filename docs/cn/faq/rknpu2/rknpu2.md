@@ -23,6 +23,7 @@ ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型�
 | Segmentation     | PP-HumanSegV2Lite | portrait                      | 133/43             |
 | Segmentation     | PP-HumanSegV2Lite | human                         | 133/43             |
 | Face Detection   | SCRFD             | SCRFD-2.5G-kps-640            | 108/42             |
+| PPClas           | ResNet50_vd       | ResNet50_vd                   | -/92               |
 
 ## RKNPU2 Backend推理使用教程
 
