@@ -22,7 +22,7 @@ public class UIEModel {
                     String vocabFile,
                     String[] schema) {
         init_(modelFile, paramsFile, vocabFile, 0.5f, 128,
-                schema, new RuntimeOption(), SchemaLanguage.ZH);
+                schema, 64, new RuntimeOption(), SchemaLanguage.ZH);
     }
 
     // Constructor with custom runtime option
@@ -32,10 +32,11 @@ public class UIEModel {
                     float positionProb,
                     int maxLength,
                     String[] schema,
+                    int batchSize,
                     RuntimeOption runtimeOption,
                     SchemaLanguage schemaLanguage) {
         init_(modelFile, paramsFile, vocabFile, positionProb, maxLength,
-                schema, runtimeOption, schemaLanguage);
+                schema, batchSize, runtimeOption, schemaLanguage);
     }
 
     // Call init manually with label file
@@ -44,7 +45,7 @@ public class UIEModel {
                         String vocabFile,
                         String[] schema) {
         return init_(modelFile, paramsFile, vocabFile, 0.5f, 128,
-                schema, new RuntimeOption(), SchemaLanguage.ZH);
+                schema, 64, new RuntimeOption(), SchemaLanguage.ZH);
     }
 
     public boolean init(String modelFile,
@@ -53,10 +54,11 @@ public class UIEModel {
                         float positionProb,
                         int maxLength,
                         String[] schema,
+                        int batchSize,
                         RuntimeOption runtimeOption,
                         SchemaLanguage schemaLanguage) {
         return init_(modelFile, paramsFile, vocabFile, positionProb, maxLength,
-                schema, runtimeOption, schemaLanguage);
+                schema, batchSize, runtimeOption, schemaLanguage);
     }
 
     public boolean release() {
@@ -103,6 +105,7 @@ public class UIEModel {
                           float positionProb,
                           int maxLength,
                           String[] schema,
+                          int batchSize,
                           RuntimeOption runtimeOption,
                           SchemaLanguage schemaLanguage) {
         if (!mInitialized) {
@@ -113,6 +116,7 @@ public class UIEModel {
                     positionProb,
                     maxLength,
                     schema,
+                    batchSize,
                     runtimeOption,
                     schemaLanguage.ordinal()
             );
@@ -130,6 +134,7 @@ public class UIEModel {
                         positionProb,
                         maxLength,
                         schema,
+                        batchSize,
                         runtimeOption,
                         schemaLanguage.ordinal()
                 );
@@ -149,6 +154,7 @@ public class UIEModel {
                                    float positionProb,
                                    int maxLength,
                                    String[] schema,
+                                   int batchSize,
                                    RuntimeOption runtimeOption,
                                    int schemaLanguage);
 

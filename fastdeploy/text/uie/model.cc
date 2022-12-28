@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "fastdeploy/text/uie/model.h"
+#include "fastdeploy/function/concat.h"
+#include "fastdeploy/function/split.h"
 #include <algorithm>
 #include <codecvt>
 #include <locale>
@@ -42,8 +44,7 @@ static std::string DBC2SBC(const std::string& content) {
       result.append(content.data() + content_utf8_len, content_char_width);
     } else {
       char dst_char[5] = {0};
-      uint32_t utf8_uint32 =
-          fast_tokenizer::utils::UnicodeToUTF8(content_char);
+      uint32_t utf8_uint32 = fast_tokenizer::utils::UnicodeToUTF8(content_char);
       uint32_t utf8_char_count =
           fast_tokenizer::utils::UnicodeToUTF8Char(utf8_uint32, dst_char);
       result.append(dst_char, utf8_char_count);
@@ -164,12 +165,12 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<std::string>& schema,
+                   int batch_size,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -185,12 +186,12 @@ UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
                    size_t max_length, const std::vector<SchemaNode>& schema,
+                   int batch_size,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -205,13 +206,12 @@ UIEModel::UIEModel(const std::string& model_file,
 UIEModel::UIEModel(const std::string& model_file,
                    const std::string& params_file,
                    const std::string& vocab_file, float position_prob,
-                   size_t max_length, const SchemaNode& schema,
+                   size_t max_length, const SchemaNode& schema, int batch_size,
                    const fastdeploy::RuntimeOption& custom_option,
                    const fastdeploy::ModelFormat& model_format,
                    SchemaLanguage schema_language)
-    : max_length_(max_length),
-      position_prob_(position_prob),
-      schema_language_(schema_language),
+    : max_length_(max_length), position_prob_(position_prob),
+      schema_language_(schema_language), batch_size_(batch_size),
       tokenizer_(vocab_file) {
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
@@ -230,7 +230,8 @@ bool UIEModel::Initialize() {
 
 void UIEModel::SetValidBackend() {
   // TODO(zhoushunjie): Add lite backend in future
-  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER, Backend::LITE};
+  valid_cpu_backends = {Backend::ORT, Backend::OPENVINO, Backend::PDINFER,
+                        Backend::LITE};
   valid_gpu_backends = {Backend::ORT, Backend::PDINFER, Backend::TRT};
 }
 
@@ -253,8 +254,8 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
   size_t cnt_org = 0;
   size_t cnt_short = 0;
   for (auto& text : texts) {
-    auto text_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
-        text.c_str(), text.length());
+    auto text_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(text.c_str(),
+                                                                 text.length());
     if (text_len <= max_length) {
       short_texts->push_back(text);
       if (input_mapping->size() <= cnt_org) {
@@ -264,8 +265,7 @@ void UIEModel::AutoSplitter(const std::vector<std::string>& texts,
       }
       cnt_short += 1;
     } else {
-      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(
-          text);
+      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter converter(text);
       for (size_t start = 0; start < text_len; start += max_length) {
         size_t end = start + max_length;
         if (end > text_len) {
@@ -742,13 +742,37 @@ void UIEModel::Predict(
       std::vector<fast_tokenizer::core::Encoding> encodings;
       Preprocess(short_input_texts, short_prompts, &encodings, &inputs);
 
-      // 3. Infer
-      std::vector<fastdeploy::FDTensor> outputs(NumOutputsOfRuntime());
-      if (!Infer(inputs, &outputs)) {
-        FDERROR << "Failed to inference while using model:" << ModelName()
-                << "." << std::endl;
+      std::vector<std::vector<FDTensor>> inputs_vec(NumInputsOfRuntime());
+      int encoding_size = encodings.size();
+      std::vector<int> num_or_sections;
+      for (int i = 0; i < encoding_size; i += batch_size_) {
+        int actual_batch_size = (std::min)(batch_size_, encoding_size - i);
+        num_or_sections.push_back(actual_batch_size);
+      }
+      for (int i = 0; i < NumInputsOfRuntime(); ++i) {
+        function::Split(inputs[i], num_or_sections, &inputs_vec[i]);
       }
 
+      // 3. Infer
+      std::vector<fastdeploy::FDTensor> outputs(NumOutputsOfRuntime());
+      std::vector<fastdeploy::FDTensor> outputs0, outputs1;
+
+      for (int i = 0; i < inputs_vec[0].size(); ++i) {
+        std::vector<fastdeploy::FDTensor> curr_inputs(NumInputsOfRuntime());
+        std::vector<fastdeploy::FDTensor> curr_outputs(NumOutputsOfRuntime());
+        for (int j = 0; j < NumInputsOfRuntime(); ++j) {
+          curr_inputs[j] = std::move(inputs_vec[j][i]);
+          curr_inputs[j].name = inputs[j].name;
+        }
+        if (!Infer(curr_inputs, &curr_outputs)) {
+          FDERROR << "Failed to inference while using model:" << ModelName()
+                  << "." << std::endl;
+        }
+        outputs0.push_back(curr_outputs[0]);
+        outputs1.push_back(curr_outputs[1]);
+      }
+      function::Concat(outputs0, &outputs[0]);
+      function::Concat(outputs1, &outputs[1]);
       // 4. Convert FDTensor to UIEResult
       Postprocess(outputs, encodings, short_input_texts, short_prompts,
                   input_mapping_with_short_text, &results_list);
