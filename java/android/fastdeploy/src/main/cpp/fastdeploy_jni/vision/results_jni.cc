@@ -1269,29 +1269,61 @@ JNIEXPORT jboolean JNICALL
 Java_com_baidu_paddle_fastdeploy_vision_SegmentationResult_releaseCxxBufferNative(
     JNIEnv *env, jobject thiz) {
   const jclass j_seg_result_clazz = env->GetObjectClass(thiz);
-  const jfieldID j_enable_cxx_buffer_id = env->GetFieldID(
+  const jfieldID j_seg_enable_cxx_buffer_id = env->GetFieldID(
       j_seg_result_clazz, "mEnableCxxBuffer", "Z");
-  const jfieldID  j_cxx_buffer_id = env->GetFieldID(
+  const jfieldID  j_seg_cxx_buffer_id = env->GetFieldID(
       j_seg_result_clazz, "mCxxBuffer", "J");
   const jfieldID j_seg_initialized_id = env->GetFieldID(
       j_seg_result_clazz, "mInitialized", "Z");
 
-  jboolean j_enable_cxx_buffer =
-      env->GetBooleanField(thiz, j_enable_cxx_buffer_id);
-  if (j_enable_cxx_buffer == JNI_FALSE) {
+  jboolean j_seg_enable_cxx_buffer =
+      env->GetBooleanField(thiz, j_seg_enable_cxx_buffer_id);
+  if (j_seg_enable_cxx_buffer == JNI_FALSE) {
     return JNI_FALSE;
   }
-  jlong j_cxx_buffer = env->GetLongField(thiz, j_cxx_buffer_id);
-  if (j_cxx_buffer == 0) {
+  jlong j_seg_cxx_buffer = env->GetLongField(thiz, j_seg_cxx_buffer_id);
+  if (j_seg_cxx_buffer == 0) {
     return JNI_FALSE;
   }
   auto c_result_ptr = reinterpret_cast<
-      fastdeploy::vision::SegmentationResult *>(j_cxx_buffer);
+      fastdeploy::vision::SegmentationResult *>(j_seg_cxx_buffer);
   delete c_result_ptr;
   LOGD("[End] Release SegmentationResult & CxxBuffer in native !");
 
   env->SetBooleanField(thiz, j_seg_initialized_id, JNI_FALSE);
   env->DeleteLocalRef(j_seg_result_clazz);
+
+  return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_baidu_paddle_fastdeploy_vision_SuperResolutionResult_releaseCxxBufferNative(
+    JNIEnv *env, jobject thiz) {
+  const jclass j_sr_result_clazz = env->GetObjectClass(thiz);
+  const jfieldID j_sr_enable_cxx_buffer_id = env->GetFieldID(
+      j_sr_result_clazz, "mEnableCxxBuffer", "Z");
+  const jfieldID  j_sr_cxx_buffer_id = env->GetFieldID(
+      j_sr_result_clazz, "mCxxBuffer", "J");
+  const jfieldID j_sr_initialized_id = env->GetFieldID(
+      j_sr_result_clazz, "mInitialized", "Z");
+  jboolean j_sr_enable_cxx_buffer =
+      env->GetBooleanField(thiz, j_sr_enable_cxx_buffer_id);
+  if (j_sr_enable_cxx_buffer == JNI_FALSE) {
+    return JNI_FALSE;
+  }
+  jlong j_sr_cxx_buffer = env->GetLongField(thiz, j_sr_cxx_buffer_id);
+  if (j_sr_cxx_buffer == 0) {
+    return JNI_FALSE;
+  }
+  // TODO:(qiuyanjun) Update SuperResolutionResult instead of std::vector<cv::Mat>
+  // WARN: Only support batch_size=1 for Android device now. So, the value of
+  // c_result_ptr->size() should always be 1.
+  auto c_result_ptr = reinterpret_cast<std::vector<cv::Mat>*>(j_sr_cxx_buffer);
+  delete c_result_ptr;
+  LOGD("[End] Release SuperResolutionResult & CxxBuffer in native !");
+
+  env->SetBooleanField(thiz, j_sr_initialized_id, JNI_FALSE);
+  env->DeleteLocalRef(j_sr_result_clazz);
 
   return JNI_TRUE;
 }
