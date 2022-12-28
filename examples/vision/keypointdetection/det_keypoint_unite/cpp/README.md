@@ -33,6 +33,8 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/000000018491.jpg
 ./infer_demo PP_PicoDet_V2_S_Pedestrian_320x320_infer PP_TinyPose_256x192_infer 000000018491.jpg 1
 # GPU上TensorRT推理
 ./infer_demo PP_PicoDet_V2_S_Pedestrian_320x320_infer PP_TinyPose_256x192_infer 000000018491.jpg 2
+# 昆仑芯XPU推理
+./infer_demo PP_PicoDet_V2_S_Pedestrian_320x320_infer PP_TinyPose_256x192_infer 000000018491.jpg 3
 ```
 
 运行完成可视化结果如下图所示
