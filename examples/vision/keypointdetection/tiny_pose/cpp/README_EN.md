@@ -83,7 +83,7 @@ PPTinyPose  model loading and initialization, among which model_file is the expo
 
 ### Class Member Property
 #### Post-processing Parameter
-> > * **use_dark**(bool): Whether to use DARK for post-processing. Refer to [Referenced Documents](https://arxiv.org/abs/1910.06278)
+> > * **use_dark**(bool): Whether to use DARK for post-processing. Refer to [Referenced Paper](https://arxiv.org/abs/1910.06278)
 
 - [Model Description](../../)
 - [Python Deployment](../python)
