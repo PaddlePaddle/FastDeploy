@@ -27,7 +27,7 @@ python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer
 ```                               
 
  ### 编写模型导出配置文件
-以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/RK3568/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。                              
+以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。                              
 
 默认的 mean=0, std=1是在内存做normalize，如果你需要在NPU上执行normalize操作，请根据你的模型配置normalize参数，例如:
 ```yaml
