@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PP-PicoDet + PP-TinyPose (Pipeline) C++部署示例
 
 本目录下提供`det_keypoint_unite_infer.cc`快速完成多人模型配置 PP-PicoDet + PP-TinyPose 在CPU/GPU，以及GPU上通过TensorRT加速部署的`单图多人关键点检测`示例。执行如下脚本即可完成
