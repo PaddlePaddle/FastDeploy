@@ -1,4 +1,4 @@
-# PPClas Python部署示例
+# PaddleClas Python部署示例
 
 在部署前，需确认以下两个步骤
 

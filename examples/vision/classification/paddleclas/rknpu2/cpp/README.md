@@ -1,4 +1,4 @@
-# PPClas C++部署示例
+# PaddleClas 模型RKNPU2部署
 
 本目录下用于展示 ResNet50_vd 模型在RKNPU2上的部署，以下的部署过程以 ResNet50_vd 为例子。
 

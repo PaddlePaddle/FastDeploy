@@ -46,9 +46,9 @@ class FASTDEPLOY_DECL PaddleClasPreprocessor {
 
   bool WithGpu() { return use_cuda_; }
 
-  // This function will disable normalize in preprocessing step.
+  /// This function will disable normalize in preprocessing step.
   void DisableNormalize();
-  // This function will disable hwc2chw in preprocessing step.
+  /// This function will disable hwc2chw in preprocessing step.
   void DisablePermute();
 
  private:
