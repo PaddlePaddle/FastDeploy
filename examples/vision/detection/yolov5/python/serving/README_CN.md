@@ -1,6 +1,6 @@
 简体中文 | [English](README_EN.md)
 
-# PaddleDetection Python轻量服务化部署示例
+# YOLOv5 Python轻量服务化部署示例
 
 在部署前，需确认以下两个步骤
 
@@ -11,11 +11,11 @@
 ```bash
 # 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/detection/yolov5/python/serving
 
-# 下载PPYOLOE模型文件（如果不下载，代码里会自动从hub下载）
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-tar xvf ppyoloe_crn_l_300e_coco.tgz
+# 下载模型文件
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
+tar xvf yolov5s_infer.tar
 
 # 启动服务，可修改server.py中的配置项来指定硬件、后端等
 # 可通过--host、--port指定IP和端口号
@@ -26,7 +26,7 @@ fastdeploy simple_serving --app server:app
 ```bash
 # 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/detection/yolov5/python/serving
 
 # 下载测试图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
