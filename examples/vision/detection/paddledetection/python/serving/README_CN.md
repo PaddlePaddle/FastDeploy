@@ -17,16 +17,9 @@ cd FastDeploy/examples/vision/detection/paddledetection/python/serving
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
-# 安装uvicorn
-pip install uvicorn
-
-# 启动服务，可选择是否使用GPU和TensorRT，可根据uvicorn --help配置IP、端口号等
-# CPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=cpu uvicorn server:app
-# GPU
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu uvicorn server:app
-# GPU上使用TensorRT （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-MODEL_DIR=ppyoloe_crn_l_300e_coco DEVICE=gpu USE_TRT=true uvicorn server:app
+# 启动服务，可修改server.py中的配置项来指定硬件、后端等
+# 可通过--host、--port指定IP和端口号
+fastdeploy simple_serving --app server:app
 ```
 
 客户端：
