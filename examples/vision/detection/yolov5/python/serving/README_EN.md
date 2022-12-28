@@ -1,6 +1,6 @@
 English | [简体中文](README_CN.md)
 
-# PaddleDetection Python Simple Serving Demo
+# YOLOv5 Python Simple Serving Demo
 
 
 ## Environment
@@ -11,11 +11,11 @@ Server:
 ```bash
 # Download demo code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/detection/yolov5/python/serving
 
-# Download PPYOLOE model
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-tar xvf ppyoloe_crn_l_300e_coco.tgz
+# Download model
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
+tar xvf yolov5s_infer.tar
 
 # Launch server, change the configurations in server.py to select hardware, backend, etc.
 # and use --host, --port to specify IP and port
@@ -26,7 +26,7 @@ Client:
 ```bash
 # Download demo code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
-cd FastDeploy/examples/vision/detection/paddledetection/python/serving
+cd FastDeploy/examples/vision/detection/yolov5/python/serving
 
 # Download test image
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
