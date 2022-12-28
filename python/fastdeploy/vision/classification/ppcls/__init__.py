@@ -42,6 +42,18 @@ class PaddleClasPreprocessor:
         """
         return self._preprocessor.use_gpu(gpu_id)
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()      
+
 
 class PaddleClasPostprocessor:
     def __init__(self, topk=1):
@@ -78,8 +90,6 @@ class PaddleClasModel(FastDeployModel):
         """
 
         super(PaddleClasModel, self).__init__(runtime_option)
-
-        assert model_format == ModelFormat.PADDLE, "PaddleClasModel only support model format of ModelFormat.PADDLE now."
         self._model = C.vision.classification.PaddleClasModel(
             model_file, params_file, config_file, self._runtime_option,
             model_format)
