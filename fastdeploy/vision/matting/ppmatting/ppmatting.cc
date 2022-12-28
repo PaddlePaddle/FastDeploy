@@ -28,7 +28,7 @@ PPMatting::PPMatting(const std::string& model_file,
   config_file_ = config_file;
   valid_cpu_backends = {Backend::ORT, Backend::PDINFER, Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
-  valid_xpu_backends = {Backend::LITE};
+  valid_kunlunxin_backends = {Backend::LITE};
   runtime_option = custom_option;
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;

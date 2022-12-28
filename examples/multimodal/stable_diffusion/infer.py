@@ -69,7 +69,7 @@ def parse_arguments():
         type=str,
         default='paddle',
         # Note(zhoushunjie): Will support 'tensorrt', 'paddle-tensorrt' soon.
-        choices=['onnx_runtime', 'paddle', 'paddle-xpu'],
+        choices=['onnx_runtime', 'paddle', 'paddle-kunlunxin'],
         help="The inference runtime backend of unet model and text encoder model."
     )
     parser.add_argument(
@@ -175,9 +175,9 @@ def create_trt_runtime(model_dir,
     return fd.Runtime(option)
 
 
-def create_xpu_runtime(model_dir, model_prefix, device_id=0):
+def create_kunlunxin_runtime(model_dir, model_prefix, device_id=0):
     option = fd.RuntimeOption()
-    option.use_xpu(
+    option.use_kunlunxin(
         device_id,
         l3_workspace_size=(64 * 1024 * 1024 - 4 * 1024),
         locked=False,
@@ -306,18 +306,18 @@ if __name__ == "__main__":
             dynamic_shape=unet_dynamic_shape,
             device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
-    elif args.backend == "paddle-xpu":
+    elif args.backend == "paddle-kunlunxin":
         print("=== build text_encoder_runtime")
-        text_encoder_runtime = create_xpu_runtime(
+        text_encoder_runtime = create_kunlunxin_runtime(
             args.model_dir,
             args.text_encoder_model_prefix,
             device_id=args.device_id)
         print("=== build vae_decoder_runtime")
-        vae_decoder_runtime = create_xpu_runtime(
+        vae_decoder_runtime = create_kunlunxin_runtime(
             args.model_dir, args.vae_model_prefix, device_id=args.device_id)
         print("=== build unet_runtime")
         start = time.time()
-        unet_runtime = create_xpu_runtime(
+        unet_runtime = create_kunlunxin_runtime(
             args.model_dir, args.unet_model_prefix, device_id=args.device_id)
         print(f"Spend {time.time() - start : .2f} s to load unet model.")
     pipe = StableDiffusionFastDeployPipeline(

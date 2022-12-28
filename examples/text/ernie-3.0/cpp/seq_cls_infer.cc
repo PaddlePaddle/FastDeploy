@@ -32,7 +32,7 @@ const char sep = '/';
 DEFINE_string(model_dir, "", "Directory of the inference model.");
 DEFINE_string(vocab_path, "", "Path of the vocab file.");
 DEFINE_string(device, "cpu",
-              "Type of inference device, support 'cpu', 'xpu' or 'gpu'.");
+              "Type of inference device, support 'cpu', 'kunlunxin' or 'gpu'.");
 DEFINE_string(backend, "onnx_runtime",
               "The inference runtime backend, support: ['onnx_runtime', "
               "'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']");
@@ -61,8 +61,8 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
                      << ", param_path = " << param_path << std::endl;
   option->SetModelPath(model_path, param_path);
 
-  if (FLAGS_device == "xpu") {
-    option->UseXpu();
+  if (FLAGS_device == "kunlunxin") {
+    option->UseKunlunXin();
     return true;
   } else if (FLAGS_device == "gpu") {
     option->UseGpu();

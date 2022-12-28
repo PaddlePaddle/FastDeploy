@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run on cpu with ORT "
                  "backend; 1: run "
-                 "on gpu with TensorRT backend ; 2: run with xpu. "
+                 "on gpu with TensorRT backend ; 2: run with kunlunxin. "
               << std::endl;
     return -1;
   }
@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
     option.UseGpu();
     option.UseTrtBackend();
   } else if (flag == 2) {
-    option.UseXpu();
+    option.UseKunlunXin();
     }
 
   std::string model_dir = argv[1];

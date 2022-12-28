@@ -1,10 +1,12 @@
 import argparse
 import ast
+import uvicorn
 
 
 def argsparser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('tools', choices=['compress', 'convert'])
+    parser.add_argument(
+        'tools', choices=['compress', 'convert', 'simple_serving'])
     ## argumentments for auto compression
     parser.add_argument(
         '--config_path',
@@ -69,6 +71,19 @@ def argsparser():
         type=ast.literal_eval,
         default=False,
         help="Turn on code optimization")
+    ## arguments for simple serving
+    parser.add_argument(
+        "--app",
+        type=str,
+        default="server:app",
+        help="Simple serving app string")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Simple serving host IP address")
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Simple serving host port")
     ## arguments for other tools
     return parser
 
@@ -116,6 +131,8 @@ def main():
         except ImportError:
             print(
                 "Model convert failed! Please check if you have installed it!")
+    if args.tools == "simple_serving":
+        uvicorn.run(args.app, host=args.host, port=args.port, app_dir='.')
 
 
 if __name__ == '__main__':

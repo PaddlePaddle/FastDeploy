@@ -1,4 +1,4 @@
-PROJECT(infer_demo C CXX)
+PROJECT(infer_adaface_demo C CXX)
 CMAKE_MINIMUM_REQUIRED (VERSION 3.12)
 
 # 指定下载解压后的fastdeploy库路径
@@ -9,5 +9,5 @@ include(${FASTDEPLOY_INSTALL_DIR}/FastDeploy.cmake)
 # 添加FastDeploy依赖头文件
 include_directories(${FASTDEPLOY_INCS})
 
-add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
-target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
+add_executable(infer_adaface_demo ${PROJECT_SOURCE_DIR}/infer.cc)
+target_link_libraries(infer_adaface_demo ${FASTDEPLOY_LIBS})
