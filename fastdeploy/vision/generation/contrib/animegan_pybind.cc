@@ -42,6 +42,37 @@ void BindAnimeGAN(pybind11::module& m) {
                    {results[i].rows, results[i].cols, results[i].channels()}, results[i].data));
         }
         return ret;
-        });
+        })
+      .def_property_readonly("preprocessor", &vision::generation::AnimeGAN::GetPreprocessor)
+      .def_property_readonly("postprocessor", &vision::generation::AnimeGAN::GetPostprocessor);
+
+  pybind11::class_<vision::generation::AnimeGANPreprocessor>(
+      m, "AnimeGANPreprocessor")
+      .def(pybind11::init<>())
+      .def("run", [](vision::generation::AnimeGANPreprocessor& self, std::vector<pybind11::array>& im_list) {
+        std::vector<vision::FDMat> images;
+        for (size_t i = 0; i < im_list.size(); ++i) {
+          images.push_back(vision::WrapMat(PyArrayToCvMat(im_list[i])));
+        }
+        std::vector<FDTensor> outputs;
+        if (!self.Run(images, &outputs)) {
+          throw std::runtime_error("Failed to preprocess the input data in PaddleClasPreprocessor.");
+        }
+        for (size_t i = 0; i < outputs.size(); ++i) {
+          outputs[i].StopSharing();
+        }
+        return outputs;
+      });  
+  pybind11::class_<vision::generation::AnimeGANPostprocessor>(
+      m, "AnimeGANPostprocessor")
+      .def(pybind11::init<>())
+      .def("run", [](vision::generation::AnimeGANPostprocessor& self, std::vector<FDTensor>& inputs) {
+        std::vector<cv::Mat> results;
+        if (!self.Run(inputs, &results)) {
+          throw std::runtime_error("Failed to postprocess the runtime result in YOLOv5Postprocessor.");
+        }
+        return results;
+      });
+
 }
 }  // namespace fastdeploy

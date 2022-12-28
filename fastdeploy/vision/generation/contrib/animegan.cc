@@ -43,75 +43,6 @@ bool AnimeGAN::Initialize() {
 }
 
 
-bool AnimeGAN::Preprocess(std::vector<Mat>& images, std::vector<FDTensor>* outputs) {
-  // 1. BGR2RGB
-  // 2. Convert(opencv style) or Normalize
-  for (size_t i = 0; i < images.size(); ++i) {
-      auto ret = BGR2RGB::Run(&images[i]);
-      if (!ret) {
-        FDERROR << "Failed to processs image:" << i << " in "
-                << "BGR2RGB" << "." << std::endl;
-        return false;
-      }
-      ret = Cast::Run(&images[i], "float");
-      if (!ret) {
-        FDERROR << "Failed to processs image:" << i << " in "
-                << "Cast" << "." << std::endl;
-        return false;
-      }
-      std::vector<float> mean{1.f / 127.5f, 1.f / 127.5f, 1.f / 127.5f};
-      std::vector<float> std {-1.f, -1.f, -1.f};
-      ret = Convert::Run(&images[i], mean, std);
-      if (!ret) {
-        FDERROR << "Failed to processs image:" << i << " in "
-                << "Cast" << "." << std::endl;
-        return false;
-      }
-    }
-  outputs->resize(1);
-  // Concat all the preprocessed data to a batch tensor
-  std::vector<FDTensor> tensors(images.size()); 
-  for (size_t i = 0; i < images.size(); ++i) {
-    images[i].ShareWithTensor(&(tensors[i]));
-    tensors[i].ExpandDim(0);
-  }
-  if (tensors.size() == 1) {
-    (*outputs)[0] = std::move(tensors[0]);
-  } else {
-    function::Concat(tensors, &((*outputs)[0]), 0);
-  }
-  return true;
-}
-
-bool AnimeGAN::Postprocess(std::vector<FDTensor>& infer_results,
-                           std::vector<cv::Mat>* results) {
-  // 1. Reverse normalization
-  // 2. RGB2BGR
-  FDTensor& output_tensor = infer_results.at(0);  
-  std::vector<int64_t> shape  = output_tensor.Shape(); // n, h, w, c
-  int size = shape[1] * shape[2] * shape[3];
-  results->resize(shape[0]);
-  float* infer_result_data = reinterpret_cast<float*>(output_tensor.Data());
-  for(size_t i = 0; i < results->size(); ++i){
-  float* data = new float[shape[1]*shape[2]*3];
-  std::memcpy(reinterpret_cast<char*>(data), reinterpret_cast<char*>(infer_result_data+i*size), sizeof(float)*shape[1]*shape[2]*3);
-  Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, data);
-  std::vector<float> mean{127.5f, 127.5f, 127.5f};
-  std::vector<float> std{127.5f, 127.5f, 127.5f};
-  Convert::Run(&result_mat, mean, std);
-  // tmp data type is float[0-1.0],convert to uint type
-  auto temp = result_mat.GetOpenCVMat();
-  cv::Mat res = cv::Mat::zeros(temp->size(), CV_8UC3);
-  temp->convertTo(res, CV_8UC3, 1);
-  Mat fd_image = WrapMat(res);
-  BGR2RGB::Run(&fd_image);
-  res = *(fd_image.GetOpenCVMat());
-  res.copyTo(results->at(i));
-  }
-  return true;
-}
-
-
 bool AnimeGAN::Predict(cv::Mat& img, cv::Mat* result) {
   std::vector<cv::Mat> results;
   if (!BatchPredict({img}, &results)) {
@@ -124,7 +55,7 @@ bool AnimeGAN::Predict(cv::Mat& img, cv::Mat* result) {
 bool AnimeGAN::BatchPredict(const std::vector<cv::Mat>& images, std::vector<cv::Mat>* results) {
   std::vector<FDMat> fd_images = WrapMat(images);
   std::vector<FDTensor> processed_data(1);
-  if (!Preprocess(fd_images, &(processed_data))) {
+  if (!preprocessor_.Run(fd_images, &(processed_data))) {
     FDERROR << "Failed to preprocess input data while using model:"
             << ModelName() << "." << std::endl;
     return false;
@@ -136,7 +67,7 @@ bool AnimeGAN::BatchPredict(const std::vector<cv::Mat>& images, std::vector<cv::
     FDERROR << "Failed to inference by runtime." << std::endl;
     return false;
   }
-  if (!Postprocess(infer_result, results)) {
+  if (!postprocessor_.Run(infer_result, results)) {
     FDERROR << "Failed to postprocess while using model:" << ModelName() << "."
             << std::endl;
     return false;

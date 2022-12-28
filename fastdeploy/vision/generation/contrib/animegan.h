@@ -15,6 +15,8 @@
 #pragma once
 #include "fastdeploy/fastdeploy_model.h"
 #include "fastdeploy/vision/common/processors/transform.h"
+#include "fastdeploy/vision/generation/contrib/preprocessor.h"
+#include "fastdeploy/vision/generation/contrib/postprocessor.h"
 
 namespace fastdeploy {
 
@@ -55,13 +57,21 @@ class FASTDEPLOY_DECL AnimeGAN : public FastDeployModel {
   bool BatchPredict(const std::vector<cv::Mat>& images,
        std::vector<cv::Mat>* results);
 
+  // Get preprocessor reference of YOLOv5
+  AnimeGANPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  // Get postprocessor reference of YOLOv5
+  AnimeGANPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
+
  private:
   bool Initialize();
 
-  bool Preprocess(std::vector<Mat>& images, std::vector<FDTensor>* output);
-
-  bool Postprocess(std::vector<FDTensor>& infer_results,
-                           std::vector<cv::Mat>* results);
+  AnimeGANPreprocessor preprocessor_;
+  AnimeGANPostprocessor postprocessor_;
 };
 
 }  // namespace generation
