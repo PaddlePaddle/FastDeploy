@@ -1,6 +1,6 @@
 [English](README_EN.md) | 简体中文
 # AdaFace C++部署示例
-本目录下提供infer_xxx.py快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer_xxx.py`快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 以AdaFace为例提供`infer.cc`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
@@ -104,7 +104,7 @@ AdaFace模型加载和初始化，如果使用PaddleInference推理，model_file
 
 #### AdaFacePostprocessor成员变量(后处理参数)
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
-      AdaFacePostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
+      通过AdaFacePostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
 
 - [模型介绍](../../)
 - [Python部署](../python)
