@@ -17,14 +17,14 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'xpu', 'cpu' or 'gpu'.")
+        help="Type of inference device, support 'kunlunxin', 'cpu' or 'gpu'.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
-    if args.device.lower() == "xpu":
-        option.use_xpu()
+    if args.device.lower() == "kunlunxin":
+        option.use_kunlunxin()
 
     if args.device.lower() == "gpu":
         option.use_gpu()

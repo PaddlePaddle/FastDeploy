@@ -15,7 +15,7 @@ English | [中文](../../cn/build_and_install/README.md)
 - [Build and Install on RV1126 Platform](rv1126.md)
 - [Build and Install on RK3588 Platform](rknpu2.md)
 - [Build and Install on A311D Platform](a311d.md)
-- [Build and Install on KunlunXin XPU Platform](xpu.md)
+- [Build and Install on KunlunXin XPU Platform](kunlunxin.md)
 
 
 ## Build options
@@ -29,7 +29,7 @@ English | [中文](../../cn/build_and_install/README.md)
 | ENABLE_VISION | Default OFF，whether to enable vision models deployment module |
 | ENABLE_TEXT | Default OFF，whether to enable text models deployment module |
 | WITH_GPU | Default OFF, if build on GPU, this needs to be ON |
-| WITH_XPU | Default OFF，if deploy on KunlunXin XPU，this needs to be ON |
+| WITH_KUNLUNXIN | Default OFF，if deploy on KunlunXin XPU，this needs to be ON |
 | WITH_TIMVX | Default OFF，if deploy on RV1126/RV1109/A311D，this needs to be ON |
 | WITH_ASCEND | Default OFF，if deploy on Huawei Ascend，this needs to be ON |
 | CUDA_DIRECTORY | Default /usr/local/cuda, if build on GPU, this defines the path of CUDA(>=11.2) |

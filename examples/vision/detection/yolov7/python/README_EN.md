@@ -22,8 +22,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device cpu
 # GPU
 python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device gpu
-# XPU
-python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device xpu
+# KunlunXin XPU
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device kunlunxin
 ```
 If you want to test ONNX model:
 ```bash
