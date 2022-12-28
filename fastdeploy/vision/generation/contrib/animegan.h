@@ -57,12 +57,12 @@ class FASTDEPLOY_DECL AnimeGAN : public FastDeployModel {
   bool BatchPredict(const std::vector<cv::Mat>& images,
        std::vector<cv::Mat>* results);
 
-  // Get preprocessor reference of YOLOv5
+  // Get preprocessor reference of AnimeGAN
   AnimeGANPreprocessor& GetPreprocessor() {
     return preprocessor_;
   }
 
-  // Get postprocessor reference of YOLOv5
+  // Get postprocessor reference of AnimeGAN
   AnimeGANPostprocessor& GetPostprocessor() {
     return postprocessor_;
   }

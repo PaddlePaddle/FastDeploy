@@ -26,7 +26,7 @@ class FASTDEPLOY_DECL AnimeGANPostprocessor {
  public:
   /** \brief Create a postprocessor instance for AnimeGAN serials model
    */
-  AnimeGANPostprocessor();
+  AnimeGANPostprocessor() {}
 
   /** \brief Process the result of runtime
    *

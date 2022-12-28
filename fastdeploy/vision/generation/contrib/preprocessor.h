@@ -26,7 +26,7 @@ class FASTDEPLOY_DECL AnimeGANPreprocessor {
  public:
   /** \brief Create a preprocessor instance for AnimeGAN serials model
    */
-  AnimeGANPreprocessor();
+  AnimeGANPreprocessor() {}
 
   /** \brief Process the input image and prepare input tensors for runtime
    *

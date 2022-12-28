@@ -18,6 +18,36 @@ from .... import FastDeployModel, ModelFormat
 from .... import c_lib_wrap as C
 
 
+class AnimeGANPreprocessor:
+    def __init__(self, config_file):
+        """Create a preprocessor for AnimeGAN.
+        """
+        self._preprocessor = C.vision.generation.AnimeGANPreprocessor()
+
+    def run(self, input_ims):
+        """Preprocess input images for AnimeGAN.
+
+        :param: input_ims: (list of numpy.ndarray)The input image
+        :return: list of FDTensor
+        """
+        return self._preprocessor.run(input_ims)
+
+
+class AnimeGANPostprocessor:
+    def __init__(self):
+        """Create a postprocessor for AnimeGAN.
+        """
+        self._postprocessor = C.vision.generation.AnimeGANPostprocessor()
+
+    def run(self, runtime_results):
+        """Postprocess the runtime results for AnimeGAN
+
+        :param: runtime_results: (list of FDTensor)The output FDTensor results from runtime
+        :return: results: (list) Final results
+        """
+        return self._postprocessor.run(runtime_results)
+
+
 class AnimeGAN(FastDeployModel):
     def __init__(self,
                  model_file,
@@ -55,3 +85,19 @@ class AnimeGAN(FastDeployModel):
         :return: a list of style transfer results
         """
         return self._model.batch_predict(input_images)
+
+    @property
+    def preprocessor(self):
+        """Get AnimeGANPreprocessor object of the loaded model
+
+        :return AnimeGANPreprocessor
+        """
+        return self._model.preprocessor
+
+    @property
+    def postprocessor(self):
+        """Get AnimeGANPostprocessor object of the loaded model
+
+        :return AnimeGANPostprocessor
+        """
+        return self._model.postprocessor
