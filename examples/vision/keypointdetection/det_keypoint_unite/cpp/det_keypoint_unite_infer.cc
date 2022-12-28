@@ -55,10 +55,9 @@ void CpuInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -104,10 +103,9 @@ void KunlunXinInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+ 
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -153,10 +151,9 @@ void GpuInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -210,10 +207,9 @@ void TrtInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测关键点结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
