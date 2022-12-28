@@ -8,8 +8,9 @@ FastDeploy当前在RK平台上支持后端引擎如下:
 | ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
 | RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
 
+## 板端编译
 
-## 板端编译FastDeploy C++ SDK
+### 编译FastDeploy C++ SDK
 
 RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。
 
@@ -31,7 +32,7 @@ make -j8
 make install
 ```
 
-### 板端编译Python SDK
+### 编译Python SDK
 
 RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。Python打包依赖`wheel`，编译前请先执行`pip install wheel`
 
