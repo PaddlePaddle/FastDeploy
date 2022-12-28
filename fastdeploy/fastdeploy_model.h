@@ -50,7 +50,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   std::vector<Backend> valid_ascend_backends = {};
   /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
    */
-  std::vector<Backend> valid_xpu_backends = {};
+  std::vector<Backend> valid_kunlunxin_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
@@ -149,7 +149,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
   bool CreateTimVXBackend();
-  bool CreateXPUBackend();
+  bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();
 
   std::shared_ptr<Runtime> runtime_;
