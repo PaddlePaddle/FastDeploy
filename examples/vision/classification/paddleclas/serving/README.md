@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleClas 服务化部署示例
 
 在服务化部署前，需确认
