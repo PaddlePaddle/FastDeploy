@@ -206,7 +206,20 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
 
   return true;
 }
-
+void PaddleDetPreprocessor::DisableNormalize() {
+  this->disable_normalize = true;
+  // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
+void PaddleDetPreprocessor::DisablePermute() {
+  this->disable_permute = true;
+  // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
 } // namespace detection
 } // namespace vision
 } // namespace fastdeploy
