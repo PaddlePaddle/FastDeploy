@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifdef LINUX
 #include <unistd.h>
 #include <dirent.h>
+#endif
+#ifdef WIN32
+#include <windows.h>
+#include <io.h>
+#endif
 
 #include <string.h>
 #include <sys/stat.h>
@@ -153,6 +159,7 @@ int read_file_to_file(const char* src_path, const char* dst_path) {
 
 int read_dir_files(const char* dir_path,
                    std::vector<std::string>& files) {  // NOLINT
+#ifdef LINUX
   struct dirent* ptr;
   DIR* dir = NULL;
   dir = opendir(dir_path);
@@ -165,13 +172,52 @@ int read_dir_files(const char* dir_path,
     }
   }
   closedir(dir);
+#endif
+#ifdef WIN32
+  intptr_t handle;
+  struct _finddata_t fileinfo;
+
+  std::string tmp_dir(dir_path);
+  std::string::size_type idx = tmp_dir.rfind("\\*");
+  if (idx == std::string::npos || idx != tmp_dir.length() - 1) {
+    tmp_dir.append("\\*");
+  }
+
+  handle = _findfirst(tmp_dir.c_str(), &fileinfo);
+  if (handle == -1) {
+    return -1;
+  }
+
+  do {
+    std::cout << "File name = " << fileinfo.name << std::endl;
+    if (strcmp(fileinfo.name, ".") != 0 && strcmp(fileinfo.name, "..") != 0) {
+      files.push_back(fileinfo.name);
+    }
+  } while (!_findnext(handle, &fileinfo));
+
+  std::cout << files.size() << std::endl;
+  for (size_t i = 0; i < files.size(); i++) {
+    std::cout << files[i] << std::endl;
+  }
+
+  _findclose(handle);
+#endif
   return files.size();
 }
 
 int dir_exist_or_mkdir(const char* dir) {
+#ifdef WIN32
+  if (CreateDirectory(dir, NULL)) {
+    // return CODE_OK;
+  } else {
+    return CODE_MKDIR_FAILED;
+  }
+#endif
+#ifdef LINUX
   if (access(dir, 0) != 0) {
     mkdir(dir, S_IRWXU | S_IRWXG | S_IRWXO);
   }
+#endif
   return CODE_OK;
 }
 

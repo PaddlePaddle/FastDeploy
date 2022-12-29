@@ -106,9 +106,6 @@ endif()
 
 # Check for 32bit system
 if(WIN32)
-  if(ENABLE_ENCRYPTION)
-      message(FATAL_ERROR "-DENABLE_ENCRYPTION=ON doesn't support on non 64-bit system now.")
-  endif()
   if(NOT CMAKE_CL_64)
     message("***********************Compile on non 64-bit system now**********************")
     add_definitions(-DNON_64_PLATFORM)

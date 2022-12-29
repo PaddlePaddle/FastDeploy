@@ -25,14 +25,31 @@ namespace fastdeploy {
 extern "C" {
 #endif
 
-FASTDEPLOY_DECL std::string generate_random_key();
+/** \brief generate a random key(base64-32bytes) for an encrypted model
+ *
+ * \return std::string key
+ */
+FASTDEPLOY_DECL std::string GenerateRandomKey();
 
-FASTDEPLOY_DECL int encrypt_stream(const std::string &keydata,
+/** \brief encrypt a std::istream with key
+ *
+ * \param[in] keydata The key(base64-32bytes) for encryption
+ * \param[in] in_stream The plain stream
+ * \param[in] out_stream The ecrypted stream
+ * \return true if encrypt successed, otherwise false
+ */
+FASTDEPLOY_DECL int EncryptStream(const std::string &keydata,
                                  std::istream &in_stream,
                                  std::ostream &out_stream);
 
-FASTDEPLOY_DECL std::vector<std::string> encrypt(const std::string& input,
-                  const std::string& key = generate_random_key());
+/** \brief encrypt a string with key
+ *
+ * \param[in] input The input string for encryption
+ * \param[in] key If not given by user, generate key automatically.
+ * \return std::vector<std::string> [encrypted string, key]
+ */
+FASTDEPLOY_DECL std::vector<std::string> Encrypt(const std::string& input,
+                  const std::string& key = GenerateRandomKey());
 
 #ifdef __cplusplus
 }

@@ -18,13 +18,13 @@ namespace fastdeploy {
 
 void BindEncryption(pybind11::module& m) {
   m.def("encrypt", [](const std::string& input, const std::string& key) {
-       return encrypt(input, key);
+       return Encrypt(input, key);
   });
   m.def("decrypt", [](const std::string& cipher, const std::string& key) {
-       return decrypt(cipher, key);
+       return Decrypt(cipher, key);
   });
   m.def("generate_key", []() {
-       return generate_random_key();
+       return GenerateRandomKey();
   });
 }
 }  // namespace fastdeploy

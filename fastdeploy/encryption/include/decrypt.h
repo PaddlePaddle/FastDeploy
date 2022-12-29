@@ -1,4 +1,4 @@
-//   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+//   Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,13 +25,33 @@ namespace fastdeploy {
 extern "C" {
 #endif
 
-FASTDEPLOY_DECL int check_stream_encrypted(std::istream& cipher_stream);
+/** \brief check stream is encrypted or not
+ *
+ * \param[in] cipher_stream The encrypted stream
+ * \return 0 if stream is encrypted.
+ */
+FASTDEPLOY_DECL int CheckStreamEncrypted(std::istream& cipher_stream);
 
-FASTDEPLOY_DECL int decrypt_stream(std::istream& cipher_stream,
+
+/** \brief decrypt an encrypted stream
+ *
+ * \param[in] cipher_stream The encrypted stream
+ * \param[in] plain_stream The decrypted stream
+ * \param[in] key_base64 The key for decryption
+ * \return 0 if decrypt success.
+ */
+FASTDEPLOY_DECL int DecryptStream(std::istream& cipher_stream,
                                  std::ostream& plain_stream,
                                  const std::string& key_base64);
 
-FASTDEPLOY_DECL std::string decrypt(const std::string& cipher,
+
+/** \brief decrypt an encrypted string
+ *
+ * \param[in] cipher The encrypted string
+ * \param[in] key The key for decryption
+ * \return The decrypted string
+ */
+FASTDEPLOY_DECL std::string Decrypt(const std::string& cipher,
                   const std::string& key);
 #ifdef __cplusplus
 }

@@ -1,4 +1,4 @@
-//   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+//   Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,14 +33,14 @@ namespace fastdeploy {
  * 0 - encrypted
  * 1 - unencrypt
  */
-int check_stream_encrypted(std::istream &cipher_stream) {
+int CheckStreamEncrypted(std::istream &cipher_stream) {
     return util::SystemUtils::check_file_encrypted(cipher_stream);
 }
 
-int decrypt_stream(std::istream &cipher_stream,
+int DecryptStream(std::istream &cipher_stream,
                   std::ostream &plain_stream,
                   const std::string &key_base64) {
-    int ret = check_stream_encrypted(cipher_stream);
+    int ret = CheckStreamEncrypted(cipher_stream);
     if (ret != CODE_OK) {
         LOGD("[M]check file encrypted failed, code: %d", ret);
         return ret;
@@ -93,12 +93,12 @@ int decrypt_stream(std::istream &cipher_stream,
     return CODE_OK;
 }
 
-std::string decrypt(const std::string& cipher,
+std::string Decrypt(const std::string& cipher,
                   const std::string& key) {
   std::string input = baidu::base::base64::base64_decode(cipher);
   std::istringstream isst_cipher(input);
   std::ostringstream osst_plain;
-  int ret =  decrypt_stream(isst_cipher, osst_plain, key);
+  int ret =  DecryptStream(isst_cipher, osst_plain, key);
   if (ret != 0) {
     FDERROR << ret << ", Failed decrypt " << std::endl;
     return "";

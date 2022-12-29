@@ -1,4 +1,4 @@
-//   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+//   Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,13 +29,13 @@
 
 namespace fastdeploy {
     
-std::string generate_random_key() {
+std::string GenerateRandomKey() {
     std::string tmp = util::SystemUtils::random_key_iv(AES_GCM_KEY_LENGTH);
     // return util::crypto::Base64Utils::encode(tmp);
     return baidu::base::base64::base64_encode(tmp);
 }
 
-int encrypt_stream(std::istream &in_stream, std::ostream &out_stream,
+int EncryptStream(std::istream &in_stream, std::ostream &out_stream,
                    const std::string &keydata) {
     std::string key_str = baidu::base::base64::base64_decode(keydata);
     if (key_str.length() != 32) {
@@ -87,12 +87,12 @@ int encrypt_stream(std::istream &in_stream, std::ostream &out_stream,
     return CODE_OK;
 }
 
-std::vector<std::string> encrypt(const std::string& input,
+std::vector<std::string> Encrypt(const std::string& input,
                   const std::string& key) {
   
   std::istringstream isst(input);
   std::ostringstream osst;
-  int ret =  encrypt_stream(isst, osst, key);
+  int ret =  EncryptStream(isst, osst, key);
   if (ret != 0) {
     FDERROR << ret << ", Failed encrypt " << std::endl;
     return {"", ""};

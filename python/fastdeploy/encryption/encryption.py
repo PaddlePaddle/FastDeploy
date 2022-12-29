@@ -15,12 +15,25 @@ from .. import c_lib_wrap as C
 
 
 def generate_key():
+    """generate a key for encryption
+    :return: key(str)
+    """
     return C.encryption.generate_key()
 
 
 def encrypt(input, key=generate_key()):
+    """Encrypt a input string with key.
+    :param: input: (str) The input str for encryption
+    :param: key: (str,optional) The key for encryption(if not given, generate automatically.)
+    :return: pair(str, str) [encrypted string, key]
+    """
     return C.encryption.encrypt(input, key)
 
 
 def decrypt(cipher, key):
+    """Decrypt a input cipher with key.
+    :param: cipher: (str) The input str for decryption
+    :param: key: (str) The key for decryption
+    :return: str(The decrypted str)
+    """
     return C.encryption.decrypt(cipher, key)
