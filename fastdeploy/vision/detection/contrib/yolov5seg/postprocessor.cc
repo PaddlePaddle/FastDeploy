@@ -115,10 +115,9 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     }
     cv::Mat matmul_result = (mask_proposals * mask_proto).t();
     cv::Mat masks = matmul_result.reshape((*results)[bs].boxes.size(), {static_cast<int>(tensors[1].shape[2]), static_cast<int>(tensors[1].shape[3])});
-
     // split for boxes nums
-	  std::vector<cv::Mat> mask_channels;
-	  cv::split(masks, mask_channels);
+    std::vector<cv::Mat> mask_channels;
+    cv::split(masks, mask_channels);
     
     // scale the boxes to the origin image shape
     auto iter_out = ims_info[bs].find("output_shape");
@@ -154,23 +153,23 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       cv::Mat dest, mask;
       // sigmoid
       cv::exp(-mask_channels[i], dest);
-		  dest = 1.0 / (1.0 + dest);
-		  // crop mask for feature map
+      dest = 1.0 / (1.0 + dest);
+      // crop mask for feature map
       int x1 = static_cast<int>(pad_w_mask);
       int y1 = static_cast<int>(pad_h_mask);
       int x2 = static_cast<int>(tensors[1].shape[3] - pad_w_mask);
       int y2 = static_cast<int>(tensors[1].shape[2] - pad_h_mask);
-		  cv::Rect roi(x1, y1, x2-x1, y2-y1);
-		  dest = dest(roi);
+      cv::Rect roi(x1, y1, x2 - x1, y2 - y1);
+      dest = dest(roi);
       cv::resize(dest, mask, cv::Size(ipt_w, ipt_h), 0, 0, cv::INTER_LINEAR);
-		  // crop mask for source img
+      // crop mask for source img
       int x1_src = static_cast<int>((*results)[bs].boxes[i][0]);
       int y1_src = static_cast<int>((*results)[bs].boxes[i][1]);
       int x2_src = static_cast<int>((*results)[bs].boxes[i][2]);
       int y2_src = static_cast<int>((*results)[bs].boxes[i][3]);
-      cv::Rect roi_src(x1_src, y1_src, x2_src-x1_src, y2_src-y1_src);
+      cv::Rect roi_src(x1_src, y1_src, x2_src - x1_src, y2_src - y1_src);
       mask = mask(roi_src);
-		  mask = mask > mask_threshold_;
+      mask = mask > mask_threshold_;
       // save mask in DetectionResult
       int keep_mask_h = y2_src - y1_src;
       int keep_mask_w = x2_src - x1_src;
