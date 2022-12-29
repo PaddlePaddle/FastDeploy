@@ -7,10 +7,6 @@ import json
 
 import fastdeploy as fd
 from fastdeploy.text import UIEModel, SchemaLanguage
-import pynvml
-import psutil
-import GPUtil
-import multiprocessing
 
 
 def parse_arguments():
@@ -45,22 +41,22 @@ def parse_arguments():
         default=128,
         help="The max length of sequence.")
     parser.add_argument(
-        "--log_interval",
-        type=int,
-        default=10,
-        help="The interval of logging.")
-    parser.add_argument(
         "--cpu_num_threads",
         type=int,
-        default=1,
+        default=8,
         help="The number of threads when inferring on cpu.")
     parser.add_argument(
-        "--use_fp16",
+        "--enable_trt_fp16",
         type=distutils.util.strtobool,
         default=False,
-        help="Use FP16 mode")
+        help="whether enable fp16 in trt backend")
     parser.add_argument(
         "--epoch", type=int, default=1, help="The epoch of test")
+    parser.add_argument(
+        "--enable_collect_memory_info",
+        type=ast.literal_eval,
+        default=False,
+        help="whether enable collect memory info")
     return parser.parse_args()
 
 
@@ -103,37 +99,116 @@ def build_option(args):
             min_shape=[1, 1],
             opt_shape=[args.batch_size, args.max_length // 2],
             max_shape=[args.batch_size, args.max_length])
-        if args.use_fp16:
+        if args.enable_trt_fp16:
             option.enable_trt_fp16()
             trt_file = trt_file + ".fp16"
         option.set_trt_cache_file(trt_file)
     return option
 
 
-def get_current_memory_mb(gpu_id=None):
-    pid = os.getpid()
-    p = psutil.Process(pid)
-    info = p.memory_full_info()
-    cpu_mem = info.uss / 1024. / 1024.
-    gpu_mem = 0
-    if gpu_id is not None:
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
-        meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        gpu_mem = meminfo.used / 1024. / 1024.
-    return cpu_mem, gpu_mem
+class StatBase(object):
+    """StatBase"""
+    nvidia_smi_path = "nvidia-smi"
+    gpu_keys = ('index', 'uuid', 'name', 'timestamp', 'memory.total',
+                'memory.free', 'memory.used', 'utilization.gpu',
+                'utilization.memory')
+    nu_opt = ',nounits'
+    cpu_keys = ('cpu.util', 'memory.util', 'memory.used')
 
 
-def get_current_gputil(gpu_id):
-    GPUs = GPUtil.getGPUs()
-    gpu_load = GPUs[gpu_id].load
-    return gpu_load
+class Monitor(StatBase):
+    """Monitor"""
 
+    def __init__(self, use_gpu=False, gpu_id=0, interval=0.1):
+        self.result = {}
+        self.gpu_id = gpu_id
+        self.use_gpu = use_gpu
+        self.interval = interval
+        self.cpu_stat_q = multiprocessing.Queue()
 
-def sample_gpuutil(gpu_id, gpu_utilization=[]):
-    while True:
-        gpu_utilization.append(get_current_gputil(gpu_id))
-        time.sleep(0.01)
+    def start(self):
+        cmd = '%s --id=%s --query-gpu=%s --format=csv,noheader%s -lms 50' % (
+            StatBase.nvidia_smi_path, self.gpu_id, ','.join(StatBase.gpu_keys),
+            StatBase.nu_opt)
+        if self.use_gpu:
+            self.gpu_stat_worker = subprocess.Popen(
+                cmd,
+                stderr=subprocess.STDOUT,
+                stdout=subprocess.PIPE,
+                shell=True,
+                close_fds=True,
+                preexec_fn=os.setsid)
+        # cpu stat
+        pid = os.getpid()
+        self.cpu_stat_worker = multiprocessing.Process(
+            target=self.cpu_stat_func,
+            args=(self.cpu_stat_q, pid, self.interval))
+        self.cpu_stat_worker.start()
+
+    def stop(self):
+        try:
+            if self.use_gpu:
+                os.killpg(self.gpu_stat_worker.pid, signal.SIGUSR1)
+            # os.killpg(p.pid, signal.SIGTERM)
+            self.cpu_stat_worker.terminate()
+            self.cpu_stat_worker.join(timeout=0.01)
+        except Exception as e:
+            print(e)
+            return
+
+        # gpu
+        if self.use_gpu:
+            lines = self.gpu_stat_worker.stdout.readlines()
+            lines = [
+                line.strip().decode("utf-8") for line in lines
+                if line.strip() != ''
+            ]
+            gpu_info_list = [{
+                k: v
+                for k, v in zip(StatBase.gpu_keys, line.split(', '))
+            } for line in lines]
+            if len(gpu_info_list) == 0:
+                return
+            result = gpu_info_list[0]
+            for item in gpu_info_list:
+                for k in item.keys():
+                    if k not in ["name", "uuid", "timestamp"]:
+                        result[k] = max(int(result[k]), int(item[k]))
+                    else:
+                        result[k] = max(result[k], item[k])
+            self.result['gpu'] = result
+
+        # cpu
+        cpu_result = {}
+        if self.cpu_stat_q.qsize() > 0:
+            cpu_result = {
+                k: v
+                for k, v in zip(StatBase.cpu_keys, self.cpu_stat_q.get())
+            }
+        while not self.cpu_stat_q.empty():
+            item = {
+                k: v
+                for k, v in zip(StatBase.cpu_keys, self.cpu_stat_q.get())
+            }
+            for k in StatBase.cpu_keys:
+                cpu_result[k] = max(cpu_result[k], item[k])
+        cpu_result['name'] = cpuinfo.get_cpu_info()['brand_raw']
+        self.result['cpu'] = cpu_result
+
+    def output(self):
+        return self.result
+
+    def cpu_stat_func(self, q, pid, interval=0.0):
+        """cpu stat function"""
+        stat_info = psutil.Process(pid)
+        while True:
+            # pid = os.getpid()
+            cpu_util, mem_util, mem_use = stat_info.cpu_percent(
+            ), stat_info.memory_percent(), round(stat_info.memory_info().rss /
+                                                 1024.0 / 1024.0, 4)
+            q.put([cpu_util, mem_util, mem_use])
+            time.sleep(interval)
+        return
 
 
 def get_dataset(data_path, max_seq_len=512):
@@ -154,38 +229,31 @@ def get_dataset(data_path, max_seq_len=512):
     return json_lines
 
 
-def run_inference(ds, uie, epoch=1, warmup_steps=10):
-    for j, sample in enumerate(ds):
-        if j > warmup_steps:
-            break
-        uie.set_schema([sample['prompt']])
-        result = uie.predict([sample['content']])
-    print(f"Run {warmup_steps} steps to warm up")
-    start = time.time()
-    for ep in range(epoch):
-        curr_start = time.time()
-        for i, sample in enumerate(ds):
-            uie.set_schema([sample['prompt']])
-            result = uie.predict([sample['content']])
-        print(
-            f"Epoch {ep} average time = {(time.time() - curr_start) * 1000.0 / (len(ds)):.4f} ms"
-        )
-    end = time.time()
-    runtime_statis = uie.print_statis_info_of_runtime()
-    print(f"Final:")
-    print(runtime_statis)
-    print(
-        f"Total average time = {(end - start) * 1000.0 / (len(ds) * epoch):.4f} ms"
-    )
-    print()
-
-
 if __name__ == '__main__':
     args = parse_arguments()
     runtime_option = build_option(args)
     model_path = os.path.join(args.model_dir, "inference.pdmodel")
     param_path = os.path.join(args.model_dir, "inference.pdiparams")
     vocab_path = os.path.join(args.model_dir, "vocab.txt")
+
+    gpu_id = args.device_id
+    enable_collect_memory_info = args.enable_collect_memory_info
+    dump_result = dict()
+    end2end_statis = list()
+    cpu_mem = list()
+    gpu_mem = list()
+    gpu_util = list()
+    if args.device == "cpu":
+        file_path = args.model_dir + "_model_" + args.backend + "_" + \
+            args.device + "_" + str(args.cpu_num_thread) + ".txt"
+    else:
+        if args.enable_trt_fp16:
+            file_path = args.model_dir + "_model_" + \
+                args.backend + "_fp16_" + args.device + ".txt"
+        else:
+            file_path = args.model_dir + "_model_" + args.backend + "_" + args.device + ".txt"
+    f = open(file_path, "w")
+    f.writelines("===={}====: \n".format(os.path.split(file_path)[-1][:-4]))
 
     ds = get_dataset(args.data_path)
     schema = ["时间"]
@@ -195,9 +263,59 @@ if __name__ == '__main__':
         vocab_path,
         position_prob=0.5,
         max_length=args.max_length,
+        batch_size=args.batch_size,
         schema=schema,
         runtime_option=runtime_option,
         schema_language=SchemaLanguage.ZH)
 
-    uie.enable_record_time_of_runtime()
-    run_inference(ds, uie, args.epoch)
+    try:
+        if enable_collect_memory_info:
+            import multiprocessing
+            import subprocess
+            import psutil
+            import signal
+            import cpuinfo
+            enable_gpu = args.device == "gpu"
+            monitor = Monitor(enable_gpu, gpu_id)
+            monitor.start()
+        uie.enable_record_time_of_runtime()
+
+        for ep in range(args.epoch):
+            for i, sample in enumerate(ds):
+                curr_start = time.time()
+                uie.set_schema([sample['prompt']])
+                result = uie.predict([sample['content']])
+                end2end_statis.append(time.time() - curr_start)
+        runtime_statis = uie.print_statis_info_of_runtime()
+
+        warmup_iter = args.epoch * len(ds) // 5
+
+        end2end_statis_repeat = end2end_statis[warmup_iter:]
+        if enable_collect_memory_info:
+            monitor.stop()
+            mem_info = monitor.output()
+            dump_result["cpu_rss_mb"] = mem_info['cpu'][
+                'memory.used'] if 'cpu' in mem_info else 0
+            dump_result["gpu_rss_mb"] = mem_info['gpu'][
+                'memory.used'] if 'gpu' in mem_info else 0
+            dump_result["gpu_util"] = mem_info['gpu'][
+                'utilization.gpu'] if 'gpu' in mem_info else 0
+
+        dump_result["runtime"] = runtime_statis["avg_time"] * 1000
+        dump_result["end2end"] = np.mean(end2end_statis_repeat) * 1000
+
+        time_cost_str = f"Runtime(ms): {dump_result['runtime']}\n" \
+                        f"End2End(ms): {dump_result['end2end']}\n"
+        f.writelines(time_cost_str)
+        print(time_cost_str)
+
+        if enable_collect_memory_info:
+            mem_info_str = f"cpu_rss_mb: {dump_result['cpu_rss_mb']}\n" \
+                           f"gpu_rss_mb: {dump_result['gpu_rss_mb']}\n" \
+                           f"gpu_util: {dump_result['gpu_util']}\n"
+            f.writelines(mem_info_str)
+            print(mem_info_str)
+    except:
+        f.writelines("!!!!!Infer Failed\n")
+
+    f.close()
