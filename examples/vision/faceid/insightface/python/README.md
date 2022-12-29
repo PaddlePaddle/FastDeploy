@@ -1,6 +1,6 @@
 [English](README_EN.md) | 简体中文
 # InsightFace Python部署示例
-本目录下提供infer_xxx.py快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer_xxx.py`快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -81,7 +81,7 @@ ArcFace模型加载和初始化，其中model_file为导出的ONNX模型格式
 > ArcFace.predict(image_data)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> 模型预测接口，输入图像直接输出检测结果。
 >
 > **参数**
 >
