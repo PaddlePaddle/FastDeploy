@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG http_proxy
+ARG https_proxy
+
 FROM paddlepaddle/fastdeploy:21.10-cpu-only-min
 
 ENV TZ=Asia/Shanghai \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    http_proxy=$http_proxy \
+    https_proxy=$http_proxy
 
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils libgomp1 ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
@@ -30,3 +35,6 @@ COPY build/fastdeploy_install /opt/fastdeploy/
 
 RUN mv /opt/tritonserver/bin/tritonserver /opt/tritonserver/bin/fastdeployserver
 ENV LD_LIBRARY_PATH="/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
+# unset proxy
+ENV http_proxy=
+ENV https_proxy=

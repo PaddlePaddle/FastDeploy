@@ -38,3 +38,4 @@ from . import pipeline
 from . import text
 from . import encryption
 from .download import download, download_and_decompress, download_model
+from . import serving
