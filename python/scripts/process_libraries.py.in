@@ -20,6 +20,47 @@ import platform
 
 user_specified_dirs = ['@OPENCV_DIRECTORY@', '@ORT_DIRECTORY@', ]
 
+def ldd(lib_name):
+    libs = []
+    print("Executing ldd", lib_name)
+    proc = subprocess.Popen(
+        ["ldd", lib_name],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "Failed to ldd external libraries of {} with code {}:\nout:\n{}\n\n"
+            "err:\n{}".format(lib_name, proc.returncode, out, err))
+    for line in out.decode('utf-8').strip('\n').split('\n'):
+        print(line)
+        libs.append(line.strip('\t').split(' ')[0])
+    return libs
+
+
+def remove_duplicated_libs(all_files):
+    for f in all_files:
+        f_name = os.path.basename(f)
+        if f_name.startswith("libfastdeploy.so."):
+            libfd = f
+            break
+    depends = ldd(libfd)
+    depends.append(os.path.basename(libfd))
+
+    remain_files = []
+    keel_all_libs = ['paddle_inference']
+    for f in all_files:
+        if any([x in f.split('/') for x in keel_all_libs]):
+            remain_files.append(f)
+            continue
+        f_name = os.path.basename(f)
+        if f_name.startswith('lib') and '.so' in f_name and f_name not in depends:
+            continue
+        remain_files.append(f)
+    return remain_files
+
+
 def process_on_linux(current_dir):
     rpaths = ["$ORIGIN:$ORIGIN/libs"]
     fd_libs = list()
@@ -174,6 +215,8 @@ def process_libraries(current_dir):
                                                     "fastdeploy")))
 
         return package_data
+    elif platform.system().lower() == "linux":
+        all_files = remove_duplicated_libs(all_files)
 
     filters = [".vcxproj", ".png", ".java", ".h", ".cc", ".cpp", ".hpp"]
     for f in all_files:
@@ -181,21 +224,6 @@ def process_libraries(current_dir):
         for flt in filters:
             if f.count(flt) > 0:
                 remain = False
-        filename = os.path.split(f)[-1]
-# Note(zhoushunjie): To add the trt libs below will increase the size of whl package by 450M.
-#        if filename in [
-#                "libnvinfer_plugin.so",
-#                "libnvinfer.so", "libnvonnxparser.so",
-#                "libnvparsers.so", "libnvcaffe_parser.so"
-#        ]:
-#            continue
-
-        for lib_prefix in ["libnvinfer_plugin.so.8.",
-            "libnvinfer.so.8.", "libnvonnxparser.so.8.",
-            "libnvparsers.so.8.", "libnvcaffe_parser.so.8."]:
-            if filename.startswith(lib_prefix):
-                remain = False
-                break
 
         if remain:
             package_data.append(
