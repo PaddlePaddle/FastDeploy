@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # YOLOv5Face C++部署示例
 
 本目录下提供`infer.cc`快速完成YOLOv5Face在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
