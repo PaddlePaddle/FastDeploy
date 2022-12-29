@@ -23,6 +23,7 @@
 #include "fastdeploy/vision/detection/contrib/yolor.h"
 #include "fastdeploy/vision/detection/contrib/yolov5/yolov5.h"
 #include "fastdeploy/vision/detection/contrib/yolov5seg/yolov5seg.h"
+#include "fastdeploy/vision/detection/contrib/fastestdet/fastestdet.h"
 #include "fastdeploy/vision/detection/contrib/yolov5lite.h"
 #include "fastdeploy/vision/detection/contrib/yolov6.h"
 #include "fastdeploy/vision/detection/contrib/yolov7/yolov7.h"
