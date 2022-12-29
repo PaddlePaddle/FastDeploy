@@ -46,7 +46,7 @@ void BindVision(pybind11::module& m) {
                 throw std::runtime_error("vision::Mask pickle with invalid state!");
 
             vision::Mask m;
-            m.data = t[0].cast<std::vector<int32_t>>();
+            m.data = t[0].cast<std::vector<uint8_t>>();
             m.shape = t[1].cast<std::vector<int64_t>>();
 
             return m;
