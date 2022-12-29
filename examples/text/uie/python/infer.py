@@ -129,6 +129,7 @@ if __name__ == "__main__":
         position_prob=0.5,
         max_length=args.max_length,
         schema=schema,
+        batch_size=args.batch_size,
         runtime_option=runtime_option,
         schema_language=SchemaLanguage.ZH)
 
@@ -181,7 +182,8 @@ if __name__ == "__main__":
     schema = {"评价维度": ["观点词", "情感倾向[正向，负向]"]}
     print(f"The extraction schema: {schema}")
     uie.set_schema(schema)
-    results = uie.predict(["店面干净，很清静"], return_dict=True)
+    results = uie.predict(
+        ["店面干净，很清静，服务员服务热情，性价比很高，发现收银台有排队"], return_dict=True)
     pprint(results)
     print()
 
