@@ -28,8 +28,8 @@ def parse_arguments():
     parser.add_argument(
         "--backend",
         type=str,
-        default='pp',
-        choices=['ort', 'pp', 'trt', 'pp-trt', 'openvino'],
+        default='paddle',
+        choices=['ort', 'paddle', 'trt', 'paddle_trt', 'ov'],
         help="The inference runtime backend.")
     parser.add_argument(
         "--device_id", type=int, default=0, help="device(gpu) id")
@@ -67,15 +67,15 @@ def build_option(args):
         option.set_cpu_thread_num(args.cpu_num_threads)
     else:
         option.use_gpu(args.device_id)
-    if args.backend == 'pp':
+    if args.backend == 'paddle':
         option.use_paddle_backend()
     elif args.backend == 'ort':
         option.use_ort_backend()
-    elif args.backend == 'openvino':
+    elif args.backend == 'ov':
         option.use_openvino_backend()
     else:
         option.use_trt_backend()
-        if args.backend == 'pp-trt':
+        if args.backend == 'paddle_trt':
             option.enable_paddle_to_trt()
             option.enable_paddle_trt_collect_shape()
         trt_file = os.path.join(args.model_dir, "infer.trt")
