@@ -62,7 +62,8 @@ void RKNPU2Infer(const std::string& model_dir, const std::string& image_file) {
     std::cerr << "Failed to initialize." << std::endl;
     return;
   }
-  model.GetPreprocessor().DisableNormalizeAndPermute();
+  model.GetPreprocessor().DisablePermute();
+  model.GetPreprocessor().DisableNormalize();
 
   fastdeploy::TimeCounter tc;
   tc.Start();

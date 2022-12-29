@@ -64,8 +64,8 @@ cd ./build/install
 
 ## 运行结果展示
 ClassifyResult(
-label_ids: 153, 
-scores: 0.684570, 
+label_ids: 153,
+scores: 0.684570,
 )
 
 ## 注意事项
