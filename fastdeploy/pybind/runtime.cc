@@ -214,7 +214,8 @@ void BindRuntime(pybind11::module& m) {
       .def("infer",
            [](Runtime& self, std::vector<FDTensor>& inputs) {
              std::vector<FDTensor> outputs;
-             return self.Infer(inputs, &outputs);
+             self.Infer(inputs, &outputs);
+             return outputs;
            })
       .def("bind_input_tensor", &Runtime::BindInputTensor)
       .def("infer", [](Runtime& self) { self.Infer(); })
