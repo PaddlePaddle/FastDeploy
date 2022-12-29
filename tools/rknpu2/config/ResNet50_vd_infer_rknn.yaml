@@ -1,10 +1,16 @@
-model_path: ./ResNet50_vd_infer.onnx
-output_folder: ./
-target_platform: RK3588
-normalize:
-  mean: [[0, 0, 0]]
-  std: [[1, 1, 1]]
+model_path: ./ResNet50_vd_infer/ResNet50_vd_infer.onnx
+output_folder: ./ResNet50_vd_infer
+mean:
+  -
+    - 0
+    - 0
+    - 0
+std:
+  -
+    - 1
+    - 1
+    - 1
 outputs: []
 outputs_nodes: []
 do_quantization: False
-dataset: 
+dataset:

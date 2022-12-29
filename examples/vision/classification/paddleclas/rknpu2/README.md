@@ -3,6 +3,7 @@
 ## 转换模型
 下面以 ResNet50_vd为例子，教大家如何转换分类模型到RKNN模型。
 
+### 导出ONNX模型
 ```bash
 # 安装 paddle2onnx
 pip install paddle2onnx
@@ -17,17 +18,17 @@ paddle2onnx --model_dir ResNet50_vd_infer  \
             --params_filename inference.pdiparams  \
             --save_file ResNet50_vd_infer/ResNet50_vd_infer.onnx  \
             --enable_dev_version True  \
-            --opset_version 12  \
+            --opset_version 10  \
             --enable_onnx_checker True
 
 # 固定shape，注意这里的inputs得对应netron.app展示的 inputs 的 name，有可能是image 或者 x
 python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
                                --output_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
                                --input_shape_dict "{'inputs':[1,3,224,224]}"
-```                               
+```  
 
- ### 编写模型导出配置文件
-以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。                              
+### 编写模型导出配置文件
+以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。  
 
 默认的 mean=0, std=1是在内存做normalize，如果你需要在NPU上执行normalize操作，请根据你的模型配置normalize参数，例如:
 ```yaml
@@ -40,11 +41,11 @@ normalize:
 outputs: []
 outputs_nodes: []
 do_quantization: False
-dataset: 
+dataset:
 ```
 
 
-# ONNX模型转RKNN模型
+### ONNX模型转RKNN模型
 ```shell
 python tools/rknpu2/export.py \
         --config_path tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml \
