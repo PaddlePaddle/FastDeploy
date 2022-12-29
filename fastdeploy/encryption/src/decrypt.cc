@@ -33,13 +33,13 @@ namespace fastdeploy {
  * 0 - encrypted
  * 1 - unencrypt
  */
-int CheckStreamEncrypted(std::istream &cipher_stream) {
+int CheckStreamEncrypted(std::istream& cipher_stream) {
     return util::SystemUtils::check_file_encrypted(cipher_stream);
 }
 
-int DecryptStream(std::istream &cipher_stream,
-                  std::ostream &plain_stream,
-                  const std::string &key_base64) {
+int DecryptStream(std::istream& cipher_stream,
+                  std::ostream& plain_stream,
+                  const std::string& key_base64) {
     int ret = CheckStreamEncrypted(cipher_stream);
     if (ret != CODE_OK) {
         LOGD("[M]check file encrypted failed, code: %d", ret);

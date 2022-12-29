@@ -35,7 +35,7 @@ std::string GenerateRandomKey() {
     return baidu::base::base64::base64_encode(tmp);
 }
 
-int EncryptStream(std::istream &in_stream, std::ostream &out_stream,
+int EncryptStream(std::istream& in_stream, std::ostream& out_stream,
                    const std::string &keydata) {
     std::string key_str = baidu::base::base64::base64_decode(keydata);
     if (key_str.length() != 32) {

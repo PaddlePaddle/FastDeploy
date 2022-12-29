@@ -39,8 +39,8 @@ FASTDEPLOY_DECL std::string GenerateRandomKey();
  * \return true if encrypt successed, otherwise false
  */
 FASTDEPLOY_DECL int EncryptStream(const std::string &keydata,
-                                 std::istream &in_stream,
-                                 std::ostream &out_stream);
+                                 std::istream& in_stream,
+                                 std::ostream& out_stream);
 
 /** \brief encrypt a string with key
  *
