@@ -28,21 +28,48 @@ python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer
 ```  
 
 ### 编写模型导出配置文件
-以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。  
+以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。
 
-默认的 mean=0, std=1是在内存做normalize，如果你需要在NPU上执行normalize操作，请根据你的模型配置normalize参数，例如:
+如果你需要在NPU上执行normalize操作，请根据你的模型配置normalize参数，例如:
 ```yaml
-model_path: ./ResNet50_vd_infer.onnx
-output_folder: ./
-target_platform: RK3588
-normalize:
-  mean: [[0.485,0.456,0.406]]
-  std: [[0.229,0.224,0.225]]
+model_path: ./ResNet50_vd_infer/ResNet50_vd_infer.onnx
+output_folder: ./ResNet50_vd_infer
+mean:
+  -
+    - 123.675
+    - 116.28
+    - 103.53
+std:
+  -
+    - 58.395
+    - 57.12
+    - 57.375
+outputs: []
+outputs_nodes: []
+do_quantization: True
+dataset: "./ResNet50_vd_infer/dataset.txt"
+```
+
+**在CPU上做normalize**可以参考以下yaml：
+```yaml
+model_path: ./ResNet50_vd_infer/ResNet50_vd_infer.onnx
+output_folder: ./ResNet50_vd_infer
+mean:
+  -
+    - 0
+    - 0
+    - 0
+std:
+  -
+    - 1
+    - 1
+    - 1
 outputs: []
 outputs_nodes: []
 do_quantization: False
-dataset:
+dataset: "./ResNet50_vd_infer/dataset.txt"
 ```
+这里我们选择在NPU上执行normalize操作.
 
 
 ### ONNX模型转RKNN模型
