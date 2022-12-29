@@ -44,9 +44,8 @@ std:
     - 58.395
     - 57.12
     - 57.375
-outputs: []
-outputs_nodes: []
-do_quantization: True
+outputs_nodes:
+do_quantization: False
 dataset: "./ResNet50_vd_infer/dataset.txt"
 ```
 
@@ -64,8 +63,7 @@ std:
     - 1
     - 1
     - 1
-outputs: []
-outputs_nodes: []
+outputs_nodes:
 do_quantization: False
 dataset: "./ResNet50_vd_infer/dataset.txt"
 ```
