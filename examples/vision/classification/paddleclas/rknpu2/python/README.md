@@ -27,7 +27,7 @@ scores: 0.684570,
 
 ## 注意事项
 RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
-DisablePermute(C++)或`disable_permute_(Python)，在预处理阶段禁用数据格式的转换。
+DisablePermute(C++)或`disable_permute(Python)，在预处理阶段禁用数据格式的转换。
 
 ## 其它文档
 - [ResNet50_vd C++部署](../cpp)
