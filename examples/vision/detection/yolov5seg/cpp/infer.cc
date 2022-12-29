@@ -52,7 +52,6 @@ void GpuInfer(const std::string& model_file, const std::string& image_file) {
     return;
   }
   std::cout << res.Str() << std::endl;
-  std::cout << res.contain_masks << std::endl;
 
   auto vis_im = fastdeploy::vision::VisDetection(im, res);
   cv::imwrite("vis_result.jpg", vis_im);
