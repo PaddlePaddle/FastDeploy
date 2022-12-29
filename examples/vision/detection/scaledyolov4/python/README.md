@@ -50,7 +50,7 @@ ScaledYOLOv4模型加载和初始化，其中model_file为导出的ONNX模型格
 > ScaledYOLOv4.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> 模型预测接口，输入图像直接输出检测结果。
 >
 > **参数**
 >
