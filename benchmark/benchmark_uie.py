@@ -245,7 +245,7 @@ if __name__ == '__main__':
     gpu_util = list()
     if args.device == "cpu":
         file_path = args.model_dir + "_model_" + args.backend + "_" + \
-            args.device + "_" + str(args.cpu_num_thread) + ".txt"
+            args.device + "_" + str(args.cpu_num_threads) + ".txt"
     else:
         if args.enable_trt_fp16:
             file_path = args.model_dir + "_model_" + \
