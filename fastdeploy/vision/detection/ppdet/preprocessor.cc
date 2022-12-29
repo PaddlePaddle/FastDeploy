@@ -45,7 +45,7 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
   for (const auto& op : cfg["Preprocess"]) {
     std::string op_name = op["type"].as<std::string>();
     if (op_name == "NormalizeImage") {
-      if (!disable_normalize) {
+      if (!disable_normalize_) {
         auto mean = op["mean"].as<std::vector<float>>();
         auto std = op["std"].as<std::vector<float>>();
         bool is_scale = true;
@@ -106,7 +106,7 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
       return false;
     }
   }
-  if (!disable_permute) {
+  if (!disable_permute_) {
     if (has_permute) {
       // permute = cast<float> + HWC2CHW
       processors_.push_back(std::make_shared<Cast>("float"));
@@ -207,14 +207,14 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
   return true;
 }
 void PaddleDetPreprocessor::DisableNormalize() {
-  this->disable_normalize = true;
+  this->disable_normalize_ = true;
   // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
   }
 }
 void PaddleDetPreprocessor::DisablePermute() {
-  this->disable_permute = true;
+  this->disable_permute_ = true;
   // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
   if (!BuildPreprocessPipelineFromConfig()) {
     FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;

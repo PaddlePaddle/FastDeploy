@@ -49,9 +49,9 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
   std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
   // for recording the switch of hwc2chw
-  bool disable_permute = false;
+  bool disable_permute_ = false;
   // for recording the switch of normalize
-  bool disable_normalize = false;
+  bool disable_normalize_ = false;
   // read config file
   std::string config_file_;
 };
