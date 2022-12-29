@@ -22,9 +22,11 @@ void Merge(DetectionResult* result, size_t low, size_t mid, size_t high) {
   std::vector<std::array<float, 4>>& boxes = result->boxes;
   std::vector<float>& scores = result->scores;
   std::vector<int32_t>& label_ids = result->label_ids;
+  std::vector<std::vector<float>>& yolo_masks = result->yolo_masks;
   std::vector<std::array<float, 4>> temp_boxes(boxes);
   std::vector<float> temp_scores(scores);
   std::vector<int32_t> temp_label_ids(label_ids);
+  std::vector<std::vector<float>> temp_yolo_masks(yolo_masks);
   size_t i = low;
   size_t j = mid + 1;
   size_t k = i;
@@ -33,11 +35,17 @@ void Merge(DetectionResult* result, size_t low, size_t mid, size_t high) {
       scores[k] = temp_scores[i];
       label_ids[k] = temp_label_ids[i];
       boxes[k] = temp_boxes[i];
+      if (!yolo_masks.empty()) {
+        yolo_masks[k] = temp_yolo_masks[i];
+      }
       i++;
     } else {
       scores[k] = temp_scores[j];
       label_ids[k] = temp_label_ids[j];
       boxes[k] = temp_boxes[j];
+      if (!yolo_masks.empty()) {
+        yolo_masks[k] = temp_yolo_masks[j];
+      }
       j++;
     }
   }
@@ -45,6 +53,9 @@ void Merge(DetectionResult* result, size_t low, size_t mid, size_t high) {
     scores[k] = temp_scores[i];
     label_ids[k] = temp_label_ids[i];
     boxes[k] = temp_boxes[i];
+    if (!yolo_masks.empty()) {
+      yolo_masks[k] = temp_yolo_masks[i];
+    }
     k++;
     i++;
   }
@@ -52,6 +63,9 @@ void Merge(DetectionResult* result, size_t low, size_t mid, size_t high) {
     scores[k] = temp_scores[j];
     label_ids[k] = temp_label_ids[j];
     boxes[k] = temp_boxes[j];
+    if (!yolo_masks.empty()) {
+      yolo_masks[k] = temp_yolo_masks[j];
+    }
     k++;
     j++;
   }

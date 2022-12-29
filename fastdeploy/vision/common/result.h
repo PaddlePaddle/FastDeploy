@@ -67,7 +67,7 @@ struct FASTDEPLOY_DECL ClassifyResult : public BaseResult {
  */
 struct FASTDEPLOY_DECL Mask : public BaseResult {
   /// Mask data buffer
-  std::vector<int32_t> data;
+  std::vector<uint8_t> data;
   /// Shape of mask
   std::vector<int64_t> shape;  // (H,W) ...
   ResultType type = ResultType::MASK;
@@ -109,7 +109,7 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::vector<Mask> masks;
   /// Shows if the DetectionResult has mask
   bool contain_masks = false;
-  /// Only for YOLOv5-Seg, 1x32D Tensor represents mask
+  /// Only for YOLOv5-Seg, Nx32D Tensor represents mask
   std::vector<std::vector<float>> yolo_masks;
 
   ResultType type = ResultType::DETECTION;

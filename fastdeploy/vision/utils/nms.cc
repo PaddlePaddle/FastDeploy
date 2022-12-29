@@ -56,6 +56,7 @@ void NMS(DetectionResult* result, float iou_threshold) {
   DetectionResult backup(*result);
   result->Clear();
   result->Reserve(suppressed.size());
+  result->contain_masks = backup.contain_masks;
   for (size_t i = 0; i < suppressed.size(); ++i) {
     if (suppressed[i] == 1) {
       continue;
@@ -63,7 +64,7 @@ void NMS(DetectionResult* result, float iou_threshold) {
     result->boxes.emplace_back(backup.boxes[i]);
     result->scores.push_back(backup.scores[i]);
     result->label_ids.push_back(backup.label_ids[i]);
-    if (!backup.yolo_masks[i].empty()) {
+    if (!backup.yolo_masks.empty()) {
       result->yolo_masks.push_back(backup.yolo_masks[i]);
     }
   }
