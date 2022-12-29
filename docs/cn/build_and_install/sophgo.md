@@ -2,7 +2,12 @@
 
 ## C++ SDK编译安装
 SOPHGO支持linux下进行编译,系统为Debian/Ubuntu  
-安装包由三个文件构成，安装包位置在third_party/sophgo，其中“$arch”为当前机器的硬件架构，使用以下命令可以获取当前的服务器arch：
+安装包由三个文件构成
+- [sophon-driver\_0.4.2\_$arch.deb](http://219.142.246.77:65000/sharing/KWqbmEcKp)
+- [sophon-libsophon\_0.4.2\_$arch.deb](http://219.142.246.77:65000/sharing/PlvlBXhWY)
+- [sophon-libsophon-dev\_0.4.2\_$arch.deb](http://219.142.246.77:65000/sharing/zTErLlpS7)
+
+其中“$arch”为当前机器的硬件架构，使用以下命令可以获取当前的服务器arch：
 ```shell
 uname -m
 ```

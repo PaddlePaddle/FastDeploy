@@ -25,9 +25,9 @@ PaddleSegModel::PaddleSegModel(const std::string& model_file,
                      const RuntimeOption& custom_option,
                      const ModelFormat& model_format) : preprocessor_(config_file),
                                                         postprocessor_(config_file) {
-  if(model_format == ModelFormat::ONNX) {
-    valid_cpu_backends = {Backend::OPENVINO, Backend::ORT};
-    valid_gpu_backends = {Backend::ORT, Backend::TRT};
+  if(model_format == ModelFormat::SOPHGO) {
+    valid_cpu_backends = {Backend::SOPHGONPU2};
+    valid_gpu_backends = {Backend::SOPHGONPU2};
   }
   else{
     valid_cpu_backends = {Backend::OPENVINO, Backend::PDINFER, Backend::ORT, Backend::LITE};
