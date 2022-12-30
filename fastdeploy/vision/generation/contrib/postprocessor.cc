@@ -28,20 +28,18 @@ bool AnimeGANPostprocessor::Run(std::vector<FDTensor>& infer_results,
   results->resize(shape[0]);
   float* infer_result_data = reinterpret_cast<float*>(output_tensor.Data());
   for(size_t i = 0; i < results->size(); ++i){
-  float* data = new float[shape[1]*shape[2]*3];
-  std::memcpy(reinterpret_cast<char*>(data), reinterpret_cast<char*>(infer_result_data+i*size), sizeof(float)*shape[1]*shape[2]*3);
-  Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, data);
-  std::vector<float> mean{127.5f, 127.5f, 127.5f};
-  std::vector<float> std{127.5f, 127.5f, 127.5f};
-  Convert::Run(&result_mat, mean, std);
-  // tmp data type is float[0-1.0],convert to uint type
-  auto temp = result_mat.GetOpenCVMat();
-  cv::Mat res = cv::Mat::zeros(temp->size(), CV_8UC3);
-  temp->convertTo(res, CV_8UC3, 1);
-  Mat fd_image = WrapMat(res);
-  BGR2RGB::Run(&fd_image);
-  res = *(fd_image.GetOpenCVMat());
-  res.copyTo(results->at(i));
+    Mat result_mat = Mat::Create(shape[1], shape[2], 3, FDDataType::FP32, infer_result_data+i*size);
+    std::vector<float> mean{127.5f, 127.5f, 127.5f};
+    std::vector<float> std{127.5f, 127.5f, 127.5f};
+    Convert::Run(&result_mat, mean, std);
+    // tmp data type is float[0-1.0],convert to uint type
+    auto temp = result_mat.GetOpenCVMat();
+    cv::Mat res = cv::Mat::zeros(temp->size(), CV_8UC3);
+    temp->convertTo(res, CV_8UC3, 1);
+    Mat fd_image = WrapMat(res);
+    BGR2RGB::Run(&fd_image);
+    res = *(fd_image.GetOpenCVMat());
+    res.copyTo(results->at(i));
   }
   return true;
 }

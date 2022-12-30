@@ -24,7 +24,7 @@ AnimeGAN::AnimeGAN(const std::string& model_file, const std::string& params_file
            const ModelFormat& model_format) {
 
   valid_cpu_backends = {Backend::PDINFER};
-  valid_gpu_backends = {Backend::PDINFER, Backend::TRT};
+  valid_gpu_backends = {Backend::PDINFER};
 
   runtime_option = custom_option;
   runtime_option.model_format = model_format;

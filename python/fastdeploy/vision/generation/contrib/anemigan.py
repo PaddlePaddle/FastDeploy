@@ -61,13 +61,12 @@ class AnimeGAN(FastDeployModel):
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
+        # call super constructor to initialize self._runtime_option
         super(AnimeGAN, self).__init__(runtime_option)
 
         self._model = C.vision.generation.AnimeGAN(
             model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
+        # assert self.initialized to confirm initialization successfully.
         assert self.initialized, "AnimeGAN initialize failed."
 
     def predict(self, input_image):

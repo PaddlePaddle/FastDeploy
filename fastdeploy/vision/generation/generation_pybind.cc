@@ -18,7 +18,7 @@ namespace fastdeploy {
 
 void BindAnimeGAN(pybind11::module& m);
 
-void BindGenerationModel(pybind11::module& m) {
+void BindGeneration(pybind11::module& m) {
   auto generation_module = m.def_submodule("generation", "image generation submodule");
   BindAnimeGAN(generation_module);
 }
