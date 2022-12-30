@@ -50,6 +50,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_gpu = (runtime_option.device == Device::GPU);
   bool use_ipu = (runtime_option.device == Device::IPU);
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
+  bool use_sophgotpu = (runtime_option.device == Device::SOPHGOTPUD);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
   bool use_ascend = (runtime_option.device == Device::ASCEND); 
   bool use_kunlunxin = (runtime_option.device == Device::KUNLUNXIN);
@@ -61,6 +62,11 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
     }
   } else if (use_rknpu) {
     if (!IsSupported(valid_rknpu_backends, runtime_option.backend)) {
+      FDERROR << "The valid rknpu backends of model " << ModelName() << " are " << Str(valid_rknpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_sophgotpu) {
+    if (!IsSupported(valid_sophgonpu_backends, runtime_option.backend)) {
       FDERROR << "The valid rknpu backends of model " << ModelName() << " are " << Str(valid_rknpu_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
@@ -118,7 +124,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateASCENDBackend();
   } else if (runtime_option.device == Device::KUNLUNXIN) {
     return CreateKunlunXinBackend();
-  } else if (runtime_option.device == Device::SOPHGONPU) {
+  } else if (runtime_option.device == Device::SOPHGOTPUD) {
     return CreateSophgoNPUBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU

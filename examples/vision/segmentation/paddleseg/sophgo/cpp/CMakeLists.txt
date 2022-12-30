@@ -37,6 +37,3 @@ install(PROGRAMS ${PADDLELITE_LIBS} DESTINATION lib)
 
 file(GLOB TIMVX_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddlelite/lib/verisilicon_timvx/*)
 install(PROGRAMS ${TIMVX_LIBS} DESTINATION lib)
-
-file(GLOB ADB_TOOLS run_with_adb.sh)
-install(PROGRAMS ${ADB_TOOLS} DESTINATION ./)

@@ -33,8 +33,7 @@ PaddleClasModel::PaddleClasModel(const std::string& model_file,
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ipu_backends = {Backend::PDINFER};
   }else if (model_format == ModelFormat::SOPHGO) {
-    valid_cpu_backends = {Backend::SOPHGONPU2};
-    valid_gpu_backends = {Backend::SOPHGONPU2};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
   } 
   else {
     valid_cpu_backends = {Backend::ORT, Backend::OPENVINO};

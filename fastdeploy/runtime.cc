@@ -75,7 +75,7 @@ std::vector<Backend> GetAvailableBackends() {
   backends.push_back(Backend::RKNPU2);
 #endif
 #ifdef ENABLE_SOPHGO_BACKEND
-  backends.push_back(Backend::SOPHGONPU2);
+  backends.push_back(Backend::SOPHGOTPU);
 #endif
   return backends;
 }
@@ -101,6 +101,8 @@ std::string Str(const Backend& b) {
     return "Backend::POROS";
   } else if (b == Backend::RKNPU2) {
     return "Backend::RKNPU2";
+  } else if (b == Backend::SOPHGOTPU) {
+    return "Backend::SOPHGOTPU";
   } else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
@@ -120,6 +122,8 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::OPENVINO";
   } else if (backend == Backend::RKNPU2) {
     out << "Backend::RKNPU2";
+  } else if (backend == Backend::SOPHGOTPU) {
+    out << "Backend::SOPHGOTPU";
   } else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
@@ -165,7 +169,7 @@ bool CheckModelFormat(const std::string& model_file,
           << model_file << std::endl;
       return false;
     }
-  }else if (model_format == ModelFormat::SOPHGO) {
+  } else if (model_format == ModelFormat::SOPHGO) {
     if (model_file.size() < 7 || 
         model_file.substr(model_file.size() -7, 7) != ".bmodel") {
       FDERROR
@@ -309,7 +313,7 @@ void RuntimeOption::UseAscend(){
 }
 
 void RuntimeOption::UseSophgo() {
-  device = Device::SOPHGONPU;
+  device = Device::SOPHGOTPUD;
   UseSophgoBackend();
 }
 
@@ -351,7 +355,7 @@ void RuntimeOption::UseOrtBackend() {
 // use sophgoruntime backend
 void RuntimeOption::UseSophgoBackend() {
 #ifdef ENABLE_SOPHGO_BACKEND
-  backend = Backend::SOPHGONPU2;
+  backend = Backend::SOPHGOTPU;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with SophgoBackend.");
 #endif
@@ -598,6 +602,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::OPENVINO;
     } else if (IsBackendAvailable(Backend::RKNPU2)) {
       option.backend = Backend::RKNPU2;
+    } else if (IsBackendAvailable(Backend::SOPHGOTPU)) {
+      option.backend = Backend::SOPHGOTPU;
     } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
@@ -657,8 +663,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
 
     FDINFO << "Runtime initialized with Backend::RKNPU2 in "
            << Str(option.device) << "." << std::endl;
-  } else if (option.backend == Backend::SOPHGONPU2) {
-    FDASSERT(option.device == Device::SOPHGONPU,
+  } else if (option.backend == Backend::SOPHGOTPU) {
+    FDASSERT(option.device == Device::SOPHGOTPUD,
              "Backend::SOPHGO only supports Device::SOPHGO");
     CreateSophgoNPUBackend();
 

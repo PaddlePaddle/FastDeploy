@@ -43,7 +43,7 @@ enum Backend {
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,      ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,    ///< RKNPU2, support RKNN format model, Rockchip NPU only
-  SOPHGONPU2,   ///< SOPHGONPU2, support SOPHGO format model, Rockchip NPU only
+  SOPHGOTPU,   ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,

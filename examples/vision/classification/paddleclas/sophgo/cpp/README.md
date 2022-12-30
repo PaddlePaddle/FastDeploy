@@ -1,4 +1,4 @@
-# paddleclas C++部署示例
+# PaddleClas C++部署示例
 
 本目录下提供`infer.cc`快速完成ResNet50_vd模型在SOPHGO BM1684x板子上加速部署的示例。
 
