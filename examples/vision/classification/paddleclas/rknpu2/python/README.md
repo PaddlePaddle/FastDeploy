@@ -19,8 +19,8 @@ python3 infer.py --model_file ./ResNet50_vd_infer/ResNet50_vd_infer_rk3588.rknn 
 
 # 运行完成后返回结果如下所示
 ClassifyResult(
-label_ids: 153, 
-scores: 0.684570, 
+label_ids: 153,
+scores: 0.684570,
 )
 ```
 
