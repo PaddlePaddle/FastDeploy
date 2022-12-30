@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+English | [简体中文](README.md)
 # YOLOv6 C++ Deployment Example
 
 This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv6 on CPU/GPU and GPU accelerated by TensorRT.
