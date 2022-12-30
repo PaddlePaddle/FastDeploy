@@ -21,12 +21,14 @@ def generate_key():
     return C.encryption.generate_key()
 
 
-def encrypt(input, key=generate_key()):
+def encrypt(input, key=None):
     """Encrypt a input string with key.
     :param: input: (str) The input str for encryption
     :param: key: (str,optional) The key for encryption(if not given, generate automatically.)
     :return: pair(str, str) [encrypted string, key]
     """
+    if key is None:
+        key = generate_key()
     return C.encryption.encrypt(input, key)
 
 
