@@ -1,3 +1,4 @@
+English | [简体中文](README.md)
 # YOLOv5 Serving Deployment Demo
 
 ## Launch Serving
