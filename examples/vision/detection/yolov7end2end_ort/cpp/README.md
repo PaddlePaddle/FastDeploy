@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # YOLOv7End2EndORT C++部署示例
 
 本目录下提供`infer.cc`快速完成YOLOv7End2EndORT在CPU/GPU部署的示例。
