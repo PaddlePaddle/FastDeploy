@@ -69,7 +69,7 @@ Users can modify the following pre-processing parameters to their needs, which a
 > > * **padding_value**(list[float]): This parameter is used to change the padding value of images during resize, containing three floating-point elements that represent the value of three channels. Default value [0, 0, 0]
 > > * **keep_ratio**(bool): Whether to keep the aspect ratio unchanged during resize. Default false
 > > * **reg_max**(int): The reg_max parameter in GFL regression. Default 7.
-> > * **downsample_strides**(list[int]): This parameter is used to change the down-sampling multiple of the feature map that generates anchor, containing three integer elements that represent the default down-sampling multiple for generating anchor. Default [8, 16, 32, 64]
+> > * **downsample_strides**(list[int]): This parameter is used to change the down-sampling multiple of the feature map that generates anchor, containing four integer elements that represent the default down-sampling multiple for generating anchor. Default [8, 16, 32, 64]
 
 
 
