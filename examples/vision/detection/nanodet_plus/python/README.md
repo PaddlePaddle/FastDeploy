@@ -69,7 +69,7 @@ NanoDetPlus模型加载和初始化，其中model_file为导出的ONNX模型格�
 > > * **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[0, 0, 0]
 > > * **keep_ratio**(bool): 通过此参数指定resize时是否保持宽高比例不变，默认是fasle.
 > > * **reg_max**(int): GFL回归中的reg_max参数，默认是7.
-> > * **downsample_strides**(list[int]): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含三个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32, 64]
+> > * **downsample_strides**(list[int]): 通过此参数可以修改生成anchor的特征图的下采样倍数, 包含四个整型元素, 分别表示默认的生成anchor的下采样倍数, 默认值为[8, 16, 32, 64]
 
 
 
