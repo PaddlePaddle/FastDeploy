@@ -21,42 +21,30 @@ def parse_arguments():
     import ast
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_file", required=True, help="Path of PaddleSeg model.")
-    parser.add_argument(
-        "--config_file", required=True, help="Path of PaddleSeg config.")
+        "--model_file", required=True, help="Path of rknn model.")
+    parser.add_argument("--config_file", required=True, help="Path of config.")
     parser.add_argument(
         "--image", type=str, required=True, help="Path of test image file.")
     return parser.parse_args()
 
 
-def build_option(args):
-    option = fd.RuntimeOption()
-    option.use_rknpu2()
-    return option
+if __name__ == "__main__":
+    args = parse_arguments()
 
-
-args = parse_arguments()
-
-# 配置runtime，加载模型
-runtime_option = build_option(args)
-model_file = args.model_file
-params_file = ""
-config_file = args.config_file
-model = fd.vision.segmentation.PaddleSegModel(
-    model_file,
-    params_file,
-    config_file,
-    runtime_option=runtime_option,
-    model_format=fd.ModelFormat.RKNN)
-
-model.preprocessor.disable_normalize()
-model.preprocessor.disable_permute()
-
-# 预测图片分割结果
-im = cv2.imread(args.image)
-result = model.predict(im)
-print(result)
-
-# 可视化结果
-vis_im = fd.vision.vis_segmentation(im, result, weight=0.5)
-cv2.imwrite("vis_img.png", vis_im)
+    model_file = args.model_file
+    params_file = ""
+    config_file = args.config_file
+    # 配置runtime，加载模型
+    runtime_option = fd.RuntimeOption()
+    runtime_option.use_rknpu2()
+    model = fd.vision.classification.ResNet50vd(
+        model_file,
+        params_file,
+        config_file,
+        runtime_option=runtime_option,
+        model_format=fd.ModelFormat.RKNN)
+    # 禁用通道转换    
+    model.preprocessor.disable_permute()
+    im = cv2.imread(args.image)
+    result = model.predict(im, topk=1)
+    print(result)

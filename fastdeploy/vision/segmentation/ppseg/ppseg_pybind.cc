@@ -36,9 +36,12 @@ void BindPPSeg(pybind11::module& m) {
              }
              return make_pair(outputs, imgs_info);;
            })
-      .def("disable_normalize_and_permute",
-                     &vision::segmentation::PaddleSegPreprocessor::DisableNormalizeAndPermute)
-                     
+      .def("disable_normalize", [](vision::segmentation::PaddleSegPreprocessor& self) {
+        self.DisableNormalize();
+      })
+      .def("disable_permute", [](vision::segmentation::PaddleSegPreprocessor& self) {
+        self.DisablePermute();
+      })
       .def_property("is_vertical_screen",
                      &vision::segmentation::PaddleSegPreprocessor::GetIsVerticalScreen,
 		     &vision::segmentation::PaddleSegPreprocessor::SetIsVerticalScreen);

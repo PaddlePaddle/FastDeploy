@@ -22,19 +22,19 @@ namespace vision {
 namespace detection {
 
 PaddleDetPreprocessor::PaddleDetPreprocessor(const std::string& config_file) {
-  FDASSERT(BuildPreprocessPipelineFromConfig(config_file),
+  this->config_file_ = config_file;
+  FDASSERT(BuildPreprocessPipelineFromConfig(),
            "Failed to create PaddleDetPreprocessor.");
   initialized_ = true;
 }
 
-bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(
-    const std::string& config_file) {
+bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig() {
   processors_.clear();
   YAML::Node cfg;
   try {
-    cfg = YAML::LoadFile(config_file);
+    cfg = YAML::LoadFile(config_file_);
   } catch (YAML::BadFile& e) {
-    FDERROR << "Failed to load yaml file " << config_file
+    FDERROR << "Failed to load yaml file " << config_file_
             << ", maybe you should check this file." << std::endl;
     return false;
   }
@@ -45,21 +45,23 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(
   for (const auto& op : cfg["Preprocess"]) {
     std::string op_name = op["type"].as<std::string>();
     if (op_name == "NormalizeImage") {
-      auto mean = op["mean"].as<std::vector<float>>();
-      auto std = op["std"].as<std::vector<float>>();
-      bool is_scale = true;
-      if (op["is_scale"]) {
-        is_scale = op["is_scale"].as<bool>();
+      if (!disable_normalize_) {
+        auto mean = op["mean"].as<std::vector<float>>();
+        auto std = op["std"].as<std::vector<float>>();
+        bool is_scale = true;
+        if (op["is_scale"]) {
+          is_scale = op["is_scale"].as<bool>();
+        }
+        std::string norm_type = "mean_std";
+        if (op["norm_type"]) {
+          norm_type = op["norm_type"].as<std::string>();
+        }
+        if (norm_type != "mean_std") {
+          std::fill(mean.begin(), mean.end(), 0.0);
+          std::fill(std.begin(), std.end(), 1.0);
+        }
+        processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
       }
-      std::string norm_type = "mean_std";
-      if (op["norm_type"]) {
-        norm_type = op["norm_type"].as<std::string>();
-      }
-      if (norm_type != "mean_std") {
-        std::fill(mean.begin(), mean.end(), 0.0);
-        std::fill(std.begin(), std.end(), 1.0);
-      }
-      processors_.push_back(std::make_shared<Normalize>(mean, std, is_scale));
     } else if (op_name == "Resize") {
       bool keep_ratio = op["keep_ratio"].as<bool>();
       auto target_size = op["target_size"].as<std::vector<int>>();
@@ -104,10 +106,12 @@ bool PaddleDetPreprocessor::BuildPreprocessPipelineFromConfig(
       return false;
     }
   }
-  if (has_permute) {
-    // permute = cast<float> + HWC2CHW
-    processors_.push_back(std::make_shared<Cast>("float"));
-    processors_.push_back(std::make_shared<HWC2CHW>());
+  if (!disable_permute_) {
+    if (has_permute) {
+      // permute = cast<float> + HWC2CHW
+      processors_.push_back(std::make_shared<Cast>("float"));
+      processors_.push_back(std::make_shared<HWC2CHW>());
+    }
   }
 
   // Fusion will improve performance
@@ -202,7 +206,20 @@ bool PaddleDetPreprocessor::Run(std::vector<FDMat>* images,
 
   return true;
 }
-
+void PaddleDetPreprocessor::DisableNormalize() {
+  this->disable_normalize_ = true;
+  // the DisableNormalize function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
+void PaddleDetPreprocessor::DisablePermute() {
+  this->disable_permute_ = true;
+  // the DisablePermute function will be invalid if the configuration file is loaded during preprocessing
+  if (!BuildPreprocessPipelineFromConfig()) {
+    FDERROR << "Failed to build preprocess pipeline from configuration file." << std::endl;
+  }
+}
 } // namespace detection
 } // namespace vision
 } // namespace fastdeploy
