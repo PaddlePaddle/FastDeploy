@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # YOLOv7End2EndTRT C++部署示例
 
 本目录下提供`infer.cc`快速完成GPU上通过TensorRT加速部署的示例，该类只支持TensorRT部署。
