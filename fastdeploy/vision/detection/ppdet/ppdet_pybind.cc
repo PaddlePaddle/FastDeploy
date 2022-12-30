@@ -31,7 +31,13 @@ void BindPPDet(pybind11::module& m) {
           outputs[i].StopSharing();
         }
         return outputs;
-      });
+      })
+      .def("disable_normalize", [](vision::detection::PaddleDetPreprocessor& self) {
+        self.DisableNormalize();
+      })
+      .def("disable_permute", [](vision::detection::PaddleDetPreprocessor& self) {
+        self.DisablePermute();
+      });;
 
   pybind11::class_<vision::detection::PaddleDetPostprocessor>(
       m, "PaddleDetPostprocessor")
