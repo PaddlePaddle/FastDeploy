@@ -52,7 +52,6 @@ option.use_ascend()
 鲲鹏920 CPU + Atlas 300I Pro 推理卡.
 | 模型 | OpenCV 端到端性能(ms) | FlyCV 端到端性能(ms) |  
 | :-----------| :--------   | :--------   |
-
 |   ResNet50     | 2.78  | 1.63  |  
 |   PP-LCNetV2   |  2.50 |  1.39   |  
 |   YOLOv7       |  27.00 | 21.36    |  
