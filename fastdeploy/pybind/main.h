@@ -32,6 +32,10 @@
 #include "fastdeploy/text.h"
 #endif
 
+#ifdef ENABLE_ENCRYPTION
+#include "fastdeploy/encryption.h"
+#endif
+
 #include "fastdeploy/core/float16.h"
 
 namespace fastdeploy {
