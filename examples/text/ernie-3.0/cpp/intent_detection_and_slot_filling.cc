@@ -99,8 +99,8 @@ bool CreateRuntimeOption(fastdeploy::RuntimeOption* option) {
                         << FLAGS_backend << "'" << std::endl;
     return false;
   }
-  std::string model_path = FLAGS_model_dir + sep + "infer.pdmodel";
-  std::string param_path = FLAGS_model_dir + sep + "infer.pdiparams";
+  std::string model_path = FLAGS_model_dir + sep + "infer_model.pdmodel";
+  std::string param_path = FLAGS_model_dir + sep + "infer_model.pdiparams";
   fastdeploy::FDINFO << "model_path = " << model_path
                      << ", param_path = " << param_path << std::endl;
   option->SetModelPath(model_path, param_path);
@@ -178,13 +178,12 @@ struct Predictor {
     inputs->resize(runtime_.NumInputs());
     for (int i = 0; i < runtime_.NumInputs(); ++i) {
       (*inputs)[i].Allocate({batch_size, seq_len},
-                            fastdeploy::FDDataType::INT64,
+                            fastdeploy::FDDataType::INT32,
                             runtime_.GetInputInfo(i).name);
     }
     // 2.2 Set the value of data
     size_t start = 0;
-    int64_t* input_ids_ptr =
-        reinterpret_cast<int64_t*>((*inputs)[0].MutableData());
+    int* input_ids_ptr = reinterpret_cast<int*>((*inputs)[0].MutableData());
     for (int i = 0; i < encodings.size(); ++i) {
       auto&& curr_input_ids = encodings[i].GetIds();
       std::copy(curr_input_ids.begin(), curr_input_ids.end(),
