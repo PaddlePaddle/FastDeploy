@@ -4,7 +4,7 @@ English | [中文](../../cn/build_and_install/download_prebuilt_libraries.md)
 
 FastDeploy provides pre-built libraries for developers to download and install directly. Meanwhile, FastDeploy also offers easy access to compile so that developers can compile FastDeploy according to their own needs.
 
-This article is divided into two parts:
+This document is divided into two parts:
 - [1.GPU Deployment Environment](#1)
 - [2.CPU Deployment Environment](#2)
 
