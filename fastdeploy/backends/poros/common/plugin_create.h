@@ -14,52 +14,56 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 namespace baidu {
 namespace mirana {
 namespace poros {
 
 class IPlugin {
-public:
-    virtual ~IPlugin() {}
-    virtual const std::string who_am_i() = 0;
+ public:
+  virtual ~IPlugin() {}
+  virtual const std::string who_am_i() = 0;
 };
 
 typedef IPlugin* (*plugin_creator_t)();
 typedef std::unordered_map<std::string, plugin_creator_t> plugin_creator_map_t;
 
 IPlugin* create_plugin(const std::string& plugin_name);
-IPlugin* create_plugin(const std::string& plugin_name, const plugin_creator_map_t& plugin_creator_map);
+IPlugin* create_plugin(const std::string& plugin_name,
+                       const plugin_creator_map_t& plugin_creator_map);
 
 void create_all_plugins(const plugin_creator_map_t& plugin_creator_map,
-        std::unordered_map<std::string, IPlugin*>& plugin_m);
+                        std::unordered_map<std::string, IPlugin*>& plugin_m);
 //void create_all_plugins(std::unordered_map<std::string, IPlugin*>& plugin_m);
 
-template <typename PluginType>
-IPlugin* default_plugin_creator() {
-    return new (std::nothrow)PluginType;
+template <typename PluginType> IPlugin* default_plugin_creator() {
+  return new (std::nothrow) PluginType;
 }
 
-void register_plugin_creator(const std::string& plugin_name, plugin_creator_t creator);
 void register_plugin_creator(const std::string& plugin_name,
-        plugin_creator_t creator, plugin_creator_map_t& plugin_creator_map);
+                             plugin_creator_t creator);
+void register_plugin_creator(const std::string& plugin_name,
+                             plugin_creator_t creator,
+                             plugin_creator_map_t& plugin_creator_map);
 
 template <typename PluginType>
 void register_plugin_class(const std::string& plugin_name) {
-    return register_plugin_creator(plugin_name, default_plugin_creator<PluginType>);
+  return register_plugin_creator(plugin_name,
+                                 default_plugin_creator<PluginType>);
 }
 
 // This version is recommended
 template <typename PluginType>
-void register_plugin_class(const std::string& plugin_name, plugin_creator_map_t& plugin_creator_map) {
-    return register_plugin_creator(plugin_name, default_plugin_creator<PluginType>, plugin_creator_map);
+void register_plugin_class(const std::string& plugin_name,
+                           plugin_creator_map_t& plugin_creator_map) {
+  return register_plugin_creator(
+      plugin_name, default_plugin_creator<PluginType>, plugin_creator_map);
 }
 
-}//poros
-}//mirana
-}//baidu
-
+}  // namespace poros
+}  // namespace mirana
+}  // namespace baidu
 
 /* vim: set ts=4 sw=4 sts=4 tw=100 */
