@@ -14,9 +14,9 @@
 #pragma once
 
 #include "fastdeploy/backends/backend.h"
-#include "fastdeploy/core/fd_tensor.h"
-#include "rknn_api.h" // NOLINT
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_config.h"
+#include "fastdeploy/core/fd_tensor.h"
+#include "rknn_api.h"  // NOLINT
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -71,8 +71,7 @@ class RKNPU2Backend : public BaseBackend {
   TensorInfo GetOutputInfo(int index) override;
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
  private:
