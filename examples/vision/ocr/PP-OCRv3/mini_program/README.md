@@ -1,4 +1,4 @@
-
+[English](README_EN.md) | 简体中文
 # PP-OCRv3 微信小程序部署示例
 
 本节介绍部署PaddleOCR的PP-OCRv3模型在微信小程序中运行，以及@paddle-js-models/ocr npm包中的js接口。
