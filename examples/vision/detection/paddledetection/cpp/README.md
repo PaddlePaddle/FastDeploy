@@ -1,6 +1,6 @@
 # PaddleDetection C++部署示例
 
-本目录下提供`infer_xxx.cc`快速完成PaddleDetection模型包括PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+本目录下提供`infer_xxx.cc`快速完成PaddleDetection模型包括PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet/CascadeRCNN/PSSDet/RetinaNet/PPYOLOESOD/FCOS/TTFNet/TOOD/GFL在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
 在部署前，需确认以下两个步骤
 
@@ -32,8 +32,6 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 1
 # GPU上TensorRT推理
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
-# 昆仑芯XPU推理
-./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 3
 ```
 
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
@@ -43,7 +41,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 ### 模型类
 
-PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，`SSD`,`PaddleYOLOv5`,`PaddleYOLOv6`,`PaddleYOLOv7`,`RTMDet`所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
+PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，`SSD`,`PaddleYOLOv5`,`PaddleYOLOv6`,`PaddleYOLOv7`,`RTMDet`,`CascadeRCNN`,`PSSDet`,`RetinaNet`,`PPYOLOESOD`,`FCOS`,`TTFNet`,`TOOD`,`GFL`所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
 ```c++
 fastdeploy::vision::detection::PPYOLOE(
         const string& model_file,
