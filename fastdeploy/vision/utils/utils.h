@@ -61,8 +61,7 @@ std::vector<int32_t> TopKIndices(const T* array, int array_size, int topk) {
 
 void NMS(DetectionResult* output, float iou_threshold = 0.5);
 
-void NMS(DetectionResult* output, float iou_threshold = 0.5,
-         std::vector<int>* index);
+void NMS(DetectionResult* output, float iou_threshold, std::vector<int>* index);
 
 void NMS(FaceDetectionResult* result, float iou_threshold = 0.5);
 

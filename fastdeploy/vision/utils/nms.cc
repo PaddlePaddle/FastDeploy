@@ -123,7 +123,17 @@ void NMS(FaceDetectionResult* result, float iou_threshold) {
 }
 
 void NMS(DetectionResult* result, float iou_threshold, std::vector<int>* index) {
-  utils::SortDetectionResult(result);
+  // get sorted score indices
+  std::map<float, int, std::greater<float>> score_map;
+  std::vector<int> sorted_indices;
+  for (size_t i = 0; i < result->scores.size(); ++i) {
+    score_map.insert(std::pair<float, int>(result->scores[i], i));
+  }
+  for (auto iter:score_map) {
+    sorted_indices.push_back(iter.second);
+  }
+
+  utils::SortDetectionResult(result);  
 
   std::vector<float> area_of_boxes(result->boxes.size());
   std::vector<int> suppressed(result->boxes.size(), 0);
@@ -164,7 +174,7 @@ void NMS(DetectionResult* result, float iou_threshold, std::vector<int>* index) 
     result->boxes.emplace_back(backup.boxes[i]);
     result->scores.push_back(backup.scores[i]);
     result->label_ids.push_back(backup.label_ids[i]);
-    index->push_back(i);
+    index->push_back(sorted_indices[i]);
   }
 }
 
