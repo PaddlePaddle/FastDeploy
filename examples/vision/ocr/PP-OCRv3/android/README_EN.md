@@ -5,7 +5,7 @@ Real-time OCR text recognition on Android. This demo is easy to use for everyone
 
 ## Prepare the Environment
 
-1. Install Android Studio in your local environment. Refer to [Android Stuido official website](https://developer.android.com/studio) for detailed tutorial.
+1. Install Android Studio in your local environment. Refer to [Android Studio Official Website](https://developer.android.com/studio) for detailed tutorial.
 2. Prepare an Android phone and turn on the USB debug mode. Opening: `Settings -> Find developer options ->  Open developer options and USB debug mode`
 
 ## Deployment steps
