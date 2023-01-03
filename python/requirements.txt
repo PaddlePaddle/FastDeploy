@@ -3,5 +3,6 @@ requests
 tqdm
 numpy
 opencv-python
-fastdeploy-tools==0.0.1
+fastdeploy-tools>=0.0.2
 pyyaml
+fastapi

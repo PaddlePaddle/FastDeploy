@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG http_proxy
+ARG https_proxy
+
 FROM nvcr.io/nvidia/tritonserver:21.10-py3 as full
 FROM nvcr.io/nvidia/tritonserver:21.10-py3-min
 
@@ -24,7 +27,10 @@ COPY serving/TensorRT-8.4.1.5 /opt/TensorRT-8.4.1.5
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \
-    DCGM_VERSION=2.2.9
+    DCGM_VERSION=2.2.9 \
+    http_proxy=$http_proxy \
+    https_proxy=$http_proxy
+
 RUN apt-get update \
     && apt-key del 7fa2af80 \
     && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb \
@@ -46,3 +52,6 @@ COPY build/fastdeploy_install /opt/fastdeploy/
 
 ENV LD_LIBRARY_PATH="/opt/TensorRT-8.4.1.5/lib/:/opt/fastdeploy/lib:/opt/fastdeploy/third_libs/install/onnxruntime/lib:/opt/fastdeploy/third_libs/install/paddle2onnx/lib:/opt/fastdeploy/third_libs/install/tensorrt/lib:/opt/fastdeploy/third_libs/install/paddle_inference/paddle/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mkldnn/lib:/opt/fastdeploy/third_libs/install/paddle_inference/third_party/install/mklml/lib:/opt/fastdeploy/third_libs/install/openvino/runtime/lib:$LD_LIBRARY_PATH"
 ENV PATH="/opt/tritonserver/bin:$PATH"
+# unset proxy
+ENV http_proxy=
+ENV https_proxy=

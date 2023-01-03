@@ -104,10 +104,17 @@ class PaddleSegPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
-    def disable_normalize_and_permute(self):
-        """To disable normalize and hwc2chw in preprocessing step.
+    def disable_normalize(self):
         """
-        return self._preprocessor.disable_normalize_and_permute()
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
 
     @property
     def is_vertical_screen(self):

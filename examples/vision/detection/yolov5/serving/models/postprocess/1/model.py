@@ -96,7 +96,7 @@ class TritonPythonModel:
 
             results = self.postprocessor_.run([infer_outputs], im_infos)
             r_str = fd.vision.utils.fd_result_to_json(results)
-            r_np = np.array(r_str, dtype=np.object)
+            r_np = np.array(r_str, dtype=np.object_)
 
             out_tensor = pb_utils.Tensor(self.output_names[0], r_np)
             inference_response = pb_utils.InferenceResponse(

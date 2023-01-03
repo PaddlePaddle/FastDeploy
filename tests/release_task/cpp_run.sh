@@ -22,7 +22,7 @@ LINUX_AARCH_CPU_CASE=('ort')
 MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget -q https://fastdeploy.bj.bcebos.com/resource/images/000000014439.jpg
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt
 tar -xvf ppyoloe_crn_l_300e_coco.tgz
 IMAGE_PATH=$CURRENT_DIR/000000014439.jpg
