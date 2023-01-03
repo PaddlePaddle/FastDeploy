@@ -1,4 +1,4 @@
-English | [简体中文](README_CN.md)
+简体中文 ｜ [English](README.md)
 # PaddleJsConverter
 
 ## Installation
@@ -27,4 +27,4 @@ pip3 install paddlejsconverter
 ```shell
 paddlejsconverter --modelPath=user_model_path --paramPath=user_model_params_path --outputDir=model_saved_path --useGPUOpt=True
 ```
-Note: The option useGPUOpt is not turned on by default. Turn on useGPUOpt if the model is used on gpu backend (webgl/webgpu), don't turn on if is running on (wasm/plain js).
+注意：useGPUOpt 选项默认不开启，如果模型用在 gpu backend（webgl/webgpu），则开启 useGPUOpt，如果模型运行在（wasm/plain js）则不要开启。

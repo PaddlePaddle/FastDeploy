@@ -1,9 +1,9 @@
-English | [简体中文](README_CN.md)
+简体中文 ｜ [English](README.md)
 # FastDeploy Runtime examples
 
-FastDeploy Runtime examples are as follows:
+FastDeploy Runtime 推理示例如下
 
-## Python Example
+## Python 示例
 
 | Example Code | Program Language | Description |
 | :------- | :------- | :---- |
@@ -16,7 +16,7 @@ FastDeploy Runtime examples are as follows:
 | python/infer_onnx_onnxruntime.py | Python | Deploy ONNX model with ONNX Runtime(CPU/GPU) |
 | python/infer_torchscript_poros.py | Python | Deploy TorchScript model with Poros Runtime(CPU/GPU) |
 
-## C++ Example
+## C++ 示例
 
 | Example Code | Program Language | Description |
 | :------- | :------- | :---- |
@@ -29,7 +29,7 @@ FastDeploy Runtime examples are as follows:
 | cpp/infer_onnx_onnxruntime.cc | C++ | Deploy ONNX model with ONNX Runtime(CPU/GPU) |
 | cpp/infer_torchscript_poros.cc | C++ | Deploy TorchScript model with Poros Runtime(CPU/GPU) |
 
-## Detailed deployment documents
+## 详细部署文档
 
-- [Python deployment](python)
-- [C++ deployment](cpp)
+- [Python部署](python)
+- [C++部署](cpp)
