@@ -1,7 +1,7 @@
 
 # How to Build SOPHGO Deployment Environment
 
-## How to Build and Install C++ SDK
+## SOPHGO Environment Preparation
 SOPHGO supports compilation on linux, using Debian/Ubuntu as an example  
 The installation package consists of three files
 - [sophon-driver\_0.4.2\_$arch.deb](http://219.142.246.77:65000/sharing/KWqbmEcKp)
@@ -39,4 +39,39 @@ The position of installation:：
 |    ├──include
 |    └──lib
 └── libsophon-current->/opt/sophon/libsophon-0.4.2
+```
+
+## How to Build and Install C++ SDK
+After setting up the compilation environment, the compilation command is as follows：
+```bash
+# Download the latest source code
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy  
+mkdir build && cd build
+
+# CMake configuration with Ascend
+cmake -DENABLE_SOPHGO_BACKEND=ON  \
+      -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-sophgo \
+      -DENABLE_VISION=ON \
+      ..
+
+# Build FastDeploy Ascend C++ SDK
+make -j8
+make install
+```  
+When the compilation is complete, the fastdeploy-sophgo directory is created in the current build directory, indicating that the FastDeploy library has been compiled.
+
+## Compiling Python FastDeploy Libraries
+After setting up the compilation environment, the compilation command is as follows：
+```bash
+# Download the latest source code
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/python
+export ENABLE_SOPHGO_BACKEND=ON
+export ENABLE_VISION=ON
+
+python setup.py build
+python setup.py bdist_wheel
+
+#After the compilation is complete, please install the whl package in the dist folder of the current directory.
 ```

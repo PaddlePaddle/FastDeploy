@@ -1,6 +1,6 @@
-# SOPHGO部署库编译
+# SOPHGO 部署库编译
 
-## C++ SDK编译安装
+## SOPHGO 环境准备
 SOPHGO支持linux下进行编译,系统为Debian/Ubuntu  
 安装包由三个文件构成
 - [sophon-driver\_0.4.2\_$arch.deb](http://219.142.246.77:65000/sharing/KWqbmEcKp)
@@ -40,4 +40,39 @@ source /etc/profile
 |    ├──include
 |    └──lib
 └── libsophon-current->/opt/sophon/libsophon-0.4.2
+```
+
+## C++ SDK编译安装
+搭建好编译环境之后，编译命令如下：
+```bash
+# Download the latest source code
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy  
+mkdir build && cd build
+
+# CMake configuration with Ascend
+cmake -DENABLE_SOPHGO_BACKEND=ON  \
+      -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-sophgo \
+      -DENABLE_VISION=ON \
+      ..
+
+# Build FastDeploy Ascend C++ SDK
+make -j8
+make install
+```  
+编译完成之后，会在当前的build目录下生成 fastdeploy-sophgo 目录，编译完成。
+
+## Python FastDeploy 库编译
+搭建好编译环境之后，编译命令如下：
+```bash
+# Download the latest source code
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/python
+export ENABLE_SOPHGO_BACKEND=ON
+export ENABLE_VISION=ON
+
+python setup.py build
+python setup.py bdist_wheel
+
+#编译完成后,请用户自行安装当前目录的dist文件夹内的whl包.
 ```
