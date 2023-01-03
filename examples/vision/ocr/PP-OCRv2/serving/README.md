@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PP-OCRv2服务化部署示例
 
 除了`下载的模型`和`rec前处理的1个参数`以外PP-OCRv2的服务化部署与PP-OCRv3服务化部署全部一样，请参考[PP-OCRv3服务化部署](../../PP-OCRv3/serving)。
