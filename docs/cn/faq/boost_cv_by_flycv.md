@@ -62,7 +62,6 @@ option.use_ascend()
 
 | 模型 | OpenCV 端到端性能(ms) | FlyCV 端到端性能(ms) |  
 | :-----------| :--------   | :--------   |
-
 |   ResNet50     | 9.23  | 6.01  |  
 |   mobilenetv1_ssld_量化模型   |  9.23 |  6.01   |  
 |   yolov5s_量化模型       |  28.33 | 14.25    |  
