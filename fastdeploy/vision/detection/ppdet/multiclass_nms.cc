@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fastdeploy/backends/common/multiclass_nms.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include <algorithm>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
 
 namespace fastdeploy {
-namespace backend {
+namespace vision {
+namespace detection {
 template <class T>
 bool SortScorePairDescend(const std::pair<float, T>& pair1,
                           const std::pair<float, T>& pair2) {
@@ -79,7 +80,7 @@ float JaccardOverlap(const float* box1, const float* box2,
   }
 }
 
-void MultiClassNMS::FastNMS(const float* boxes, const float* scores,
+void PaddleMultiClassNMS::FastNMS(const float* boxes, const float* scores,
                             const int& num_boxes,
                             std::vector<int>* keep_indices) {
   std::vector<std::pair<float, int>> sorted_indices;
@@ -109,7 +110,7 @@ void MultiClassNMS::FastNMS(const float* boxes, const float* scores,
   }
 }
 
-int MultiClassNMS::NMSForEachSample(
+int PaddleMultiClassNMS::NMSForEachSample(
     const float* boxes, const float* scores, int num_boxes, int num_classes,
     std::map<int, std::vector<int>>* keep_indices) {
   for (int i = 0; i < num_classes; ++i) {
@@ -152,7 +153,7 @@ int MultiClassNMS::NMSForEachSample(
   return num_det;
 }
 
-void MultiClassNMS::Compute(const float* boxes_data, const float* scores_data,
+void PaddleMultiClassNMS::Compute(const float* boxes_data, const float* scores_data,
                             const std::vector<int64_t>& boxes_dim,
                             const std::vector<int64_t>& scores_dim) {
   int score_size = scores_dim.size();
@@ -220,5 +221,6 @@ void MultiClassNMS::Compute(const float* boxes_data, const float* scores_data,
     }
   }
 }
-}  // namespace backend
+}  // namespace detection
+}  // namespace vision
 }  // namespace fastdeploy

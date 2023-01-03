@@ -14,53 +14,45 @@
 
 #pragma once
 
-#include <string>
-#include "torch/script.h"
 #include "torch/csrc/jit/jit_log.h"
+#include "torch/script.h"
+#include <string>
 // #include "ATen/Context.h"
 
 namespace baidu {
 namespace mirana {
 namespace poros {
 
-enum Device : int8_t {
-    GPU = 0,
-    CPU,
-    XPU,
-    UNKNOW
-};
+enum Device : int8_t { GPU = 0, CPU, XPU, UNKNOW };
 
 struct PorosOptions {
-    Device device = GPU;
-    bool debug = false;
-    bool use_fp16 = false;
-    bool is_dynamic = false;
-    bool long_to_int = true;
-    uint64_t max_workspace_size = 1ULL << 30;
-    int32_t device_id = -1;
-    int32_t unconst_ops_thres = -1;
-    bool use_nvidia_tf32 = false;
+  Device device = GPU;
+  bool debug = false;
+  bool use_fp16 = false;
+  bool is_dynamic = false;
+  bool long_to_int = true;
+  uint64_t max_workspace_size = 1ULL << 30;
+  int32_t device_id = -1;
+  int32_t unconst_ops_thres = -1;
+  bool use_nvidia_tf32 = false;
 };
 
 class PorosModule : public torch::jit::Module {
-public:
-    PorosModule(torch::jit::Module module) : torch::jit::Module(module) {
-    }
-    ~PorosModule() = default;
+ public:
+  PorosModule(torch::jit::Module module) : torch::jit::Module(module) {}
+  ~PorosModule() = default;
 
-    void to_device(Device device){
-        _options.device = device;
-    }
+  void to_device(Device device) { _options.device = device; }
 
-    //c10::IValue forward(std::vector<c10::IValue> inputs);
-    //void save(const std::string& filename);
-public:
-    PorosOptions _options;
-
+  //c10::IValue forward(std::vector<c10::IValue> inputs);
+  //void save(const std::string& filename);
+ public:
+  PorosOptions _options;
 };
 
 //via porosmodule.save
-std::unique_ptr<PorosModule> Load(const std::string& filename, const PorosOptions& options);
+std::unique_ptr<PorosModule> Load(const std::string& filename,
+                                  const PorosOptions& options);
 
 }  // namespace poros
 }  // namespace mirana

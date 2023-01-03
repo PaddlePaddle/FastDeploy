@@ -104,7 +104,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   std::string contents;
 
   if (option.model_from_memory_) {
-    config_.SetModelBuffer(model_file.c_str(), option.model_buffer_size_, params_file.c_str(), option.params_buffer_size_);
+    config_.SetModelBuffer(model_file.c_str(), option.model_buffer_size_,
+                           params_file.c_str(), option.params_buffer_size_);
     contents = model_file;
   } else {
     config_.SetModel(model_file, params_file);
@@ -182,7 +183,9 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
       FDINFO << "Start generating shape range info file." << std::endl;
       paddle_infer::Config analysis_config;
       if (option.model_from_memory_) {
-        analysis_config.SetModelBuffer(model_file.c_str(), option.model_buffer_size_, params_file.c_str(), option.params_buffer_size_);
+        analysis_config.SetModelBuffer(
+            model_file.c_str(), option.model_buffer_size_, params_file.c_str(),
+            option.params_buffer_size_);
       } else {
         analysis_config.SetModel(model_file, params_file);
       }
