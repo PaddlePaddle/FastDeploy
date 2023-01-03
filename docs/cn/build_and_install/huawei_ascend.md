@@ -94,6 +94,11 @@ python setup.py bdist_wheel
 
 #编译完成后,请用户自行安装当前目录的dist文件夹内的whl包.
 ```
+## 五.昇腾部署时开启FlyCV
+[FlyCV](https://github.com/PaddlePaddle/FlyCV) 是一款高性能计算机图像处理库, 针对ARM架构做了很多优化, 相比其他图像处理库性能更为出色.
+FastDeploy现在已经集成FlyCV, 用户可以在支持的硬件平台上使用FlyCV, 实现模型端到端推理性能的加速.
+模型端到端推理中, 预处理和后处理阶段为CPU计算, 当用户使用ARM CPU + 昇腾的硬件平台时, 我们推荐用户使用FlyCV, 可以实现端到端的推理性能加速, 详见[FLyCV使用文档](./boost_cv_by_flycv.md)
+
 
 - 华为昇腾NPU 上使用C++部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU C++ 部署示例](../../../examples/vision/classification/paddleclas/ascend/cpp/README.md)
 - 华为昇腾NPU 上使用Python部署 PaddleClas 分类模型请参考：[PaddleClas 华为升腾NPU Python 部署示例](../../../examples/vision/classification/paddleclas/ascend/python/README.md)
