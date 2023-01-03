@@ -36,6 +36,18 @@ class PaddleDetPreprocessor:
         """
         return self._preprocessor.run(input_ims)
 
+    def disable_normalize(self):
+        """
+        This function will disable normalize in preprocessing step.
+        """
+        self._preprocessor.disable_normalize()
+
+    def disable_permute(self):
+        """
+        This function will disable hwc2chw in preprocessing step.
+        """
+        self._preprocessor.disable_permute()
+
 
 class PaddleDetPostprocessor:
     def __init__(self):
