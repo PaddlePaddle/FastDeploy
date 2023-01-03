@@ -17,6 +17,7 @@
 
 #include "fast_tokenizer/pretokenizers/pretokenizer.h"
 #include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
+#include "fast_tokenizer/utils/utf8.h"
 #include "fastdeploy/function/functions.h"
 #include "fastdeploy/runtime.h"
 #include "fastdeploy/utils/path.h"
@@ -174,7 +175,7 @@ struct Predictor {
     int64_t batch_size = texts.size();
     int64_t seq_len = 0;
     if (batch_size > 0) {
-      seq_len = encodings[0].GetIds().size();
+      seq_len = encodings[0].GetLen();
     }
     inputs->resize(runtime_.NumInputs());
     for (int i = 0; i < runtime_.NumInputs(); ++i) {
@@ -228,6 +229,8 @@ struct Predictor {
       fast_tokenizer::pretokenizers::CharToBytesOffsetConverter convertor(
           texts[i]);
       fast_tokenizer::core::Offset curr_offset;
+      int unicode_len = fast_tokenizer::utils::GetUnicodeLenFromUTF8(
+          texts[i].data(), texts[i].length());
       int seq_len = preds.Shape()[0];
       int64_t* preds_ptr = reinterpret_cast<int64_t*>(preds.Data());
       for (int j = 0; j < seq_len; ++j) {
@@ -235,7 +238,8 @@ struct Predictor {
         fastdeploy::function::Slice(preds, {0}, {j}, &pred);
         int64_t slot_label_id = preds_ptr[j];
         const std::string& curr_label = slot_labels_[slot_label_id];
-        if ((curr_label == "O" || curr_label.find("B-") != std::string::npos) &&
+        if ((curr_label == "O" || curr_label.find("B-") != std::string::npos ||
+             (j - 1 >= unicode_len)) &&
             start >= 0) {
           // Convert the unicode character offset to byte offset.
           convertor.convert({start, j - 1}, &curr_offset);
@@ -245,6 +249,9 @@ struct Predictor {
                               curr_offset.second - curr_offset.first),
               {start, j - 2}});
           start = -1;
+          if (j - 1 >= unicode_len) {
+            break;
+          }
         }
         if (curr_label.find("B-") != std::string::npos) {
           start = j - 1;
