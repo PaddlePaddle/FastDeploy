@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "fastdeploy/backends/backend.h"
 #include "onnxruntime_cxx_api.h"  // NOLINT
