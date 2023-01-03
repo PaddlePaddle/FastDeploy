@@ -46,15 +46,13 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       return false;
     }
     const float* data = reinterpret_cast<const float*>(tensors[0].Data()) + bs * tensors[0].shape[1] * tensors[0].shape[2];
-    // For Mask Proposals
-    (*results)[bs].contain_masks = true;
     for (size_t i = 0; i < tensors[0].shape[1]; ++i) {
       int s = i * tensors[0].shape[2];
       float cls_conf = data[s + 4];
       float confidence = data[s + 4];
-      std::vector<float> mask_proposal(data + s + tensors[0].shape[2] - mask_nums_, data + s + tensors[0].shape[2]);
-      for (size_t k = 0; k < mask_proposal.size(); ++k) {
-        mask_proposal[k] *= cls_conf;
+      std::vector<float> mask_embedding(data + s + tensors[0].shape[2] - mask_nums_, data + s + tensors[0].shape[2]);
+      for (size_t k = 0; k < mask_embedding.size(); ++k) {
+        mask_embedding[k] *= cls_conf;
       }
       if (multi_label_) {
         for (size_t j = 5; j < tensors[0].shape[2] - mask_nums_; ++j) {
@@ -75,7 +73,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
               data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
           (*results)[bs].label_ids.push_back(label_id);
           (*results)[bs].scores.push_back(confidence);
-          (*results)[bs].yolo_masks.push_back(mask_proposal);
+          mask_embeddings_.push_back(mask_embedding);
         }
       } else {
         const float* max_class_score =
@@ -94,27 +92,32 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
             data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
         (*results)[bs].label_ids.push_back(label_id);
         (*results)[bs].scores.push_back(confidence);
-        (*results)[bs].yolo_masks.push_back(mask_proposal);
+        mask_embeddings_.push_back(mask_embedding);
       }
     }
 
     if ((*results)[bs].boxes.size() == 0) {
       return true;
     }
-
-    utils::NMS(&((*results)[bs]), nms_threshold_);
+    // get box index after nms
+    std::vector<int> index;
+    utils::NMS(&((*results)[bs]), nms_threshold_, &index);
 
     // deal with mask
+    (*results)[bs].contain_masks = true;
     (*results)[bs].masks.resize((*results)[bs].boxes.size());
-    const float* data_mask = reinterpret_cast<const float*>(tensors[1].Data()) + bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
-    cv::Mat mask_proto = cv::Mat(tensors[1].shape[1], tensors[1].shape[2] * tensors[1].shape[3], CV_32FC(1), const_cast<float*>(data_mask));
+    const float* data_mask = reinterpret_cast<const float*>(tensors[1].Data()) +
+                              bs * tensors[1].shape[1] * tensors[1].shape[2] * tensors[1].shape[3];
+    cv::Mat mask_proto = cv::Mat(tensors[1].shape[1],
+                         tensors[1].shape[2] * tensors[1].shape[3], CV_32FC(1), const_cast<float*>(data_mask));
     // vector to cv::Mat for Matmul
     cv::Mat mask_proposals;
-    for (size_t i = 0; i < (*results)[bs].yolo_masks.size(); ++i) {
-      mask_proposals.push_back(cv::Mat((*results)[bs].yolo_masks[i]).t());
+    for (size_t i = 0; i < index.size(); ++i) {
+      mask_proposals.push_back(cv::Mat(mask_embeddings_[index[i]]).t());
     }
     cv::Mat matmul_result = (mask_proposals * mask_proto).t();
-    cv::Mat masks = matmul_result.reshape((*results)[bs].boxes.size(), {static_cast<int>(tensors[1].shape[2]), static_cast<int>(tensors[1].shape[3])});
+    cv::Mat masks = matmul_result.reshape((*results)[bs].boxes.size(),
+                    {static_cast<int>(tensors[1].shape[2]), static_cast<int>(tensors[1].shape[3])});
     // split for boxes nums
     std::vector<cv::Mat> mask_channels;
     cv::split(masks, mask_channels);

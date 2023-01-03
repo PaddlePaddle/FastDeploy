@@ -77,11 +77,6 @@ DetectionResult::DetectionResult(const DetectionResult& res) {
     for (size_t i = 0; i < mask_size; ++i) {
       masks.emplace_back(res.masks[i]);
     }
-    yolo_masks.clear();
-    size_t yolo_masks_size = res.yolo_masks.size();
-    for (size_t j = 0; j < yolo_masks_size; ++j) {
-      yolo_masks.emplace_back(res.yolo_masks[j]);
-    }
   }
 }
 
@@ -94,8 +89,6 @@ DetectionResult& DetectionResult::operator=(DetectionResult&& other) {
     if (contain_masks) {
       masks.clear();
       masks = std::move(other.masks);
-      yolo_masks.clear();
-      yolo_masks = std::move(other.yolo_masks);
     }
   }
   return *this;
@@ -106,7 +99,6 @@ void DetectionResult::Clear() {
   std::vector<float>().swap(scores);
   std::vector<int32_t>().swap(label_ids);
   std::vector<Mask>().swap(masks);
-  std::vector<std::vector<float>>().swap(yolo_masks);
   contain_masks = false;
 }
 
@@ -115,7 +107,6 @@ void DetectionResult::Reserve(int size) {
   scores.reserve(size);
   label_ids.reserve(size);
   masks.reserve(size);
-  yolo_masks.reserve(size);
 }
 
 void DetectionResult::Resize(int size) {
@@ -123,7 +114,6 @@ void DetectionResult::Resize(int size) {
   scores.resize(size);
   label_ids.resize(size);
   masks.resize(size);
-  yolo_masks.resize(size);
 }
 
 std::string DetectionResult::Str() {

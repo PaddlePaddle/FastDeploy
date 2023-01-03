@@ -174,13 +174,10 @@ class YOLOv5Seg(FastDeployModel):
         :param runtime_option: (fastdeploy.RuntimeOption)RuntimeOption for inference this model, if it's None, will use the default backend on CPU
         :param model_format: (fastdeploy.ModelForamt)Model format of the loaded model
         """
-        # 调用基函数进行backend_option的初始化
-        # 初始化后的option保存在self._runtime_option
         super(YOLOv5Seg, self).__init__(runtime_option)
 
         self._model = C.vision.detection.YOLOv5Seg(
             model_file, params_file, self._runtime_option, model_format)
-        # 通过self.initialized判断整个模型的初始化是否成功
         assert self.initialized, "YOLOv5Seg initialize failed."
 
     def predict(self, input_image, conf_threshold=0.25, nms_iou_threshold=0.5):

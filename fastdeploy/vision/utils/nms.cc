@@ -56,7 +56,6 @@ void NMS(DetectionResult* result, float iou_threshold) {
   DetectionResult backup(*result);
   result->Clear();
   result->Reserve(suppressed.size());
-  result->contain_masks = backup.contain_masks;
   for (size_t i = 0; i < suppressed.size(); ++i) {
     if (suppressed[i] == 1) {
       continue;
@@ -64,9 +63,6 @@ void NMS(DetectionResult* result, float iou_threshold) {
     result->boxes.emplace_back(backup.boxes[i]);
     result->scores.push_back(backup.scores[i]);
     result->label_ids.push_back(backup.label_ids[i]);
-    if (!backup.yolo_masks.empty()) {
-      result->yolo_masks.push_back(backup.yolo_masks[i]);
-    }
   }
 }
 
@@ -123,6 +119,52 @@ void NMS(FaceDetectionResult* result, float iou_threshold) {
             backup.landmarks[i * result->landmarks_per_face + j]);
       }
     }
+  }
+}
+
+void NMS(DetectionResult* result, float iou_threshold, std::vector<int>* index) {
+  utils::SortDetectionResult(result);
+
+  std::vector<float> area_of_boxes(result->boxes.size());
+  std::vector<int> suppressed(result->boxes.size(), 0);
+  for (size_t i = 0; i < result->boxes.size(); ++i) {
+    area_of_boxes[i] = (result->boxes[i][2] - result->boxes[i][0]) *
+                       (result->boxes[i][3] - result->boxes[i][1]);
+  }
+
+  for (size_t i = 0; i < result->boxes.size(); ++i) {
+    if (suppressed[i] == 1) {
+      continue;
+    }
+    for (size_t j = i + 1; j < result->boxes.size(); ++j) {
+      if (suppressed[j] == 1) {
+        continue;
+      }
+      float xmin = std::max(result->boxes[i][0], result->boxes[j][0]);
+      float ymin = std::max(result->boxes[i][1], result->boxes[j][1]);
+      float xmax = std::min(result->boxes[i][2], result->boxes[j][2]);
+      float ymax = std::min(result->boxes[i][3], result->boxes[j][3]);
+      float overlap_w = std::max(0.0f, xmax - xmin);
+      float overlap_h = std::max(0.0f, ymax - ymin);
+      float overlap_area = overlap_w * overlap_h;
+      float overlap_ratio =
+          overlap_area / (area_of_boxes[i] + area_of_boxes[j] - overlap_area);
+      if (overlap_ratio > iou_threshold) {
+        suppressed[j] = 1;
+      }
+    }
+  }
+  DetectionResult backup(*result);
+  result->Clear();
+  result->Reserve(suppressed.size());
+  for (size_t i = 0; i < suppressed.size(); ++i) {
+    if (suppressed[i] == 1) {
+      continue;
+    }
+    result->boxes.emplace_back(backup.boxes[i]);
+    result->scores.push_back(backup.scores[i]);
+    result->label_ids.push_back(backup.label_ids[i]);
+    index->push_back(i);
   }
 }
 

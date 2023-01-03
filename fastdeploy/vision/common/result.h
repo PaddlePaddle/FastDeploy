@@ -109,8 +109,6 @@ struct FASTDEPLOY_DECL DetectionResult : public BaseResult {
   std::vector<Mask> masks;
   /// Shows if the DetectionResult has mask
   bool contain_masks = false;
-  /// Only for YOLOv5-Seg, Nx32D Tensor represents mask
-  std::vector<std::vector<float>> yolo_masks;
 
   ResultType type = ResultType::DETECTION;
 

@@ -68,10 +68,11 @@ class FASTDEPLOY_DECL YOLOv5SegPostprocessor {
   float nms_threshold_;
   bool multi_label_;
   float max_wh_;
-  // number of masks
+  // channel nums of masks
   int mask_nums_;
   // mask threshold
   float mask_threshold_;
+  std::vector<std::vector<float>> mask_embeddings_;
 };
 
 }  // namespace detection
