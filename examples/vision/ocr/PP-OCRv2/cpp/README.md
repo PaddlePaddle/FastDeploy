@@ -142,7 +142,7 @@ Recognizer类初始化时,需要在label_path参数中,输入识别模型所需�
 > > * **det_db_box_thresh**(double): DB模型输出框的阈值，低于此值的预测框会被丢弃，默认为0.6
 > > * **det_db_unclip_ratio**(double): DB模型输出框扩大的比例，默认为1.5
 > > * **det_db_score_mode**(string):DB后处理中计算文本框平均得分的方式,默认为slow，即求polygon区域的平均分数的方式
-> > * **use_dilation**(bool):是否对检测输出的feature map做膨胀处理,默认为Fasle
+> > * **use_dilation**(bool):是否对检测输出的feature map做膨胀处理,默认为False
 
 #### Classifier预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
