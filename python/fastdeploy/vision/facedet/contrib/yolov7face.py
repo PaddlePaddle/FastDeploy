@@ -140,15 +140,11 @@ class YOLOv7Face(FastDeployModel):
 
         assert self.initialized, "YOLOv7Face initialize failed."
 
-    def predict(self, input_image, conf_threshold=0.5, nms_iou_threshold=0.45):
+    def predict(self, input_image):
          """Detect the location and key points of human faces from an input image
          :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
-         :param conf_threshold: confidence threashold for postprocessing, default is 0.5
-         :param nms_iou_threshold: iou threashold for NMS, default is 0.45
          :return: FaceDetectionResult
          """
-         self.postprocessor.conf_threshold = conf_threshold
-         self.postprocessor.nms_threshold = nms_iou_threshold
          return self._model.predict(input_image)
 
     def batch_predict(self, images):
