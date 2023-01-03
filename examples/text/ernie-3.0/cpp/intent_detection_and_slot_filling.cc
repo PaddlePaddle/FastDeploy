@@ -35,6 +35,7 @@ DEFINE_string(model_dir, "", "Directory of the inference model.");
 DEFINE_string(vocab_path, "", "Path of the vocab file.");
 DEFINE_string(slot_label_path, "", "Path of the slot_label file.");
 DEFINE_string(intent_label_path, "", "Path of the intent_label file.");
+DEFINE_string(test_data_path, "", "The path of the test dataset file.");
 DEFINE_string(device, "cpu",
               "Type of inference device, support 'cpu' or 'gpu'.");
 DEFINE_string(backend, "paddle",
@@ -319,6 +320,19 @@ bool GetFilePath(const std::string& path, const std::string& default_path,
   return true;
 }
 
+void ReadDatasetFromTxt(const std::string path,
+                        std::vector<std::string>* dataset) {
+  std::fstream fin(path);
+  std::string text;
+  while (fin >> text) {
+    if (text.length() > 0) {
+      dataset->push_back(text);
+    } else {
+      break;
+    }
+  }
+}
+
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   auto option = fastdeploy::RuntimeOption();
@@ -365,5 +379,30 @@ int main(int argc, char* argv[]) {
     std::cout << "No." << i << " text = " << texts[i] << std::endl;
     std::cout << results[i] << std::endl;
   }
+
+  std::string dataset_path;
+  if (GetFilePath(FLAGS_test_data_path, "test.txt", &dataset_path)) {
+    std::cout << "Read dataset path from: " << dataset_path << std::endl;
+    texts.clear();
+    results.clear();
+    ReadDatasetFromTxt(dataset_path, &texts);
+    std::vector<std::string> curr_texts;
+    int text_num = texts.size();
+    int j = 0;
+    for (int i = 0; i < text_num; i += FLAGS_batch_size) {
+      int actual_batch_size = (std::min)(text_num - i, FLAGS_batch_size);
+      curr_texts.insert(curr_texts.end(), texts.begin() + i,
+                        texts.begin() + i + actual_batch_size);
+      predictor.Predict(curr_texts, &results);
+      for (int k = 0; k < curr_texts.size(); ++k) {
+        std::cout << "No." << i * FLAGS_batch_size + k
+                  << " text = " << curr_texts[k] << std::endl;
+        std::cout << results[k] << std::endl;
+      }
+      results.clear();
+      curr_texts.clear();
+    }
+  }
+
   return 0;
 }
