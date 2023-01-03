@@ -3,12 +3,13 @@
 
 ## 部署准备
 ### FastDeploy 交叉编译环境准备
-- 1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/a311d.md#交叉编译环境搭建)  
+1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/a311d.md#交叉编译环境搭建)  
 
 ### 量化模型准备
-- 1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
-- 2. 用户可以使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此 yaml 文件, 用户从 FP32 模型文件夹下复制此 yaml 文件到量化后的模型文件夹内即可.)
-- 更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
+1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
+2. 用户可以使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。(注意: 推理量化后的分类模型仍然需要FP32模型文件夹下的inference_cls.yaml文件, 自行量化的模型文件夹内不包含此 yaml 文件, 用户从 FP32 模型文件夹下复制此 yaml 文件到量化后的模型文件夹内即可.)
+
+更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
 
 ## 在 A311D 上部署量化后的 ResNet50_Vd 分类模型
 请按照以下步骤完成在 A311D 上部署 ResNet50_Vd 量化模型：

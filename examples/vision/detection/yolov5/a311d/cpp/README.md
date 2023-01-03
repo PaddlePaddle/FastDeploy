@@ -4,11 +4,10 @@
 
 ## 部署准备
 ### FastDeploy 交叉编译环境准备
-- 1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/a311d.md#交叉编译环境搭建)  
+1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/a311d.md#交叉编译环境搭建)  
 
 ### 量化模型准备
-用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
-用户也可以按照如下步骤准备量化模型：
+可以直接使用由 FastDeploy 提供的量化模型进行部署，也可以按照如下步骤准备量化模型：
 1. 按照 [YOLOv5](https://github.com/ultralytics/yolov5/releases/tag/v6.1) 官方导出方式导出 ONNX 模型，或者直接使用如下命令下载
 ```bash
 wget https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx
@@ -28,7 +27,8 @@ fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --metho
 wget https://bj.bcebos.com/fastdeploy/models/yolov5s_ptq_model.tar.gz
 tar -xvf yolov5s_ptq_model.tar.gz
 ```
-- 更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
+
+更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
 
 ## 在 A311D 上部署量化后的 YOLOv5 检测模型
 请按照以下步骤完成在 A311D 上部署 YOLOv5 量化模型：
