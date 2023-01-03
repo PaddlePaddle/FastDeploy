@@ -100,6 +100,7 @@ FastDeploy is now integrated with FlyCV, allowing users to use FlyCV on supporte
 In end-to-end model inference, the pre-processing and post-processing phases are CPU computation, we recommend using FlyCV for end-to-end inference performance acceleration when you are using ARM CPU + Ascend hardware platform. See [Enable FlyCV](./boost_cv_by_flycv.md) documentation for details.
 
 
-Deploying PaddleClas Classification Model on Huawei Ascend NPU using C++ please refer to: [PaddleClas Huawei Ascend NPU C++ Deployment Example](../../../examples/vision/classification/paddleclas/ascend/cpp/README.md)
+## Deployment demo reference
+- Deploying PaddleClas Classification Model on Huawei Ascend NPU using C++ please refer to: [PaddleClas Huawei Ascend NPU C++ Deployment Example](../../../examples/vision/classification/paddleclas/cpp/README.md)
 
-Deploying PaddleClas classification model on Huawei Ascend NPU using Python please refer to: [PaddleClas Huawei Ascend NPU Python Deployment Example](../../../examples/vision/classification/paddleclas/ascend/python/README.md)
+- Deploying PaddleClas classification model on Huawei Ascend NPU using Python please refer to: [PaddleClas Huawei Ascend NPU Python Deployment Example](../../../examples/vision/classification/paddleclas/python/README.md)
