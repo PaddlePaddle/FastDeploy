@@ -92,7 +92,7 @@ In particular, for the configuration method of the dependency library required b
 
 ### 3.2 SDK usage method 2: Visual Studio 2019 creates sln project using C++ SDK
 
-This section is for non-CMake users and describes how to create a sln project in Visual Studio 2019 to use FastDeploy C++ SDK. CMake users please read the next section directly. In addition, this section is a special thanks to "Awake to the Southern Sky" for his tutorial on FastDeploy: [How to deploy PaddleDetection target detection model on Windows using FastDeploy C++].(https://www.bilibili.com/read/cv18807232)
+This section is for non-CMake users and describes how to create a sln project in Visual Studio 2019 to use FastDeploy C++ SDK. CMake users please read the next section directly. In addition, this section is a special thanks to "Awake to the Southern Sky" for his tutorial on FastDeploy: [How to deploy PaddleDetection target detection model on Windows using FastDeploy C++](https://www.bilibili.com/read/cv18807232).
 
 <div id="VisualStudio2019Sln"></div>  
 
@@ -192,7 +192,7 @@ Compile successfully, you can see the exe saved in：
 D:\qiuyanjun\fastdeploy_test\infer_ppyoloe\x64\Release\infer_ppyoloe.exe  
 ```  
 
-（2）Execute the executable file and get the inference result. First you need to copy all the dlls to the directory where the exe is located. At the same time, you also need to download and extract the pyoloe model files and test images, and then copy them to the directory where the exe is located. Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [various methods to configure the exe to run the required dependency library](#CommandLineDeps)  
+（2）Execute the executable file and get the inference result. First you need to copy all the dlls to the directory where the exe is located. At the same time, you also need to download and extract the pyoloe model files and test images, and then copy them to the directory where the exe is located. Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [various methods to configure the exe to run the required dependency library](#CommandLineDeps).  
 
 ![image](https://user-images.githubusercontent.com/31974251/192829545-3ea36bfc-9a54-492b-984b-2d5d39094d47.png)  
 
@@ -331,7 +331,7 @@ Open the saved image to view the visualization results at：
 <img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
 </div>
 
-Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [a variety of methods to configure the exe to run the required dependency library](#CommandLineDeps)
+Special note, the exe needs to run when the dependency library configuration method, please refer to the section: [a variety of methods to configure the exe to run the required dependency library](#CommandLineDeps).
 
 ## 4. Multiple methods to Configure the Required Dependencies for the Exe Runtime
 <div id="CommandLineDeps"></div>  

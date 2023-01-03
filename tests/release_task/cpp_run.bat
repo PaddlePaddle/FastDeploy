@@ -30,7 +30,7 @@ if "%DEVICE%" == "gpu" (
 echo "CPP_FASTDEPLOY_PACKAGE: " %CPP_FASTDEPLOY_PACKAGE%
 echo "RUN_CASES" %RUN_CASES%
 
-python -c "import wget; wget.download('https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg')"
+python -c "import wget; wget.download('https://fastdeploy.bj.bcebos.com/resource/images/000000014439.jpg')"
 python -c "import wget; wget.download('https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt')"
 python -c "from download import *; download_and_decompress('https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz', './')"
 
