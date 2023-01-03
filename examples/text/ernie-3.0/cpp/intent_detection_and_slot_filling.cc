@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
+#include "fast_tokenizer/pretokenizers/pretokenizer.h"
 #include "fastdeploy/function/functions.h"
 #include "fastdeploy/runtime.h"
 #include "fastdeploy/utils/path.h"
@@ -224,7 +225,9 @@ struct Predictor {
       int start = -1;
       std::string label_name = "";
       std::vector<IntentDetAndSlotFillResult::SlotFillResult> items;
-
+      fast_tokenizer::pretokenizers::CharToBytesOffsetConverter convertor(
+          texts[i]);
+      fast_tokenizer::core::Offset curr_offset;
       int seq_len = preds.Shape()[0];
       for (int j = 0; j < seq_len; ++j) {
         fastdeploy::FDTensor pred;
@@ -234,21 +237,26 @@ struct Predictor {
 
         if ((curr_label == "O" || curr_label.find("B-") != std::string::npos) &&
             start >= 0) {
+          // Convert the unicode character offset to byte offset.
+          convertor.convert({start, j - 1}, &curr_offset);
           items.emplace_back(IntentDetAndSlotFillResult::SlotFillResult{
               label_name,
-              texts[i].substr(start, i - 1 - start),
-              {start, i - 1}});
+              texts[i].substr(curr_offset.first,
+                              curr_offset.second - curr_offset.first),
+              {start, j - 2}});
           start = -1;
         }
         if (curr_label.find("B-") != std::string::npos) {
-          start = i - 1;
+          start = j - 1;
           label_name = curr_label.substr(2);
         }
       }
       if (start >= 0) {
+        convertor.convert({start, seq_len}, &curr_offset);
         items.emplace_back(IntentDetAndSlotFillResult::SlotFillResult{
             "",
-            texts[i].substr(start, seq_len - 1 - start),
+            texts[i].substr(curr_offset.first,
+                            curr_offset.second - curr_offset.first),
             {start, seq_len - 1}});
       }
       (*results)[i].slot_result = std::move(items);
