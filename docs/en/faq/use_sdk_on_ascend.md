@@ -1,4 +1,4 @@
-[简体中文](../../cn/faq/use_sdk_on_linux.md) | English
+[简体中文](../../cn/faq/use_sdk_on_ascend.md) | English
 
 
 # # Linux deployment with C++ on Huawei Ascend
@@ -19,3 +19,11 @@ source fastdeploy-ascend/fastdeploy_init.sh
 ```
 
 Note that this command only takes effect in the current command environment after execution (switching to a new terminal window, or closing the window and reopening it will not work), if you need to keep it in effect on the system, add these environment variables to the `~/.bashrc` file.
+
+# Enable FlyCV for Ascend deployment
+
+[FlyCV](https://github.com/PaddlePaddle/FlyCV) is a high performance computer image processing library, providing better performance than other image processing libraries, especially in the ARM architecture.
+FastDeploy is now integrated with FlyCV, allowing users to use FlyCV on supported hardware platforms to accelerate model end-to-end inference performance.
+
+In end-to-end model inference, the pre-processing and post-processing phases are CPU computation, we recommend using FlyCV for end-to-end inference performance acceleration when you are using ARM CPU + Ascend hardware platform. See the following documentation for details.
+- [Enable FlyCV](./boost_cv_by_flycv.md)
