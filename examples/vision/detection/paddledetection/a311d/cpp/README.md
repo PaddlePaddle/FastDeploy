@@ -10,6 +10,7 @@
 - 1. 用户可以直接使用由 FastDeploy 提供的量化模型进行部署。
 - 2. 用户可以先使用 PaddleDetection 自行导出 Float32 模型，注意导出模型模型时设置参数：use_shared_conv=False，更多细节请参考：[PP-YOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
 - 3. 用户可以使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/)，自行进行模型量化, 并使用产出的量化模型进行部署。（注意: 推理量化后的检测模型仍然需要FP32模型文件夹下的 infer_cfg.yml 文件，自行量化的模型文件夹内不包含此 yaml 文件，用户从 FP32 模型文件夹下复制此yaml文件到量化后的模型文件夹内即可。）
+- 4. 模型需要异构计算，异构计算文件可以参考：[异构计算](./../../../../../../docs/cn/faq/heterogeneous_computing_on_timvx_npu.md)，由于 FastDeploy 已经提供了模型，可以先测试我们提供的异构文件，验证精度是否符合要求。
 - 更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
 
 ## 在 A311D 上部署量化后的 PP-YOLOE  检测模型
