@@ -395,8 +395,7 @@ int main(int argc, char* argv[]) {
                         texts.begin() + i + actual_batch_size);
       predictor.Predict(curr_texts, &results);
       for (int k = 0; k < curr_texts.size(); ++k) {
-        std::cout << "No." << i * FLAGS_batch_size + k
-                  << " text = " << curr_texts[k] << std::endl;
+        std::cout << "No." << i + k << " text = " << curr_texts[k] << std::endl;
         std::cout << results[k] << std::endl;
       }
       results.clear();
