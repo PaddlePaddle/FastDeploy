@@ -68,16 +68,16 @@
 | [yolov6_s_400e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6_s_400e_coco.tgz) | 68M | Box AP 43.4%|  |
 | [yolov7_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_l_300e_coco.tgz) | 145M | Box AP 51.0%|  |
 | [yolov7_x_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_x_300e_coco.tgz) | 277M | Box AP 53.0%|  |
-| [cascade_rcnn_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_fpn_1x_coco.tgz) | 271M | Box AP 41.1%|  |
-| [cascade_rcnn_r50_vd_fpn_ssld_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz) | 271M | Box AP 45.0%|  |
-| [faster_rcnn_enhance_3x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/faster_rcnn_enhance_3x_coco.tgz) | 119M | Box AP 41.5%|  |
-| [fcos_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/fcos_r50_fpn_1x_coco.tgz) | 129M | Box AP 39.6%|  |
-| [gfl_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/gfl_r50_fpn_1x_coco.tgz) | 128M | Box AP 41.0%|  |
+| [cascade_rcnn_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_fpn_1x_coco.tgz) | 271M | Box AP 41.1%|  暂不支持TensorRT、ORT |
+| [cascade_rcnn_r50_vd_fpn_ssld_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/cascade_rcnn_r50_vd_fpn_ssld_2x_coco.tgz) | 271M | Box AP 45.0%|  暂不支持TensorRT、ORT |
+| [faster_rcnn_enhance_3x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/faster_rcnn_enhance_3x_coco.tgz) | 119M | Box AP 41.5%|  暂不支持TensorRT、ORT |
+| [fcos_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/fcos_r50_fpn_1x_coco.tgz) | 129M | Box AP 39.6%|  暂不支持TensorRT |
+| [gfl_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/gfl_r50_fpn_1x_coco.tgz) | 128M | Box AP 41.0%|  暂不支持TensorRT |
 | [ppyoloe_crn_l_80e_sliced_visdrone_640_025](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_80e_sliced_visdrone_640_025.tgz) | 200M | Box AP 31.9%|  |
-| [retinanet_r101_fpn_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r101_fpn_2x_coco.tgz) | 210M | Box AP 40.6%|  |
-| [retinanet_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r50_fpn_1x_coco.tgz) | 136M | Box AP 37.5%|  |
-| [tood_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/tood_r50_fpn_1x_coco.tgz) | 130M | Box AP 42.5%|  |
-| [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%|  |
+| [retinanet_r101_fpn_2x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r101_fpn_2x_coco.tgz) | 210M | Box AP 40.6%|  暂不支持TensorRT、ORT |
+| [retinanet_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/retinanet_r50_fpn_1x_coco.tgz) | 136M | Box AP 37.5%|  暂不支持TensorRT、ORT |
+| [tood_r50_fpn_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/tood_r50_fpn_1x_coco.tgz) | 130M | Box AP 42.5%|  暂不支持TensorRT、ORT |
+| [ttfnet_darknet53_1x_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ttfnet_darknet53_1x_coco.tgz) | 178M | Box AP 33.5%|  暂不支持TensorRT、ORT |
 
 ## 详细部署文档
 
