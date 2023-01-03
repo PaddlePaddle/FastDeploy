@@ -217,7 +217,7 @@ class TritonPythonModel:
             out_tensor_0 = pb_utils.Tensor(
                 self.output_names[0],
                 np.array(
-                    batch_rec_texts, dtype=np.object))
+                    batch_rec_texts, dtype=np.object_))
             out_tensor_1 = pb_utils.Tensor(self.output_names[1],
                                            np.array(batch_rec_scores))
             inference_response = pb_utils.InferenceResponse(

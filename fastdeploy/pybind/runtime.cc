@@ -24,7 +24,8 @@ void BindRuntime(pybind11::module& m) {
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
-      .def("use_xpu", &RuntimeOption::UseXpu)
+      .def("use_ascend", &RuntimeOption::UseAscend)
+      .def("use_kunlunxin", &RuntimeOption::UseKunlunXin)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
       .def("set_cpu_thread_num", &RuntimeOption::SetCpuThreadNum)
       .def("use_paddle_backend", &RuntimeOption::UsePaddleBackend)
@@ -34,6 +35,13 @@ void BindRuntime(pybind11::module& m) {
       .def("use_trt_backend", &RuntimeOption::UseTrtBackend)
       .def("use_openvino_backend", &RuntimeOption::UseOpenVINOBackend)
       .def("use_lite_backend", &RuntimeOption::UseLiteBackend)
+      .def("set_lite_device_names", &RuntimeOption::SetLiteDeviceNames)
+      .def("set_lite_context_properties", &RuntimeOption::SetLiteContextProperties)
+      .def("set_lite_model_cache_dir", &RuntimeOption::SetLiteModelCacheDir)
+      .def("set_lite_dynamic_shape_info", &RuntimeOption::SetLiteDynamicShapeInfo)
+      .def("set_lite_subgraph_partition_path", &RuntimeOption::SetLiteSubgraphPartitionPath)
+      .def("set_lite_mixed_precision_quantization_config_path", &RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath)
+      .def("set_lite_subgraph_partition_config_buffer", &RuntimeOption::SetLiteSubgraphPartitionConfigBuffer)
       .def("set_paddle_mkldnn", &RuntimeOption::SetPaddleMKLDNN)
       .def("set_openvino_device", &RuntimeOption::SetOpenVINODevice)
       .def("set_openvino_shape_info", &RuntimeOption::SetOpenVINOShapeInfo)
@@ -106,20 +114,20 @@ void BindRuntime(pybind11::module& m) {
                      &RuntimeOption::ipu_available_memory_proportion)
       .def_readwrite("ipu_enable_half_partial",
                      &RuntimeOption::ipu_enable_half_partial)
-      .def_readwrite("xpu_l3_workspace_size",
-                     &RuntimeOption::xpu_l3_workspace_size)
-      .def_readwrite("xpu_locked",
-                     &RuntimeOption::xpu_locked)
-      .def_readwrite("xpu_autotune",
-                     &RuntimeOption::xpu_autotune)
-      .def_readwrite("xpu_autotune_file",
-                     &RuntimeOption::xpu_autotune_file)
-      .def_readwrite("xpu_precision",
-                     &RuntimeOption::xpu_precision)
-      .def_readwrite("xpu_adaptive_seqlen",
-                     &RuntimeOption::xpu_adaptive_seqlen)
-      .def_readwrite("xpu_enable_multi_stream",
-                     &RuntimeOption::xpu_enable_multi_stream);                              
+      .def_readwrite("kunlunxin_l3_workspace_size",
+                     &RuntimeOption::kunlunxin_l3_workspace_size)
+      .def_readwrite("kunlunxin_locked",
+                     &RuntimeOption::kunlunxin_locked)
+      .def_readwrite("kunlunxin_autotune",
+                     &RuntimeOption::kunlunxin_autotune)
+      .def_readwrite("kunlunxin_autotune_file",
+                     &RuntimeOption::kunlunxin_autotune_file)
+      .def_readwrite("kunlunxin_precision",
+                     &RuntimeOption::kunlunxin_precision)
+      .def_readwrite("kunlunxin_adaptive_seqlen",
+                     &RuntimeOption::kunlunxin_adaptive_seqlen)
+      .def_readwrite("kunlunxin_enable_multi_stream",
+                     &RuntimeOption::kunlunxin_enable_multi_stream);                              
 
   pybind11::class_<TensorInfo>(m, "TensorInfo")
       .def_readwrite("name", &TensorInfo::name)
@@ -206,7 +214,8 @@ void BindRuntime(pybind11::module& m) {
       .def("infer",
            [](Runtime& self, std::vector<FDTensor>& inputs) {
              std::vector<FDTensor> outputs;
-             return self.Infer(inputs, &outputs);
+             self.Infer(inputs, &outputs);
+             return outputs;
            })
       .def("bind_input_tensor", &Runtime::BindInputTensor)
       .def("infer", [](Runtime& self) { self.Infer(); })

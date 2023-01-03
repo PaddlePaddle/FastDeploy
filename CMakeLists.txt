@@ -64,8 +64,9 @@ option(ENABLE_LITE_BACKEND "Whether to enable paddle lite backend." OFF)
 option(ENABLE_VISION "Whether to enable vision models usage." OFF)
 option(ENABLE_TEXT "Whether to enable text models usage." OFF)
 option(ENABLE_FLYCV "Whether to enable flycv to boost image preprocess." OFF)
+option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
-option(WITH_XPU "Whether to compile for KunlunXin XPU deploy." OFF)
+option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
@@ -143,19 +144,21 @@ if (WITH_TIMVX)
   include(${PROJECT_SOURCE_DIR}/cmake/timvx.cmake)
 endif()
 
-if (WITH_XPU)
+if (WITH_ASCEND)
+  include(${PROJECT_SOURCE_DIR}/cmake/ascend.cmake)
+endif()
+
+if (WITH_KUNLUNXIN)
   if(NOT ENABLE_LITE_BACKEND)
-      message(WARNING "While compiling with -DWITH_XPU=ON, will force to set -DENABLE_LITE_BACKEND=ON")
       set(ENABLE_LITE_BACKEND ON)
   endif()
   if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
-    message(FATAL_ERROR "XPU is only supported on Linux x64 platform")
+    message(FATAL_ERROR "KunlunXin XPU is only supported on Linux x64 platform")
   endif()
   if(NOT PADDLELITE_URL)
     set(PADDLELITE_URL "https://bj.bcebos.com/fastdeploy/third_libs/lite-linux-x64-xpu-20221215.tgz")
   endif()
 endif()
-
 
 if(ANDROID OR IOS)
   if(ENABLE_ORT_BACKEND)
@@ -237,12 +240,12 @@ if(ENABLE_PADDLE_BACKEND)
   add_definitions(-DENABLE_PADDLE_BACKEND)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_PADDLE_SRCS})
   include(${PROJECT_SOURCE_DIR}/cmake/paddle_inference.cmake)
-  if(NOT APPLE)
-    list(APPEND DEPEND_LIBS external_paddle_inference external_dnnl external_omp)
-  else()
-    # no third parties libs(mkldnn and omp) need to
-    # link into paddle_inference on MacOS OSX.
-    list(APPEND DEPEND_LIBS external_paddle_inference)
+  list(APPEND DEPEND_LIBS external_paddle_inference)
+  if(external_dnnl_FOUND)
+    list(APPEND DEPEND_LIBS external_dnnl external_omp)
+  endif()
+  if(external_ort_FOUND)
+    list(APPEND DEPEND_LIBS external_p2o external_ort)
   endif()
 endif()
 
@@ -384,9 +387,9 @@ if(ENABLE_TRT_BACKEND)
     find_package(Python COMPONENTS Interpreter Development REQUIRED)
     message(STATUS "Copying ${TRT_DIRECTORY}/lib to ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib ...")
     execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${TRT_DIRECTORY}/lib ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib)
-    file(GLOB_RECURSE TRT_STAIC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib/*.a)
+    file(GLOB_RECURSE TRT_STATIC_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib/*.a)
     if(TRT_STATIC_LIBS)
-      file(REMOVE ${TRT_STAIC_LIBS})
+      file(REMOVE ${TRT_STATIC_LIBS})
     endif()
     if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
       execute_process(COMMAND sh -c "ls *.so*" WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt/lib
@@ -613,6 +616,13 @@ if(NOT WIN32)
 else()
   install(
     FILES ${PROJECT_SOURCE_DIR}/scripts/fastdeploy_init.bat
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif()
+
+if(WITH_ASCEND)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/scripts/ascend_init.sh
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
 endif()
