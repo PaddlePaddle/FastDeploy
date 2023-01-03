@@ -43,8 +43,8 @@ def build_option(args):
               \nPaddleDetection/MaskRCNN has only support Backend::Paddle now."""
         )
 
-    if args.device.lower() == "xpu":
-        option.use_xpu()
+    if args.device.lower() == "kunlunxin":
+        option.use_kunlunxin()
 
     if args.device.lower() == "ascend":
         option.use_ascend()

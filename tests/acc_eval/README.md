@@ -23,7 +23,7 @@
 cd classification
 # 执行prepare.sh脚本,自动下载并解压模型至models文件夹下
 bash prepare.sh
-# 开始精度验证
+# 首先修改run.sh中的TARGET_DEVICE为想测试的硬件,之后执行run.sh脚本
 bash run.sh
 # 验证完毕的输出以及精度数据,会保存至log文件夹下,用户自行查看
 ```
