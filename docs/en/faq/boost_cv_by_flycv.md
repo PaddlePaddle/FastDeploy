@@ -50,7 +50,6 @@ option.use_ascend()
 KunPeng 920 CPU + Atlas 300I Pro.
 | Model | OpenCV E2E Performance(ms) | FlyCV E2E Performance(ms) |  
 | :-----------| :--------   | :--------   |
-
 |   ResNet50     | 2.78  | 1.63  |  
 |   PP-LCNetV2   |  2.50 |  1.39   |  
 |   YOLOv7       |  27.00 | 21.36    |  
