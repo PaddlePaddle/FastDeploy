@@ -109,7 +109,7 @@ Recognizer类初始化时,需要在rec_label_file参数中,输入识别模型所
 #### DBDetector预处理参数
 用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
 
-> > * **max_side_len**(int): 检测算法前向时图片长边的最大尺寸，当长边超出这个值时会将长边resize到这个大小，短边等比例缩放,默认为960
+> > * **max_side_len**(int): 检测算法前向视图片长边的最大尺寸，当长边超出这个值时会将长边resize到这个大小，短边等比例缩放,默认为960
 > > * **det_db_thresh**(double): DB模型输出预测图的二值化阈值，默认为0.3
 > > * **det_db_box_thresh**(double): DB模型输出框的阈值，低于此值的预测框会被丢弃，默认为0.6
 > > * **det_db_unclip_ratio**(double): DB模型输出框扩大的比例，默认为1.5
