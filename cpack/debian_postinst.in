@@ -4,7 +4,6 @@ case "$1" in
     configure)
         PLATFORM=`uname`
         FASTDEPLOY_LIBRARY_PATH=@CMAKE_INSTALL_PREFIX@
-        FASTDEPLOY_LIBRARY_PATH=${FASTDEPLOY_LIBRARY_PATH%/*}
 
         echo "=============== Information ======================"
         echo "FastDeploy Library Path: $FASTDEPLOY_LIBRARY_PATH"
@@ -22,7 +21,7 @@ case "$1" in
 
         IMPORT_PATH=""
         for LIB_DIR in ${LIBS_DIRECOTRIES[@]};do
-            echo "Find Library Directory: $LIB_DIR"
+            echo "Found Library Directory: $LIB_DIR"
             echo ${LIB_DIR} >> @CMAKE_INSTALL_PREFIX@/@CPACK_PACKAGE_NAME@.conf
         done
 
@@ -32,6 +31,10 @@ case "$1" in
         ln -sf @CMAKE_INSTALL_PREFIX@/@CPACK_PACKAGE_NAME@.conf /etc/ld.so.conf.d
 
         ldconfig
+
+        echo "FastDeploy is successfully installed and configured."
+        echo "Now please get started with FastDeploy examples at $FASTDEPLOY_LIBRARY_PATH/examples."
+        echo "And don't forget to set FASTDEPLOY_INSTALL_DIR=$FASTDEPLOY_LIBRARY_PATH in cmake when building examples."
         ;;
     *)
         echo "postinst called with unknown argument \`$1'" >&2
