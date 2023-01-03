@@ -15,8 +15,8 @@
 #include <sstream>
 #include <vector>
 
-#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 #include "fast_tokenizer/pretokenizers/pretokenizer.h"
+#include "fast_tokenizer/tokenizers/ernie_fast_tokenizer.h"
 #include "fastdeploy/function/functions.h"
 #include "fastdeploy/runtime.h"
 #include "fastdeploy/utils/path.h"
@@ -40,7 +40,7 @@ DEFINE_string(backend, "paddle",
               "The inference runtime backend, support: ['onnx_runtime', "
               "'paddle', 'openvino', 'tensorrt', 'paddle_tensorrt']");
 DEFINE_int32(batch_size, 1, "The batch size of data.");
-DEFINE_int32(max_length, 128, "The batch size of data.");
+DEFINE_int32(max_length, 16, "The batch size of data.");
 DEFINE_bool(use_fp16, false, "Wheter to use FP16 mode.");
 
 void PrintUsage() {
@@ -229,12 +229,12 @@ struct Predictor {
           texts[i]);
       fast_tokenizer::core::Offset curr_offset;
       int seq_len = preds.Shape()[0];
+      int64_t* preds_ptr = reinterpret_cast<int64_t*>(preds.Data());
       for (int j = 0; j < seq_len; ++j) {
         fastdeploy::FDTensor pred;
-        fastdeploy::function::Slice(preds, {0}, {i}, &pred);
-        int64_t slot_label_id = (reinterpret_cast<int64_t*>(pred.Data()))[0];
+        fastdeploy::function::Slice(preds, {0}, {j}, &pred);
+        int64_t slot_label_id = preds_ptr[j];
         const std::string& curr_label = slot_labels_[slot_label_id];
-
         if ((curr_label == "O" || curr_label.find("B-") != std::string::npos) &&
             start >= 0) {
           // Convert the unicode character offset to byte offset.
@@ -250,14 +250,6 @@ struct Predictor {
           start = j - 1;
           label_name = curr_label.substr(2);
         }
-      }
-      if (start >= 0) {
-        convertor.convert({start, seq_len}, &curr_offset);
-        items.emplace_back(IntentDetAndSlotFillResult::SlotFillResult{
-            "",
-            texts[i].substr(curr_offset.first,
-                            curr_offset.second - curr_offset.first),
-            {start, seq_len - 1}});
       }
       (*results)[i].slot_result = std::move(items);
     }
@@ -333,9 +325,12 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   ErnieFastTokenizer tokenizer(vocab_path);
+  uint32_t max_length = FLAGS_max_length;
   tokenizer.EnableTruncMethod(
-      FLAGS_max_length, 0, fast_tokenizer::core::Direction::RIGHT,
+      max_length, 0, fast_tokenizer::core::Direction::RIGHT,
       fast_tokenizer::core::TruncStrategy::LONGEST_FIRST);
+  tokenizer.EnablePadMethod(fast_tokenizer::core::Direction::RIGHT, 0, 0,
+                            "[PAD]", &max_length, nullptr);
   std::unordered_map<int, std::string> slot_label_map;
   std::unordered_map<int, std::string> intent_label_map;
 
