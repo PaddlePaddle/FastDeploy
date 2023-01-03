@@ -1,4 +1,4 @@
-[简体中文](../../cn/faq/use_sdk_on_ascend.md) | English
+[简体中文](../../cn/faq/use_sdk_on_linux.md) | English
 
 
 # # Linux deployment with C++ on Huawei Ascend

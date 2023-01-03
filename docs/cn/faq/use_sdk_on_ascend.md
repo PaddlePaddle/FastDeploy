@@ -1,4 +1,4 @@
-[English](../../en/faq/use_sdk_on_ascend.md) | 中文
+[English](../../en/faq/use_sdk_on_linux.md) | 中文
 
 
 # Linux上使用C++在华为昇腾部署
