@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleDetection RKNPU2部署示例
 
 ## 支持模型列表
