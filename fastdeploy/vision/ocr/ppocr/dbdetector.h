@@ -61,11 +61,20 @@ class FASTDEPLOY_DECL DBDetector : public FastDeployModel {
   virtual bool BatchPredict(const std::vector<cv::Mat>& images,
           std::vector<std::vector<std::array<int, 8>>>* det_results);
 
-  DBDetectorPreprocessor preprocessor_;
-  DBDetectorPostprocessor postprocessor_;
+  /// Get preprocessor reference of DBDetectorPreprocessor
+  virtual DBDetectorPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of DBDetectorPostprocessor
+  virtual DBDetectorPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  private:
   bool Initialize();
+  DBDetectorPreprocessor preprocessor_;
+  DBDetectorPostprocessor postprocessor_;
 };
 
 }  // namespace ocr
