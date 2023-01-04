@@ -39,10 +39,21 @@ class FASTDEPLOY_DECL PaddleDetPreprocessor {
    */
   bool Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs);
 
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize();
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute();
+
  private:
-  bool BuildPreprocessPipelineFromConfig(const std::string& config_file);
+  bool BuildPreprocessPipelineFromConfig();
   std::vector<std::shared_ptr<Processor>> processors_;
   bool initialized_ = false;
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
+  // read config file
+  std::string config_file_;
 };
 
 }  // namespace detection

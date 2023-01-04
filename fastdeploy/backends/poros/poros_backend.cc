@@ -188,8 +188,7 @@ bool PorosBackend::InitFromPoros(const std::string& model_file,
 }
 
 bool PorosBackend::Infer(std::vector<FDTensor>& inputs,
-                         std::vector<FDTensor>* outputs,
-                         bool copy_to_fd) {
+                         std::vector<FDTensor>* outputs, bool copy_to_fd) {
   // Convert FD Tensor to PyTorch Tensor
   std::vector<torch::jit::IValue> poros_inputs;
   bool is_backend_cuda =
