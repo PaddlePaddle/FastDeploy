@@ -59,7 +59,7 @@ public OCRResult predict(Bitmap ARGB8888Bitmap, boolean rendering); // Render wi
 ```
 - Model resource release API: Call release() API to release model resources. Return true for successful release and false for failure; call initialized() to determine whether the model was initialized successfully, with true indicating successful initialization and false indicating failure. 
 ```java
-public boolean release(); // Realise native resources 
+public boolean release(); // Release native resources 
 public boolean initialized(); // Check if initialization was successful
 ```
 
