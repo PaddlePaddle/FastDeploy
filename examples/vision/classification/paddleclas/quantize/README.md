@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleClas 量化模型部署
 FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工具.
 用户可以使用一键模型自动化压缩工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
