@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 namespace fastdeploy {
 
 struct LiteBackendOption {
