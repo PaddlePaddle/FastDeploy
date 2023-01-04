@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "fastdeploy/backends/sophgo/sophgo_backend.h"
-#include <assert.h>
-namespace fastdeploy {
-    SophgoBackend::~SophgoBackend() {
 
-      bm_dev_free(handle_);
-  
-}
+#include <assert.h>
+
+namespace fastdeploy {
+SophgoBackend::~SophgoBackend() { bm_dev_free(handle_); }
 /***************************************************************
  *  @name       GetSDKAndDeviceVersion
  *  @brief      get Sophgo sdk and device version
@@ -26,10 +24,7 @@ namespace fastdeploy {
  *  @return     bool
  *  @note       None
  ***************************************************************/
-bool SophgoBackend::GetSDKAndDeviceVersion() {
-
-  return true;
-}
+bool SophgoBackend::GetSDKAndDeviceVersion() { return true; }
 
 /***************************************************************
  *  @name      BuildOption
@@ -38,9 +33,9 @@ bool SophgoBackend::GetSDKAndDeviceVersion() {
  *  @note      None
  ***************************************************************/
 void SophgoBackend::BuildOption(const SophgoBackendOption& option) {
-//  this->option_ = option;
+  //  this->option_ = option;
   // save cpu_name
-//   this->option_.cpu_name = option.cpu_name;
+  //   this->option_.cpu_name = option.cpu_name;
 }
 
 /***************************************************************
@@ -53,8 +48,7 @@ void SophgoBackend::BuildOption(const SophgoBackendOption& option) {
  *  @note       None
  ***************************************************************/
 bool SophgoBackend::InitFromSophgo(const std::string& model_file,
-                                 const SophgoBackendOption& option) {
-
+                                   const SophgoBackendOption& option) {
   // LoadModel
   if (!this->LoadModel((char*)model_file.data())) {
     FDERROR << "load model failed" << std::endl;
@@ -98,7 +92,7 @@ bool SophgoBackend::LoadModel(void* model) {
 
   int network_num = bmrt_get_network_number(p_bmrt_);
 
-  const char **net_names = NULL;
+  const char** net_names = NULL;
   bmrt_get_network_names(p_bmrt_, &net_names);
   net_name_ = net_names[0];
   free(net_names);
@@ -119,15 +113,15 @@ bool SophgoBackend::LoadModel(void* model) {
 bool SophgoBackend::GetModelInputOutputInfos() {
   inputs_desc_.resize(net_info_->input_num);
   bm_shape_t* input_shapes = net_info_->stages->input_shapes;
-  for(int idx=0; idx<net_info_->input_num; idx++){
+  for (int idx = 0; idx < net_info_->input_num; idx++) {
     std::string temp_name = (net_info_->input_names)[idx];
     std::vector<int> temp_shape{};
     temp_shape.resize(input_shapes[idx].num_dims);
-    for(int i=0; i<input_shapes[idx].num_dims; i++){
+    for (int i = 0; i < input_shapes[idx].num_dims; i++) {
       temp_shape[i] = input_shapes[idx].dims[i];
     }
     bm_data_type_t* input_dtypes = net_info_->input_dtypes;
-    //SophgoType to FDDataType
+    // SophgoType to FDDataType
     FDDataType temp_dtype = SophgoTensorTypeToFDDataType(*input_dtypes);
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     inputs_desc_[idx] = temp_input_info;
@@ -135,15 +129,15 @@ bool SophgoBackend::GetModelInputOutputInfos() {
 
   outputs_desc_.resize(net_info_->output_num);
   bm_shape_t* output_shapes = net_info_->stages->output_shapes;
-  for(int idx=0; idx<net_info_->output_num; idx++){
+  for (int idx = 0; idx < net_info_->output_num; idx++) {
     std::string temp_name1 = (net_info_->output_names)[idx];
     std::vector<int> temp_shape1{};
     temp_shape1.resize(output_shapes[idx].num_dims);
-    for(int i=0; i<output_shapes[idx].num_dims; i++){
+    for (int i = 0; i < output_shapes[idx].num_dims; i++) {
       temp_shape1[i] = output_shapes[idx].dims[i];
     }
     bm_data_type_t* output_dtypes = net_info_->output_dtypes;
-    //SophgoType to FDDataType
+    // SophgoType to FDDataType
     FDDataType temp_dtype1 = SophgoTensorTypeToFDDataType(*output_dtypes);
     TensorInfo temp_output_info = {temp_name1, temp_shape1, temp_dtype1};
     outputs_desc_[idx] = temp_output_info;
@@ -167,11 +161,12 @@ TensorInfo SophgoBackend::GetOutputInfo(int index) {
   return outputs_desc_[index];
 }
 
-std::vector<TensorInfo> SophgoBackend::GetOutputInfos() { return outputs_desc_; }
+std::vector<TensorInfo> SophgoBackend::GetOutputInfos() {
+  return outputs_desc_;
+}
 
 bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs,
-                          bool copy_to_fd) {
+                          std::vector<FDTensor>* outputs, bool copy_to_fd) {
   int input_size = inputs.size();
   assert(input_size != 0);
   assert(input_size == NumInputs());
@@ -179,48 +174,52 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
   bm_status_t status = BM_SUCCESS;
 
   bm_data_type_t* input_dtypes = net_info_->input_dtypes;
-  for(int i=0;i<input_size;i++){
-    status = bm_malloc_device_byte(handle_, 
-    &input_tensors[i].device_mem,net_info_->max_input_bytes[i]);
+  for (int i = 0; i < input_size; i++) {
+    status = bm_malloc_device_byte(handle_, &input_tensors[i].device_mem,
+                                   net_info_->max_input_bytes[i]);
     assert(BM_SUCCESS == status);
     input_tensors[i].dtype = input_dtypes[i];
     input_tensors[i].st_mode = BM_STORE_1N;
     input_tensors[i].shape = *(net_info_->stages[i].input_shapes);
     unsigned int input_byte = bmrt_tensor_bytesize(&input_tensors[i]);
-    bm_memcpy_s2d_partial(handle_, input_tensors[i].device_mem, (void *)inputs[i].Data(),
-    bmrt_tensor_bytesize(&input_tensors[i]));
+    bm_memcpy_s2d_partial(handle_, input_tensors[i].device_mem,
+                          (void*)inputs[i].Data(),
+                          bmrt_tensor_bytesize(&input_tensors[i]));
   }
 
   int output_size = NumOutputs();
   bm_tensor_t output_tensors[output_size];
-  for(int i=0;i<output_size;i++){
+  for (int i = 0; i < output_size; i++) {
     status = bm_malloc_device_byte(handle_, &output_tensors[i].device_mem,
-    net_info_->max_output_bytes[i]);
+                                   net_info_->max_output_bytes[i]);
     assert(BM_SUCCESS == status);
   }
 
-  bool launch_status = bmrt_launch_tensor_ex(p_bmrt_, net_name_.c_str(), input_tensors, net_info_->input_num,
-  output_tensors, net_info_->output_num, true, false);
+  bool launch_status = bmrt_launch_tensor_ex(
+      p_bmrt_, net_name_.c_str(), input_tensors, net_info_->input_num,
+      output_tensors, net_info_->output_num, true, false);
   assert(launch_status);
   status = bm_thread_sync(handle_);
   assert(status == BM_SUCCESS);
 
   outputs->resize(outputs_desc_.size());
   bm_data_type_t* output_dtypes = net_info_->output_dtypes;
-  for(int i=0;i<output_size;i++){
-    int temp_bytesize = bmrt_tensor_bytesize(&output_tensors[i]); //Byte
-    float *temp_out = (float *)malloc(temp_bytesize);
-    bm_memcpy_d2s_partial(handle_, temp_out, output_tensors[i].device_mem, temp_bytesize);
+  for (int i = 0; i < output_size; i++) {
+    int temp_bytesize = bmrt_tensor_bytesize(&output_tensors[i]);  // Byte
+    float* temp_out = (float*)malloc(temp_bytesize);
+    bm_memcpy_d2s_partial(handle_, temp_out, output_tensors[i].device_mem,
+                          temp_bytesize);
 
     std::vector<int64_t> temp_shape;
     temp_shape.resize(outputs_desc_[i].shape.size());
     for (int j = 0; j < outputs_desc_[i].shape.size(); ++j) {
-        temp_shape[j] = outputs_desc_[i].shape[j];
+      temp_shape[j] = outputs_desc_[i].shape[j];
     }
-      (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype, outputs_desc_[i].name);
+    (*outputs)[i].Resize(temp_shape, outputs_desc_[i].dtype,
+                         outputs_desc_[i].name);
 
-      memcpy((*outputs)[i].MutableData(), temp_out, (*outputs)[i].Nbytes());
-      free(temp_out);
+    memcpy((*outputs)[i].MutableData(), temp_out, (*outputs)[i].Nbytes());
+    free(temp_out);
   }
 
   return true;
@@ -264,7 +263,8 @@ FDDataType SophgoBackend::SophgoTensorTypeToFDDataType(bm_data_type_t type) {
  *  @note       None
  ***************************************************************/
 // Sophgo_tensor_type
-bm_data_type_t SophgoBackend::FDDataTypeToSophgoTensorType(fastdeploy::FDDataType type) {
+bm_data_type_t SophgoBackend::FDDataTypeToSophgoTensorType(
+    fastdeploy::FDDataType type) {
   if (type == FDDataType::FP16) {
     return BM_FLOAT16;
   }
@@ -287,4 +287,4 @@ bm_data_type_t SophgoBackend::FDDataTypeToSophgoTensorType(fastdeploy::FDDataTyp
   return BM_FLOAT32;
 }
 
-}
+}  // namespace fastdeploy
