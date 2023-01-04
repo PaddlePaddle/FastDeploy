@@ -6,10 +6,10 @@
 - [FastDeploy预编译库下载安装](download_prebuilt_libraries.md)
 
 ## 自行编译安装
-- [GPU部署环境](gpu.md)
+- [NVIDIA GPU部署环境](gpu.md)
 - [CPU部署环境](cpu.md)
 - [IPU部署环境](ipu.md)
-- [Jetson部署环境](jetson.md)
+- [Nvidia Jetson部署环境](jetson.md)
 - [Android平台部署环境](android.md)
 - [瑞芯微RV1126部署环境](rv1126.md)
 - [瑞芯微RK3588部署环境](rknpu2.md)
