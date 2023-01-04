@@ -46,6 +46,9 @@ wget https://paddleseg.bj.bcebos.com/dygraph/demo/cityscapes_demo.png
 以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
 - [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
+如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前初始化部署环境:
+- [如何使用华为昇腾NPU部署](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
+
 ## PaddleSeg C++接口
 
 ### PaddleSeg类

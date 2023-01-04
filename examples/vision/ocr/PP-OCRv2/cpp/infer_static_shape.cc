@@ -33,60 +33,42 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto cls_option = option;
   auto rec_option = option;
 
-  // The cls and rec model can inference a batch of images now.
-  // User could initialize the inference batch size and set them after create PP-OCR model.
-  int cls_batch_size = 1;
-  int rec_batch_size = 6;
-
-  // If use TRT backend, the dynamic shape will be set as follow.
-  // We recommend that users set the length and height of the detection model to a multiple of 32.
-  // We also recommend that users set the Trt input shape as follow.
-  det_option.SetTrtInputShape("x", {1, 3, 64,64}, {1, 3, 640, 640},
-                                {1, 3, 960, 960});
-  cls_option.SetTrtInputShape("x", {1, 3, 48, 10}, {cls_batch_size, 3, 48, 320}, {cls_batch_size, 3, 48, 1024});
-  rec_option.SetTrtInputShape("x", {1, 3, 48, 10}, {rec_batch_size, 3, 48, 320},
-                                {rec_batch_size, 3, 48, 2304});
-  
-  // Users could save TRT cache file to disk as follow. 
-  // det_option.SetTrtCacheFile(det_model_dir + sep + "det_trt_cache.trt");
-  // cls_option.SetTrtCacheFile(cls_model_dir + sep + "cls_trt_cache.trt");
-  // rec_option.SetTrtCacheFile(rec_model_dir + sep + "rec_trt_cache.trt");
-
   auto det_model = fastdeploy::vision::ocr::DBDetector(det_model_file, det_params_file, det_option);
   auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
   auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
+
+  // Users could enable static shape infer for rec model when deploy PP-OCR on hardware 
+  // which can not support dynamic shape infer well, like Huawei Ascend series. 
+  rec_model.GetPreprocessor().SetStaticShapeInfer(true);
 
   assert(det_model.Initialized());
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
 
   // The classification model is optional, so the PP-OCR can also be connected in series as follows
-  // auto ppocr_v3 = fastdeploy::pipeline::PPOCRv3(&det_model, &rec_model);
-  auto ppocr_v3 = fastdeploy::pipeline::PPOCRv3(&det_model, &cls_model, &rec_model);
-  
-  // Set inference batch size for cls model and rec model, the value could be -1 and 1 to positive infinity.
-  // When inference batch size is set to -1, it means that the inference batch size 
-  // of the cls and rec models will be the same as the number of boxes detected by the det model. 
-  ppocr_v3.SetClsBatchSize(cls_batch_size);
-  ppocr_v3.SetRecBatchSize(rec_batch_size); 
+  // auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &rec_model);
+  auto ppocr_v2 = fastdeploy::pipeline::PPOCRv2(&det_model, &cls_model, &rec_model);
 
-  if(!ppocr_v3.Initialized()){
+  // When users enable static shape infer for rec model, the batch size of cls and rec model must to be set to 1.
+  ppocr_v2.SetClsBatchSize(1);
+  ppocr_v2.SetRecBatchSize(1); 
+
+  if(!ppocr_v2.Initialized()){
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
     return;
   }
 
   auto im = cv::imread(image_file);
-  auto im_bak = im.clone();
   
   fastdeploy::vision::OCRResult result;
-  if (!ppocr_v3.Predict(&im, &result)) {
+  if (!ppocr_v2.Predict(im, &result)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
 
   std::cout << result.Str() << std::endl;
 
-  auto vis_im = fastdeploy::vision::VisOcr(im_bak, result);
+  auto vis_im = fastdeploy::vision::VisOcr(im, result);
   cv::imwrite("vis_result.jpg", vis_im);
   std::cout << "Visualized result saved in ./vis_result.jpg" << std::endl;
 }
@@ -96,12 +78,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Usage: infer_demo path/to/det_model path/to/cls_model "
                  "path/to/rec_model path/to/rec_label_file path/to/image "
                  "run_option, "
-                 "e.g ./infer_demo ./ch_PP-OCRv3_det_infer "
-                 "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv3_rec_infer "
+                 "e.g ./infer_demo ./ch_PP-OCRv2_det_infer "
+                 "./ch_ppocr_mobile_v2.0_cls_infer ./ch_PP-OCRv2_rec_infer "
                  "./ppocr_keys_v1.txt ./12.jpg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with gpu and use Paddle-TRT; 4: run with kunlunxin."
+                 "with ascend."
               << std::endl;
     return -1;
   }
@@ -112,17 +94,7 @@ int main(int argc, char* argv[]) {
   if (flag == 0) {
     option.UseCpu(); 
   } else if (flag == 1) {
-    option.UseGpu();
-  } else if (flag == 2) {
-    option.UseGpu();
-    option.UseTrtBackend();
-  } else if (flag == 3) {
-    option.UseGpu();
-    option.UseTrtBackend();
-    option.EnablePaddleTrtCollectShape();
-    option.EnablePaddleToTrt();
-  } else if (flag == 4) {
-    option.UseKunlunXin();
+    option.UseAscend();
   }
 
   std::string det_model_dir = argv[1];
