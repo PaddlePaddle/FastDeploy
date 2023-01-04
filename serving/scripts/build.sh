@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 WITH_GPU=${1:-ON}
+docker_name=${2:-build_fd}
 
 if [ $WITH_GPU == "ON" ]; then
 
@@ -30,7 +31,7 @@ if [ ! -d "./TensorRT-8.4.1.5/" ]; then
     rm -rf TensorRT-8.4.1.5.Linux.x86_64-gnu.cuda-11.6.cudnn8.4.tar.gz
 fi
 
-nvidia-docker run -i --rm --name build_fd \
+nvidia-docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
@@ -68,7 +69,7 @@ else
 
 echo "start build FD CPU library"
 
-docker run -i --rm --name build_fd \
+docker run -i --rm --name ${docker_name} \
            -v`pwd`/..:/workspace/fastdeploy \
            -e "http_proxy=${http_proxy}" \
            -e "https_proxy=${https_proxy}" \
