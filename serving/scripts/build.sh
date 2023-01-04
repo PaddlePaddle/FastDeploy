@@ -12,8 +12,37 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-WITH_GPU=${1:-ON}
-docker_name=${2:-build_fd}
+
+ARGS=`getopt -a -o w:n:h:hs -l WITH_GPU:,docker_name:,http_proxy:,https_proxy: -- "$@"` 
+
+eval set -- "${ARGS}" 
+echo "parse start"
+
+while true  
+do  
+        case "$1" in 
+        -w|--WITH_GPU)  
+                WITH_GPU="$2" 
+                shift;;
+        -n|--docker_name)  
+                docker_name="$2" 
+                shift;;
+        -h|--http_proxy)  
+                http_proxy="$2" 
+                shift;;
+        -hs|--https_proxy)  
+                https_proxy="$2" 
+                shift;;
+        --)  
+                shift
+                break;;  
+        esac
+shift
+done 
+
+if [ -z $WITH_GPU ];then
+    WITH_GPU="ON"
+fi
 
 if [ $WITH_GPU == "ON" ]; then
 
