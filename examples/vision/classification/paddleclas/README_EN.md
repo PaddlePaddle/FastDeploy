@@ -21,7 +21,7 @@ Now FastDeploy supports the deployment of the following models
 
 ## Prepare PaddleClas Deployment Model
 
-For PaddleClas model export, refer to [模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)  
+For PaddleClas model export, refer to [Model Export](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)  
 
 Attention：The model exported by PaddleClas contains two files, including `inference.pdmodel` and `inference.pdiparams`. However, it is necessary to prepare the generic [inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml) file provided by PaddleClas to meet the requirements of deployment. FastDeploy will obtain from the yaml file the preprocessing information required during inference. FastDeploy will get the preprocessing information needed by the model from the yaml file. Developers can directly download this file. But they need to modify the configuration parameters in the yaml file based on personalized needs. Refer to the configuration information in the infer section of the PaddleClas model training [config.](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)
 
