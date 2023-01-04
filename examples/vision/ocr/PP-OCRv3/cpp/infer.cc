@@ -56,10 +56,6 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto cls_model = fastdeploy::vision::ocr::Classifier(cls_model_file, cls_params_file, cls_option);
   auto rec_model = fastdeploy::vision::ocr::Recognizer(rec_model_file, rec_params_file, rec_label_file, rec_option);
 
-  // Users could enable static shape infer for rec model when deploy PP-OCR on hardware 
-  // which can not support dynamic shape infer well, like Huawei Ascend series. 
-  // rec_model.GetPreprocessor().SetStaticShapeInfer(true);
-
   assert(det_model.Initialized());
   assert(cls_model.Initialized());
   assert(rec_model.Initialized());
@@ -71,9 +67,6 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   // Set inference batch size for cls model and rec model, the value could be -1 and 1 to positive infinity.
   // When inference batch size is set to -1, it means that the inference batch size 
   // of the cls and rec models will be the same as the number of boxes detected by the det model. 
-  // When users enable static shape infer for rec model, the batch size of cls and rec model needs to be set to 1.
-  // ppocr_v3.SetClsBatchSize(1);
-  // ppocr_v3.SetRecBatchSize(1); 
   ppocr_v3.SetClsBatchSize(cls_batch_size);
   ppocr_v3.SetRecBatchSize(rec_batch_size); 
 
@@ -130,8 +123,6 @@ int main(int argc, char* argv[]) {
     option.EnablePaddleToTrt();
   } else if (flag == 4) {
     option.UseKunlunXin();
-  } else if (flag == 5) {
-    option.UseAscend();
   }
 
   std::string det_model_dir = argv[1];

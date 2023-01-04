@@ -31,6 +31,10 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 # 华为昇腾推理
 ./infer_paddle_model_demo yolov7_infer 000000014439.jpg 3
 ```
+
+如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前初始化部署环境:
+- [如何使用华为昇腾NPU部署](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
+
 如果想要验证ONNX模型的推理，可以参考如下命令：
 ```bash
 #下载官方转换好的yolov7 ONNX模型文件和测试图片
