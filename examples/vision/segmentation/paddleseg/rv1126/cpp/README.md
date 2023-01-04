@@ -5,12 +5,14 @@ English | [简体中文](README_CN.md)
 
 ## Deployment Preparations
 ### FastDeploy Cross-compile Environment Preparations
-- 1. For the software and hardware environment, and the cross-compile environment, please refer to [Preparations for FastDeploy Cross-compile environment](../../../../../../docs/en/build_and_install/rv1126.md#Cross-compilation-environment-construction).  
+1. For the software and hardware environment, and the cross-compile environment, please refer to [Preparations for FastDeploy Cross-compile environment](../../../../../../docs/en/build_and_install/rv1126.md#Cross-compilation-environment-construction).  
 
 ### Model Preparations
-- 1. You can directly use the quantized model provided by FastDeploy for deployment.
-- 2. You can use one-click automatical compression tool provided by FastDeploy to quantize model by yourself, and use the generated quantized model for deployment.(Note: The quantized classification model still needs the deploy.yaml file in the FP32 model folder. Self-quantized model folder does not contain this yaml file, you can copy it from the FP32 model folder to the quantized model folder.)
-- For more information, please refer to [Model Quantization](../../quantize/README.md).
+1. You can directly use the quantized model provided by FastDeploy for deployment.
+2. You can use one-click automatical compression tool provided by FastDeploy to quantize model by yourself, and use the generated quantized model for deployment.(Note: The quantized classification model still needs the deploy.yaml file in the FP32 model folder. Self-quantized model folder does not contain this yaml file, you can copy it from the FP32 model folder to the quantized model folder.)
+3. The model requires heterogeneous computation. Please refer to: [Heterogeneous Computation](./../../../../../../docs/en/faq/heterogeneous_computing_on_timvx_npu.md). Since the model is already provided, you can test the heterogeneous file we provide first to verify whether the accuracy meets the requirements.
+
+For more information, please refer to [Model Quantization](../../quantize/README.md).
 
 ## Deploying the Quantized PP-LiteSeg Segmentation model on RV1126
 Please follow these steps to complete the deployment of the PP-LiteSeg quantization model on RV1126.
