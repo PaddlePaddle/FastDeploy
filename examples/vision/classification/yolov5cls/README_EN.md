@@ -2,8 +2,8 @@ English | [简体中文](README.md)
 
 # YOLOv5Cls Ready-to-deploy Model
 
-- YOLOv5Cls v6.2 model deployment is based on [YOLOv5](https://github.com/ultralytics/yolov5/tree/v6.2) and [基于ImageNet的预训练模型](https://github.com/ultralytics/yolov5/releases/tag/v6.2)
-  - （1）The *-cls.pt model provided by [官方库](https://github.com/ultralytics/yolov5/releases/tag/v6.2) can export the ONNX file using `export.py` in [YOLOv5](https://github.com/ultralytics/yolov5), then deployment can be conducted；
+- YOLOv5Cls v6.2 model deployment is based on [YOLOv5](https://github.com/ultralytics/yolov5/tree/v6.2) and [Pre-trained Models on ImageNet](https://github.com/ultralytics/yolov5/releases/tag/v6.2)
+  - （1）The *-cls.pt model provided by [Official Repository](https://github.com/ultralytics/yolov5/releases/tag/v6.2) can export the ONNX file using `export.py` in [YOLOv5](https://github.com/ultralytics/yolov5), then deployment can be conducted；
   - （2）The YOLOv5Cls v6.2 Model trained by personal data should export the ONNX file using `export.py` in [YOLOv5](https://github.com/ultralytics/yolov5).
 
 
