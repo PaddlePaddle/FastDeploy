@@ -31,6 +31,8 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 2
 # 昆仑芯XPU推理
 ./infer_paddle_demo yolov5s_infer 000000014439.jpg 3
+# 华为昇腾推理
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 4
 ```
 
 上述的模型为 Paddle 模型的推理，如果想要做 ONNX 模型的推理，可以按照如下步骤：
