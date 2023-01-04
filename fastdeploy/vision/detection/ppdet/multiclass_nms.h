@@ -18,8 +18,9 @@
 #include <vector>
 
 namespace fastdeploy {
-namespace backend {
-struct MultiClassNMS {
+namespace vision {
+namespace detection {
+struct PaddleMultiClassNMS {
   int64_t background_label = -1;
   int64_t keep_top_k = -1;
   float nms_eta;
@@ -40,6 +41,6 @@ struct MultiClassNMS {
                const std::vector<int64_t>& boxes_dim,
                const std::vector<int64_t>& scores_dim);
 };
-}  // namespace backend
-
+}  // namespace detection
+}  // namespace vision
 }  // namespace fastdeploy

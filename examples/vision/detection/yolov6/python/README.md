@@ -22,6 +22,8 @@ python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --d
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device gpu
 # 昆仑芯XPU推理
 python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device kunlunxin
+# 华为昇腾推理
+python infer_paddle_model.py --model yolov6s_infer --image 000000014439.jpg  --device ascend
 ```
 如果想要验证ONNX模型的推理，可以参考如下命令：
 ```bash

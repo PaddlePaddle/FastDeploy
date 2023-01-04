@@ -31,6 +31,9 @@ def build_option(args):
     if args.device.lower() == "gpu":
         option.use_gpu()
 
+    if args.device.lower() == "ascend":
+        option.use_ascend()
+
     if args.use_trt:
         option.use_trt_backend()
         option.set_trt_input_shape("images", [1, 3, 640, 640])
