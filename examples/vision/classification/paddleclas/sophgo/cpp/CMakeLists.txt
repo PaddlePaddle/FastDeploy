@@ -14,26 +14,4 @@ include_directories(${FastDeploy_INCLUDE_DIRS})
 
 add_executable(infer_demo ${PROJECT_SOURCE_DIR}/infer.cc)
 # 添加FastDeploy库依赖
-message(STATUS @@)
-message(STATUS ${FASTDEPLOY_LIBS})
 target_link_libraries(infer_demo ${FASTDEPLOY_LIBS})
-
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build/install)
-
-install(TARGETS infer_demo DESTINATION ./)
-
-install(DIRECTORY models DESTINATION ./)
-install(DIRECTORY images DESTINATION ./)
-# install(DIRECTORY run_with_adb.sh DESTINATION ./)
-
-file(GLOB FASTDEPLOY_LIBS ${FASTDEPLOY_INSTALL_DIR}/lib/*)
-install(PROGRAMS ${FASTDEPLOY_LIBS} DESTINATION lib)
-
-file(GLOB OPENCV_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/opencv/lib/lib*)
-install(PROGRAMS ${OPENCV_LIBS} DESTINATION lib)
-
-file(GLOB PADDLELITE_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddlelite/lib/lib*)
-install(PROGRAMS ${PADDLELITE_LIBS} DESTINATION lib)
-
-file(GLOB TIMVX_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddlelite/lib/verisilicon_timvx/*)
-install(PROGRAMS ${TIMVX_LIBS} DESTINATION lib)

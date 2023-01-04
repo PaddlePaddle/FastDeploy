@@ -1,4 +1,4 @@
-# PaddleDetection SOPHGO部署示例
+# YOLOv5 SOPHGO部署示例
 
 ## 支持模型列表
 

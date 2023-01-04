@@ -1,4 +1,4 @@
-# PaddleDetection C++部署示例
+# YOLOv5 C++部署示例
 
 本目录下提供`infer.cc`快速完成yolov5s模型在SOPHGO BM1684x板子上加速部署的示例。
 
