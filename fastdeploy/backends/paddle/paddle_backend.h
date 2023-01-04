@@ -20,73 +20,14 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/backends/paddle/option.h"
 #ifdef ENABLE_PADDLE_FRONTEND
 #include "paddle2onnx/converter.h"
 #endif
 #include "fastdeploy/utils/unique_ptr.h"
 #include "paddle_inference_api.h"  // NOLINT
 
-#ifdef ENABLE_TRT_BACKEND
-#include "fastdeploy/backends/tensorrt/trt_backend.h"
-#endif
-
 namespace fastdeploy {
-
-struct IpuOption {
-  int ipu_device_num;
-  int ipu_micro_batch_size;
-  bool ipu_enable_pipelining;
-  int ipu_batches_per_step;
-  bool ipu_enable_fp16;
-  int ipu_replica_num;
-  float ipu_available_memory_proportion;
-  bool ipu_enable_half_partial;
-};
-
-struct PaddleBackendOption {
-  std::string model_file = "";   // Path of model file
-  std::string params_file = "";  // Path of parameters file, can be empty
-
-  std::string model_buffer_ = "";
-  std::string params_buffer_ = "";
-  size_t model_buffer_size_ = 0;
-  size_t params_buffer_size_ = 0;
-  bool model_from_memory_ = false;
-
-#ifdef WITH_GPU
-  bool use_gpu = true;
-#else
-  bool use_gpu = false;
-#endif
-  bool enable_mkldnn = true;
-
-  bool enable_log_info = false;
-
-  bool enable_trt = false;
-#ifdef ENABLE_TRT_BACKEND
-  TrtBackendOption trt_option;
-  bool collect_shape = false;
-  std::vector<std::string> trt_disabled_ops_{};
-#endif
-
-#ifdef WITH_IPU
-  bool use_ipu = true;
-  IpuOption ipu_option;
-#else
-  bool use_ipu = false;
-#endif
-
-  int mkldnn_cache_size = 1;
-  int cpu_thread_num = 8;
-  // initialize memory size(MB) for GPU
-  int gpu_mem_init_size = 100;
-  // gpu device id
-  int gpu_id = 0;
-  bool enable_pinned_memory = false;
-  void* external_stream_ = nullptr;
-
-  std::vector<std::string> delete_pass_names = {};
-};
 
 // convert FD device to paddle place type
 paddle_infer::PlaceType ConvertFDDeviceToPlace(Device device);
@@ -132,7 +73,6 @@ class PaddleBackend : public BaseBackend {
   std::vector<TensorInfo> GetOutputInfos() override;
 
  private:
-#ifdef ENABLE_TRT_BACKEND
   void
   CollectShapeRun(paddle_infer::Predictor* predictor,
                   const std::map<std::string, std::vector<int>>& shape) const;
@@ -142,7 +82,6 @@ class PaddleBackend : public BaseBackend {
       std::map<std::string, std::vector<int>>* min_shape,
       std::map<std::string, std::vector<int>>* opt_shape) const;
   void SetTRTDynamicShapeToConfig(const PaddleBackendOption& option);
-#endif
   PaddleBackendOption option_;
   paddle_infer::Config config_;
   std::shared_ptr<paddle_infer::Predictor> predictor_;
