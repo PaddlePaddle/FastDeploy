@@ -23,32 +23,32 @@ namespace fastdeploy {
 std::string AtType2String(const at::ScalarType& dtype) {
   std::string out;
   switch (dtype) {
-    case at::kByte:
-      out = "at::kByte";
-      break;
-    case at::kChar:
-      out = "at::kChar";
-      break;
-    case at::kShort:
-      out = "at::kShort";
-      break;
-    case at::kInt:
-      out = "at::kInt";
-      break;
-    case at::kLong:
-      out = "at::kLong";
-      break;
-    case at::kHalf:
-      out = "at::kHalf";
-      break;
-    case at::kFloat:
-      out = "at::kFloat";
-      break;
-    case at::kDouble:
-      out = "at::kDouble";
-      break;
-    default:
-      out = "at::UNKNOWN";
+  case at::kByte:
+    out = "at::kByte";
+    break;
+  case at::kChar:
+    out = "at::kChar";
+    break;
+  case at::kShort:
+    out = "at::kShort";
+    break;
+  case at::kInt:
+    out = "at::kInt";
+    break;
+  case at::kLong:
+    out = "at::kLong";
+    break;
+  case at::kHalf:
+    out = "at::kHalf";
+    break;
+  case at::kFloat:
+    out = "at::kFloat";
+    break;
+  case at::kDouble:
+    out = "at::kDouble";
+    break;
+  default:
+    out = "at::UNKNOWN";
   }
   return out;
 }
@@ -129,9 +129,8 @@ at::Tensor CreatePorosValue(FDTensor& tensor, bool is_backend_cuda) {
              numel * sizeof(double));
     }
   } else {
-    FDASSERT(false,
-             "Unrecognized data type while calling "
-             "PorosBackend::CreatePorosValue().");
+    FDASSERT(false, "Unrecognized data type while calling "
+                    "PorosBackend::CreatePorosValue().");
   }
   return poros_value;
 }

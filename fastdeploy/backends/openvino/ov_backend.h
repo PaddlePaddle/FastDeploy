@@ -47,8 +47,7 @@ class OpenVINOBackend : public BaseBackend {
   InitFromOnnx(const std::string& model_file,
                const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const override;
