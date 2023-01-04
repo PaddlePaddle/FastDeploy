@@ -301,6 +301,11 @@ class RuntimeOption:
                    rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
         return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
 
+    def use_sophgo(self):
+        """Inference with SOPHGO TPU
+        """
+        return self._option.use_sophgo()
+
     def use_ascend(self):
         """Inference with Huawei Ascend NPU
         """
