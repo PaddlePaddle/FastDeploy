@@ -41,6 +41,7 @@ class FASTDEPLOY_DECL PicoDet : public PPDetBase {
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_kunlunxin_backends = {Backend::LITE};
     valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
     initialized = Initialize();
   }
 
