@@ -72,7 +72,6 @@ class FASTDEPLOY_DECL YOLOv5SegPostprocessor {
   int mask_nums_;
   // mask threshold
   float mask_threshold_;
-  std::vector<std::vector<float>> mask_embeddings_;
 };
 
 }  // namespace detection

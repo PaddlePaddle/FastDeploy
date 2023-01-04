@@ -35,6 +35,8 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
   results->resize(batch);
 
   for (size_t bs = 0; bs < batch; ++bs) {
+    // store mask information
+    std::vector<std::vector<float>> mask_embeddings;
     (*results)[bs].Clear();
     if (multi_label_) {
       (*results)[bs].Reserve(tensors[0].shape[1] * (tensors[0].shape[2] - mask_nums_ - 5));
@@ -73,7 +75,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
               data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
           (*results)[bs].label_ids.push_back(label_id);
           (*results)[bs].scores.push_back(confidence);
-          mask_embeddings_.push_back(mask_embedding);
+          mask_embeddings.push_back(mask_embedding);
         }
       } else {
         const float* max_class_score =
@@ -92,7 +94,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
             data[s + 1] + data[s + 3] / 2.0f + label_id * max_wh_});
         (*results)[bs].label_ids.push_back(label_id);
         (*results)[bs].scores.push_back(confidence);
-        mask_embeddings_.push_back(mask_embedding);
+        mask_embeddings.push_back(mask_embedding);
       }
     }
 
@@ -113,7 +115,7 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
     // vector to cv::Mat for Matmul
     cv::Mat mask_proposals;
     for (size_t i = 0; i < index.size(); ++i) {
-      mask_proposals.push_back(cv::Mat(mask_embeddings_[index[i]]).t());
+      mask_proposals.push_back(cv::Mat(mask_embeddings[index[i]]).t());
     }
     cv::Mat matmul_result = (mask_proposals * mask_proto).t();
     cv::Mat masks = matmul_result.reshape((*results)[bs].boxes.size(),
@@ -166,10 +168,10 @@ bool YOLOv5SegPostprocessor::Run(const std::vector<FDTensor>& tensors, std::vect
       dest = dest(roi);
       cv::resize(dest, mask, cv::Size(ipt_w, ipt_h), 0, 0, cv::INTER_LINEAR);
       // crop mask for source img
-      int x1_src = static_cast<int>((*results)[bs].boxes[i][0]);
-      int y1_src = static_cast<int>((*results)[bs].boxes[i][1]);
-      int x2_src = static_cast<int>((*results)[bs].boxes[i][2]);
-      int y2_src = static_cast<int>((*results)[bs].boxes[i][3]);
+      int x1_src = static_cast<int>(round((*results)[bs].boxes[i][0]));
+      int y1_src = static_cast<int>(round((*results)[bs].boxes[i][1]));
+      int x2_src = static_cast<int>(round((*results)[bs].boxes[i][2]));
+      int y2_src = static_cast<int>(round((*results)[bs].boxes[i][3]));
       cv::Rect roi_src(x1_src, y1_src, x2_src - x1_src, y2_src - y1_src);
       mask = mask(roi_src);
       mask = mask > mask_threshold_;
