@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # AnimeGAN C++部署示例
 
 本目录下提供`infer.cc`快速完成AnimeGAN在CPU/GPU部署的示例。
