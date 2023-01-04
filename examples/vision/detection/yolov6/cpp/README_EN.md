@@ -30,9 +30,15 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_paddle_demo yolov6s_infer 000000014439.jpg 1
 # KunlunXin XPU inference
 ./infer_paddle_demo yolov6s_infer 000000014439.jpg 2
+# HUAWEI Ascend inference
+./infer_paddle_demo yolov6s_infer 000000014439.jpg 3
 ```
 
-If you want to verify the inference of ONNX models, refer to the following command:
+If you use HUAWEI Ascend NPU deployment, refer to the following document to initialize deployment environment:
+- [How to use HUAWEI Ascend NPU deployment](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
+
+
+If you want to verify the inference of ONNX models, refer to the following commands:
 ```bash
 # Download the official converted YOLOv6 ONNX model files and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx
@@ -42,7 +48,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 ./infer_demo yolov6s.onnx 000000014439.jpg 0
 # GPU inference
 ./infer_demo yolov6s.onnx 000000014439.jpg 1
-# TensorRT inference on GPU
+# TensorRT inference on GPU 
 ./infer_demo yolov6s.onnx 000000014439.jpg 2
 ```
 
