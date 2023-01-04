@@ -136,6 +136,30 @@ void BindPPDet(pybind11::module& m) {
 
   pybind11::class_<vision::detection::RTMDet, vision::detection::PPDetBase>(m, "RTMDet")
       .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
-                          ModelFormat>());                               
+                          ModelFormat>());    
+  pybind11::class_<vision::detection::CascadeRCNN, vision::detection::PPDetBase>(m, "CascadeRCNN")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());    
+  pybind11::class_<vision::detection::PSSDet, vision::detection::PPDetBase>(m, "PSSDet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::RetinaNet, vision::detection::PPDetBase>(m, "RetinaNet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::PPYOLOESOD, vision::detection::PPDetBase>(m, "PPYOLOESOD")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::FCOS, vision::detection::PPDetBase>(m, "FCOS")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::TTFNet, vision::detection::PPDetBase>(m, "TTFNet")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::TOOD, vision::detection::PPDetBase>(m, "TOOD")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());
+  pybind11::class_<vision::detection::GFL, vision::detection::PPDetBase>(m, "GFL")
+      .def(pybind11::init<std::string, std::string, std::string, RuntimeOption,
+                          ModelFormat>());                                                                                                                                                                                              
 }
 }  // namespace fastdeploy
