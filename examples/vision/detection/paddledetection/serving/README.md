@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleDetection 服务化部署示例
 
 本文档以PP-YOLOE模型(ppyoloe_crn_l_300e_coco)为例，进行详细介绍。其他PaddleDetection模型都已支持服务化部署，只需将下述命令中的模型和配置名字修改成要部署模型的名字。
