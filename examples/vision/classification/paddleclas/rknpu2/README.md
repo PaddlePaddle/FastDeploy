@@ -1,3 +1,4 @@
+[English](README_EN.md) | 简体中文
 # PaddleClas 模型RKNPU2部署
 
 ## 转换模型
