@@ -5,7 +5,7 @@ FastDeploy supports the deployment of quantification models and provides a conve
 
 ## FastDeploy one-click auto-compression tool
 FastDeploy provides a one-click auto-compression tool that allows users to quantize models by simply entering a configuration file.
-Refer to [One-click auto-compression tool](../../../../../tools/common_tools/auto_compression/) for details. 
+Refer to [one-click auto-compression tool](../../../../../tools/common_tools/auto_compression/) for details. 
 Attention:The quantized classification model still requires the inference_cls.yaml file in the FP32 model folder. The model folder after personal quantification does not contain this yaml file. But users can copy this yaml file from the FP32 model folder to your quantized model folder.
 
 ## Download the quantized PaddleClas model
@@ -13,7 +13,7 @@ Users can also directly download the quantized models in the table below.
 
 Benchmark table description:
 - Runtime latency: model’s inference latency on multiple Runtimes, including CPU->GPU data copy, GPU inference, and GPU->CPU data copy time. It does not include the pre and post processing time of the model.
-- End-to-end latency: model’s latency in the actual inference scenario, including the pre and post processing time of the model.
+- End2End latency: model’s latency in the actual inference scenario, including the pre and post processing time of the model.
 - Measured latency: The average latency after 1000 times of inference in milliseconds.
 - INT8 + FP16: Enable FP16 inference for Runtime while inferring the INT8 quantification model
 - INT8 + FP16 + PM: Use Pinned Memory to speed up the GPU->CPU data copy while inferring the INT8 quantization model with FP16 turned on.
