@@ -5,7 +5,7 @@
 
 ## 环境准备
 
-1. 在本地环境安装好 Android Studio 工具，详细安装方法请见[Android Stuido 官网](https://developer.android.com/studio)。
+1. 在本地环境安装好 Android Studio 工具，详细安装方法请见[Android Studio 官网](https://developer.android.com/studio)。
 2. 准备一部 Android 手机，并开启 USB 调试模式。开启方法: `手机设置 -> 查找开发者选项 -> 打开开发者选项和 USB 调试模式`
 
 ## 部署步骤
@@ -148,6 +148,6 @@ model.init(modelFile, paramFile, configFile, option);
 ```  
 
 ## 更多参考文档
-如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API感兴趣，可以参考以下内容:  
+如果您想知道更多的FastDeploy Java API文档以及如何通过JNI来接入FastDeploy C++ API，可以参考以下内容:  
 - [在 Android 中使用 FastDeploy Java SDK](../../../../../java/android/)
 - [在 Android 中使用 FastDeploy C++ SDK](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
