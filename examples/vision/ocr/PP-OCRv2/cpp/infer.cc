@@ -65,9 +65,9 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
 
   // Set inference batch size for cls model and rec model, the value could be -1 and 1 to positive infinity.
   // When inference batch size is set to -1, it means that the inference batch size 
-  // of the cls and rec models will be the same as the number of boxes detected by the det model.  
+  // of the cls and rec models will be the same as the number of boxes detected by the det model. 
   ppocr_v2.SetClsBatchSize(cls_batch_size);
-  ppocr_v2.SetRecBatchSize(rec_batch_size);
+  ppocr_v2.SetRecBatchSize(rec_batch_size); 
 
   if(!ppocr_v2.Initialized()){
     std::cerr << "Failed to initialize PP-OCR." << std::endl;

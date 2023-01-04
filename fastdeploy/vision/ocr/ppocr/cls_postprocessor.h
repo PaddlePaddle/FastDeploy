@@ -39,6 +39,12 @@ class FASTDEPLOY_DECL ClassifierPostprocessor {
           std::vector<int32_t>* cls_labels, std::vector<float>* cls_scores,
           size_t start_index, size_t total_size);
 
+  /// Set threshold for the classification postprocess, default is 0.9
+  void SetClsThresh(float cls_thresh) { cls_thresh_ = cls_thresh; }
+
+  /// Get threshold value of the classification postprocess.
+  float GetClsThresh() const { return cls_thresh_; }
+
   float cls_thresh_ = 0.9;
 };
 
