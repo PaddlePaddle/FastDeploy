@@ -44,6 +44,10 @@ if [ -z $WITH_GPU ];then
     WITH_GPU="ON"
 fi
 
+if [ -z $docker_name ];then
+    docker_name="build_fd"
+fi
+
 if [ $WITH_GPU == "ON" ]; then
 
 echo "start build FD GPU library"
