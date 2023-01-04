@@ -1,4 +1,4 @@
-
+[English](README_EN.md) | 简体中文
 # MobileNet 前端部署示例
 
 本节介绍部署PaddleClas的图像分类mobilenet模型在浏览器中运行，以及@paddle-js-models/mobilenet npm包中的js接口。
