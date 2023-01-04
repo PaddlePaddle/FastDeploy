@@ -114,6 +114,10 @@ else()
     BUILD_BYPRODUCTS ${PADDLELITE_LIB})
 endif()  
 
+if(UNIX AND (NOT APPLE) AND (NOT ANDROID))
+  add_custom_target(patchelf_paddle_lite ALL COMMAND  bash -c "PATCHELF_EXE=${PATCHELF_EXE} python ${PROJECT_SOURCE_DIR}/scripts/patch_paddle_lite.py ${PADDLELITE_INSTALL_DIR}/lib/" DEPENDS ${LIBRARY_NAME})
+endif()
+
 add_library(external_paddle_lite STATIC IMPORTED GLOBAL)
 set_property(TARGET external_paddle_lite PROPERTY IMPORTED_LOCATION ${PADDLELITE_LIB})
 add_dependencies(external_paddle_lite ${PADDLELITE_PROJECT})

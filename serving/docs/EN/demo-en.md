@@ -1,6 +1,6 @@
 English | [中文](../zh_CN/demo.md)
 # Service-oriented Deployment Demo
-We take the YOLOv5 model as an simple example, and introduce how to execute a service-oriented deployment. For the detailed code, please refer to [Service-oriented Deployment of YOLOv5](../../../examples/vision/detection/yolov5/serving). It is recommend that you read the following documents before reading this article.
+We take the YOLOv5 model as an simple example, and introduce how to execute a service-oriented deployment. For the detailed code, please refer to [Service-oriented Deployment of YOLOv5](../../../examples/vision/detection/yolov5/serving). It is recommend that you read the following documents before reading this document.
 - [Service-oriented Model Catalog Description](model_repository-en.md) (how to prepare the model catalog)
 - [Service-oriented Deployment Configuration Description](model_configuration-en.md) (the configuration option for runtime)
 

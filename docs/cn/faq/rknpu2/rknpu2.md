@@ -23,4 +23,4 @@ ONNX模型不能直接调用RK芯片中的NPU进行运算，需要把ONNX模型�
 | Segmentation   | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md) | portrait(int8)           | 133/43             |
 | Segmentation   | [PP-HumanSegV2Lite](../../../../examples/vision/segmentation/paddleseg/rknpu2/README.md) | human(int8)              | 133/43             |
 | Face Detection | [SCRFD](../../../../examples/vision/facedet/scrfd/rknpu2/README.md)                      | SCRFD-2.5G-kps-640(int8) | 108/42             |
-| Classification | [ResNet](../../../../examples/vision/classification/paddleclas/rknpu2/README.md)         | ResNet50_vd              | -/92               |
+| Classification | [ResNet](../../../../examples/vision/classification/paddleclas/rknpu2/README.md)         | ResNet50_vd              | -/33               |
