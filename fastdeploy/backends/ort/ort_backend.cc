@@ -16,8 +16,8 @@
 
 #include <memory>
 
-#include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/backends/ort/ops/adaptive_pool2d.h"
+#include "fastdeploy/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/backends/ort/utils.h"
 #include "fastdeploy/core/float16.h"
 #include "fastdeploy/utils/utils.h"
@@ -64,7 +64,7 @@ void OrtBackend::BuildOption(const OrtBackendOption& option) {
     } else {
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = option.gpu_id;
-      if(option.external_stream_) {
+      if (option.external_stream_) {
         cuda_options.has_user_compute_stream = 1;
         cuda_options.user_compute_stream = option.external_stream_;
       }
@@ -91,11 +91,11 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   strcpy(ops[0].export_op_name, "MultiClassNMS");
   strcpy(ops[1].op_name, "pool2d");
   strcpy(ops[1].export_op_name, "AdaptivePool2d");
-  
+
   if (!paddle2onnx::Export(model_file.c_str(), params_file.c_str(),
                            &model_content_ptr, &model_content_size, 11, true,
-                           verbose, true, true, true, ops.data(),
-                           2, "onnxruntime", nullptr, 0, "", &save_external)) {
+                           verbose, true, true, true, ops.data(), 2,
+                           "onnxruntime", nullptr, 0, "", &save_external)) {
     FDERROR << "Error occured while export PaddlePaddle to ONNX format."
             << std::endl;
     return false;
@@ -105,11 +105,11 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
                                model_content_ptr + model_content_size);
   delete[] model_content_ptr;
   model_content_ptr = nullptr;
-  if(save_external){
+  if (save_external) {
     std::string model_file_name = "model.onnx";
     std::fstream f(model_file_name, std::ios::out);
     FDASSERT(f.is_open(), "Can not open file: %s to save model.",
-                        model_file_name.c_str());
+             model_file_name.c_str());
     f << onnx_model_proto;
     f.close();
     return InitFromOnnx(model_file_name, option, false);
@@ -182,7 +182,7 @@ bool OrtBackend::InitFromOnnx(const std::string& model_file,
 }
 
 void OrtBackend::OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
-                           const std::string& name, bool copy_to_fd) {
+                                    const std::string& name, bool copy_to_fd) {
   const auto info = value.GetTensorTypeAndShapeInfo();
   const auto data_type = info.GetElementType();
   size_t numel = info.GetElementCount();
@@ -216,15 +216,13 @@ void OrtBackend::OrtValueToFDTensor(const Ort::Value& value, FDTensor* tensor,
     memcpy(tensor->MutableData(), value_ptr, numel);
   } else {
     tensor->name = name;
-    tensor->SetExternalData(
-      shape, dtype,
-      const_cast<void*>(value_ptr), Device::CPU);
+    tensor->SetExternalData(shape, dtype, const_cast<void*>(value_ptr),
+                            Device::CPU);
   }
 }
 
 bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
-                       std::vector<FDTensor>* outputs,
-                       bool copy_to_fd) {
+                       std::vector<FDTensor>* outputs, bool copy_to_fd) {
   if (inputs.size() != inputs_desc_.size()) {
     FDERROR << "[OrtBackend] Size of the inputs(" << inputs.size()
             << ") should keep same with the inputs of this model("
@@ -256,8 +254,8 @@ bool OrtBackend::Infer(std::vector<FDTensor>& inputs,
   std::vector<Ort::Value> ort_outputs = binding_->GetOutputValues();
   outputs->resize(ort_outputs.size());
   for (size_t i = 0; i < ort_outputs.size(); ++i) {
-    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]),
-                       outputs_desc_[i].name, copy_to_fd);
+    OrtValueToFDTensor(ort_outputs[i], &((*outputs)[i]), outputs_desc_[i].name,
+                       copy_to_fd);
   }
 
   return true;
@@ -310,11 +308,13 @@ void OrtBackend::InitCustomOperators() {
   if (custom_operators_.size() == 0) {
     MultiClassNmsOp* multiclass_nms = new MultiClassNmsOp{};
     custom_operators_.push_back(multiclass_nms);
-    if(option_.use_gpu){
-      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CUDAExecutionProvider"};
+    if (option_.use_gpu) {
+      AdaptivePool2dOp* adaptive_pool2d =
+          new AdaptivePool2dOp{"CUDAExecutionProvider"};
       custom_operators_.push_back(adaptive_pool2d);
-    }else{
-      AdaptivePool2dOp* adaptive_pool2d = new AdaptivePool2dOp{"CPUExecutionProvider"};
+    } else {
+      AdaptivePool2dOp* adaptive_pool2d =
+          new AdaptivePool2dOp{"CPUExecutionProvider"};
       custom_operators_.push_back(adaptive_pool2d);
     }
   }

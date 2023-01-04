@@ -3,7 +3,8 @@
 
 # Linux上C++部署
 
-1. 编译完成运行，提示找不到.so文件
+1. 编译完成运行，提示找不到.so文件 "cannot open shared object file: No such file or directory"
+
 
 在执行二进制文件时，需要能够在环境变量中找到FastDeploy相关的库文件。FastDeploy提供了辅助脚本来帮助完成。
 

@@ -58,7 +58,7 @@ namespace fastdeploy {
 struct TrtValueInfo {
   std::string name;
   std::vector<int> shape;
-  nvinfer1::DataType dtype;  // dtype of TRT model
+  nvinfer1::DataType dtype;   // dtype of TRT model
   FDDataType original_dtype;  // dtype of original ONNX/Paddle model
 };
 
@@ -97,8 +97,7 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const { return inputs_desc_.size(); }
@@ -107,7 +106,7 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
-  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                      int device_id = -1) override;
 
   ~TrtBackend() {

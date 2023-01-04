@@ -40,16 +40,24 @@ if(WIN32)
       CACHE FILEPATH "paddle_inference compile library." FORCE)
   set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/mkldnn.lib")
   set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5md.lib")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/paddle2onnx.lib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/onnxruntime.lib")
 elseif(APPLE)
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.dylib"
       CACHE FILEPATH "paddle_inference compile library." FORCE)
+  set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
+  set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.dylib")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.dylib")
 else()
   set(PADDLEINFERENCE_COMPILE_LIB
       "${PADDLEINFERENCE_INSTALL_DIR}/paddle/lib/libpaddle_inference.so"
       CACHE FILEPATH "paddle_inference compile library." FORCE)
   set(DNNL_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mkldnn/lib/libdnnl.so.2")
   set(OMP_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/mklml/lib/libiomp5.so")
+  set(P2O_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/paddle2onnx/lib/libpaddle2onnx.so")
+  set(ORT_LIB "${PADDLEINFERENCE_INSTALL_DIR}/third_party/install/onnxruntime/lib/libonnxruntime.so")
 endif(WIN32)
 
 
@@ -59,10 +67,16 @@ if(PADDLEINFERENCE_DIRECTORY)
   endif()
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${PADDLEINFERENCE_DIRECTORY} to ${THIRD_PARTY_PATH}/install/paddle_inference ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
+  if(WIN32)
+    message(FATAL_ERROR "Define PADDLEINFERENCE_DIRECTORY is not supported on Windows platform.")
+  else()
+    execute_process(COMMAND mkdir -p ${THIRD_PARTY_PATH}/install)
+    execute_process(COMMAND cp -r ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
+    execute_process(COMMAND rm -rf ${THIRD_PARTY_PATH}/install/paddle_inference/paddle/lib/*.a)
+  endif()
 else()
   set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
-  set(PADDLEINFERENCE_VERSION "2.4-dev3")
+  set(PADDLEINFERENCE_VERSION "2.4-dev4")
   if(WIN32)
     if (WITH_GPU)
       set(PADDLEINFERENCE_FILE "paddle_inference-win-x64-gpu-trt-${PADDLEINFERENCE_VERSION}.zip")
@@ -116,16 +130,23 @@ set_property(TARGET external_paddle_inference PROPERTY IMPORTED_LOCATION
                                          ${PADDLEINFERENCE_COMPILE_LIB})
 add_dependencies(external_paddle_inference ${PADDLEINFERENCE_PROJECT})
 
-if (NOT APPLE)
-  # no third parties libs(mkldnn and omp) need to 
-  # link into paddle_inference on MacOS OSX.
-  add_library(external_dnnl STATIC IMPORTED GLOBAL)
-  set_property(TARGET external_dnnl PROPERTY IMPORTED_LOCATION
-                                          ${DNNL_LIB})
-  add_dependencies(external_dnnl ${PADDLEINFERENCE_PROJECT})
 
-  add_library(external_omp STATIC IMPORTED GLOBAL)
-  set_property(TARGET external_omp PROPERTY IMPORTED_LOCATION
-                                          ${OMP_LIB})
-  add_dependencies(external_omp ${PADDLEINFERENCE_PROJECT})
-endif()
+add_library(external_p2o STATIC IMPORTED GLOBAL)
+set_property(TARGET external_p2o PROPERTY IMPORTED_LOCATION
+        ${P2O_LIB})
+add_dependencies(external_p2o ${PADDLEINFERENCE_PROJECT})
+
+add_library(external_ort STATIC IMPORTED GLOBAL)
+set_property(TARGET external_ort PROPERTY IMPORTED_LOCATION
+        ${ORT_LIB})
+add_dependencies(external_ort ${PADDLEINFERENCE_PROJECT})
+
+add_library(external_dnnl STATIC IMPORTED GLOBAL)
+set_property(TARGET external_dnnl PROPERTY IMPORTED_LOCATION
+                                        ${DNNL_LIB})
+add_dependencies(external_dnnl ${PADDLEINFERENCE_PROJECT})
+
+add_library(external_omp STATIC IMPORTED GLOBAL)
+set_property(TARGET external_omp PROPERTY IMPORTED_LOCATION
+                                        ${OMP_LIB})
+add_dependencies(external_omp ${PADDLEINFERENCE_PROJECT})
