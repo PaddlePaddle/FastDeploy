@@ -1,31 +1,31 @@
-[English](README_EN.md) | 简体中文
-# YOLOv5Cls Python部署示例
+English | [简体中文](README_CN.md)
+# YOLOv5Cls Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation.
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成YOLOv5Cls在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+This directory provides examples that `infer.py` fast finishes the deployment of YOLOv5Cls on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
 ```bash
-#下载部署示例代码
+# Download deployment example code 
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/classification/yolov5cls/python/
 
-#下载 YOLOv5Cls 模型文件和测试图片
+# Download the YOLOv5Cls model file and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n-cls.onnx
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# CPU推理
+# CPU inference
 python infer.py --model yolov5n-cls.onnx --image ILSVRC2012_val_00000010.jpeg --device cpu --topk 1
-# GPU推理
+# GPU inference
 python infer.py --model yolov5n-cls.onnx --image ILSVRC2012_val_00000010.jpeg --device gpu --topk 1
-# GPU上使用TensorRT推理
+# TensorRT inference on GPU 
 python infer.py --model yolov5n-cls.onnx --image ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True
 ```
 
-运行完成后返回结果如下所示
+The result returned after running is as follows
 ```bash
 ClassifyResult(
 label_ids: 265,
@@ -33,42 +33,42 @@ scores: 0.196327,
 )
 ```
 
-## YOLOv5Cls Python接口
+## YOLOv5Cls Python Interface 
 
 ```python
 fastdeploy.vision.classification.YOLOv5Cls(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
-YOLOv5Cls模型加载和初始化，其中model_file为导出的ONNX模型格式
+YOLOv5Cls model loading and initialization, among which model_file is the exported ONNX model format
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
+> * **model_format**(ModelFormat): Model format. ONNX format by default
 
-### predict函数
+### predict Function
 
 > ```python
 > YOLOv5Cls.predict(image_data, topk=1)
 > ```
 >
-> 模型预测结口，输入图像直接输出分类topk结果。
+> Model prediction interface. Input images and output classification topk results directly.
 >
-> **参数**
+> **Parameter**
 >
-> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **topk**(int):返回预测概率最高的topk个分类结果，默认为1
+> > * **input_image**(np.ndarray): Input data in HWC or BGR format
+> > * **topk**(int): Return the topk classification results with the highest prediction probability. Default 1
 
-> **返回**
+> **Return**
 >
-> > 返回`fastdeploy.vision.ClassifyResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > Return `fastdeploy.vision.ClassifyResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of the structure.
 
 
-## 其它文档
+## Other Documents
 
-- [YOLOv5Cls 模型介绍](..)
-- [YOLOv5Cls C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [YOLOv5Cls Model Description](..)
+- [YOLOv5Cls C++ Deployment](../cpp)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
