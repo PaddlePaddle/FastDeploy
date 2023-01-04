@@ -24,6 +24,7 @@ void BindRuntime(pybind11::module& m) {
       .def("use_gpu", &RuntimeOption::UseGpu)
       .def("use_cpu", &RuntimeOption::UseCpu)
       .def("use_rknpu2", &RuntimeOption::UseRKNPU2)
+      .def("use_sophgo", &RuntimeOption::UseSophgo)
       .def("use_ascend", &RuntimeOption::UseAscend)
       .def("use_kunlunxin", &RuntimeOption::UseKunlunXin)
       .def("set_external_stream", &RuntimeOption::SetExternalStream)
@@ -241,19 +242,22 @@ void BindRuntime(pybind11::module& m) {
       .value("POROS", Backend::POROS)
       .value("PDINFER", Backend::PDINFER)
       .value("RKNPU2", Backend::RKNPU2)
+      .value("SOPHGOTPU", Backend::SOPHGOTPU)
       .value("LITE", Backend::LITE);
   pybind11::enum_<ModelFormat>(m, "ModelFormat", pybind11::arithmetic(),
                                "ModelFormat for inference.")
       .value("PADDLE", ModelFormat::PADDLE)
       .value("TORCHSCRIPT", ModelFormat::TORCHSCRIPT)
       .value("RKNN", ModelFormat::RKNN)
+      .value("SOPHGO", ModelFormat::SOPHGO)
       .value("ONNX", ModelFormat::ONNX);
   pybind11::enum_<Device>(m, "Device", pybind11::arithmetic(),
                           "Device for inference.")
       .value("CPU", Device::CPU)
       .value("GPU", Device::GPU)
       .value("IPU", Device::IPU)
-      .value("RKNPU", Device::RKNPU);
+      .value("RKNPU", Device::RKNPU)
+      .value("SOPHGOTPU", Device::SOPHGOTPUD);
 
   pybind11::enum_<FDDataType>(m, "FDDataType", pybind11::arithmetic(),
                               "Data type of FastDeploy.")
