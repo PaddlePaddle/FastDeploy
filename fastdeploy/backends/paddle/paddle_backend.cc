@@ -13,8 +13,10 @@
 // limitations under the License.
 
 #include "fastdeploy/backends/paddle/paddle_backend.h"
-#include "fastdeploy/utils/path.h"
+
 #include <sstream>
+
+#include "fastdeploy/utils/path.h"
 
 namespace fastdeploy {
 
@@ -26,7 +28,6 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.SetExecStream(option_.external_stream_);
     }
     if (option.enable_trt) {
-#ifdef ENABLE_TRT_BACKEND
       config_.Exp_DisableTensorRtOPs(option.trt_disabled_ops_);
       auto precision = paddle_infer::PrecisionType::kFloat32;
       if (option.trt_option.enable_fp16) {
@@ -46,11 +47,6 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
                                    option.trt_option.max_batch_size, 3,
                                    precision, use_static);
       SetTRTDynamicShapeToConfig(option);
-#else
-      FDWARNING << "The FastDeploy is not compiled with TensorRT backend, so "
-                   "will fallback to GPU with Paddle Inference Backend."
-                << std::endl;
-#endif
     }
   } else if (option.use_ipu) {
 #ifdef WITH_IPU
@@ -100,7 +96,8 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
     return false;
   }
 
-  // The input/output information get from predictor is not right, use PaddleReader instead now
+  // The input/output information get from predictor is not right, use
+  // PaddleReader instead now
   std::string contents;
 
   if (option.model_from_memory_) {
@@ -116,14 +113,14 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   config_.EnableMemoryOptim();
   BuildOption(option);
   auto reader = paddle2onnx::PaddleReader(contents.c_str(), contents.size());
-  // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to int8 mode
+  // If it's a quantized model, and use cpu with mkldnn, automaticaly switch to
+  // int8 mode
   if (reader.is_quantize_model) {
     if (option.use_gpu) {
       FDWARNING << "The loaded model is a quantized model, while inference on "
                    "GPU, please use TensorRT backend to get better performance."
                 << std::endl;
       if (option.enable_trt) {
-#ifdef ENABLE_TRT_BACKEND
         bool use_static = false;
         if (option.trt_option.serialize_file != "") {
           FDWARNING
@@ -139,7 +136,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
                                      paddle_infer::PrecisionType::kInt8,
                                      use_static, false);
         SetTRTDynamicShapeToConfig(option);
-#endif
       }
     }
     if (option.enable_mkldnn) {
@@ -163,14 +159,13 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
   outputs_desc_.resize(reader.num_outputs);
   for (int i = 0; i < reader.num_outputs; ++i) {
     std::string name(reader.outputs[i].name);
-    std::vector<int64_t> shape(reader.outputs[i].shape,
-                               reader.outputs[i].shape +
-                                   reader.outputs[i].rank);
+    std::vector<int64_t> shape(
+        reader.outputs[i].shape,
+        reader.outputs[i].shape + reader.outputs[i].rank);
     outputs_desc_[i].name = name;
     outputs_desc_[i].shape.assign(shape.begin(), shape.end());
     outputs_desc_[i].dtype = ReaderDataTypeToFD(reader.outputs[i].dtype);
   }
-#ifdef ENABLE_TRT_BACKEND
   if (option.collect_shape) {
     // Set the shape info file.
     std::string curr_model_dir = "./";
@@ -205,7 +200,6 @@ bool PaddleBackend::InitFromPaddle(const std::string& model_file,
            << " to set TensorRT dynamic shape." << std::endl;
     config_.EnableTunedTensorRtDynamicShape(shape_range_info, false);
   }
-#endif
   predictor_ = paddle_infer::CreatePredictor(config_);
   initialized_ = true;
   return true;
@@ -284,7 +278,6 @@ std::unique_ptr<BaseBackend> PaddleBackend::Clone(void* stream, int device_id) {
   return new_backend;
 }
 
-#ifdef ENABLE_TRT_BACKEND
 void PaddleBackend::SetTRTDynamicShapeToConfig(
     const PaddleBackendOption& option) {
   std::map<std::string, std::vector<int>> max_shape;
@@ -354,30 +347,30 @@ void PaddleBackend::CollectShapeRun(
     tensor->Reshape(shape_value);
     auto dtype = input_type[name];
     switch (dtype) {
-    case paddle_infer::DataType::FLOAT32: {
-      std::vector<float> input_data(shape_num, 1.0);
-      tensor->CopyFromCpu(input_data.data());
-      break;
-    }
-    case paddle_infer::DataType::INT32: {
-      std::vector<int> input_data(shape_num, 1);
-      tensor->CopyFromCpu(input_data.data());
-      break;
-    }
-    case paddle_infer::DataType::INT64: {
-      std::vector<int64_t> input_data(shape_num, 1);
-      tensor->CopyFromCpu(input_data.data());
-      break;
-    }
-    default: {
-      FDASSERT(false, "Input data Paddle backend only supports "
-                      "FP32/INT32/INT64 currently.");
-      break;
-    }
+      case paddle_infer::DataType::FLOAT32: {
+        std::vector<float> input_data(shape_num, 1.0);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      case paddle_infer::DataType::INT32: {
+        std::vector<int> input_data(shape_num, 1);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      case paddle_infer::DataType::INT64: {
+        std::vector<int64_t> input_data(shape_num, 1);
+        tensor->CopyFromCpu(input_data.data());
+        break;
+      }
+      default: {
+        FDASSERT(false,
+                 "Input data Paddle backend only supports "
+                 "FP32/INT32/INT64 currently.");
+        break;
+      }
     }
   }
   predictor->Run();
 }
-#endif
 
 }  // namespace fastdeploy

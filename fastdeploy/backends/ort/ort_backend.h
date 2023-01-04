@@ -21,6 +21,7 @@
 #include <map>
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/backends/ort/option.h"
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
 namespace fastdeploy {
@@ -29,27 +30,6 @@ struct OrtValueInfo {
   std::string name;
   std::vector<int64_t> shape;
   ONNXTensorElementDataType dtype;
-};
-
-struct OrtBackendOption {
-  // -1 means default
-  // 0: ORT_DISABLE_ALL
-  // 1: ORT_ENABLE_BASIC
-  // 2: ORT_ENABLE_EXTENDED
-  // 99: ORT_ENABLE_ALL (enable some custom optimizations e.g bert)
-  int graph_optimization_level = -1;
-  int intra_op_num_threads = -1;
-  int inter_op_num_threads = -1;
-  // 0: ORT_SEQUENTIAL
-  // 1: ORT_PARALLEL
-  int execution_mode = -1;
-  bool use_gpu = false;
-  int gpu_id = 0;
-  void* external_stream_ = nullptr;
-
-  // inside parameter, maybe remove next version
-  bool remove_multiclass_nms_ = false;
-  std::map<std::string, std::string> custom_op_info_;
 };
 
 class OrtBackend : public BaseBackend {
