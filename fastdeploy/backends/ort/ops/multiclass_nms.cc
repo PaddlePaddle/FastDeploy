@@ -15,9 +15,9 @@
 #ifndef NON_64_PLATFORM
 
 #include "fastdeploy/backends/ort/ops/multiclass_nms.h"
-#include <algorithm>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
+#include <algorithm>
 
 namespace fastdeploy {
 
