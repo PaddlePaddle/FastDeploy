@@ -1,7 +1,7 @@
 English | [简体中文](README.md)
 # Image Generation Model
 
-Now FastDeploy supports the deployment of the following style migration models in the PaddleHub pre-trained model repository
+Now FastDeploy supports the deployment of the following style transfer models in the PaddleHub pre-trained model repository
 
 | Model | Description | Model Format |
 | :--- | :--- | :------- |
