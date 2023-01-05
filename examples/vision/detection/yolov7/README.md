@@ -27,16 +27,14 @@ python models/export.py --grid --dynamic --end2end --weights PATH/TO/yolov7.pt
 ## 下载预训练ONNX模型
 
 为了方便开发者的测试，下面提供了YOLOv7导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx) | 141MB | 51.4% |
-| [YOLOv7x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x.onnx) | 273MB | 53.1% |
-| [YOLOv7-w6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6.onnx) | 269MB | 54.9% |
-| [YOLOv7-e6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6.onnx) | 372MB | 56.0% |
-| [YOLOv7-d6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6.onnx) | 511MB | 56.6% |
-| [YOLOv7-e6e](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e.onnx) | 579MB | 56.8% |
-
-
+| 模型                                                               | 大小    | 精度    | 备注 |
+|:---------------------------------------------------------------- |:----- |:----- | :----- |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx) | 141MB | 51.4% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [YOLOv7x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x.onnx) | 273MB | 53.1% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [YOLOv7-w6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6.onnx) | 269MB | 54.9% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [YOLOv7-e6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6.onnx) | 372MB | 56.0% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [YOLOv7-d6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6.onnx) | 511MB | 56.6% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [YOLOv7-e6e](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e.onnx) | 579MB | 56.8% | 此模型文件来源于[YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
 
 
 ## 详细部署文档
