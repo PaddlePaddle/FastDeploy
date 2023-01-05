@@ -1,20 +1,19 @@
-[English](README_EN.md) | 简体中文
+English | [简体中文](README_CN.md)
 
-# RKYOLO准备部署模型
+# RKYOLO Ready-to-deploy Model
 
-RKYOLO参考[rknn_model_zoo](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo)的代码
-对RKYOLO系列模型进行了封装，目前支持RKYOLOV5系列模型的部署。
+RKYOLO models are encapsulated with reference to the code of [rknn_model_zoo](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo). Now we support the deployment of RKYOLOV5 models. 
 
-## 支持模型列表
+## List of Supported Models
 
 * RKYOLOV5
 
-## 模型转换example
+## Model Transformation Example
 
-请参考[RKNN_model_convert](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo/RKNN_model_convert)
+Please refer to [RKNN_model_convert](https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo/RKNN_model_convert)
 
 
-## 其他链接
-- [Cpp部署](./cpp)
-- [Python部署](./python)
-- [视觉模型预测结果](../../../../docs/api/vision_results/)
+## Other Links
+- [Cpp deployment](./cpp)
+- [Python deployment](./python)
+- [Visual model predicting results](../../../../docs/api/vision_results/)
