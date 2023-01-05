@@ -51,6 +51,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   bool use_ipu = (runtime_option.device == Device::IPU);
   bool use_rknpu = (runtime_option.device == Device::RKNPU);
   bool use_timvx = (runtime_option.device == Device::TIMVX);
+  bool use_ascend = (runtime_option.device == Device::ASCEND); 
+  bool use_kunlunxin = (runtime_option.device == Device::KUNLUNXIN);
 
   if (use_gpu) {
     if (!IsSupported(valid_gpu_backends, runtime_option.backend)) {
@@ -65,6 +67,16 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
   } else if (use_timvx) {
     if (!IsSupported(valid_timvx_backends, runtime_option.backend)) {
       FDERROR << "The valid timvx backends of model " << ModelName() << " are " << Str(valid_timvx_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_ascend) {
+    if (!IsSupported(valid_ascend_backends, runtime_option.backend)) {
+      FDERROR << "The valid ascend backends of model " << ModelName() << " are " << Str(valid_ascend_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
+      return false;
+    }
+  } else if (use_kunlunxin) {
+    if (!IsSupported(valid_kunlunxin_backends, runtime_option.backend)) {
+      FDERROR << "The valid kunlunxin backends of model " << ModelName() << " are " << Str(valid_kunlunxin_backends) << ", " << runtime_option.backend << " is not supported." << std::endl;
       return false;
     }
   } else if(use_ipu) {
@@ -102,6 +114,10 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return CreateRKNPUBackend();
   } else if (runtime_option.device == Device::TIMVX) {
     return CreateTimVXBackend();
+  } else if (runtime_option.device == Device::ASCEND) {
+    return CreateASCENDBackend();
+  } else if (runtime_option.device == Device::KUNLUNXIN) {
+    return CreateKunlunXinBackend();
   } else if (runtime_option.device == Device::IPU) {
 #ifdef WITH_IPU
     return CreateIpuBackend();
@@ -111,7 +127,7 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
     return false;
 #endif
   }
-  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX now." << std::endl;
+  FDERROR << "Only support CPU/GPU/IPU/RKNPU/TIMVX/KunlunXin/ASCEND now." << std::endl;
   return false;
 }
 
@@ -224,6 +240,54 @@ bool FastDeployModel::CreateTimVXBackend() {
   FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
   return false;
 }
+
+bool FastDeployModel::CreateKunlunXinBackend() {
+  if (valid_kunlunxin_backends.size() == 0) {
+    FDERROR << "There's no valid KunlunXin backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_kunlunxin_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_kunlunxin_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_kunlunxin_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
+
+bool FastDeployModel::CreateASCENDBackend() {
+  if (valid_ascend_backends.size() == 0) {
+    FDERROR << "There's no valid ascend backends for model: " << ModelName()
+            << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < valid_ascend_backends.size(); ++i) {
+    if (!IsBackendAvailable(valid_ascend_backends[i])) {
+      continue;
+    }
+    runtime_option.backend = valid_ascend_backends[i];
+    runtime_ = std::unique_ptr<Runtime>(new Runtime());
+    if (!runtime_->Init(runtime_option)) {
+      return false;
+    }
+    runtime_initialized_ = true;
+    return true;
+  }
+  FDERROR << "Found no valid backend for model: " << ModelName() << std::endl;
+  return false;
+}
+
 
 bool FastDeployModel::CreateIpuBackend() {
   if (valid_ipu_backends.size() == 0) {

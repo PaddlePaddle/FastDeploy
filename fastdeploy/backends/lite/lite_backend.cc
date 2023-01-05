@@ -43,24 +43,33 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
   option_ = option;
   std::vector<paddle::lite_api::Place> valid_places;
   if (option_.enable_int8) {
-    valid_places.push_back(
+    if(option_.enable_kunlunxin) {
+      valid_places.push_back(
+          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kInt8)});
+    } else {
+      valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+    }
     FDINFO << "Lite::Backend enable_int8 option is ON ! Lite::Backend will "
            << "inference with int8 precision!" << std::endl;    
   }
   if (option_.enable_fp16) {
-    paddle::lite_api::MobileConfig check_fp16_config;
-    // Determine whether the device supports the FP16
-    // instruction set (or whether it is an arm device
-    // of the armv8.2 architecture)
-    supported_fp16_ = check_fp16_config.check_fp16_valid();
-    if (supported_fp16_) {
+    if(option_.enable_kunlunxin){
       valid_places.push_back(
-          paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
-      FDINFO << "Your device is supported fp16 ! Lite::Backend will "
-             << "inference with fp16 precision!" << std::endl;    
+          paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFP16)});
     } else {
-      FDWARNING << "This device is not supported fp16, will skip fp16 option.";
+      paddle::lite_api::MobileConfig check_fp16_config;
+      // Determine whether the device supports the FP16
+      // instruction set (or whether it is an arm device
+      // of the armv8.2 architecture)
+      supported_fp16_ = check_fp16_config.check_fp16_valid();
+      if (supported_fp16_) {
+        valid_places.push_back(
+            paddle::lite_api::Place{TARGET(kARM), PRECISION(kFP16)});
+        FDINFO << "The device supports FP16, Lite::Backend will inference with FP16 precision." << std::endl;    
+      } else {
+        FDWARNING << "The device doesn't support FP16, will fallback to FP32.";
+      }
     }
   }
   if (!option_.nnadapter_subgraph_partition_config_path.empty()) {
@@ -80,9 +89,61 @@ void LiteBackend::BuildOption(const LiteBackendOption& option) {
         paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
     valid_places.push_back(
         paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)});
+  } 
+  
+  if(option_.enable_ascend){
+    
+    if(option_.nnadapter_device_names.empty()){
+      config_.set_nnadapter_device_names({"huawei_ascend_npu"});
+    } else {
+      config_.set_nnadapter_device_names(option_.nnadapter_device_names);
+    }
+
+    if(!option_.nnadapter_context_properties.empty()){
+      config_.set_nnadapter_context_properties(option_.nnadapter_context_properties);
+    }
+
+    if(!option_.nnadapter_model_cache_dir.empty()){
+      config_.set_nnadapter_model_cache_dir(option_.nnadapter_model_cache_dir);
+    }
+
+    if(!option_.nnadapter_mixed_precision_quantization_config_path.empty()){
+      config_.set_nnadapter_mixed_precision_quantization_config_path(
+        option_.nnadapter_mixed_precision_quantization_config_path
+      );
+    }
+
+    if(!option_.nnadapter_subgraph_partition_config_path.empty()){
+      config_.set_nnadapter_subgraph_partition_config_path(
+        option_.nnadapter_subgraph_partition_config_path
+      );
+    }
+
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kInt8)});
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kNNAdapter), PRECISION(kFloat)});
+    valid_places.push_back(
+        paddle::lite_api::Place{TARGET(kARM), PRECISION(kInt8)}); 
   }
-  valid_places.push_back(
+  
+  if(option_.enable_kunlunxin){
+    valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kXPU), PRECISION(kFloat)});
+    valid_places.push_back(
+      paddle::lite_api::Place{TARGET(kX86), PRECISION(kFloat)});
+    config_.set_xpu_dev_per_thread(option_.device_id);
+    config_.set_xpu_workspace_l3_size_per_thread(option_.kunlunxin_l3_workspace_size);
+    config_.set_xpu_l3_cache_method(option_.kunlunxin_l3_workspace_size, option_.kunlunxin_locked);
+    config_.set_xpu_conv_autotune(option_.kunlunxin_autotune, option_.kunlunxin_autotune_file);
+    config_.set_xpu_multi_encoder_method(option_.kunlunxin_precision, option_.kunlunxin_adaptive_seqlen);
+    if (option_.kunlunxin_enable_multi_stream) {
+      config_.enable_xpu_multi_stream();
+    }
+  } else {
+    valid_places.push_back(
       paddle::lite_api::Place{TARGET(kARM), PRECISION(kFloat)});
+  }
   config_.set_valid_places(valid_places);
   if (option_.threads > 0) {
     config_.set_threads(option_.threads);
@@ -160,7 +221,9 @@ bool LiteBackend::InitFromPaddle(const std::string& model_file,
     auto shape = tensor->shape();
     info.shape.assign(shape.begin(), shape.end());
     info.name = output_names[i];
-    info.dtype = LiteDataTypeToFD(tensor->precision());
+    if(!option_.enable_kunlunxin){
+      info.dtype = LiteDataTypeToFD(tensor->precision());
+    }
     outputs_desc_.emplace_back(info);
   }
 
@@ -222,12 +285,12 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
         reinterpret_cast<const uint8_t*>(const_cast<void*>(
         inputs[i].CpuData())));
     } else if (inputs[i].dtype == FDDataType::INT64) {
-#ifdef __aarch64__      
+#if (defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_ARM64))      
       tensor->CopyFromCpu<int64_t, paddle::lite_api::TargetType::kHost>(
         reinterpret_cast<const int64_t*>(const_cast<void*>(
         inputs[i].CpuData())));
 #else 
-      FDASSERT(false, "FDDataType::INT64 is not support for Arm v7 now!");         
+      FDASSERT(false, "FDDataType::INT64 is not support for x86/armv7 now!");         
 #endif        
     } else {
       FDASSERT(false, "Unexpected data type of %d.", inputs[i].dtype);
@@ -239,6 +302,9 @@ bool LiteBackend::Infer(std::vector<FDTensor>& inputs,
   outputs->resize(outputs_desc_.size());
   for (size_t i = 0; i < outputs_desc_.size(); ++i) {
     auto tensor = predictor_->GetOutput(i);
+    if(outputs_desc_[i].dtype != LiteDataTypeToFD(tensor->precision())){
+      outputs_desc_[i].dtype = LiteDataTypeToFD(tensor->precision());
+    }
     (*outputs)[i].Resize(tensor->shape(), outputs_desc_[i].dtype,
                          outputs_desc_[i].name);
     memcpy((*outputs)[i].MutableData(), tensor->data<void>(),

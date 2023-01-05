@@ -7,6 +7,16 @@ FastDeploy针对python和cpp开发者，提供了以下多线程或多进程的�
 - [python多线程以及多进程预测的使用示例](python)
 - [cpp多线程预测的使用示例](cpp)
 
+=======
+## 目前支持多线程以及多进程预测的模型
+
+| 任务类型           | 说明                                  | 模型下载链接                                                                          |
+|:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
+| Detection      | 支持PaddleDetection系列模型 | [PaddleDetection](../../examples/vision/detection/paddledetection)       |
+| Segmentation   | 支持PaddleSeg系列模型          | [PaddleSeg](../../examples/vision/segmentation/paddleseg) |
+| Classification | 支持PaddleClas系列模型             | [PaddleClas](../../examples/vision/classification/paddleclas)   |
+>> **注意**:点击上方模型下载链接，至`下载预训练模型`模块下载模型
+
 ## 多线程预测时克隆模型
 
 针对一个视觉模型的推理包含3个环节

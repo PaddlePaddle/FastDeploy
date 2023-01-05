@@ -12,15 +12,32 @@
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# 下载 FastDeploy 预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
-#下载官方转换好的yolov5模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
+#下载官方转换好的 yolov5 Paddle 模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s_infer.tar
+tar -xvf yolov5s_infer.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
+
+# CPU推理
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 0
+# GPU推理
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 1
+# GPU上TensorRT推理
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 2
+# 昆仑芯XPU推理
+./infer_paddle_demo yolov5s_infer 000000014439.jpg 3
+```
+
+上述的模型为 Paddle 模型的推理，如果想要做 ONNX 模型的推理，可以按照如下步骤：
+```bash
+# 1. 下载官方转换好的 yolov5 ONNX 模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 # CPU推理
 ./infer_demo yolov5s.onnx 000000014439.jpg 0
@@ -29,7 +46,6 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 # GPU上TensorRT推理
 ./infer_demo yolov5s.onnx 000000014439.jpg 2
 ```
-
 运行完成可视化结果如下图所示
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184309358-d803347a-8981-44b6-b589-4608021ad0f4.jpg">

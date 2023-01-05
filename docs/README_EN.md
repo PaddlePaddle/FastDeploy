@@ -8,6 +8,11 @@
 - [Build and Install FastDeploy Library on GPU Platform](en/build_and_install/gpu.md)
 - [Build and Install FastDeploy Library on CPU Platform](en/build_and_install/cpu.md)
 - [Build and Install FastDeploy Library on IPU Platform](en/build_and_install/ipu.md)
+- [Build and Install FastDeploy Library on KunlunXin XPU Platform](en/build_and_install/kunlunxin.md)
+- [Build and Install on RV1126 Platform](en/build_and_install/rv1126.md)
+- [Build and Install on RK3588 Platform](en/build_and_install/rknpu2.md)
+- [Build and Install on A311D Platform](en/build_and_install/a311d.md)
+- [Build and Install on Huawei Ascend Platform](en/build_and_install/huawei_ascend.md)
 - [Build and Install FastDeploy Library on  Nvidia Jetson Platform](en/build_and_install/jetson.md)
 - [Build and Install FastDeploy Library on Android Platform](en/build_and_install/android.md)
 - [Build and Install FastDeploy Serving Deployment Image](../serving/docs/EN/compile-en.md)
@@ -19,10 +24,10 @@
 - [A Quick Start on Runtime Python](en/quick_start/runtime/python.md)
 - [A Quick Start on Runtime C++](en/quick_start/runtime/cpp.md)
 
-## API 
+## API
 
 - [Python API](https://baidu-paddle.github.io/fastdeploy-api/python/html/)
-- [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/) 
+- [C++ API](https://baidu-paddle.github.io/fastdeploy-api/cpp/html/)
 - [Android Java API](../java/android)
 
 ## Performance Optimization

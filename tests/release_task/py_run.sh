@@ -17,7 +17,7 @@ LINUX_AARCH_CPU_CASE=('ort')
 MACOS_INTEL_CPU_CASE=('ort' 'openvino')
 MACOS_ARM64_CPU_CASE=('default')
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
-wget -q https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
+wget -q https://fastdeploy.bj.bcebos.com/resource/images/000000014439.jpg
 wget -q https://bj.bcebos.com/paddlehub/fastdeploy/release_task_groud_truth_result.txt
 tar -xvf ppyoloe_crn_l_300e_coco.tgz
 IMAGE_PATH=$CURRENT_DIR/000000014439.jpg
@@ -63,7 +63,6 @@ do
                fi
        fi
        if [ "$DEVICE" = "gpu" ];then
-
 	       if [ "$backend" = "trt" ];then
                        python infer_ppyoloe.py --model_dir $MODEL_PATH --image $IMAGE_PATH --device gpu --backend $backend >> py_trt_result.txt
                        python $COMPARE_SHELL --gt_path $GROUND_TRUTH_PATH --result_path py_trt_result.txt --platform $PLATFORM --device trt
@@ -86,4 +85,3 @@ else
        cat $res_file
        exit -1
 fi
-

@@ -213,6 +213,31 @@ void RuntimeOption::SetModelPath(const std::string& model_path,
   }
 }
 
+void RuntimeOption::SetModelBuffer(const char * model_buffer,
+                                   size_t model_buffer_size,
+                                   const char * params_buffer,
+                                   size_t params_buffer_size,
+                                   const ModelFormat& format) {
+  model_buffer_size_ = model_buffer_size;
+  params_buffer_size_ = params_buffer_size;
+  model_from_memory_ = true;
+  if (format == ModelFormat::PADDLE) {
+    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
+    params_buffer_ = std::string(params_buffer, params_buffer + params_buffer_size);
+    model_format = ModelFormat::PADDLE;
+  } else if (format == ModelFormat::ONNX) {
+    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
+    model_format = ModelFormat::ONNX;
+  } else if (format == ModelFormat::TORCHSCRIPT) {
+    model_buffer_ = std::string(model_buffer, model_buffer + model_buffer_size);
+    model_format = ModelFormat::TORCHSCRIPT;
+  } else {
+    FDASSERT(false,
+             "The model format only can be "
+             "ModelFormat::PADDLE/ModelFormat::ONNX/ModelFormat::TORCHSCRIPT.");
+  }
+}
+
 void RuntimeOption::UseGpu(int gpu_id) {
 #ifdef WITH_GPU
   device = Device::GPU;
@@ -236,7 +261,31 @@ void RuntimeOption::UseRKNPU2(fastdeploy::rknpu2::CpuName rknpu2_name,
 void RuntimeOption::UseTimVX() {
   enable_timvx = true;
   device = Device::TIMVX;
-  UseLiteBackend();
+}
+
+void RuntimeOption::UseKunlunXin(int kunlunxin_id, 
+                          int l3_workspace_size,
+                          bool locked,
+                          bool autotune,
+                          const std::string &autotune_file,
+                          const std::string &precision,
+                          bool adaptive_seqlen,
+                          bool enable_multi_stream) {
+  enable_kunlunxin = true;
+  device_id = kunlunxin_id;
+  kunlunxin_l3_workspace_size = l3_workspace_size;
+  kunlunxin_locked=locked;
+  kunlunxin_autotune=autotune;
+  kunlunxin_autotune_file=autotune_file;
+  kunlunxin_precision = precision;
+  kunlunxin_adaptive_seqlen=adaptive_seqlen;
+  kunlunxin_enable_multi_stream=enable_multi_stream;
+  device = Device::KUNLUNXIN;
+}
+
+void RuntimeOption::UseAscend(){
+  enable_ascend = true;
+  device = Device::ASCEND;
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -363,6 +412,36 @@ void RuntimeOption::SetLiteSubgraphPartitionPath(
   lite_nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
+
+void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer){
+  lite_nnadapter_subgraph_partition_config_buffer = nnadapter_subgraph_partition_config_buffer;
+}
+
+void RuntimeOption::SetLiteDeviceNames(const std::vector<std::string>& nnadapter_device_names){
+  lite_nnadapter_device_names = nnadapter_device_names; 
+}
+
+void RuntimeOption::SetLiteContextProperties(const std::string& nnadapter_context_properties){
+  lite_nnadapter_context_properties = nnadapter_context_properties; 
+}
+
+void RuntimeOption::SetLiteModelCacheDir(const std::string& nnadapter_model_cache_dir){
+  lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
+}
+
+
+void RuntimeOption::SetLiteDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info){
+  lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info; 
+}
+
+void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path){
+        lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
+}
+
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
@@ -532,8 +611,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::KUNLUNXIN || option.device == Device::ASCEND,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::KUNLUNXIN.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -581,7 +660,11 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  return backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  for (auto& tensor : output_tensors_) {
+    tensor.device_id = option.device_id;
+  }
+  return result;
 }
 
 void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
@@ -627,6 +710,13 @@ void Runtime::CreatePaddleBackend() {
   pd_option.cpu_thread_num = option.cpu_thread_num;
   pd_option.enable_pinned_memory = option.enable_pinned_memory;
   pd_option.external_stream_ = option.external_stream_;
+  pd_option.model_from_memory_ = option.model_from_memory_;
+  if (pd_option.model_from_memory_) {
+    pd_option.model_buffer_ = option.model_buffer_;
+    pd_option.params_buffer_ = option.params_buffer_;
+    pd_option.model_buffer_size_ = option.model_buffer_size_;
+    pd_option.params_buffer_size_ = option.params_buffer_size_;
+  }
 #ifdef ENABLE_TRT_BACKEND
   if (pd_option.use_gpu && option.pd_enable_trt) {
     pd_option.enable_trt = true;
@@ -664,9 +754,15 @@ void Runtime::CreatePaddleBackend() {
            "PaddleBackend only support model format of ModelFormat::PADDLE.");
   backend_ = utils::make_unique<PaddleBackend>();
   auto casted_backend = dynamic_cast<PaddleBackend*>(backend_.get());
-  FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
+  if (pd_option.model_from_memory_) {
+    FDASSERT(casted_backend->InitFromPaddle(option.model_buffer_, option.params_buffer_,
                                           pd_option),
            "Load model from Paddle failed while initliazing PaddleBackend.");
+  } else {
+    FDASSERT(casted_backend->InitFromPaddle(option.model_file, option.params_file,
+                                          pd_option),
+           "Load model from Paddle failed while initliazing PaddleBackend.");
+  }
 #else
   FDASSERT(false, "PaddleBackend is not available, please compiled with "
                   "ENABLE_PADDLE_BACKEND=ON.");
@@ -781,9 +877,25 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
-  lite_option.nnadapter_subgraph_partition_config_path =
-      option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_buffer = option.lite_nnadapter_subgraph_partition_config_buffer;
+  lite_option.nnadapter_device_names = option.lite_nnadapter_device_names;
+  lite_option.nnadapter_context_properties = option.lite_nnadapter_context_properties;
+  lite_option.nnadapter_model_cache_dir = option.lite_nnadapter_model_cache_dir;
+  lite_option.nnadapter_dynamic_shape_info = option.lite_nnadapter_dynamic_shape_info;
+  lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
   lite_option.enable_timvx = option.enable_timvx;
+  lite_option.enable_ascend = option.enable_ascend;
+  lite_option.enable_kunlunxin = option.enable_kunlunxin;
+  lite_option.device_id  = option.device_id;
+  lite_option.kunlunxin_l3_workspace_size  = option.kunlunxin_l3_workspace_size;
+  lite_option.kunlunxin_locked = option.kunlunxin_locked;
+  lite_option.kunlunxin_autotune = option.kunlunxin_autotune;
+  lite_option.kunlunxin_autotune_file = option.kunlunxin_autotune_file;
+  lite_option.kunlunxin_precision  = option.kunlunxin_precision;
+  lite_option.kunlunxin_adaptive_seqlen = option.kunlunxin_adaptive_seqlen;
+  lite_option.kunlunxin_enable_multi_stream = option.kunlunxin_enable_multi_stream;
+
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
   backend_ = utils::make_unique<LiteBackend>();

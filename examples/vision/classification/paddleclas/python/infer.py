@@ -17,7 +17,8 @@ def parse_arguments():
         "--device",
         type=str,
         default='cpu',
-        help="Type of inference device, support 'cpu' or 'gpu' or 'ipu'.")
+        help="Type of inference device, support 'cpu' or 'gpu' or 'ipu' or 'kunlunxin' or 'ascend' ."
+    )
     parser.add_argument(
         "--use_trt",
         type=ast.literal_eval,
@@ -34,6 +35,12 @@ def build_option(args):
 
     if args.device.lower() == "ipu":
         option.use_ipu()
+
+    if args.device.lower() == "kunlunxin":
+        option.use_kunlunxin()
+
+    if args.device.lower() == "ascend":
+        option.use_ascend()
 
     if args.use_trt:
         option.use_trt_backend()
