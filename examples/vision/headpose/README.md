@@ -1,8 +1,8 @@
-[English](README_EN.md) | 简体中文
-# 头部姿态模型
+English | [简体中文](README_CN.md)
+# Headpose Model
 
-FastDeploy目前支持如下头部姿态模型部署
+FastDeploy currently supports the deployment of the following headpose models
 
-| 模型 | 说明 | 模型格式 | 版本 |
+| Model | Description | Model Format | Version |
 | :--- | :--- | :------- | :--- |
-| [omasaht/headpose-fsanet-pytorch](./fsanet) | FSANet 系列模型 | ONNX | [CommitID:002549c](https://github.com/omasaht/headpose-fsanet-pytorch/commit/002549c) |
+| [omasaht/headpose-fsanet-pytorch](./fsanet) | FSANet models | ONNX | [CommitID:002549c](https://github.com/omasaht/headpose-fsanet-pytorch/commit/002549c) |
