@@ -26,7 +26,6 @@ def process_paddle_lite(paddle_lite_so_path):
     rpaths = ["$ORIGIN", "$ORIGIN/mklml/lib/"]
     patchelf_exe = os.getenv("PATCHELF_EXE", "patchelf")
 
-    
     for paddle_lite_so_file in os.listdir(paddle_lite_so_path):
         paddle_lite_so_file = os.path.join(paddle_lite_so_path,
                                            paddle_lite_so_file)
@@ -40,25 +39,28 @@ def process_paddle_lite(paddle_lite_so_path):
                 assert os.system(
                     command) == 0, "patchelf {} failed, the command: {}".format(
                         paddle_lite_so_file, command)
-        
-         # Patch /paddlelite/lib/mklml/lib/*.so
+
+        # Patch /paddlelite/lib/mklml/lib/*.so
         if 'mklml' in paddle_lite_so_file:
-            paddle_lite_mklml_lib_path = os.path.join(paddle_lite_so_path,
-                                           paddle_lite_so_file,'lib')
-            
-            for paddle_lite_mklml_so_file in os.listdir(paddle_lite_mklml_lib_path):
-                paddle_lite_mklml_so_file = os.path.join(paddle_lite_mklml_lib_path,
-                                           paddle_lite_mklml_so_file)
+            paddle_lite_mklml_lib_path = os.path.join(
+                paddle_lite_so_path, paddle_lite_so_file, 'lib')
+
+            for paddle_lite_mklml_so_file in os.listdir(
+                    paddle_lite_mklml_lib_path):
+                paddle_lite_mklml_so_file = os.path.join(
+                    paddle_lite_mklml_lib_path, paddle_lite_mklml_so_file)
 
                 if '.so' in paddle_lite_mklml_so_file:
                     command = "{} --set-rpath '{}' {}".format(
-                        patchelf_exe, ":".join(rpaths), paddle_lite_mklml_so_file)
+                        patchelf_exe, ":".join(rpaths),
+                        paddle_lite_mklml_so_file)
                     if platform.machine() != 'sw_64' and platform.machine(
                     ) != 'mips64':
                         assert os.system(
-                            command) == 0, "patchelf {} failed, the command: {}".format(
-                                paddle_lite_mklml_so_file, command) 
-            
+                            command
+                        ) == 0, "patchelf {} failed, the command: {}".format(
+                            paddle_lite_mklml_so_file, command)
+
 
 if __name__ == "__main__":
     process_paddle_lite(sys.argv[1])
