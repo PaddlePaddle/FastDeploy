@@ -1,40 +1,40 @@
-[English](README_EN.md) | 简体中文
-# PP-OCRv3 微信小程序部署示例
+English | [简体中文](README_CN.md)
+# PP-OCRv3 Wechat Mini-program Deployment Example
 
-本节介绍部署PaddleOCR的PP-OCRv3模型在微信小程序中运行，以及@paddle-js-models/ocr npm包中的js接口。
-
-
-## 微信小程序部署PP-OCRv3模型
-
-PP-OCRv3模型部署到微信小程序[**参考文档**](../../../../application/js/mini_program)
+This document introduces the deployment of PP-OCRv3 model from PaddleOCR in Wechat mini-program, and the js interface in the @paddle-js-models/ocr npm package.
 
 
-## PP-OCRv3 js接口
+## Deploy PP-OCRv3 models in Wechat Mini-program
+
+For the deployment of PP-OCRv3 models in Wechat mini-program, refer to [**reference document**](../../../../application/js/mini_program)
+
+
+## PP-OCRv3 js interface
 
 ```
 import * as ocr from "@paddle-js-models/ocr";
 await ocr.init(detConfig, recConfig);
 const res = await ocr.recognize(img, option, postConfig);
 ```
-ocr模型加载和初始化，其中模型为Paddle.js模型格式，js模型转换方式参考[文档](../../../../application/js/web_demo/README.md)
+ocr model loading and initialization, where the model is in Paddle.js model format. For the conversion of js models, refer to [document](../../../../application/js/web_demo/README.md)
 
-**init函数参数**
+**init function parameter**
 
-> * **detConfig**(dict): 文本检测模型配置参数，默认值为 {modelPath: 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json', fill: '#fff', mean: [0.485, 0.456, 0.406],std: [0.229, 0.224, 0.225]}; 其中，modelPath为文本检测模型路径，fill 为图像预处理padding的值，mean和std分别为预处理的均值和标准差
-> * **recConfig**(dict)): 文本识别模型配置参数，默认值为 {modelPath: 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_rec_infer_js/model.json', fill: '#000', mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5]}; 其中，modelPath为文本检测模型路径，fill 为图像预处理padding的值，mean和std分别为预处理的均值和标准差
-
-
-**recognize函数参数**
-
-> * **img**(HTMLImageElement): 输入图像参数，类型为HTMLImageElement。
-> * **option**(dict): 可视化文本检测框的canvas参数，可不用设置。
-> * **postConfig**(dict): 文本检测后处理参数，默认值为：{shape: 960, thresh: 0.3, box_thresh: 0.6, unclip_ratio:1.5}; thresh是输出预测图的二值化阈值；box_thresh是输出框的阈值，低于此值的预测框会被丢弃，unclip_ratio是输出框扩大的比例。
+> * **detConfig**(dict): The configuration parameter for text detection model. Default {modelPath: 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_det_infer_js_960/model.json', fill: '#fff', mean: [0.485, 0.456, 0.406],std: [0.229, 0.224, 0.225]}; Among them, modelPath  is the path of the text detection model; fill is the padding value in the image pre-processing; mean and std are the mean and standard deviation in the pre-processing
+> * **recConfig**(dict)): The configuration parameter for text recognition model. Default {modelPath: 'https://js-models.bj.bcebos.com/PaddleOCR/PP-OCRv3/ch_PP-OCRv3_rec_infer_js/model.json', fill: '#000', mean: [0.5, 0.5, 0.5], std: [0.5, 0.5, 0.5]}; Among them, modelPath is the path of the text detection model, fill is the padding value in the image pre-processing, and mean/std are the mean and standard deviation in the pre-processing
 
 
-## 其它文档
+**recognize function parameter**
 
-- [PP-OCR 系列模型介绍](../../)
-- [PP-OCRv3 C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
-- [PP-OCRv3模型web demo文档](../../../../application/js/web_demo/README.md)
+> * **img**(HTMLImageElement): Enter an image parameter in HTMLImageElement. 
+> * **option**(dict): The canvas parameter of the visual text detection box. No need to set.
+> * **postConfig**(dict): Text detection post-processing parameter. Default: {shape: 960, thresh: 0.3, box_thresh: 0.6, unclip_ratio:1.5}; thresh is the binarization threshold of the output prediction image; box_thresh is the threshold of the output box, below which the prediction box will be discarded; unclip_ratio is the expansion ratio of the output box.
+
+
+## Other Documents
+
+- [PP-OCR Model Description](../../)
+- [PP-OCRv3 C++ Deployment](../cpp)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Web demo document of PP-OCRv3 models](../../../../application/js/web_demo/README.md)
