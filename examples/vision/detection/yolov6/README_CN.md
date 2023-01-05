@@ -12,13 +12,12 @@
 ## 下载预训练ONNX模型
 
 为了方便开发者的测试，下面提供了YOLOv6导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% |
-| [YOLOv6s_640](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s-640x640.onnx) | 66MB | 43.1% |
-| [YOLOv6t](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6t.onnx) | 58MB | 41.3% |
-| [YOLOv6n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6n.onnx) | 17MB | 35.0% |
-
+| 模型                                                               | 大小    | 精度    | 备注 |
+|:---------------------------------------------------------------- |:----- |:----- |:----- |
+| [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% | 此模型文件来源于[YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6s_640](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s-640x640.onnx) | 66MB | 43.1% | 此模型文件来源于[YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6t](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6t.onnx) | 58MB | 41.3% | 此模型文件来源于[YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6n.onnx) | 17MB | 35.0% | 此模型文件来源于[YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
 
 
 ## 详细部署文档
