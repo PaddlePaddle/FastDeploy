@@ -1,45 +1,45 @@
-English | [简体中文](README.md)
-# RobustVideoMatting Python Deployment Example
+[English](README.md) | 简体中文
+# RobustVideoMatting Python部署示例
 
-Before deployment, two steps require confirmation
+在部署前，需确认以下两个步骤
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-This directory provides examples that `infer.py` fast finishes the deployment of RobustVideoMatting on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
+本目录下提供`infer.py`快速完成RobustVideoMatting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
 
 ```bash
-# Download the deployment example code 
+#下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/matting/rvm/python
 
-# Download RobustVideoMatting model files, test images and videos
-## Original ONNX Model
+# 下载RobustVideoMatting模型文件和测试图片以及视频
+## 原版ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_fp32.onnx
-## Specially process the ONNX model for loading TRT
+## 为加载TRT特殊处理ONNX模型
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/video.mp4
 
-# CPU inference
-## image
+# CPU推理
+## 图片
 python infer.py --model rvm_mobilenetv3_fp32.onnx --image matting_input.jpg --bg matting_bgr.jpg --device cpu
-## video
+## 视频
 python infer.py --model rvm_mobilenetv3_fp32.onnx --video video.mp4 --bg matting_bgr.jpg --device cpu
-# GPU inference
-## image
+# GPU推理
+## 图片
 python infer.py --model rvm_mobilenetv3_fp32.onnx --image matting_input.jpg --bg matting_bgr.jpg --device gpu
-## video
+## 视频
 python infer.py --model rvm_mobilenetv3_fp32.onnx --video video.mp4 --bg matting_bgr.jpg --device gpu
-# TRT inference
-## image
+# TRT推理
+## 图片
 python infer.py --model rvm_mobilenetv3_trt.onnx --image matting_input.jpg --bg matting_bgr.jpg --device gpu --use_trt True
-## video
+## 视频
 python infer.py --model rvm_mobilenetv3_trt.onnx --video video.mp4 --bg matting_bgr.jpg --device gpu --use_trt True
 ```
 
-The visualized result after running is as follows
+运行完成可视化结果如下图所示
 <div width="1240">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852040-759da522-fca4-4786-9205-88c622cd4a39.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852587-48895efc-d24a-43c9-aeec-d7b0362ab2b9.jpg">
@@ -49,41 +49,41 @@ The visualized result after running is as follows
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/19977378/196654529-866bff5d-47a2-4584-9627-39b587799228.gif">
 </div>
 
-## RobustVideoMatting Python Interface 
+## RobustVideoMatting Python接口
 
 ```python
 fd.vision.matting.RobustVideoMatting(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
-RobustVideoMatting model loading and initialization, among which model_file is the exported ONNX model format
+RobustVideoMatting模型加载和初始化，其中model_file为导出的ONNX模型格式
 
-**Parameter**
+**参数**
 
-> * **model_file**(str): Model file path 
-> * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
-> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
-> * **model_format**(ModelFormat): Model format. ONNX format by default
+> * **model_file**(str): 模型文件路径
+> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
+> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
 
-### predict function
+### predict函数
 
 > ```python
 > RobustVideoMatting.predict(input_image)
 > ```
 >
-> Model prediction interface. Input images and output matting results.
+> 模型预测结口，输入图像直接输出抠图结果。
 >
-> **Parameter**
+> **参数**
 >
-> > * **input_image**(np.ndarray): Input data in HWC or BGR format
+> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
 
-> **Return**
+> **返回**
 >
-> > Return `fastdeploy.vision.MattingResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of the structure.
+> > 返回`fastdeploy.vision.MattingResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
-## Other Documents
+## 其它文档
 
-- [RobustVideoMatting Model Description](..)
-- [RobustVideoMatting C++ Deployment](../cpp)
-- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [RobustVideoMatting 模型介绍](..)
+- [RobustVideoMatting C++部署](../cpp)
+- [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
