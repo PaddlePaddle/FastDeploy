@@ -1,62 +1,61 @@
-[English](README_EN.md) | 简体中文
-# PP-MSVSR Python部署示例
+English | [简体中文](README_CN.md)
+# PP-MSVSR Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成PP-MSVSR在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
-
+This directory provides examples that `infer.py` fast finishes the deployment of PP-MSVSR on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 ```bash
-#下载部署示例代码
+# Download the deployment example code 
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/sr/ppmsvsr/python
 
-# 下载VSR模型文件和测试视频
+# Download VSR model files and test videos
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-MSVSR_reds_x4.tar
 tar -xvf PP-MSVSR_reds_x4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
-# CPU推理
+# CPU inference
 python infer.py --model PP-MSVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device cpu
-# GPU推理
+# GPU inference
 python infer.py --model PP-MSVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device gpu
-# GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
+# TensorRT inference on GPU （Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
 python infer.py --model PP-MSVSR_reds_x4 --video vsr_src.mp4 --frame_num 2 --device gpu --use_trt True
 ```
 
-## VSR Python接口
+## VSR Python Interface 
 
 ```python
 fd.vision.sr.PPMSVSR(model_file, params_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-PP-MSVSR模型加载和初始化，其中model_file和params_file为训练模型导出的Paddle inference文件，具体请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)
+PP-MSVSR model loading and initialization, among which model_file and params_file are the Paddle inference files exported from the training model. Refer to [Model Export](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md) for more information
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-### predict函数
+### predict  function
 
 > ```python
 > PPMSVSR.predict(frames)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **frames**(list[np.ndarray]): 输入数据，注意需为HWC，BGR格式, frames为视频帧序列
+> > * **frames**(list[np.ndarray]): Input data in HWC or BGR format. Frames are the video frame sequences
 
-> **返回** list[np.ndarray] 为超分后的视频帧序列
+> **Return** list[np.ndarray] is the video frame sequence after SR
 
 
-## 其它文档
+## Other Documents
 
-- [PP-MSVSR 模型介绍](..)
-- [PP-MSVSR C++部署](../cpp)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [PP-MSVSR Model Description](..)
+- [PP-MSVSR C++ Deployment](../cpp)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
