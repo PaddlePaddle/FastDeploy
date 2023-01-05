@@ -1,31 +1,31 @@
-[English](README_EN.md) | 简体中文
-# RobustVideoMatting 模型部署
+English | [简体中文](README_CN.md)
+# RobustVideoMatting Model Deployment
 
-## 模型版本说明
+## Model Description
 
 - [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting/commit/81a1093)
 
-## 支持模型列表
+## List of Supported Models
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [RobustVideoMatting 模型](https://github.com/PeterL1n/RobustVideoMatting)
+- [RobustVideoMatting model](https://github.com/PeterL1n/RobustVideoMatting)
 
-## 下载预训练模型
+## Download Pre-trained Models
 
-为了方便开发者的测试，下面提供了RobustVideoMatting导出的各系列模型，开发者可直接下载使用。
+For developers' testing, models exported by RobustVideoMatting are provided below. Developers can download and use them directly.
 
-| 模型                                                               | 参数大小    | 精度    | 备注 |
+| Model                                                               | Parameter Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
-| [rvm_mobilenetv3_fp32.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_fp32.onnx) | 15MB ||exported from [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting/commit/81a1093)，GPL-3.0 License |
-| [rvm_resnet50_fp32.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_resnet50_fp32.onnx) | 103MB | |exported from [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting/commit/81a1093)，GPL-3.0 License |
-| [rvm_mobilenetv3_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx) | 15MB | |exported from [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting/commit/81a1093)，GPL-3.0 License |
-| [rvm_resnet50_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_resnet50_trt.onnx) | 103MB | | exported from [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting/commit/81a1093)，GPL-3.0 License |
+| [rvm_mobilenetv3_fp32.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_fp32.onnx) | 15MB | - |
+| [rvm_resnet50_fp32.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_resnet50_fp32.onnx) | 103MB | - |
+| [rvm_mobilenetv3_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_mobilenetv3_trt.onnx) | 15MB | - |
+| [rvm_resnet50_trt.onnx](https://bj.bcebos.com/paddlehub/fastdeploy/rvm_resnet50_trt.onnx) | 103MB | - |
 
 **Note**：
-- 如果要使用 TensorRT 进行推理，需要下载后缀为 trt 的 onnx 模型文件
+- If you want to use TensorRT for inference, download onnx model file with the trt suffix is necessary.
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
