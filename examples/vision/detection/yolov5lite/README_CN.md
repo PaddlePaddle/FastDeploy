@@ -55,7 +55,7 @@
 为了方便开发者的测试，下面提供了YOLOv5Lite导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- |:----- |
-| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License ｜
+| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
