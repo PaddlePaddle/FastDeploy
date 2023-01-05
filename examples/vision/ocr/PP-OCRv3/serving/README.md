@@ -1,38 +1,37 @@
-[English](README_EN.md) | 简体中文
-# PP-OCR服务化部署示例
+English | [简体中文](README_CN.md)
+# PP-OCR Serving Deployment Example
 
-在服务化部署前，需确认
+Before the serving deployment, please confirm 
 
-- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+- 1.  Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for software and hardware environment requirements and image pull commands
 
-## 介绍
-本文介绍了使用FastDeploy搭建OCR文字识别服务的方法.
+## Introduction
+This document describes how to build an OCR text recognition service with FastDeploy.
 
-服务端必须在docker内启动,而客户端不是必须在docker容器内.
+The server must be started in docker, while the client does not need to be in a docker container.
 
-**本文所在路径($PWD)下的models里包含模型的配置和代码(服务端会加载模型和代码以启动服务), 需要将其映射到docker中使用.**
+**The models in the path ($PWD) contain the model configuration and code (the server will load the models and code to start the service), which needs to be mapped to docker.**
 
-OCR由det(检测)、cls(分类)和rec(识别)三个模型组成.
+OCR consists of det (detection), cls (classification) and rec (recognition) models.
 
-服务化部署串联的示意图如下图所示,其中`pp_ocr`串联了`det_preprocess`、`det_runtime`和`det_postprocess`,`cls_pp`串联了`cls_runtime`和`cls_postprocess`,`rec_pp`串联了`rec_runtime`和`rec_postprocess`.
+The diagram of the serving deployment is shown below, where `pp_ocr` connects to `det_preprocess`、`det_runtime` and `det_postprocess`,`cls_pp` connects to `cls_runtime` and `cls_postprocess`,`rec_pp` connects to `rec_runtime` and `rec_postprocess`.
 
-特别的是,在`det_postprocess`中会多次调用`cls_pp`和`rec_pp`服务,来实现对检测结果(多个框)进行分类和识别,,最后返回给用户最终的识别结果。
-
+In particular, `cls_pp` and `rec_pp` services are called multiple times in `det_postprocess` to realize the classification and identification of the detection results (multiple boxes), and finally return the identification results to users.
 <p align="center">
     <br>
 <img src='./ppocr.png'">
     <br>
 <p>
 
-## 使用
-### 1. 服务端
+## Usage
+### 1. Server
 #### 1.1 Docker
 ```bash
-# 下载仓库代码
+# Download the repository code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/ocr/PP-OCRv3/serving/
 
-# 下载模型,图片和字典文件
+# Dpwnload model, image, and dictionary files
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
 tar xvf ch_PP-OCRv3_det_infer.tar && mv ch_PP-OCRv3_det_infer 1
 mv 1/inference.pdiparams 1/model.pdiparams && mv 1/inference.pdmodel 1/model.pdmodel
@@ -55,41 +54,41 @@ mv ppocr_keys_v1.txt models/rec_postprocess/1/
 
 wget https://gitee.com/paddlepaddle/PaddleOCR/raw/release/2.6/doc/imgs/12.jpg
 
-# x.y.z为镜像版本号，需参照serving文档替换为数字
+# x.y.z represent the image version. Refer to serving document to replace them with numbers
 docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 docker run -dit --net=host --name fastdeploy --shm-size="1g" -v $PWD:/ocr_serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
 docker exec -it -u root fastdeploy bash
 ```
 
-#### 1.2 安装(在docker内)
+#### 1.2 Installation (in docker)
 ```bash
 ldconfig
 apt-get install libgl1
 ```
 
-#### 1.3 启动服务端(在docker内)
+#### 1.3 Start the server (in docker)
 ```bash
 fastdeployserver --model-repository=/ocr_serving/models
 ```
 
-参数:
-  - `model-repository`(required): 整套模型streaming_pp_tts存放的路径.
-  - `http-port`(optional): HTTP服务的端口号. 默认: `8000`. 本示例中未使用该端口.
-  - `grpc-port`(optional): GRPC服务的端口号. 默认: `8001`.
-  - `metrics-port`(optional): 服务端指标的端口号. 默认: `8002`. 本示例中未使用该端口.
+Parameter:
+  - `model-repository`(required): The storage path of the entire model streaming_pp_tts.
+  - `http-port`(optional): Port number for the HTTP service. Default: `8000`. This port is not used in this example. 
+  - `grpc-port`(optional): Port number for the GRPC service. Default: `8001`.
+  - `metrics-port`(optional): Port number for the serer metric. Default: `8002`. This port is not used in this example.
 
 
-### 2. 客户端
-#### 2.1 安装
+### 2. Client
+#### 2.1 Installation
 ```bash
 pip3 install tritonclient[all]
 ```
 
-#### 2.2 发送请求
+#### 2.2 Send Requests
 ```bash
 python3 client.py
 ```
 
-## 配置修改
+## Configuration Change
 
-当前默认配置在GPU上运行， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/zh_CN/model_configuration.md) for more information.
