@@ -1,43 +1,43 @@
-[English](README_EN.md) | 简体中文
-# RetinaFace准备部署模型
+English | [简体中文](README_CN.md)
+# RetinaFace Ready-to-deploy Model
 
 - [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b)
-  - （1）[官方库](https://github.com/biubug6/Pytorch_Retinaface/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）自己数据训练的RetinaFace模型，可按照[导出ONNX模型](#导出ONNX模型)后，完成部署。
+  - （1）The *.pt provided by the[Official Library](https://github.com/biubug6/Pytorch_Retinaface/) can be deployed after the [Export ONNX Model](#导出ONNX模型)；
+  - （2）As for RetinaFace model trained on customized data, please follow the [Export ONNX Model](#导出ONNX模型) to complete the deployment.
 
 
-## 导出ONNX模型
+##  Export ONNX Model
 
-[下载预训练ONNX模型](#下载预训练ONNX模型)已事先转换成ONNX；如果从RetinaFace官方repo下载的模型，需要按如下教程导出ONNX。  
+[Download the pre-trained ONNX model](#下载预训练ONNX模型)The model has been converted to ONNX. If you downloaded the model from the RetinaFace official repo, please follow the tutorial below to export ONNX.  
 
 
-* 下载官方仓库并
+* Download the official repository 
 ```bash
 git clone https://github.com/biubug6/Pytorch_Retinaface.git
 ```
-* 下载预训练权重并放在weights文件夹
+* Download the pre-trained weights and place them in the weights folder
 ```text
 ./weights/
       mobilenet0.25_Final.pth
       mobilenetV1X0.25_pretrain.tar
       Resnet50_Final.pth
 ```
-* 运行convert_to_onnx.py导出ONNX模型文件
+* run convert_to_onnx.py to export ONNX model files
 ```bash
 PYTHONPATH=. python convert_to_onnx.py --trained_model ./weights/mobilenet0.25_Final.pth --network mobile0.25 --long_side 640 --cpu
 PYTHONPATH=. python convert_to_onnx.py --trained_model ./weights/Resnet50_Final.pth --network resnet50 --long_side 640 --cpu
 ```
-注意：需要先对convert_to_onnx.py脚本中的--long_side参数增加类型约束，type=int.
-* 使用onnxsim对模型进行简化
+Attention: We need to add a type constraint, type=int, to the --long_side parameter in the convert_to_onnx.py script.
+* Use onnxsim to simplify the model
 ```bash
 onnxsim FaceDetector.onnx Pytorch_RetinaFace_mobile0.25-640-640.onnx  # mobilenet
 onnxsim FaceDetector.onnx Pytorch_RetinaFace_resnet50-640-640.onnx  # resnet50
 ```
 
-## 下载预训练ONNX模型
+## Download pre-trained ONNX models
 
-为了方便开发者的测试，下面提供了RetinaFace导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
+For developers' testing, models exported by RetinaFace are provided below. Developers can download and use them directly. (The accuracy of the models in the table is sourced from the official library)
+| Model                                                               | Size    | Accuracy    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [RetinaFace_mobile0.25-640](https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-640-640.onnx) | 1.7MB | - |
 | [RetinaFace_mobile0.25-720](https://bj.bcebos.com/paddlehub/fastdeploy/Pytorch_RetinaFace_mobile0.25-720-1080.onnx) | 1.7MB | -|
@@ -48,12 +48,12 @@ onnxsim FaceDetector.onnx Pytorch_RetinaFace_resnet50-640-640.onnx  # resnet50
 
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[RetinaFace CommitID:b984b4b](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b) 编写
+- This tutorial and related code are written based on [RetinaFace CommitID:b984b4b](https://github.com/biubug6/Pytorch_Retinaface/commit/b984b4b) 
