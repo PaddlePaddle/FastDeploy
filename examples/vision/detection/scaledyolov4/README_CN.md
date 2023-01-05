@@ -26,16 +26,16 @@
 为了方便开发者的测试，下面提供了ScaledYOLOv4导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
 | 模型                                                               | 大小    | 精度    | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- |:----- |
-| [ScaledYOLOv4-P5-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5-896.onnx) | 271MB | 51.2% | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P5+BoF-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_-896.onnx) | 271MB | 51.7% | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6-1280.onnx) | 487MB | 53.9% | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P6+BoF-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_-1280.onnx) | 487MB | 54.4% | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P7-1536](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7-1536.onnx) | 1.1GB | 55.0% | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P5](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx) | 271MB | - | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P5+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_.onnx) | 271MB | -| 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P6](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6.onnx) | 487MB | - | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_.onnx) | 487MB | - | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
-| [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | - | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [YOLOR-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-1280-1280.onnx) | 143MB | 54.1% | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-W6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-1280-1280.onnx) | 305MB | 55.5% | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-E6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-1280-1280.onnx ) | 443MB | 56.4% | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-1280-1280.onnx) | 580MB | 57.0% | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-1280-1280.onnx) | 580MB | 57.3% | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-P6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-640-640.onnx) | 143MB | - | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-W6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-640-640.onnx) | 305MB | - | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-E6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-640-640.onnx ) | 443MB | - | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-640-640.onnx) | 580MB | - | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-640-640.onnx) | 580MB | - | 此模型文件来源于[YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 
 
 ## 详细部署文档
