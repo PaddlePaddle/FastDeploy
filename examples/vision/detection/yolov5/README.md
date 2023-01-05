@@ -10,13 +10,13 @@ English | [简体中文](README_CN.md)
 ## Download Pre-trained ONNX Model
 
 For developers' testing, models exported by YOLOv5 are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
-| Model                                                               | Size    | Accuracy    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv5n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n.onnx) | 7.6MB | 28.0% |
-| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx) | 28MB | 37.4% |
-| [YOLOv5m](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5m.onnx) | 82MB | 45.4% |
-| [YOLOv5l](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5l.onnx) | 178MB | 49.0% |
-| [YOLOv5x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5x.onnx) | 332MB | 50.7% |
+| Model                                                               | Size    | Accuracy  | Note |
+|:---------------------------------------------------------------- |:----- |:----- |:---- |
+| [YOLOv5n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5n.onnx) | 7.6MB | 28.0% | This model file is sourced from [YOLOv5](https://github.com/ultralytics/yolov5)，GPL-3.0 License |
+| [YOLOv5s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s.onnx) | 28MB | 37.4% | This model file is sourced from [YOLOv5](https://github.com/ultralytics/yolov5)，GPL-3.0 License |
+| [YOLOv5m](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5m.onnx) | 82MB | 45.4% | This model file is sourced from [YOLOv5](https://github.com/ultralytics/yolov5)，GPL-3.0 License |
+| [YOLOv5l](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5l.onnx) | 178MB | 49.0% | This model file is sourced from [YOLOv5](https://github.com/ultralytics/yolov5)，GPL-3.0 License |
+| [YOLOv5x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5x.onnx) | 332MB | 50.7% | This model file is sourced from [YOLOv5](https://github.com/ultralytics/yolov5)，GPL-3.0 License |
 
 
 ## Detailed Deployment Documents
