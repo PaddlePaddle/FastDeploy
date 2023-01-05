@@ -1,13 +1,13 @@
-[English](README_EN.md) | 简体中文
-# PP-OCRv2服务化部署示例
+English | [简体中文](README_CN.md)
+# PP-OCRv2 Serving Deployment 
 
-除了`下载的模型`和`rec前处理的1个参数`以外PP-OCRv2的服务化部署与PP-OCRv3服务化部署全部一样，请参考[PP-OCRv3服务化部署](../../PP-OCRv3/serving)。
+The serving deployment of PP-OCRv2 is identical to that of PP-OCRv3 except for `downloaded models` and `1 parameter for rec pre-processing`. Refer to [PP-OCRv3 serving deployment](../../PP-OCRv3/serving)
 
-## 下载模型
-将下载链接中的`v3`改为`v2`即可。
+## Download models 
+Change `v3` into `v2` in the download link.
 
-## 修改rec前处理参数
-在[model.py](../../PP-OCRv3/serving/models/det_postprocess/1/model.py#L109)文件**109行添加以下代码**：
+## Modify the rec pre-processing parameter
+**Add the following code to line 109** in the file [model.py](../../PP-OCRv3/serving/models/det_postprocess/1/model.py#L109):
 ```
 self.rec_preprocessor.cls_image_shape[1] = 32
 ```
