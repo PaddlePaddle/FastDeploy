@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <map>
 #include <vector>
-
+#include "fastdeploy/runtime/enum_variables.h"
 #include "fastdeploy/backends/lite/option.h"
 #include "fastdeploy/backends/openvino/option.h"
 #include "fastdeploy/backends/ort/option.h"
@@ -34,35 +34,6 @@
 #include "fastdeploy/backends/tensorrt/option.h"
 
 namespace fastdeploy {
-
-/*! Inference backend supported in FastDeploy */
-enum Backend {
-  UNKNOWN,  ///< Unknown inference backend
-  ORT,  ///< ONNX Runtime, support Paddle/ONNX format model, CPU / Nvidia GPU
-  TRT,  ///< TensorRT, support Paddle/ONNX format model, Nvidia GPU only
-  PDINFER,  ///< Paddle Inference, support Paddle format model, CPU / Nvidia GPU
-  POROS,    ///< Poros, support TorchScript format model, CPU / Nvidia GPU
-  OPENVINO,   ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
-  LITE,       ///< Paddle Lite, support Paddle format model, ARM CPU only
-  RKNPU2,     ///< RKNPU2, support RKNN format model, Rockchip NPU only
-  SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
-};
-
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const Backend& backend);
-
-/*! Paddle Lite power mode for mobile device. */
-enum LitePowerMode {
-  LITE_POWER_HIGH = 0,       ///< Use Lite Backend with high power mode
-  LITE_POWER_LOW = 1,        ///< Use Lite Backend with low power mode
-  LITE_POWER_FULL = 2,       ///< Use Lite Backend with full power mode
-  LITE_POWER_NO_BIND = 3,    ///< Use Lite Backend with no bind power mode
-  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
-  LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
-};
-
-FASTDEPLOY_DECL std::string Str(const Backend& b);
-FASTDEPLOY_DECL std::string Str(const ModelFormat& f);
 
 /**
  * @brief Get all the available inference backend in FastDeploy

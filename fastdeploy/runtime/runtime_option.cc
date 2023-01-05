@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/runtime.h"
-
 #include "fastdeploy/utils/unique_ptr.h"
 #include "fastdeploy/utils/utils.h"
 
@@ -56,29 +55,6 @@ bool IsBackendAvailable(const Backend& backend) {
     }
   }
   return false;
-}
-
-std::ostream& operator<<(std::ostream& out, const Backend& backend) {
-  if (backend == Backend::ORT) {
-    out << "Backend::ORT";
-  } else if (backend == Backend::TRT) {
-    out << "Backend::TRT";
-  } else if (backend == Backend::PDINFER) {
-    out << "Backend::PDINFER";
-  } else if (backend == Backend::OPENVINO) {
-    out << "Backend::OPENVINO";
-  } else if (backend == Backend::RKNPU2) {
-    out << "Backend::RKNPU2";
-  } else if (backend == Backend::SOPHGOTPU) {
-    out << "Backend::SOPHGOTPU";
-  } else if (backend == Backend::POROS) {
-    out << "Backend::POROS";
-  } else if (backend == Backend::LITE) {
-    out << "Backend::PDLITE";
-  } else {
-    out << "UNKNOWN-Backend";
-  }
-  return out;
 }
 
 bool CheckModelFormat(const std::string& model_file,
@@ -360,9 +336,10 @@ void RuntimeOption::EnablePaddleToTrt() {
   backend = Backend::PDINFER;
   pd_enable_trt = true;
 #else
-  FDASSERT(false, "While using TrtBackend with EnablePaddleToTrt, require the "
-                  "FastDeploy is compiled with Paddle Inference Backend, "
-                  "please rebuild your FastDeploy.");
+  FDASSERT(false,
+           "While using TrtBackend with EnablePaddleToTrt, require the "
+           "FastDeploy is compiled with Paddle Inference Backend, "
+           "please rebuild your FastDeploy.");
 #endif
 }
 
@@ -496,8 +473,9 @@ bool Runtime::Compile(std::vector<std::vector<FDTensor>>& prewarm_tensors,
       casted_backend->Compile(option.model_file, prewarm_tensors, poros_option),
       "Load model from Torchscript failed while initliazing PorosBackend.");
 #else
-  FDASSERT(false, "PorosBackend is not available, please compiled with "
-                  "ENABLE_POROS_BACKEND=ON.");
+  FDASSERT(false,
+           "PorosBackend is not available, please compiled with "
+           "ENABLE_POROS_BACKEND=ON.");
 #endif
   return true;
 }

@@ -22,6 +22,16 @@
 #include <map>
 namespace fastdeploy {
 
+/*! Paddle Lite power mode for mobile device. */
+enum LitePowerMode {
+  LITE_POWER_HIGH = 0,       ///< Use Lite Backend with high power mode
+  LITE_POWER_LOW = 1,        ///< Use Lite Backend with low power mode
+  LITE_POWER_FULL = 2,       ///< Use Lite Backend with full power mode
+  LITE_POWER_NO_BIND = 3,    ///< Use Lite Backend with no bind power mode
+  LITE_POWER_RAND_HIGH = 4,  ///< Use Lite Backend with rand high mode
+  LITE_POWER_RAND_LOW = 5    ///< Use Lite Backend with rand low power mode
+};
+
 struct LiteBackendOption {
   // cpu num threads
   int threads = 1;
