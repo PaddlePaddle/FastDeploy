@@ -38,7 +38,7 @@ scores: 0.686229,
 )
 ```
 
-## PaddleClasModel Python接口
+## PaddleClasModel Python Interface
 
 ```python
 fd.vision.classification.PaddleClasModel(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
