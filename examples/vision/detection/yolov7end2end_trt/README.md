@@ -1,29 +1,29 @@
-[English](README_EN.md) | 简体中文
-# YOLOv7End2EndTRT 准备部署模型
+English | [简体中文](README_CN.md)
+# YOLOv7End2EndTRT Ready-to-deploy Model
 
-YOLOv7End2EndTRT 部署实现来自[YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1)分支代码，和[基于COCO的预训练模型](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)。注意，YOLOv7End2EndTRT 是专门用于推理YOLOv7中导出模型带[TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) 版本的End2End模型，不带nms的模型推理请使用YOLOv7类，而 [ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) 版本的End2End模型请使用YOLOv7End2EndORT进行推理。
+The YOLOv7End2EndTRT deployment is based on [YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1) branch code and [Pre-trained Model Baesd on COCO](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1). Attention: YOLOv7End2EndTRT is designed for the inference of exported End2End models in the [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) version in YOLOv7. YOLOv7 class is for the inference of models without nms. YOLOv7End2EndORT is for the inference of End2End models in the [ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) version.
 
-  - （1）[官方库](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1)提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；*.trt和*.pose模型不支持部署；
-  - （2）自己数据训练的YOLOv7模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考[详细部署文档](#详细部署文档)完成部署。
+  - （1）*.pt provided by [Official Repository](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1) should [Export the ONNX Model](#导出ONNX模型) to complete the deployment. The deployment of *.trt and *.pose models is not supported.
+  - （2）The YOLOv7 model  trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Please refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
 
 
 
-## 导出ONNX模型
+## Export the ONNX Model
 
 ```bash
-# 下载yolov7模型文件
+#  Download yolov7 Model Files
 wget https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt
 
-# 导出带TRT_NMS的onnx格式文件 (Tips: 对应 YOLOv7 release v0.1 代码)
+# Export file in onnx format with TRT_NMS (Tips: corresponding to the code of YOLOv7 release v0.1)
 python export.py --weights yolov7.pt --grid --end2end --simplify --topk-all 100 --iou-thres 0.65 --conf-thres 0.35 --img-size 640 640
-# 导出其他模型的命令类似 将yolov7.pt替换成 yolov7x.pt yolov7-d6.pt yolov7-w6.pt ...
-# 使用YOLOv7End2EndTRT只需提供onnx文件，不需要额外再转trt文件，推理时自动转换
+# The commands for exporting other models are similar. Replace yolov7.pt with yolov7x.pt yolov7-d6.pt yolov7-w6.pt ...
+# Only onnx files are required to employ YOLOv7End2EndTRT. Additional trt files are not required because automatic switching happens during inference.
 ```
 
-## 下载预训练ONNX模型
+## Download Pre-trained ONNX Models
 
-为了方便开发者的测试，下面提供了YOLOv7End2EndTRT 导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
+For developers' testing, models exported by YOLOv7End2EndTRT are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
+| Model                                                               | Size    | Accuracy    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [yolov7-end2end-trt-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-trt-nms.onnx) | 141MB | 51.4% |
 | [yolov7x-end2end-trt-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x-end2end-trt-nms.onnx) | 273MB | 53.1% |
@@ -33,12 +33,12 @@ python export.py --weights yolov7.pt --grid --end2end --simplify --topk-all 100 
 | [yolov7-e6e-end2end-trt-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e-end2end-trt-nms.onnx) | 579MB | 56.8% |
 
 
-## 详细部署文档
+## Detailed Deployment Documents
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployement](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) 编写
+- Document and code are based on [YOLOv7 0.1](https://github.com/WongKinYiu/yolov7/tree/v0.1) 
