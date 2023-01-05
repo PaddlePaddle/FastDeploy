@@ -14,6 +14,12 @@
 
 #include "fastdeploy/vision/common/processors/resize_by_short.h"
 
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -51,7 +57,7 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA; 
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "LimitByShort: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -76,6 +82,50 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
       mat->SetWidth(new_im.width());
     }
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool ResizeByShort::ImplByCvCuda(Mat* mat) {
+  cv::Mat* im = mat->GetOpenCVMat();
+  int origin_w = im->cols;
+  int origin_h = im->rows;
+  int origin_c = im->channels();
+  double scale = GenerateScale(origin_w, origin_h);
+  int width = static_cast<int>(round(scale * im->cols));
+  int height = static_cast<int>(round(scale * im->rows));
+
+  int batchsize = 1;
+  cvcuda::Resize resizeOp;
+
+  // Prepare input tensor of resizeOp
+  std::string buf_name = Name() + "_cvcuda_src";
+  std::vector<int64_t> shape = {origin_h, origin_w, origin_c};
+  FDTensor* src = UpdateAndGetReusedBuffer({origin_h, origin_w, origin_c},
+                                           im->type(), buf_name, Device::GPU);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+  FDASSERT(cudaMemcpyAsync(GetCvCudaTensorDataPtr(src_tensor), im->ptr(),
+                           src->Nbytes(), cudaMemcpyHostToDevice,
+                           mat->Stream()) == 0,
+           "[ERROR] Error occurs while copy memory from CPU to GPU.");
+
+  // Prepare output tensor of resizeOp
+  buf_name = Name() + "_cvcuda_dst";
+  FDTensor* dst = UpdateAndGetReusedBuffer({height, width, origin_c},
+                                           im->type(), buf_name, Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  resizeOp(mat->Stream(), src_tensor, dst_tensor,
+           NVCVInterpolationType(interp_));
+
+  cv::Mat out(height, width, im->type(), GetCvCudaTensorDataPtr(dst_tensor));
+
+  mat->SetMat(out);
+  mat->SetWidth(width);
+  mat->SetHeight(height);
+  mat->device = Device::GPU;
   return true;
 }
 #endif

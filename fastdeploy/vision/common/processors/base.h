@@ -59,6 +59,10 @@ class FASTDEPLOY_DECL Processor {
     return ImplByOpenCV(mat);
   }
 
+  virtual bool ImplByCvCuda(Mat* mat) {
+    return ImplByOpenCV(mat);
+  }
+
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 
  protected:

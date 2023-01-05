@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/common/processors/base.h"
-#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 #include "fastdeploy/utils/utils.h"
+#include "fastdeploy/vision/common/processors/proc_lib.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -37,8 +37,24 @@ bool Processor::operator()(Mat* mat, ProcLib lib) {
 #else
     FDASSERT(false, "FastDeploy didn't compile with WITH_GPU.");
 #endif
+  } else if (target == ProcLib::CVCUDA) {
+#ifdef ENABLE_CVCUDA
+    if (mat->Stream() == nullptr) {
+      FDWARNING
+          << "When using CV-CUDA, it's better to create mat->stream externally."
+          << std::endl;
+      cudaStream_t stream;
+      FDASSERT(cudaStreamCreate(&stream) == 0,
+               "[ERROR] Error occurs while calling cudaStreamCreate().");
+      mat->SetStream(stream);
+    }
+    return ImplByCvCuda(mat);
+#else
+    FDASSERT(false, "FastDeploy didn't compile with CV-CUDA.");
+#endif
   }
   // DEFAULT & OPENCV
+  mat->MakeSureOnCpu();
   return ImplByOpenCV(mat);
 }
 
@@ -50,9 +66,8 @@ FDTensor* Processor::UpdateAndGetReusedBuffer(
     reused_buffers_[buffer_name] = FDTensor();
   }
   reused_buffers_[buffer_name].is_pinned_memory = use_pinned_memory;
-  reused_buffers_[buffer_name].Resize(new_shape,
-                                      OpenCVDataTypeToFD(opencv_dtype),
-                                      buffer_name, new_device);
+  reused_buffers_[buffer_name].Resize(
+      new_shape, OpenCVDataTypeToFD(opencv_dtype), buffer_name, new_device);
   return &reused_buffers_[buffer_name];
 }
 

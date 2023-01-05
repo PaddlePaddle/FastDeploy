@@ -13,22 +13,20 @@
 // limitations under the License.
 
 #pragma once
+
+#include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
+
+#ifdef ENABLE_CVCUDA
+#include "nvcv/Tensor.hpp"
 
 namespace fastdeploy {
 namespace vision {
 
-enum class FASTDEPLOY_DECL ProcLib { DEFAULT, OPENCV, FLYCV, CUDA, CVCUDA };
+nvcv::ImageFormat CreateCvCudaImageFormat(FDDataType type, int channel);
+nvcv::TensorWrapData CreateCvCudaTensorWrapData(const FDTensor& tensor);
+void* GetCvCudaTensorDataPtr(const nvcv::TensorWrapData& tensor);
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const ProcLib& p);
-
-struct FASTDEPLOY_DECL DefaultProcLib {
-  // default_lib has the highest priority
-  // all the function in `processor` will force to use
-  // default_lib if this flag is set.
-  // DEFAULT means this flag is not set
-  static ProcLib default_lib;
-};
-
-}  // namespace vision
-}  // namespace fastdeploy
+}
+}
+#endif

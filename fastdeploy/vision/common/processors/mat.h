@@ -17,6 +17,10 @@
 #include "fastdeploy/vision/common/processors/proc_lib.h"
 #include "opencv2/core/core.hpp"
 
+#ifdef WITH_GPU
+#include <cuda_runtime_api.h>
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -111,6 +115,9 @@ struct FASTDEPLOY_DECL Mat {
 #ifdef ENABLE_FLYCV
   fcv::Mat fcv_mat;
 #endif
+#ifdef WITH_GPU
+  cudaStream_t stream = nullptr;
+#endif
 
  public:
   FDDataType Type();
@@ -120,6 +127,10 @@ struct FASTDEPLOY_DECL Mat {
   void SetChannels(int s) { channels = s; }
   void SetWidth(int w) { width = w; }
   void SetHeight(int h) { height = h; }
+#ifdef WITH_GPU
+  cudaStream_t Stream() const { return stream; }
+  void SetStream(cudaStream_t s) { stream = s; }
+#endif
 
   // Transfer the vision::Mat to FDTensor
   void ShareWithTensor(FDTensor* tensor);
@@ -136,6 +147,10 @@ struct FASTDEPLOY_DECL Mat {
   ProcLib mat_type = ProcLib::OPENCV;
   Layout layout = Layout::HWC;
   Device device = Device::CPU;
+
+  // Make sure mat buffer is on CPU
+  // If not on CPU, then copy the buffer from device to
+  void MakeSureOnCpu();
 
   // Create FD Mat from FD Tensor. This method only create a
   // new FD Mat with zero copy and it's data pointer is reference
