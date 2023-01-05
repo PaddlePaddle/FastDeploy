@@ -38,10 +38,10 @@ bool PaddleDetPostprocessor::ProcessMask(
     (*results)[i].contain_masks = true;
     (*results)[i].masks.resize((*results)[i].boxes.size());
     for (int j = 0; j < (*results)[i].boxes.size(); ++j) {
-      int x1 = static_cast<int>((*results)[i].boxes[j][0]);
-      int y1 = static_cast<int>((*results)[i].boxes[j][1]);
-      int x2 = static_cast<int>((*results)[i].boxes[j][2]);
-      int y2 = static_cast<int>((*results)[i].boxes[j][3]);
+      int x1 = static_cast<int>(round((*results)[i].boxes[j][0]));
+      int y1 = static_cast<int>(round((*results)[i].boxes[j][1]));
+      int x2 = static_cast<int>(round((*results)[i].boxes[j][2]));
+      int y2 = static_cast<int>(round((*results)[i].boxes[j][3]));
       int keep_mask_h = y2 - y1;
       int keep_mask_w = x2 - x1;
       int keep_mask_numel = keep_mask_h * keep_mask_w;
@@ -201,22 +201,22 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
       (*results)[i].label_ids.push_back(
           static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
-      (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2] / GetScaleFactor()[1],
-           ptr[j * 6 + 3] / GetScaleFactor()[0],
-           ptr[j * 6 + 4] / GetScaleFactor()[1],
-           ptr[j * 6 + 5] / GetScaleFactor()[0]}));
+      (*results)[i].boxes.emplace_back(
+          std::array<float, 4>({ptr[j * 6 + 2] / GetScaleFactor()[1],
+                                ptr[j * 6 + 3] / GetScaleFactor()[0],
+                                ptr[j * 6 + 4] / GetScaleFactor()[1],
+                                ptr[j * 6 + 5] / GetScaleFactor()[0]}));
     }
     offset += (num_boxes[i] * 6);
   }
   return true;
 }
 
-std::vector<float> PaddleDetPostprocessor::GetScaleFactor(){
+std::vector<float> PaddleDetPostprocessor::GetScaleFactor() {
   return scale_factor_;
 }
 
-void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
+void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value) {
   for (int i = 0; i < scale_factor_.size(); ++i) {
     scale_factor_[i] = scale_factor_value[i];
   }
@@ -225,6 +225,6 @@ void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
 bool PaddleDetPostprocessor::DecodeAndNMSApplied() {
   return apply_decode_and_nms_;
 }
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy
