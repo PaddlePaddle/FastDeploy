@@ -21,6 +21,7 @@
 #pragma once
 #include "fastdeploy/utils/utils.h"
 #include <ostream>
+#include <map>
 
 namespace fastdeploy {
 
@@ -61,12 +62,12 @@ enum ModelFormat {
 /// Describle all the supported backends for specified model format
 static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
   {ModelFormat::PADDLE, {Backend::PDINFER, Backend::LITE,
-                      Backend::ORT, Backend::OPENVINO, Backend::TRT}}，
-  {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}}，
-  {ModelFormat::RKNN, {Backend::RKNPU2}}，
-  {ModelFormat::TORCHSCRIPT, {Backend::POROS}}，
-  {ModelFormat::SOPHGO, {Backend::SOPHOGO}}
-}；
+                      Backend::ORT, Backend::OPENVINO, Backend::TRT}},
+  {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}},
+  {ModelFormat::RKNN, {Backend::RKNPU2}},
+  {ModelFormat::TORCHSCRIPT, {Backend::POROS}},
+  {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
+};
 
     FASTDEPLOY_DECL std::ostream &
     operator<<(std::ostream& out, const Backend& backend);
