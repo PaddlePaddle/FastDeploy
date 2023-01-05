@@ -1,19 +1,19 @@
-[English](README_EN.md) | 简体中文
+English | [简体中文](README_CN.md)
 
-# YOLOv6准备部署模型
-
-
-- YOLOv6 部署实现来自[YOLOv6](https://github.com/meituan/YOLOv6/releases/tag/0.1.0)，和[基于coco的预训练模型](https://github.com/meituan/YOLOv6/releases/tag/0.1.0)。
-
-  - （1）[官方库](https://github.com/meituan/YOLOv6/releases/tag/0.1.0)提供的*.onnx可直接进行部署；
-  - （2）开发者自己训练的模型，导出ONNX模型后，参考[详细部署文档](#详细部署文档)完成部署。
+# YOLOv6 Ready-to-deploy Model
 
 
+- The YOLOv6 deployment is based on [YOLOv6](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) and [Pre-trained Model Based on COCO](https://github.com/meituan/YOLOv6/releases/tag/0.1.0).
 
-## 下载预训练ONNX模型
+  - （1）The *.onnx provided by [Official Repository](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) can directly conduct deployemnt；
+  - （2）Personal models trained by developers should export the ONNX model. Refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
 
-为了方便开发者的测试，下面提供了YOLOv6导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
+
+
+## Download Pre-trained ONNX Model
+
+For developers' testing, models exported by YOLOv6 are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
+| Model                                                               | Size    | Accuracy    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% |
 | [YOLOv6s_640](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s-640x640.onnx) | 66MB | 43.1% |
@@ -22,12 +22,12 @@
 
 
 
-## 详细部署文档
+## Detailed Deployment Documents
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployement](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[YOLOv6 0.1.0版本](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) 编写
+- Document and code are based on [YOLOv6 0.1.0 version](https://github.com/meituan/YOLOv6/releases/tag/0.1.0) 
