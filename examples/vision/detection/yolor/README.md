@@ -23,19 +23,18 @@ English | [简体中文](README_CN.md)
 ## Download Pre-trained ONNX Model
 
 For developers' testing, models exported by YOLOR are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
-| Model                                                               | Size    | Accuracy    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOR-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-1280-1280.onnx) | 143MB | 54.1% |
-| [YOLOR-W6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-1280-1280.onnx) | 305MB | 55.5% |
-| [YOLOR-E6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-1280-1280.onnx ) | 443MB | 56.4% |
-| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-1280-1280.onnx) | 580MB | 57.0% |
-| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-1280-1280.onnx) | 580MB | 57.3% |
-| [YOLOR-P6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-640-640.onnx) | 143MB | - |
-| [YOLOR-W6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-640-640.onnx) | 305MB | - |
-| [YOLOR-E6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-640-640.onnx ) | 443MB | - |
-| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-640-640.onnx) | 580MB | - |
-| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-640-640.onnx) | 580MB | - |
-
+| Model                                                               | Size    | Accuracy   | Note |
+|:---------------------------------------------------------------- |:----- |:----- |:----- |
+| [YOLOR-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-1280-1280.onnx) | 143MB | 54.1% | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-W6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-1280-1280.onnx) | 305MB | 55.5% | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-E6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-1280-1280.onnx ) | 443MB | 56.4% | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-1280-1280.onnx) | 580MB | 57.0% | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-1280-1280.onnx) | 580MB | 57.3% | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-P6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-p6-paper-541-640-640.onnx) | 143MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-W6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-w6-paper-555-640-640.onnx) | 305MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-E6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-e6-paper-564-640-640.onnx ) | 443MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-570-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
+| [YOLOR-D6](https://bj.bcebos.com/paddlehub/fastdeploy/yolor-d6-paper-573-640-640.onnx) | 580MB | - | This model file is sourced from [YOLOR](https://github.com/WongKinYiu/yolor)，GPL-3.0 License |
 
 
 ## Detailed Deployment Documents
