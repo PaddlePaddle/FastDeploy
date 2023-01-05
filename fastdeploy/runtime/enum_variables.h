@@ -37,7 +37,30 @@ enum Backend {
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
 };
 
+enum FASTDEPLOY_DECL Device {CPU, GPU, RKNPU, IPU, TIMVX, KUNLUNXIN, ASCEND,
+                              SOPHGOTPUD};
+
+
+/*! Deep learning model format */
+enum ModelFormat {
+  AUTOREC,      ///< Auto recognize the model format by model file name
+  PADDLE,       ///< Model with paddlepaddle format
+  ONNX,         ///< Model with ONNX format
+  RKNN,         ///< Model with RKNN format
+  TORCHSCRIPT,  ///< Model with TorchScript format
+  SOPHGO,       ///< Model with SOPHGO format
+};
+
+FASTDEPLOY_DECL std::string Str(const Device& d);
+
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const Backend& backend);
+
+
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
+
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
+                                         const ModelFormat& format);
+
 
 }  // namespace fastdeploy

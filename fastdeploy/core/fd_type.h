@@ -22,11 +22,6 @@
 
 namespace fastdeploy {
 
-enum FASTDEPLOY_DECL Device {CPU, GPU, RKNPU, IPU, TIMVX, KUNLUNXIN, ASCEND,
-                              SOPHGOTPUD};
-
-FASTDEPLOY_DECL std::string Str(const Device& d);
-
 enum FASTDEPLOY_DECL FDDataType {
   BOOL,
   INT16,
@@ -52,7 +47,6 @@ enum FASTDEPLOY_DECL FDDataType {
   INT8
 };
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const FDDataType& fdt);
@@ -65,18 +59,5 @@ template <typename PlainType>
 struct FASTDEPLOY_DECL TypeToDataType {
   static const FDDataType dtype;
 };
-
-/*! Deep learning model format */
-enum ModelFormat {
-  AUTOREC,      ///< Auto recognize the model format by model file name
-  PADDLE,       ///< Model with paddlepaddle format
-  ONNX,         ///< Model with ONNX format
-  RKNN,         ///< Model with RKNN format
-  TORCHSCRIPT,  ///< Model with TorchScript format
-  SOPHGO,       ///< Model with SOPHGO format
-};
-
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const ModelFormat& format);
 
 }  // namespace fastdeploy

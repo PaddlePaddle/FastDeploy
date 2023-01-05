@@ -38,4 +38,48 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
   return out;
 }
 
+std::ostream& operator<<(std::ostream& out, const Device& d) {
+  switch (d) {
+    case Device::CPU:
+      out << "Device::CPU";
+      break;
+    case Device::GPU:
+      out << "Device::GPU";
+      break;
+    case Device::RKNPU:
+      out << "Device::RKNPU";
+      break;
+    case Device::SOPHGOTPUD:
+      out << "Device::SOPHGOTPUD";
+      break;
+    case Device::TIMVX:
+      out << "Device::TIMVX";
+      break;
+    case Device::KUNLUNXIN:
+      out << "Device::KUNLUNXIN";
+      break;
+    case Device::ASCEND:
+      out << "Device::ASCEND";
+      break;
+    default:
+      out << "Device::UNKOWN";
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
+  if (format == ModelFormat::PADDLE) {
+    out << "ModelFormat::PADDLE";
+  } else if (format == ModelFormat::ONNX) {
+    out << "ModelFormat::ONNX";
+  } else if (format == ModelFormat::RKNN) {
+    out << "ModelFormat::RKNN";
+  } else if (format == ModelFormat::SOPHGO) {
+    out << "ModelFormat::SOPHGO";
+  } else if (format == ModelFormat::TORCHSCRIPT) {
+    out << "ModelFormat::TORCHSCRIPT";
+  }
+  out << "UNKNOWN-ModelFormat";
+  return out;
+}
 }  // namespace fastdeploy
