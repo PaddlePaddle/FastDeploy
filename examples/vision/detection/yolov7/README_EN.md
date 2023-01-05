@@ -24,14 +24,14 @@ python models/export.py --grid --dynamic --end2end --weights PATH/TO/yolov7.pt
 
 To facilitate testing for developers, we provide below the models exported by YOLOv7, which developers can download and use directly. (The accuracy of the models in the table is sourced from the official library)
 
-| Model                                                                    | Size  | Accuracy |
-| ------------------------------------------------------------------------ | ----- | -------- |
-| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx)         | 141MB | 51.4%    |
-| [YOLOv7x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x.onnx)       | 273MB | 53.1%    |
-| [YOLOv7-w6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6.onnx)   | 269MB | 54.9%    |
-| [YOLOv7-e6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6.onnx)   | 372MB | 56.0%    |
-| [YOLOv7-d6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6.onnx)   | 511MB | 56.6%    |
-| [YOLOv7-e6e](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e.onnx) | 579MB | 56.8%    |
+| Model                                                                    | Size  | Accuracy | Note |
+| ------------------------------------------------------------------------ | ----- | -------- | -------- |
+| [YOLOv7](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx)         | 141MB | 51.4%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
+| [YOLOv7x](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x.onnx)       | 273MB | 53.1%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
+| [YOLOv7-w6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6.onnx)   | 269MB | 54.9%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
+| [YOLOv7-e6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6.onnx)   | 372MB | 56.0%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
+| [YOLOv7-d6](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6.onnx)   | 511MB | 56.6%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
+| [YOLOv7-e6e](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e.onnx) | 579MB | 56.8%    | This model file comes from [YOLOv7](https://github.com/WongKinYiu/yolov7), GPL-3.0 License |
 
 ## Detailed Deployment Tutorials
 
