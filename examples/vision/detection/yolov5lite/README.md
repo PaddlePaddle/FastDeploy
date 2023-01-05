@@ -55,7 +55,7 @@ github repository,  follow the guidelines to download the `yolov5-lite-xx.pt` mo
 For developers' testing, models exported by YOLOv5Lite are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
 | Model                                                               | Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- |:----- |
-| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License ｜
+| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% | This model file is sourced from[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 | [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
