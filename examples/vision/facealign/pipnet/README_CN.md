@@ -1,20 +1,21 @@
-English | [简体中文](README.md)
-# PIPNet Model Deployment
+[English](README.md) | 简体中文
+# PIPNet 模型部署
 
-## Model Description
+## 模型版本说明
 
 - [PIPNet](https://github.com/jhb86253817/PIPNet/tree/b9eab58)
 
-## List of Supported Models
+## 支持模型列表
 
-Now FastDeploy supports the deployment of the following models
+目前FastDeploy支持如下模型的部署
 
-- [PIPNet Model](https://github.com/jhb86253817/PIPNet)
+- [PIPNet 模型](https://github.com/jhb86253817/PIPNet)
 
-## Download Pre-trained Models
+## 下载预训练模型
 
-For developers' testing, models exported by PIPNet are provided below. Developers can download and use them directly. 
-| Model                                                               | Parameter Size    | Accuracy    | Note |
+为了方便开发者的测试，下面提供了PIPNet导出的各系列模型，开发者可直接下载使用。
+
+| 模型                                                               | 参数大小    | 精度    | 备注 |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
 | [PIPNet19_ResNet18_AFLW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x19x32x256_aflw.onnx) | 45.6M | - |
 | [PIPNet29_ResNet18_COFW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x29x32x256_cofw.onnx) | 46.1M | - |
@@ -27,7 +28,7 @@ For developers' testing, models exported by PIPNet are provided below. Developer
 
 
 
-## Detailed Deployment Tutorials
+## 详细部署文档
 
-- [Python Deployment](python)
-- [C++ Deployment](cpp)
+- [Python部署](python)
+- [C++部署](cpp)
