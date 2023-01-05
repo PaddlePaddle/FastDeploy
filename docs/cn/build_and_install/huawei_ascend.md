@@ -73,7 +73,7 @@ $ npu-smi info
 以上步骤成功后，用户可以直接在docker内部开始FastDeploy的编译.
 
 注意:
-- 如果用户在Docker内想使用其他的CANN版本,请自行更新 Dockerfile 文件内的 CANN 下载路径, 同时更新相应的驱动和固件. 当前示例中, aarch64平台的Dockerfile内默认为[CANN 5.1.RC2](https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%205.1.RC2/Ascend-cann-toolkit_5.1.RC2_linux-aarch64.run). x86_64平台的Dockerfile内默认为[CANN 5.1.RC1](https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/5.1.RC1.alpha001/Ascend-cann-toolkit_5.1.RC1.alpha001_linux-x86_64.run)
+- 如果用户在Docker内想使用其他的CANN版本,请自行更新 Dockerfile 文件内的 CANN 下载路径, 同时更新相应的驱动和固件. 当前示例中, aarch64平台的Dockerfile内默认为[CANN 5.1.RC2](https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%205.1.RC2/Ascend-cann-toolkit_5.1.RC2_linux-aarch64.run), x86_64平台的Dockerfile内默认为[CANN 5.1.RC1](https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/5.1.RC1.alpha001/Ascend-cann-toolkit_5.1.RC1.alpha001_linux-x86_64.run).
 
 - 如果用户不想使用docker，可以参考由Paddle Lite提供的[ARM Linux环境下的编译环境准备](https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/docs/source_compile/arm_linux_compile_arm_linux.rst)或者[X86 Linux环境下的编译环境准备](https://github.com/PaddlePaddle/Paddle-Lite/blob/develop/docs/source_compile/linux_x86_compile_linux_x86.rst)自行配置编译环境, 之后再自行下载并安装相应的CANN软件包来完成配置.
 
