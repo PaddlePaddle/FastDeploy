@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+English | [简体中文](README_CN.md)
 # 关键点检测模型
 
 FastDeploy目前支持两种关键点检测任务方式的部署
