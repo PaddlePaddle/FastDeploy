@@ -1,24 +1,24 @@
-English | [简体中文](README_CN.md)
-# YOLOv5 Python Deployment Example
+[English](README.md) | 简体中文
+# YOLOv5 Python部署示例
 
-Before deployment, the following step need to be confirmed:
+在部署前，需确认以下步骤
 
-- 1. Hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirement](../../../../../../docs/en/build_and_install/sophgo.md)
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/sophgo.md)
 
-`infer.py` in this directory provides a quick example of deployment of the YOLOv5 model on SOPHGO TPU. Please run the following script:
+本目录下提供`infer.py`快速完成 YOLOv5 在SOPHGO TPU上部署的示例。执行如下脚本即可完成
 
 ```bash
-# Download the sample deployment code.
+# 下载部署示例代码
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/yolov5/sophgo/python
 
-# Download images.
+# 下载图片
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# Inference.
+# 推理
 python3 infer.py --model_file ./bmodel/yolov5s_1684x_f32.bmodel --image 000000014439.jpg
 
-# The returned result.
+# 运行完成后返回结果如下所示
 DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
 268.480255,81.053055, 298.694794, 169.439026, 0.896569, 0
 104.731163,45.661972, 127.583824, 93.449387, 0.869531, 0
@@ -42,6 +42,6 @@ DetectionResult: [xmin, ymin, xmax, ymax, score, label_id]
 101.406250,152.562500, 118.890625, 169.140625, 0.253891, 24
 ```
 
-## Other Documents
-- [YOLOv5 C++ Deployment](../cpp)
-- [Converting YOLOv5 SOPHGO model](../README.md)
+## 其它文档
+- [YOLOv5 C++部署](../cpp)
+- [转换YOLOv5 SOPHGO模型文档](../README.md)
