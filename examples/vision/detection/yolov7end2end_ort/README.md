@@ -22,14 +22,14 @@ python export.py --weights yolov7.pt --grid --end2end --simplify --topk-all 100 
 ## Download the Pre-trained ONNX Model
 
 For developers' testing, models exported by YOLOv7End2EndORT are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
-| Model                                                               | Size    | Accuracy    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [yolov7-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-ort-nms.onnx) | 141MB | 51.4% |
-| [yolov7x-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x-end2end-ort-nms.onnx) | 273MB | 53.1% |
-| [yolov7-w6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6-end2end-ort-nms.onnx) | 269MB | 54.9% |
-| [yolov7-e6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6-end2end-ort-nms.onnx) | 372MB | 56.0% |
-| [yolov7-d6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6-end2end-ort-nms.onnx) | 511MB | 56.6% |
-| [yolov7-e6e-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e-end2end-ort-nms.onnx) | 579MB | 56.8% |
+| Model                                                               | Size    | Accuracy    | Note |
+|:---------------------------------------------------------------- |:----- |:----- |:----- |
+| [yolov7-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-ort-nms.onnx) | 141MB | 51.4% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [yolov7x-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7x-end2end-ort-nms.onnx) | 273MB | 53.1% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [yolov7-w6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-w6-end2end-ort-nms.onnx) | 269MB | 54.9% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [yolov7-e6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6-end2end-ort-nms.onnx) | 372MB | 56.0% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [yolov7-d6-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-d6-end2end-ort-nms.onnx) | 511MB | 56.6% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
+| [yolov7-e6e-end2end-ort-nms](https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-e6e-end2end-ort-nms.onnx) | 579MB | 56.8% | This model file is sourced from [YOLOv7](https://github.com/WongKinYiu/yolov7)，GPL-3.0 License |
 
 
 ## Detailed Deployment Documents
