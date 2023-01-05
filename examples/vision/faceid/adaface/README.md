@@ -1,33 +1,32 @@
-[English](README_EN.md) | 简体中文
-# AdaFace准备部署模型
+English | [简体中文](README_CN.md)
+# AdaFace Ready-to-deploy Model
 
 - [PaddleClas](https://github.com/PaddlePaddle/PaddleClas/)
-  - [官方库](https://github.com/PaddlePaddle/PaddleClas/)中训练过后的Paddle模型导出Paddle静态图模型操作后，可进行部署；
+  - Paddle models trained in the [official repository](https://github.com/PaddlePaddle/PaddleClas/) are available for deployment after exporting Paddle static graph models；
 
-## 简介
-一直以来，低质量图像的人脸识别都具有挑战性，因为低质量图像的人脸属性是模糊和退化的。将这样的图片输入模型时，将不能很好的实现分类。
-而在人脸识别任务中，我们经常会利用opencv的仿射变换来矫正人脸数据，这时数据会出现低质量退化的现象。如何解决低质量图片的分类问题成为了模型落地时的痛点问题。
+## Introduction
+Face recognition of low-quality images has been challenging because the face attributes of these images are blurred and degraded. We cannot realize optimal classification after such images are fed into the model. 
+In face recognition, we often use the affine transformation of opencv to correct the face data that will degrade in low quality. The classification of low-quality images becomes a crucial problem during model development.
 
-在AdaFace这项工作中，作者在损失函数中引入了另一个因素，即图像质量。作者认为，强调错误分类样本的策略应根据其图像质量进行调整。
-具体来说，简单或困难样本的相对重要性应该基于样本的图像质量来给定。据此作者提出了一种新的损失函数来通过图像质量强调不同的困难样本的重要性。
+In AdaFace, we introduce another factor in the loss function, namely image quality. We maintain that the strategy of emphasizing misclassified samples should be adjusted according to their image quality. 
+Specifically, the importance of easy and difficult samples should be given based on the their image quality. Accordingly, we propose a new loss function to emphasize the importance of different difficult samples by their image quality.
 
-由上，AdaFace缓解了低质量图片在输入网络后输出结果精度变低的情况，更加适合在人脸识别任务落地中使用。
+In a nutshell, AdaFace improves the situation that low-quality images become less accurate after input to the network, which is more effective in the task of face recognition.
+
+## Export Paddle Static Graph Model
+Taking AdaFace as an example:
+Refer to [AIStudio](https://aistudio.baidu.com/aistudio/projectdetail/4479879?contributionType=1) for training and export of the code.
 
 
-## 导出Paddle静态图模型
-以AdaFace为例:
-训练和导出代码，请参考[AIStudio](https://aistudio.baidu.com/aistudio/projectdetail/4479879?contributionType=1)
+## Download Pre-trained Paddle Static Graph Model
 
+For developers' testing, converted models are provided below. Developers can download and use them directly. (The accuracy of the models in the table is sourced from the model introduction in AIStudio)
 
-## 下载预训练Paddle静态图模型
-
-为了方便开发者的测试，下面提供了我转换过的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）其中精度指标来源于AIStudio中对各模型的介绍。
-
-| 模型                                                                                            | 大小    | 精度 (AgeDB_30) |
+| Model                                                                                            | Size    | Accuracy (AgeDB_30) |
 |:----------------------------------------------------------------------------------------------|:------|:--------------|
 | [AdaFace-MobileFacenet](https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz) | 3.2MB | 95.5          |
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
