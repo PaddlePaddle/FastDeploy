@@ -1,4 +1,4 @@
-[简体中文](README.md) | English
+English | [简体中文](README_CN.md)
 
 # YOLOv7 Prepare the model for Deployment
 
