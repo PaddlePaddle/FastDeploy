@@ -1,43 +1,42 @@
-[English](README_EN.md) | 简体中文
-# AdaFace Python部署示例
-本目录下提供`infer_xxx.py`快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+English | [简体中文](README_CN.md)
+# AdaFace Python Deployment Example
+This directory provides examples that `infer_xxx.py` fast finishes the deployment of AdaFace on CPU/GPU and GPU accelerated by TensorRT.
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以AdaFace为例子, 提供`infer.py`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
-
+Taking AdaFace as an example, we demonstrate how `infer.py` fast finishes the deployment of AdaFace on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 ```bash
-#下载部署示例代码
+# Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/faceid/adaface/python/
 
-#下载AdaFace模型文件和测试图片
-#下载测试图片
+# Download AdaFace model files and test images
+# Download test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
 unzip face_demo.zip
 
-# 如果为Paddle模型，运行以下代码
+# Run the following code if the model is in Paddle format
 wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
 tar zxvf mobilefacenet_adaface.tgz -C ./
 
-# CPU推理
+# CPU inference
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
                 --face face_0.jpg \
                 --face_positive face_1.jpg \
                 --face_negative face_2.jpg \
                 --device cpu
-# GPU推理
+# GPU inference
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
                 --face face_0.jpg \
                 --face_positive face_1.jpg \
                 --face_negative face_2.jpg \
                 --device gpu
-# GPU上使用TensorRT推理
+# TensorRT inference on GPU
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
                 --face face_0.jpg \
@@ -46,7 +45,7 @@ python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --device gpu \
                 --use_trt True
 
-# 昆仑芯XPU推理
+# KunlunXin XPU inference
 python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                 --params_file mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
                 --face test_lite_focal_arcface_0.JPG \
@@ -55,7 +54,7 @@ python infer.py --model mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
                  --device kunlunxin
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 
 <div width="700">
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321537-860bf857-0101-4e92-a74c-48e8658d838c.JPG">
@@ -71,56 +70,56 @@ Cosine 01:  0.7483505506964364
 Cosine 02:  -0.09605773855893639
 ```
 
-## AdaFace Python接口
+## AdaFace Python Interface 
 
 ```python
 fastdeploy.vision.faceid.AdaFace(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-AdaFace模型加载和初始化，其中model_file为导出的ONNX模型格式或PADDLE静态图格式
+AdaFace  model loading and initialization, among which model_file is the exported ONNX model format or PADDLE static graph format
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为PADDLE
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-### predict函数
+### predict function
 
 > ```python
 > AdaFace.predict(image_data)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+> > * **image_data**(np.ndarray): Input data in HWC or BGR format
 
-> **返回**
+> **Return**
 >
-> > 返回`fastdeploy.vision.FaceRecognitionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > Return `fastdeploy.vision.FaceRecognitionResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for its description.
 
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### Class Member Property
+#### Pre-processing Parameter
+Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
 
-#### AdaFacePreprocessor的成员变量
-以下变量为AdaFacePreprocessor的成员变量
-> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112]
-> > * **alpha**(list[float]): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5]
-> > * **beta**(list[float]): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f]
-> > * **swap_rb**(bool): 预处理是否将BGR转换成RGB，默认True
+#### Member variables of AdaFacePreprocessor
+The member variables of AdaFacePreprocessor are as follows
+> > * **size**(list[int]): This parameter changes the size of the resize during preprocessing, containing two integer elements for [width, height] with default value [112, 112]
+> > * **alpha**(list[float]): Preprocess normalized alpha, and calculated as `x'=x*alpha+beta`. alpha defaults to [1. / 127.5, 1.f / 127.5, 1. / 127.5]
+> > * **beta**(list[float]): Preprocess normalized alpha, and calculated as `x'=x*alpha+beta`. beta defaults to [-1.f, -1.f, -1.f]
+> > * **swap_rb**(bool): Whether to convert BGR to RGB in pre-processing. Default true
 
-#### AdaFacePostprocessor的成员变量
-以下变量为AdaFacePostprocessor的成员变量
-> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认False
+#### Member variables of AdaFacePostprocessor
+The member variables of AdaFacePostprocessor are as follows
+> > * **l2_normalize**(bool): Whether to perform l2 normalization before outputting the face vector. Default false.
 
 
-## 其它文档
+## Other Documents
 
-- [AdaFace 模型介绍](..)
-- [AdaFace C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [AdaFace Model Description](..)
+- [AdaFace C++ Deployment](../cpp)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
