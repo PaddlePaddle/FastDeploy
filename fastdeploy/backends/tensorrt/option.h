@@ -19,8 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "fastdeploy/core/fd_type.h"
-
 namespace fastdeploy {
 
 struct TrtBackendOption {
