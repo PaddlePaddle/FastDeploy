@@ -13,12 +13,12 @@ English | [简体中文](README_CN.md)
 ## Download Pre-trained ONNX Model
 
 For developers' testing, models exported by YOLOv6 are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
-| Model                                                               | Size    | Accuracy    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% |
-| [YOLOv6s_640](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s-640x640.onnx) | 66MB | 43.1% |
-| [YOLOv6t](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6t.onnx) | 58MB | 41.3% |
-| [YOLOv6n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6n.onnx) | 17MB | 35.0% |
+| Model                                                               | Size    | Accuracy    | Note |
+|:---------------------------------------------------------------- |:----- |:----- |:----- |
+| [YOLOv6s](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s.onnx) | 66MB | 43.1% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6s_640](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s-640x640.onnx) | 66MB | 43.1% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6t](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6t.onnx) | 58MB | 41.3% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
+| [YOLOv6n](https://bj.bcebos.com/paddlehub/fastdeploy/yolov6n.onnx) | 17MB | 35.0% | This model file is sourced from [YOLOv6](https://github.com/meituan/YOLOv6)，GPL-3.0 License |
 
 
 
