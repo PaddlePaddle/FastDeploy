@@ -1,18 +1,18 @@
-[English](README_EN.md) | 简体中文
-# AdaFace C++部署示例
-本目录下提供`infer_xxx.py`快速完成AdaFace模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+English | [简体中文](README_CN.md)
+# AdaFace C++ Deployment Example
+This directory provides examples that `infer_xxx.py` fast finishes the deployment of AdaFace on CPU/GPU and GPU accelerated by TensorRT. 
 
-以AdaFace为例提供`infer.cc`快速完成AdaFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+Taking AdaFace as an example, we demonstrate how `infer.cc` fast finishes the deployment of AdaFace on CPU/GPU and GPU accelerated by TensorRT.
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking the CPU inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 
 ```bash
-# “如果预编译库不包含本模型，请从最新代码编译SDK”
+# “If the precompiled library does not contain this model, compile SDK from the latest code”
 mkdir build
 cd build
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
@@ -20,19 +20,19 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-#下载测试图片
+# Download test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
 unzip face_demo.zip
 
-# 如果为Paddle模型，运行以下代码
+# Run the following code if the model is in Paddle format
 wget https://bj.bcebos.com/paddlehub/fastdeploy/mobilefacenet_adaface.tgz
 tar zxvf mobilefacenet_adaface.tgz -C ./
-# CPU推理
+# CPU inference
 ./infer_adaface_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 0
 
-# GPU推理
+# GPU inference
 ./infer_adaface_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 1
@@ -42,13 +42,13 @@ tar zxvf mobilefacenet_adaface.tgz -C ./
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 2
 
-# 昆仑芯XPU推理
+# KunlunXin XPU inference
 ./infer_demo mobilefacenet_adaface/mobilefacenet_adaface.pdmodel \
               mobilefacenet_adaface/mobilefacenet_adaface.pdiparams \
               face_0.jpg face_1.jpg face_2.jpg 3
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 
 <div width="700">
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321537-860bf857-0101-4e92-a74c-48e8658d838c.JPG">
@@ -56,12 +56,12 @@ tar zxvf mobilefacenet_adaface.tgz -C ./
 <img width="220" float="left" src="https://user-images.githubusercontent.com/67993288/184321622-d9a494c3-72f3-47f1-97c5-8a2372de491f.JPG">
 </div>
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-## AdaFace C++接口
+## AdaFace C++ Interface 
 
-### AdaFace类
+### AdaFace Class 
 
 ```c++
 fastdeploy::vision::faceid::AdaFace(
@@ -71,42 +71,41 @@ fastdeploy::vision::faceid::AdaFace(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-AdaFace模型加载和初始化，如果使用PaddleInference推理，model_file和params_file为PaddleInference模型格式;
-如果使用ONNXRuntime推理，model_file为ONNX模型格式,params_file为空。
+AdaFace model loading and initialization, model_file and params_file are in PaddleInference format if using PaddleInference for inference;
+model_file is in ONNX format and params_file is empty if using ONNXRuntime for inference
 
 
-
-#### Predict函数
+#### Predict Function
 
 > ```c++
 > AdaFace::Predict(cv::Mat* im, FaceRecognitionResult* result)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, FaceRecognitionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: Detection results, including detection box and confidence of each box. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for FaceRecognitionResult.
 
-### 修改预处理以及后处理的参数
-预处理和后处理的参数的需要通过修改AdaFacePostprocessor，AdaFacePreprocessor的成员变量来进行修改。
+### Revise pre-processing and post-processing parameters 
+Pre-processing and post-processing parameters can be changed by modifying the member variables of AdaFacePostprocessor and AdaFacePreprocessor.
 
-#### AdaFacePreprocessor成员变量(预处理参数)
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[112, 112],
-      通过AdaFacePreprocessor::SetSize(std::vector<int>& size)来进行修改
-> > * **alpha**(vector&lt;float&gt;): 预处理归一化的alpha值，计算公式为`x'=x*alpha+beta`，alpha默认为[1. / 127.5, 1.f / 127.5, 1. / 127.5],
-      通过AdaFacePreprocessor::SetAlpha(std::vector<float>& alpha)来进行修改
-> > * **beta**(vector&lt;float&gt;): 预处理归一化的beta值，计算公式为`x'=x*alpha+beta`，beta默认为[-1.f, -1.f, -1.f],
-      通过AdaFacePreprocessor::SetBeta(std::vector<float>& beta)来进行修改
-> > * **permute**(bool): 预处理是否将BGR转换成RGB，默认true,
-      通过AdaFacePreprocessor::SetPermute(bool permute)来进行修改
+#### AdaFacePreprocessor member variables (preprocessing parameters)
+> > * **size**(vector&lt;int&gt;): This parameter changes the size of the resize during preprocessing, containing two integer elements for [width, height] with default value [112, 112].
+      Revise through AdaFacePreprocessor::SetSize(std::vector<int>& size)
+> > * **alpha**(vector&lt;float&gt;): Preprocess normalized alpha, and calculated as `x'=x*alpha+beta`. alpha defaults to [1. / 127.5, 1.f / 127.5, 1. / 127.5].
+      Revise through AdaFacePreprocessor::SetAlpha(std::vector<float>& alpha)
+> > * **beta**(vector&lt;float&gt;): Preprocess normalized beta, and calculated as `x'=x*alpha+beta`，beta defaults to [-1.f, -1.f, -1.f],
+      Revise through AdaFacePreprocessor::SetBeta(std::vector<float>& beta)
+> > * **permute**(bool): Whether to convert BGR to RGB in pre-processing. Default true.
+      Revise through AdaFacePreprocessor::SetPermute(bool permute)
 
-#### AdaFacePostprocessor成员变量(后处理参数)
-> > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
-      通过AdaFacePostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
+#### AdaFacePostprocessor member variables (post-processing parameters)
+> > * **l2_normalize**(bool): Whether to perform l2 normalization before outputting the face vector. Default false.
+      Revise through AdaFacePostprocessor::SetL2Normalize(bool& l2_normalize)
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
