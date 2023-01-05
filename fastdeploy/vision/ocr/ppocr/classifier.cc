@@ -52,6 +52,12 @@ bool Classifier::Initialize() {
   return true;
 }
 
+std::unique_ptr<Classifier> Classifier::Clone() const {
+  std::unique_ptr<Classifier> clone_model = utils::make_unique<Classifier>(Classifier(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
+}
+
 bool Classifier::Predict(const cv::Mat& img, int32_t* cls_label, float* cls_score) {
   std::vector<int32_t> cls_labels(1);
   std::vector<float> cls_scores(1);

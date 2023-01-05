@@ -170,6 +170,17 @@ class DBDetector(FastDeployModel):
             assert self.initialized, "DBDetector initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR detection model object
+        :return: a new OCR detection model object
+        """
+        class DBDetectorClone(DBDetector):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = DBDetectorClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -406,6 +417,17 @@ class Classifier(FastDeployModel):
             assert self.initialized, "Classifier initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR classification model object
+        :return: a new OCR classification model object
+        """
+        class ClassifierClone(Classifier):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = ClassifierClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -603,6 +625,17 @@ class Recognizer(FastDeployModel):
             assert self.initialized, "Recognizer initialize failed."
             self._runnable = True
 
+    def clone(self):
+        """Clone OCR recognition model object
+        :return: a new OCR recognition model object
+        """
+        class RecognizerClone(Recognizer):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = RecognizerClone(self._model.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -706,6 +739,17 @@ class PPOCRv3(FastDeployModel):
             self.system = C.vision.ocr.PPOCRv3(
                 det_model._model, cls_model._model, rec_model._model)
 
+    def clone(self):
+        """Clone PPOCRv3 pipeline object
+        :return: a new PPOCRv3 pipeline object
+        """
+        class PPOCRv3Clone(PPOCRv3):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPOCRv3Clone(self.system.clone())
+        return clone_model
+
     def predict(self, input_image):
         """Predict an input image
         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
@@ -769,6 +813,17 @@ class PPOCRv2(FastDeployModel):
         else:
             self.system = C.vision.ocr.PPOCRv2(
                 det_model._model, cls_model._model, rec_model._model)
+
+    def clone(self):
+        """Clone PPOCRv3 pipeline object
+        :return: a new PPOCRv3 pipeline object
+        """
+        class PPOCRv2Clone(PPOCRv2):
+            def __init__(self, model):
+                self._model = model
+
+        clone_model = PPOCRv2Clone(self.system.clone())
+        return clone_model
 
     def predict(self, input_image):
         """Predict an input image

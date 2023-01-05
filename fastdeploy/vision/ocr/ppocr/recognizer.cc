@@ -55,6 +55,12 @@ bool Recognizer::Initialize() {
   return true;
 }
 
+std::unique_ptr<Recognizer> Recognizer::Clone() const {
+  std::unique_ptr<Recognizer> clone_model = utils::make_unique<Recognizer>(Recognizer(*this));
+  clone_model->SetRuntime(clone_model->CloneRuntime());
+  return clone_model;
+}
+
 bool Recognizer::Predict(const cv::Mat& img, std::string* text, float* rec_score) {
   std::vector<std::string> texts(1);
   std::vector<float> rec_scores(1);
