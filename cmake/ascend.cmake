@@ -17,7 +17,6 @@ if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
 endif()
 
 
-
 if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
   if (NOT BUILD_FASTDEPLOY_PYTHON)
     message(STATUS "Build FastDeploy Ascend C++ library on aarch64 platform.")
