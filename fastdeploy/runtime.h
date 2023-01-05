@@ -19,4 +19,5 @@
  */
 
 #pragma once
+#include "fastdeploy/core/config.h"
 #include "fastdeploy/runtime/runtime.h"
