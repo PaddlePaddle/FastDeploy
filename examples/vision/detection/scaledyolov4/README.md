@@ -25,18 +25,18 @@ English | [简体中文](README_CN.md)
 ## Download Pre-trained ONNX Model
 
 For developers' testing, models exported by ScaledYOLOv4 are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
-| Model                                                               | Size    | Accuracy    |
-|:---------------------------------------------------------------- |:----- |:----- |
-| [ScaledYOLOv4-P5-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5-896.onnx) | 271MB | 51.2% |
-| [ScaledYOLOv4-P5+BoF-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_-896.onnx) | 271MB | 51.7% |
-| [ScaledYOLOv4-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6-1280.onnx) | 487MB | 53.9% |
-| [ScaledYOLOv4-P6+BoF-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_-1280.onnx) | 487MB | 54.4% |
-| [ScaledYOLOv4-P7-1536](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7-1536.onnx) | 1.1GB | 55.0% |
-| [ScaledYOLOv4-P5](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx) | 271MB | - |
-| [ScaledYOLOv4-P5+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_.onnx) | 271MB | -|
-| [ScaledYOLOv4-P6](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6.onnx) | 487MB | - |
-| [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_.onnx) | 487MB | - |
-| [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | - |
+| Model                                                               | Size    | Accuracy    | Note |
+|:---------------------------------------------------------------- |:----- |:----- |:----- |
+| [ScaledYOLOv4-P5-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5-896.onnx) | 271MB | 51.2% | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P5+BoF-896](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_-896.onnx) | 271MB | 51.7% | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P6-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6-1280.onnx) | 487MB | 53.9% | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P6+BoF-1280](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_-1280.onnx) | 487MB | 54.4% | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P7-1536](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7-1536.onnx) | 1.1GB | 55.0% | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P5](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5.onnx) | 271MB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P5+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p5_.onnx) | 271MB | -| This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P6](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6.onnx) | 487MB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P6+BoF](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p6_.onnx) | 487MB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
+| [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | - | This model file is sourced from [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
 
 
 
