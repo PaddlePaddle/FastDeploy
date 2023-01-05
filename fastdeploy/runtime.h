@@ -43,6 +43,7 @@ enum Backend {
   OPENVINO,  ///< Intel OpenVINO, support Paddle/ONNX format, CPU only
   LITE,      ///< Paddle Lite, support Paddle format model, ARM CPU only
   RKNPU2,    ///< RKNPU2, support RKNN format model, Rockchip NPU only
+  SOPHGOTPU,   ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
 };
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
@@ -116,10 +117,13 @@ struct FASTDEPLOY_DECL RuntimeOption {
   /// Use TimVX to inference
   void UseTimVX();
 
+  /// Use Huawei Ascend to inference
+  void UseAscend();
+
   ///
-  /// \brief Turn on XPU.
+  /// \brief Turn on KunlunXin XPU.
   ///
-  /// \param xpu_id the XPU card to use (default is 0).
+  /// \param kunlunxin_id the KunlunXin XPU card to use (default is 0).
   /// \param l3_workspace_size The size of the video memory allocated by the l3
   ///         cache, the maximum is 16M.
   /// \param locked Whether the allocated L3 cache can be locked. If false,
@@ -136,9 +140,10 @@ struct FASTDEPLOY_DECL RuntimeOption {
   ///       file will be used and autotune will not be performed again.
   /// \param precision Calculation accuracy of multi_encoder
   /// \param adaptive_seqlen Is the input of multi_encoder variable length
-  /// \param enable_multi_stream Whether to enable the multi stream of xpu.
+  /// \param enable_multi_stream Whether to enable the multi stream of
+  ///        KunlunXin XPU.
   ///
-  void UseXpu(int xpu_id = 0,
+  void UseKunlunXin(int kunlunxin_id = 0,
               int l3_workspace_size = 0xfffc00,
               bool locked = false,
               bool autotune = true,
@@ -146,6 +151,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
               const std::string& precision = "int16",
               bool adaptive_seqlen = false,
               bool enable_multi_stream = false);
+
+  /// Use Sophgo to inference
+  void UseSophgo();
 
   void SetExternalStream(void* external_stream);
 
@@ -165,6 +173,9 @@ struct FASTDEPLOY_DECL RuntimeOption {
 
   /// Set ONNX Runtime as inference backend, support CPU/GPU
   void UseOrtBackend();
+
+  /// Set SOPHGO Runtime as inference backend, support CPU/GPU
+  void UseSophgoBackend();
 
   /// Set TensorRT as inference backend, only support GPU
   void UseTrtBackend();
@@ -235,10 +246,47 @@ struct FASTDEPLOY_DECL RuntimeOption {
   void SetLiteOptimizedModelDir(const std::string& optimized_model_dir);
 
   /**
-   * @brief Set nnadapter subgraph partition path for Paddle Lite backend.
+   * @brief Set subgraph partition path for Paddle Lite backend.
    */
   void SetLiteSubgraphPartitionPath(
       const std::string& nnadapter_subgraph_partition_config_path);
+
+  /**
+   * @brief Set subgraph partition path for Paddle Lite backend.
+   */
+  void SetLiteSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer);
+
+  /**
+   * @brief Set device name for Paddle Lite backend.
+   */
+  void SetLiteDeviceNames(
+      const std::vector<std::string>& nnadapter_device_names);
+
+  /**
+   * @brief Set context properties for Paddle Lite backend.
+   */
+  void  SetLiteContextProperties(
+      const std::string& nnadapter_context_properties);
+
+  /**
+   * @brief Set model cache dir for Paddle Lite backend.
+   */
+  void SetLiteModelCacheDir(
+      const std::string& nnadapter_model_cache_dir);
+
+  /**
+   * @brief Set dynamic shape info for Paddle Lite backend.
+   */
+  void SetLiteDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info);
+
+  /**
+   * @brief Set mixed precision quantization config path for Paddle Lite backend.
+   */
+  void SetLiteMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path);
 
   /**
    * @brief enable half precision while use paddle lite backend
@@ -398,8 +446,18 @@ struct FASTDEPLOY_DECL RuntimeOption {
   // optimized model dir for CxxConfig
   std::string lite_optimized_model_dir = "";
   std::string lite_nnadapter_subgraph_partition_config_path = "";
+  // and other nnadapter settings for CxxConfig
+  std::string lite_nnadapter_subgraph_partition_config_buffer = "";
+  std::string lite_nnadapter_context_properties = "";
+  std::string lite_nnadapter_model_cache_dir = "";
+  std::string lite_nnadapter_mixed_precision_quantization_config_path = "";
+  std::map<std::string, std::vector<std::vector<int64_t>>>
+    lite_nnadapter_dynamic_shape_info = {{"", {{0}}}};
+  std::vector<std::string> lite_nnadapter_device_names = {};
+
   bool enable_timvx = false;
-  bool enable_xpu = false;
+  bool enable_ascend = false;
+  bool enable_kunlunxin = false;
 
   // ======Only for Trt Backend=======
   std::map<std::string, std::vector<int32_t>> trt_max_shape;
@@ -432,14 +490,14 @@ struct FASTDEPLOY_DECL RuntimeOption {
   fastdeploy::rknpu2::CoreMask rknpu2_core_mask_ =
       fastdeploy::rknpu2::CoreMask::RKNN_NPU_CORE_AUTO;
 
-  // ======Only for XPU Backend=======
-  int xpu_l3_workspace_size = 0xfffc00;
-  bool xpu_locked = false;
-  bool xpu_autotune = true;
-  std::string xpu_autotune_file = "";
-  std::string xpu_precision = "int16";
-  bool xpu_adaptive_seqlen = false;
-  bool xpu_enable_multi_stream = false;
+  // ======Only for KunlunXin XPU Backend=======
+  int kunlunxin_l3_workspace_size = 0xfffc00;
+  bool kunlunxin_locked = false;
+  bool kunlunxin_autotune = true;
+  std::string kunlunxin_autotune_file = "";
+  std::string kunlunxin_precision = "int16";
+  bool kunlunxin_adaptive_seqlen = false;
+  bool kunlunxin_enable_multi_stream = false;
 
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
@@ -525,6 +583,7 @@ struct FASTDEPLOY_DECL Runtime {
   void CreateOpenVINOBackend();
   void CreateLiteBackend();
   void CreateRKNPU2Backend();
+  void CreateSophgoNPUBackend();
   std::unique_ptr<BaseBackend> backend_;
   std::vector<FDTensor> input_tensors_;
   std::vector<FDTensor> output_tensors_;

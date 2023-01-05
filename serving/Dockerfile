@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG http_proxy
+ARG https_proxy
+
 FROM nvcr.io/nvidia/tritonserver:21.10-py3 as full
 FROM nvcr.io/nvidia/tritonserver:21.10-py3-min
 
@@ -24,7 +27,10 @@ COPY serving/TensorRT-8.4.1.5 /opt/TensorRT-8.4.1.5
 
 ENV TZ=Asia/Shanghai \
     DEBIAN_FRONTEND=noninteractive \
-    DCGM_VERSION=2.2.9
+    DCGM_VERSION=2.2.9 \
+    http_proxy=$http_proxy \
+    https_proxy=$http_proxy
+
 RUN apt-get update \
     && apt-key del 7fa2af80 \
     && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb \
@@ -35,7 +41,12 @@ RUN apt-get update \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libre2-5 libb64-0d python3 python3-pip libarchive-dev ffmpeg libsm6 libxext6 \
     && python3 -m pip install -U pip \
-    && python3 -m pip install paddlepaddle-gpu paddlenlp fast-tokenizer-python
+    && python3 -m pip install paddlenlp fast-tokenizer-python
+
+# unset proxy
+ENV http_proxy=
+ENV https_proxy=
+python3 -m pip install paddlepaddle-gpu==2.4.1.post112 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 COPY python/dist/*.whl /opt/fastdeploy/
 RUN python3 -m pip install  /opt/fastdeploy/*.whl \

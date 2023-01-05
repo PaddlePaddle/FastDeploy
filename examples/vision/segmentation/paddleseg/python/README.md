@@ -25,6 +25,10 @@ python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_
 python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu
 # GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
 python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device gpu --use_trt True
+# 昆仑芯XPU推理
+python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device kunlunxin
+# 华为昇腾推理
+python infer.py --model Unet_cityscapes_without_argmax_infer --image cityscapes_demo.png --device ascend
 ```
 
 运行完成可视化结果如下图所示

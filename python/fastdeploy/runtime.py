@@ -263,18 +263,18 @@ class RuntimeOption:
             return
         return self._option.use_gpu(device_id)
 
-    def use_xpu(self,
-                device_id=0,
-                l3_workspace_size=16 * 1024 * 1024,
-                locked=False,
-                autotune=True,
-                autotune_file="",
-                precision="int16",
-                adaptive_seqlen=False,
-                enable_multi_stream=False):
-        """Inference with XPU
+    def use_kunlunxin(self,
+                      device_id=0,
+                      l3_workspace_size=16 * 1024 * 1024,
+                      locked=False,
+                      autotune=True,
+                      autotune_file="",
+                      precision="int16",
+                      adaptive_seqlen=False,
+                      enable_multi_stream=False):
+        """Inference with KunlunXin XPU
 
-        :param device_id: (int)The index of XPU will be used for inference, default 0
+        :param device_id: (int)The index of KunlunXin XPU will be used for inference, default 0
         :param l3_workspace_size: (int)The size of the video memory allocated by the l3 cache, the maximum is 16M, default 16M
         :param locked: (bool)Whether the allocated L3 cache can be locked. If false, it means that the L3 cache is not locked,
                         and the allocated L3 cache can be shared by multiple models, and multiple models
@@ -285,11 +285,11 @@ class RuntimeOption:
                         the algorithm specified in the file will be used and autotune will not be performed again.
         :param precision: (str)Calculation accuracy of multi_encoder
         :param adaptive_seqlen: (bool)adaptive_seqlen Is the input of multi_encoder variable length
-        :param enable_multi_stream: (bool)Whether to enable the multi stream of xpu.
+        :param enable_multi_stream: (bool)Whether to enable the multi stream of KunlunXin XPU.
         """
-        return self._option.use_xpu(device_id, l3_workspace_size, locked,
-                                    autotune, autotune_file, precision,
-                                    adaptive_seqlen, enable_multi_stream)
+        return self._option.use_kunlunxin(device_id, l3_workspace_size, locked,
+                                          autotune, autotune_file, precision,
+                                          adaptive_seqlen, enable_multi_stream)
 
     def use_cpu(self):
         """Inference with CPU
@@ -300,6 +300,16 @@ class RuntimeOption:
                    rknpu2_name=rknpu2.CpuName.RK3588,
                    rknpu2_core=rknpu2.CoreMask.RKNN_NPU_CORE_0):
         return self._option.use_rknpu2(rknpu2_name, rknpu2_core)
+
+    def use_sophgo(self):
+        """Inference with SOPHGO TPU
+        """
+        return self._option.use_sophgo()
+
+    def use_ascend(self):
+        """Inference with Huawei Ascend NPU
+        """
+        return self._option.use_ascend()
 
     def set_cpu_thread_num(self, thread_num=-1):
         """Set number of threads if inference with CPU
@@ -354,6 +364,46 @@ class RuntimeOption:
         """Wrapper function of use_lite_backend(), use Paddle Lite backend, support inference Paddle model on ARM CPU.
         """
         return self.use_lite_backend()
+
+    def set_lite_device_names(self, device_names):
+        """Set nnadapter device name for Paddle Lite backend.
+        """
+        return self._option.set_lite_device_names(device_names)
+
+    def set_lite_context_properties(self, context_properties):
+        """Set nnadapter context properties for Paddle Lite backend.
+        """
+        return self._option.set_lite_context_properties(context_properties)
+
+    def set_lite_model_cache_dir(self, model_cache_dir):
+        """Set nnadapter model cache dir for Paddle Lite backend.
+        """
+        return self._option.set_lite_model_cache_dir(model_cache_dir)
+
+    def set_lite_dynamic_shape_info(self, dynamic_shape_info):
+        """ Set nnadapter dynamic shape info for Paddle Lite backend.
+        """
+        return self._option.set_lite_dynamic_shape_info(dynamic_shape_info)
+
+    def set_lite_subgraph_partition_path(self, subgraph_partition_path):
+        """ Set nnadapter subgraph partition path for Paddle Lite backend.
+        """
+        return self._option.set_lite_subgraph_partition_path(
+            subgraph_partition_path)
+
+    def set_lite_subgraph_partition_config_buffer(self,
+                                                  subgraph_partition_buffer):
+        """ Set nnadapter subgraph partition buffer for Paddle Lite backend.
+        """
+        return self._option.set_lite_subgraph_partition_config_buffer(
+            subgraph_partition_buffer)
+
+    def set_lite_mixed_precision_quantization_config_path(
+            self, mixed_precision_quantization_config_path):
+        """ Set nnadapter mixed precision quantization config path for Paddle Lite backend..
+        """
+        return self._option.set_lite_mixed_precision_quantization_config_path(
+            mixed_precision_quantization_config_path)
 
     def set_paddle_mkldnn(self, use_mkldnn=True):
         """Enable/Disable MKLDNN while using Paddle Inference backend, mkldnn is enabled by default.

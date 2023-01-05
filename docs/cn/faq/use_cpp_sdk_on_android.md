@@ -1,12 +1,17 @@
+
+[English](../../en/faq/use_cpp_sdk_on_android.md) | 中文
+
 # 在 Android 中通过 JNI 使用 FastDeploy C++ SDK  
 本文档将以PicoDet为例，讲解如何通过JNI，将FastDeploy中的模型封装到Android中进行调用。阅读本文档，您至少需要了解C++、Java、JNI以及Android的基础知识。如果您主要关注如何在Java层如何调用FastDeploy的API，则可以不阅读本文档。
 
 ## 目录  
-- [新建Java类并定义native API](#Java)  
-- [Android Studio 生成JNI函数定义](#JNI)  
-- [在C++层实现JNI函数](#CPP)  
-- [编写CMakeLists.txt及配置build.gradle](#CMakeAndGradle)  
-- [更多FastDeploy Android 使用案例](#Examples)
+- [在 Android 中通过 JNI 使用 FastDeploy C++ SDK](#在-android-中通过-jni-使用-fastdeploy-c-sdk)
+  - [目录](#目录)
+  - [新建Java类并定义native API](#新建java类并定义native-api)
+  - [Android Studio 生成JNI函数定义](#android-studio-生成jni函数定义)
+  - [在C++层实现JNI函数](#在c层实现jni函数)
+  - [编写CMakeLists.txt及配置build.gradle](#编写cmakeliststxt及配置buildgradle)
+  - [更多FastDeploy Android 使用案例](#更多fastdeploy-android-使用案例)
 
 ## 新建Java类并定义native API  
 <div id="Java"></div>

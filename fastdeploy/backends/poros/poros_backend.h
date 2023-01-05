@@ -20,34 +20,11 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
-
+#include "fastdeploy/backends/poros/option.h"
 #include "fastdeploy/backends/poros/common/compile.h"
 #include "fastdeploy/backends/poros/common/poros_module.h"
 
 namespace fastdeploy {
-
-struct PorosBackendOption {
-#ifdef WITH_GPU
-  bool use_gpu = true;
-#else
-  bool use_gpu = false;
-#endif
-  int gpu_id = 0;
-  bool long_to_int = true;
-  // There is calculation precision in tf32 mode on A10, it can bring some
-  // performance improvement, but there may be diff
-  bool use_nvidia_tf32 = false;
-  // Threshold for the number of non-const ops
-  int32_t unconst_ops_thres = -1;
-  std::string poros_file = "";
-  std::vector<FDDataType> prewarm_datatypes = {FDDataType::FP32};
-  // TRT options
-  bool enable_fp16 = false;
-  bool enable_int8 = false;
-  bool is_dynamic = false;
-  size_t max_batch_size = 32;
-  size_t max_workspace_size = 1 << 30;
-};
 
 // Convert data type from fastdeploy to poros
 at::ScalarType GetPorosDtype(const FDDataType& fd_dtype);
@@ -74,9 +51,9 @@ class PorosBackend : public BaseBackend {
 
   void BuildOption(const PorosBackendOption& option);
 
-  bool InitFromTorchScript(
-      const std::string& model_file,
-      const PorosBackendOption& option = PorosBackendOption());
+  bool
+  InitFromTorchScript(const std::string& model_file,
+                      const PorosBackendOption& option = PorosBackendOption());
 
   bool InitFromPoros(const std::string& model_file,
                      const PorosBackendOption& option = PorosBackendOption());
@@ -85,8 +62,7 @@ class PorosBackend : public BaseBackend {
                std::vector<std::vector<FDTensor>>& prewarm_tensors,
                const PorosBackendOption& option = PorosBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const { return _numinputs; }

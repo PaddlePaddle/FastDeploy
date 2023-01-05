@@ -45,6 +45,10 @@
 #include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
 #endif
 
+#ifdef ENABLE_SOPHGO_BACKEND
+#include "fastdeploy/backends/sophgo/sophgo_backend.h"
+#endif
+
 namespace fastdeploy {
 
 std::vector<Backend> GetAvailableBackends() {
@@ -70,6 +74,9 @@ std::vector<Backend> GetAvailableBackends() {
 #ifdef ENABLE_RKNPU2_BACKEND
   backends.push_back(Backend::RKNPU2);
 #endif
+#ifdef ENABLE_SOPHGO_BACKEND
+  backends.push_back(Backend::SOPHGOTPU);
+#endif
   return backends;
 }
 
@@ -94,6 +101,8 @@ std::string Str(const Backend& b) {
     return "Backend::POROS";
   } else if (b == Backend::RKNPU2) {
     return "Backend::RKNPU2";
+  } else if (b == Backend::SOPHGOTPU) {
+    return "Backend::SOPHGOTPU";
   } else if (b == Backend::OPENVINO) {
     return "Backend::OPENVINO";
   } else if (b == Backend::LITE) {
@@ -113,6 +122,8 @@ std::ostream& operator<<(std::ostream& out, const Backend& backend) {
     out << "Backend::OPENVINO";
   } else if (backend == Backend::RKNPU2) {
     out << "Backend::RKNPU2";
+  } else if (backend == Backend::SOPHGOTPU) {
+    out << "Backend::SOPHGOTPU";
   } else if (backend == Backend::POROS) {
     out << "Backend::POROS";
   } else if (backend == Backend::LITE) {
@@ -158,6 +169,15 @@ bool CheckModelFormat(const std::string& model_file,
           << model_file << std::endl;
       return false;
     }
+  } else if (model_format == ModelFormat::SOPHGO) {
+    if (model_file.size() < 7 || 
+        model_file.substr(model_file.size() -7, 7) != ".bmodel") {
+      FDERROR
+          << "With model format of ModelFormat::SOPHGO, the model file "
+             "should ends with `.bmodel`, but now it's "
+          << model_file << std::endl;
+      return false;     
+    }
   } else {
     FDERROR
         << "Only support model format with frontend ModelFormat::PADDLE / "
@@ -185,6 +205,10 @@ ModelFormat GuessModelFormat(const std::string& model_file) {
              model_file.substr(model_file.size() - 5, 5) == ".rknn") {
     FDINFO << "Model Format: RKNN." << std::endl;
     return ModelFormat::RKNN;
+  } else if (model_file.size() > 7 &&
+             model_file.substr(model_file.size() - 7, 7) == ".bmodel") {
+    FDINFO << "Model Format: SOPHGO." << std::endl;
+    return ModelFormat::SOPHGO;
   }
 
   FDERROR << "Cannot guess which model format you are using, please set "
@@ -263,7 +287,7 @@ void RuntimeOption::UseTimVX() {
   device = Device::TIMVX;
 }
 
-void RuntimeOption::UseXpu(int xpu_id, 
+void RuntimeOption::UseKunlunXin(int kunlunxin_id, 
                           int l3_workspace_size,
                           bool locked,
                           bool autotune,
@@ -271,16 +295,26 @@ void RuntimeOption::UseXpu(int xpu_id,
                           const std::string &precision,
                           bool adaptive_seqlen,
                           bool enable_multi_stream) {
-  enable_xpu = true;
-  device_id = xpu_id;
-  xpu_l3_workspace_size = l3_workspace_size;
-  xpu_locked=locked;
-  xpu_autotune=autotune;
-  xpu_autotune_file=autotune_file;
-  xpu_precision = precision;
-  xpu_adaptive_seqlen=adaptive_seqlen;
-  xpu_enable_multi_stream=enable_multi_stream;
-  device = Device::XPU;
+  enable_kunlunxin = true;
+  device_id = kunlunxin_id;
+  kunlunxin_l3_workspace_size = l3_workspace_size;
+  kunlunxin_locked=locked;
+  kunlunxin_autotune=autotune;
+  kunlunxin_autotune_file=autotune_file;
+  kunlunxin_precision = precision;
+  kunlunxin_adaptive_seqlen=adaptive_seqlen;
+  kunlunxin_enable_multi_stream=enable_multi_stream;
+  device = Device::KUNLUNXIN;
+}
+
+void RuntimeOption::UseAscend(){
+  enable_ascend = true;
+  device = Device::ASCEND;
+}
+
+void RuntimeOption::UseSophgo() {
+  device = Device::SOPHGOTPUD;
+  UseSophgoBackend();
 }
 
 void RuntimeOption::SetExternalStream(void* external_stream) {
@@ -315,6 +349,15 @@ void RuntimeOption::UseOrtBackend() {
   backend = Backend::ORT;
 #else
   FDASSERT(false, "The FastDeploy didn't compile with OrtBackend.");
+#endif
+}
+
+// use sophgoruntime backend
+void RuntimeOption::UseSophgoBackend() {
+#ifdef ENABLE_SOPHGO_BACKEND
+  backend = Backend::SOPHGOTPU;
+#else
+  FDASSERT(false, "The FastDeploy didn't compile with SophgoBackend.");
 #endif
 }
 
@@ -407,6 +450,36 @@ void RuntimeOption::SetLiteSubgraphPartitionPath(
   lite_nnadapter_subgraph_partition_config_path =
       nnadapter_subgraph_partition_config_path;
 }
+
+void RuntimeOption::SetLiteSubgraphPartitionConfigBuffer(
+      const std::string& nnadapter_subgraph_partition_config_buffer){
+  lite_nnadapter_subgraph_partition_config_buffer = nnadapter_subgraph_partition_config_buffer;
+}
+
+void RuntimeOption::SetLiteDeviceNames(const std::vector<std::string>& nnadapter_device_names){
+  lite_nnadapter_device_names = nnadapter_device_names; 
+}
+
+void RuntimeOption::SetLiteContextProperties(const std::string& nnadapter_context_properties){
+  lite_nnadapter_context_properties = nnadapter_context_properties; 
+}
+
+void RuntimeOption::SetLiteModelCacheDir(const std::string& nnadapter_model_cache_dir){
+  lite_nnadapter_model_cache_dir = nnadapter_model_cache_dir;
+}
+
+
+void RuntimeOption::SetLiteDynamicShapeInfo(
+      const std::map<std::string, std::vector<std::vector<int64_t>>>&
+          nnadapter_dynamic_shape_info){
+  lite_nnadapter_dynamic_shape_info = nnadapter_dynamic_shape_info; 
+}
+
+void RuntimeOption::SetLiteMixedPrecisionQuantizationConfigPath(
+      const std::string& nnadapter_mixed_precision_quantization_config_path){
+        lite_nnadapter_mixed_precision_quantization_config_path = nnadapter_mixed_precision_quantization_config_path;
+}
+
 
 void RuntimeOption::SetTrtInputShape(const std::string& input_name,
                                      const std::vector<int32_t>& min_shape,
@@ -529,6 +602,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
       option.backend = Backend::OPENVINO;
     } else if (IsBackendAvailable(Backend::RKNPU2)) {
       option.backend = Backend::RKNPU2;
+    } else if (IsBackendAvailable(Backend::SOPHGOTPU)) {
+      option.backend = Backend::SOPHGOTPU;
     } else {
       FDERROR << "Please define backend in RuntimeOption, current it's "
                  "Backend::UNKNOWN."
@@ -576,8 +651,8 @@ bool Runtime::Init(const RuntimeOption& _option) {
     FDINFO << "Runtime initialized with Backend::OPENVINO in "
            << Str(option.device) << "." << std::endl;
   } else if (option.backend == Backend::LITE) {
-    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::XPU,
-             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::XPU.");
+    FDASSERT(option.device == Device::CPU || option.device == Device::TIMVX || option.device == Device::KUNLUNXIN || option.device == Device::ASCEND,
+             "Backend::LITE only supports Device::CPU/Device::TIMVX/Device::KUNLUNXIN.");
     CreateLiteBackend();
     FDINFO << "Runtime initialized with Backend::LITE in " << Str(option.device)
            << "." << std::endl;
@@ -588,7 +663,15 @@ bool Runtime::Init(const RuntimeOption& _option) {
 
     FDINFO << "Runtime initialized with Backend::RKNPU2 in "
            << Str(option.device) << "." << std::endl;
-  } else {
+  } else if (option.backend == Backend::SOPHGOTPU) {
+    FDASSERT(option.device == Device::SOPHGOTPUD,
+             "Backend::SOPHGO only supports Device::SOPHGO");
+    CreateSophgoNPUBackend();
+
+    FDINFO << "Runtime initialized with Backend::SOPHGO in "
+           << Str(option.device) << "." << std::endl;
+  }  
+  else {
     FDERROR << "Runtime only support "
                "Backend::ORT/Backend::TRT/Backend::PDINFER/Backend::POROS as "
                "backend now."
@@ -625,7 +708,11 @@ bool Runtime::Infer(std::vector<FDTensor>& input_tensors,
 }
 
 bool Runtime::Infer() {
-  return backend_->Infer(input_tensors_, &output_tensors_, false);
+  bool result = backend_->Infer(input_tensors_, &output_tensors_, false);
+  for (auto& tensor : output_tensors_) {
+    tensor.device_id = option.device_id;
+  }
+  return result;
 }
 
 void Runtime::BindInputTensor(const std::string& name, FDTensor& input) {
@@ -838,18 +925,24 @@ void Runtime::CreateLiteBackend() {
   lite_option.enable_fp16 = option.lite_enable_fp16;
   lite_option.power_mode = static_cast<int>(option.lite_power_mode);
   lite_option.optimized_model_dir = option.lite_optimized_model_dir;
-  lite_option.nnadapter_subgraph_partition_config_path =
-      option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_path = option.lite_nnadapter_subgraph_partition_config_path;
+  lite_option.nnadapter_subgraph_partition_config_buffer = option.lite_nnadapter_subgraph_partition_config_buffer;
+  lite_option.nnadapter_device_names = option.lite_nnadapter_device_names;
+  lite_option.nnadapter_context_properties = option.lite_nnadapter_context_properties;
+  lite_option.nnadapter_model_cache_dir = option.lite_nnadapter_model_cache_dir;
+  lite_option.nnadapter_dynamic_shape_info = option.lite_nnadapter_dynamic_shape_info;
+  lite_option.nnadapter_mixed_precision_quantization_config_path = option.lite_nnadapter_mixed_precision_quantization_config_path;
   lite_option.enable_timvx = option.enable_timvx;
-  lite_option.enable_xpu = option.enable_xpu;
+  lite_option.enable_ascend = option.enable_ascend;
+  lite_option.enable_kunlunxin = option.enable_kunlunxin;
   lite_option.device_id  = option.device_id;
-  lite_option.xpu_l3_workspace_size  = option.xpu_l3_workspace_size;
-  lite_option.xpu_locked = option.xpu_locked;
-  lite_option.xpu_autotune = option.xpu_autotune;
-  lite_option.xpu_autotune_file = option.xpu_autotune_file;
-  lite_option.xpu_precision  = option.xpu_precision;
-  lite_option.xpu_adaptive_seqlen = option.xpu_adaptive_seqlen;
-  lite_option.xpu_enable_multi_stream = option.xpu_enable_multi_stream;
+  lite_option.kunlunxin_l3_workspace_size  = option.kunlunxin_l3_workspace_size;
+  lite_option.kunlunxin_locked = option.kunlunxin_locked;
+  lite_option.kunlunxin_autotune = option.kunlunxin_autotune;
+  lite_option.kunlunxin_autotune_file = option.kunlunxin_autotune_file;
+  lite_option.kunlunxin_precision  = option.kunlunxin_precision;
+  lite_option.kunlunxin_adaptive_seqlen = option.kunlunxin_adaptive_seqlen;
+  lite_option.kunlunxin_enable_multi_stream = option.kunlunxin_enable_multi_stream;
 
   FDASSERT(option.model_format == ModelFormat::PADDLE,
            "LiteBackend only support model format of ModelFormat::PADDLE");
@@ -878,6 +971,21 @@ void Runtime::CreateRKNPU2Backend() {
 #else
   FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
                   "ENABLE_RKNPU2_BACKEND=ON.");
+#endif
+}
+
+void Runtime::CreateSophgoNPUBackend() {
+#ifdef ENABLE_SOPHGO_BACKEND
+  auto sophgo_option = SophgoBackendOption();
+  FDASSERT(option.model_format == ModelFormat::SOPHGO,
+           "SophgoBackend only support model format of ModelFormat::SOPHGO");
+  backend_ = utils::make_unique<SophgoBackend>();
+  auto casted_backend = dynamic_cast<SophgoBackend*>(backend_.get());
+  FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
+           "Load model from nb file failed while initializing LiteBackend.");
+#else
+  FDASSERT(false, "SophgoBackend is not available, please compiled with "
+                  "ENABLE_SOPHGO_BACKEND=ON.");
 #endif
 }
 
