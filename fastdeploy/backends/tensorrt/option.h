@@ -13,10 +13,13 @@
 // limitations under the License.
 
 #pragma once
+#include "fastdeploy/core/fd_type.h"
 #include <iostream>
 #include <map>
 #include <string>
 #include <vector>
+
+#include "fastdeploy/core/fd_type.h"
 
 namespace fastdeploy {
 
