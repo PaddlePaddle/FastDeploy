@@ -69,12 +69,11 @@ static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
   {ModelFormat::SOPHGO, {Backend::SOPHGOTPU}}
 };
 
-    FASTDEPLOY_DECL std::ostream &
-    operator<<(std::ostream& out, const Backend& backend);
+FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Backend& b);
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const ModelFormat& format);
+                                         const ModelFormat& f);
 
 }  // namespace fastdeploy
