@@ -17,7 +17,7 @@ SOPHGO-TPU部署模型前需要将以上Paddle模型转换成bmodel模型，我�
 ### 下载ch_PP-OCRv3_det模型,并转换为ONNX模型
 ```shell
 wget https://paddleocr.bj.bcebos.com/PP-OCRv3/chinese/ch_PP-OCRv3_det_infer.tar
-tar xvf PP_LiteSeg_B_STDC2_cityscapes_without_argmax_infer.tgz
+tar xvf ch_PP-OCRv3_det_infer.tar
 
 # 修改ch_PP-OCRv3_det模型的输入shape，由动态输入变成固定输入
 python paddle_infer_shape.py --model_dir ch_PP-OCRv3_det_infer \
