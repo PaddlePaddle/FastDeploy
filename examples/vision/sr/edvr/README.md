@@ -1,29 +1,29 @@
-[English](README_EN.md) | 简体中文
-# EDVR模型部署
+English | [简体中文](README_CN.md)
+# EDVR Model Deployment
 
-## 模型版本说明
+## Model Description
 
 - [PaddleGAN develop](https://github.com/PaddlePaddle/PaddleGAN)
 
-## 支持模型列表
+## List of Supported Models
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
 - [EDVR](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)。
 
 
-## 导出部署模型
+## Export Deployment Model
 
-在部署前，需要先将训练好的EDVR导出成部署模型，导出EDVR导出模型步骤，参考文档[导出模型](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)。
+Before deployment, export the trained EDVR to the deployment model. Refer to [Export Model](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md) for detailed steps.
 
 
-| 模型                                                                             | 参数大小   | 精度    | 备注 |
+| Model                                                                             | Parameter Size   | Accuracy    | Note |
 |:--------------------------------------------------------------------------------|:-------|:----- | :------ |
 | [EDVR](https://bj.bcebos.com/paddlehub/fastdeploy/EDVR_M_wo_tsa_SRx4.tar) | 14.9MB | - |
 
-**注意**：非常不建议在没有独立显卡的设备上运行该模型
+**Attention**: Running this model on a device without separate graphics card is highly discouraged
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
