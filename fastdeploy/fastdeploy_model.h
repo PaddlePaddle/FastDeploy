@@ -45,12 +45,18 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid timvx backends. This member defined all the timvx backends have successfully tested for the model
    */
   std::vector<Backend> valid_timvx_backends = {};
+  /** Model's valid ascend backends. This member defined all the cann backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_ascend_backends = {};
   /** Model's valid KunlunXin xpu backends. This member defined all the KunlunXin xpu backends have successfully tested for the model
    */
-  std::vector<Backend> valid_xpu_backends = {};
+  std::vector<Backend> valid_kunlunxin_backends = {};
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
+  /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -145,8 +151,10 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateGpuBackend();
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
+  bool CreateSophgoNPUBackend();
   bool CreateTimVXBackend();
-  bool CreateXPUBackend();
+  bool CreateKunlunXinBackend();
+  bool CreateASCENDBackend();
 
   std::shared_ptr<Runtime> runtime_;
   bool runtime_initialized_ = false;

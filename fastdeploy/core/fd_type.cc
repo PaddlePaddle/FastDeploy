@@ -56,14 +56,20 @@ std::string Str(const Device& d) {
     case Device::RKNPU:
       out = "Device::RKNPU";
       break;
+    case Device::SOPHGOTPUD:
+      out = "Device::SOPHGOTPUD";
+      break;
     case Device::IPU:
       out = "Device::IPU";
       break;
     case Device::TIMVX:
       out = "Device::TIMVX";
       break;
-    case Device::XPU:
-      out = "Device::XPU";
+    case Device::ASCEND:
+      out = "Device::ASCEND";
+      break;
+    case Device::KUNLUNXIN:
+      out = "Device::KUNLUNXIN";
       break;
     default:
       out = "Device::UNKOWN";
@@ -82,11 +88,17 @@ std::ostream& operator<<(std::ostream& out,const Device& d){
   case Device::RKNPU:
     out << "Device::RKNPU";
     break;
+  case Device::SOPHGOTPUD:
+    out << "Device::SOPHGOTPUD";
+    break;
   case Device::TIMVX:
     out << "Device::TIMVX";
     break;
-  case Device::XPU:
-    out << "Device::XPU";
+  case Device::KUNLUNXIN:
+    out << "Device::KUNLUNXIN";
+    break;
+  case Device::ASCEND:
+    out << "Device::ASCEND";
     break;
   default:
     out << "Device::UNKOWN";
@@ -199,8 +211,10 @@ std::string Str(const ModelFormat& f) {
     return "ModelFormat::PADDLE";
   } else if (f == ModelFormat::ONNX) {
     return "ModelFormat::ONNX";
-  }else if (f == ModelFormat::RKNN) {
+  } else if (f == ModelFormat::RKNN) {
     return "ModelFormat::RKNN";
+  } else if (f == ModelFormat::SOPHGO) {
+    return "ModelFormat::SOPHGO";
   } else if (f == ModelFormat::TORCHSCRIPT) {
     return "ModelFormat::TORCHSCRIPT";
   }
@@ -214,6 +228,8 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
     out << "ModelFormat::ONNX";
   } else if (format == ModelFormat::RKNN) {
     out << "ModelFormat::RKNN";
+  } else if (format == ModelFormat::SOPHGO) {
+    out << "ModelFormat::SOPHGO";
   } else if (format == ModelFormat::TORCHSCRIPT) {
     out << "ModelFormat::TORCHSCRIPT";
   }

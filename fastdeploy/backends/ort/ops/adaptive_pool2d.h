@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <map>
-#include <string>
-#include <algorithm>
-#include <cmath>
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/utils/utils.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <string>
 
 #ifndef NON_64_PLATFORM
 #include "onnxruntime_cxx_api.h"  // NOLINT
@@ -38,9 +38,8 @@ struct AdaptivePool2dKernel {
   const char* provider_;
 
  public:
-  AdaptivePool2dKernel(Ort::CustomOpApi ort,
-                        const OrtKernelInfo* info,
-                        const char* provider)
+  AdaptivePool2dKernel(Ort::CustomOpApi ort, const OrtKernelInfo* info,
+                       const char* provider)
       : ort_(ort) {
     GetAttribute(info);
     provider_ = provider;
@@ -51,9 +50,8 @@ struct AdaptivePool2dKernel {
   void Compute(OrtKernelContext* context);
 
   void CpuAdaptivePool(const std::vector<int64_t>& input_size,
-                        const std::vector<int64_t>& output_size,
-                        const float* input_data,
-                        float* output_data);
+                       const std::vector<int64_t>& output_size,
+                       const float* input_data, float* output_data);
 };
 
 struct AdaptivePool2dOp
@@ -77,9 +75,8 @@ struct AdaptivePool2dOp
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   }
 
-  const char* GetExecutionProviderType() const {
-    return provider_;
-  }
+  const char* GetExecutionProviderType() const { return provider_; }
+
  private:
   const char* provider_;
 };

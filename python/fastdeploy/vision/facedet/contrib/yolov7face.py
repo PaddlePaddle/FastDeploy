@@ -140,6 +140,13 @@ class YOLOv7Face(FastDeployModel):
 
         assert self.initialized, "YOLOv7Face initialize failed."
 
+    def predict(self, input_image):
+         """Detect the location and key points of human faces from an input image
+         :param input_image: (numpy.ndarray)The input image data, 3-D array with layout HWC, BGR format
+         :return: FaceDetectionResult
+         """
+         return self._model.predict(input_image)
+
     def batch_predict(self, images):
         """Classify a batch of input image
 

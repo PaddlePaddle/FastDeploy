@@ -18,6 +18,8 @@ import os
 import numpy as np
 import time
 
+from fastdeploy import ModelFormat
+
 
 def parse_arguments():
     import argparse
@@ -244,17 +246,53 @@ if __name__ == '__main__':
 
     try:
         if "yolox" in model_file:
-            model = fd.vision.detection.YOLOX(
-                model_file, runtime_option=option)
+            if ".onnx" in model_file:
+                model = fd.vision.detection.YOLOX(
+                    model_file, runtime_option=option)
+            else:
+                model_file = os.path.join(args.model, "model.pdmodel")
+                params_file = os.path.join(args.model, "model.pdiparams")
+                model = fd.vision.detection.YOLOX(
+                    model_file,
+                    params_file,
+                    runtime_option=option,
+                    model_format=ModelFormat.PADDLE)
         elif "yolov5" in model_file:
-            model = fd.vision.detection.YOLOv5(
-                model_file, runtime_option=option)
+            if ".onnx" in model_file:
+                model = fd.vision.detection.YOLOv5(
+                    model_file, runtime_option=option)
+            else:
+                model_file = os.path.join(args.model, "model.pdmodel")
+                params_file = os.path.join(args.model, "model.pdiparams")
+                model = fd.vision.detection.YOLOv5(
+                    model_file,
+                    params_file,
+                    runtime_option=option,
+                    model_format=ModelFormat.PADDLE)
         elif "yolov6" in model_file:
-            model = fd.vision.detection.YOLOv6(
-                model_file, runtime_option=option)
+            if ".onnx" in model_file:
+                model = fd.vision.detection.YOLOv6(
+                    model_file, runtime_option=option)
+            else:
+                model_file = os.path.join(args.model, "model.pdmodel")
+                params_file = os.path.join(args.model, "model.pdiparams")
+                model = fd.vision.detection.YOLOv6(
+                    model_file,
+                    params_file,
+                    runtime_option=option,
+                    model_format=ModelFormat.PADDLE)
         elif "yolov7" in model_file:
-            model = fd.vision.detection.YOLOv7(
-                model_file, runtime_option=option)
+            if ".onnx" in model_file:
+                model = fd.vision.detection.YOLOv7(
+                    model_file, runtime_option=option)
+            else:
+                model_file = os.path.join(args.model, "model.pdmodel")
+                params_file = os.path.join(args.model, "model.pdiparams")
+                model = fd.vision.detection.YOLOv7(
+                    model_file,
+                    params_file,
+                    runtime_option=option,
+                    model_format=ModelFormat.PADDLE)
         else:
             raise Exception("model {} not support now in yolo series".format(
                 args.model))
