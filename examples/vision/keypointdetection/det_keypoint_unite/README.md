@@ -1,39 +1,39 @@
-[English](README_EN.md) | 简体中文
-# PP-PicoDet + PP-TinyPose 联合部署(Pipeline)
+English | [简体中文](README_CN.md)
+# PP-PicoDet + PP-TinyPose Co-deployment (Pipeline)
 
-## 模型版本说明
+## Model Description
 
 - [PaddleDetection release/2.5](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5)
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [PP-PicoDet + PP-TinyPose系列模型](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
+- [PP-PicoDet + PP-TinyPose Models](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
 
-## 准备PP-TinyPose部署模型
+## Prepare PP-TinyPose Deployment Model
 
-PP-TinyPose以及PP-PicoDet模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.5/deploy/EXPORT_MODEL.md)  
+Export the PP-TinyPose and PP-PicoDet models. Please refer to [Model Export](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.5/deploy/EXPORT_MODEL.md) 
 
-**注意**:导出的推理模型包含`model.pdmodel`、`model.pdiparams`和`infer_cfg.yml`三个文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息。
+**Attention**: The exported inference model contains three files, including `model.pdmodel`、`model.pdiparams` and `infer_cfg.yml`.  FastDeploy will get the pre-processing information for inference from yaml files.
 
-## 下载预训练模型
+## Download Pre-trained Model
 
-为了方便开发者的测试，下面提供了PP-PicoDet + PP-TinyPose（Pipeline）导出的部分模型，开发者可直接下载使用。
+For developers' testing, part of the PP-PicoDet + PP-TinyPose（Pipeline）exported models are provided below. Developers can download and use them directly. 
 
-| 应用场景                         |  模型                                 | 参数文件大小 |  AP(业务数据集) | AP(COCO Val 单人/多人) | 单人/多人推理耗时 (FP32) | 单人/多人推理耗时（FP16) |
+| Application Scenario                          |  Model                                | Parameter File Size  |  AP(Service Data set) | AP(COCO Val Single/Multi-person) | Single/Multi-person Inference Time (FP32) | Single/Multi-person Inference Time（FP16) |
 |:-------------------------------|:--------------------------------- |:----- |:----- | :----- | :----- | :----- |
-| 单人模型配置 |[PicoDet-S-Lcnet-Pedestrian-192x192](https://bj.bcebos.com/paddlehub/fastdeploy/PP_PicoDet_V2_S_Pedestrian_192x192_infer.tgz) + [PP-TinyPose-128x96](https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_128x96_infer.tgz) | 4.6MB + 5.3MB | 86.2% | 52.8% | 12.90ms | 9.61ms |
-| 多人模型配置 |[PicoDet-S-Lcnet-Pedestrian-320x320](https://bj.bcebos.com/paddlehub/fastdeploy/PP_PicoDet_V2_S_Pedestrian_320x320_infer.tgz) + [PP-TinyPose-256x192](https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_256x192_infer.tgz)  | 4.6M + 5.3MB | 85.7% | 49.9% | 47.63ms | 34.62ms |
+| Single-person Model Configuration  |[PicoDet-S-Lcnet-Pedestrian-192x192](https://bj.bcebos.com/paddlehub/fastdeploy/PP_PicoDet_V2_S_Pedestrian_192x192_infer.tgz) + [PP-TinyPose-128x96](https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_128x96_infer.tgz) | 4.6MB + 5.3MB | 86.2% | 52.8% | 12.90ms | 9.61ms |
+| Multi-person Model Configuration |[PicoDet-S-Lcnet-Pedestrian-320x320](https://bj.bcebos.com/paddlehub/fastdeploy/PP_PicoDet_V2_S_Pedestrian_320x320_infer.tgz) + [PP-TinyPose-256x192](https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_256x192_infer.tgz)  | 4.6M + 5.3MB | 85.7% | 49.9% | 47.63ms | 34.62ms |
 
-**说明**
-- 关键点检测模型的精度指标是基于对应行人检测模型检测得到的检测框。
-- 精度测试中去除了flip操作，且检测置信度阈值要求0.5。
-- 速度测试环境为qualcomm snapdragon 865，采用arm8下4线程推理。
-- Pipeline速度包含模型的预处理、推理及后处理部分。
-- 精度测试中，为了公平比较，多人数据去除了6人以上（不含6人）的图像。
+**Note**
+- The accuracy of the keypoint detection model is based on the detection frame obtained by the pedestrian detection model. 
+- The flip operation is removed from the accuracy test with the detection confidence threshold of 0.5. 
+- The speed test environment is qualcomm snapdragon 865 with 4-thread inference under arm8. 
+- The Pipeline speed covers the preprocessing, inference, and post-processing of the model. 
+- In the accuracy test, images with more than 6 people (excluding 6 people) were removed from the multi-person data for fair comparison.
 
-更多信息请参考：[PP-TinyPose 官方文档](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
+For more information: refer to [PP-TinyPose official document](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.5/configs/keypoint/tiny_pose/README.md)
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
