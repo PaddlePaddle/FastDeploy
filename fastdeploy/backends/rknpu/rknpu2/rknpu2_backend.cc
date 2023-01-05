@@ -27,14 +27,14 @@ RKNPU2Backend::~RKNPU2Backend() {
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     rknn_destroy_mem(ctx, input_mems_[i]);
   }
-  if(input_mems_ != nullptr){
+  if (input_mems_ != nullptr) {
     free(input_mems_);
   }
 
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     rknn_destroy_mem(ctx, output_mems_[i]);
   }
-  if(output_mems_ != nullptr){
+  if (output_mems_ != nullptr) {
     free(output_mems_);
   }
 }
@@ -173,16 +173,15 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
 
   // create input tensor memory
   // rknn_tensor_mem* input_mems[io_num.n_input];
-  input_mems_ = (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_input);
+  input_mems_ =
+      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_input);
 
   // get input info and copy to input tensor info
   for (uint32_t i = 0; i < io_num.n_input; i++) {
     input_attrs_[i].index = i;
 
     // query info
-    ret = rknn_query(ctx,
-                     RKNN_QUERY_INPUT_ATTR,
-                     &(input_attrs_[i]),
+    ret = rknn_query(ctx, RKNN_QUERY_INPUT_ATTR, &(input_attrs_[i]),
                      sizeof(rknn_tensor_attr));
     DumpTensorAttr(input_attrs_[i]);
 
@@ -190,11 +189,11 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
       printf("rknn_init error! ret=%d\n", ret);
       return false;
     }
-    if((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
-        (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)){
-      FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED" << std::endl;
+    if ((input_attrs_[i].fmt != RKNN_TENSOR_NHWC) &&
+        (input_attrs_[i].fmt != RKNN_TENSOR_UNDEFINED)) {
+      FDERROR << "rknpu2_backend only support input format is NHWC or UNDEFINED"
+              << std::endl;
     }
-
 
     // copy input_attrs_ to input tensor info
     std::string temp_name = input_attrs_[i].name;
@@ -203,25 +202,28 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
     for (int j = 0; j < input_attrs_[i].n_dims; j++) {
       temp_shape[j] = (int)input_attrs_[i].dims[j];
     }
-    FDDataType temp_dtype = fastdeploy::RKNPU2Backend::RknnTensorTypeToFDDataType(input_attrs_[i].type);
+    FDDataType temp_dtype =
+        fastdeploy::RKNPU2Backend::RknnTensorTypeToFDDataType(
+            input_attrs_[i].type);
     TensorInfo temp_input_info = {temp_name, temp_shape, temp_dtype};
     inputs_desc_[i] = temp_input_info;
   }
 
   // Get detailed output parameters
-  output_attrs_ = (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
+  output_attrs_ =
+      (rknn_tensor_attr*)malloc(sizeof(rknn_tensor_attr) * io_num.n_output);
   memset(output_attrs_, 0, io_num.n_output * sizeof(rknn_tensor_attr));
   outputs_desc_.resize(io_num.n_output);
 
   // Create output tensor memory
-  output_mems_ = (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_output);;
+  output_mems_ =
+      (rknn_tensor_mem**)malloc(sizeof(rknn_tensor_mem*) * io_num.n_output);
+  ;
 
   for (uint32_t i = 0; i < io_num.n_output; i++) {
     output_attrs_[i].index = i;
     // query info
-    ret = rknn_query(ctx,
-                     RKNN_QUERY_OUTPUT_ATTR,
-                     &(output_attrs_[i]),
+    ret = rknn_query(ctx, RKNN_QUERY_OUTPUT_ATTR, &(output_attrs_[i]),
                      sizeof(rknn_tensor_attr));
     DumpTensorAttr(output_attrs_[i]);
 
@@ -233,7 +235,7 @@ bool RKNPU2Backend::GetModelInputOutputInfos() {
     // If the output dimension is 3, the runtime will automatically change it to 4.
     // Obviously, this is wrong, and manual correction is required here.
     int n_dims = output_attrs_[i].n_dims;
-    if((n_dims == 4) && (output_attrs_[i].dims[3] == 1)){
+    if ((n_dims == 4) && (output_attrs_[i].dims[3] == 1)) {
       n_dims--;
     }
 
@@ -292,8 +294,7 @@ std::vector<TensorInfo> RKNPU2Backend::GetOutputInfos() {
 }
 
 bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
-                          std::vector<FDTensor>* outputs,
-                          bool copy_to_fd) {
+                          std::vector<FDTensor>* outputs, bool copy_to_fd) {
   int ret = RKNN_SUCC;
   // Judge whether the input and output size are the same
   if (inputs.size() != inputs_desc_.size()) {
@@ -303,15 +304,17 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
     return false;
   }
 
-  if(!this->infer_init){
+  if (!this->infer_init) {
     for (uint32_t i = 0; i < io_num.n_input; i++) {
       // Judge whether the input and output types are the same
       rknn_tensor_type input_type =
-          fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(inputs[i].dtype);
+          fastdeploy::RKNPU2Backend::FDDataTypeToRknnTensorType(
+              inputs[i].dtype);
       if (input_type != input_attrs_[i].type) {
         FDWARNING << "The input tensor type != model's inputs type."
-                  << "The input_type need " << get_type_string(input_attrs_[i].type)
-                  << ",but inputs["<< i << "].type is " << get_type_string(input_type)
+                  << "The input_type need "
+                  << get_type_string(input_attrs_[i].type) << ",but inputs["
+                  << i << "].type is " << get_type_string(input_type)
                   << std::endl;
       }
 
@@ -319,10 +322,11 @@ bool RKNPU2Backend::Infer(std::vector<FDTensor>& inputs,
       input_attrs_[i].type = input_type;
       input_attrs_[i].size = inputs[0].Nbytes();
       input_attrs_[i].size_with_stride = inputs[0].Nbytes();
-      if(input_attrs_[i].type == RKNN_TENSOR_FLOAT16 ||
-          input_attrs_[i].type == RKNN_TENSOR_FLOAT32){
+      if (input_attrs_[i].type == RKNN_TENSOR_FLOAT16 ||
+          input_attrs_[i].type == RKNN_TENSOR_FLOAT32) {
         FDINFO << "The input model is not a quantitative model. "
-                  "Close the normalize operation." << std::endl;
+                  "Close the normalize operation."
+               << std::endl;
       }
 
       input_mems_[i] = rknn_create_mem(ctx, inputs[i].Nbytes());
@@ -474,4 +478,4 @@ RKNPU2Backend::FDDataTypeToRknnTensorType(fastdeploy::FDDataType type) {
   FDERROR << "rknn_tensor_type don't support this type" << std::endl;
   return RKNN_TENSOR_TYPE_MAX;
 }
-} // namespace fastdeploy
+}  // namespace fastdeploy

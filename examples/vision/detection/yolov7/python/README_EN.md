@@ -14,7 +14,21 @@ This doc provides a quick `infer.py` demo of YOLOv7 deployment on CPU/GPU, and a
 # Download sample deployment code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd examples/vision/detection/yolov7/python/
+wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7_infer.tar
+tar -xf yolov7_infer.tar
+wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
+# CPU
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device cpu
+# GPU
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device gpu
+# KunlunXin XPU
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device kunlunxin
+# Huawei Ascend
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device ascend
+```
+If you want to test ONNX model:
+```bash
 # Download yolov7 model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
@@ -23,7 +37,7 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device cpu
 # GPU
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu
-# GPU上使用TensorRT推理
+# Infer with TensorRT on GPU
 python infer.py --model yolov7.onnx --image 000000014439.jpg --device gpu --use_trt True
 ```
 

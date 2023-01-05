@@ -1,3 +1,4 @@
+中文 | [English](keypointdetection_result_EN.md)
 # KeyPointDetectionResult 目标检测结果
 
 KeyPointDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中目标行为的各个关键点坐标和置信度。
@@ -16,10 +17,12 @@ struct KeyPointDetectionResult {
 };
 ```
 
-- **keypoints**: 成员变量，表示识别到的目标行为的关键点坐标。`keypoints.size()= N * J`，
+- **keypoints**: 成员变量，表示识别到的目标行为的关键点坐标。
+  `keypoints.size()= N * J`
     - `N`：图片中的目标数量
     - `J`：num_joints（一个目标的关键点数量）
-- **scores**: 成员变量，表示识别到的目标行为的关键点坐标的置信度。`scores.size()= N * J`
+- **scores**: 成员变量，表示识别到的目标行为的关键点坐标的置信度。
+  `scores.size()= N * J`
     - `N`：图片中的目标数量
     - `J`:num_joints（一个目标的关键点数量）
 - **num_joints**: 成员变量，一个目标的关键点数量
@@ -31,11 +34,11 @@ struct KeyPointDetectionResult {
 `fastdeploy.vision.KeyPointDetectionResult`
 
 - **keypoints**(list of list(float)): 成员变量，表示识别到的目标行为的关键点坐标。
-                                      `keypoints.size()= N * J`
-                                      `N`:图片中的目标数量
-                                      `J`:num_joints（关键点数量）
+  `keypoints.size()= N * J`
+  - `N`:图片中的目标数量
+  - `J`:num_joints（关键点数量）
 - **scores**(list of float): 成员变量，表示识别到的目标行为的关键点坐标的置信度。
-                             `scores.size()= N * J`
-                             `N`:图片中的目标数量
-                             `J`:num_joints（一个目标的关键点数量）
+  `scores.size()= N * J`
+  - `N`:图片中的目标数量
+  - `J`:num_joints（一个目标的关键点数量）
 - **num_joints**(int): 成员变量，一个目标的关键点数量

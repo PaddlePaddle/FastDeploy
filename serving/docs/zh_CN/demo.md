@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/demo-en.md)
 # 服务化部署示例
 我们以最简单的yolov5模型为例，讲述如何进行服务化部署，详细的代码和操作步骤见[yolov5服务化部署](../../../examples/vision/detection/yolov5/serving)，阅读本文之前建议您先阅读以下文档：
 - [服务化模型目录说明](model_repository.md) (说明如何准备模型目录)

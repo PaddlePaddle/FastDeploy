@@ -49,17 +49,17 @@ int main(int argc, char* argv[]) {
     backend_type = std::atoi(argv[3]);
   }
   switch (backend_type) {
-    case 0:
-      option.UsePaddleInferBackend();
-      break;
-    case 1:
-      option.UseOrtBackend();
-      break;
-    case 2:
-      option.UseOpenVINOBackend();
-      break;
-    default:
-      break;
+  case 0:
+    option.UsePaddleInferBackend();
+    break;
+  case 1:
+    option.UseOrtBackend();
+    break;
+  case 2:
+    option.UseOpenVINOBackend();
+    break;
+  default:
+    break;
   }
   std::string model_dir(argv[1]);
   std::string model_path = model_dir + sep + "inference.pdmodel";
@@ -68,9 +68,9 @@ int main(int argc, char* argv[]) {
   using fastdeploy::text::SchemaNode;
   using fastdeploy::text::UIEResult;
 
-  auto predictor =
-      fastdeploy::text::UIEModel(model_path, param_path, vocab_path, 0.5, 128,
-                                 {"时间", "选手", "赛事名称"}, option);
+  auto predictor = fastdeploy::text::UIEModel(
+      model_path, param_path, vocab_path, 0.5, 128,
+      {"时间", "选手", "赛事名称"}, /* batch_size = */ 1, option);
   std::cout << "After init predictor" << std::endl;
   std::vector<std::unordered_map<std::string, std::vector<UIEResult>>> results;
   // Named Entity Recognition

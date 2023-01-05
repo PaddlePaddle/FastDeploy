@@ -22,25 +22,34 @@ namespace vision {
 namespace ocr {
 
 void OcrRecognizerResizeImage(FDMat* mat, float max_wh_ratio,
-                              const std::vector<int>& rec_image_shape) {
-  int img_c, img_h, img_w;
-  img_c = rec_image_shape[0];
+                              const std::vector<int>& rec_image_shape, bool static_shape_infer) {
+  int img_h, img_w;
   img_h = rec_image_shape[1];
   img_w = rec_image_shape[2];
 
-  img_w = int(img_h * max_wh_ratio);
+  if (!static_shape_infer) {
 
-  float ratio = float(mat->Width()) / float(mat->Height());
-  int resize_w;
-  if (ceilf(img_h * ratio) > img_w) {
-    resize_w = img_w;
-  }else{
-    resize_w = int(ceilf(img_h * ratio));
+    img_w = int(img_h * max_wh_ratio);
+    float ratio = float(mat->Width()) / float(mat->Height());
+
+    int resize_w;
+    if (ceilf(img_h * ratio) > img_w) {
+      resize_w = img_w;
+    } else {
+      resize_w = int(ceilf(img_h * ratio));
+    }
+    Resize::Run(mat, resize_w, img_h);
+    Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
+
+  } else {
+    if (mat->Width() >= img_w) {
+      Resize::Run(mat, img_w, img_h); // Reszie W to 320
+    } else {
+      Resize::Run(mat, mat->Width(), img_h);
+      Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), {127, 127, 127});
+      // Pad to 320
+    } 
   }
-  Resize::Run(mat, resize_w, img_h);
-
-  std::vector<float> value = {127, 127, 127};
-  Pad::Run(mat, 0, 0, 0, int(img_w - mat->Width()), value);
 }
 
 bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTensor>* outputs) {
@@ -75,7 +84,7 @@ bool RecognizerPreprocessor::Run(std::vector<FDMat>* images, std::vector<FDTenso
       real_index = indices[i];
     }
     FDMat* mat = &(images->at(real_index));
-    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_);
+    OcrRecognizerResizeImage(mat, max_wh_ratio, rec_image_shape_, static_shape_infer_);
     NormalizeAndPermute::Run(mat, mean_, scale_, is_scale_);
   }
   // Only have 1 output Tensor.

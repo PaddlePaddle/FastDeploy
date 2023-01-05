@@ -49,8 +49,10 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
     is_vertical_screen_ = value;
   }
 
-  // This function will disable normalize and hwc2chw in preprocessing step.
-  void DisableNormalizeAndPermute();
+  /// This function will disable normalize in preprocessing step.
+  void DisableNormalize();
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute();
 
  private:
   virtual bool BuildPreprocessPipelineFromConfig();
@@ -61,10 +63,12 @@ class FASTDEPLOY_DECL PaddleSegPreprocessor {
    */
   bool is_vertical_screen_ = false;
 
-  // for recording the switch of normalize and hwc2chw
-  bool disable_normalize_and_permute_ = false;
+  // for recording the switch of hwc2chw
+  bool disable_permute_ = false;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
 
-  bool is_contain_resize_op = false;
+  bool is_contain_resize_op_ = false;
 
   bool initialized_ = false;
 };

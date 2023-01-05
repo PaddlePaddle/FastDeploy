@@ -1,3 +1,5 @@
+[English](../../en/faq/build_on_win_with_gui.md) | 中文
+
 # CMakeGUI + VS 2019 IDE编译FastDeploy
 
 注：此方式仅支持编译FastDeploy C++ SDK

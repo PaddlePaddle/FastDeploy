@@ -1,3 +1,4 @@
+[English](../../en/build_and_install/ipu.md) | 简体中文
 
 # IPU部署库编译
 

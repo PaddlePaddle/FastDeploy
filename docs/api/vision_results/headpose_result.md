@@ -1,3 +1,4 @@
+中文 ｜ [English](headpose_result_EN.md)
 # HeadPoseResult 头部姿态结果
 
 HeadPoseResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明头部姿态结果。

@@ -17,40 +17,40 @@
 #include "NvInferPlugin.h"
 #include "NvInferRuntimeCommon.h"
 #include "fastdeploy/utils/utils.h"
+#include <cstring>
 #include <iostream>
+#include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <memory>
-#include <cstring>
-#include <sstream>
 
 namespace fastdeploy {
 
 class BasePlugin : public nvinfer1::IPluginV2DynamicExt {
  protected:
-    void setPluginNamespace(const char* libNamespace) noexcept override {
-      mNamespace = libNamespace;
-    }
+  void setPluginNamespace(const char* libNamespace) noexcept override {
+    mNamespace = libNamespace;
+  }
 
-    const char* getPluginNamespace() const noexcept override {
-      return mNamespace.c_str();
-    }
+  const char* getPluginNamespace() const noexcept override {
+    return mNamespace.c_str();
+  }
 
-    std::string mNamespace;
+  std::string mNamespace;
 };
 
 class BaseCreator : public nvinfer1::IPluginCreator {
  public:
-    void setPluginNamespace(const char* libNamespace) noexcept override {
-        mNamespace = libNamespace;
-    }
+  void setPluginNamespace(const char* libNamespace) noexcept override {
+    mNamespace = libNamespace;
+  }
 
-    const char* getPluginNamespace() const noexcept override {
-        return mNamespace.c_str();
-    }
+  const char* getPluginNamespace() const noexcept override {
+    return mNamespace.c_str();
+  }
 
  protected:
-    std::string mNamespace;
+  std::string mNamespace;
 };
 
 typedef enum {
@@ -62,19 +62,17 @@ typedef enum {
 } pluginStatus_t;
 
 // Write values into buffer
-template <typename T>
-void write(char*& buffer, const T& val) {
-    std::memcpy(buffer, &val, sizeof(T));
-    buffer += sizeof(T);
+template <typename T> void write(char*& buffer, const T& val) {
+  std::memcpy(buffer, &val, sizeof(T));
+  buffer += sizeof(T);
 }
 
 // Read values from buffer
-template <typename T>
-T read(const char*& buffer) {
-    T val{};
-    std::memcpy(&val, buffer, sizeof(T));
-    buffer += sizeof(T);
-    return val;
+template <typename T> T read(const char*& buffer) {
+  T val{};
+  std::memcpy(&val, buffer, sizeof(T));
+  buffer += sizeof(T);
+  return val;
 }
 
 }  // namespace fastdeploy

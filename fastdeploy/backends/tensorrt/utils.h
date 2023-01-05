@@ -32,17 +32,15 @@
 namespace fastdeploy {
 
 struct FDInferDeleter {
-  template <typename T>
-  void operator()(T* obj) const {
+  template <typename T> void operator()(T* obj) const {
     if (obj) {
       delete obj;
-//      obj->destroy();
+      //      obj->destroy();
     }
   }
 };
 
-template <typename T>
-using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
+template <typename T> using FDUniquePtr = std::unique_ptr<T, FDInferDeleter>;
 
 int64_t Volume(const nvinfer1::Dims& d);
 
@@ -72,17 +70,13 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
   return out;
 }
 
-template <typename AllocFunc, typename FreeFunc>
-class FDGenericBuffer {
+template <typename AllocFunc, typename FreeFunc> class FDGenericBuffer {
  public:
   //!
   //! \brief Construct an empty buffer.
   //!
   explicit FDGenericBuffer(nvinfer1::DataType type = nvinfer1::DataType::kFLOAT)
-      : mSize(0),
-        mCapacity(0),
-        mType(type),
-        mBuffer(nullptr),
+      : mSize(0), mCapacity(0), mType(type), mBuffer(nullptr),
         mExternal_buffer(nullptr) {}
 
   //!
@@ -104,9 +98,7 @@ class FDGenericBuffer {
   }
 
   FDGenericBuffer(FDGenericBuffer&& buf)
-      : mSize(buf.mSize),
-        mCapacity(buf.mCapacity),
-        mType(buf.mType),
+      : mSize(buf.mSize), mCapacity(buf.mCapacity), mType(buf.mType),
         mBuffer(buf.mBuffer) {
     buf.mSize = 0;
     buf.mCapacity = 0;
@@ -133,7 +125,8 @@ class FDGenericBuffer {
   //! \brief Returns pointer to underlying array.
   //!
   void* data() {
-    if (mExternal_buffer != nullptr) return mExternal_buffer;
+    if (mExternal_buffer != nullptr)
+      return mExternal_buffer;
     return mBuffer;
   }
 
@@ -141,7 +134,8 @@ class FDGenericBuffer {
   //! \brief Returns pointer to underlying array.
   //!
   const void* data() const {
-    if (mExternal_buffer != nullptr) return mExternal_buffer;
+    if (mExternal_buffer != nullptr)
+      return mExternal_buffer;
     return mBuffer;
   }
 
@@ -213,8 +207,8 @@ class FDGenericBuffer {
 };
 
 using FDDeviceBuffer = FDGenericBuffer<FDDeviceAllocator, FDDeviceFree>;
-using FDDeviceHostBuffer = FDGenericBuffer<FDDeviceHostAllocator,
-                                           FDDeviceHostFree>;
+using FDDeviceHostBuffer =
+    FDGenericBuffer<FDDeviceHostAllocator, FDDeviceHostFree>;
 
 class FDTrtLogger : public nvinfer1::ILogger {
  public:

@@ -1,3 +1,4 @@
+English | [中文](../zh_CN/model_repository.md)
 # Model Repository
 
 FastDeploy starts the serving by specifying one or more models in the model repository to deploy the service. When the serving is running, the models in the service can be modified following [Model Management](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_management.md), and obtain serving from one or more model repositories specified at the serving initiation.

@@ -37,13 +37,13 @@ cp models/runtime/ppyoloe_runtime_config.pbtxt models/runtime/config.pbtxt
 
 # 拉取fastdeploy镜像(x.y.z为镜像版本号，需替换成fastdeploy版本数字)
 # GPU镜像
-docker pull paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
+docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
 # CPU镜像
 docker pull paddlepaddle/fastdeploy:z.y.z-cpu-only-21.10
 
 
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /serving 目录
-nvidia-docker run -it --net=host --name fd_serving --shm-size="1g"  -v `pwd`/:/serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
+nvidia-docker run -it --net=host --name fd_serving --shm-size="1g"  -v `pwd`/:/serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
 
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models

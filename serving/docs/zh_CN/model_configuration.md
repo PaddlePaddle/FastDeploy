@@ -1,3 +1,4 @@
+中文 ｜ [English](../EN/model_configuration-en.md)
 # 模型配置
 模型存储库中的每个模型都必须包含一个模型配置，该配置提供了关于模型的必要和可选信息。这些配置信息一般写在 *config.pbtxt* 文件中，[ModelConfig protobuf](https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto)格式。
 

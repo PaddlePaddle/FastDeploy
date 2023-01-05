@@ -1,3 +1,5 @@
+[English](../../../en/quick_start/runtime/cpp.md) | 中文
+
 # C++推理
 
 确认开发环境已准备FastDeploy C++部署库，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。

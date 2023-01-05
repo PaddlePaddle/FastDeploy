@@ -1,5 +1,5 @@
 # optional, If name is specified it must match the name of the model repository directory containing the model.
-name: "ppyoloe_runtime"
+name: "runtime"
 backend: "fastdeploy"
 
 # Input configuration of the model

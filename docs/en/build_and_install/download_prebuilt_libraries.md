@@ -1,9 +1,10 @@
 English | [中文](../../cn/build_and_install/download_prebuilt_libraries.md)
+
 # How to Install Prebuilt Library
 
 FastDeploy provides pre-built libraries for developers to download and install directly. Meanwhile, FastDeploy also offers easy access to compile so that developers can compile FastDeploy according to their own needs.
 
-This article is divided into two parts:
+This document is divided into two parts:
 - [1.GPU Deployment Environment](#1)
 - [2.CPU Deployment Environment](#2)
 
@@ -22,7 +23,7 @@ FastDeploy supports Computer Vision, Text and NLP model deployment on CPU and Nv
 
 ### Python SDK
 
-Install the released version（the newest 1.0.1 for now）
+Install the released version（the newest 1.0.2 for now）
 
 ```
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -42,12 +43,12 @@ conda config --add channels conda-forge && conda install cudatoolkit=11.2 cudnn=
 
 ### C++ SDK
 
-Install the released version（Latest 1.0.1）
+Install the released version（Latest 1.0.2）
 
 | Platform    | File                                                                                                                  | Description                                               |
 |:----------- |:--------------------------------------------------------------------------------------------------------------------- |:--------------------------------------------------------- |
-| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.1.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2 |
-| Windows x64 | [fastdeploy-win-x64-gpu-1.0.1.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.1.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
+| Linux x64 | [fastdeploy-linux-x64-gpu-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-gpu-1.0.2.tgz) | g++ 8.2, CUDA 11.2, cuDNN 8.2 |
+| Windows x64 | [fastdeploy-win-x64-gpu-1.0.2.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-gpu-1.0.2.zip) | Visual Studio 16 2019, CUDA 11.2, cuDNN 8.2 |
 
 Install the Develop version（Nightly build）
 
@@ -69,7 +70,7 @@ FastDeploy supports computer vision, text and NLP model deployment on CPU with P
 
 ### Python SDK
 
-Install the released version（Latest 1.0.1 for now）
+Install the released version（Latest 1.0.2 for now）
 
 ```
 pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
@@ -83,16 +84,16 @@ pip install fastdeploy-python==0.0.0 -f https://www.paddlepaddle.org.cn/whl/fast
 
 ### C++ SDK
 
-Install the released version（Latest 1.0.1 for now, Android is 1.0.1）
+Install the released version（Latest 1.0.2 for now, Android is 1.0.0）
 
 | Platform      | File                                                                                                                  | Description                    |
 |:------------- |:--------------------------------------------------------------------------------------------------------------------- |:------------------------------ |
-| Linux x64 | [fastdeploy-linux-x64-1.0.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.1.tgz) | g++ 8.2 |
-| Windows x64 | [fastdeploy-win-x64-1.0.1.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.1.zip) | Visual Studio 16 2019 |
-| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.1.tgz) | clang++ 10.0.0|
-| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.1.tgz) | clang++ 13.0.0 |
-| Linux aarch64 | [fastdeploy-osx-arm64-1.0.1.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.1.tgz) | gcc 6.3 |  
-| Android armv7&v8 | [fastdeploy-android-1.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.0-shared.tgz)| NDK 25, clang++, support arm64-v8a及armeabi-v7a |
+| Linux x64 | [fastdeploy-linux-x64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-1.0.2.tgz) | g++ 8.2 |
+| Windows x64 | [fastdeploy-win-x64-1.0.2.zip](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-win-x64-1.0.2.zip) | Visual Studio 16 2019 |
+| Mac OSX x64 | [fastdeploy-osx-x86_64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-x86_64-1.0.2.tgz) | clang++ 10.0.0|
+| Mac OSX arm64 | [fastdeploy-osx-arm64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-osx-arm64-1.0.2.tgz) | clang++ 13.0.0 |
+| Linux aarch64 | [fastdeploy-osx-arm64-1.0.2.tgz](https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-aarch64-1.0.2.tgz) | gcc 6.3 |  
+| Android armv7&v8 | [fastdeploy-android-1.0.0-shared.tgz](https://bj.bcebos.com/fastdeploy/release/android/fastdeploy-android-1.0.0-shared.tgz)| NDK 25, clang++, support arm64-v8a and armeabi-v7a |
 
 ## Java SDK
 
@@ -109,6 +110,6 @@ Install the Develop version（Nightly build）
 | Linux x64 | [fastdeploy-linux-x64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-linux-x64-0.0.0.tgz) | g++ 8.2 |
 | Windows x64 | [fastdeploy-win-x64-0.0.0.zip](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-win-x64-0.0.0.zip) | Visual Studio 16 2019 |
 | Mac OSX x64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://bj.bcebos.com/fastdeploy/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz) | - |
-| Mac OSX arm64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz) | clang++ 13.0.0编译产出 |
+| Mac OSX arm64 | [fastdeploy-osx-arm64-0.0.0.tgz](https://fastdeploy.bj.bcebos.com/dev/cpp/fastdeploy-osx-arm64-0.0.0.tgz) | clang++ 13.0.0 to compile |
 | Linux aarch64 | - | - |  
 | Android armv7&v8 | - | - |

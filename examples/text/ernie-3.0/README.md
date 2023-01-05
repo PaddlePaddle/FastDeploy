@@ -1,39 +1,41 @@
-# ERNIE 3.0 模型部署
+[简体中文](README_CN.md)| English
 
-## 模型详细说明
-- [PaddleNLP ERNIE 3.0模型说明](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
+# ERNIE 3.0 Model Deployment
 
-## 支持的模型列表
+## Model Description
+- [PaddleNLP ERNIE 3.0 Model Description](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0)
 
-| 模型 |  结构  | 语言 |
+## A list of Supported Models
+
+| Model |  Structure  | Language |
 | :---: | :--------: | :--------: |
-| `ERNIE 3.0-Base`| 12-layers, 768-hidden, 12-heads | 中文 |
-| `ERNIE 3.0-Medium`| 6-layers, 768-hidden, 12-heads | 中文 |
-| `ERNIE 3.0-Mini`| 6-layers, 384-hidden, 12-heads | 中文 |
-| `ERNIE 3.0-Micro`| 4-layers, 384-hidden, 12-heads | 中文 |
-| `ERNIE 3.0-Nano `| 4-layers, 312-hidden, 12-heads | 中文 |
+| `ERNIE 3.0-Base`| 12-layers, 768-hidden, 12-heads | Chinese |
+| `ERNIE 3.0-Medium`| 6-layers, 768-hidden, 12-heads | Chinese |
+| `ERNIE 3.0-Mini`| 6-layers, 384-hidden, 12-heads | Chinese |
+| `ERNIE 3.0-Micro`| 4-layers, 384-hidden, 12-heads | Chinese |
+| `ERNIE 3.0-Nano `| 4-layers, 312-hidden, 12-heads | Chinese |
 
-## 支持的NLP任务列表
+## A list of Supported NLP Tasks
 
-| 任务 Task  |  是否支持   |
+| Task  |  Yes or No   |
 | :--------------- | ------- |
-| 文本分类 | ✅ |
-| 序列标注 | ❌ |
+| text classification | ✅ |
+| sequence labeling | ❌ |
 
-## 导出部署模型
+## Export Deployment Models
 
-在部署前，需要先将训练好的ERNIE模型导出成部署模型，导出步骤可参考文档[导出模型](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0).
+Before deployment, it is required to export trained ERNIE models into deployment models. The export steps can be found in the document [Export Model](https://github.com/PaddlePaddle/PaddleNLP/tree/release/2.4/model_zoo/ernie-3.0).
 
-## 下载微调模型
+## Download Fine-tuning Models
 
-### 分类任务
+### Classification Task
 
-为了方便开发者的测试，下面提供了在文本分类[AFQMC数据集](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip)上微调的ERNIE 3.0-Medium模型，开发者可直接下载体验。
+For developers' testing, the fine-tuned ERNIE 3.0-Medium Model on text classification [AFQMC dataset](https://bj.bcebos.com/paddlenlp/datasets/afqmc_public.zip) is provided below. Developers can download it directly.
 
 - [ERNIE 3.0 Medium AFQMC](https://bj.bcebos.com/fastdeploy/models/ernie-3.0/ernie-3.0-medium-zh-afqmc.tgz)
 
-## 详细部署文档
+## Detailed Deployment Documents 
 
-- [Python部署](python)
-- [C++部署](cpp)
-- [Serving部署](serving)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
+- [Serving Deployment](serving)

@@ -1,3 +1,4 @@
+English | [中文](../../cn/build_and_install/jetson.md)
 
 # How to Build FastDeploy Library on Nvidia Jetson Platform
 

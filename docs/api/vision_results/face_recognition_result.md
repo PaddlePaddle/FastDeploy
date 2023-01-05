@@ -1,3 +1,4 @@
+中文 ｜ [English](face_recognition_result_EN.md)
 # FaceRecognitionResult 人脸识别结果
 
 FaceRecognitionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸识别模型对图像特征的embedding。

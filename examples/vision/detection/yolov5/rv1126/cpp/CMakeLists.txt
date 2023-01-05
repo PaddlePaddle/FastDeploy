@@ -21,17 +21,10 @@ install(TARGETS infer_demo DESTINATION ./)
 install(DIRECTORY models DESTINATION ./)
 install(DIRECTORY images DESTINATION ./)
 
-file(GLOB FASTDEPLOY_LIBS ${FASTDEPLOY_INSTALL_DIR}/lib/*)
-install(PROGRAMS ${FASTDEPLOY_LIBS} DESTINATION lib)
-
-file(GLOB OPENCV_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/opencv/lib/lib*)
-install(PROGRAMS ${OPENCV_LIBS} DESTINATION lib)
-
-file(GLOB PADDLELITE_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddlelite/lib/lib*)
-install(PROGRAMS ${PADDLELITE_LIBS} DESTINATION lib)
-
-file(GLOB TIMVX_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/paddlelite/lib/verisilicon_timvx/*)
-install(PROGRAMS ${TIMVX_LIBS} DESTINATION lib)
+file(GLOB_RECURSE FASTDEPLOY_LIBS ${FASTDEPLOY_INSTALL_DIR}/lib/lib*.so*)
+file(GLOB_RECURSE ALL_LIBS ${FASTDEPLOY_INSTALL_DIR}/third_libs/install/lib*.so*)
+list(APPEND ALL_LIBS ${FASTDEPLOY_LIBS})
+install(PROGRAMS ${ALL_LIBS} DESTINATION lib)
 
 file(GLOB ADB_TOOLS run_with_adb.sh)
 install(PROGRAMS ${ADB_TOOLS} DESTINATION ./)

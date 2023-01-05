@@ -36,7 +36,9 @@ void BindYOLOv5(pybind11::module& m) {
       })
       .def_property("size", &vision::detection::YOLOv5Preprocessor::GetSize, &vision::detection::YOLOv5Preprocessor::SetSize)
       .def_property("padding_value", &vision::detection::YOLOv5Preprocessor::GetPaddingValue, &vision::detection::YOLOv5Preprocessor::SetPaddingValue)
-      .def_property("is_scale_up", &vision::detection::YOLOv5Preprocessor::GetScaleUp, &vision::detection::YOLOv5Preprocessor::SetScaleUp);
+      .def_property("is_scale_up", &vision::detection::YOLOv5Preprocessor::GetScaleUp, &vision::detection::YOLOv5Preprocessor::SetScaleUp)
+      .def_property("is_mini_pad", &vision::detection::YOLOv5Preprocessor::GetMiniPad, &vision::detection::YOLOv5Preprocessor::SetMiniPad)
+      .def_property("stride", &vision::detection::YOLOv5Preprocessor::GetStride, &vision::detection::YOLOv5Preprocessor::SetStride);
 
   pybind11::class_<vision::detection::YOLOv5Postprocessor>(
       m, "YOLOv5Postprocessor")

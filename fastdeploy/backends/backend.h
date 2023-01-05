@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include "fastdeploy/backends/common/multiclass_nms.h"
 #include "fastdeploy/core/fd_tensor.h"
 #include "fastdeploy/core/fd_type.h"
 

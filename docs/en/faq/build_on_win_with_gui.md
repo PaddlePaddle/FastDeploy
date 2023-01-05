@@ -1,13 +1,18 @@
+English | [中文](../../cn/faq/build_on_win_with_gui.md)
 # Use CMakeGUI + VS 2019 IDE to Compile FastDeploy
 
 Note: This method only supports FastDeploy C++ SDK
 
 ## Contents
 
-- [How to Use CMake GUI for Basic Compliation](#CMakeGuiAndVS2019Basic)
-- [How to Set for CPU version C++ SDK Compilation](#CMakeGuiAndVS2019CPU)
-- [How to Set for GPU version C++ SDK Compilation](#CMakeGuiAndVS2019GPU)
-- [How to Use Visual Studio 2019 IDE for Compliation](#CMakeGuiAndVS2019Build)
+- [Use CMakeGUI + VS 2019 IDE to Compile FastDeploy](#use-cmakegui--vs-2019-ide-to-compile-fastdeploy)
+  - [Contents](#contents)
+    - [How to Use CMake GUI for Basic Compilation](#how-to-use-cmake-gui-for-basic-compilation)
+    - [How to Set for CPU version C++ SDK Compilation](#how-to-set-for-cpu-version-c-sdk-compilation)
+    - [How to Set for GPU version C++ SDK Compilation](#how-to-set-for-gpu-version-c-sdk-compilation)
+    - [How to Use Visual Studio 2019 IDE for Compliation](#how-to-use-visual-studio-2019-ide-for-compliation)
+    - [Compile all examples（Optional）](#compile-all-examplesoptional)
+  - [Note](#note)
 
 ### How to Use CMake GUI for Basic Compilation
 <div id="CMakeGuiAndVS2019Basic"></div>

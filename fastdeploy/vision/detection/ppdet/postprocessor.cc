@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
+#include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 
 namespace fastdeploy {
@@ -176,7 +177,7 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
     return false;
   }
 
-  backend::MultiClassNMS nms;
+  PaddleMultiClassNMS nms;
   nms.background_label = -1;
   nms.keep_top_k = 100;
   nms.nms_eta = 1.0;

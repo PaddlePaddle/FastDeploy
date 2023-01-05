@@ -55,10 +55,57 @@ void CpuInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
+  auto vis_im =
+      fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
+  cv::imwrite("vis_result.jpg", vis_im);
+  std::cout << "TinyPose visualized result saved in ./vis_result.jpg"
+            << std::endl;
+}
+
+void KunlunXinInfer(const std::string& det_model_dir,
+              const std::string& tinypose_model_dir,
+              const std::string& image_file) {
+  auto option = fastdeploy::RuntimeOption();
+  option.UseKunlunXin();
+  auto det_model_file = det_model_dir + sep + "model.pdmodel";
+  auto det_params_file = det_model_dir + sep + "model.pdiparams";
+  auto det_config_file = det_model_dir + sep + "infer_cfg.yml";
+  auto det_model = fastdeploy::vision::detection::PicoDet(
+      det_model_file, det_params_file, det_config_file, option);
+  if (!det_model.Initialized()) {
+    std::cerr << "Detection Model Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto tinypose_model_file = tinypose_model_dir + sep + "model.pdmodel";
+  auto tinypose_params_file = tinypose_model_dir + sep + "model.pdiparams";
+  auto tinypose_config_file = tinypose_model_dir + sep + "infer_cfg.yml";
+  auto tinypose_model = fastdeploy::vision::keypointdetection::PPTinyPose(
+      tinypose_model_file, tinypose_params_file, tinypose_config_file, option);
+  if (!tinypose_model.Initialized()) {
+    std::cerr << "TinyPose Model Failed to initialize." << std::endl;
+    return;
+  }
+
+  auto im = cv::imread(image_file);
+  fastdeploy::vision::KeyPointDetectionResult res;
+
+  auto pipeline =
+      fastdeploy::pipeline::PPTinyPose(
+          &det_model, &tinypose_model);
+  pipeline.detection_model_score_threshold = 0.5;
+  if (!pipeline.Predict(&im, &res)) {
+    std::cerr << "TinyPose Prediction Failed." << std::endl;
+    return;
+  } else {
+    std::cout << "TinyPose Prediction Done!" << std::endl;
+  }
+ 
+  std::cout << res.Str() << std::endl;
+
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -104,10 +151,9 @@ void GpuInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测框结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -161,10 +207,9 @@ void TrtInfer(const std::string& det_model_dir,
   } else {
     std::cout << "TinyPose Prediction Done!" << std::endl;
   }
-  // 输出预测关键点结果
+  
   std::cout << res.Str() << std::endl;
 
-  // 可视化预测结果
   auto vis_im =
       fastdeploy::vision::VisKeypointDetection(im, res, 0.2);
   cv::imwrite("vis_result.jpg", vis_im);
@@ -180,7 +225,7 @@ int main(int argc, char* argv[]) {
                  "./test.jpeg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -191,6 +236,8 @@ int main(int argc, char* argv[]) {
     GpuInfer(argv[1], argv[2], argv[3]);
   } else if (std::atoi(argv[4]) == 2) {
     TrtInfer(argv[1], argv[2], argv[3]);
+  } else if (std::atoi(argv[4]) == 3) {
+    KunlunXinInfer(argv[1], argv[2], argv[3]);
   }
   return 0;
 }

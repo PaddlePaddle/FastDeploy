@@ -30,24 +30,24 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
   auto place = ConvertFDDeviceToPlace(fd_tensor.device);
   if (fd_tensor.dtype == FDDataType::FP32) {
     if (place == paddle_infer::PlaceType::kGPU) {
-       tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
-                              shape, place);
+      tensor->ShareExternalData(static_cast<const float*>(fd_tensor.Data()),
+                                shape, place);
     } else {
       tensor->CopyFromCpu(static_cast<const float*>(fd_tensor.Data()));
     }
     return;
   } else if (fd_tensor.dtype == FDDataType::INT32) {
     if (place == paddle_infer::PlaceType::kGPU) {
-       tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
-                              shape, place);
+      tensor->ShareExternalData(static_cast<const int32_t*>(fd_tensor.Data()),
+                                shape, place);
     } else {
       tensor->CopyFromCpu(static_cast<const int32_t*>(fd_tensor.Data()));
     }
     return;
   } else if (fd_tensor.dtype == FDDataType::INT64) {
     if (place == paddle_infer::PlaceType::kGPU) {
-       tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
-                              shape, place);
+      tensor->ShareExternalData(static_cast<const int64_t*>(fd_tensor.Data()),
+                                shape, place);
     } else {
       tensor->CopyFromCpu(static_cast<const int64_t*>(fd_tensor.Data()));
     }
@@ -62,13 +62,12 @@ void ShareTensorFromFDTensor(paddle_infer::Tensor* tensor,
 }
 
 void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
-                            FDTensor* fd_tensor,
-                            bool copy_to_fd) {
+                            FDTensor* fd_tensor, bool copy_to_fd) {
   auto fd_dtype = PaddleDataTypeToFD(tensor->type());
   std::vector<int64_t> shape;
   auto tmp_shape = tensor->shape();
   shape.assign(tmp_shape.begin(), tmp_shape.end());
-  if(copy_to_fd) {
+  if (copy_to_fd) {
     fd_tensor->Resize(shape, fd_dtype, tensor->name());
     if (fd_tensor->dtype == FDDataType::FP32) {
       tensor->CopyToCpu(static_cast<float*>(fd_tensor->MutableData()));
@@ -79,9 +78,9 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     } else if (fd_tensor->dtype == FDDataType::INT64) {
       tensor->CopyToCpu(static_cast<int64_t*>(fd_tensor->MutableData()));
       return;
-    } 
+    }
     FDASSERT(false, "Unexpected data type(%s) while infer with PaddleBackend.",
-            Str(fd_tensor->dtype).c_str());
+             Str(fd_tensor->dtype).c_str());
   } else {
     paddle_infer::PlaceType place;
     int size = 0;
@@ -99,17 +98,17 @@ void PaddleTensorToFDTensor(std::unique_ptr<paddle_infer::Tensor>& tensor,
     } else if (fd_dtype == FDDataType::UINT8) {
       out_data = tensor->data<uint8_t>(&place, &size);
     } else {
-      FDASSERT(false, "Unexpected data type(%s) while infer shared with PaddleBackend.",
+      FDASSERT(
+          false,
+          "Unexpected data type(%s) while infer shared with PaddleBackend.",
           Str(fd_dtype).c_str());
     }
     Device device = Device::CPU;
-    if(place == paddle_infer::PlaceType::kGPU) {
+    if (place == paddle_infer::PlaceType::kGPU) {
       device = Device::GPU;
     }
     fd_tensor->name = tensor->name();
-    fd_tensor->SetExternalData(
-        shape, fd_dtype,
-        out_data, device);
+    fd_tensor->SetExternalData(shape, fd_dtype, out_data, device);
   }
 }
 
@@ -153,7 +152,10 @@ FDDataType ReaderDataTypeToFD(int32_t dtype) {
   } else if (dtype == 6) {
     fd_dtype = FDDataType::FP16;
   } else {
-    FDASSERT(false, "Unexpected data type: %d while call ReaderDataTypeToFD in PaddleBackend.", dtype);
+    FDASSERT(false,
+             "Unexpected data type: %d while call ReaderDataTypeToFD in "
+             "PaddleBackend.",
+             dtype);
   }
   return fd_dtype;
 }

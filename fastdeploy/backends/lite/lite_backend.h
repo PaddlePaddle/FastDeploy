@@ -20,42 +20,10 @@
 #include <vector>
 
 #include "fastdeploy/backends/backend.h"
+#include "fastdeploy/backends/lite/option.h"
 #include "paddle_api.h"  // NOLINT
 
 namespace fastdeploy {
-
-struct LiteBackendOption {
-  // cpu num threads
-  int threads = 1;
-  // lite power mode
-  // 0: LITE_POWER_HIGH
-  // 1: LITE_POWER_LOW
-  // 2: LITE_POWER_FULL
-  // 3: LITE_POWER_NO_BIND
-  // 4: LITE_POWER_RAND_HIGH
-  // 5: LITE_POWER_RAND_LOW
-  int power_mode = 3;
-  // enable fp16
-  bool enable_fp16 = false;
-  // enable int8
-  bool enable_int8 = false;
-  // optimized model dir for CxxConfig
-  std::string optimized_model_dir = "";
-  // TODO(qiuyanjun): support more options for lite backend.
-  // Such as fp16, different device target (kARM/kXPU/kNPU/...)
-  std::string nnadapter_subgraph_partition_config_path = "";
-  bool enable_timvx = false;
-  bool enable_xpu = false;
-  int device_id = 0;
-  int xpu_l3_workspace_size = 0xfffc00;
-  bool xpu_locked = false;
-  bool xpu_autotune = true;
-  std::string xpu_autotune_file = "";
-  std::string xpu_precision = "int16";
-  bool xpu_adaptive_seqlen = false;
-  bool xpu_enable_multi_stream = false;
-};
-
 // Convert data type from paddle lite to fastdeploy
 FDDataType LiteDataTypeToFD(const paddle::lite_api::PrecisionType& dtype);
 

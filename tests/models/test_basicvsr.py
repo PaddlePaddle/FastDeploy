@@ -69,3 +69,7 @@ def test_basicvsr():
         if t >= 10:
             break
     capture.release()
+
+
+if __name__ == "__main__":
+    test_basicvsr()

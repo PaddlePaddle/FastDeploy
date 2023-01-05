@@ -20,6 +20,7 @@ void BindFDTensor(pybind11::module&);
 void BindRuntime(pybind11::module&);
 void BindFDModel(pybind11::module&);
 void BindVision(pybind11::module&);
+void BindEncryption(pybind11::module&);
 void BindText(pybind11::module&);
 void BindPipeline(pybind11::module&);
 
@@ -166,6 +167,13 @@ PYBIND11_MODULE(@PY_LIBRARY_NAME@, m) {
       m.def_submodule("pipeline", "Pipeline module of FastDeploy.");
   BindPipeline(pipeline_module);
 #endif
+
+#ifdef ENABLE_ENCRYPTION
+  auto encryption_module =
+      m.def_submodule("encryption", "Encryption module of FastDeploy.");
+  BindEncryption(encryption_module);
+#endif
+
 #ifdef ENABLE_TEXT
   auto text_module =
       m.def_submodule("text", "Text module of FastDeploy.");

@@ -1,4 +1,4 @@
-
+English | [中文](../../cn/build_and_install/cpu.md)
 
 # How to Build CPU Deployment Environment
 

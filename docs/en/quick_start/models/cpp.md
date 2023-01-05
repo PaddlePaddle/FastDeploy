@@ -1,3 +1,4 @@
+English | [中文](../../../cn/quick_start/models/cpp.md)
 # C++ Deployment
 
 Please make sure the development environment has FastDeploy C++ SDK installed. Refer to [FastDeploy installation](../../build_and_install/) to install the pre-built FastDeploy, or build and install according to your own needs.

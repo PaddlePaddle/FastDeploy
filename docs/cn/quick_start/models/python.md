@@ -1,3 +1,5 @@
+[English](../../../en/quick_start/models/python.md) | 中文
+
 # PPYOLOE Python部署
 
 确认开发环境已安装FastDeploy，参考[FastDeploy安装](../../build_and_install/)安装预编译的FastDeploy，或根据自己需求进行编译安装。

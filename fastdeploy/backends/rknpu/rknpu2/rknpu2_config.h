@@ -24,9 +24,9 @@ typedef enum _rknpu2_cpu_name {
 /*! RKNPU2 core mask for mobile device. */
 typedef enum _rknpu2_core_mask {
   RKNN_NPU_CORE_AUTO = 0,  //< default, run on NPU core randomly.
-  RKNN_NPU_CORE_0 = 1,    //< run on NPU core 0.
-  RKNN_NPU_CORE_1 = 2,    //< run on NPU core 1.
-  RKNN_NPU_CORE_2 = 4,    //< run on NPU core 2.
+  RKNN_NPU_CORE_0 = 1,     //< run on NPU core 0.
+  RKNN_NPU_CORE_1 = 2,     //< run on NPU core 1.
+  RKNN_NPU_CORE_2 = 4,     //< run on NPU core 2.
   RKNN_NPU_CORE_0_1 =
       RKNN_NPU_CORE_0 | RKNN_NPU_CORE_1,  //< run on NPU core 1 and core 2.
   RKNN_NPU_CORE_0_1_2 =

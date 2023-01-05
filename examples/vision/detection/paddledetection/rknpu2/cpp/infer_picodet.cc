@@ -19,14 +19,13 @@
 void ONNXInfer(const std::string& model_dir, const std::string& image_file) {
   std::string model_file = model_dir + "/picodet_s_416_coco_lcnet.onnx";
   std::string params_file;
-  std::string config_file = model_dir + "/deploy.yaml";
+  std::string config_file = model_dir + "/infer_cfg.yml";
   auto option = fastdeploy::RuntimeOption();
   option.UseCpu();
   auto format = fastdeploy::ModelFormat::ONNX;
 
   auto model = fastdeploy::vision::detection::PicoDet(
       model_file, params_file, config_file,option,format);
-  model.GetPostprocessor().ApplyDecodeAndNMS();
 
   fastdeploy::TimeCounter tc;
   tc.Start();

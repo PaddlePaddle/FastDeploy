@@ -34,7 +34,7 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   auto rec_option = option;
 
   // The cls and rec model can inference a batch of images now.
-  // User could initialize the inference batch size and set them after create PPOCR model.
+  // User could initialize the inference batch size and set them after create PP-OCR model.
   int cls_batch_size = 1;
   int rec_batch_size = 6;
 
@@ -66,9 +66,9 @@ void InitAndInfer(const std::string& det_model_dir, const std::string& cls_model
   
   // Set inference batch size for cls model and rec model, the value could be -1 and 1 to positive infinity.
   // When inference batch size is set to -1, it means that the inference batch size 
-  // of the cls and rec models will be the same as the number of boxes detected by the det model.  
+  // of the cls and rec models will be the same as the number of boxes detected by the det model. 
   ppocr_v3.SetClsBatchSize(cls_batch_size);
-  ppocr_v3.SetRecBatchSize(rec_batch_size);
+  ppocr_v3.SetRecBatchSize(rec_batch_size); 
 
   if(!ppocr_v3.Initialized()){
     std::cerr << "Failed to initialize PP-OCR." << std::endl;
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
                  "./ppocr_keys_v1.txt ./12.jpg 0"
               << std::endl;
     std::cout << "The data type of run_option is int, 0: run with cpu; 1: run "
-                 "with gpu; 2: run with gpu and use tensorrt backend."
+                 "with gpu; 2: run with gpu and use tensorrt backend; 3: run with gpu and use Paddle-TRT; 4: run with kunlunxin."
               << std::endl;
     return -1;
   }
@@ -121,6 +121,8 @@ int main(int argc, char* argv[]) {
     option.UseTrtBackend();
     option.EnablePaddleTrtCollectShape();
     option.EnablePaddleToTrt();
+  } else if (flag == 4) {
+    option.UseKunlunXin();
   }
 
   std::string det_model_dir = argv[1];

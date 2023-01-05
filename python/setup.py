@@ -56,6 +56,9 @@ if os.getenv("BUILD_ON_CPU", "OFF") == "ON":
 setup_configs = dict()
 setup_configs["ENABLE_RKNPU2_BACKEND"] = os.getenv("ENABLE_RKNPU2_BACKEND",
                                                    "OFF")
+setup_configs["ENABLE_SOPHGO_BACKEND"] = os.getenv("ENABLE_SOPHGO_BACKEND",
+                                                   "OFF")
+setup_configs["WITH_ASCEND"] = os.getenv("WITH_ASCEND", "OFF")
 setup_configs["ENABLE_ORT_BACKEND"] = os.getenv("ENABLE_ORT_BACKEND", "OFF")
 setup_configs["ENABLE_OPENVINO_BACKEND"] = os.getenv("ENABLE_OPENVINO_BACKEND",
                                                      "OFF")
@@ -67,11 +70,12 @@ setup_configs["ENABLE_TRT_BACKEND"] = os.getenv("ENABLE_TRT_BACKEND", "OFF")
 setup_configs["ENABLE_LITE_BACKEND"] = os.getenv("ENABLE_LITE_BACKEND", "OFF")
 setup_configs["PADDLELITE_URL"] = os.getenv("PADDLELITE_URL", "OFF")
 setup_configs["ENABLE_VISION"] = os.getenv("ENABLE_VISION", "OFF")
+setup_configs["ENABLE_ENCRYPTION"] = os.getenv("ENABLE_ENCRYPTION", "OFF")
 setup_configs["ENABLE_FLYCV"] = os.getenv("ENABLE_FLYCV", "OFF")
 setup_configs["ENABLE_TEXT"] = os.getenv("ENABLE_TEXT", "OFF")
 setup_configs["WITH_GPU"] = os.getenv("WITH_GPU", "OFF")
 setup_configs["WITH_IPU"] = os.getenv("WITH_IPU", "OFF")
-setup_configs["WITH_XPU"] = os.getenv("WITH_XPU", "OFF")
+setup_configs["WITH_KUNLUNXIN"] = os.getenv("WITH_KUNLUNXIN", "OFF")
 setup_configs["BUILD_ON_JETSON"] = os.getenv("BUILD_ON_JETSON", "OFF")
 setup_configs["TRT_DIRECTORY"] = os.getenv("TRT_DIRECTORY", "UNDEFINED")
 setup_configs["CUDA_DIRECTORY"] = os.getenv("CUDA_DIRECTORY",

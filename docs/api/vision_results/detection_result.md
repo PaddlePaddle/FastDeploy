@@ -1,3 +1,4 @@
+中文 ｜ [English](detection_result_EN.md) 
 # DetectionResult 目标检测结果
 
 DetectionResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度。

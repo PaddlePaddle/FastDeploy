@@ -509,6 +509,17 @@ class RecognizerPreprocessor:
         return self._preprocessor.run(input_ims)
 
     @property
+    def static_shape_infer(self):
+        return self._preprocessor.static_shape_infer
+
+    @static_shape_infer.setter
+    def static_shape_infer(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `static_shape_infer` must be type of bool."
+        self._preprocessor.static_shape_infer = value
+
+    @property
     def is_scale(self):
         return self._preprocessor.is_scale
 
@@ -625,6 +636,17 @@ class Recognizer(FastDeployModel):
     @postprocessor.setter
     def postprocessor(self, value):
         self._model.postprocessor = value
+
+    @property
+    def static_shape_infer(self):
+        return self._model.preprocessor.static_shape_infer
+
+    @static_shape_infer.setter
+    def static_shape_infer(self, value):
+        assert isinstance(
+            value,
+            bool), "The value to set `static_shape_infer` must be type of bool."
+        self._model.preprocessor.static_shape_infer = value
 
     @property
     def is_scale(self):
