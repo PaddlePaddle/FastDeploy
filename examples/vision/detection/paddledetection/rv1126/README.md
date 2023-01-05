@@ -1,12 +1,12 @@
-[English](README_EN.md) | 简体中文
-# PP-YOLOE  量化模型在 RV1126 上的部署
-目前 FastDeploy 已经支持基于 Paddle Lite 部署 PP-YOLOE  量化模型到 RV1126 上。
+English | [简体中文](README_CN.md)
+# Deploy PP-YOLOE Quantification Model on RV1126
+Now FastDeploy supports the deployment of PP-YOLOE quantification model to RV1126 based on Paddle Lite.
 
-模型的量化和量化模型的下载请参考：[模型量化](../quantize/README.md)
+For model quantification and download, refer to [Model Quantification](../quantize/README.md)
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-在 RV1126 上只支持 C++ 的部署。
+Only C++ deployment is supported on RV1126.
 
-- [C++部署](cpp)
+- [C++ Deployment](cpp)
