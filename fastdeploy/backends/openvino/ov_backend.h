@@ -21,17 +21,10 @@
 
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/utils/unique_ptr.h"
+#include "fastdeploy/backends/openvino/option.h"
 #include "openvino/openvino.hpp"
 
 namespace fastdeploy {
-
-struct OpenVINOBackendOption {
-  std::string device = "CPU";
-  int cpu_thread_num = -1;
-  int num_streams = 0;
-  std::map<std::string, std::vector<int64_t>> shape_infos;
-  std::set<std::string> cpu_operators{"MulticlassNms"};
-};
 
 class OpenVINOBackend : public BaseBackend {
  public:
@@ -47,8 +40,7 @@ class OpenVINOBackend : public BaseBackend {
   InitFromOnnx(const std::string& model_file,
                const OpenVINOBackendOption& option = OpenVINOBackendOption());
 
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const override;

@@ -37,7 +37,6 @@
 | [ScaledYOLOv4-P7](https://bj.bcebos.com/paddlehub/fastdeploy/scaled_yolov4-p7.onnx) | 1.1GB | - | 此模型文件来源于[ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4)，GPL-3.0 License |
 
 
-
 ## 详细部署文档
 
 - [Python部署](python)

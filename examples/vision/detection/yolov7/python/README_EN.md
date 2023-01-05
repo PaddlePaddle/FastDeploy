@@ -24,6 +24,8 @@ python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --dev
 python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device gpu
 # KunlunXin XPU
 python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device kunlunxin
+# Huawei Ascend
+python infer_paddle_model.py --model yolov7_infer --image 000000014439.jpg --device ascend
 ```
 If you want to test ONNX model:
 ```bash

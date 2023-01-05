@@ -25,6 +25,7 @@
 #include "NvOnnxParser.h"
 #include "fastdeploy/backends/backend.h"
 #include "fastdeploy/backends/tensorrt/utils.h"
+#include "fastdeploy/backends/tensorrt/option.h"
 #include "fastdeploy/utils/unique_ptr.h"
 
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
@@ -58,27 +59,8 @@ namespace fastdeploy {
 struct TrtValueInfo {
   std::string name;
   std::vector<int> shape;
-  nvinfer1::DataType dtype;  // dtype of TRT model
+  nvinfer1::DataType dtype;   // dtype of TRT model
   FDDataType original_dtype;  // dtype of original ONNX/Paddle model
-};
-
-struct TrtBackendOption {
-  std::string model_file = "";   // Path of model file
-  std::string params_file = "";  // Path of parameters file, can be empty
-  // format of input model
-  ModelFormat model_format = ModelFormat::AUTOREC;
-
-  int gpu_id = 0;
-  bool enable_fp16 = false;
-  bool enable_int8 = false;
-  size_t max_batch_size = 32;
-  size_t max_workspace_size = 1 << 30;
-  std::map<std::string, std::vector<int32_t>> max_shape;
-  std::map<std::string, std::vector<int32_t>> min_shape;
-  std::map<std::string, std::vector<int32_t>> opt_shape;
-  std::string serialize_file = "";
-  bool enable_pinned_memory = false;
-  void* external_stream_ = nullptr;
 };
 
 std::vector<int> toVec(const nvinfer1::Dims& dim);
@@ -97,8 +79,7 @@ class TrtBackend : public BaseBackend {
   bool InitFromOnnx(const std::string& model_file,
                     const TrtBackendOption& option = TrtBackendOption(),
                     bool from_memory_buffer = false);
-  bool Infer(std::vector<FDTensor>& inputs,
-             std::vector<FDTensor>* outputs,
+  bool Infer(std::vector<FDTensor>& inputs, std::vector<FDTensor>* outputs,
              bool copy_to_fd = true) override;
 
   int NumInputs() const { return inputs_desc_.size(); }
@@ -107,7 +88,7 @@ class TrtBackend : public BaseBackend {
   TensorInfo GetOutputInfo(int index);
   std::vector<TensorInfo> GetInputInfos() override;
   std::vector<TensorInfo> GetOutputInfos() override;
-  std::unique_ptr<BaseBackend> Clone(void *stream = nullptr,
+  std::unique_ptr<BaseBackend> Clone(void* stream = nullptr,
                                      int device_id = -1) override;
 
   ~TrtBackend() {

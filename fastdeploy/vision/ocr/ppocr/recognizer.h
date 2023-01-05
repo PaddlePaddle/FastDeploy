@@ -78,11 +78,20 @@ class FASTDEPLOY_DECL Recognizer : public FastDeployModel {
                size_t start_index, size_t end_index,
                const std::vector<int>& indices);
 
-  RecognizerPreprocessor preprocessor_;
-  RecognizerPostprocessor postprocessor_;
+  /// Get preprocessor reference of DBDetectorPreprocessor
+  virtual RecognizerPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of DBDetectorPostprocessor
+  virtual RecognizerPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  private:
   bool Initialize();
+  RecognizerPreprocessor preprocessor_;
+  RecognizerPostprocessor postprocessor_;
 };
 
 }  // namespace ocr

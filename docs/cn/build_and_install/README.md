@@ -6,10 +6,10 @@
 - [FastDeploy预编译库下载安装](download_prebuilt_libraries.md)
 
 ## 自行编译安装
-- [GPU部署环境](gpu.md)
+- [NVIDIA GPU部署环境](gpu.md)
 - [CPU部署环境](cpu.md)
 - [IPU部署环境](ipu.md)
-- [Jetson部署环境](jetson.md)
+- [Nvidia Jetson部署环境](jetson.md)
 - [Android平台部署环境](android.md)
 - [瑞芯微RV1126部署环境](rv1126.md)
 - [瑞芯微RK3588部署环境](rknpu2.md)
@@ -26,6 +26,7 @@
 | ENABLE_PADDLE_BACKEND   | 默认OFF，是否编译集成Paddle Inference后端(CPU/GPU上推荐打开)                             |  
 | ENABLE_LITE_BACKEND     | 默认OFF，是否编译集成Paddle Lite后端(编译Android库时需要设置为ON)                          |
 | ENABLE_RKNPU2_BACKEND   | 默认OFF，是否编译集成RKNPU2后端(RK3588/RK3568/RK3566上推荐打开)                           |
+| ENABLE_SOPHGO_BACKEND   | 默认OFF，是否编译集成SOPHGO后端, 当在SOPHGO TPU上部署时，需要设置为ON                      |
 | WITH_ASCEND             | 默认OFF，当在华为昇腾NPU上部署时, 需要设置为ON                                              |
 | WITH_KUNLUNXIN          | 默认OFF，当在昆仑芯XPU上部署时，需设置为ON                                                |
 | WITH_TIMVX              | 默认OFF，需要在RV1126/RV1109/A311D上部署时，需设置为ON                                   |

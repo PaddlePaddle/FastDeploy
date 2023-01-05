@@ -77,11 +77,20 @@ class FASTDEPLOY_DECL Classifier : public FastDeployModel {
                             std::vector<float>* cls_scores,
                             size_t start_index, size_t end_index);
 
-  ClassifierPreprocessor preprocessor_;
-  ClassifierPostprocessor postprocessor_;
+  /// Get preprocessor reference of ClassifierPreprocessor
+  virtual ClassifierPreprocessor& GetPreprocessor() {
+    return preprocessor_;
+  }
+
+  /// Get postprocessor reference of ClassifierPostprocessor
+  virtual ClassifierPostprocessor& GetPostprocessor() {
+    return postprocessor_;
+  }
 
  private:
   bool Initialize();
+  ClassifierPreprocessor preprocessor_;
+  ClassifierPostprocessor postprocessor_;
 };
 
 }  // namespace ocr
