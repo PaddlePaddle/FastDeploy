@@ -53,26 +53,26 @@ namespace fastdeploy {
 
 bool Runtime::Init(const RuntimeOption& _option) {
   option = _option;
-  if (option.model_format == ModelFormat::AUTOREC) {
-    option.model_format = GuessModelFormat(_option.model_file);
-  }
+  // Choose default backend by model format
   if (option.backend == Backend::UNKNOWN) {
-    if (IsBackendAvailable(Backend::ORT)) {
-      option.backend = Backend::ORT;
-    } else if (IsBackendAvailable(Backend::PDINFER)) {
-      option.backend = Backend::PDINFER;
-    } else if (IsBackendAvailable(Backend::POROS)) {
-      option.backend = Backend::POROS;
-    } else if (IsBackendAvailable(Backend::OPENVINO)) {
-      option.backend = Backend::OPENVINO;
-    } else if (IsBackendAvailable(Backend::RKNPU2)) {
-      option.backend = Backend::RKNPU2;
-    } else if (IsBackendAvailable(Backend::SOPHGOTPU)) {
-      option.backend = Backend::SOPHGOTPU;
-    } else {
-      FDERROR << "Please define backend in RuntimeOption, current it's "
-                 "Backend::UNKNOWN."
+    auto iter = s_default_backends_cfg.find(option.model_format);
+    if (iter == s_default_backends_cfg.end()) {
+      FDERROR << "Cannot found a default backend for model format: "
+              << option.model_format
+              << ", please define the inference backend in RuntimeOption."
               << std::endl;
+      return false;
+    }
+    for (const auto& b : iter->second) {
+      if (IsBackendAvailable(b)) {
+        option.backend = b;
+        FDINFO << "FastDeploy will choose " << b << " to inference this model."
+               << std::endl;
+      }
+    }
+    if (option.backend == Backend::UNKNOWN) {
+      FDERROR << "Cannot found available backends for model format: "
+              << option.model_format << "." << std::endl;
       return false;
     }
   }
@@ -279,8 +279,9 @@ void Runtime::CreatePaddleBackend() {
              "Load model from Paddle failed while initliazing PaddleBackend.");
   }
 #else
-  FDASSERT(false, "PaddleBackend is not available, please compiled with "
-                  "ENABLE_PADDLE_BACKEND=ON.");
+  FDASSERT(false,
+           "PaddleBackend is not available, please compiled with "
+           "ENABLE_PADDLE_BACKEND=ON.");
 #endif
 }
 
@@ -310,8 +311,9 @@ void Runtime::CreateOpenVINOBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OpenVINOBackend is not available, please compiled with "
-                  "ENABLE_OPENVINO_BACKEND=ON.");
+  FDASSERT(false,
+           "OpenVINOBackend is not available, please compiled with "
+           "ENABLE_OPENVINO_BACKEND=ON.");
 #endif
 }
 
@@ -341,8 +343,9 @@ void Runtime::CreateOrtBackend() {
              "Load model from Paddle failed while initliazing OrtBackend.");
   }
 #else
-  FDASSERT(false, "OrtBackend is not available, please compiled with "
-                  "ENABLE_ORT_BACKEND=ON.");
+  FDASSERT(false,
+           "OrtBackend is not available, please compiled with "
+           "ENABLE_ORT_BACKEND=ON.");
 #endif
 }
 
@@ -379,8 +382,9 @@ void Runtime::CreateTrtBackend() {
              "Load model from Paddle failed while initliazing TrtBackend.");
   }
 #else
-  FDASSERT(false, "TrtBackend is not available, please compiled with "
-                  "ENABLE_TRT_BACKEND=ON.");
+  FDASSERT(false,
+           "TrtBackend is not available, please compiled with "
+           "ENABLE_TRT_BACKEND=ON.");
 #endif
 }
 
@@ -425,8 +429,9 @@ void Runtime::CreateLiteBackend() {
                                           lite_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false, "LiteBackend is not available, please compiled with "
-                  "ENABLE_LITE_BACKEND=ON.");
+  FDASSERT(false,
+           "LiteBackend is not available, please compiled with "
+           "ENABLE_LITE_BACKEND=ON.");
 #endif
 }
 
@@ -442,8 +447,9 @@ void Runtime::CreateRKNPU2Backend() {
   FDASSERT(casted_backend->InitFromRKNN(option.model_file, rknpu2_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false, "RKNPU2Backend is not available, please compiled with "
-                  "ENABLE_RKNPU2_BACKEND=ON.");
+  FDASSERT(false,
+           "RKNPU2Backend is not available, please compiled with "
+           "ENABLE_RKNPU2_BACKEND=ON.");
 #endif
 }
 
@@ -457,8 +463,9 @@ void Runtime::CreateSophgoNPUBackend() {
   FDASSERT(casted_backend->InitFromSophgo(option.model_file, sophgo_option),
            "Load model from nb file failed while initializing LiteBackend.");
 #else
-  FDASSERT(false, "SophgoBackend is not available, please compiled with "
-                  "ENABLE_SOPHGO_BACKEND=ON.");
+  FDASSERT(false,
+           "SophgoBackend is not available, please compiled with "
+           "ENABLE_SOPHGO_BACKEND=ON.");
 #endif
 }
 

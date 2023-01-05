@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*! \file runtime.h
+/*! \file enum_variables.h
     \brief A brief file description.
 
     More details
@@ -37,9 +37,16 @@ enum Backend {
   SOPHGOTPU,  ///< SOPHGOTPU, support SOPHGO format model, Sophgo TPU only
 };
 
-enum FASTDEPLOY_DECL Device {CPU, GPU, RKNPU, IPU, TIMVX, KUNLUNXIN, ASCEND,
-                              SOPHGOTPUD};
-
+enum FASTDEPLOY_DECL Device {
+  CPU,
+  GPU,
+  RKNPU,
+  IPU,
+  TIMVX,
+  KUNLUNXIN,
+  ASCEND,
+  SOPHGOTPUD
+};
 
 /*! Deep learning model format */
 enum ModelFormat {
@@ -51,16 +58,22 @@ enum ModelFormat {
   SOPHGO,       ///< Model with SOPHGO format
 };
 
-FASTDEPLOY_DECL std::string Str(const Device& d);
+/// Describle all the supported backends for specified model format
+static std::map<ModelFormat, std::vector<Backend>> s_default_backends_cfg = {
+  {ModelFormat::PADDLE, {Backend::PDINFER, Backend::LITE,
+                      Backend::ORT, Backend::OPENVINO, Backend::TRT}}，
+  {ModelFormat::ONNX, {Backend::ORT, Backend::OPENVINO, Backend::TRT}}，
+  {ModelFormat::RKNN, {Backend::RKNPU2}}，
+  {ModelFormat::TORCHSCRIPT, {Backend::POROS}}，
+  {ModelFormat::SOPHGO, {Backend::SOPHOGO}}
+}；
 
-FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
-                                         const Backend& backend);
-
+    FASTDEPLOY_DECL std::ostream &
+    operator<<(std::ostream& out, const Backend& backend);
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out, const Device& d);
 
 FASTDEPLOY_DECL std::ostream& operator<<(std::ostream& out,
                                          const ModelFormat& format);
-
 
 }  // namespace fastdeploy

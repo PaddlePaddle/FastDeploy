@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*! \file runtime.h
+/*! \file runtime_option.h
     \brief A brief file description.
 
     More details
@@ -470,7 +470,7 @@ struct FASTDEPLOY_DECL RuntimeOption {
   std::string model_file = "";   // Path of model file
   std::string params_file = "";  // Path of parameters file, can be empty
   // format of input model
-  ModelFormat model_format = ModelFormat::AUTOREC;
+  ModelFormat model_format = ModelFormat::PADDLE;
 
   std::string model_buffer_ = "";
   std::string params_buffer_ = "";
