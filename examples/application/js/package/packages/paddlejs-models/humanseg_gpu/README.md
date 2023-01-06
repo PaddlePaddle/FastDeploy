@@ -47,7 +47,7 @@ humanseg.drawMask(data, canvas3, back_canvas);
 
 ```js
 
-// 引入 humanseg sdk
+// import humanseg sdk
 import * as humanseg from '@paddle-js-models/humanseg/lib/index_gpu';
 
 // load humanseg model, use 398x224 shape model, and preheat

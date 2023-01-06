@@ -1,12 +1,13 @@
-# StableDiffusion C++部署示例
+English | [简体中文](README_CN.md)
+# StableDiffusion C++ Deployment
 
-在部署前，需确认以下两个步骤
+Before deployment, the following two steps need to be confirmed:
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Hardware and software environment meets the requirements. Please refer to [Environment requirements for FastDeploy](../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 2. Download pre-compiled libraries and samples according to the development environment. Please refer to [FastDeploy pre-compiled libraries](../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`*_infer.cc`快速完成StableDiffusion各任务的C++部署示例。
+This directory provides `*_infer.cc` to quickly complete C++ deployment examples for each task of StableDiffusion.
 
-## Inpaint任务
+## Inpaint Task
 
-StableDiffusion Inpaint任务是一个根据提示文本补全图片的任务，具体而言就是用户给定提示文本，原始图片以及原始图片的mask图片，该任务输出补全后的图片。
+The StableDiffusion Inpaint task is a task that completes the image based on the prompt text. User provides the prompt text, the original image and the mask image of the original image, and the task outputs the completed image.

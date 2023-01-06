@@ -1,3 +1,4 @@
+简体中文 ｜ [English](RNN_EN.md)
 # RNN算子计算过程
 
 ## 一、RNN理解
@@ -73,7 +74,7 @@ paddle源码实现：https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/
 
 计算方式：将rnn_matmul op输出结果分割成4份，每份执行不同激活函数计算，最后输出lstm_x_y.tmp_c[1,  1,  48]。x∈[0, 3]，y∈[0, 24]。
 详见算子实现：[rnn_cell](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_cell.ts)
-)
+
 
 4）rnn_hidden
 计算方式：将rnn_matmul op输出结果分割成4份，每份执行不同激活函数计算，最后输出lstm_x_y.tmp_h[1,  1,  48]。x∈[0, 3]，y∈[0, 24]。
