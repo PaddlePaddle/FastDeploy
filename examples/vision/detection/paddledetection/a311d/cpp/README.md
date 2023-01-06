@@ -1,5 +1,5 @@
 English | [简体中文](README_CN.md)
-# PP-YOLOE  Quantized Model C++ Deployment Example
+# PP-YOLOE Quantitative Model C++ Deployment Example
 
  `infer.cc` in this directory can help you quickly complete the inference acceleration of PP-YOLOE quantization model deployment on A311D.
 
@@ -9,7 +9,7 @@ English | [简体中文](README_CN.md)
 
 ### Model Preparations
 1. You can directly use the quantized model provided by FastDeploy for deployment.
-2. You can use PaddleDetection to export Float32 models, note that you need to set the parameter when exporting model: use_shared_conv=False. For more information: [PP-YOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe)
+2. You can use PaddleDetection to export Float32 models, note that you need to set the parameter when exporting model: use_shared_conv=False. For more information: [PP-YOLOE](https://github.com/PaddlePaddle/PaddleDetection/tree/release/2.4/configs/ppyoloe).
 3. You can use [one-click automatical compression tool](../../../../../../tools/common_tools/auto_compression/) provided by FastDeploy to quantize model by yourself, and use the generated quantized model for deployment.(Note: The quantized classification model still needs the infer_cfg.yml file in the FP32 model folder. Self-quantized model folder does not contain this yaml file, you can copy it from the FP32 model folder to the quantized model folder.)
 4. The model requires heterogeneous computation. Please refer to: [Heterogeneous Computation](./../../../../../../docs/en/faq/heterogeneous_computing_on_timvx_npu.md). Since the model is already provided, you can test the heterogeneous file we provide first to verify whether the accuracy meets the requirements.
 

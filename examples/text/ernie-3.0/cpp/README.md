@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps require confirmation.
 
-- 1. Environment of software and hardware should meet the requirements. Please refer to[FastDeploy Environment Requirements](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-- 2. Based on the develop environment, download the precompiled deployment library and samples code. Please refer to [FastDeploy Precompiled Library](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Environment of software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
+- 2. Based on the develop environment, download the precompiled deployment library and samples code. Please refer to [FastDeploy Precompiled Library](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
 
 This directory provides deployment examples that seq_cls_inferve.py fast finish text classification tasks on CPU/GPU.
 

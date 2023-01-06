@@ -10,11 +10,11 @@ English | [简体中文](README_CN.md)
 1. You can directly use the quantized model provided by FastDeploy for deployment.
 2. You can use [one-click automatical compression tool](../../../../../../tools/common_tools/auto_compression/) provided by FastDeploy to quantize model by yourself, and use the generated quantized model for deployment.(Note: The quantized classification model still needs the inference_cls.yaml file in the FP32 model folder. Self-quantized model folder does not contain this yaml file, you can copy it from the FP32 model folder to the quantized model folder.)
 
-For more information, please refer to [Model Quantization](../../quantize/README.md)
+For more information, please refer to [Model Quantization](../../quantize/README.md).
 
 ## Deploying the Quantized ResNet50_Vd Segmentation model on A311D
 Please follow these steps to complete the deployment of the ResNet50_Vd quantization model on A311D.
-1. Cross-compile the FastDeploy library as described in [Cross-compile  FastDeploy](../../../../../../docs/en/build_and_install/a311d.md#FastDeploy-cross-compilation-library-compilation-based-on-Paddle-Lite)
+1. Cross-compile the FastDeploy library as described in [Cross-compile  FastDeploy](../../../../../../docs/en/build_and_install/a311d.md#FastDeploy-cross-compilation-library-compilation-based-on-Paddle-Lite).
 
 2. Copy the compiled library to the current directory. You can run this line:
 ```bash
@@ -54,4 +54,4 @@ The output is:
 
 <img width="640" src="https://user-images.githubusercontent.com/30516196/200767389-26519e50-9e4f-4fe1-8d52-260718f73476.png">
 
-Please note that the model deployed on A311D needs to be quantized. You can refer to [Model Quantization](../../../../../../docs/en/quantize.md)
+Please note that the model deployed on A311D needs to be quantized. You can refer to [Model Quantization](../../../../../../docs/en/quantize.md).
