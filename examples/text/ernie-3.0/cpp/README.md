@@ -35,7 +35,7 @@ tar xvfz ernie-3.0-medium-zh-afqmc.tgz
 # GPU Inference
 ./seq_cls_infer_demo --device gpu --model_dir ernie-3.0-medium-zh-afqmc
 
-# KunlunXin XPU 推理
+# KunlunXin XPU Inference
 ./seq_cls_infer_demo --device kunlunxin --model_dir ernie-3.0-medium-zh-afqmc
 ```
 The result returned after running is as follows：

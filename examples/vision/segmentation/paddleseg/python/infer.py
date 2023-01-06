@@ -33,6 +33,9 @@ def build_option(args):
     if args.device.lower() == "kunlunxin":
         option.use_kunlunxin()
 
+    if args.device.lower() == "ascend":
+        option.use_ascend()
+
     if args.use_trt:
         option.use_trt_backend()
         option.set_trt_input_shape("x", [1, 3, 256, 256], [1, 3, 1024, 1024],

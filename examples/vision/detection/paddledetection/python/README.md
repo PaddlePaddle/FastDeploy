@@ -1,38 +1,37 @@
-# PaddleDetection Python部署示例
+English | [简体中文](README_CN.md)
+# PaddleDetection Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation.
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer_xxx.py`快速完成PPYOLOE/PicoDet等模型在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+This directory provides examples that `infer_xxx.py` fast finishes the deployment of PPYOLOE/PicoDet models on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
 ```bash
-#下载部署示例代码
+# Download deployment example code 
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/paddledetection/python/
 
-#下载PPYOLOE模型文件和测试图片
+# Download the PPYOLOE model file and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
-# CPU推理
+# CPU inference
 python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device cpu
-# GPU推理
+# GPU inference
 python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu
-# GPU上使用TensorRT推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
+# TensorRT inference on GPU  （Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
 python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device gpu --use_trt True
-# 昆仑芯XPU推理
-python infer_ppyoloe.py --model_dir ppyoloe_crn_l_300e_coco --image 000000014439.jpg --device kunlunxin
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 <div  align="center">  
 <img src="https://user-images.githubusercontent.com/19339784/184326520-7075e907-10ed-4fad-93f8-52d0e35d4964.jpg", width=480px, height=320px />
 </div>
 
-## PaddleDetection Python接口
+## PaddleDetection Python Interface 
 
 ```python
 fastdeploy.vision.detection.PPYOLOE(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
@@ -49,36 +48,36 @@ fastdeploy.vision.detection.PaddleYOLOv7(model_file, params_file, config_file, r
 fastdeploy.vision.detection.RTMDet(model_file, params_file, config_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-PaddleDetection模型加载和初始化，其中model_file， params_file为导出的Paddle部署模型格式, config_file为PaddleDetection同时导出的部署配置yaml文件
+PaddleDetection model loading and initialization, among which model_file and params_file are the exported Paddle model format. config_file is the configuration yaml file exported by PaddleDetection simultaneously
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 推理配置yaml文件路径
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **config_file**(str): Inference configuration yaml file path
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-### predict函数
+### predict Function
 
-PaddleDetection中各个模型，包括PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO/FasterRCNN，均提供如下同样的成员函数用于进行图像的检测
+PaddleDetection models, including PPYOLOE/PicoDet/PaddleYOLOX/YOLOv3/PPYOLO/FasterRCNN, all provide the following member functions for image detection
 > ```python
 > PPYOLOE.predict(image_data, conf_threshold=0.25, nms_iou_threshold=0.5)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output results directly.
 >
-> **参数**
+> **Parameter**
 >
-> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+> > * **image_data**(np.ndarray): Input data in HWC or BGR format
 
-> **返回**
+> **Return**
 >
-> > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > Return `fastdeploy.vision.DetectionResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of the structure.
 
-## 其它文档
+## Other Documents
 
-- [PaddleDetection 模型介绍](..)
-- [PaddleDetection C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [PaddleDetection Model Description](..)
+- [PaddleDetection C++ Deployment](../cpp)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)

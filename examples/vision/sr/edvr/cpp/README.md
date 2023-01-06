@@ -1,43 +1,44 @@
-# EDVR C++部署示例
+English | [简体中文](README_CN.md)
+# EDVR C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成EDVR在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+This directory provides examples that `infer.cc` fast finishes the deployment of EDVR on CPU/GPU and GPU accelerated by TensorRT. 
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上EDVR推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking the EDVR inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0)
 
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# 下载EDVR模型文件和测试视频
+# Download EDVR model files and test videos
 wget https://bj.bcebos.com/paddlehub/fastdeploy/EDVR_M_wo_tsa_SRx4.tar
 tar -xvf EDVR_M_wo_tsa_SRx4.tar
 wget https://bj.bcebos.com/paddlehub/fastdeploy/vsr_src.mp4
 
 
-# CPU推理
+# CPU inference
 ./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 0 5
-# GPU推理
+# GPU inference
 ./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 1 5
-# GPU上TensorRT推理
+# TensorRT Inference on GPU
 ./infer_demo EDVR_M_wo_tsa_SRx4 vsr_src.mp4 2 5
 ```
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-## EDVR C++接口
+## EDVR C++ Interface 
 
-### EDVR类
+### EDVR Class
 
 ```c++
 fastdeploy::vision::sr::EDVR(
@@ -47,28 +48,28 @@ fastdeploy::vision::sr::EDVR(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-EDVR模型加载和初始化，其中model_file为导出的Paddle模型格式。
+EDVR model loading and initialization, among which model_file is the exported Paddle model format.
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-#### Predict函数
+#### Predict Function
 
 > ```c++
 > EDVR::Predict(std::vector<cv::Mat>& imgs, std::vector<cv::Mat>& results)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **imgs**: 输入视频帧序列，注意需为HWC，BGR格式
-> > * **results**: 视频超分结果，超分后的视频帧序列
+> > * **imgs**: Input video frame sequence in HWC or BGR format
+> > * **results**: Video SR results: video frame sequence after SR
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
