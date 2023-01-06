@@ -85,7 +85,10 @@ model_transform.py \
 ### 注意
 **由于TPU-MLIR当前不支持后处理算法，所以需要查看后处理的输入作为网络的输出**  
 具体方法为：output_names需要通过[NETRO](https://netron.app/) 查看，网页中打开需要转换的ONNX模型，搜索NonMaxSuppression节点  
-查看INPUTS中boxes和scores的名字，这个两个名字就是我们所需的output_names
+查看INPUTS中boxes和scores的名字，这个两个名字就是我们所需的output_names  
+例如使用Netron可视化后，可以得到如下图片  
+![](https://user-images.githubusercontent.com/120167928/210939488-a37e6c8b-474c-4948-8362-2066ee7a2ecb.png)  
+找到蓝色方框标记的NonMaxSuppression节点，可以看到红色方框标记的两个节点名称为p2o.Div.1,p2o.Concat.29
 
 ``` bash
 # 将mlir模型转换为BM1684x的F32 bmodel模型
