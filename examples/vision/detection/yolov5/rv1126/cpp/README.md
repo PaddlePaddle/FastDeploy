@@ -1,45 +1,46 @@
-# YOLOv5 量化模型 C++ 部署示例
+English | [简体中文](README_CN.md)
+# YOLOv5 Quantification Model C++ Deployment Example
 
-本目录下提供的 `infer.cc`，可以帮助用户快速完成 YOLOv5 量化模型在 RV1126 上的部署推理加速。
+This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv5 on RV1126.
 
-## 部署准备
-### FastDeploy 交叉编译环境准备
-1. 软硬件环境满足要求，以及交叉编译环境的准备，请参考：[FastDeploy 交叉编译环境准备](../../../../../../docs/cn/build_and_install/rv1126.md#交叉编译环境搭建)  
+## Prepare the deployment
+### Prepare FastDeploy cross-compilation environment
+1. For the environment of software, hardware and cross-compilation, refer to [FastDeploy cross-compilation environment preparation](../../../../../../docs/cn/build_and_install/rv1126.md#交叉编译环境搭建)  
 
-### 量化模型准备
-可以直接使用由 FastDeploy 提供的量化模型进行部署，也可以按照如下步骤准备量化模型：
-1. 按照 [YOLOv5](https://github.com/ultralytics/yolov5/releases/tag/v6.1) 官方导出方式导出 ONNX 模型，或者直接使用如下命令下载
+### Prepare the quantification model
+Users can directly deploy quantized models provided by FastDeploy or prepare quantification models as the following steps:
+1. Refer to [YOLOv5](https://github.com/ultralytics/yolov5/releases/tag/v6.1) to officially convert the ONNX model or use the following command to download it.
 ```bash
 wget https://paddle-slim-models.bj.bcebos.com/act/yolov5s.onnx
 ```
-2. 准备 300 张左右量化用的图片，也可以使用如下命令下载我们准备好的数据。
+2. Prepare 300 or so images for quantization.And we can also download the prepared data using the following command:
 ```bash
 wget https://bj.bcebos.com/fastdeploy/models/COCO_val_320.tar.gz
 tar -xf COCO_val_320.tar.gz
 ```
-3. 使用 FastDeploy 提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/),自行进行模型量化, 并使用产出的量化模型进行部署。
+3. Users can use the [ One-click auto-compression tool](../../../../../../tools/common_tools/auto_compression/) provided by FastDeploy to automatically conduct quantification model for deployment.
 ```bash
 fastdeploy compress --config_path=./configs/detection/yolov5s_quant.yaml --method='PTQ' --save_dir='./yolov5s_ptq_model_new/'
 ```
-4. YOLOv5 模型需要异构计算，异构计算文件可以参考：[异构计算](./../../../../../../docs/cn/faq/heterogeneous_computing_on_timvx_npu.md)，由于 FastDeploy 已经提供了 YOLOv5 模型，可以先测试我们提供的异构文件，验证精度是否符合要求。
+4. The YOLOv5 model requires heterogeneous computing. Refer to [Heterogeneous Computing](./../../../../../../docs/cn/faq/heterogeneous_computing_on_timvx_npu.md).  Since FastDeploy already provides the YOLOv5 model, we can first test the heterogeneous files to verify whether the accuracy meets the requirements.
 ```bash
-# 先下载我们提供的模型，解压后将其中的 subgraph.txt 文件拷贝到新量化的模型目录中
+# Download the model, unzip it, and copy the subgraph.txt file to your newly quantized model directory
 wget https://bj.bcebos.com/fastdeploy/models/yolov5s_ptq_model.tar.gz
 tar -xvf yolov5s_ptq_model.tar.gz
 ```
 
-更多量化相关相关信息可查阅[模型量化](../../quantize/README.md)
+Refer to [model quantification](../../quantize/README.md) for more information
 
-## 在 RV1126 上部署量化后的 YOLOv5 检测模型
-请按照以下步骤完成在 RV1126 上部署 YOLOv5 量化模型：
-1. 交叉编译编译 FastDeploy 库，具体请参考：[交叉编译 FastDeploy](../../../../../../docs/cn/build_and_install/rv1126.md#基于-paddlelite-的-fastdeploy-交叉编译库编译)
+## Deploy quantized YOLOv5 detection model on RV1126
+Refer to the following steps:
+1. For cross compiling FastDeploy repo, refer to [cross compiling FastDeploy](../../../../../../docs/cn/build_and_install/rv1126.md#基于-paddlelite-的-fastdeploy-交叉编译库编译)
 
-2. 将编译后的库拷贝到当前目录，可使用如下命令：
+2. Copy the compiled repo to your current directory through the following command:
 ```bash
 cp -r FastDeploy/build/fastdeploy-timvx/ FastDeploy/examples/vision/detection/yolov5/rv1126/cpp
 ```
 
-3. 在当前路径下载部署所需的模型和示例图片：
+3. Download models and images for deployment in the current location:
 ```bash
 cd FastDeploy/examples/vision/detection/yolov5/rv1126/cpp
 mkdir models && mkdir images
@@ -50,26 +51,26 @@ wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/0000000
 cp -r 000000014439.jpg images
 ```
 
-4. 编译部署示例，可使入如下命令：
+4. Compile the deployment example through the following command:
 ```bash
 cd FastDeploy/examples/vision/detection/yolov5/rv1126/cpp
 mkdir build && cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=${PWD}/../fastdeploy-timvx/toolchain.cmake -DFASTDEPLOY_INSTALL_DIR=${PWD}/../fastdeploy-timvx -DTARGET_ABI=armhf ..
 make -j8
 make install
-# 成功编译之后，会生成 install 文件夹，里面有一个运行 demo 和部署所需的库
+# Successful compilation generates the install folder, containing a running demo and repo required for deployment
 ```
 
-5. 基于 adb 工具部署 YOLOv5 检测模型到 Rockchip RV1126，可使用如下命令：
+5. Deploy YOLOv5 detection model to Rockchip RV1126 based on adb. Refer to the following command:
 ```bash
-# 进入 install 目录
+# Enter the install directory
 cd FastDeploy/examples/vision/detection/yolov5/rv1126/cpp/build/install/
-# 如下命令表示：bash run_with_adb.sh 需要运行的demo 模型路径 图片路径 设备的DEVICE_ID
+# The following commands represent: bash run_with_adb.sh running demo  model path  image path   DEVICE_ID
 bash run_with_adb.sh infer_demo yolov5s_ptq_model 000000014439.jpg $DEVICE_ID
 ```
 
-部署成功后，vis_result.jpg 保存的结果如下：
+vis_result.jpg after successful deployment:
 
 <img width="640" src="https://user-images.githubusercontent.com/30516196/203706969-dd58493c-6635-4ee7-9421-41c2e0c9524b.png">
 
-需要特别注意的是，在 RV1126 上部署的模型需要是量化后的模型，模型的量化请参考：[模型量化](../../../../../../docs/cn/quantize.md)
+Note that the deployment model on RV1126 is the quantized model. Refer to [Model Quantification](../../../../../../docs/cn/quantize.md)
