@@ -1,4 +1,4 @@
-English | [简体中文](README.md)
+[English](README.md) | 简体中文
 # SCRFD C++部署示例
 
 本目录下提供`infer.cc`快速完成SCRFD在NPU加速部署的示例。
