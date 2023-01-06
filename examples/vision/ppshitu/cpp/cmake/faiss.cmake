@@ -33,10 +33,10 @@ set(FAISS_URL_PREFIX "https://bj.bcebos.com/fastdeploy/test")
 if(ANDROID)
   # check ABI, toolchain
   if((NOT ANDROID_ABI MATCHES "armeabi-v7a") AND (NOT ANDROID_ABI MATCHES "arm64-v8a"))
-    message(FATAL_ERROR "FastDeploy with Paddle Lite only support armeabi-v7a, arm64-v8a now.")
+    message(FATAL_ERROR "FAISS only support armeabi-v7a, arm64-v8a now.")
   endif()
   if(NOT ANDROID_TOOLCHAIN MATCHES "clang")
-     message(FATAL_ERROR "Currently, only support clang toolchain while cross compiling FastDeploy for Android with Paddle Lite backend, but found ${ANDROID_TOOLCHAIN}.")
+     message(FATAL_ERROR "Currently, only support clang toolchain but found ${ANDROID_TOOLCHAIN}.")
   endif()  
 endif()
 
