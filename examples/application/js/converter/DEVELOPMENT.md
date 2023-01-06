@@ -1,4 +1,4 @@
-[中文版](./DEVELOPMENT_cn.md)
+English | [简体中文](DEVELOPMENT_CN.md)
 # paddlejs-converter
 
 paddlejs-converter is a model transformation tool for Paddle.js. Its role is to convert PaddlePaddle models (also known as fluid models) into a browser-friendly format that Paddle.js can use to load and predict usage in browsers as well as other environments. In addition, paddlejs-converter provides powerful model optimization capabilities to help developers optimize the model structure and improve runtime performance.
