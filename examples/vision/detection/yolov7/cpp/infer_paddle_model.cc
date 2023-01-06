@@ -31,7 +31,7 @@ void InitAndInfer(const std::string& model_dir, const std::string& image_file,
   auto im = cv::imread(image_file);
 
   fastdeploy::vision::DetectionResult res;
-  if (!model.Predict(&im, &res)) {
+  if (!model.Predict(im, &res)) {
     std::cerr << "Failed to predict." << std::endl;
     return;
   }
@@ -68,7 +68,9 @@ int main(int argc, char* argv[]) {
     option.UseTrtBackend();
   } else if (flag == 2) {
     option.UseKunlunXin();
-    }
+  } else if (flag == 3) {
+    option.UseAscend();
+  }
 
   std::string model_dir = argv[1];
   std::string test_image = argv[2];
