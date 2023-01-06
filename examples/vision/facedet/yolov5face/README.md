@@ -1,44 +1,45 @@
-# YOLOv5Face准备部署模型
+English | [简体中文](README_CN.md)
+# YOLOv5Face Ready-to-deploy Model
 
 - [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead)
-  - （1）[官方库](https://github.com/deepcam-cn/yolov5-face/)中提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）开发者基于自己数据训练的YOLOv5Face模型，可按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)后，完成部署。
+  - （1）The *.pt provided by the [Official Library](https://github.com/deepcam-cn/yolov5-face/) can be deployed after the [Export ONNX Model](#导出ONNX模型) to complete the deployment；
+  - （2）As for YOLOv5Face model trained on customized data, please follow the operations guidelines in [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)  to complete the deployment.
 
-## 导出ONNX模型
+## Export ONNX Model
 
-访问[YOLOv5Face](https://github.com/deepcam-cn/yolov5-face)官方github库，按照指引下载安装，下载`yolov5s-face.pt` 模型，利用 `export.py` 得到`onnx`格式文件。
+Visit [YOLOv5Face](https://github.com/deepcam-cn/yolov5-face) official github repository, follow the guidelines to download the `yolov5s-face.pt` model, and employ `export.py` to get the file in `onnx` format.
 
-* 下载yolov5face模型文件
+* Download yolov5face model files
   ```
   Link: https://pan.baidu.com/s/1fyzLxZYx7Ja1_PCIWRhxbw Link: eq0q  
   https://drive.google.com/file/d/1zxaHeLDyID9YU4-hqK7KNepXIwbTkRIO/view?usp=sharing
   ```
 
-* 导出onnx格式文件
+* Export files in onnx format
   ```bash
   PYTHONPATH=. python export.py --weights weights/yolov5s-face.pt --img_size 640 640 --batch_size 1  
   ```
-* onnx模型简化(可选)
+* onnx model simplification (optional)
   ```bash
   onnxsim yolov5s-face.onnx yolov5s-face.onnx
   ```
 
-## 下载预训练ONNX模型
+## Download Pre-trained ONNX Model
 
-为了方便开发者的测试，下面提供了YOLOv5Face导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
+For developers' testing, models exported by YOLOv5Face are provided below. Developers can download and use them directly. (The accuracy of the models in the table is sourced from the official library)
+| Model                                                               | Size    | Accuracy    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [YOLOv5s-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5s-face.onnx) | 30MB | 94.3 |
 | [YOLOv5s-Face-bak](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-s-640x640.bak.onnx) | 30MB | -|
 | [YOLOv5l-Face](https://bj.bcebos.com/paddlehub/fastdeploy/yolov5face-l-640x640.onnx ) | 181MB | 95.8 |
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[YOLOv5Face CommitID:4fd1ead](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead) 编写
+- This tutorial and related code are written based on [YOLOv5Face CommitID:4fd1ead](https://github.com/deepcam-cn/yolov5-face/commit/4fd1ead) 

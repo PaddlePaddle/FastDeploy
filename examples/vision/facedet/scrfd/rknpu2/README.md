@@ -1,10 +1,11 @@
-# SCRFD RKNPU2部署模型
+English | [简体中文](README_CN.md)
+# SCRFD RKNPU2 Deployment Models
 
-本教程提供SCRFD模型在RKNPU2环境下的部署，模型的详细介绍已经ONNX模型的下载请查看[模型介绍文档](../README.md)。
+This tutorial demonstrates the deployment of SCRFD models in RKNPU2. For model description and download of ONNX models, refer to [Model Description](../README.md)。
 
-## ONNX模型转换RKNN模型
+## From ONNX model to RKNN model
 
-下面以scrfd_500m_bnkps_shape640x640为例子，快速的转换SCRFD ONNX模型为RKNN量化模型。 以下命令在Ubuntu18.04下执行:
+Taking scrfd_500m_bnkps_shape640x640 as an example, the following commands in Ubuntu18.0 demonstrate how to fast convert SCRFD ONNX models to RKNN quantification models:
 ```bash
 wget  https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/scrfd_500m_bnkps_shape640x640.zip
 unzip scrfd_500m_bnkps_shape640x640.zip
@@ -15,12 +16,12 @@ python  /Path/To/FastDeploy/tools/rknpu2/export.py \
 
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python/README.md)
-- [C++部署](cpp/README.md)
+- [Python Deployment](python/README.md)
+- [C++ Deployment](cpp/README.md)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[SCRFD CommitID:17cdeab](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950) 编写
+- This document and code are written based on [SCRFD CommitID:17cdeab](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)

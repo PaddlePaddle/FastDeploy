@@ -1,70 +1,71 @@
-# AnimeGAN Python部署示例
+English | [简体中文](README_CN.md)
+# AnimeGAN Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Two steps before deployment
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成AnimeGAN在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。执行如下脚本即可完成
+This directory provides examples that `infer.py` fast finishes the deployment of AnimeGAN on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
 ```bash
-# 下载部署示例代码
+# Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/generation/anemigan/python
-# 下载准备好的测试图片
+# Download prepared test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/style_transfer_testimg.jpg
 
-# CPU推理
+# CPU inference
 python infer.py --model animegan_v1_hayao_60  --image style_transfer_testimg.jpg  --device cpu
-# GPU推理
+# GPU inference
 python infer.py --model animegan_v1_hayao_60 --image style_transfer_testimg.jpg  --device gpu
 ```
 
-## AnimeGAN Python接口
+## AnimeGAN Python Interface
 
 ```python
 fd.vision.generation.AnimeGAN(model_file, params_file, runtime_option=None, model_format=ModelFormat.PADDLE)
 ```
 
-AnimeGAN模型加载和初始化，其中model_file和params_file为用于Paddle inference的模型结构文件和参数文件。
+AnimeGAN model loading and initialization, among which model_file and params_file are the model file and parameter file for Paddle inference.
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. PADDLE format by default
 
 
-### predict函数
+### predict function
 
 > ```python
 > AnimeGAN.predict(input_image)
 > ```
 >
-> 模型预测入口，输入图像输出风格迁移后的结果。
+> Model prediction interface. Input images and output style transfer results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+> > * **input_image**(np.ndarray): Input data in HWC or BGR format
 
-> **返回** np.ndarray, 风格转换后的图像，BGR格式
+> **Return** np.ndarray, the image after style transfer in BGR format
 
-### batch_predict函数
+### batch_predict function
 > ```python
-> AnimeGAN.batch_predict函数(input_images)
+> AnimeGAN.batch_predict function (input_images)
 > ```
 >
-> 模型预测入口，输入一组图像并输出风格迁移后的结果。
+> Model prediction interface. Input a set of images and output style transfer results
 >
-> **参数**
+> **Parameter**
 >
-> > * **input_images**(list(np.ndarray)): 输入数据，一组图像数据，注意需为HWC，BGR格式
+> > * **input_images**(list(np.ndarray)): Input data in HWC or BGR format
 
-> **返回** list(np.ndarray), 风格转换后的一组图像，BGR格式
+> **Return** list(np.ndarray), a set of images after style transfer in BGR format
 
-## 其它文档
+## Other Documents
 
-- [风格迁移 模型介绍](..)
-- [C++部署](../cpp)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Style Transfer Model Description](..)
+- [C++ Deployment](../cpp)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)

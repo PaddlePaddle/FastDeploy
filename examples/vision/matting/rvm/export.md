@@ -1,20 +1,21 @@
-# RobustVideoMatting 支持TRT的动态ONNX导出
+English | [简体中文](README_CN.md)
+# RobustVideoMatting supports TRT’s dynamic ONNX export
 
-## 环境依赖
+## Environment Dependencies
 
 - python >= 3.5
 - pytorch 1.12.0
 - onnx 1.10.0
 - onnxsim 0.4.8
 
-## 步骤一：拉取 RobustVideoMatting onnx 分支代码
+## Step 1: Pull the RobustVideoMatting onnx branch code
 
 ```shell
 git clone -b onnx https://github.com/PeterL1n/RobustVideoMatting.git
 cd RobustVideoMatting
 ```
 
-## 步骤二：去掉 downsample_ratio 动态输入
+## Step 2: Remove downsample_ratio dynamic input
 
 在```model/model.py```中，将 ```downsample_ratio``` 输入去掉，如下图所示
 
@@ -49,9 +50,9 @@ def forward(self, src, r1, r2, r3, r4,
         return [seg, *rec]
 ```
 
-## 步骤三：修改导出 ONNX 脚本
+## Step 3: Modify the export ONNX script
 
-修改```export_onnx.py```脚本，去掉```downsample_ratio```输入
+Modify ```export_onnx.py``` script to remove the ```downsample_ratio``` input
 
 ```python
 def export(self):
@@ -89,7 +90,7 @@ def export(self):
         })
 ```
 
-运行下列命令
+Run the following commands
 
 ```shell
 python export_onnx.py \
@@ -102,15 +103,15 @@ python export_onnx.py \
 ```
 
 **Note**：
-- trt关于多输入ONNX模型的dynamic shape，如果x0和x1的shape不同，不能都以height、width去表示，要以height0、height1去区分，要不然build engine阶段会出错
+- For the dynamic shape of the multi-input ONNX model in trt, if the shapes of x0 and x1 are different, we cannot use height and width but height0 and height1 to differentiate them, otherwise, there will be some mistakes when building engine
 
-## 步骤四：使用onnxsim简化
+## Step 4: Simplify with onnxsim
 
-安装 onnxsim，并简化步骤三导出的 ONNX 模型
+Install onnxsim and simplify the ONNX model exported in step 3
 
 ```shell
 pip install onnxsim
 onnxsim rvm_mobilenetv3.onnx rvm_mobilenetv3_trt.onnx
 ```
 
-```rvm_mobilenetv3_trt.onnx```即为可运行 TRT 后端的动态 shape 的 ONNX 模型
+```rvm_mobilenetv3_trt.onnx```: The ONNX model in dynamic shape that can run the TRT backend

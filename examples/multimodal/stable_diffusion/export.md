@@ -1,3 +1,4 @@
+简体中文 ｜ [English](export_EN.md)
 # Diffusion模型导出教程
 
 本项目支持两种模型导出方式：[PPDiffusers](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers)模型导出以及[Diffusers](https://github.com/huggingface/diffusers)模型导出。下面分别介绍这两种模型导出方式。

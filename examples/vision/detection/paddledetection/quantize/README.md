@@ -1,45 +1,46 @@
-# PaddleDetection 量化模型部署
-FastDeploy已支持部署量化模型,并提供一键模型自动化压缩的工具.
-用户可以使用一键模型自动化压缩工具,自行对模型量化后部署, 也可以直接下载FastDeploy提供的量化模型进行部署.
+English | [简体中文](README_CN.md)
+# PaddleDetection Quantification Model Deployment
+FastDeploy supports the deployment of quantification models and provides a convenient tool for automatic model compression. 
+Users can use it to deploy models after quantification or directly deploy quantized models provided by FastDeploy.
 
-## FastDeploy一键模型自动化压缩工具
-FastDeploy 提供了一键模型自动化压缩工具, 能够简单地通过输入一个配置文件, 对模型进行量化.
-详细教程请见: [一键模型自动化压缩工具](../../../../../tools/common_tools/auto_compression/)
+## FastDeploy one-click model auto-compression tool
+FastDeploy provides a one-click auto-compression tool that allows users to quantize models by simply entering a configuration file.  
+Refer to [one-click auto-compression tool](../../../../../tools/common_tools/auto_compression/) for details. 
 
-## 下载量化完成的PP-YOLOE-l模型
-用户也可以直接下载下表中的量化模型进行部署.(点击模型名字即可下载)
+## Download the quantized PP-YOLOE-l model
+Users can also directly download the quantized models in the table below. (Click the model name to download it)
 
 
-Benchmark表格说明:
-- Runtime时延为模型在各种Runtime上的推理时延,包含CPU->GPU数据拷贝,GPU推理,GPU->CPU数据拷贝时间. 不包含模型各自的前后处理时间.
-- 端到端时延为模型在实际推理场景中的时延, 包含模型的前后处理.
-- 所测时延均为推理1000次后求得的平均值, 单位是毫秒.
-- INT8 + FP16 为在推理INT8量化模型的同时, 给Runtime 开启FP16推理选项
-- INT8 + FP16 + PM, 为在推理INT8量化模型和开启FP16的同时, 开启使用Pinned Memory的选项,可加速GPU->CPU数据拷贝的速度
-- 最大加速比, 为FP32时延除以INT8推理的最快时延,得到最大加速比.
-- 策略为量化蒸馏训练时, 采用少量无标签数据集训练得到量化模型, 并在全量验证集上验证精度, INT8精度并不代表最高的INT8精度.
-- CPU为Intel(R) Xeon(R) Gold 6271C, 所有测试中固定CPU线程数为1.  GPU为Tesla T4, TensorRT版本8.4.15.
+Benchmark  table description:
+- Runtime latency: model’s inference latency on multiple Runtimes, including CPU->GPU data copy, GPU inference, and GPU->CPU data copy time. It does not include the pre and post processing time of the model.
+- End2End latency: model’s latency in the actual inference scenario, including the pre and post processing time of the model.
+- Measured latency: The average latency after 1000 times of inference in milliseconds.
+- INT8 + FP16: Enable FP16 inference for Runtime while inferring the INT8 quantification model
+- INT8 + FP16 + PM: Use Pinned Memory to speed up the GPU->CPU data copy while inferring the INT8 quantization model with FP16 turned on.
+- Maximum speedup ratio: Obtained by dividing the FP32 latency by the highest INT8 inference latency.
+- The strategy is to use a few unlabeled data sets to train the model for quantification and to verify the accuracy on the full validation set. The INT8 accuracy does not represent the highest value.
+- The CPU is Intel(R) Xeon(R) Gold 6271C, , and the number of CPU threads is fixed to 1. The GPU is Tesla T4 with TensorRT version 8.4.15.
 
 
 #### Runtime Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 Runtime时延   | INT8 Runtime时延 | INT8 + FP16 Runtime时延  | INT8+FP16+PM Runtime时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
+| Model                 |Inference Backend            |Deployment Hardware    | FP32 Runtime Latency   | INT8 Runtime Latency | INT8 + FP16 Runtime Latency  | INT8+FP16+PM Runtime Latency  | Maximum Speedup Ratio    | FP32 mAP | INT8 mAP | Quantification Method   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | TensorRT         |    GPU    |  27.90 | 6.39 |6.44|5.95    |      4.67       | 51.4  | 50.7 | 量化蒸馏训练 |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | Paddle-TensorRT |    GPU    |  30.89     |None  |  13.78 |14.01    |      2.24       | 51.4  | 50.5 | 量化蒸馏训练 |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar)  | ONNX Runtime |    CPU    |     1057.82 |   449.52 |None|None    |      2.35        |51.4 | 50.0 |量化蒸馏训练 |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | TensorRT         |    GPU    |  27.90 | 6.39 |6.44|5.95    |      4.67       | 51.4  | 50.7 | Quantized distillation training |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | Paddle-TensorRT |    GPU    |  30.89     |None  |  13.78 |14.01    |      2.24       | 51.4  | 50.5 | Quantized distillation training |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar)  | ONNX Runtime |    CPU    |     1057.82 |   449.52 |None|None    |      2.35        |51.4 | 50.0 | Quantized distillation training |
 
 NOTE:
-- TensorRT比Paddle-TensorRT快的原因是在runtime移除了multiclass_nms3算子
+- The reason why TensorRT is faster than Paddle-TensorRT is that the multiclass_nms3 operator is removed during runtime
 
-#### 端到端 Benchmark
-| 模型                 |推理后端            |部署硬件    | FP32 End2End时延   | INT8 End2End时延 | INT8 + FP16 End2End时延  | INT8+FP16+PM End2End时延  | 最大加速比    | FP32 mAP | INT8 mAP | 量化方式   |
+#### End2End Benchmark
+| Model                 | Inference Backend            |Deployment Hardware    | FP32 End2End Latency   | INT8 End2End Latency | INT8 + FP16 End2End Latency | INT8+FP16+PM End2End Latency  | Maximum Speedup Ratio    | FP32 mAP | INT8 mAP | Quantification Method   |
 | ------------------- | -----------------|-----------|  --------     |--------      |--------      | --------- |-------- |----- |----- |----- |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | TensorRT         |    GPU    |  35.75 | 15.42 |20.70|20.85  |      2.32      | 51.4  | 50.7 | 量化蒸馏训练 |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | Paddle-TensorRT |    GPU    | 33.48    |None  |  18.47 |18.03   |     1.81       | 51.4  | 50.5 | 量化蒸馏训练 |
-| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar)  | ONNX Runtime |    CPU    |     1067.17 |   461.037 |None|None    |      2.31        |51.4 | 50.0 |量化蒸馏训练 |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | TensorRT         |    GPU    |  35.75 | 15.42 |20.70|20.85  |      2.32      | 51.4  | 50.7 | Quantized distillation training |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar )  | Paddle-TensorRT |    GPU    | 33.48    |None  |  18.47 |18.03   |     1.81       | 51.4  | 50.5 | Quantized distillation training |
+| [ppyoloe_crn_l_300e_coco](https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco_qat.tar)  | ONNX Runtime |    CPU    |     1067.17 |   461.037 |None|None    |      2.31        |51.4 | 50.0 | Quantized distillation training |
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials  
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
