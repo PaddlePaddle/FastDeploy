@@ -33,7 +33,7 @@ docker pull registry.baidubce.com/paddlepaddle/fastdeploy:1.0.2-gpu-cuda11.4-trt
 
 Users can also compile the image by themselves according to their own needs, referring to the following documents:
 
-- [FastDeploy Serving Deployment Image Compilation](docs/zh_CN/compile-en.md)
+- [FastDeploy Serving Deployment Image Compilation](docs/zh_CN/compile.md/compile-en.md)
 
 ## Other Tutorials
 
