@@ -1,81 +1,81 @@
-# YOLOv7End2EndTRT Python部署示例
+English | [简体中文](README_CN.md)
+# YOLOv7End2EndTRT Python Deployment Example
 
-在部署前，需确认以下两个步骤
+Two steps before deployment
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl p ackage. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`infer.py`快速完成YOLOv7End2EndTRT在TensorRT加速部署的示例。执行如下脚本即可完成
-
+This directory provides examples that `infer.py` fast finishes the deployment of YOLOv7End2EndTRT accelerated by TensorRT. The script is as follows
 ```bash
-#下载部署示例代码
+# Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/detection/yolov7end2end_trt/python/
 
-#下载yolov7模型文件和测试图片
+# Download yolov7 model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-trt-nms.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
-# TensorRT GPU推理
+# TensorRT inference on GPU 
 python infer.py --model yolov7-end2end-trt-nms.onnx --image 000000014439.jpg --device gpu --use_trt True
-# 若安装的python包没有支持该类 则请自行从源码develop分支编译最新的FastDeploy Python Wheel包进行安装
+# If it is not supported by the python package, compile the latest FastDeploy Python Wheel package from the source code in develop branch and install it.
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 
 <div align='center'>
   <img width="640" alt="image" src="https://user-images.githubusercontent.com/31974251/186605967-ad0c53f2-3ce8-4032-a90f-6f5c1238e7f4.png">
 </div>
 
-注意，YOLOv7End2EndTRT 是专门用于推理YOLOv7中导出模型带[TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) 版本的End2End模型，不带nms的模型推理请使用YOLOv7类，而 [ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) 版本的End2End模型请使用YOLOv7End2EndORT进行推理。
+Attention: YOLOv7End2EndTRT is designed for the inference of End2End models with [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) among the YOLOv7 exported models. For models without nms, use YOLOv7 class for inference. For End2End models with [ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87), use YOLOv7End2EndTRT for inference.
 
-## YOLOv7End2EndTRT Python接口
+## YOLOv7End2EndTRT Python Interface 
 
 ```python
 fastdeploy.vision.detection.YOLOv7End2EndTRT(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
 ```
 
-YOLOv7End2EndTRT 模型加载和初始化，其中model_file为导出的ONNX模型格式
+YOLOv7End2EndTRT model loading and initialization, among which model_file is the exported ONNX model format
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. ONNX format by default
 
-### predict函数
+### predict function
 
 > ```python
 > YOLOv7End2EndTRT.predict(image_data, conf_threshold=0.25)
 > ```
 >
-> 模型预测结口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **image_data**(np.ndarray): 输入数据，注意需为HWC，BGR格式
-> > * **conf_threshold**(float): 检测框置信度过滤阈值，但由于YOLOv7 End2End的模型在导出成ONNX时已经指定了score阈值，因此该参数只有在大于已经指定的阈值时才会有效。
+> > * **image_data**(np.ndarray): Input data in HWC or BGR format
+> > * **conf_threshold**(float): Filtering threshold of detection box confidence. But considering that YOLOv7 End2End models have a score threshold specified during ONNX export, this parameter will be effective when being greater than the specified one.
 
-> **返回**
+> **Return**
 >
-> > 返回`fastdeploy.vision.DetectionResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > Return `fastdeploy.vision.DetectionResult` structure. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for its description.
 
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### Class Member Property
+#### Pre-processing Parameter
+Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
 
-> > * **size**(list[int]): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(list[float]): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=True` 表示不使用填充的方式，默认值为`is_no_pad=False`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=False`
-> > * **stride**(int): 配合`stris_mini_padide`成员变量使用, 默认值为`stride=32`
+> > * **size**(list[int]): This parameter changes resize used during preprocessing, containing two integer elements for [width, height] with default value [640, 640]
+> > * **padding_value**(list[float]): This parameter is used to change the padding value of images during resize, containing three floating-point elements that represent the value of three channels. Default value [114, 114, 114]
+> > * **is_no_pad**(bool): Specify whether to resize the image through padding. `is_no_pad=True` represents no paddling. Default `is_no_pad=False`
+> > * **is_mini_pad**(bool): This parameter sets the width and height of the image after resize to the value nearest to the `size` member variable and to the point where the padded pixel size is divisible by the `stride` member variable. Default `is_mini_pad=False`
+> > * **stride**(int): Used with the `stris_mini_padide` member variable. Default `stride=32`
 
 
 
-## 其它文档
+## Other Documents
 
-- [YOLOv7End2EndTRT 模型介绍](..)
-- [YOLOv7End2EndTRT C++部署](../cpp)
-- [模型预测结果说明](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [YOLOv7End2EndTRT Model Description](..)
+- [YOLOv7End2EndTRT C++ Deployment](../cpp)
+- [Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)

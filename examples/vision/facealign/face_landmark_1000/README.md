@@ -1,25 +1,26 @@
-# FaceLandmark 模型部署
+English | [简体中文](README_CN.md)
+# FaceLandmark Model Deployment
 
-## 模型版本说明
+## Model Description
 
 - [FaceLandmark1000](https://github.com/Single430/FaceLandmark1000/tree/1a951b6)
 
-## 支持模型列表
+## List of Supported Models
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [FaceLandmark1000 模型](https://github.com/Single430/FaceLandmark1000)
+- [FaceLandmark1000 Model](https://github.com/Single430/FaceLandmark1000)
 
-## 下载预训练模型
+## Download Pre-trained Models
 
-为了方便开发者的测试，下面提供了FaceLandmark导出的各系列模型，开发者可直接下载使用。
+For developers' testing, models exported by FaceLandmark are provided below. Developers can download and use them directly. 
 
-| 模型                                                               | 参数大小    | 精度    | 备注 |
+| Model                                                               | Parameter Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- | :------ |
 | [FaceLandmark1000](https://bj.bcebos.com/paddlehub/fastdeploy/FaceLandmark1000.onnx) | 2.1M | - |
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
