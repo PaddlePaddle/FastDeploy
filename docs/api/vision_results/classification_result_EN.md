@@ -1,9 +1,9 @@
-English | [中文](classification_result.md)
-# Image Classification Result
+简体中文 ｜ [English](classification_result.md)
+# ClassifyResult 图像分类结果
 
-The ClassifyResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the classification result and confidence level of the image.
+ClassifyResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像的分类结果和置信度。
 
-## C++ Definition
+## C++ 定义
 
 `fastdeploy::vision::ClassifyResult`
 
@@ -16,14 +16,14 @@ struct ClassifyResult {
 };
 ```
 
-- **label_ids**: Member variable which indicates the classification results of a single image. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification results.
-- **scores**: Member variable which indicates the confidence level of a single image on the corresponding classification result. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification confidence level.
-- **Clear()**: Member function used to clear the results stored in the structure.
-- **Str()**: Member function used to output the information in the structure as string (for Debug).
+- **label_ids**: 成员变量，表示单张图片的分类结果，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类结果
+- **scores**: 成员变量，表示单张图片在相应分类结果上的置信度，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类置信度
+- **Clear()**: 成员函数，用于清除结构体中存储的结果
+- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
 
-## Python Definition
+## Python 定义
 
 `fastdeploy.vision.ClassifyResult`
 
-- **label_ids**(list of int): Member variable which indicates the classification results of a single image. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification results.
-- **scores**(list of float): Member variable which indicates the confidence level of a single image on the corresponding classification result. Its number is determined by the topk passed in when using the classification model, e.g. it can return the top 5 classification confidence level.
+- **label_ids**(list of int): 成员变量，表示单张图片的分类结果，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类结果
+- **scores**(list of float): 成员变量，表示单张图片在相应分类结果上的置信度，其个数根据在使用分类模型时传入的topk决定，例如可以返回top 5的分类置信度
