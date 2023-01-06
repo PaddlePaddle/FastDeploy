@@ -57,7 +57,7 @@ class FASTDEPLOY_DECL PPOCRv2 : public FastDeployModel {
    *
    * \return new PPOCRv2* type unique pointer
    */
-  virtual std::unique_ptr<PPOCRv2> Clone() const;
+  std::unique_ptr<PPOCRv2> Clone() const;
 
   /** \brief Predict the input image and get OCR result.
    *
