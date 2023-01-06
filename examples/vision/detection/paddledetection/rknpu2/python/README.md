@@ -25,9 +25,9 @@ python3 infer.py --model_file ./picodet_s_416_coco_lcnet/picodet_s_416_coco_lcne
 ```
 
 
-## 注意事项
+## Notes
 The input requirement for the model on RKNPU is to use NHWC format, and image normalization will be embedded into the model when converting the RKNN model, so we need to call DisableNormalizePermute(C++) or `disable_normalize_permute(Python) first when deploying with FastDeploy to disable normalization and data format conversion in the preprocessing stage.
-## 其它文档
+## Other Documents
 
 - [PaddleDetection Model Description](..)
 - [PaddleDetection C++ Deployment](../cpp)
