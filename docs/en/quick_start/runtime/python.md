@@ -5,7 +5,7 @@ Please check out the FastDeploy is already installed in your environment. You ca
 
 This document shows an inference sample on the CPU using the PaddleClas classification model MobileNetV2 as an example.
 
-## 1. Obtaining the Module
+## 1. Obtaining the model
 
 ``` python
 import fastdeploy as fd
@@ -42,7 +42,7 @@ results = runtime.infer({
 
 print(results[0].shape)
 ```
-When loading is complete, you can get the following output information indicating the initialized backend and the hardware devices.
+When loading is complete, you will get the following output information indicating the initialized backend and the hardware devices.
 ```
 [INFO] fastdeploy/fastdeploy_runtime.cc(283)::Init	Runtime initialized with Backend::OrtBackend in device Device::CPU.
 ```

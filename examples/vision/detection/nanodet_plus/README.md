@@ -1,26 +1,27 @@
-# NanoDetPlus准备部署模型
+English | [简体中文](README_CN.md)
+# NanoDetPlus Ready-to-deploy Model
 
 
-- NanoDetPlus部署实现来自[NanoDetPlus](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) 的代码，基于coco的[预训练模型](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)。
+- NanoDetPlus deployment is based on the code of [NanoDetPlus](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) and coco's [Pre-trained Model](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1).
 
-  - （1）[官方库](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1)提供的*.onnx可直接进行部署；
-  - （2）开发者自己训练的模型，导出ONNX模型后，参考[详细部署文档](#详细部署文档)完成部署。
+  - （1）The *.onnx provided by [official repository](https://github.com/RangiLyu/nanodet/releases/tag/v1.0.0-alpha-1) can directly conduct the deployment；
+  - （2）Models trained by developers should export ONNX models. Please refer to [Detailed Deployment Documents](#详细部署文档) for deployment.
 
-## 下载预训练ONNX模型
+## Download Pre-trained ONNX Model
 
-为了方便开发者的测试，下面提供了NanoDetPlus导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    |
+For developers' testing, models exported by NanoDetPlus are provided below. Developers can download them directly. (The model accuracy in the following table is derived from the source official repository)
+| Model                                                               | Size    | Accuracy    |
 |:---------------------------------------------------------------- |:----- |:----- |
 | [NanoDetPlus_320](https://bj.bcebos.com/paddlehub/fastdeploy/nanodet-plus-m_320.onnx ) | 4.6MB | 27.0% |
 | [NanoDetPlus_320_sim](https://bj.bcebos.com/paddlehub/fastdeploy/nanodet-plus-m_320-sim.onnx) | 4.6MB | 27.0% |
 
 
-## 详细部署文档
+## Detailed Deployment Documents
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[NanoDetPlus v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) 编写
+- Document and code are based on [NanoDetPlus v1.0.0-alpha-1](https://github.com/RangiLyu/nanodet/tree/v1.0.0-alpha-1) 
