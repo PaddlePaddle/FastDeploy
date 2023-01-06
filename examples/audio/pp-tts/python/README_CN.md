@@ -1,4 +1,4 @@
-(简体中文|[English](./README.md))
+简体中文 | [English](README.md)
 
 # PP-TTS流式语音合成Python示例
 
