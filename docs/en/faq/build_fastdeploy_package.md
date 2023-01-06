@@ -35,5 +35,5 @@ make -j
 cpack -G RPM
 
 # Install .rpm package
-dpkg -i xxx.rpm
+rpm -i xxx.rpm
 ```
