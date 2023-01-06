@@ -39,7 +39,7 @@ Please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../d
 
 ### Copy model and configuration files to folder Model
 In the process of Paddle dynamic map model -> Paddle static map model -> ONNX mdoel, ONNX file and the corresponding yaml configuration file will be generated. Please move the configuration file to the folder model. 
-After converting to RKNN, the model file also needs to be copied to folder model. Please refer to ([ResNet50_vd RKNN model](../README.md))。
+After converting to RKNN, the model file also needs to be copied to folder model. Please refer to ([ResNet50_vd RKNN model](../README.md)).
 
 ### Prepare Test Images to folder image
 ```bash
