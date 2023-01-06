@@ -1,4 +1,4 @@
-[English](./README.md)
+[English](README.md) | 简体中文
 # paddlejs-converter
 
 paddlejs-converter 是适用于 Paddle.js 的模型转换工具，其作用是将 PaddlePaddle 模型（或称为 fluid 模型）转化为浏览器友好的格式，以供Paddle.js在浏览器等环境中加载预测使用。此外，paddlejs-converter 还提供了强大的模型优化能力，帮助开发者对模型结构进行优化，提高运行时性能。
