@@ -9,7 +9,7 @@ English | [简体中文](README_CN.md)
 
 Now FastDeploy supports the deployment of the following models
 
-- [PP-MSVSR](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)。
+- [PP-MSVSR](https://github.com/PaddlePaddle/PaddleGAN/blob/develop/docs/zh_CN/tutorials/video_super_resolution.md)
 
 
 ##  Export Deployment Model

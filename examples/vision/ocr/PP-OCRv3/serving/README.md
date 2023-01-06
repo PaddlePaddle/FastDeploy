@@ -3,7 +3,7 @@ English | [简体中文](README_CN.md)
 
 Before the serving deployment, please confirm 
 
-- 1.  Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for software and hardware environment requirements and image pull commands
+- 1.  Refer to [FastDeploy Serving Deployment](../../../../../serving/README.md) for software and hardware environment requirements and image pull commands
 
 ## Introduction
 This document describes how to build an OCR text recognition service with FastDeploy.
@@ -91,4 +91,4 @@ python3 client.py
 
 ## Configuration Change
 
-The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/zh_CN/model_configuration.md) for more information.
+The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.
