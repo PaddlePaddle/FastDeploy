@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "fastdeploy/core/fd_type.h"
 #include <iostream>
 #include <memory>
 #include <string>

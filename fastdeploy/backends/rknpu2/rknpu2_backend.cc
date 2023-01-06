@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "fastdeploy/backends/rknpu/rknpu2/rknpu2_backend.h"
+#include "fastdeploy/backends/rknpu2/rknpu2_backend.h"
 #include "fastdeploy/utils/perf.h"
 namespace fastdeploy {
 RKNPU2Backend::~RKNPU2Backend() {

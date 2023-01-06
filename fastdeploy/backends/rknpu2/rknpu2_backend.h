@@ -14,7 +14,7 @@
 #pragma once
 
 #include "fastdeploy/backends/backend.h"
-#include "fastdeploy/backends/rknpu/rknpu2/rknpu2_config.h"
+#include "fastdeploy/backends/rknpu2/option.h"
 #include "fastdeploy/core/fd_tensor.h"
 #include "rknn_api.h"  // NOLINT
 #include <cstring>
