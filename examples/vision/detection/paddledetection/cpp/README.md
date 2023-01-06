@@ -1,54 +1,48 @@
-# PaddleDetection C++部署示例
+English | [简体中文](README_CN.md)
+# PaddleDetection C++ Deployment Example
 
-本目录下提供`infer_xxx.cc`快速完成PaddleDetection模型包括PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet/CascadeRCNN/PSSDet/RetinaNet/PPYOLOESOD/FCOS/TTFNet/TOOD/GFL在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+This directory provides examples that `infer_xxx.cc` fast finishes the deployment of PaddleDetection models, including PPYOLOE/PicoDet/YOLOX/YOLOv3/PPYOLO/FasterRCNN/YOLOv5/YOLOv6/YOLOv7/RTMDet on CPU/GPU and GPU accelerated by TensorRT. 
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 
 ```bash
-以ppyoloe为例进行推理部署
+ppyoloe is taken as an example for inference deployment
 
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# 下载PPYOLOE模型文件和测试图片
+# Download the PPYOLOE model file and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ppyoloe_crn_l_300e_coco.tgz
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 tar xvf ppyoloe_crn_l_300e_coco.tgz
 
 
-# CPU推理
+# CPU inference
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 0
-# GPU推理
+# GPU inference
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 1
-# GPU上TensorRT推理
+# TensorRT Inference on GPU
 ./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 2
-# 昆仑芯XPU推理
-./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 3
-# 华为昇腾推理
-./infer_ppyoloe_demo ./ppyoloe_crn_l_300e_coco 000000014439.jpg 4
 ```
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
 
-如果用户使用华为昇腾NPU部署, 请参考以下方式在部署前初始化部署环境:
-- [如何使用华为昇腾NPU部署](../../../../../docs/cn/faq/use_sdk_on_ascend.md)
+## PaddleDetection C++ Interface 
 
-## PaddleDetection C++接口
+### Model Class
 
-### 模型类
-
-PaddleDetection目前支持6种模型系列，类名分别为`PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，`SSD`,`PaddleYOLOv5`,`PaddleYOLOv6`,`PaddleYOLOv7`,`RTMDet`,`CascadeRCNN`,`PSSDet`,`RetinaNet`,`PPYOLOESOD`,`FCOS`,`TTFNet`,`TOOD`,`GFL`所有类名的构造函数和预测函数在参数上完全一致，本文档以PPYOLOE为例讲解API
+PaddleDetection currently supports 6 kinds of models, including `PPYOLOE`, `PicoDet`, `PaddleYOLOX`, `PPYOLO`, `FasterRCNN`，`SSD`,`PaddleYOLOv5`,`PaddleYOLOv6`,`PaddleYOLOv7`,`RTMDet`. The constructors and predictors for all 6 kinds are consistent in terms of parameters. This document takes PPYOLOE as an example to introduce its API
 ```c++
 fastdeploy::vision::detection::PPYOLOE(
         const string& model_file,
@@ -60,28 +54,28 @@ fastdeploy::vision::detection::PPYOLOE(
 
 PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ONNX模型格式。
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 配置文件路径，即PaddleDetection导出的部署yaml文件
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为PADDLE格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **config_file**(str): •	Configuration file path, which is the deployment yaml file exported by PaddleDetection
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-#### Predict函数
+#### Predict Function
 
 > ```c++
 > PPYOLOE::Predict(cv::Mat* im, DetectionResult* result)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output results directly.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: Detection result, including detection box and confidence of each box. Refer to [Vision Model Prediction Result](../../../../../docs/api/vision_results/) for DetectionResult 
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model prediction results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
