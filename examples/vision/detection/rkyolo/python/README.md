@@ -25,7 +25,7 @@ python3 infer.py --model_file ./model/  \
 
 
 ## Note
-RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
+The model needs to be in NHWC format on RKNPU. The normalized image will be embedded in the RKNN model. Therefore, when we deploy with FastDeploy, call DisablePermute(C++) or `disable_permute(Python)` to disable normalization and data format conversion during preprocessing.
 
 ## Other Documents
 
