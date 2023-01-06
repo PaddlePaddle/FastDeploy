@@ -16,6 +16,7 @@ English | [中文](../../cn/build_and_install/README.md)
 - [Build and Install on RK3588 Platform](rknpu2.md)
 - [Build and Install on A311D Platform](a311d.md)
 - [Build and Install on KunlunXin XPU Platform](kunlunxin.md)
+- [Build and Install on Huawei Ascend Platform](huawei_ascend.md)
 
 
 ## Build options

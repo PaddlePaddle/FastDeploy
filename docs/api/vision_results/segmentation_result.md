@@ -1,11 +1,11 @@
-中文 ｜ [English](segmentation_result_EN.md)
-# SegmentationResult 目标检测结果
+English | [中文](segmentation_result_CN.md)
+# Segmentation Result
 
-SegmentationResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像中每个像素预测出来的分割类别和分割类别的概率值。
+The SegmentationResult code is defined in `fastdeploy/vision/common/result.h`, indicating the segmentation category and the segmentation category probability predicted in each pixel in the image.
 
-## C++ 定义
+## C++ Definition
 
-`fastdeploy::vision::SegmentationResult`
+``fastdeploy::vision::SegmentationResult``
 
 ```c++
 struct SegmentationResult {
@@ -18,16 +18,16 @@ struct SegmentationResult {
 };
 ```
 
-- **label_map**: 成员变量，表示单张图片每个像素点的分割类别，`label_map.size()`表示图片像素点的个数
-- **score_map**: 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`--output_op argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`--output_op softmax`或者导出模型时指定`--output_op none`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/cpp/)`apply_softmax=True`)
-- **shape**: 成员变量，表示输出图片的shape，为H\*W
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **label_map**: Member variable which indicates the segmentation category of each pixel in a single image. `label_map.size()` indicates the number of pixel points of a image.
+- **score_map**: Member variable which indicates the predicted segmentation category probability value (specified as `--output_op argmax` when export) corresponding to label_map, or the probability value normalized by softmax (specified as `--output_op softmax` when export, or as `--output_op when exporting the model). none`  when export while setting the [class member attribute](../../../examples/vision/segmentation/paddleseg/cpp/) as `apply_softmax=True` during model initialization).
+- **shape**: Member variable which indicates the shape of the output image as H\*W.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.SegmentationResult`
 
-- **label_map**(list of int): 成员变量，表示单张图片每个像素点的分割类别
-- **score_map**(list of float): 成员变量，与label_map一一对应的所预测的分割类别概率值(当导出模型时指定`--output_op argmax`)或者经过softmax归一化化后的概率值(当导出模型时指定`--output_op softmax`或者导出模型时指定`--output_op none`同时模型初始化的时候设置模型[类成员属性](../../../examples/vision/segmentation/paddleseg/python/)`apply_softmax=true`)
-- **shape**(list of int): 成员变量，表示输出图片的shape，为H\*W
+- **label_map**(list of int): Member variable which indicates the segmentation category of each pixel in a single image.
+- **score_map**(list of float): Member variable which indicates the predicted segmentation category probability value (specified as `--output_op argmax` when export) corresponding to label_map, or the probability value normalized by softmax (specified as `--output_op softmax` when export, or as `--output_op when exporting the model). none`  when export while setting the [class member attribute](../../../examples/vision/segmentation/paddleseg/cpp/) as `apply_softmax=True` during model initialization).
+- **shape**(list of int): Member variable which indicates the shape of the output image as H\*W.

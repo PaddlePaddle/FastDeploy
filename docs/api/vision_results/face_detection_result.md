@@ -1,11 +1,11 @@
-中文 | [English](face_detection_result_EN.md)
-# FaceDetectionResult 人脸检测结果
+English | [中文](face_detection_result_CN.md)
+# Face Detection Result
 
-FaceDetectionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸检测出来的目标框、人脸landmarks，目标置信度和每张人脸的landmark数量。
+The FaceDetectionResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the target frames, face landmarks, target confidence and the number of landmark per face.
 
-## C++ 定义
+## C++ Definition
 
-`fastdeploy::vision::FaceDetectionResult`
+``fastdeploy::vision::FaceDetectionResult``
 
 ```c++
 struct FaceDetectionResult {
@@ -18,18 +18,18 @@ struct FaceDetectionResult {
 };
 ```
 
-- **boxes**: 成员变量，表示单张图片检测出来的所有目标框坐标，`boxes.size()`表示框的个数，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **scores**: 成员变量，表示单张图片检测出来的所有目标置信度，其元素个数与`boxes.size()`一致
-- **landmarks**: 成员变量，表示单张图片检测出来的所有人脸的关键点，其元素个数与`boxes.size()`一致
-- **landmarks_per_face**: 成员变量，表示每个人脸框中的关键点的数量。
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single image. `boxes.size()` indicates the number of boxes, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **scores**: Member variable which indicates the confidence level of all targets detected in a single image, where the number of elements is the same as `boxes.size()`.
+- **landmarks**: Member variable which indicates the keypoints of all faces detected in a single image, where the number of elements is the same as `boxes.size()`.
+- **landmarks_per_face**: Member variable which indicates the number of keypoints in each face box.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.FaceDetectionResult`
 
-- **boxes**(list of list(float)): 成员变量，表示单张图片检测出来的所有目标框坐标。boxes是一个list，其每个元素为一个长度为4的list， 表示为一个框，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **scores**(list of float): 成员变量，表示单张图片检测出来的所有目标置信度
-- **landmarks**(list of list(float)): 成员变量，表示单张图片检测出来的所有人脸的关键点
-- **landmarks_per_face**(int): 成员变量，表示每个人脸框中的关键点的数量。
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single image.
+- **landmarks**(list of list(float)): Member variable which indicates the keypoints of all faces detected in a single image.
+- **landmarks_per_face**(int): Member variable which indicates the number of keypoints in each face box.

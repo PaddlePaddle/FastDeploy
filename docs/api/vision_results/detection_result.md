@@ -1,9 +1,10 @@
-中文 ｜ [English](detection_result_EN.md) 
-# DetectionResult 目标检测结果
+English | [简体中文](detection_result_CN.md)
 
-DetectionResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明图像检测出来的目标框、目标类别和目标置信度。
+# Target Detection Result
 
-## C++ 定义
+The DetectionResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the target frame, target class and target confidence level detected in the image.
+
+## C++ Definition
 
 ```c++
 fastdeploy::vision::DetectionResult
@@ -21,13 +22,13 @@ struct DetectionResult {
 };
 ```
 
-- **boxes**: 成员变量，表示单张图片检测出来的所有目标框坐标，`boxes.size()`表示框的个数，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **scores**: 成员变量，表示单张图片检测出来的所有目标置信度，其元素个数与`boxes.size()`一致
-- **label_ids**: 成员变量，表示单张图片检测出来的所有目标类别，其元素个数与`boxes.size()`一致
-- **masks**: 成员变量，表示单张图片检测出来的所有实例mask，其元素个数及shape大小与`boxes`一致
-- **contain_masks**: 成员变量，表示检测结果中是否包含实例mask，实例分割模型的结果此项一般为true.
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single image. `boxes.size()` indicates the number of boxes, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **scores**: Member variable which indicates the confidence level of all targets detected in a single image, where the number of elements is the same as `boxes.size()`.
+- **label_ids**: Member variable which indicates all target categories detected in a single image, where the number of elements is the same as `boxes.size()`.
+- **masks**: Member variable which indicates all detected instance masks of a single image, where the number of elements and the shape size are the same as `boxes`.
+- **contain_masks**: Member variable which indicates whether the detected result contains instance masks, which is generally true for the instance segmentation model.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
 ```c++
 fastdeploy::vision::Mask
@@ -35,31 +36,31 @@ fastdeploy::vision::Mask
 ```c++
 struct Mask {
   std::vector<int32_t> data;
-  std::vector<int64_t> shape;  // (H,W) ...
+  std::vector<int64_t> shape; // (H,W) ...
 
   void Clear();
   std::string Str();
 };
 ```  
-- **data**: 成员变量，表示检测到的一个mask
-- **shape**: 成员变量，表示mask的shape，如 (h,w)
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **data**: Member variable which indicates a detected mask.
+- **shape**: Member variable which indicates the shape of the mask, e.g. (h,w).
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 ```python
 fastdeploy.vision.DetectionResult  
 ```
 
-- **boxes**(list of list(float)): 成员变量，表示单张图片检测出来的所有目标框坐标。boxes是一个list，其每个元素为一个长度为4的list， 表示为一个框，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **scores**(list of float): 成员变量，表示单张图片检测出来的所有目标置信度
-- **label_ids**(list of int): 成员变量，表示单张图片检测出来的所有目标类别
-- **masks**: 成员变量，表示单张图片检测出来的所有实例mask，其元素个数及shape大小与`boxes`一致
-- **contain_masks**: 成员变量，表示检测结果中是否包含实例mask，实例分割模型的结果此项一般为True.
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single image.
+- **label_ids**(list of int): Member variable which indicates all target categories detected in a single image.
+- **masks**: Member variable which indicates all detected instance masks of a single image, where the number of elements and the shape size are the same as `boxes`.
+- **contain_masks**: Member variable which indicates whether the detected result contains instance masks, which is generally true for the instance segmentation model.
 
 ```python
 fastdeploy.vision.Mask  
 ```
-- **data**: 成员变量，表示检测到的一个mask
-- **shape**: 成员变量，表示mask的shape，如 (h,w)
+- **data**: Member variable which indicates a detected mask.
+- **shape**: Member variable which indicates the shape of the mask, e.g. (h,w).
