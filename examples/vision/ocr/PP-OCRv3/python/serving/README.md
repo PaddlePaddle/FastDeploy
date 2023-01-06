@@ -5,6 +5,7 @@ English | [简体中文](README_CN.md)
 ## Environment
 
 - 1. Prepare environment and install FastDeploy Python whl, refer to [download_prebuilt_libraries](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 2. For installing the FastDeploy Python whl package, please refer to [FastDeploy Python Installation](../../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Server:
 ```bash
