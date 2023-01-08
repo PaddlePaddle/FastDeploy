@@ -14,7 +14,10 @@ FastDeploy针对python和cpp开发者，提供了以下多线程或多进程的�
 | Detection      | 支持PaddleDetection系列模型 | [PaddleDetection](../../examples/vision/detection/paddledetection)       |
 | Segmentation   | 支持PaddleSeg系列模型          | [PaddleSeg](../../examples/vision/segmentation/paddleseg) |
 | Classification | 支持PaddleClas系列模型             | [PaddleClas](../../examples/vision/classification/paddleclas)   |
->> **注意**:点击上方模型下载链接，至`下载预训练模型`模块下载模型
+| OCR | 支持PaddleOCR系列模型             | [PaddleClas](../../examples/vision/ocr/)   |
+>> **注意**:
+- 点击上方模型下载链接，至`下载预训练模型`模块下载模型
+- OCR是多模型串联的模型，多线程示例请参考`pipeline`文件夹，其他单模型多线程示例在`single_model`文件夹中
 
 ## 多线程预测时克隆模型
 
