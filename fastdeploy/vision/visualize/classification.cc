@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
 #include <algorithm>
 
 #include "fastdeploy/vision/visualize/visualize.h"
@@ -46,7 +44,7 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
     cv::Point origin;
     origin.x = w_sep;
     origin.y = h_sep * (i + 1);
-    cv::putText(vis_im, text, origin, font, font_size, 
+    cv::putText(vis_im, text, origin, font, font_size,
                 cv::Scalar(255, 255, 255), 1);
   }
   return vis_im;
@@ -54,9 +52,8 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
 
 // Visualize ClassifyResult with custom labels.
 cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
-                          const std::vector<std::string>& labels,
-                          int top_k, float score_threshold,
-                          float font_size) {
+                          const std::vector<std::string>& labels, int top_k,
+                          float score_threshold, float font_size) {
   int h = im.rows;
   int w = im.cols;
   auto vis_im = im.clone();
@@ -78,8 +75,8 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
     if (labels.size() > result.label_ids[i]) {
       text = labels[result.label_ids[i]] + "," + text;
     } else {
-      FDWARNING << "The label_id: " << result.label_ids[i] 
-                << " in DetectionResult should be less than length of labels:" 
+      FDWARNING << "The label_id: " << result.label_ids[i]
+                << " in DetectionResult should be less than length of labels:"
                 << labels.size() << "." << std::endl;
     }
     if (text.size() > 16) {
@@ -89,7 +86,7 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
     cv::Point origin;
     origin.x = w_sep;
     origin.y = h_sep * (i + 1);
-    cv::putText(vis_im, text, origin, font, font_size, 
+    cv::putText(vis_im, text, origin, font, font_size,
                 cv::Scalar(255, 255, 255), 1);
   }
   return vis_im;
@@ -97,4 +94,3 @@ cv::Mat VisClassification(const cv::Mat& im, const ClassifyResult& result,
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif
