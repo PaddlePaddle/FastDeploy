@@ -1,34 +1,36 @@
-# PaddleClas 模型部署
+English | [简体中文](README_CN.md)
 
-## 模型版本说明
+# PaddleClas Model Deployment
+
+## Model Description
 
 - [PaddleClas Release/2.4](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4)
 
-目前FastDeploy支持如下模型的部署
+Now FastDeploy supports the deployment of the following models
 
-- [PP-LCNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNet.md)
-- [PP-LCNetV2系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNetV2.md)
-- [EfficientNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/EfficientNet_and_ResNeXt101_wsl.md)
-- [GhostNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [MobileNet系列模型(包含v1,v2,v3)](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [ShuffleNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
-- [SqueezeNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Others.md)
-- [Inception系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Inception.md)
-- [PP-HGNet系列模型](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-HGNet.md)
-- [ResNet系列模型（包含vd系列）](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/ResNet_and_vd.md)
+- [PP-LCNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNet.md)
+- [PP-LCNetV2 Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-LCNetV2.md)
+- [EfficientNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/EfficientNet_and_ResNeXt101_wsl.md)
+- [GhostNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
+- [MobileNet Models(including v1,v2,v3)](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
+- [ShuffleNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Mobile.md)
+- [SqueezeNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Others.md)
+- [Inception Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/Inception.md)
+- [PP-HGNet Models](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/PP-HGNet.md)
+- [ResNet Models（including vd series）](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/models/ResNet_and_vd.md)
 
-## 准备PaddleClas部署模型
+## Prepare PaddleClas Deployment Model
 
-PaddleClas模型导出，请参考其文档说明[模型导出](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA)  
+For PaddleClas model export, refer to [Model Export](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/zh_CN/inference_deployment/export_model.md#2-%E5%88%86%E7%B1%BB%E6%A8%A1%E5%9E%8B%E5%AF%BC%E5%87%BA).  
 
-注意：PaddleClas导出的模型仅包含`inference.pdmodel`和`inference.pdiparams`两个文件，但为了满足部署的需求，同时也需准备其提供的通用[inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml)文件，FastDeploy会从yaml文件中获取模型在推理时需要的预处理信息，开发者可直接下载此文件使用。但需根据自己的需求修改yaml文件中的配置参数，具体可比照PaddleClas模型训练[config](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)中的infer部分的配置信息进行修改。
+Attention：The model exported by PaddleClas contains two files, including `inference.pdmodel` and `inference.pdiparams`. However, it is necessary to prepare the generic [inference_cls.yaml](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/deploy/configs/inference_cls.yaml) file provided by PaddleClas to meet the requirements of deployment. FastDeploy will obtain from the yaml file the preprocessing information required during inference. FastDeploy will get the preprocessing information needed by the model from the yaml file. Developers can directly download this file. But they need to modify the configuration parameters in the yaml file based on personalized needs. Refer to the configuration information in the infer section of the PaddleClas model training [config.](https://github.com/PaddlePaddle/PaddleClas/tree/release/2.4/ppcls/configs/ImageNet)
 
 
-## 下载预训练模型
+## Download Pre-trained Model
 
-为了方便开发者的测试，下面提供了PaddleClas导出的部分模型（含inference_cls.yaml文件），开发者可直接下载使用。
+For developers' testing, some models exported by PaddleClas (including the inference_cls.yaml file) are provided below. Developers can download them directly.
 
-| 模型                                                               | 参数文件大小    |输入Shape |  Top1 | Top5 |
+| Model                                                               | Parameter File Size    |Input Shape |  Top1 | Top5 |
 |:---------------------------------------------------------------- |:----- |:----- | :----- | :----- |
 | [PPLCNet_x1_0](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNet_x1_0_infer.tgz) | 12MB | 224x224 |71.32% | 90.03% |
 | [PPLCNetV2_base](https://bj.bcebos.com/paddlehub/fastdeploy/PPLCNetV2_base_infer.tgz)  | 26MB  | 224x224 |77.04% | 93.27% |
@@ -50,8 +52,8 @@ PaddleClas模型导出，请参考其文档说明[模型导出](https://github.c
 | [PPHGNet_base_ssld](https://bj.bcebos.com/paddlehub/fastdeploy/PPHGNet_base_ssld_infer.tgz) |  274MB | 224x224 | 85.0% | 97.35% |
 | [ResNet50_vd](https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz) |  98MB | 224x224 | 79.12% | 94.44% |
 
-## 详细部署文档
+## Detailed Deployment Documents
 
-- [Python部署](python)
-- [C++部署](cpp)
-- [服务化部署](serving)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
+- [Serving Deployment](serving)

@@ -1,18 +1,19 @@
-# PaddleClas 模型RKNPU2部署
+English | [简体中文](README_CN.md)
+# PaddleClas Model RKNPU2 Deployment
 
-## 转换模型
-下面以 ResNet50_vd为例子，教大家如何转换分类模型到RKNN模型。
+## Convert the model
+Taking ResNet50_vd as an example, this document demonstrates how to convert classification model to RKNN model.
 
-### 导出ONNX模型
+### Export the ONNX model
 ```bash
-# 安装 paddle2onnx
+# Install paddle2onnx
 pip install paddle2onnx
 
-# 下载ResNet50_vd模型文件和测试图片
+# Download ResNet50_vd model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 
-# 静态图转ONNX模型，注意，这里的save_file请和压缩包名对齐
+# From static map to ONNX model. Attention: Align the save_file with the zip file name
 paddle2onnx --model_dir ResNet50_vd_infer  \
             --model_filename inference.pdmodel \
             --params_filename inference.pdiparams  \
@@ -21,16 +22,16 @@ paddle2onnx --model_dir ResNet50_vd_infer  \
             --opset_version 10  \
             --enable_onnx_checker True
 
-# 固定shape，注意这里的inputs得对应netron.app展示的 inputs 的 name，有可能是image 或者 x
+# Fix shape. Attention: the inputs here should correspond to the name of the inputs shown in netron.app, which may be image or x
 python -m paddle2onnx.optimize --input_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
                                --output_model ResNet50_vd_infer/ResNet50_vd_infer.onnx \
                                --input_shape_dict "{'inputs':[1,3,224,224]}"
 ```  
 
-### 编写模型导出配置文件
-以转化RK3588的RKNN模型为例子，我们需要编辑tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml，来转换ONNX模型到RKNN模型。
+### Write the model export configuration file
+Taking the example of RKNN model from RK3588, we need to edit tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml to convert ONNX model to RKNN model.
 
-如果你需要在NPU上执行normalize操作，请根据你的模型配置normalize参数，例如:
+If you need to perform the normalize operation on NPU, configure the normalize parameters based on your model. For example:
 ```yaml
 model_path: ./ResNet50_vd_infer/ResNet50_vd_infer.onnx
 output_folder: ./ResNet50_vd_infer
@@ -49,7 +50,7 @@ do_quantization: False
 dataset: "./ResNet50_vd_infer/dataset.txt"
 ```
 
-**在CPU上做normalize**可以参考以下yaml：
+To **normalize on CPU**, refer to the following yaml：
 ```yaml
 model_path: ./ResNet50_vd_infer/ResNet50_vd_infer.onnx
 output_folder: ./ResNet50_vd_infer
@@ -67,17 +68,17 @@ outputs_nodes:
 do_quantization: False
 dataset: "./ResNet50_vd_infer/dataset.txt"
 ```
-这里我们选择在NPU上执行normalize操作.
+Here we perform the normalize operation on NPU.
 
 
-### ONNX模型转RKNN模型
+### From ONNX model to RKNN model
 ```shell
 python tools/rknpu2/export.py \
         --config_path tools/rknpu2/config/ResNet50_vd_infer_rknn.yaml \
         --target_platform rk3588
 ```
 
-## 其他链接
-- [Cpp部署](./cpp)
-- [Python部署](./python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
+## Other Links
+- [Cpp Deployment](./cpp)
+- [Python Deployment](./python)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
