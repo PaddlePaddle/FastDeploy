@@ -1,5 +1,5 @@
 English | [简体中文](README_CN.md)
-# C++推理
+# C++ Inference
 
 Before running demo, the following two steps need to be confirmed:
 

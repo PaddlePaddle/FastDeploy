@@ -2,7 +2,7 @@ English | [简体中文](README_CN.md)
 # MODNet Ready-to-deploy Model
 
 - [MODNet](https://github.com/ZHKKKe/MODNet/commit/28165a4)
-  - （1）The *.pt provided by the [Official Library](https://github.com/ZHKKKe/MODNet/) can be deployed after [Export ONNX Model](#导出ONNX模型)；
+  - （1）The *.pt provided by the [Official Library](https://github.com/ZHKKKe/MODNet/) can be deployed after [Export ONNX Model](#export-onnx-model)；
   - （2）As for MODNet model trained on customized data, please follow the operations guidelines in [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B) to complete the deployment.
 
 ##  Export ONNX Model

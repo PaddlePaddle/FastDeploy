@@ -31,6 +31,8 @@ void PaddleBackend::BuildOption(const PaddleBackendOption& option) {
       config_.Exp_DisableTensorRtOPs(option.trt_disabled_ops_);
       auto precision = paddle_infer::PrecisionType::kFloat32;
       if (option.trt_option.enable_fp16) {
+        FDINFO << "Will try to use tensorrt fp16 inference with Paddle Backend."
+               << std::endl;
         precision = paddle_infer::PrecisionType::kHalf;
       }
       bool use_static = false;

@@ -4,8 +4,8 @@ This directory provides examples that `infer_xxx.py` fast finishes the deploymen
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2.  Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Taking ArcFace as an example, we demonstrate how `infer_arcface.py` fast finishes the deployment of ArcFace on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 ```bash
@@ -111,4 +111,4 @@ Member variables of AdaFacePostprocessor are as follows
 - [InsightFace Model Description](..)
 - [InsightFace C++ Deployment](../cpp)
 - [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

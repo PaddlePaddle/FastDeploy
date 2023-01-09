@@ -29,11 +29,6 @@ if(${WITH_GPU})
     set(WITH_GPU OFF)
 endif()
 
-if(${ENABLE_OPENCV_CUDA})
-    message(WARNING "While compiling with -DWITH_TIMVX=ON, will force to set -DENABLE_OPENCV_CUDA=OFF") 
-    set(ENABLE_OPENCV_CUDA OFF) 
-endif()
-
 if(${ENABLE_TEXT})
     set(ENABLE_TEXT OFF CACHE BOOL "Force ENABLE_TEXT OFF" FORCE)
     message(STATUS "While compiling with -DWITH_TIMVX=ON, will force to set -DENABLE_TEXT=OFF")

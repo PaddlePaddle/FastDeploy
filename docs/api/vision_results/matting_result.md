@@ -1,11 +1,12 @@
-中文 ｜ [English](matting_result_EN.md)
-# MattingResult 抠图结果
+English | [中文](matting_result_CN.md)
 
-MattingResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明模型预测的alpha透明度的值，预测的前景等。
+# Matting Result 
 
-## C++ 定义
+The MattingResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the predicted value of alpha transparency predicted and the predicted foreground, etc.
 
-`fastdeploy::vision::MattingResult`
+## C++ Definition
+
+``fastdeploy::vision::MattingResult`''
 
 ```c++
 struct MattingResult {
@@ -18,19 +19,19 @@ struct MattingResult {
 };
 ```
 
-- **alpha**: 是一维向量，为预测的alpha透明度的值，值域为[0.,1.]，长度为hxw，h,w为输入图像的高和宽
-- **foreground**: 是一维向量，为预测的前景，值域为[0.,255.]，长度为hxwxc，h,w为输入图像的高和宽，c一般为3，foreground不是一定有的，只有模型本身预测了前景，这个属性才会有效
-- **contain_foreground**: 表示预测的结果是否包含前景
-- **shape**: 表示输出结果的shape，当contain_foreground为false，shape只包含(h,w)，当contain_foreground为true，shape包含(h,w,c), c一般为3
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **alpha**: It is a one-dimensional vector, indicating the predicted value of alpha transparency. The value range is [0.,1.], and the length is hxw, in which h,w represent the height and the width of the input image seperately.
+- **foreground**: It is a one-dimensional vector, indicating the predicted foreground. The value range is [0.,255.], and the length is hxwxc, in which h,w represent the height and the width of the input image, and c is generally 3. This vector is valid only when the model itself predicts the foreground.
+- **contain_foreground**: Used to indicate whether the result contains foreground.
+- **shape**: Used to indicate the shape of the output. When contain_foreground is false, the shape only contains (h,w), while when contain_foreground is true, the shape contains (h,w,c), in which c is generally 3.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.MattingResult`
 
-- **alpha**(list of float): 是一维向量，为预测的alpha透明度的值，值域为[0.,1.]，长度为hxw，h,w为输入图像的高和宽
-- **foreground**(list of float): 是一维向量，为预测的前景，值域为[0.,255.]，长度为hxwxc，h,w为输入图像的高和宽，c一般为3，foreground不是一定有的，只有模型本身预测了前景，这个属性才会有效
-- **contain_foreground**(bool): 表示预测的结果是否包含前景
-- **shape**(list of int): 表示输出结果的shape，当contain_foreground为false，shape只包含(h,w)，当contain_foreground为true，shape包含(h,w,c), c一般为3
+- **alpha**(list of float): It is a one-dimensional vector, indicating the predicted value of alpha transparency. The value range is [0.,1.], and the length is hxw, in which h,w represent the height and the width of the input image seperately.
+- **foreground**(list of float): It is a one-dimensional vector, indicating the predicted foreground. The value range is [0.,255.], and the length is hxwxc, in which h,w represent the height and the width of the input image, and c is generally 3. This vector is valid only when the model itself predicts the foreground.
+- **contain_foreground**(bool): Used to indicate whether the result contains foreground.
+- **shape**(list of int): Used to indicate the shape of the output. When contain_foreground is false, the shape only contains (h,w), while when contain_foreground is true, the shape contains (h,w,c), in which c is generally 3.

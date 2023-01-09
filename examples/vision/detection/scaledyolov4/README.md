@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 - The ScaledYOLOv4 deployment is based on the code of [ScaledYOLOv4](https://github.com/WongKinYiu/ScaledYOLOv4) and [Pre-trained Model on COCO](https://github.com/WongKinYiu/ScaledYOLOv4).
 
-  - （1）The *.pt provided by [Official Repository](https://github.com/WongKinYiu/ScaledYOLOv4) should [Export the ONNX Model](#导出ONNX模型) to complete the deployment；
-  - （2）The ScaledYOLOv4 model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
+  - （1）The *.pt provided by [Official Repository](https://github.com/WongKinYiu/ScaledYOLOv4) should [Export the ONNX Model](#Export-the-ONNX-Model) to complete the deployment；
+  - （2）The ScaledYOLOv4 model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
 
 ## Export the ONNX Model

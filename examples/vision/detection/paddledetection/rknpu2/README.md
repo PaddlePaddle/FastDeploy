@@ -8,9 +8,8 @@ Now FastDeploy supports the deployment of the following models
 
 ## Prepare PaddleDetection deployment models and convert models
 Before RKNPU deployment, you need to transform Paddle model to RKNN model:
-* From Paddle dynamic map to ONNX model, refer to [PaddleDetection Model Export](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/EXPORT_MODEL.md)
-  , and set **export.nms=True** during transformation.
-* From ONNX model to RKNN model, refer to [Transformation Document](../../../../../docs/cn/faq/rknpu2/export.md).
+* From Paddle dynamic map to ONNX model, refer to [PaddleDetection Model Export](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.4/deploy/EXPORT_MODEL.md), and set **export.nms=True** during transformation.
+* From ONNX model to RKNN model, refer to [Transformation Document](../../../../../docs/en/faq/rknpu2/export.md).
 
 
 ## Model Transformation Example

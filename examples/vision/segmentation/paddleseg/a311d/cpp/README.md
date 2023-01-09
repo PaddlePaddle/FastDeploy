@@ -1,11 +1,11 @@
 English | [简体中文](README_CN.md)
-# PP-LiteSeg Quantized Model C++ Deployment Example
+# PP-LiteSeg Quantitative Model C++ Deployment Example
 
- `infer.cc` in this directory can help you quickly complete the inference acceleration of PP-LiteSeg quantization model deployment on A311D.
+`infer.cc` in this directory can help you quickly complete the inference acceleration of PP-LiteSeg quantization model deployment on A311D.
 
 ## Deployment Preparations
 ### FastDeploy Cross-compile Environment Preparations
-1. For the software and hardware environment, and the cross-compile environment, please refer to [FastDeploy Cross-compile environment](../../../../../../docs/en/build_and_install/a311d.md#Cross-compilation-environment-construction)  
+1. For the software and hardware environment, and the cross-compile environment, please refer to [FastDeploy Cross-compile environment](../../../../../../docs/en/build_and_install/a311d.md#Cross-compilation-environment-construction).  
 
 ### Model Preparations
 1. You can directly use the quantized model provided by FastDeploy for deployment.

@@ -4,8 +4,8 @@ English | [简体中文](README_CN.md)
 - The YOLOv5Lite Deployment is based on the code of [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
 and [Pre-trained Model Based on COCO](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)。
 
-  - （1）The *.pt provided by [Official Repository](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) should [Export the ONNX Model](#导出ONNX模型)to complete the deployment；
-  - （2）The YOLOv5Lite model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Refer to [Detailed Deployment Documents](#详细部署文档) to complete the deployment.
+  - （1）The *.pt provided by [Official Repository](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) should [Export the ONNX Model](#Export-the-ONNX-Model)to complete the deployment；
+  - （2）The YOLOv5Lite model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
 
 ## Export the ONNX Model

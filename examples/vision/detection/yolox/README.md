@@ -2,10 +2,10 @@ English | [简体中文](README_CN.md)
 # YOLOX Ready-to-deploy Model
 
 
-- The YOLOX deployment is based on [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0) and [coco's pre-trained models](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0)。
+- The YOLOX deployment is based on [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX/tree/0.1.1rc0) and [coco's pre-trained models](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0).
 
   - （1）The *.pth provided by [Official Repository](https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0) should export the ONNX model to complete the deployment;
-  - （2）The YOLOX model trained by personal data should export the ONNX model. Refer to [Detailed Deployment Documents](#详细部署文档)  to complete the deployment.
+  - （2）The YOLOX model trained by personal data should export the ONNX model. Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents)  to complete the deployment.
 
 
 
