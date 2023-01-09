@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides the `Multi-person keypoint detection in a single image` example that `pptinypose_infer.py` fast finishes the deployment of PP-TinyPose on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 >> **Attention**: single model currently only supports single-person keypoint detection in a single image. Therefore, the input image should contain one person only or should be cropped. For multi-person keypoint detection, refer to [PP-TinyPose Pipeline](../../det_keypoint_unite/python/README.md)
@@ -78,4 +78,4 @@ Users can modify the following pre-processing parameters to their needs, which a
 - [PP-TinyPose Model Description](..)
 - [PP-TinyPose C++ Deployment](../cpp)
 - [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
