@@ -5,8 +5,8 @@ This directory provides examples that `infer.cc` fast finishes the deployment of
 
 Two steps before deployment
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Taking the AnimeGAN inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 1.0.2 or above (x.x.x>=1.0.2) is required to support this model.
 
@@ -31,7 +31,7 @@ tar xvfz animegan_v1_hayao_60_v1.0.0.tgz
 ```
 
 The above command works for Linux or MacOS. For SDK in Windows, refer to
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
 ## AnimeGAN C++ Interface 
 
@@ -82,4 +82,4 @@ AnimeGAN model loading and initialization, among which model_file is the exporte
 
 - [Model Description](../../)
 - [Python Deployment](../python)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

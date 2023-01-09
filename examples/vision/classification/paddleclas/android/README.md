@@ -148,4 +148,4 @@ set(FastDeploy_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/fastdeploy-android
 ## More Reference Documents
 For more FastDeploy Java API documentes and how to access FastDeploy C++ API via JNI, refer to:
 - [Use FastDeploy Java SDK in Android](../../../../../java/android/)
-- [Use FastDeploy C++ SDK in Android](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+- [Use FastDeploy C++ SDK in Android](../../../../../docs/en/faq/use_cpp_sdk_on_android.md)  
