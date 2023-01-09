@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from threading import Thread
 import fastdeploy as fd
 import cv2
 import os
+from multiprocessing import Pool
 
 
 def parse_arguments():
@@ -82,6 +84,7 @@ def parse_arguments():
         "--process_num", type=int, default=1, help="process num")
     return parser.parse_args()
 
+
 def get_image_list(image_path):
     image_list = []
     if os.path.isfile(image_path):
@@ -102,100 +105,102 @@ def get_image_list(image_path):
 
     return image_list
 
+
 def build_option(args):
-
-    det_option = fd.RuntimeOption()
-    cls_option = fd.RuntimeOption()
-    rec_option = fd.RuntimeOption()
-
-    det_option.set_cpu_thread_num(args.cpu_thread_num)
-    cls_option.set_cpu_thread_num(args.cpu_thread_num)
-    rec_option.set_cpu_thread_num(args.cpu_thread_num)
-
+    option = fd.RuntimeOption()
     if args.device.lower() == "gpu":
-        det_option.use_gpu(args.device_id)
-        cls_option.use_gpu(args.device_id)
-        rec_option.use_gpu(args.device_id)
+        option.use_gpu(args.device_id)
+
+    option.set_cpu_thread_num(args.cpu_thread_num)
 
     if args.device.lower() == "kunlunxin":
-        det_option.use_kunlunxin()
-        cls_option.use_kunlunxin()
-        rec_option.use_kunlunxin()
-
-        return det_option, cls_option, rec_option
+        option.use_kunlunxin()
+        return option
 
     if args.backend.lower() == "trt":
         assert args.device.lower(
         ) == "gpu", "TensorRT backend require inference on device GPU."
-        det_option.use_trt_backend()
-        cls_option.use_trt_backend()
-        rec_option.use_trt_backend()
-
-        # 设置trt input shape
-        # 如果用户想要自己改动检测模型的输入shape, 我们建议用户把检测模型的长和高设置为32的倍数.
-        det_option.set_trt_input_shape("x", [1, 3, 64, 64], [1, 3, 640, 640],
-                                       [1, 3, 960, 960])
-        cls_option.set_trt_input_shape("x", [1, 3, 48, 10],
-                                       [args.cls_bs, 3, 48, 320],
-                                       [args.cls_bs, 3, 48, 1024])
-        rec_option.set_trt_input_shape("x", [1, 3, 32, 10],
-                                       [args.rec_bs, 3, 32, 320],
-                                       [args.rec_bs, 3, 32, 2304])
-
-        # 用户可以把TRT引擎文件保存至本地
-        det_option.set_trt_cache_file(args.det_model + "/det_trt_cache.trt")
-        cls_option.set_trt_cache_file(args.cls_model + "/cls_trt_cache.trt")
-        rec_option.set_trt_cache_file(args.rec_model + "/rec_trt_cache.trt")
-
+        option.use_trt_backend()
     elif args.backend.lower() == "pptrt":
         assert args.device.lower(
         ) == "gpu", "Paddle-TensorRT backend require inference on device GPU."
-        det_option.use_trt_backend()
-        det_option.enable_paddle_trt_collect_shape()
-        det_option.enable_paddle_to_trt()
-
-        cls_option.use_trt_backend()
-        cls_option.enable_paddle_trt_collect_shape()
-        cls_option.enable_paddle_to_trt()
-
-        rec_option.use_trt_backend()
-        rec_option.enable_paddle_trt_collect_shape()
-        rec_option.enable_paddle_to_trt()
-
-        # 设置trt input shape
-        # 如果用户想要自己改动检测模型的输入shape, 我们建议用户把检测模型的长和高设置为32的倍数.
-        det_option.set_trt_input_shape("x", [1, 3, 64, 64], [1, 3, 640, 640],
-                                       [1, 3, 960, 960])
-        cls_option.set_trt_input_shape("x", [1, 3, 48, 10],
-                                       [args.cls_bs, 3, 48, 320],
-                                       [args.cls_bs, 3, 48, 1024])
-        rec_option.set_trt_input_shape("x", [1, 3, 32, 10],
-                                       [args.rec_bs, 3, 32, 320],
-                                       [args.rec_bs, 3, 32, 2304])
-
-        # 用户可以把TRT引擎文件保存至本地
-        det_option.set_trt_cache_file(args.det_model)
-        cls_option.set_trt_cache_file(args.cls_model)
-        rec_option.set_trt_cache_file(args.rec_model)
-
+        option.use_trt_backend()
+        option.enable_paddle_trt_collect_shape()
+        option.enable_paddle_to_trt()
     elif args.backend.lower() == "ort":
-        det_option.use_ort_backend()
-        cls_option.use_ort_backend()
-        rec_option.use_ort_backend()
-
+        option.use_ort_backend()
     elif args.backend.lower() == "paddle":
-        det_option.use_paddle_infer_backend()
-        cls_option.use_paddle_infer_backend()
-        rec_option.use_paddle_infer_backend()
-
+        option.use_paddle_infer_backend()
     elif args.backend.lower() == "openvino":
         assert args.device.lower(
         ) == "cpu", "OpenVINO backend require inference on device CPU."
-        det_option.use_openvino_backend()
-        cls_option.use_openvino_backend()
-        rec_option.use_openvino_backend()
+        option.use_openvino_backend()
+    return option
 
-    return det_option, cls_option, rec_option
+
+def load_model(args, runtime_option):
+    # Detection模型, 检测文字框
+    det_model_file = os.path.join(args.det_model, "inference.pdmodel")
+    det_params_file = os.path.join(args.det_model, "inference.pdiparams")
+    # Classification模型，方向分类，可选
+    cls_model_file = os.path.join(args.cls_model, "inference.pdmodel")
+    cls_params_file = os.path.join(args.cls_model, "inference.pdiparams")
+    # Recognition模型，文字识别模型
+    rec_model_file = os.path.join(args.rec_model, "inference.pdmodel")
+    rec_params_file = os.path.join(args.rec_model, "inference.pdiparams")
+    rec_label_file = args.rec_label_file
+
+    # PPOCR的cls和rec模型现在已经支持推理一个Batch的数据
+    # 定义下面两个变量后, 可用于设置trt输入shape, 并在PPOCR模型初始化后, 完成Batch推理设置
+    cls_batch_size = 1
+    rec_batch_size = 6
+
+    # 当使用TRT时，分别给三个模型的runtime设置动态shape,并完成模型的创建.
+    # 注意: 需要在检测模型创建完成后，再设置分类模型的动态输入并创建分类模型, 识别模型同理.
+    # 如果用户想要自己改动检测模型的输入shape, 我们建议用户把检测模型的长和高设置为32的倍数.
+    det_option = runtime_option
+    det_option.set_trt_input_shape("x", [1, 3, 64, 64], [1, 3, 640, 640],
+                                   [1, 3, 960, 960])
+    # 用户可以把TRT引擎文件保存至本地
+    #det_option.set_trt_cache_file(args.det_model  + "/det_trt_cache.trt")
+    global det_model
+    det_model = fd.vision.ocr.DBDetector(
+        det_model_file, det_params_file, runtime_option=det_option)
+
+    cls_option = runtime_option
+    cls_option.set_trt_input_shape("x", [1, 3, 48, 10],
+                                   [cls_batch_size, 3, 48, 320],
+                                   [cls_batch_size, 3, 48, 1024])
+    # 用户可以把TRT引擎文件保存至本地
+    #cls_option.set_trt_cache_file(args.cls_model  + "/cls_trt_cache.trt")
+    global cls_model
+    cls_model = fd.vision.ocr.Classifier(
+        cls_model_file, cls_params_file, runtime_option=cls_option)
+
+    rec_option = runtime_option
+    rec_option.set_trt_input_shape("x", [1, 3, 48, 10],
+                                   [rec_batch_size, 3, 48, 320],
+                                   [rec_batch_size, 3, 48, 2304])
+    # 用户可以把TRT引擎文件保存至本地
+    #rec_option.set_trt_cache_file(args.rec_model  + "/rec_trt_cache.trt")
+    global rec_model
+    rec_model = fd.vision.ocr.Recognizer(
+        rec_model_file,
+        rec_params_file,
+        rec_label_file,
+        runtime_option=rec_option)
+
+    # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
+    global ppocr_v3
+    ppocr_v3 = fd.vision.ocr.PPOCRv3(
+        det_model=det_model, cls_model=cls_model, rec_model=rec_model)
+
+    # 给cls和rec模型设置推理时的batch size
+    # 此值能为-1, 和1到正无穷
+    # 当此值为-1时, cls和rec模型的batch size将默认和det模型检测出的框的数量相同
+    ppocr_v3.cls_batch_size = cls_batch_size
+    ppocr_v3.rec_batch_size = rec_batch_size
+
 
 def predict(model, img_list):
     result_list = []
@@ -206,11 +211,13 @@ def predict(model, img_list):
         result_list.append(result)
     return result_list
 
+
 def process_predict(image):
     # predict ppocr result
     im = cv2.imread(image)
-    result = ppocr_v2.predict(im)
-    return result
+    result = ppocr_v3.predict(im)
+    print(result)
+
 
 class WrapperThread(Thread):
     def __init__(self, func, args):
@@ -224,52 +231,24 @@ class WrapperThread(Thread):
     def get_result(self):
         return self.result
 
+
 if __name__ == '__main__':
     args = parse_arguments()
-    
+
     imgs_list = get_image_list(args.image_path)
-    # Detection模型, 检测文字框
-    det_model_file = os.path.join(args.det_model, "inference.pdmodel")
-    det_params_file = os.path.join(args.det_model, "inference.pdiparams")
-    # Classification模型，方向分类，可选
-    cls_model_file = os.path.join(args.cls_model, "inference.pdmodel")
-    cls_params_file = os.path.join(args.cls_model, "inference.pdiparams")
-    # Recognition模型，文字识别模型
-    rec_model_file = os.path.join(args.rec_model, "inference.pdmodel")
-    rec_params_file = os.path.join(args.rec_model, "inference.pdiparams")
-    rec_label_file = args.rec_label_file
-    
     # 对于三个模型，均采用同样的部署配置
-    # 用户也可根据自己的需求,个性化配置
-    det_option, cls_option, rec_option = build_option(args)
-    
-    det_model = fd.vision.ocr.DBDetector(
-        det_model_file, det_params_file, runtime_option=det_option)
-    
-    cls_model = fd.vision.ocr.Classifier(
-        cls_model_file, cls_params_file, runtime_option=cls_option)
-    
-    rec_model = fd.vision.ocr.Recognizer(
-        rec_model_file, rec_params_file, rec_label_file, runtime_option=rec_option)
-    
-    # 创建PP-OCR，串联3个模型，其中cls_model可选，如无需求，可设置为None
-    ppocr_v2 = fd.vision.ocr.PPOCRv2(
-        det_model=det_model, cls_model=cls_model, rec_model=rec_model)
-    
-    # 给cls和rec模型设置推理时的batch size
-    # 此值能为-1, 和1到正无穷
-    # 当此值为-1时, cls和rec模型的batch size将默认和det模型检测出的框的数量相同
-    ppocr_v2.cls_batch_size = args.cls_bs
-    ppocr_v2.rec_batch_size = args.rec_bs
-    
+    # 用户也可根据自行需求分别配置
+    runtime_option = build_option(args)
+
     if args.use_multi_process:
-        results = []
         process_num = args.process_num
-        with Pool(process_num) as pool:
-            results = pool.map(process_predict, imgs_list)
-        for result in results:
-            print(result)
+        with Pool(
+                process_num,
+                initializer=load_model,
+                initargs=(args, runtime_option)) as pool:
+            pool.map(process_predict, imgs_list)
     else:
+        load_model(args, runtime_option)
         threads = []
         thread_num = args.thread_num
         image_num_each_thread = int(len(imgs_list) / thread_num)
@@ -281,13 +260,14 @@ if __name__ == '__main__':
             if i == thread_num - 1:
                 t = WrapperThread(
                     predict,
-                    args=(ppocr_v2.clone(), imgs_list[i * image_num_each_thread:],
-                          args.topk))
+                    args=(ppocr_v3.clone(),
+                          imgs_list[i * image_num_each_thread:]))
             else:
                 t = WrapperThread(
                     predict,
-                    args=(ppocr_v2.clone(), imgs_list[i * image_num_each_thread:(
-                        i + 1) * image_num_each_thread - 1], args.topk))
+                    args=(ppocr_v3.clone(),
+                          imgs_list[i * image_num_each_thread:(i + 1) *
+                                    image_num_each_thread - 1], args.topk))
             threads.append(t)
             t.start()
 
