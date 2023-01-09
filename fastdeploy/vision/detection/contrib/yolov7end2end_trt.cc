@@ -75,14 +75,14 @@ YOLOv7End2EndTRT::YOLOv7End2EndTRT(const std::string& model_file,
   runtime_option.model_format = model_format;
   runtime_option.model_file = model_file;
   if (runtime_option.device != Device::GPU) {
-    FDWARNING << Str(runtime_option.device)
+    FDWARNING << runtime_option.device
               << " is not support for YOLOv7End2EndTRT,"
               << "will fallback to Device::GPU." << std::endl;
     runtime_option.device = Device::GPU;
   }
   if (runtime_option.backend != Backend::UNKNOWN) {
     if (runtime_option.backend != Backend::TRT) {
-      FDWARNING << Str(runtime_option.backend)
+      FDWARNING << runtime_option.backend
                 << " is not support for YOLOv7End2EndTRT,"
                 << "will fallback to Backend::TRT." << std::endl;
       runtime_option.backend = Backend::TRT;

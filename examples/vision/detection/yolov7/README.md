@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 - YOLOv7 deployment is based on [YOLOv7](https://github.com/WongKinYiu/yolov7/tree/v0.1) branching code, and [COCO Pre-Trained Models](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1).
 
-  - （1）The *.pt provided by the [Official Library](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1) can be deployed after the [export ONNX model](#export ONNX model) operation; *.trt and *.pose models do not support deployment.
+  - （1）The *.pt provided by the [Official Library](https://github.com/WongKinYiu/yolov7/releases/tag/v0.1) can be deployed after the [export ONNX model](#Export-ONNX-Model) operation; *.trt and *.pose models do not support deployment.
   - （2）As for YOLOv7 model trained on customized data, please follow the operations guidelines in [Export ONNX model](#Export-ONNX-Model) and then refer to [Detailed Deployment Tutorials](#Detailed-Deployment-Tutorials) to complete the deployment.
 
 ## Export ONNX Model

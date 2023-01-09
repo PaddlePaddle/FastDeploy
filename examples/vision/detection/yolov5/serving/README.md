@@ -55,4 +55,4 @@ output_name: detction_result
 
 
 
-The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../serving/docs/zh_CN/model_configuration.md) to modify the configs in `models/runtime/config.pbtxt`.
+The default is to run ONNXRuntime on CPU. If developers need to run it on GPU or other inference engines, please see the  [Configs File](../../../../../serving/docs/EN/model_configuration-en.md) to modify the configs in `models/runtime/config.pbtxt`.

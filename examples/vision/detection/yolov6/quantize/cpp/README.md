@@ -1,37 +1,38 @@
-# YOLOv6量化模型 C++部署示例
+English | [简体中文](README_CN.md)
+# YOLOv6 Quantification Model C++ Deployment Example
 
-本目录下提供的`infer.cc`,可以帮助用户快速完成YOLOv6s量化模型在CPU/GPU上的部署推理加速.
+This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv6 quantification models on CPU/GPU.
 
-## 部署准备
-### FastDeploy环境准备
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+## Prepare the deployment
+### FastDeploy Environment Preparation
+- 1. Software and hardware should meet the requirements. Please refer to  [FastDeploy Environment Requirements](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-### 量化模型准备
-- 1. 用户可以直接使用由FastDeploy提供的量化模型进行部署.
-- 2. 用户可以使用FastDeploy提供的[一键模型自动化压缩工具](../../../../../../tools/common_tools/auto_compression/),自行进行模型量化, 并使用产出的量化模型进行部署.
+### Prepare the quantification model
+- 1. Users can directly deploy quantized models provided by FastDeploy.
+- 2. ii.	Or users can use the [One-click auto-compression tool](../../../../../../tools/common_tools/auto_compression/) provided by FastDeploy to automatically conduct quantification model for deployment.
 
-## 以量化后的YOLOv6s模型为例, 进行部署
-在本目录执行如下命令即可完成编译,以及量化模型部署.支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+## Example: quantized YOLOv6 model
+The compilation and deployment can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-#下载FastDeloy提供的yolov6s量化模型文件和测试图片
+# Download yolov6 quantification model files and test images provided by FastDeploy
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov6s_qat_model_new.tar
 tar -xvf yolov6s_qat_model.tar
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
-# 在CPU上使用ONNX Runtime推理量化模型
+# Use ONNX Runtime quantification model on CPU
 ./infer_demo yolov6s_qat_model 000000014439.jpg 0
-# 在GPU上使用TensorRT推理量化模型
+# Use TensorRT quantification model on GPU
 ./infer_demo yolov6s_qat_model 000000014439.jpg 1
-# 在GPU上使用Paddle-TensorRT推理量化模型
+# Use Paddle-TensorRT quantification model on GPU
 ./infer_demo yolov6s_qat_model 000000014439.jpg 2
 ```
