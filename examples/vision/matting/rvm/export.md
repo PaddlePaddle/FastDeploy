@@ -17,7 +17,7 @@ cd RobustVideoMatting
 
 ## Step 2: Remove downsample_ratio dynamic input
 
-在```model/model.py```中，将 ```downsample_ratio``` 输入去掉，如下图所示
+Remove the ```downsample_ratio``` input in ```model/model.py```.
 
 ```python
 def forward(self, src, r1, r2, r3, r4,

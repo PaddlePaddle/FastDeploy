@@ -7,7 +7,7 @@ For PaddleDetection model export and download of pre-trained models, refer to [P
 
 Confirm before the serving deployment
 
-- 1. Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for software and hardware environment requirements and image pull commands
+- 1. Refer to [FastDeploy Serving Deployment](../../../../../serving/README.md) for software and hardware environment requirements and image pull commands
 
 
 ## Start Service
@@ -92,4 +92,4 @@ output_name: DET_RESULT
 
 ## Configuration Change
 
-The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/zh_CN/model_configuration.md) for more information.
+The current default configuration runs on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.

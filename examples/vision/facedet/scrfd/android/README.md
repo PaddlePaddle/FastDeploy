@@ -36,7 +36,7 @@ The final effect is as follows. Figure 1: Install the APP on the phone; Figure 2
 
 ```java
 // Constructor: constructor w/o label file
-public SCRFD(); // 空构造函数，之后可以调用init初始化
+public SCRFD(); // An empty constructor. It can be initialized later by calling init function.
 public SCRFD(String modelFile, String paramsFile);
 public SCRFD(String modelFile, String paramsFile, RuntimeOption option);
 // Call init manually for initialization: call init manually w/o label file
@@ -146,4 +146,4 @@ It’s simple to replace the FastDeploy prediction library and models. The predi
 ## More Reference Documents
 For more FastDeploy Java API documentes and how to access FastDeploy C++ API via JNI, refer to: 
 - [FastDeploy Java SDK in Android](../../../../../java/android/)
-- [FastDeploy C++ SDK in Android](../../../../../docs/cn/faq/use_cpp_sdk_on_android.md)  
+- [FastDeploy C++ SDK in Android](../../../../../docs/en/faq/use_cpp_sdk_on_android.md)  
