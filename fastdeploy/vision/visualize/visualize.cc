@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
 #include "fastdeploy/vision/visualize/visualize.h"
 
 namespace fastdeploy {
@@ -66,4 +65,3 @@ const std::vector<int>& Visualize::GetColorMap(int num_classes) {
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif
