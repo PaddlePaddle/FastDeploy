@@ -54,6 +54,9 @@ class FASTDEPLOY_DECL FastDeployModel {
   /** Model's valid hardware backends. This member defined all the gpu backends have successfully tested for the model
    */
   std::vector<Backend> valid_rknpu_backends = {};
+  /** Model's valid hardware backends. This member defined all the sophgo npu backends have successfully tested for the model
+   */
+  std::vector<Backend> valid_sophgonpu_backends = {};
 
   /// Get number of inputs for this model
   virtual int NumInputsOfRuntime() { return runtime_->NumInputs(); }
@@ -118,9 +121,7 @@ class FASTDEPLOY_DECL FastDeployModel {
     std::vector<FDTensor>().swap(reused_output_tensors_);
   }
 
-  virtual fastdeploy::Runtime* CloneRuntime() {
-    return runtime_->Clone();
-  }
+  virtual fastdeploy::Runtime* CloneRuntime() { return runtime_->Clone(); }
 
   virtual bool SetRuntime(fastdeploy::Runtime* clone_runtime) {
     runtime_ = std::unique_ptr<Runtime>(clone_runtime);
@@ -148,6 +149,7 @@ class FASTDEPLOY_DECL FastDeployModel {
   bool CreateGpuBackend();
   bool CreateIpuBackend();
   bool CreateRKNPUBackend();
+  bool CreateSophgoNPUBackend();
   bool CreateTimVXBackend();
   bool CreateKunlunXinBackend();
   bool CreateASCENDBackend();

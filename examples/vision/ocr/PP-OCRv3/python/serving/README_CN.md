@@ -1,4 +1,4 @@
-简体中文 | [English](README_EN.md)
+简体中文 | [English](README.md)
 
 # PP-OCRv3 Python轻量服务化部署示例
 

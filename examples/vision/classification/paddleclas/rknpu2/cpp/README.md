@@ -1,28 +1,29 @@
-# PaddleClas C++部署示例
+English | [简体中文](README_CN.md)
+# PaddleClas C++ Deployment Example
 
-本目录下用于展示 ResNet50_vd 模型在RKNPU2上的部署，以下的部署过程以 ResNet50_vd 为例子。
+This directory demonstrates the deployment of ResNet50_vd model on RKNPU2. The following deployment process takes ResNet50_vd as an example.
 
-在部署前，需确认以下两个步骤:
+Before deployment, the following two steps need to be confirmed:
 
-1. 软硬件环境满足要求
-2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
+1. Hardware and software environment meets the requirements.
+2. Download the pre-compiled deployment repository or compile the FastDeploy repository from scratch according to the development environment.
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
+For the above steps, please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md).
 
-## 生成基本目录文件
+## Generate Basic Directory Files
 
-该例程由以下几个部分组成
+The routine consists of the following parts:
 ```text
 .
 ├── CMakeLists.txt
-├── build  # 编译文件夹
-├── images  # 存放图片的文件夹
+├── build  # Compile Folder
+├── images  # Folder for images
 ├── infer.cc
-├── ppclas_model_dir  # 存放模型文件的文件夹
-└── thirdpartys  # 存放sdk的文件夹
+├── ppclas_model_dir  # Folder for models
+└── thirdpartys  # Folder for sdk
 ```
 
-首先需要先生成目录结构
+First, please build a directory structure
 ```bash
 mkdir build
 mkdir images
@@ -30,23 +31,22 @@ mkdir ppclas_model_dir
 mkdir thirdpartys
 ```
 
-## 编译
+## Compile
 
-### 编译并拷贝SDK到thirdpartys文件夹
+### Compile and Copy SDK to folder thirdpartys
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
-fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
+Please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md) to compile SDK.After compiling, the fastdeploy-0.0.3 directory will be created in the build directory, please move it to the thirdpartys directory.
 
-### 拷贝模型文件，以及配置文件至model文件夹
-在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model，转换方案: ([ResNet50_vd RKNN模型](../README.md))。
+### Copy model and configuration files to folder Model
+In the process of Paddle dynamic map model -> Paddle static map model -> ONNX mdoel, ONNX file and the corresponding yaml configuration file will be generated. Please move the configuration file to the folder model. 
+After converting to RKNN, the model file also needs to be copied to folder model. Please refer to ([ResNet50_vd RKNN model](../README.md)).
 
-### 准备测试图片至image文件夹
+### Prepare Test Images to folder image
 ```bash
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 ```
 
-### 编译example
+### Compile example
 
 ```bash
 cd build
@@ -55,24 +55,23 @@ make -j8
 make install
 ```
 
-## 运行例程
+## Running Routines
 
 ```bash
 cd ./build/install
 ./rknpu_test ./ppclas_model_dir ./images/ILSVRC2012_val_00000010.jpeg
 ```
 
-## 运行结果展示
+## Results
 ClassifyResult(
-label_ids: 153, 
-scores: 0.684570, 
+label_ids: 153,
+scores: 0.684570,
 )
 
-## 注意事项
-RKNPU上对模型的输入要求是使用NHWC格式，且图片归一化操作会在转RKNN模型时，内嵌到模型中，因此我们在使用FastDeploy部署时，
-DisablePermute(C++)或`disable_permute(Python)，在预处理阶段禁用数据格式的转换。
+## Notes
+The input requirement for the model on RKNPU is to use NHWC format, and image normalization will be embedded into the model when converting the RKNN model, so we need to call DisablePermute(C++) or disable_permute(Python) first when deploying with FastDeploy to disable data format conversion in the preprocessing stage.
 
-## 其它文档
-- [ResNet50_vd Python 部署](../python)
-- [模型预测结果说明](../../../../../../docs/api/vision_results/)
-- [转换ResNet50_vd RKNN模型文档](../README.md)
+## Other Documents
+- [ResNet50_vd Python Deployment](../python)
+- [Prediction results](../../../../../../docs/api/vision_results/)
+- [Converting ResNet50_vd RKNN model](../README.md)

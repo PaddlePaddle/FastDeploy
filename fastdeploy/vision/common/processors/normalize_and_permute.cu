@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifdef WITH_GPU
 #include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 
 namespace fastdeploy {
 namespace vision {
 
-__global__ void NormalizeAndPermuteKernel(
-    uint8_t* src, float* dst, const float* alpha, const float* beta,
-    int num_channel, bool swap_rb, int edge) {
+__global__ void NormalizeAndPermuteKernel(uint8_t* src, float* dst,
+                                          const float* alpha, const float* beta,
+                                          int num_channel, bool swap_rb,
+                                          int edge) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (idx >= edge) return;
 
@@ -38,8 +40,8 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
   std::string buf_name = Name() + "_src";
   std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
-  FDTensor* src = UpdateAndGetReusedBuffer(shape, im->type(), buf_name,
-                                           Device::GPU);
+  FDTensor* src =
+      UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
   FDASSERT(cudaMemcpy(src->Data(), im->ptr(), src->Nbytes(),
                       cudaMemcpyHostToDevice) == 0,
            "Error occurs while copy memory from CPU to GPU.");
@@ -58,7 +60,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 
   buf_name = Name() + "_beta";
   FDTensor* beta = UpdateAndGetReusedBuffer({(int64_t)beta_.size()}, CV_32FC1,
-                                             buf_name, Device::GPU);
+                                            buf_name, Device::GPU);
   FDASSERT(cudaMemcpy(beta->Data(), beta_.data(), beta->Nbytes(),
                       cudaMemcpyHostToDevice) == 0,
            "Error occurs while copy memory from CPU to GPU.");
@@ -80,3 +82,4 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
 
 }  // namespace vision
 }  // namespace fastdeploy
+#endif

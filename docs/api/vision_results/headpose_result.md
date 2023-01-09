@@ -1,11 +1,11 @@
-中文 ｜ [English](headpose_result_EN.md)
-# HeadPoseResult 头部姿态结果
+English | [中文](headpose_result_CN.md)
+# Head Pose Result
 
-HeadPoseResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明头部姿态结果。
+The HeadPoseResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the head pose result.
 
-## C++ 定义
+## C++ Definition
 
-`fastdeploy::vision::HeadPoseResult`
+``fastdeploy::vision::HeadPoseResult`''
 
 ```c++
 struct HeadPoseResult {
@@ -15,12 +15,12 @@ struct HeadPoseResult {
 };
 ```
 
-- **euler_angles**: 成员变量，表示单张人脸图片预测的欧拉角，存放的顺序是(yaw, pitch, roll)， yaw 代表水平转角，pitch 代表垂直角，roll 代表翻滚角，值域都为 [-90,+90]度
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **euler_angles**: Member variable which indicates the Euler angles predicted for a single face image, stored in the order (yaw, pitch, roll), with yaw representing the horizontal turn angle, pitch representing the vertical angle, and roll representing the roll angle, all with a value range of [-90,+90].
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.HeadPoseResult`
 
-- **euler_angles**(list of float): 成员变量，表示单张人脸图片预测的欧拉角，存放的顺序是(yaw, pitch, roll)， yaw 代表水平转角，pitch 代表垂直角，roll 代表翻滚角，值域都为 [-90,+90]度
+- **euler_angles**(list of float): Member variable which indicates the Euler angles predicted for a single face image, stored in the order (yaw, pitch, roll), with yaw representing the horizontal turn angle, pitch representing the vertical angle, and roll representing the roll angle, all with a value range of [-90,+90].
