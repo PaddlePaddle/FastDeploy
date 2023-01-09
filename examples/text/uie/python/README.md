@@ -4,8 +4,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps need to be confirmed.
 
-- 1. The software and hardware environment meets the requirements. Please refer to [Environment requirements for FastDeploy](../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
-- 2. FastDeploy Python whl pacakage needs installation. Please refer to [FastDeploy Python Installation](../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
+- 1. The software and hardware environment meets the requirements. Please refer to [Environment requirements for FastDeploy](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
+- 2. FastDeploy Python whl pacakage needs installation. Please refer to [FastDeploy Python Installation](../../../../docs/en/build_and_install/download_prebuilt_libraries.md).
 
 This directory provides an example that `infer.py` quickly complete CPU deployment conducted by the UIE model with OpenVINO acceleration on CPU/GPU and CPU.
 
@@ -348,7 +348,7 @@ fd.text.uie.UIEModel(model_file,
                      schema_language=SchemaLanguage.ZH)
 ```
 
-UIEModel loading and initialization. Among them, `model_file`, `params_file` are Paddle inference documents exported by trained models. Please refer to [Model export](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2).`vocab_file`refers to the vocabulary file. The vocabulary of the UIE model UIE can be downloaded in [UIE configuration file](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py)
+UIEModel loading and initialization. Among them, `model_file`, `params_file` are Paddle inference documents exported by trained models. Please refer to [Model export](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/model_zoo/uie/README.md#%E6%A8%A1%E5%9E%8B%E9%83%A8%E7%BD%B2). `vocab_file`refers to the vocabulary file. The vocabulary of the UIE model UIE can be downloaded in [UIE configuration file](https://github.com/PaddlePaddle/PaddleNLP/blob/5401f01af85f1c73d8017c6b3476242fce1e6d52/model_zoo/uie/utils.py).
 
 **Parameter**
 

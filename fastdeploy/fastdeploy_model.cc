@@ -140,9 +140,11 @@ bool FastDeployModel::InitRuntimeWithSpecifiedDevice() {
 }
 
 bool FastDeployModel::InitRuntime() {
-  FDASSERT(
-      CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
-      "ModelFormatCheck Failed.");
+  if (!runtime_option.model_from_memory_) {
+    FDASSERT(
+        CheckModelFormat(runtime_option.model_file, runtime_option.model_format),
+        "ModelFormatCheck Failed.");
+  }
   if (runtime_initialized_) {
     FDERROR << "The model is already initialized, cannot be initliazed again."
             << std::endl;

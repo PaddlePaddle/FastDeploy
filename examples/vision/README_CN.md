@@ -1,4 +1,4 @@
-[English](README_EN.md) | 简体中文
+[English](README.md) | 简体中文
 # 视觉模型部署
 
 本目录下提供了各类视觉模型的部署，主要涵盖以下任务类型
