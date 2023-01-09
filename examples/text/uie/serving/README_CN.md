@@ -41,6 +41,15 @@ docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 # 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /uie_serving 目录
 docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v `pwd`/:/uie_serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
 
+# 在容器中重装fastdeploy的python包(镜像中的python包默认不带各个推理引擎，UIE需要python版的推理引擎)
+# gpu
+python3 -m pip uninstall fastdeploy-gpu-python
+python3 -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+
+# cpu
+python3 -m pip uninstall fastdeploy-python
+python3 -m pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+
 # 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/uie_serving/models --backend-config=python,shm-default-byte-size=10485760
 ```
