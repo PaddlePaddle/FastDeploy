@@ -1,10 +1,10 @@
-English | [简体中文](README_CN.md) 
+English | [简体中文](README_CN.md)
 
 # Example of UIE Serving Deployment
 
 Before serving deployment, you need to confirm:
 
-- 1. You can refer to [FastDeploy serving deployment](../../../../serving/README.md) for hardware and software environment requirements and image pull commands for serving images.
+- 1. You can refer to [FastDeploy Serving](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands for serving images.
 
 ## Prepare models
 
@@ -41,6 +41,15 @@ docker pull paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
 # Run the container. The container name is fd_serving, and the current directory is mounted as the container's /uie_serving directory
 docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v `pwd`/:/uie_serving paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10 bash
+
+# reinstall fastdeploy python
+# gpu
+python3 -m pip uninstall fastdeploy-gpu-python
+python3 -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+
+# cpu
+python3 -m pip uninstall fastdeploy-python
+python3 -m pip install fastdeploy-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 
 # Start the service (it will have scheduling privileges for all GPU cards without setting the CUDA_VISIBLE_DEVICES environment variable)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/uie_serving/models --backend-config=python,shm-default-byte-size=10485760
@@ -143,4 +152,4 @@ results:
 
 ## Configuration Modification
 
-The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [Configuration Document](../../../../serving/docs/EN/model_configuration-en.md).
+The current configuration is by default to run the paddle engine on CPU. If you want to run on CPU/GPU or other inference engines, modifying the configuration is needed.Please refer to [Config Doc](../../../../serving/docs/zh_CN/model_configuration.md)
