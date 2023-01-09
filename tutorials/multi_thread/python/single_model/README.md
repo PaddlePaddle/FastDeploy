@@ -20,24 +20,24 @@ wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/Ima
 
 
 # CPU多线程推理
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --thread_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --thread_num 1
 # CPU多进程推理
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --use_multi_process True --process_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --use_multi_process True --process_num 1
 
 # GPU多线程推理
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --thread_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --thread_num 1
 # GPU多进程推理
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --use_multi_process True --process_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --use_multi_process True --process_num 1
 
 # GPU上使用TensorRT多线程推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --thread_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --thread_num 1
 # GPU上使用TensorRT多进程推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --use_multi_process True --process_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --use_multi_process True --process_num 1
 
 # IPU多线程推理（注意：IPU推理首次运行会有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --thread_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --thread_num 1
 # IPU多进程推理（注意：IPU推理首次运行会有序列化模型的操作，有一定耗时，需要耐心等待）
-python infer.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --use_multi_process True --process_num 1
+python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --use_multi_process True --process_num 1
 ```
 >> **注意**: `--image_path` 可以输入图片文件夹的路径
 
