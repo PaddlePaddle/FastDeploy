@@ -8,9 +8,9 @@ FastDeploy当前在RK平台上支持后端引擎如下:
 | ONNX&nbsp;Runtime | RK356X   <br> RK3588 | ONNX   | 编译开关`ENABLE_ORT_BACKEND`为ON或OFF控制，默认OFF    |
 | RKNPU2            | RK356X   <br> RK3588 | RKNN   | 编译开关`ENABLE_RKNPU2_BACKEND`为ON或OFF控制，默认OFF |
 
-## 板端编译
+## 编译FastDeploy SDK
 
-### 编译FastDeploy C++ SDK
+### 板端编译FastDeploy C++ SDK
 
 RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。
 
@@ -28,6 +28,26 @@ cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+make -j8
+make install
+```
+
+### 交叉编译FastDeploy C++ SDK
+```bash
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy
+mkdir build && cd build
+cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ \
+          -DCMAKE_TOOLCHAIN_FILE=./../cmake/toolchain.cmake \
+          -DTARGET_ABI=arm64 \
+          -DENABLE_ORT_BACKEND=OFF \
+	      -DENABLE_RKNPU2_BACKEND=ON \
+	      -DENABLE_VISION=ON \
+	      -DRKNN2_TARGET_SOC=RK3588 \
+	      -DENABLE_FLYCV=ON \
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+
 make -j8
 make install
 ```
