@@ -21,7 +21,7 @@
 
 #include "fastdeploy/runtime/backends/backend.h"
 #include "fastdeploy/runtime/backends/paddle/option.h"
-#ifdef INTEGRATE_PADDLE2ONNX
+#ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
 #include "fastdeploy/utils/unique_ptr.h"

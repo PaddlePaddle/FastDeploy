@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/runtime/backends/openvino/ov_backend.h"
-#ifdef INTEGRATE_PADDLE2ONNX
+#ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
 
