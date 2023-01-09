@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "fastdeploy/backends/rknpu2/option.h"
 #include "fastdeploy/pybind/main.h"
+#include "fastdeploy/runtime/backends/rknpu2/option.h"
 namespace fastdeploy {
 void BindRKNPU2Config(pybind11::module& m) {
   pybind11::enum_<fastdeploy::rknpu2::CpuName>(
