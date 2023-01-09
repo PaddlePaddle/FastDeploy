@@ -3,7 +3,7 @@ English | [简体中文](README_CN.md)
 
 
 - [SCRFD](https://github.com/deepinsight/insightface/tree/17cdeab12a35efcebc2660453a8cbeae96e20950)
-  - （1）The *.pt provided by the [Official Library](https://github.com/deepinsight/insightface/) can be deployed after the [Export ONNX Model](#导出ONNX模型) to complete the deployment；
+  - （1）The *.pt provided by the [Official Library](https://github.com/deepinsight/insightface/) can be deployed after the [Export ONNX Model](#export-onnx-model) to complete the deployment；
   - （2）As for SCRFD model trained on customized data, please follow [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B) to complete the deployment.
 
 

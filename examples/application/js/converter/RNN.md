@@ -1,35 +1,35 @@
-简体中文 ｜ [English](RNN_EN.md)
-# RNN算子计算过程
+English | [简体中文](RNN_CN.md)
+# The computation process of RNN operator
 
-## 一、RNN理解
+## 1. Understanding of RNN
 
-**RNN** 是循环神经网络，由输入层、隐藏层和输出层组成，擅长对序列数据进行处理。
+**RNN** is a recurrent neural network, including an input layer, a hidden layer and an output layer, which is specialized in processing sequential data.
 
 ![RNN](https://user-images.githubusercontent.com/43414102/144739164-d6c4b9ff-d885-4812-8d05-5bf045d3a11b.png)
-paddle官网文档：https://www.paddlepaddle.org.cn/documentation/docs/zh/api/paddle/nn/RNN_cn.html#rnn
+paddle official document: https://www.paddlepaddle.org.cn/documentation/docs/zh/api/paddle/nn/RNN_cn.html#rnn
 
-paddle源码实现：https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/fluid/operators/rnn_op.h#L812
+paddle source code implementation: https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/fluid/operators/rnn_op.h#L812
 
-##二、RNN计算方式
+## 2. How to compute RNN 
 
- t 时刻，输入层为 ![图片](https://paddlejs.bj.bcebos.com/doc/xt.svg) ，隐藏层为 ![图片](https://paddlejs.bj.bcebos.com/doc/st.svg) ，输出层为 ![图片](https://paddlejs.bj.bcebos.com/doc/ot.svg)  。由上图可知，![图片](https://paddlejs.bj.bcebos.com/doc/st.svg) 的值不仅仅取决于 ![图片](https://paddlejs.bj.bcebos.com/doc/xt.svg)  ，还取决于 ![图片](https://paddlejs.bj.bcebos.com/doc/st1.svg) 。计算公式如下：
+ At moment t, the input layer is ![图片](https://paddlejs.bj.bcebos.com/doc/xt.svg), hidden layer is ![图片](https://paddlejs.bj.bcebos.com/doc/st.svg), output layer is  ![图片](https://paddlejs.bj.bcebos.com/doc/ot.svg). As the picture above, ![图片](https://paddlejs.bj.bcebos.com/doc/st.svg)isn't just decided by  ![图片](https://paddlejs.bj.bcebos.com/doc/xt.svg),it is also related to ![图片](https://paddlejs.bj.bcebos.com/doc/st1.svg). The formula is as follows.:
 
 ![RNN公式](https://user-images.githubusercontent.com/43414102/144739185-92724c8c-25f7-4559-9b1d-f1d76e65d965.jpeg)
 
-## 三、pdjs中RNN算子实现
+## 3.  RNN operator implementation in pdjs
 
-因为 RNN 有梯度消失问题，不能获取更多上下文信息，所以 CRNN 中使用的是 **LSTM（Long Short Term Memory）**，LSTM 是一种特殊的 RNN，能够保存长期的依赖关系。
+Because the gradient disappearance problem exists in RNN, and more contextual information cannot be obtained, **LSTM (Long Short Term Memory)** is used in CRNN, which is a special kind of RNN that can preserve long-term dependencies.
 
-基于图像的序列，两个方向的上下文是相互有用且互补的。由于 LSTM 是单向的，所以将两个 LSTM，一个向前和一个向后组合到一个**双向 LSTM** 中。此外，可以堆叠多层双向 LSTM。ch_PP-OCRv2_rec_infer 识别模型就是使用的双层双向 LSTM 结构。计算过程如下图所示：
+Based on the image sequence, the two directions of context are mutually useful and complementary. Since the LSTM is unidirectional, two LSTMs, one forward and one backward, are combined into a **bidirectional LSTM**. In addition, multiple layers of bidirectional LSTMs can be stacked. ch_PP-OCRv2_rec_infer recognition model is using a two-layer bidirectional LSTM structure. The calculation process is shown as follows.
 
-#### 以ch_ppocr_mobile_v2.0_rec_infer 模型 rnn算子为例：
+#### Take ch_ppocr_mobile_v2.0_rec_infer model, rnn operator as an example
 ```javascript
 {
 	Attr: {
 		mode: 'LSTM'
-		//  是否双向，为true则正向反向都需要遍历
+		//  Whether bidirectional, if true, it is necessary to traverse both forward and reverse.
 		is_bidirec: true
-		// 隐藏层层数，代表循环次数
+		// Number of hidden layers, representing the number of loops.
 		num_layers: 2
 	}
 	
@@ -59,25 +59,22 @@ paddle源码实现：https://github.com/PaddlePaddle/Paddle/blob/develop/paddle/
 }
 ```
 
-#### 整体计算过程
+#### Overall computation process
 ![LSTM计算过程](https://user-images.githubusercontent.com/43414102/144739246-daf839ad-1d96-4e1d-8f34-38ed0bc5f288.png)
-#### rnn 计算中新增op：
-1）rnn_origin
+#### Add op in rnn calculation
+1) rnn_origin
+Formula: blas.MatMul(Input,  WeightList_ih, blas_ih) + blas.MatMul(PreState,  WeightList_hh,  blas_hh)
 
-计算公式： blas.MatMul(Input,  WeightList_ih, blas_ih) + blas.MatMul(PreState,  WeightList_hh,  blas_hh)
+2) rnn_matmul
+Formula: rnn_matmul = rnn_origin +  Matmul( $ S_{t-1} $,  WeightList_hh)
 
-2）rnn_matmul
-
-计算公式：rnn_matmul = rnn_origin +  Matmul( $ S_{t-1} $,  WeightList_hh)
-
-3）rnn_cell
-
-计算方式：将rnn_matmul op输出结果分割成4份，每份执行不同激活函数计算，最后输出lstm_x_y.tmp_c[1,  1,  48]。x∈[0, 3]，y∈[0, 24]。
-详见算子实现：[rnn_cell](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_cell.ts)
+3) rnn_cell
+Method: Split the rnn_matmul op output into 4 copies, each copy performs a different activation function calculation, and finally outputs lstm_x_y.tmp_c[1,  1,  48]. x∈[0, 3], y∈[0, 24].
+For details, please refer to [rnn_cell](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_cell.ts).
 
 
-4）rnn_hidden
-计算方式：将rnn_matmul op输出结果分割成4份，每份执行不同激活函数计算，最后输出lstm_x_y.tmp_h[1,  1,  48]。x∈[0, 3]，y∈[0, 24]。
-详见算子实现：[rnn_hidden](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_hidden.ts)
+4) rnn_hidden
+Split the rnn_matmul op output into 4 copies, each copy performs a different activation function calculation, and finally outputs lstm_x_y.tmp_h[1,  1,  48]. x∈[0, 3], y∈[0, 24].
+For details, please refer to [rnn_hidden](../paddlejs-backend-webgl/src/ops/shader/rnn/rnn_hidden.ts).
 
 

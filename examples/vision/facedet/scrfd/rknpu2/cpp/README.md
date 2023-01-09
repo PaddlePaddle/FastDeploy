@@ -1,28 +1,29 @@
-# SCRFD C++部署示例
+English | [简体中文](README_CN.md)
+# SCRFD C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成SCRFD在NPU加速部署的示例。
+This directory provides examples that `infer.cc` fast finishes the deployment of SCRFD on NPU.
 
-在部署前，需确认以下两个步骤:
+Two steps before deployment:
 
-1. 软硬件环境满足要求
-2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
+1. The environment of software and hardware should meet the requirements.
+2. Download the precompiled deployment repo or deploy the FastDeploy repository from scratch according to your development environment. 
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
+Refer to [RK2 generation NPU deployment repository compilation](../../../../../../docs/cn/build_and_install/rknpu2.md) for the steps above
 
-## 生成基本目录文件
+## Generate the base directory file
 
-该例程由以下几个部分组成
+It consists of the following parts
 ```text
 .
 ├── CMakeLists.txt
-├── build  # 编译文件夹
-├── image  # 存放图片的文件夹
+├── build  # Compile folder
+├── image  # The folder to save images 
 ├── infer.cc
-├── model  # 存放模型文件的文件夹
-└── thirdpartys  # 存放sdk的文件夹
+├── model  # The folder to save model files
+└── thirdpartys  # The folder to save sdk
 ```
 
-首先需要先生成目录结构
+Generate the directory first
 ```bash
 mkdir build
 mkdir images
@@ -30,23 +31,22 @@ mkdir model
 mkdir thirdpartys
 ```
 
-## 编译
+## Compile
 
-### 编译并拷贝SDK到thirdpartys文件夹
+### Compile and copy the SDK into the thirdpartys folder
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
-fastdeploy-0.7.0目录，请移动它至thirdpartys目录下.
+Refer to [RK2 generation NPU deployment repository compilation](../../../../../../docs/cn/build_and_install/rknpu2.md). It will enerate fastdeploy-0.7.0 directory in the build directory after compilation. Move it to the thirdpartys directory.
 
-### 拷贝模型文件至model文件夹
-请参考[SCRFD模型转换文档](../README.md)转换SCRFD ONNX模型到RKNN模型,再将RKNN模型移动到model文件夹。
+### Copy the model files to the model folder
+Refer to [SCRFD model conversion](../README.md) to convert SCRFD ONNX model to RKNN model and move it to the model folder.
 
-### 准备测试图片至image文件夹
+### Prepare test images to the image folder
 ```bash
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 cp test_lite_face_detector_3.jpg ./images
 ```
 
-### 编译example
+### Compile example
 
 ```bash
 cd build
@@ -54,17 +54,17 @@ cmake ..
 make -j8
 make install
 ```
-## 运行例程
+## Running routines
 
 ```bash
 cd ./build/install
 export LD_LIBRARY_PATH=${PWD}/lib:${LD_LIBRARY_PATH}
 ./rknpu_test
 ```
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 
 <img width="640" src="https://user-images.githubusercontent.com/67993288/184301789-1981d065-208f-4a6b-857c-9a0f9a63e0b1.jpg">
 
-- [模型介绍](../../README.md)
-- [Python部署](../python/README.md)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/README.md)
+- [Model Description](../../README.md)
+- [Python Deployment](../python/README.md)
+- [Vision Model Prediction Results](../../../../../../docs/api/vision_results/README.md)

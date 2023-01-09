@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 - [UltraFace](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/commit/dffdddd)
   - （1）The *.onnx  provided by the [Official Library](https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/) can be downloaded directly or through the following model link.
-  - （2）As for the model trained on customized data, export the onnx model and then refer to [Detailed Deployment Tutorials](#详细部署文档) to complete the deployment.
+  - （2）As for the model trained on customized data, export the onnx model and then refer to [Detailed Deployment Tutorials](#detailed-deployment-tutorials) to complete the deployment.
 
 
 
