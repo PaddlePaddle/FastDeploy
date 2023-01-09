@@ -36,5 +36,5 @@ ocr model loading and initialization, where the model is in Paddle.js model form
 - [PP-OCR Model Description](../../)
 - [PP-OCRv3 C++ Deployment](../cpp)
 - [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
 - [Web demo document of PP-OCRv3 models](../../../../application/js/web_demo/README.md)

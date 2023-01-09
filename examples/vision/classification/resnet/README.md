@@ -1,10 +1,10 @@
 English | [简体中文](README_CN.md)
 # ResNet Ready-to-deploy Model
 
-- ResNet Deployment is based on the code of [Torchvision](https://github.com/pytorch/vision/tree/v0.12.0) and [Pre-trained Models on ImageNet2012](https://github.com/pytorch/vision/tree/v0.12.0)。
+- ResNet Deployment is based on the code of [Torchvision](https://github.com/pytorch/vision/tree/v0.12.0) and [Pre-trained Models on ImageNet2012](https://github.com/pytorch/vision/tree/v0.12.0).
 
-  - （1）Deployment is conducted after [Export ONNX Model](#导出ONNX模型) by the *.pt provided by [Official Repository](https://github.com/pytorch/vision/tree/v0.12.0)；
-  - （2）The ResNet Model trained by personal data should [Export ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Please refer to [Detailed Deployment Tutorials](#详细部署文档) for deployment.
+  - （1）Deployment is conducted after [Export ONNX Model](#Export-the-ONNX-Model) by the *.pt provided by [Official Repository](https://github.com/pytorch/vision/tree/v0.12.0)；
+  - （2）The ResNet Model trained by personal data should [Export ONNX Model](#Export-the-ONNX-Model). Please refer to [Detailed Deployment Tutorials](#Detailed-Deployment-Documents) for deployment.
 
 
 ## Export the ONNX Model
