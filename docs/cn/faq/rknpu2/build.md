@@ -52,7 +52,7 @@ make -j8
 make install
 ```
 
-### 编译Python SDK
+### 板端编译Python SDK
 
 RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debian 11) 环境下完成。Python打包依赖`wheel`，编译前请先执行`pip install wheel`
 
