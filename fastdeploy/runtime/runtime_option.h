@@ -24,30 +24,16 @@
 #include <map>
 #include <vector>
 #include "fastdeploy/runtime/enum_variables.h"
-#include "fastdeploy/backends/lite/option.h"
-#include "fastdeploy/backends/openvino/option.h"
-#include "fastdeploy/backends/ort/option.h"
-#include "fastdeploy/backends/paddle/option.h"
-#include "fastdeploy/backends/poros/option.h"
-#include "fastdeploy/backends/rknpu2/option.h"
-#include "fastdeploy/backends/sophgo/option.h"
-#include "fastdeploy/backends/tensorrt/option.h"
+#include "fastdeploy/runtime/backends/lite/option.h"
+#include "fastdeploy/runtime/backends/openvino/option.h"
+#include "fastdeploy/runtime/backends/ort/option.h"
+#include "fastdeploy/runtime/backends/paddle/option.h"
+#include "fastdeploy/runtime/backends/poros/option.h"
+#include "fastdeploy/runtime/backends/rknpu2/option.h"
+#include "fastdeploy/runtime/backends/sophgo/option.h"
+#include "fastdeploy/runtime/backends/tensorrt/option.h"
 
 namespace fastdeploy {
-
-/**
- * @brief Get all the available inference backend in FastDeploy
- */
-FASTDEPLOY_DECL std::vector<Backend> GetAvailableBackends();
-
-/**
- * @brief Check if the inference backend available
- */
-FASTDEPLOY_DECL bool IsBackendAvailable(const Backend& backend);
-
-bool CheckModelFormat(const std::string& model_file,
-                      const ModelFormat& model_format);
-ModelFormat GuessModelFormat(const std::string& model_file);
 
 /*! @brief Option object used when create a new Runtime object
  */
