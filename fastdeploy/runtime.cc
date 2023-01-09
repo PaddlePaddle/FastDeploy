@@ -929,9 +929,9 @@ void Runtime::CreateRKNPU2Backend() {
 Runtime* Runtime::Clone(void* stream, int device_id) {
   Runtime* runtime = new Runtime();
   if (option.backend != Backend::OPENVINO &&
-      option.backend != Backend::PDINFER && option.backend != Backend::TRT) {
+      option.backend != Backend::PDINFER) {
     runtime->Init(option);
-    FDWARNING << "Only OpenVINO/Paddle Inference/TensorRT support \
+    FDWARNING << "Only OpenVINO/Paddle Inference support \
                   clone engine to  reduce CPU/GPU memory usage now. For "
               << option.backend
               << ", FastDeploy will create a new engine which \
