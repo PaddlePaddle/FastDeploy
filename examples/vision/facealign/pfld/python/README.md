@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install FastDeploy Python whl package. Refer to [FastDeploy Python Installation](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides examples that `infer.py` fast finishes the deployment of PFLD on CPU/GPU and GPU accelerated by TensorRT. FastDeploy version 0.6.0 or above is required to support this model. The script is as follows
 
@@ -39,7 +39,7 @@ fd.vision.facealign.PFLD(model_file, params_file=None, runtime_option=None, mode
 
 PFLD model loading and initialization, among which model_file is the exported ONNX model format
 
-**参数**
+**Parameters**
 
 > * **model_file**(str): Model file path 
 > * **params_file**(str): Parameter file path. No need to set when the model is in ONNX format
@@ -68,4 +68,4 @@ PFLD model loading and initialization, among which model_file is the exported ON
 - [PFLD Model Description](..)
 - [PFLD C++ Deployment](../cpp)
 - [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

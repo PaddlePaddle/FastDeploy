@@ -3,7 +3,7 @@ English | [简体中文](README_CN.md)
 
 Before deployment, the following step need to be confirmed:
 
-- 1. Hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirement](../../../../../../docs/en/build_and_install/sophgo.md)
+- 1. Hardware and software environment meets the requirements. Please refer to [FastDeploy Environment Requirement](../../../../../../docs/en/build_and_install/sophgo.md).
 
 `infer.py` in this directory provides a quick example of deployment of the ResNet50_vd model on SOPHGO TPU. Please run the following script:
 

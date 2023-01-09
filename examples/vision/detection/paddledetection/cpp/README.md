@@ -5,8 +5,8 @@ This directory provides examples that `infer_xxx.cc` fast finishes the deploymen
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 Taking inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 
@@ -36,7 +36,7 @@ tar xvf ppyoloe_crn_l_300e_coco.tgz
 ```
 
 The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
-- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
 ## PaddleDetection C++ Interface 
 
@@ -52,7 +52,7 @@ fastdeploy::vision::detection::PPYOLOE(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ONNX模型格式。
+Loading and initializing PaddleDetection PPYOLOE model, where the format of model_file is as the exported ONNX model.
 
 **Parameter**
 
@@ -78,4 +78,4 @@ PaddleDetection PPYOLOE模型加载和初始化，其中model_file为导出的ON
 - [Model Description](../../)
 - [Python Deployment](../python)
 - [Vision Model prediction results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

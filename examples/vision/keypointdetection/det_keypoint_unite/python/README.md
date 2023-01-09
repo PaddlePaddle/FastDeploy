@@ -3,8 +3,8 @@ English | [简体中文](README_CN.md)
 
 Before deployment, two steps require confirmation
 
-- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy  Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 This directory provides the `Multi-person keypoint detection in a single image` example that `det_keypoint_unite_infer.py` fast finishes the deployment of multi-person detection model PP-PicoDet + PP-TinyPose on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 >> **Attention**: For standalone deployment of PP-TinyPose single model, refer to [PP-TinyPose Single Model](../../tiny_pose//python/README.md)
@@ -74,4 +74,4 @@ Score threshold of the Detectin model for filtering detection boxes before enter
 - [Pipeline Model Description](..)
 - [Pipeline C++ Deployment](../cpp)
 - [Model Prediction Results](../../../../../docs/api/vision_results/)
-- [How to switch the model inference backend engine](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)

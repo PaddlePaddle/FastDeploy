@@ -1,34 +1,73 @@
 [English](README.md) | 简体中文
-# PIPNet 模型部署
 
-## 模型版本说明
+# PIPNet Python部署示例
 
-- [PIPNet](https://github.com/jhb86253817/PIPNet/tree/b9eab58)
+在部署前，需确认以下两个步骤
 
-## 支持模型列表
+- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-目前FastDeploy支持如下模型的部署
+本目录下提供`infer.py`快速完成PIPNet在CPU/GPU，以及GPU上通过TensorRT加速部署的示例，保证 FastDeploy 版本 >= 0.7.0 支持PIPNet模型。执行如下脚本即可完成
 
-- [PIPNet 模型](https://github.com/jhb86253817/PIPNet)
+```bash
+#下载部署示例代码
+git clone https://github.com/PaddlePaddle/FastDeploy.git
+cd FastDeploy/examples/vision/facealign/pipnet/python
 
-## 下载预训练模型
+# 下载PIPNet模型文件和测试图片以及视频
+## 原版ONNX模型
+wget https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x19x32x256_aflw.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/facealign_input.png
 
-为了方便开发者的测试，下面提供了PIPNet导出的各系列模型，开发者可直接下载使用。
+# CPU推理
+python infer.py --model pipnet_resnet18_10x19x32x256_aflw.onnx --image facealign_input.png --device cpu
+# GPU推理
+python infer.py --model pipnet_resnet18_10x19x32x256_aflw.onnx --image facealign_input.png --device gpu
+# TRT推理
+python infer.py --model pipnet_resnet18_10x19x32x256_aflw.onnx --image facealign_input.png --device gpu --backend trt
+```
 
-| 模型                                                               | 参数大小    | 精度    | 备注 |
-|:---------------------------------------------------------------- |:----- |:----- | :------ |
-| [PIPNet19_ResNet18_AFLW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x19x32x256_aflw.onnx) | 45.6M | - |
-| [PIPNet29_ResNet18_COFW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x29x32x256_cofw.onnx) | 46.1M | - |
-| [PIPNet68_ResNet18_300W](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x68x32x256_300w.onnx) | 47.9M | - |
-| [PIPNet98_ResNet18_WFLW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet18_10x98x32x256_wflw.onnx) | 49.3M | - |
-| [PIPNet19_ResNet101_AFLW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet101_10x19x32x256_aflw.onnx) | 173.4M | - |
-| [PIPNet29_ResNet101_COFW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet101_10x29x32x256_cofw.onnx) | 175.3M | - |
-| [PIPNet68_ResNet101_300W](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet101_10x68x32x256_300w.onnx) | 182.6M | - |
-| [PIPNet98_ResNet101_WFLW](https://bj.bcebos.com/paddlehub/fastdeploy/pipnet_resnet101_10x98x32x256_wflw.onnx) | 188.3M | - |
+运行完成可视化结果如下图所示
+
+<div width="500">
+<img width="470" height="384" float="left" src="https://user-images.githubusercontent.com/67993288/200761400-08491112-56c3-470f-87ac-87be805d5658.jpg">
+</div>
+
+## PIPNet Python接口
+
+```python
+fd.vision.facealign.PIPNet(model_file, params_file=None, runtime_option=None, model_format=ModelFormat.ONNX)
+```
+
+PIPNet模型加载和初始化，其中model_file为导出的ONNX模型格式
+
+**参数**
+
+> * **model_file**(str): 模型文件路径
+> * **params_file**(str): 参数文件路径，当模型格式为ONNX格式时，此参数无需设定
+> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
+> * **model_format**(ModelFormat): 模型格式，默认为ONNX
+
+### predict函数
+
+> ```python
+> PIPNet.predict(input_image)
+> ```
+>
+> 模型预测结口，输入图像直接输出landmarks坐标结果。
+>
+> **参数**
+>
+> > * **input_image**(np.ndarray): 输入数据，注意需为HWC，BGR格式
+
+> **返回**
+>
+> > 返回`fastdeploy.vision.FaceAlignmentResult`结构体，结构体说明参考文档[视觉模型预测结果](../../../../../docs/api/vision_results/)
 
 
+## 其它文档
 
-## 详细部署文档
-
-- [Python部署](python)
-- [C++部署](cpp)
+- [PIPNet 模型介绍](..)
+- [PIPNet C++部署](../cpp)
+- [模型预测结果说明](../../../../../docs/api/vision_results/)
+- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)

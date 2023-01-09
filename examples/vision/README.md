@@ -32,5 +32,5 @@ Targeted at the vision suite of PaddlePaddle and external popular models, FastDe
 - Model Loading
 - Calling the `predict`interface
 
-When deploying visual models, FastDeploy supports one-click switching of the backend inference engine. Please refer to [How to switch model inference engine](../../docs/cn/faq/how_to_change_backend.md).
+When deploying visual models, FastDeploy supports one-click switching of the backend inference engine. Please refer to [How to switch model inference engine](../../docs/en/faq/how_to_change_backend.md).
 
