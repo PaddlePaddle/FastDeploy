@@ -82,4 +82,43 @@ std::ostream& operator<<(std::ostream& out, const ModelFormat& format) {
   out << "UNKNOWN-ModelFormat";
   return out;
 }
+
+std::vector<Backend> GetAvailableBackends() {
+  std::vector<Backend> backends;
+#ifdef ENABLE_ORT_BACKEND
+  backends.push_back(Backend::ORT);
+#endif
+#ifdef ENABLE_TRT_BACKEND
+  backends.push_back(Backend::TRT);
+#endif
+#ifdef ENABLE_PADDLE_BACKEND
+  backends.push_back(Backend::PDINFER);
+#endif
+#ifdef ENABLE_POROS_BACKEND
+  backends.push_back(Backend::POROS);
+#endif
+#ifdef ENABLE_OPENVINO_BACKEND
+  backends.push_back(Backend::OPENVINO);
+#endif
+#ifdef ENABLE_LITE_BACKEND
+  backends.push_back(Backend::LITE);
+#endif
+#ifdef ENABLE_RKNPU2_BACKEND
+  backends.push_back(Backend::RKNPU2);
+#endif
+#ifdef ENABLE_SOPHGO_BACKEND
+  backends.push_back(Backend::SOPHGOTPU);
+#endif
+  return backends;
+}
+
+bool IsBackendAvailable(const Backend& backend) {
+  std::vector<Backend> backends = GetAvailableBackends();
+  for (size_t i = 0; i < backends.size(); ++i) {
+    if (backend == backends[i]) {
+      return true;
+    }
+  }
+  return false;
+}
 }  // namespace fastdeploy
