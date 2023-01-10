@@ -93,3 +93,17 @@ python3 client.py
 ## 配置修改
 
 当前默认配置在GPU上运行， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+
+## 使用VisualDL进行服务管理
+
+用户可以使用[VisualDL进行fastdeployserver下的模型服务化部署](../../../../../serving/docs/zh_CN/vdl_management.md)管理，上述启动服务、配置修改以及客户端请求的操作都可以基于VisualDL进行。
+
+通过VisualDL的可视化界面对PP-OCR进行服务化部署只需要如下三步：
+```text
+1. 载入模型库：./vision/ocr/PP-OCRv3/serving
+2. 下载模型资源文件：点击det_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_det进行下载。点击cls_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_ppocr_mobile_v2.0_cls进行下载。点击rec_runtime模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_rec进行下载。点击rec_postprocess模型，点击版本号1添加预训练模型，选择文字识别模型ch_PP-OCRv3_rec进行下载。
+3. 启动服务：点击启动服务按钮，输入启动参数。
+```
+ <p align="center">
+  <img src="https://rte.weiyun.baidu.com/wiki/attach/image/api/imageDownloadAddress?attachId=fcc072a729cf47cd9d1bd9ecd190e8c4&docGuid=y1ijlRY2CD9M2D&sign=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiYXBwSWQiOjEsInVpZCI6InVWMXcwZ2pkb2giLCJkb2NJZCI6InkxaWpsUlkyQ0Q5TTJEIn0..kyefFAvuftW38aul.YX2z1fOpz_86Eo0uKsZPYelNy8vCp374pgKe0XjlaSDCaLnY8Urtes5p5mMcEmm5doMWQgXuGib5SSktYOr3qo-xvvRkqaYQtr3bZy9NupQF-JHjSin7JdLyeObV4dFfJPDc9jl0YjF2JqrcR7oB4lzhCow8eSDf-zTkdnikbLhjweBIn97wps_loJyNeznsHgn52EGrQ30AjHSZkX0tY1vngg.UyQbQaGYXIR7g80qc0Y4zw" width="100%"/>
+</p>
