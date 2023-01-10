@@ -575,6 +575,8 @@ if(WITH_ASCEND)
   )
 endif()
 
+include(${PROJECT_SOURCE_DIR}/cmake/config_cpack.cmake)
+
 ############################### Building: FastDeploy Python Wheel #############################
 if(BUILD_FASTDEPLOY_PYTHON)
   add_definitions(-DBUILD_FASTDEPLOY_PYTHON)
