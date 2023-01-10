@@ -26,7 +26,8 @@ make -j8
 
 ```bash
 #下载官方转换好的SCRFD模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/scrfd_500m_bnkps_shape640x640.onnx
+wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/scrfd_500m_bnkps_shape640x640_rknpu2.zip
+unzip scrfd_500m_bnkps_shape640x640_rknpu2.zip
 wget https://raw.githubusercontent.com/DefTruth/lite.ai.toolkit/main/examples/lite/resources/test_lite_face_detector_3.jpg
 ./infer_demo scrfd_500m_bnkps_shape640x640_rknpu2/scrfd_500m_bnkps_shape640x640_rk3568_quantized.rknn \
               test_lite_face_detector_3.jpg \
