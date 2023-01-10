@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
+
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -202,21 +203,18 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
           static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
       (*results)[i].boxes.emplace_back(std::array<float, 4>(
-          {ptr[j * 6 + 2] / GetScaleFactor()[1],
-           ptr[j * 6 + 3] / GetScaleFactor()[0],
-           ptr[j * 6 + 4] / GetScaleFactor()[1],
-           ptr[j * 6 + 5] / GetScaleFactor()[0]}));
+          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
     }
     offset += (num_boxes[i] * 6);
   }
   return true;
 }
 
-std::vector<float> PaddleDetPostprocessor::GetScaleFactor(){
+std::vector<float> PaddleDetPostprocessor::GetScaleFactor() {
   return scale_factor_;
 }
 
-void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
+void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value) {
   for (int i = 0; i < scale_factor_.size(); ++i) {
     scale_factor_[i] = scale_factor_value[i];
   }
@@ -225,6 +223,6 @@ void PaddleDetPostprocessor::SetScaleFactor(float* scale_factor_value){
 bool PaddleDetPostprocessor::DecodeAndNMSApplied() {
   return apply_decode_and_nms_;
 }
-} // namespace detection
-} // namespace vision
-} // namespace fastdeploy
+}  // namespace detection
+}  // namespace vision
+}  // namespace fastdeploy
