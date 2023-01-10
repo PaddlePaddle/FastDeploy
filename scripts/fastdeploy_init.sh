@@ -27,9 +27,13 @@ done
 # Remove the dumplicate directories
 LIBS_DIRECOTRIES=($(awk -v RS=' ' '!a[$1]++' <<< ${LIBS_DIRECOTRIES[@]}))
 
+# Print the dynamic library location and output the configuration file
+output_file=./fastdeploy_libs.conf
+rm $output_file
 IMPORT_PATH=""
 for LIB_DIR in ${LIBS_DIRECOTRIES[@]};do
     echo "Find Library Directory: $LIB_DIR"
+    echo "$LIB_DIR" >> $output_file
     IMPORT_PATH=${LIB_DIR}":"$IMPORT_PATH
 done
 
