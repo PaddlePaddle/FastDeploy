@@ -21,7 +21,7 @@
 #include "fastdeploy/runtime/backends/ort/ops/multiclass_nms.h"
 #include "fastdeploy/runtime/backends/ort/utils.h"
 #include "fastdeploy/utils/utils.h"
-#ifdef ENABLE_PADDLE_FRONTEND
+#ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
 
@@ -84,7 +84,7 @@ bool OrtBackend::InitFromPaddle(const std::string& model_file,
   char* model_content_ptr;
   int model_content_size = 0;
   bool save_external = false;
-#ifdef ENABLE_PADDLE_FRONTEND
+#ifdef ENABLE_PADDLE2ONNX
   std::vector<paddle2onnx::CustomOp> ops;
   ops.resize(2);
   strcpy(ops[0].op_name, "multiclass_nms3");
