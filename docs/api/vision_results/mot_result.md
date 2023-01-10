@@ -1,9 +1,9 @@
-中文 ｜ [English](mot_result_EN.md)
-# MOTResult 多目标跟踪结果
+English | [中文](mot_result_CN.md)
+# Multi-target Tracking Result
 
-MOTResult代码定义在`fastdeploy/vision/common/result.h`中，用于表明多目标跟踪中的检测出来的目标框、目标跟踪id、目标类别和目标置信度。
+The MOTResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the detected target frame, target tracking id, target class and target confidence ratio in multi-target tracking task.
 
-## C++ 定义
+## C++ Definition
 
 ```c++
 fastdeploy::vision::MOTResult
@@ -21,20 +21,21 @@ struct MOTResult{
 };
 ```
 
-- **boxes**: 成员变量，表示单帧画面中检测出来的所有目标框坐标，`boxes.size()`表示框的个数，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **ids**: 成员变量，表示单帧画面中所有目标的id，其元素个数与`boxes.size()`一致
-- **scores**: 成员变量，表示单帧画面检测出来的所有目标置信度，其元素个数与`boxes.size()`一致
-- **class_ids**: 成员变量，表示单帧画面出来的所有目标类别，其元素个数与`boxes.size()`一致
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **boxes**: Member variable which indicates the coordinates of all detected target boxes in a single frame. `boxes.size()` indicates the number of boxes, each box is represented by 4 float values in order of xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **ids**: Member variable which indicates the ids of all targets in a single frame, where the element number is the same as `boxes.size()`.
+- **scores**: Member variable which indicates the confidence level of all targets detected in a single frame, where the number of elements is the same as `boxes.size()`.
+- **class_ids**: Member variable which indicates all target classes detected in a single frame, where the element number is the same as `boxes.size()`.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 ```python
 fastdeploy.vision.MOTResult
 ```
 
-- **boxes**(list of list(float)): 成员变量，表示单帧画面中检测出来的所有目标框坐标。boxes是一个list，其每个元素为一个长度为4的list， 表示为一个框，每个框以4个float数值依次表示xmin, ymin, xmax, ymax， 即左上角和右下角坐标
-- **ids**(list of list(float)):成员变量，表示单帧画面中所有目标的id，其元素个数与`boxes`一致
-- **scores**(list of float): 成员变量，表示单帧画面检测出来的所有目标置信度
-- **class_ids**(list of int): 成员变量，表示单帧画面出来的所有目标类别
+- **boxes**(list of list(float)): Member variable which indicates the coordinates of all detected target boxes in a single frame. It is a list, and each element in it is also a list of length 4, representing a box with 4 float values representing xmin, ymin, xmax, ymax, i.e. the coordinates of the top left and bottom right corner.
+- **ids**(list of list(float)): Member variable which indicates the ids of all targets in a single frame, where the element number is the same as `boxes`.
+- **scores**(list of float): Member variable which indicates the confidence level of all targets detected in a single frame.
+- **class_ids**(list of float): Member variable which indicates all target classes detected in a single frame.
+

@@ -1,3 +1,4 @@
+[English](../../en/build_and_install/sophgo.md) | 简体中文
 # SOPHGO 部署库编译
 
 ## SOPHGO 环境准备

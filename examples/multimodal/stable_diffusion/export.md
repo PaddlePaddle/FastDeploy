@@ -1,32 +1,33 @@
-# Diffusion模型导出教程
+English | [简体中文](export_CN.md)
+# Diffusion Model Export
 
-本项目支持两种模型导出方式：[PPDiffusers](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers)模型导出以及[Diffusers](https://github.com/huggingface/diffusers)模型导出。下面分别介绍这两种模型导出方式。
+The project supports two methods of model export, [PPDiffusers](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers) model export and [Diffusers](https://github.com/huggingface/diffusers) model export. Here we introduce each of these two methods. 
 
-## PPDiffusers 模型导出
+## PPDiffusers Model Export
 
-[PPDiffusers](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers)是一款支持跨模态（如图像与语音）训练和推理的扩散模型（Diffusion Model）工具箱，其借鉴了🤗 Huggingface团队的[Diffusers](https://github.com/huggingface/diffusers)的优秀设计，并且依托[PaddlePaddle](https://github.com/PaddlePaddle/Paddle)框架和[PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理库。下面介绍如何使用FastDeploy将PPDiffusers提供的Diffusion模型进行高性能部署。
+[PPDiffusers](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers) is a Diffusion Model toolkit that supports cross-modal (e.g., image and speech) training and inference. It builds on the design of [Diffusers](https://github.com/huggingface/diffusers) by the 🤗 Huggingface team, and relies on [PaddlePaddle](https://github.com/PaddlePaddle/Paddle) framework and the [PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP) natural language processing library. The following describes how to use FastDeploy to deploy the Diffusion model provided by PPDiffusers for high performance.
 
-### 依赖安装
+### Dependency Installation
 
-模型导出需要依赖`paddlepaddle`, `paddlenlp`以及`ppdiffusers`，可使用`pip`执行下面的命令进行快速安装。
+The model export depends on `paddlepaddle`, `paddlenlp` and `ppdiffusers`, which can be installed quickly by running the following command using `pip`.
 
 ```shell
 pip install -r requirements_paddle.txt
 ```
 
-### 模型导出
+### Model Export
 
-___注意：模型导出过程中，需要下载StableDiffusion模型。为了使用该模型与权重，你必须接受该模型所要求的License，请访问HuggingFace的[model card](https://huggingface.co/runwayml/stable-diffusion-v1-5), 仔细阅读里面的License，然后签署该协议。___
+___Note: The StableDiffusion model needs to be downloaded during the model export process. In order to use the model and weights, you must accept the License required. Please visit HuggingFace's [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5), to read the License carefully, and then sign the agreement.___
 
-___Tips: Stable Diffusion是基于以下的License: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
+___Tips: Stable Diffusion is based on these Licenses: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
 
-可执行以下命令行完成模型导出。
+You can run the following lines to export model.
 
 ```shell
 python export_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path stable-diffusion-v1-4
 ```
 
-输出的模型目录结构如下：
+The output model directory is as follows:
 ```shell
 stable-diffusion-v1-4/
 ├── text_encoder
@@ -43,47 +44,47 @@ stable-diffusion-v1-4/
     └── inference.pdmodel
 ```
 
-#### 参数说明
+#### Parameters
 
-`export_model.py` 各命令行参数的说明。
+Here is description of each command line parameter in `export_model.py`.
 
-| 参数 |参数说明 |
+| Parameter |Description |
 |----------|--------------|
-|<div style="width: 230pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[ppdiffuser模型列表](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers/examples/textual_inversion)。|
-|--output_path | 导出的模型目录。 |
+|<div style="width: 230pt">--pretrained_model_name_or_path </div> | The diffusion pretrained model provided by ppdiffuers. Default is "CompVis/stable-diffusion-v1-4". For more diffusion pretrained models, please refer to [ppdiffuser model list](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/ppdiffusers/examples/textual_inversion).|
+|--output_path | Exported directory |
 
 
-## Diffusers 模型导出
+## Diffusers Model Export
 
-[Diffusers](https://github.com/huggingface/diffusers)是一款由HuggingFace打造的支持跨模态（如图像与语音）训练和推理的扩散模型（Diffusion Model）工具箱。其底层的模型代码提供PyTorch实现的版本以及Flax实现的版本两种版本。本示例将介绍如何使用FastDeploy将PyTorch实现的Diffusion模型进行高性能部署。
+[Diffusers](https://github.com/huggingface/diffusers) is a Diffusion Model toolkit built by HuggingFace to support cross-modal (e.g. image and speech) training and inference. The underlying model code is available in both a PyTorch implementation and a Flax implementation. This example shows how to use FastDeploy to deploy a PyTorch implementation of Diffusion Model for high performance. 
 
-### 依赖安装
+### Dependency Installation
 
-模型导出需要依赖`onnx`, `torch`, `diffusers`以及`transformers`，可使用`pip`执行下面的命令进行快速安装。
+The model export depends on `onnx`, `torch`, `diffusers` and `transformers`, which can be installed quickly by running the following command using `pip`.
 
 ```shell
 pip install -r requirements_torch.txt
 ```
 
-### 模型导出
+### Model Export
 
-___注意：模型导出过程中，需要下载StableDiffusion模型。为了使用该模型与权重，你必须接受该模型所要求的License，并且获取HF Hub授予的Token。请访问HuggingFace的[model card](https://huggingface.co/runwayml/stable-diffusion-v1-5), 仔细阅读里面的License，然后签署该协议。___
+___Note: The StableDiffusion model needs to be downloaded during the model export process. In order to use the model and weights, you must accept the License required, and get the Token granted by HF Hub. Please visit HuggingFace's [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5), to read the License carefully, and then sign the agreement.___
 
-___Tips: Stable Diffusion是基于以下的License: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
+___Tips: Stable Diffusion is based on these Licenses: The CreativeML OpenRAIL M license is an Open RAIL M license, adapted from the work that BigScience and the RAIL Initiative are jointly carrying in the area of responsible AI licensing. See also the article about the BLOOM Open RAIL license on which this license is based.___
 
-若第一次导出模型，需要先登录HuggingFace客户端。执行以下命令进行登录：
+If you are exporting a model for the first time, you need to log in to the HuggingFace client first. Run the following command to log in:
 
 ```shell
 huggingface-cli login
 ```
 
-完成登录后，执行以下命令行完成模型导出。
+After finishing the login, you can run the following lines to export model.
 
 ```shell
 python export_torch_to_onnx_model.py --pretrained_model_name_or_path CompVis/stable-diffusion-v1-4 --output_path torch_diffusion_model
 ```
 
-输出的模型目录结构如下：
+The output model directory is as follows:
 
 ```shell
 torch_diffusion_model/
@@ -95,11 +96,11 @@ torch_diffusion_model/
     └── inference.onnx
 ```
 
-#### 参数说明
+#### Parameters
 
-`export_torch_to_onnx_model.py` 各命令行参数的说明。
+Here is description of each command line parameter in  `export_torch_to_onnx_model.py`.
 
-| 参数 |参数说明 |
+| Parameter |Description |
 |----------|--------------|
-|<div style="width: 230pt">--pretrained_model_name_or_path </div> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4	"。更多diffusion预训练模型可参考[HuggingFace模型列表说明](https://huggingface.co/CompVis/stable-diffusion-v1-4)。|
-|--output_path | 导出的模型目录。 |
+|<div style="width: 230pt">--pretrained_model_name_or_path </div> |The diffusion pretrained model provided by ppdiffuers, default is "CompVis/stable-diffusion-v1-4". For more diffusion pretrained models, please refer to [HuggingFace model list](https://huggingface.co/CompVis/stable-diffusion-v1-4).|
+|--output_path |Exported directory |

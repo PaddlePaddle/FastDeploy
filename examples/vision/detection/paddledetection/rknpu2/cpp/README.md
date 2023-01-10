@@ -1,28 +1,29 @@
-# PaddleDetection C++部署示例
+English | [简体中文](README_CN.md)
+# PaddleDetection Deployment Examples for C++
 
-本目录下提供`infer_picodet.cc`快速完成PPDetection模型在Rockchip板子上上通过二代NPU加速部署的示例。
+`infer_picodet.cc` in this directory provides an example of quickly completing the PPDetection model on Rockchip boards for accelerated deployment via second-generation NPUs.
 
-在部署前，需确认以下两个步骤:
+Before deployment, the following two steps need to be confirmed:
 
-1. 软硬件环境满足要求
-2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
+1. Hardware and software environment meets the requirements.
+2. Download the pre-compiled deployment repository or compile the FastDeploy repository from scratch according to the development environment.
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
+For the above steps, please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md).
 
-## 生成基本目录文件
+## Generate Basic Directory Files
 
-该例程由以下几个部分组成
+The routine consists of the following parts:
 ```text
 .
 ├── CMakeLists.txt
-├── build  # 编译文件夹
-├── image  # 存放图片的文件夹
+├── build  # Compile Folder
+├── image  # Folder for images
 ├── infer_picodet.cc
-├── model  # 存放模型文件的文件夹
-└── thirdpartys  # 存放sdk的文件夹
+├── model  # Folder for models
+└── thirdpartys  # Folder for sdk
 ```
 
-首先需要先生成目录结构
+First, please build a directory structure
 ```bash
 mkdir build
 mkdir images
@@ -30,24 +31,23 @@ mkdir model
 mkdir thirdpartys
 ```
 
-## 编译
+## Compile
 
-### 编译并拷贝SDK到thirdpartys文件夹
+### Compile and Copy SDK to folder thirdpartys
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
-fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
+Please refer to [How to Build RKNPU2 Deployment Environment](../../../../../../docs/en/build_and_install/rknpu2.md) to compile SDK.After compiling, the fastdeploy-0.0.3 directory will be created in the build directory, please move it to the thirdpartys directory.
 
-### 拷贝模型文件，以及配置文件至model文件夹
-在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model。
+### Copy model and configuration files to folder Model
+In the process of Paddle dynamic map model -> Paddle static map model -> ONNX mdoel, ONNX file and the corresponding yaml configuration file will be generated. Please move the configuration file to the folder model. 
+After converting to RKNN, the model file also needs to be copied to folder model.
 
-### 准备测试图片至image文件夹
+### Prepare Test Images to folder image
 ```bash
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 cp 000000014439.jpg ./images
 ```
 
-### 编译example
+### Compile example
 
 ```bash
 cd build
@@ -56,7 +56,7 @@ make -j8
 make install
 ```
 
-## 运行例程
+## Running Routines
 
 ```bash
 cd ./build/install
@@ -64,6 +64,6 @@ cd ./build/install
 ```
 
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision model prediction results](../../../../../../docs/api/vision_results/)

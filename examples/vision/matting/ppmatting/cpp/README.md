@@ -1,41 +1,41 @@
-# PP-Matting C++部署示例
+English | [简体中文](README_CN.md)
+# PP-Matting C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成PP-Matting在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
+This directory provides examples that `infer.cc` fast finishes the deployment of PP-Matting on CPU/GPU and GPU accelerated by TensorRT. 
+Before deployment, two steps require confirmation
 
-在部署前，需确认以下两个步骤
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy  Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
-
-以Linux上 PP-Matting 推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking the PP-Matting inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy  Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# 下载PP-Matting模型文件和测试图片
+# Download PP-Matting model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP-Matting-512.tgz
 tar -xvf PP-Matting-512.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_input.jpg
 wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 
 
-# CPU推理
+# CPU inference
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 0
-# GPU推理
+# GPU inference
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 1
-# GPU上TensorRT推理
+# TensorRT inference on GPU
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 2
-# 昆仑芯XPU推理
+# kunlunxin XPU inference
 ./infer_demo PP-Matting-512 matting_input.jpg matting_bgr.jpg 3
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 <div width="840">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852040-759da522-fca4-4786-9205-88c622cd4a39.jpg">
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852587-48895efc-d24a-43c9-aeec-d7b0362ab2b9.jpg">
@@ -43,12 +43,12 @@ wget https://bj.bcebos.com/paddlehub/fastdeploy/matting_bgr.jpg
 <img width="200" height="200" float="left" src="https://user-images.githubusercontent.com/67993288/186852554-6960659f-4fd7-4506-b33b-54e1a9dd89bf.jpg">
 </div>
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-## PP-Matting C++接口
+## PP-Matting C++ Interface 
 
-### PPMatting类
+### PPMatting Class
 
 ```c++
 fastdeploy::vision::matting::PPMatting(
@@ -59,35 +59,35 @@ fastdeploy::vision::matting::PPMatting(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-PP-Matting模型加载和初始化，其中model_file为导出的Paddle模型格式。
+PP-Matting model loading and initialization, among which model_file is the exported Paddle model format.
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 推理部署配置文件
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **config_file**(str): Inference deployment configuration file
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-#### Predict函数
+#### Predict Function
 
 > ```c++
 > PPMatting::Predict(cv::Mat* im, MattingResult* result)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 分割结果，包括分割预测的标签以及标签对应的概率值, MattingResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: The segmentation result, including the predicted label of the segmentation and the corresponding probability of the label. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of SegmentationResult
 
-### 类成员属性
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### Class Member Variable
+#### Pre-processing Parameter
+Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
 
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
