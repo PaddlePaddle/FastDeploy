@@ -29,9 +29,7 @@ void BindKeyPointDetection(pybind11::module& m);
 void BindHeadPose(pybind11::module& m);
 void BindSR(pybind11::module& m);
 void BindGeneration(pybind11::module& m);
-#ifdef ENABLE_VISION_VISUALIZE
 void BindVisualize(pybind11::module& m);
-#endif
 
 void BindVision(pybind11::module& m) {
   pybind11::class_<vision::Mask>(m, "Mask")
@@ -39,20 +37,20 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("data", &vision::Mask::data)
       .def_readwrite("shape", &vision::Mask::shape)
       .def(pybind11::pickle(
-        [](const vision::Mask &m) { 
+          [](const vision::Mask& m) {
             return pybind11::make_tuple(m.data, m.shape);
-        },
-        [](pybind11::tuple t) { 
+          },
+          [](pybind11::tuple t) {
             if (t.size() != 2)
-                throw std::runtime_error("vision::Mask pickle with invalid state!");
+              throw std::runtime_error(
+                  "vision::Mask pickle with invalid state!");
 
             vision::Mask m;
             m.data = t[0].cast<std::vector<uint8_t>>();
             m.shape = t[1].cast<std::vector<int64_t>>();
 
             return m;
-        }
-      ))
+          }))
       .def("__repr__", &vision::Mask::Str)
       .def("__str__", &vision::Mask::Str);
 
@@ -61,20 +59,20 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("label_ids", &vision::ClassifyResult::label_ids)
       .def_readwrite("scores", &vision::ClassifyResult::scores)
       .def(pybind11::pickle(
-        [](const vision::ClassifyResult &c) { 
+          [](const vision::ClassifyResult& c) {
             return pybind11::make_tuple(c.label_ids, c.scores);
-        },
-        [](pybind11::tuple t) { 
+          },
+          [](pybind11::tuple t) {
             if (t.size() != 2)
-                throw std::runtime_error("vision::ClassifyResult pickle with invalid state!");
+              throw std::runtime_error(
+                  "vision::ClassifyResult pickle with invalid state!");
 
             vision::ClassifyResult c;
             c.label_ids = t[0].cast<std::vector<int32_t>>();
             c.scores = t[1].cast<std::vector<float>>();
 
             return c;
-        }
-      ))
+          }))
       .def("__repr__", &vision::ClassifyResult::Str)
       .def("__str__", &vision::ClassifyResult::Str);
 
@@ -86,12 +84,14 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("masks", &vision::DetectionResult::masks)
       .def_readwrite("contain_masks", &vision::DetectionResult::contain_masks)
       .def(pybind11::pickle(
-        [](const vision::DetectionResult &d) { 
-            return pybind11::make_tuple(d.boxes, d.scores, d.label_ids, d.masks, d.contain_masks);
-        },
-        [](pybind11::tuple t) { 
+          [](const vision::DetectionResult& d) {
+            return pybind11::make_tuple(d.boxes, d.scores, d.label_ids, d.masks,
+                                        d.contain_masks);
+          },
+          [](pybind11::tuple t) {
             if (t.size() != 5)
-                throw std::runtime_error("vision::DetectionResult pickle with Invalid state!");
+              throw std::runtime_error(
+                  "vision::DetectionResult pickle with Invalid state!");
 
             vision::DetectionResult d;
             d.boxes = t[0].cast<std::vector<std::array<float, 4>>>();
@@ -101,8 +101,7 @@ void BindVision(pybind11::module& m) {
             d.contain_masks = t[4].cast<bool>();
 
             return d;
-        }
-      ))
+          }))
       .def("__repr__", &vision::DetectionResult::Str)
       .def("__str__", &vision::DetectionResult::Str);
 
@@ -152,14 +151,17 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("label_map", &vision::SegmentationResult::label_map)
       .def_readwrite("score_map", &vision::SegmentationResult::score_map)
       .def_readwrite("shape", &vision::SegmentationResult::shape)
-      .def_readwrite("contain_score_map", &vision::SegmentationResult::contain_score_map)
+      .def_readwrite("contain_score_map",
+                     &vision::SegmentationResult::contain_score_map)
       .def(pybind11::pickle(
-        [](const vision::SegmentationResult &s) { 
-            return pybind11::make_tuple(s.label_map, s.score_map, s.shape, s.contain_score_map);
-        },
-        [](pybind11::tuple t) { 
+          [](const vision::SegmentationResult& s) {
+            return pybind11::make_tuple(s.label_map, s.score_map, s.shape,
+                                        s.contain_score_map);
+          },
+          [](pybind11::tuple t) {
             if (t.size() != 4)
-                throw std::runtime_error("vision::SegmentationResult pickle with Invalid state!");
+              throw std::runtime_error(
+                  "vision::SegmentationResult pickle with Invalid state!");
 
             vision::SegmentationResult s;
             s.label_map = t[0].cast<std::vector<uint8_t>>();
@@ -168,8 +170,7 @@ void BindVision(pybind11::module& m) {
             s.contain_score_map = t[3].cast<bool>();
 
             return s;
-        }
-      ))
+          }))
       .def("__repr__", &vision::SegmentationResult::Str)
       .def("__str__", &vision::SegmentationResult::Str);
 
@@ -178,7 +179,8 @@ void BindVision(pybind11::module& m) {
       .def_readwrite("alpha", &vision::MattingResult::alpha)
       .def_readwrite("foreground", &vision::MattingResult::foreground)
       .def_readwrite("shape", &vision::MattingResult::shape)
-      .def_readwrite("contain_foreground", &vision::MattingResult::contain_foreground)
+      .def_readwrite("contain_foreground",
+                     &vision::MattingResult::contain_foreground)
       .def("__repr__", &vision::MattingResult::Str)
       .def("__str__", &vision::MattingResult::Str);
 
@@ -215,8 +217,6 @@ void BindVision(pybind11::module& m) {
   BindHeadPose(m);
   BindSR(m);
   BindGeneration(m);
-#ifdef ENABLE_VISION_VISUALIZE
   BindVisualize(m);
-#endif
 }
 }  // namespace fastdeploy
