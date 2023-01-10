@@ -12,3 +12,4 @@ RKNPU2指的是Rockchip推出的RK356X以及RK3588系列芯片的NPU。
 * [编译FastDeploy](../faq/rknpu2/build.md)
 * [RKNN模型导出建议](../faq/rknpu2/export.md)
 * [RKNPU2模型部署demo](../faq/rknpu2/rknpu2.md)
+* [RKNPU2 常见问题合集](../faq/rknpu2/issues.md)
