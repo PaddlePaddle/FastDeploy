@@ -71,14 +71,11 @@ option(WITH_ASCEND "Whether to compile for Huawei Ascend deploy." OFF)
 option(WITH_TIMVX "Whether to compile for TIMVX deploy." OFF)
 option(WITH_KUNLUNXIN "Whether to compile for KunlunXin XPU deploy." OFF)
 option(WITH_TESTING "Whether to compile with unittest." OFF)
+
 ############################# Options for Android cross compiling #########################
 option(WITH_OPENCV_STATIC "Use OpenCV static lib for Android." OFF)
 option(WITH_LITE_STATIC "Use Paddle Lite static lib for Android." OFF)
 option(WITH_OPENMP "Use OpenMP support for Android." OFF)
-
-# Please don't open this flag now, some bugs exists.
-# Only support Linux Now
-# option(ENABLE_OPENCV_CUDA "Whether to enable opencv with cuda, this will allow process image with GPU." OFF)
 
 # Whether to build fastdeploy with vision/text/... examples, only for testings.
 option(BUILD_EXAMPLES "Whether to build fastdeploy with vision examples" OFF)
@@ -187,17 +184,16 @@ add_definitions(-DFASTDEPLOY_LIB)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/core/config.h)
 configure_file(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc.in ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pybind/main.cc)
 file(GLOB_RECURSE ALL_DEPLOY_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/*.cc)
-file(GLOB_RECURSE FDTENSOR_FUNC_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cc)
 file(GLOB_RECURSE FDTENSOR_FUNC_CUDA_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/function/*.cu)
-file(GLOB_RECURSE DEPLOY_OP_CUDA_KERNEL_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/op_cuda_kernels/*.cu)
-file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/ort/*.cc)
-file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/paddle/*.cc)
-file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/*.cc)
-file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/*.cpp)
-file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/openvino/*.cc)
-file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/rknpu/rknpu2/*.cc)
-file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/sophgo/*.cc)
-file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/lite/*.cc)
+file(GLOB_RECURSE DEPLOY_OP_CUDA_KERNEL_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/op_cuda_kernels/*.cu)
+file(GLOB_RECURSE DEPLOY_ORT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/ort/*.cc)
+file(GLOB_RECURSE DEPLOY_PADDLE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/paddle/*.cc)
+file(GLOB_RECURSE DEPLOY_POROS_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/poros/*.cc)
+file(GLOB_RECURSE DEPLOY_TRT_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cc ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/*.cpp)
+file(GLOB_RECURSE DEPLOY_OPENVINO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/openvino/*.cc)
+file(GLOB_RECURSE DEPLOY_RKNPU2_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/rknpu2/*.cc)
+file(GLOB_RECURSE DEPLOY_SOPHGO_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/sophgo/*.cc)
+file(GLOB_RECURSE DEPLOY_LITE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/lite/*.cc)
 file(GLOB_RECURSE DEPLOY_VISION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/vision/*.cc)
 file(GLOB_RECURSE DEPLOY_ENCRYPTION_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/encryption/*.cc)
 file(GLOB_RECURSE DEPLOY_PIPELINE_SRCS ${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/pipeline/*.cc)
@@ -293,7 +289,7 @@ if(ENABLE_POROS_BACKEND)
   else ()
     message(STATUS "site-packages: ${Python3_SITELIB}")
   endif ()
-  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/poros/common)
+  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/poros/common)
   # find trt
   if(NOT WITH_GPU)
   message(FATAL_ERROR "While -DENABLE_POROS_BACKEND=ON, must set -DWITH_GPU=ON, but now it's OFF")
@@ -381,7 +377,7 @@ if(ENABLE_TRT_BACKEND)
 
   add_definitions(-DENABLE_TRT_BACKEND)
   include_directories(${TRT_INC_DIR})
-  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/tensorrt/common)
+  include_directories(${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/tensorrt/common)
   list(APPEND ALL_DEPLOY_SRCS ${DEPLOY_TRT_SRCS})
   find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR} NO_DEFAULT_PATH)
   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR} NO_DEFAULT_PATH)
@@ -420,15 +416,6 @@ endif()
 if(ENABLE_VISION)
   add_definitions(-DENABLE_VISION)
   add_definitions(-DENABLE_VISION_VISUALIZE)
-  if(ENABLE_OPENCV_CUDA)
-    if(NOT WITH_GPU)
-      message(FATAL_ERROR "ENABLE_OPENCV_CUDA is available on Linux and WITH_GPU=ON, but now WITH_GPU=OFF.")
-    endif()
-    if(APPLE OR ANDROID OR IOS OR WIN32)
-      message(FATAL_ERROR "Cannot enable opencv with cuda in mac/ios/android/windows os, please set -DENABLE_OPENCV_CUDA=OFF.")
-    endif()
-    add_definitions(-DENABLE_OPENCV_CUDA)
-  endif()
   add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/yaml-cpp)
   list(APPEND DEPEND_LIBS yaml-cpp)
   if(BUILD_CUDA_SRC)
@@ -587,7 +574,7 @@ install(
   DESTINATION ${CMAKE_INSTALL_PREFIX}/include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/backends/*/*.h"
+  PATTERN "${PROJECT_SOURCE_DIR}/${CSRCS_DIR_NAME}/fastdeploy/runtime/backends/*/*.h"
 )
 install(
   DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/third_libs/install

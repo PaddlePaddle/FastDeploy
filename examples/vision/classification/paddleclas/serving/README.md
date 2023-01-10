@@ -1,50 +1,51 @@
-# PaddleClas 服务化部署示例
+English | [简体中文](README_CN.md)
+# PaddleClas Service Deployment Example
 
-在服务化部署前，需确认
+Before the service deployment, please confirm 
 
-- 1. 服务化镜像的软硬件环境要求和镜像拉取命令请参考[FastDeploy服务化部署](../../../../../serving/README_CN.md)
+- 1. Refer to [FastDeploy Service Deployment](../../../../../serving/README.md) for software and hardware environment requirements and image pull commands.
 
 
-## 启动服务
+## Start the Service
 
 ```bash
-#下载部署示例代码
+# Download the example code for deployment
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/examples/vision/classification/paddleclas/serving
 
-# 下载ResNet50_vd模型文件和测试图片
+# Download ResNet50_vd model files and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-# 将配置文件放入预处理目录
+# Put the configuration file into the preprocessing directory 
 mv ResNet50_vd_infer/inference_cls.yaml models/preprocess/1/inference_cls.yaml
 
-# 将模型放入 models/runtime/1目录下, 并重命名为model.pdmodel和model.pdiparams
+# Place the model under models/runtime/1 and rename them to model.pdmodel和model.pdiparams
 mv ResNet50_vd_infer/inference.pdmodel models/runtime/1/model.pdmodel
 mv ResNet50_vd_infer/inference.pdiparams models/runtime/1/model.pdiparams
 
-# 拉取fastdeploy镜像(x.y.z为镜像版本号，需参照serving文档替换为数字)
-# GPU镜像
+# Pull the fastdeploy image (x.y.z represent the image version. Refer to the serving document to replace them with numbers)
+# GPU image 
 docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10
-# CPU镜像
+# CPU image 
 docker pull registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-cpu-only-21.10
 
-# 运行容器.容器名字为 fd_serving, 并挂载当前目录为容器的 /serving 目录
+# Run the container named fd_serving and mount it in the /serving directory of the container 
 nvidia-docker run -it --net=host --name fd_serving -v `pwd`/:/serving registry.baidubce.com/paddlepaddle/fastdeploy:x.y.z-gpu-cuda11.4-trt8.4-21.10  bash
 
-# 启动服务(不设置CUDA_VISIBLE_DEVICES环境变量，会拥有所有GPU卡的调度权限)
+# Start the service (The CUDA_VISIBLE_DEVICES  environment variable is not set, which entitles the scheduling authority of all GPU cards)
 CUDA_VISIBLE_DEVICES=0 fastdeployserver --model-repository=/serving/models --backend-config=python,shm-default-byte-size=10485760
 ```
->> **注意**:
+>> **Attention**:
 
->> 拉取其他硬件上的镜像请看[服务化部署主文档](../../../../../serving/README_CN.md)
+>> To pull images from other hardware, refer to [Service Deployment Master Document](../../../../../serving/README.md)
 
->> 执行fastdeployserver启动服务出现"Address already in use", 请使用`--grpc-port`指定端口号来启动服务，同时更改客户端示例中的请求端口号.
+>> If "Address already in use" appears when running fastdeployserver to start the service, use `--grpc-port` to specify the port number and change the request port number in the client demo.
 
->> 其他启动参数可以使用 fastdeployserver --help 查看
+>> Other startup parameters can be checked by fastdeployserver --help 
 
-服务启动成功后， 会有以下输出:
+Successful service start brings the following output:
 ```
 ......
 I0928 04:51:15.784517 206 grpc_server.cc:4117] Started GRPCInferenceService at 0.0.0.0:8001
@@ -53,26 +54,26 @@ I0928 04:51:15.826578 206 http_server.cc:167] Started Metrics Service at 0.0.0.0
 ```
 
 
-## 客户端请求
+## Client Request 
 
-在物理机器中执行以下命令，发送grpc请求并输出结果
+Execute the following command in the physical machine to send the grpc request and output the result
 ```
-#下载测试图片
+# Download test images 
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
-#安装客户端依赖
+# Install client dependencies 
 python3 -m pip install tritonclient\[all\]
 
-# 发送请求
+# Send the request 
 python3 paddlecls_grpc_client.py
 ```
 
-发送请求成功后，会返回json格式的检测结果并打印输出:
+The result is returned in json format and printed after sending the request:
 ```
 output_name: CLAS_RESULT
 {'label_ids': [153], 'scores': [0.6862289905548096]}
 ```
 
-## 配置修改
+## Configuration Change
 
-当前默认配置在GPU上运行TensorRT引擎， 如果要在CPU或其他推理引擎上运行。 需要修改`models/runtime/config.pbtxt`中配置，详情请参考[配置文档](../../../../../serving/docs/zh_CN/model_configuration.md)
+The current default configuration runs the TensorRT engine on GPU. If you want to run it on CPU or other inference engines, please modify the configuration in `models/runtime/config.pbtxt`. Refer to [Configuration Document](../../../../../serving/docs/EN/model_configuration-en.md) for more information.
