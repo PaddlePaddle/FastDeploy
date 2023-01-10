@@ -21,7 +21,7 @@
 
 #include <type_traits>
 
-#include "fastdeploy/runtime.h"
+#include "fastdeploy/runtime/runtime.h"
 
 #ifdef ENABLE_VISION
 #include "fastdeploy/vision.h"
@@ -30,6 +30,10 @@
 
 #ifdef ENABLE_TEXT
 #include "fastdeploy/text.h"
+#endif
+
+#ifdef ENABLE_ENCRYPTION
+#include "fastdeploy/encryption.h"
 #endif
 
 #include "fastdeploy/core/float16.h"

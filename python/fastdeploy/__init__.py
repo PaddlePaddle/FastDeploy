@@ -36,5 +36,6 @@ from . import c_lib_wrap as C
 from . import vision
 from . import pipeline
 from . import text
+from . import encryption
 from .download import download, download_and_decompress, download_model, get_model_list
 from . import serving

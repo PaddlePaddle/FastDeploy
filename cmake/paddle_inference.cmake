@@ -13,6 +13,10 @@
 # limitations under the License.
 include(ExternalProject)
 
+if(WITH_GPU AND WITH_IPU)
+  message(FATAL_ERROR "Cannot build with WITH_GPU=ON and WITH_IPU=ON on the same time.")
+endif()
+
 option(PADDLEINFERENCE_DIRECTORY "Directory of Paddle Inference library" OFF)
 
 set(PADDLEINFERENCE_PROJECT "extern_paddle_inference")
@@ -67,7 +71,13 @@ if(PADDLEINFERENCE_DIRECTORY)
   endif()
   find_package(Python COMPONENTS Interpreter Development REQUIRED)
   message(STATUS "Copying ${PADDLEINFERENCE_DIRECTORY} to ${THIRD_PARTY_PATH}/install/paddle_inference ...")
-  execute_process(COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/copy_directory.py ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
+  if(WIN32)
+    message(FATAL_ERROR "Define PADDLEINFERENCE_DIRECTORY is not supported on Windows platform.")
+  else()
+    execute_process(COMMAND mkdir -p ${THIRD_PARTY_PATH}/install)
+    execute_process(COMMAND cp -r ${PADDLEINFERENCE_DIRECTORY} ${THIRD_PARTY_PATH}/install/paddle_inference)
+    execute_process(COMMAND rm -rf ${THIRD_PARTY_PATH}/install/paddle_inference/paddle/lib/*.a)
+  endif()
 else()
   set(PADDLEINFERENCE_URL_BASE "https://bj.bcebos.com/fastdeploy/third_libs/")
   set(PADDLEINFERENCE_VERSION "2.4-dev4")
