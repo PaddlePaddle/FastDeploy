@@ -17,12 +17,11 @@ RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debi
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
-mkdir build && cd build
 
-# 编译配置详情见README文件，这里只介绍关键的几个配置
-# -DENABLE_ORT_BACKEND:     是否开启ONNX模型，默认关闭
-# -DENABLE_RKNPU2_BACKEND:  是否开启RKNPU模型，默认关闭
-# -RKNN2_TARGET_SOC:             编译SDK的板子型号，只能输入RK356X或者RK3588，注意区分大小写
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
+mkdir build && cd build
 cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
