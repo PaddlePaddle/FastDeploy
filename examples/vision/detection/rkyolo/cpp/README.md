@@ -1,28 +1,29 @@
-# RKYOLO C++部署示例
+English | [简体中文](README_CN.md)
+# RKYOLO C++ Deployment Example
 
-本目录下提供`infer_xxxxx.cc`快速完成RKYOLO模型在Rockchip板子上上通过二代NPU加速部署的示例。
+This directory provides examples that `infer_xxxxx.cc` fast finishes the deployment of RKYOLO models on Rockchip board through 2-nd generation NPU
 
-在部署前，需确认以下两个步骤:
+Two steps before deployment
 
-1. 软硬件环境满足要求
-2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
+1. Software and hardware should meet the requirements.
+2. Download the precompiled deployment library or deploy FastDeploy repository from scratch according to your development environment.
 
-以上步骤请参考[RK2代NPU部署库编译](../../../../../docs/cn/build_and_install/rknpu2.md)实现
+Refer to [RK2 generation NPU deployment repository compilation](../../../../../docs/cn/build_and_install/rknpu2.md)
 
-## 生成基本目录文件
+## Generate the base directory file
 
-该例程由以下几个部分组成
+The routine consists of the following parts
 ```text
 .
 ├── CMakeLists.txt
-├── build  # 编译文件夹
-├── image  # 存放图片的文件夹
+├── build  # Compile folder
+├── image  # Folder to save images
 ├── infer_rkyolo.cc
-├── model  # 存放模型文件的文件夹
-└── thirdpartys  # 存放sdk的文件夹
+├── model  # Folder to save model files
+└── thirdpartys  # Folder to save sdk
 ```
 
-首先需要先生成目录结构
+Generate a directory first
 ```bash
 mkdir build
 mkdir images
@@ -30,24 +31,23 @@ mkdir model
 mkdir thirdpartys
 ```
 
-## 编译
+## Compile
 
-### 编译并拷贝SDK到thirdpartys文件夹
+### Compile and copy SDK to the thirdpartys folder
 
-请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)仓库编译SDK，编译完成后，将在build目录下生成
-fastdeploy-0.0.3目录，请移动它至thirdpartys目录下.
+Refer to [RK2 generation NPU deployment repository compilation](../../../../../../docs/cn/build_and_install/rknpu2.md). It will generate fastdeploy-0.0.3 directory in the build directory after compilation. Move it to the thirdpartys directory.
 
-### 拷贝模型文件，以及配置文件至model文件夹
-在Paddle动态图模型 -> Paddle静态图模型 -> ONNX模型的过程中，将生成ONNX文件以及对应的yaml配置文件，请将配置文件存放到model文件夹内。
-转换为RKNN后的模型文件也需要拷贝至model。
+### Copy model files and configuration files to the model folder
+In the process of Paddle dynamic graph model -> Paddle static graph model -> ONNX model, the ONNX file and the corresponding yaml configuration file will be generated. Please save the configuration file in the model folder.
+Copy onverted RKNN model files to model。
 
-### 准备测试图片至image文件夹
+### Prepare test images and image folder
 ```bash
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 cp 000000014439.jpg ./images
 ```
 
-### 编译example
+### Compilation example
 
 ```bash
 cd build
@@ -56,7 +56,7 @@ make -j8
 make install
 ```
 
-## 运行例程
+## Running routine 
 
 ```bash
 cd ./build/install
@@ -64,6 +64,6 @@ cd ./build/install
 ```
 
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../../docs/api/vision_results/)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model Prediction Results](../../../../../../docs/api/vision_results/)

@@ -1,11 +1,12 @@
-# PaddleClas 量化模型在 A311D 上的部署
-目前 FastDeploy 已经支持基于 Paddle Lite 部署 PaddleClas 量化模型到 A311D 上。
+English | [简体中文](README_CN.md)
+# Deploy PaddleClas Quantification Model on A311D
+Now FastDeploy supports the deployment of PaddleClas quantification model to A311D based on Paddle Lite.
 
-模型的量化和量化模型的下载请参考：[模型量化](../quantize/README.md)
+For model quantification and download, refer to [model quantification](../quantize/README.md).
 
 
-## 详细部署文档
+## Detailed Deployment Tutorials
 
-在 A311D 上只支持 C++ 的部署。
+Only C++ deployment is supported on A311D. 
 
-- [C++部署](cpp)
+- [C++ deployment](cpp)

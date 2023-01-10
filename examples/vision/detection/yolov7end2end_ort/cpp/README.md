@@ -1,50 +1,51 @@
-# YOLOv7End2EndORT C++部署示例
+English | [简体中文](README_CN.md)
+# YOLOv7End2EndORT C++ Deployment Example
 
-本目录下提供`infer.cc`快速完成YOLOv7End2EndORT在CPU/GPU部署的示例。
+This directory provides examples that `infer.cc` fast finishes the deployment of YOLOv7End2EndORT on CPU/GPU accelerated by TensorRT. 
 
-在部署前，需确认以下两个步骤
+Two steps before deployment
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2.  Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
-以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking the inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0) is required to support this model.
 
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-#下载官方转换好的yolov7模型文件和测试图片
+# Download the official converted yolov7 model files and test images 
 wget https://bj.bcebos.com/paddlehub/fastdeploy/yolov7-end2end-ort-nms.onnx
 wget https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg
 
 
-# CPU推理
+# CPU inference
 ./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 0
-# GPU推理
+# GPU inference
 ./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 1
-# TensorRT + GPU 部署 (暂不支持 会回退到 ORT + GPU)
+# TensorRT + GPU deployment (Not supported yet. Back to ORT + GPU)
 ./infer_demo yolov7-end2end-ort-nms.onnx 000000014439.jpg 2
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 
 <div align='center'>
   <img width="639" alt="image" src="https://user-images.githubusercontent.com/31974251/186369053-1b578d61-ca70-4755-9671-c9fccf6314a0.png">
 </div>
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-注意，YOLOv7End2EndORT是专门用于推理YOLOv7中导出模型带[ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) 版本的End2End模型，不带nms的模型推理请使用YOLOv7类，而 [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111) 版本的End2End模型请使用YOLOv7End2EndTRT进行推理。
+Attention: YOLOv7End2EndORT is designed for the inference of End2End models with [ORT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L87) among the YOLOv7 exported models. For models without nms, use YOLOv7 class for inference. For End2End models with [TRT_NMS](https://github.com/WongKinYiu/yolov7/blob/main/models/experimental.py#L111), use YOLOv7End2EndTRT for inference.
 
-## YOLOv7End2EndORT C++接口
+## YOLOv7End2EndORT C++ Interface 
 
-### YOLOv7End2EndORT 类
+### YOLOv7End2EndORT Class
 
 ```c++
 fastdeploy::vision::detection::YOLOv7End2EndORT(
@@ -54,41 +55,41 @@ fastdeploy::vision::detection::YOLOv7End2EndORT(
         const ModelFormat& model_format = ModelFormat::ONNX)
 ```
 
-YOLOv7End2EndORT 模型加载和初始化，其中model_file为导出的ONNX模型格式。
+YOLOv7End2EndORT model loading and initialization, among which model_file is the exported ONNX model format
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径，当模型格式为ONNX时，此参数传入空字符串即可
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为ONNX格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path. Merely passing an empty string when the model is in ONNX format
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. ONNX format by default
 
-#### Predict函数
+#### Predict function
 
 > ```c++
 > YOLOv7End2EndORT::Predict(cv::Mat* im, DetectionResult* result,
 >                           float conf_threshold = 0.25)
 > ```
 >
-> 模型预测接口，输入图像直接输出检测结果。
+> Model prediction interface. Input images and output detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 检测结果，包括检测框，各个框的置信度, DetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
-> > * **conf_threshold**: 检测框置信度过滤阈值，但由于YOLOv7 End2End的模型在导出成ONNX时已经指定了score阈值，因此该参数只有在大于已经指定的阈值时才会有效。
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: Detection results, including detection box and confidence of each box. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for DetectionResult 
+> > * **conf_threshold**: Filtering threshold of detection box confidence. But considering that YOLOv7 End2End models have a score threshold specified during ONNX export, this parameter will be effective when being greater than the specified one.
 
-### 类成员变量
-#### 预处理参数
-用户可按照自己的实际需求，修改下列预处理参数，从而影响最终的推理和部署效果
+### Class Member Variable
+#### Pre-processing Parameter
+Users can modify the following pre-processing parameters to their needs, which affects the final inference and deployment results
 
-> > * **size**(vector&lt;int&gt;): 通过此参数修改预处理过程中resize的大小，包含两个整型元素，表示[width, height], 默认值为[640, 640]
-> > * **padding_value**(vector&lt;float&gt;): 通过此参数可以修改图片在resize时候做填充(padding)的值, 包含三个浮点型元素, 分别表示三个通道的值, 默认值为[114, 114, 114]
-> > * **is_no_pad**(bool): 通过此参数让图片是否通过填充的方式进行resize, `is_no_pad=ture` 表示不使用填充的方式，默认值为`is_no_pad=false`
-> > * **is_mini_pad**(bool): 通过此参数可以将resize之后图像的宽高这是为最接近`size`成员变量的值, 并且满足填充的像素大小是可以被`stride`成员变量整除的。默认值为`is_mini_pad=false`
-> > * **stride**(int): 配合`stris_mini_pad`成员变量使用, 默认值为`stride=32`
+> > * **size**(vector&lt;int&gt;): This parameter changes resize used during preprocessing, containing two integer elements for [width, height] with default value [640, 640]
+> > * **padding_value**(vector&lt;float&gt;): This parameter is used to change the padding value of images during resize, containing three floating-point elements that represent the value of three channels. Default value [114, 114, 114]
+> > * **is_no_pad**(bool): Specify whether to resize the image through padding. `is_no_pad=ture` represents no paddling. Default`is_no_pad=false`
+> > * **is_mini_pad**(bool): This parameter sets the width and height of the image after resize to the value nearest to the `size` member variable and to the point where the padded pixel size is divisible by the `stride` member variable. Default `is_mini_pad=false`
+> > * **stride**(int): Used with the `stris_mini_pad` member variable. Default `stride=32`
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
