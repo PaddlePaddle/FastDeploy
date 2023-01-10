@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "fastdeploy/vision/detection/ppdet/postprocessor.h"
+
 #include "fastdeploy/vision/detection/ppdet/multiclass_nms.h"
 #include "fastdeploy/vision/utils/utils.h"
 
@@ -201,11 +202,8 @@ bool PaddleDetPostprocessor::ProcessUnDecodeResults(
       (*results)[i].label_ids.push_back(
           static_cast<int32_t>(round(ptr[j * 6])));
       (*results)[i].scores.push_back(ptr[j * 6 + 1]);
-      (*results)[i].boxes.emplace_back(
-          std::array<float, 4>({ptr[j * 6 + 2] / GetScaleFactor()[1],
-                                ptr[j * 6 + 3] / GetScaleFactor()[0],
-                                ptr[j * 6 + 4] / GetScaleFactor()[1],
-                                ptr[j * 6 + 5] / GetScaleFactor()[0]}));
+      (*results)[i].boxes.emplace_back(std::array<float, 4>(
+          {ptr[j * 6 + 2], ptr[j * 6 + 3], ptr[j * 6 + 4], ptr[j * 6 + 5]}));
     }
     offset += (num_boxes[i] * 6);
   }
