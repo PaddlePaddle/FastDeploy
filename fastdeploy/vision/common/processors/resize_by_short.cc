@@ -88,6 +88,7 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
 
 #ifdef ENABLE_CVCUDA
 bool ResizeByShort::ImplByCvCuda(Mat* mat) {
+  std::cout << Name() << " cvcuda" << std::endl;
   cv::Mat* im = mat->GetOpenCVMat();
   int origin_w = im->cols;
   int origin_h = im->rows;

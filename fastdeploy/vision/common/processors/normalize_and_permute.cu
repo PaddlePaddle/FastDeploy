@@ -17,9 +17,10 @@
 namespace fastdeploy {
 namespace vision {
 
-__global__ void NormalizeAndPermuteKernel(
-    uint8_t* src, float* dst, const float* alpha, const float* beta,
-    int num_channel, bool swap_rb, int edge) {
+__global__ void NormalizeAndPermuteKernel(uint8_t* src, float* dst,
+                                          const float* alpha, const float* beta,
+                                          int num_channel, bool swap_rb,
+                                          int edge) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (idx >= edge) return;
 
@@ -36,14 +37,24 @@ __global__ void NormalizeAndPermuteKernel(
 
 bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   cv::Mat* im = mat->GetOpenCVMat();
+
+  // Prepare input tensor
+  FDTensor src;
   std::string buf_name = Name() + "_src";
   std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
-  FDTensor* src = UpdateAndGetReusedBuffer(shape, im->type(), buf_name,
-                                           Device::GPU);
-  FDASSERT(cudaMemcpy(src->Data(), im->ptr(), src->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
-           "Error occurs while copy memory from CPU to GPU.");
+  if (mat->device == Device::GPU) {
+    mat->ShareWithTensor(&src);
+  } else if (mat->device == Device::CPU) {
+    src = *UpdateAndGetReusedBuffer(shape, im->type(), buf_name, Device::GPU);
+    FDASSERT(cudaMemcpyAsync(src.Data(), im->ptr(), src.Nbytes(),
+                             cudaMemcpyHostToDevice, mat->Stream()) == 0,
+             "[ERROR] Error occurs while copy memory from CPU to GPU.");
+  } else {
+    FDERROR << "FDMat is on unsupported device: " << mat->device << std::endl;
+    return false;
+  }
 
+  // Prepare output tensot
   buf_name = Name() + "_dst";
   FDTensor* dst = UpdateAndGetReusedBuffer(shape, CV_32FC(im->channels()),
                                            buf_name, Device::GPU);
@@ -52,22 +63,22 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   buf_name = Name() + "_alpha";
   FDTensor* alpha = UpdateAndGetReusedBuffer({(int64_t)alpha_.size()}, CV_32FC1,
                                              buf_name, Device::GPU);
-  FDASSERT(cudaMemcpy(alpha->Data(), alpha_.data(), alpha->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
+  FDASSERT(cudaMemcpyAsync(alpha->Data(), alpha_.data(), alpha->Nbytes(),
+                           cudaMemcpyHostToDevice, mat->Stream()) == 0,
            "Error occurs while copy memory from CPU to GPU.");
 
   buf_name = Name() + "_beta";
   FDTensor* beta = UpdateAndGetReusedBuffer({(int64_t)beta_.size()}, CV_32FC1,
-                                             buf_name, Device::GPU);
-  FDASSERT(cudaMemcpy(beta->Data(), beta_.data(), beta->Nbytes(),
-                      cudaMemcpyHostToDevice) == 0,
+                                            buf_name, Device::GPU);
+  FDASSERT(cudaMemcpyAsync(beta->Data(), beta_.data(), beta->Nbytes(),
+                           cudaMemcpyHostToDevice, mat->Stream()) == 0,
            "Error occurs while copy memory from CPU to GPU.");
 
   int jobs = im->cols * im->rows;
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
-  NormalizeAndPermuteKernel<<<blocks, threads, 0, NULL>>>(
-      reinterpret_cast<uint8_t*>(src->Data()),
+  NormalizeAndPermuteKernel<<<blocks, threads, 0, mat->Stream()>>>(
+      reinterpret_cast<uint8_t*>(src.Data()),
       reinterpret_cast<float*>(dst->Data()),
       reinterpret_cast<float*>(alpha->Data()),
       reinterpret_cast<float*>(beta->Data()), im->channels(), swap_rb_, jobs);
@@ -76,6 +87,11 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   mat->device = Device::GPU;
   mat->layout = Layout::CHW;
   return true;
+}
+
+bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) {
+  std::cout << Name() << " cvcuda" << std::endl;
+  return ImplByCuda(mat);
 }
 
 }  // namespace vision

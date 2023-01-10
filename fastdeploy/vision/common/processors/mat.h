@@ -149,7 +149,7 @@ struct FASTDEPLOY_DECL Mat {
   Device device = Device::CPU;
 
   // Make sure mat buffer is on CPU
-  // If not on CPU, then copy the buffer from device to
+  // If not on CPU, then copy the buffer from device to CPU
   void MakeSureOnCpu();
 
   // Create FD Mat from FD Tensor. This method only create a
