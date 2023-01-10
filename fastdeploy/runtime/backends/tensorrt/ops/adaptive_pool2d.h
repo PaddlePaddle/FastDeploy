@@ -14,7 +14,7 @@
 
 #pragma once
 #include "common.h"  // NOLINT
-#include "fastdeploy/runtime/backends/op_cuda_kernels/adaptive_pool2d_kernel.h"
+#include "fastdeploy/runtime/backends/common/cuda/adaptive_pool2d_kernel.h"
 
 namespace fastdeploy {
 
