@@ -71,6 +71,7 @@ class FASTDEPLOY_DECL PPYOLOE : public PPDetBase {
     valid_kunlunxin_backends = {Backend::LITE};
     valid_rknpu_backends = {Backend::RKNPU2};
     valid_ascend_backends = {Backend::LITE};
+    valid_sophgonpu_backends = {Backend::SOPHGOTPU};
     initialized = Initialize();
   }
 
@@ -274,7 +275,8 @@ class FASTDEPLOY_DECL CascadeRCNN : public PPDetBase {
     initialized = Initialize();
   }
 
-  virtual std::string ModelName() const { return "PaddleDetection/CascadeRCNN"; }
+  virtual std::string ModelName() const {
+                         return "PaddleDetection/CascadeRCNN"; }
 };
 
 class FASTDEPLOY_DECL PSSDet : public PPDetBase {
