@@ -71,8 +71,8 @@ bool FastDeployModel::InitRuntimeWithSpecifiedBackend() {
     }
   } else if (use_sophgotpu) {
     if (!IsSupported(valid_sophgonpu_backends, runtime_option.backend)) {
-      FDERROR << "The valid rknpu backends of model " << ModelName() << " are "
-              << Str(valid_rknpu_backends) << ", " << runtime_option.backend
+      FDERROR << "The valid sophgo backends of model " << ModelName() << " are "
+              << Str(valid_sophgonpu_backends) << ", " << runtime_option.backend
               << " is not supported." << std::endl;
       return false;
     }
