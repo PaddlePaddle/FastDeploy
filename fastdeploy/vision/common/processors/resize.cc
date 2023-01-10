@@ -14,6 +14,12 @@
 
 #include "fastdeploy/vision/common/processors/resize.h"
 
+#ifdef ENABLE_CVCUDA
+#include <cvcuda/OpResize.hpp>
+
+#include "fastdeploy/vision/common/processors/cvcuda_utils.h"
+#endif
+
 namespace fastdeploy {
 namespace vision {
 
@@ -79,7 +85,7 @@ bool Resize::ImplByFlyCV(Mat* mat) {
   } else if (interp_ == 2) {
     interp_method = fcv::InterpolationType::INTER_CUBIC;
   } else if (interp_ == 3) {
-    interp_method = fcv::InterpolationType::INTER_AREA;  
+    interp_method = fcv::InterpolationType::INTER_AREA;
   } else {
     FDERROR << "Resize: Only support interp_ be 0/1/2/3 with FlyCV, but "
                "now it's "
@@ -112,6 +118,65 @@ bool Resize::ImplByFlyCV(Mat* mat) {
             << std::endl;
     return false;
   }
+  return true;
+}
+#endif
+
+#ifdef ENABLE_CVCUDA
+bool Resize::ImplByCvCuda(Mat* mat) {
+  std::cout << Name() << " cvcuda" << std::endl;
+  cv::Mat* im = mat->GetOpenCVMat();
+  int origin_w = im->cols;
+  int origin_h = im->rows;
+  int origin_c = im->channels();
+
+  if (width_ == origin_w && height_ == origin_h) {
+    return true;
+  }
+  if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
+    return true;
+  }
+
+  if (width_ > 0 && height_ > 0) {
+  } else if (scale_w_ > 0 && scale_h_ > 0) {
+    width_ = std::round(scale_w_ * origin_w);
+    height_ = std::round(scale_h_ * origin_h);
+  } else {
+    FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
+               "or (scale_w > 0 && scale_h > 0)."
+            << std::endl;
+    return false;
+  }
+
+  int batchsize = 1;
+  cvcuda::Resize resize_op;
+
+  // Prepare input tensor
+  std::string buf_name = Name() + "_cvcuda_src";
+  FDTensor* src = UpdateAndGetReusedBuffer({origin_h, origin_w, origin_c},
+                                           im->type(), buf_name, Device::GPU);
+  auto src_tensor = CreateCvCudaTensorWrapData(*src);
+  FDASSERT(cudaMemcpyAsync(GetCvCudaTensorDataPtr(src_tensor), im->ptr(),
+                           src->Nbytes(), cudaMemcpyHostToDevice,
+                           mat->Stream()) == 0,
+           "[ERROR] Error occurs while copy memory from CPU to GPU.");
+
+  // Prepare output tensor
+  buf_name = Name() + "_cvcuda_dst";
+  FDTensor* dst = UpdateAndGetReusedBuffer({height_, width_, origin_c},
+                                           im->type(), buf_name, Device::GPU);
+  auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
+
+  // CV-CUDA Interp value is compatible with OpenCV
+  resize_op(mat->Stream(), src_tensor, dst_tensor,
+            NVCVInterpolationType(interp_));
+
+  cv::Mat out(height_, width_, im->type(), GetCvCudaTensorDataPtr(dst_tensor));
+
+  mat->SetMat(out);
+  mat->SetWidth(width_);
+  mat->SetHeight(height_);
+  mat->device = Device::GPU;
   return true;
 }
 #endif

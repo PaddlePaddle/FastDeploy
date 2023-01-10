@@ -35,6 +35,9 @@ class FASTDEPLOY_DECL Resize : public Processor {
 #ifdef ENABLE_FLYCV
   bool ImplByFlyCV(Mat* mat);
 #endif
+#ifdef ENABLE_CVCUDA
+  bool ImplByCvCuda(Mat* mat);
+#endif
   std::string Name() { return "Resize"; }
 
   static bool Run(Mat* mat, int width, int height, float scale_w = -1.0,
