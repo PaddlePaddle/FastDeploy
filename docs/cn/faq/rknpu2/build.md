@@ -36,6 +36,10 @@ make install
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
+
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
 mkdir build && cd build
 cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-gcc \
           -DCMAKE_CXX_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-g++ \
@@ -47,7 +51,6 @@ cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch
 	      -DRKNN2_TARGET_SOC=RK3588 \
 	      -DENABLE_FLYCV=ON \
           -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
-
 make -j8
 make install
 ```
@@ -59,16 +62,17 @@ RKNPU2暂时仅支持linux系统, 以下教程在RK3568(debian 10)、RK3588(debi
 ```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
-cd python
 
+# 如果您使用的是develop分支输入以下命令
+git checkout develop
+
+cd python
 export ENABLE_ORT_BACKEND=ON
 export ENABLE_RKNPU2_BACKEND=ON
 export ENABLE_VISION=ON
 export RKNN2_TARGET_SOC=RK3588
 python3 setup.py build
 python3 setup.py bdist_wheel
-
 cd dist
-
 pip3 install fastdeploy_python-0.0.0-cp39-cp39-linux_aarch64.whl
 ```
