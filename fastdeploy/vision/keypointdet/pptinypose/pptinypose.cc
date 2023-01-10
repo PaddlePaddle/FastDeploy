@@ -1,7 +1,8 @@
 #include "fastdeploy/vision/keypointdet/pptinypose/pptinypose.h"
+
 #include "fastdeploy/vision/utils/utils.h"
 #include "yaml-cpp/yaml.h"
-#ifdef ENABLE_PADDLE_FRONTEND
+#ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
 #include "fastdeploy/vision.h"
@@ -16,7 +17,8 @@ PPTinyPose::PPTinyPose(const std::string& model_file,
                        const RuntimeOption& custom_option,
                        const ModelFormat& model_format) {
   config_file_ = config_file;
-  valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO, Backend::LITE};
+  valid_cpu_backends = {Backend::PDINFER, Backend::ORT, Backend::OPENVINO,
+                        Backend::LITE};
   valid_gpu_backends = {Backend::PDINFER, Backend::ORT, Backend::TRT};
   valid_kunlunxin_backends = {Backend::LITE};
   runtime_option = custom_option;
@@ -100,11 +102,11 @@ bool PPTinyPose::Preprocess(Mat* mat, std::vector<FDTensor>* outputs) {
       int resize_height = -1;
       std::tie(resize_width, resize_height) = processor->GetWidthAndHeight();
       cv::Mat trans_matrix(2, 3, CV_64FC1);
-      GetAffineTransform(center, scale, 0, {resize_width, resize_height}, &trans_matrix, 0);
+      GetAffineTransform(center, scale, 0, {resize_width, resize_height},
+                         &trans_matrix, 0);
       if (!(processor->SetTransformMatrix(trans_matrix))) {
-        FDERROR << "Failed to set transform matrix of " 
-                << processors_[i]->Name()
-                << " processor." << std::endl;
+        FDERROR << "Failed to set transform matrix of "
+                << processors_[i]->Name() << " processor." << std::endl;
       }
     }
     if (!(*(processors_[i].get()))(mat)) {
@@ -139,7 +141,7 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
   int idxdata_size =
       std::accumulate(infer_result[1].shape.begin(),
                       infer_result[1].shape.end(), 1, std::multiplies<int>());
-  
+
   if (outdata_size < 6) {
     FDWARNING << "PPTinyPose No object detected." << std::endl;
   }
@@ -160,7 +162,9 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
     std::copy(static_cast<int64_t*>(idx_data),
               static_cast<int64_t*>(idx_data) + idxdata_size, idxout.begin());
   } else {
-    FDERROR << "Only support process inference result with INT32/INT64 data type, but now it's " << idx_dtype << "." << std::endl;
+    FDERROR << "Only support process inference result with INT32/INT64 data "
+               "type, but now it's "
+            << idx_dtype << "." << std::endl;
   }
   GetFinalPredictions(heatmap, out_data_shape, idxout, center, scale, &preds,
                       this->use_dark);
@@ -176,7 +180,8 @@ bool PPTinyPose::Postprocess(std::vector<FDTensor>& infer_result,
 
 bool PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result) {
   std::vector<float> center = {round(im->cols / 2.0f), round(im->rows / 2.0f)};
-  std::vector<float> scale = {static_cast<float>(im->cols), static_cast<float>(im->rows)};
+  std::vector<float> scale = {static_cast<float>(im->cols),
+                              static_cast<float>(im->rows)};
   Mat mat(*im);
   std::vector<FDTensor> processed_data;
   if (!Preprocess(&mat, &processed_data)) {
