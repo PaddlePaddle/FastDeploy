@@ -129,7 +129,7 @@ visualdl --host 0.0.0.0 --port 8080
   </p>
 
   d. 测试服务
-  点击"打开客户端"按钮，会打开快速测试fastdeployserver服务的客户端界面。该界面基于gradio编写，并且会自动根据fastdeployserver服务启动的参数，帮助用户填好基本的信息，用户可以参考 [使用fastdeploy client进行可视化请求服务](./client.md#fastdeploy-client--fastdeploy服务的客户端组件)进行使用。
+  点击"打开客户端"按钮，会打开快速测试fastdeployserver服务的客户端界面。该界面基于gradio编写，并且会自动根据fastdeployserver服务启动的参数，帮助用户填好基本的信息，用户可以参考 [使用fastdeploy client进行可视化请求服务](./client.md#使用fastdeploy-client进行可视化请求服务)进行使用。
   <p align="center">
   <img src="https://user-images.githubusercontent.com/22424850/211198901-3e58fe9d-8667-4416-987a-200f9edeb05d.gif" width="100%"/>
   </p>
