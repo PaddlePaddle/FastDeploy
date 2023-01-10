@@ -109,7 +109,7 @@ void RuntimeOption::UseKunlunXin(int kunlunxin_id, int l3_workspace_size,
 
 void RuntimeOption::UseAscend() {
   device = Device::ASCEND;
-  paddle_lite_option.enable_ascend = enable_ascend;
+  paddle_lite_option.enable_ascend = true;
 }
 
 void RuntimeOption::UseSophgo() {
