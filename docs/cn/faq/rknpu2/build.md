@@ -27,7 +27,7 @@ cmake ..  -DENABLE_ORT_BACKEND=ON \
 	      -DENABLE_RKNPU2_BACKEND=ON \
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
-          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
 make -j8
 make install
 ```
@@ -50,7 +50,7 @@ cmake ..  -DCMAKE_C_COMPILER=/home/zbc/opt/gcc-linaro-6.3.1-2017.05-x86_64_aarch
 	      -DENABLE_VISION=ON \
 	      -DRKNN2_TARGET_SOC=RK3588 \
 	      -DENABLE_FLYCV=ON \
-          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.3
+          -DCMAKE_INSTALL_PREFIX=${PWD}/fastdeploy-0.0.0
 make -j8
 make install
 ```
