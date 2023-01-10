@@ -21,8 +21,10 @@
 // \brief
 // \author Qi Liu, Xinyu Wang
 
-#include "fastdeploy/vision/utils/cuda_utils.h"
+#ifdef WITH_GPU
 #include <opencv2/opencv.hpp>
+
+#include "fastdeploy/vision/utils/cuda_utils.h"
 
 namespace fastdeploy {
 namespace vision {
@@ -32,12 +34,11 @@ struct AffineMatrix {
   float value[6];
 };
 
-__global__ void YoloPreprocessCudaKernel( 
-    uint8_t* src, int src_line_size, int src_width, 
-    int src_height, float* dst, int dst_width, 
-    int dst_height, uint8_t padding_color_b,
-    uint8_t padding_color_g, uint8_t padding_color_r,
-    AffineMatrix d2s, int edge) {
+__global__ void YoloPreprocessCudaKernel(
+    uint8_t* src, int src_line_size, int src_width, int src_height, float* dst,
+    int dst_width, int dst_height, uint8_t padding_color_b,
+    uint8_t padding_color_g, uint8_t padding_color_r, AffineMatrix d2s,
+    int edge) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
   if (position >= edge) return;
 
@@ -91,7 +92,7 @@ __global__ void YoloPreprocessCudaKernel(
     c2 = w1 * v1[2] + w2 * v2[2] + w3 * v3[2] + w4 * v4[2];
   }
 
-  // bgr to rgb 
+  // bgr to rgb
   float t = c2;
   c2 = c0;
   c0 = t;
@@ -111,16 +112,17 @@ __global__ void YoloPreprocessCudaKernel(
   *pdst_c2 = c2;
 }
 
-void CudaYoloPreprocess(
-    uint8_t* src, int src_width, int src_height,
-    float* dst, int dst_width, int dst_height,
-    const std::vector<float> padding_value, cudaStream_t stream) {
+void CudaYoloPreprocess(uint8_t* src, int src_width, int src_height, float* dst,
+                        int dst_width, int dst_height,
+                        const std::vector<float> padding_value,
+                        cudaStream_t stream) {
   AffineMatrix s2d, d2s;
-  float scale = std::min(dst_height / (float)src_height, dst_width / (float)src_width);
+  float scale =
+      std::min(dst_height / (float)src_height, dst_width / (float)src_width);
 
   s2d.value[0] = scale;
   s2d.value[1] = 0;
-  s2d.value[2] = -scale * src_width  * 0.5  + dst_width * 0.5;
+  s2d.value[2] = -scale * src_width * 0.5 + dst_width * 0.5;
   s2d.value[3] = 0;
   s2d.value[4] = scale;
   s2d.value[5] = -scale * src_height * 0.5 + dst_height * 0.5;
@@ -135,12 +137,11 @@ void CudaYoloPreprocess(
   int threads = 256;
   int blocks = ceil(jobs / (float)threads);
   YoloPreprocessCudaKernel<<<blocks, threads, 0, stream>>>(
-      src, src_width * 3, src_width,
-      src_height, dst, dst_width,
-      dst_height, padding_value[0], padding_value[1], padding_value[2], d2s, jobs);
-
+      src, src_width * 3, src_width, src_height, dst, dst_width, dst_height,
+      padding_value[0], padding_value[1], padding_value[2], d2s, jobs);
 }
 
 }  // namespace utils
 }  // namespace vision
 }  // namespace fastdeploy
+#endif

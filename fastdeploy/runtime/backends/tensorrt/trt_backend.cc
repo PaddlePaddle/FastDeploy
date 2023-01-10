@@ -20,7 +20,7 @@
 #include "NvInferRuntime.h"
 #include "fastdeploy/function/cuda_cast.h"
 #include "fastdeploy/utils/utils.h"
-#ifdef ENABLE_PADDLE_FRONTEND
+#ifdef ENABLE_PADDLE2ONNX
 #include "paddle2onnx/converter.h"
 #endif
 
@@ -123,7 +123,7 @@ bool TrtBackend::InitFromPaddle(const std::string& model_file,
   }
   option_ = option;
 
-#ifdef ENABLE_PADDLE_FRONTEND
+#ifdef ENABLE_PADDLE2ONNX
   std::vector<paddle2onnx::CustomOp> ops;
   ops.resize(1);
   strcpy(ops[0].op_name, "pool2d");

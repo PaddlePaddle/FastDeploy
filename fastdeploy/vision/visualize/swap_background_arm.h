@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
 #pragma once
 
 #include "fastdeploy/vision/common/result.h"
@@ -21,18 +20,15 @@
 namespace fastdeploy {
 namespace vision {
 
-cv::Mat SwapBackgroundNEON(const cv::Mat& im, 
-                           const cv::Mat& background, 
-                           const MattingResult& result, 
+cv::Mat SwapBackgroundNEON(const cv::Mat& im,
+                           const cv::Mat& background,
+                           const MattingResult& result,
                            bool remove_small_connected_area = false);
 
 cv::Mat SwapBackgroundNEON(const cv::Mat& im,
                            const cv::Mat& background,
                            const SegmentationResult& result,
-                           int background_label);    
+                           int background_label);
 
 }  // namespace vision
 }  // namespace fastdeploy
-
-#endif
-
