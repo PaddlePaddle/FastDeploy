@@ -180,7 +180,7 @@ bool SophgoBackend::Infer(std::vector<FDTensor>& inputs,
     assert(BM_SUCCESS == status);
     input_tensors[i].dtype = input_dtypes[i];
     input_tensors[i].st_mode = BM_STORE_1N;
-    input_tensors[i].shape = *(net_info_->stages[i].input_shapes);
+    input_tensors[i].shape = net_info_->stages[0].input_shapes[i];
     unsigned int input_byte = bmrt_tensor_bytesize(&input_tensors[i]);
     bm_memcpy_s2d_partial(handle_, input_tensors[i].device_mem,
                           (void*)inputs[i].Data(),
