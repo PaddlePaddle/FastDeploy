@@ -27,7 +27,7 @@ error while loading shared libraries: libfastdeploy.so.0.0.0: cannot open shared
 
 **临时解决方法**
 
-临时解决方法对系统没有伤害，但是仅在打开终端时生效，关闭终端后，这个配置会失效。
+临时解决方法对系统没有影响，但是仅在当前打开的终端时生效，关闭终端后，这个配置会失效。
 
 ```bash
 source PathToFastDeploySDK/fastdeploy_init.sh
