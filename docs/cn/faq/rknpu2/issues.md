@@ -27,7 +27,7 @@ error while loading shared libraries: libfastdeploy.so.0.0.0: cannot open shared
 
 **临时解决方法**
 
-编译FastDeploy C++ SDK后，SDK目录下有一个fastdeploy_init.sh文件，运行这个文件即可。
+临时解决方法对系统没有伤害，但是仅在打开终端时生效，关闭终端后，这个配置会失效。
 
 ```bash
 source PathToFastDeploySDK/fastdeploy_init.sh
@@ -35,9 +35,10 @@ source PathToFastDeploySDK/fastdeploy_init.sh
 
 **永久解决方案**
 
-运行以下代码:
+临时解决方法解决方案在开关终端后会失效，因为每一次重新打开终端运行程序时，都需要重新输入命令。如果您不想每一次运行程序都需要运行一次代码，可以执行以下代码:
 ```bash
 source PathToFastDeploySDK/fastdeploy_init.sh
 sudo cp PathToFastDeploySDK/fastdeploy_libs.conf /etc/ld.so.conf.d/
 sudo ldconfig
 ```
+执行后配置文件将写入系统，刷新后即可让系统找到库的位置。
