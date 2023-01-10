@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef ENABLE_VISION_VISUALIZE
-
 #include "fastdeploy/vision/visualize/visualize.h"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -110,4 +108,3 @@ cv::Mat Visualize::RemoveSmallConnectedArea(const cv::Mat& alpha_pred,
 
 }  // namespace vision
 }  // namespace fastdeploy
-#endif
