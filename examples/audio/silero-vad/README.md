@@ -22,7 +22,7 @@ Silero VAD was trained on huge corpora that include over 100 languages and it pe
 
 Silero VAD supports 8000 Hz and 16000 Hz sampling rates.
 
-## 详细部署文档
+## Detailed Deployment Documents
 
 - [C++ deployment](cpp)
 
