@@ -4,7 +4,7 @@ English | [简体中文](README_CN.md)
 
 Before serving deployment, you need to confirm
 
-- 1. Refer to [FastDeploy Serving Deployment](../../../../../serving/README_CN.md) for hardware and software environment requirements and image pull commands of serving images.
+- 1. Refer to [FastDeploy Serving Deployment](../../../../serving/README.md) for hardware and software environment requirements and image pull commands of serving images.
 
 ## Prepare Models
 
@@ -30,18 +30,18 @@ mv msra_ner_pruned_infer_model/float32.pdiparams models/ernie_tokencls_model/1/m
 After download and move, the models directory of the classification tasks is as follows:
 ```
 models
-├── ernie_seqcls                      # 分类任务的pipeline
+├── ernie_seqcls                      # Pipeline for classification task
 │   ├── 1
-│   └── config.pbtxt                  # 通过这个文件组合前后处理和模型推理
-├── ernie_seqcls_model                # 分类任务的模型推理
+│   └── config.pbtxt                  # Combine pre and post processing and model inference
+├── ernie_seqcls_model                # Model inference for classification task
 │   ├── 1
 │   │   └── model.onnx
 │   └── config.pbtxt
-├── ernie_seqcls_postprocess          # 分类任务后处理
+├── ernie_seqcls_postprocess          # Post-processing of classification task
 │   ├── 1
 │   │   └── model.py
 │   └── config.pbtxt
-└── ernie_tokenizer                   # 预处理分词
+└── ernie_tokenizer                   # Pre-processing splitting
     ├── 1
     │   └── model.py
     └── config.pbtxt
@@ -63,9 +63,9 @@ docker run  -it --net=host --name fastdeploy_server --shm-size="1g" -v /path/ser
 The serving directory contains the configuration to start the pipeline service and the code to send the prediction request, including
 
 ```
-models                    # 服务化启动需要的模型仓库，包含模型和服务配置文件
-seq_cls_rpc_client.py     # 新闻分类任务发送pipeline预测请求的脚本
-token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚本
+models                    # Model repository needed for serving startup, containing model and service configuration files
+seq_cls_rpc_client.py     # Script for sending pipeline prediction requests for news classification task
+token_cls_rpc_client.py   # Script for sequence annotation task to send pipeline prediction requests
 ```
 
 *Attention*:Attention: When starting the service, each python backend process of Server requests 64M memory by default, and the docker started by default cannot start more than one python backend node. There are two solutions:
@@ -76,13 +76,13 @@ token_cls_rpc_client.py   # 序列标注任务发送pipeline预测请求的脚�
 ### Classification Task
 Execute the following command in the container to start the service:
 ```
-# 默认启动models下所有模型
+# Enable all models by default
 fastdeployserver --model-repository=/models
 
-# 可通过参数只启动分类任务
+# You can only enable classification task via parameters
 fastdeployserver --model-repository=/models --model-control-mode=explicit --load-model=ernie_seqcls
 ```
-输出打印如下:
+The output is:
 ```
 I1019 09:41:15.375496 2823 model_repository_manager.cc:1183] successfully loaded 'ernie_tokenizer' version 1
 I1019 09:41:15.375987 2823 model_repository_manager.cc:1022] loading: ernie_seqcls:1
@@ -109,7 +109,7 @@ Execute the following command in the container to start the sequence labelling s
 ```
 fastdeployserver --model-repository=/models --model-control-mode=explicit --load-model=ernie_tokencls --backend-config=python,shm-default-byte-size=10485760
 ```
-输出打印如下:
+The output is:
 ```
 I1019 09:41:15.375496 2823 model_repository_manager.cc:1183] successfully loaded 'ernie_tokenizer' version 1
 I1019 09:41:15.375987 2823 model_repository_manager.cc:1022] loading: ernie_seqcls:1
@@ -148,7 +148,7 @@ Attention: The proxy need turning off when executing client requests. The ip add
 ```
 python seq_cls_grpc_client.py
 ```
-输出打印如下:
+The output is:
 ```
 {'label': array([5, 9]), 'confidence': array([0.6425664 , 0.66534853], dtype=float32)}
 {'label': array([4]), 'confidence': array([0.53198355], dtype=float32)}
@@ -160,7 +160,7 @@ Attention: The proxy need turning off when executing client requests. The ip add
 ```
 python token_cls_grpc_client.py
 ```
-输出打印如下:
+The output is:
 ```
 input data: 北京的涮肉，重庆的火锅，成都的小吃都是极具特色的美食。
 The model detects all entities:
@@ -173,5 +173,5 @@ entity: 玛雅   label: LOC   pos: [2, 3]
 entity: 华夏   label: LOC   pos: [14, 15]
 ```
 
-## 配置修改
-The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/zh_CN/model_configuration.md)
+## Configuration Modification
+The current classification task (ernie_seqcls_model/config.pbtxt) is by default configured to run the OpenVINO engine on CPU; the sequence labelling task is by default configured to run the Paddle engine on GPU. If you want to run on CPU/GPU or other inference engines, you should modify the configuration. please refer to the [configuration document.](../../../../serving/docs/EN/model_configuration-en.md)

@@ -1,8 +1,9 @@
-中文 ｜ [English](face_recognition_result_EN.md)
-# FaceRecognitionResult 人脸识别结果
+English | [中文](face_recognition_result_CN.md)
 
-FaceRecognitionResult 代码定义在`fastdeploy/vision/common/result.h`中，用于表明人脸识别模型对图像特征的embedding。
-## C++ 定义
+# Face Recognition Result
+
+The FaceRecognitionResult code is defined in `fastdeploy/vision/common/result.h`, and is used to indicate the image features embedding in the face recognition model.
+## C++ Definition
 
 `fastdeploy::vision::FaceRecognitionResult`
 
@@ -14,12 +15,12 @@ struct FaceRecognitionResult {
 };
 ```
 
-- **embedding**: 成员变量，表示人脸识别模型最终的提取的特征embedding，可以用来计算人脸之间的特征相似度。
-- **Clear()**: 成员函数，用于清除结构体中存储的结果
-- **Str()**: 成员函数，将结构体中的信息以字符串形式输出（用于Debug）
+- **embedding**: Member variable which indicates the final extracted feature embedding of the face recognition model, and can be used to calculate the facial feature similarity.
+- **Clear()**: Member function used to clear the results stored in the structure.
+- **Str()**: Member function used to output the information in the structure as string (for Debug).
 
-## Python 定义
+## Python Definition
 
 `fastdeploy.vision.FaceRecognitionResult`
 
-- **embedding**(list of float): 成员变量，表示人脸识别模型最终提取的特征embedding，可以用来计算人脸之间的特征相似度。
+- **embedding**(list of float): Member variable which indicates the final extracted feature embedding of the face recognition model, and can be used to calculate the facial feature similarity.

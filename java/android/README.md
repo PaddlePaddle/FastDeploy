@@ -328,7 +328,7 @@ public class SegmentationResult {
   public boolean initialized(); // Check if the result is valid.
 }  
 ```
-Other reference：C++/Python corresponding SegmentationResult description: [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
+Other reference: C++/Python corresponding SegmentationResult description: [api/vision_results/segmentation_result.md](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/api/vision_results/segmentation_result.md)
 
 - Face detection result description  
 ```java

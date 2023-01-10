@@ -1,71 +1,72 @@
-# YOLOv5Lite准备部署模型
+English | [简体中文](README_CN.md)
+# YOLOv5Lite Ready-to-deploy Model
 
-- YOLOv5Lite部署实现来自[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
-代码，和[基于COCO的预训练模型](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)。
+- The YOLOv5Lite Deployment is based on the code of [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)
+and [Pre-trained Model Based on COCO](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)。
 
-  - （1）[官方库](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4)提供的*.pt通过[导出ONNX模型](#导出ONNX模型)操作后，可进行部署；
-  - （2）自己数据训练的YOLOv5Lite模型，按照[导出ONNX模型](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B)操作后，参考[详细部署文档](#详细部署文档)完成部署。
+  - （1）The *.pt provided by [Official Repository](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) should [Export the ONNX Model](#Export-the-ONNX-Model)to complete the deployment；
+  - （2）The YOLOv5Lite model trained by personal data should [Export the ONNX Model](#%E5%AF%BC%E5%87%BAONNX%E6%A8%A1%E5%9E%8B). Refer to [Detailed Deployment Documents](#Detailed-Deployment-Documents) to complete the deployment.
 
 
-## 导出ONNX模型
+## Export the ONNX Model
 
-- 自动获取
-  访问[YOLOv5Lite](https://github.com/ppogg/YOLOv5-Lite)
-官方github库，按照指引下载安装，下载`yolov5-lite-xx.onnx` 模型(Tips：官方提供的ONNX文件目前是没有decode模块的)
+- Auto-acquisition
+  Visit official [YOLOv5Lite](https://github.com/ppogg/YOLOv5-Lite)
+github repository, follow the guidelines to download the `yolov5-lite-xx.onnx` model(Tips: The official ONNX files are currently provided without the decode module)
   ```bash
-  #下载yolov5-lite模型文件(.onnx)
+  # Download yolov5-lite model files(.onnx)
   Download from https://drive.google.com/file/d/1bJByk9eoS6pv8Z3N4bcLRCV3i7uk24aU/view
-  官方Repo也支持百度云下载
+  Official Repo also supports Baidu cloud download
   ```
 
-- 手动获取
+- Manual Acquisition
 
-  访问[YOLOv5Lite](https://github.com/ppogg/YOLOv5-Lite)
-官方github库，按照指引下载安装，下载`yolov5-lite-xx.pt` 模型，利用 `export.py` 得到`onnx`格式文件。
+  Visit official [YOLOv5Lite](https://github.com/ppogg/YOLOv5-Lite)
+github repository,  follow the guidelines to download the `yolov5-lite-xx.pt` model, and employ `export.py` to get files in `onnx` format.
 
-  - 导出含有decode模块的ONNX文件
+  - Export ONNX files with the decode module
 
-  首先需要参考[YOLOv5-Lite#189](https://github.com/ppogg/YOLOv5-Lite/pull/189)的解决办法，修改代码。
+  First refer to [YOLOv5-Lite#189](https://github.com/ppogg/YOLOv5-Lite/pull/189) to modify the code.
 
   ```bash
-  #下载yolov5-lite模型文件(.pt)
+  # Download yolov5-lite model files(.pt)
   Download from https://drive.google.com/file/d/1oftzqOREGqDCerf7DtD5BZp9YWELlkMe/view
-  官方Repo也支持百度云下载
+  Official Repo also supports Baidu cloud download
 
-  # 导出onnx格式文件
+  # Export files in onnx format
   python export.py --grid --dynamic --concat --weights PATH/TO/yolov5-lite-xx.pt
 
 
   ```
-  - 导出无decode模块的ONNX文件(不需要修改代码)
+  - Export ONNX files without the docode module(No code changes are required)
 
   ```bash
-  #下载yolov5-lite模型文件
+  # Download yolov5-lite model files
   Download from https://drive.google.com/file/d/1oftzqOREGqDCerf7DtD5BZp9YWELlkMe/view
-  官方Repo也支持百度云下载
+  Official Repo also supports Baidu cloud download
 
-  # 导出onnx格式文件
+  # Export files in onnx format
   python export.py --grid --dynamic --weights PATH/TO/yolov5-lite-xx.pt
 
   ```
 
-## 下载预训练ONNX模型
+## Download Pre-trained ONNX Model
 
-为了方便开发者的测试，下面提供了YOLOv5Lite导出的各系列模型，开发者可直接下载使用。（下表中模型的精度来源于源官方库）
-| 模型                                                               | 大小    | 精度    | 备注 |
+For developers' testing, models exported by YOLOv5Lite are provided below. Developers can download them directly. (The accuracy in the following table is derived from the source official repository)
+| Model                                                               | Size    | Accuracy    | Note |
 |:---------------------------------------------------------------- |:----- |:----- |:----- |
-| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License ｜
-| [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
-| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
-| [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% | 此模型文件来源于[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
+| [YOLOv5Lite-e](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-e-sim-320.onnx) | 3.1MB | 35.1% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
+| [YOLOv5Lite-s](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-s-sim-416.onnx) | 6.3MB | 42.0% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
+| [YOLOv5Lite-c](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-c-sim-512.onnx) | 18MB | 50.9% | This model file is sourced from[YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
+| [YOLOv5Lite-g](https://bj.bcebos.com/paddlehub/fastdeploy/v5Lite-g-sim-640.onnx) | 21MB | 57.6% | This model file is sourced from [YOLOv5-Lite](https://github.com/ppogg/YOLOv5-Lite)，GPL-3.0 License |
 
 
-## 详细部署文档
+## Detailed Deployment Documents
 
-- [Python部署](python)
-- [C++部署](cpp)
+- [Python Deployment](python)
+- [C++ Deployment](cpp)
 
 
-## 版本说明
+## Release Note
 
-- 本版本文档和代码基于[YOLOv5-Lite v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) 编写
+- Document and code are based on [YOLOv5-Lite v1.4](https://github.com/ppogg/YOLOv5-Lite/releases/tag/v1.4) 
