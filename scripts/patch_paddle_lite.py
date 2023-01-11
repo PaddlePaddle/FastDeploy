@@ -41,7 +41,7 @@ def process_paddle_lite(paddle_lite_so_path):
                         paddle_lite_so_file, command)
 
         # Patch /paddlelite/lib/mklml/lib/*.so
-        if 'mklml' in paddle_lite_so_file:
+        if 'mklml' in paddle_lite_so_file and '.so' not in paddle_lite_so_file:
             paddle_lite_mklml_lib_path = os.path.join(
                 paddle_lite_so_path, paddle_lite_so_file, 'lib')
 
