@@ -32,30 +32,30 @@ bool PaddleDetPostprocessor::ProcessMask(
   int64_t out_mask_h = shape[1];
   int64_t out_mask_w = shape[2];
   int64_t out_mask_numel = shape[1] * shape[2];
-  const int32_t* data = reinterpret_cast<const int32_t*>(tensor.CpuData());
+  const uint8_t* data = reinterpret_cast<const uint8_t*>(tensor.CpuData());
   int index = 0;
 
   for (int i = 0; i < results->size(); ++i) {
     (*results)[i].contain_masks = true;
     (*results)[i].masks.resize((*results)[i].boxes.size());
     for (int j = 0; j < (*results)[i].boxes.size(); ++j) {
-      int x1 = static_cast<int>((*results)[i].boxes[j][0]);
-      int y1 = static_cast<int>((*results)[i].boxes[j][1]);
-      int x2 = static_cast<int>((*results)[i].boxes[j][2]);
-      int y2 = static_cast<int>((*results)[i].boxes[j][3]);
+      int x1 = static_cast<int>(round((*results)[i].boxes[j][0]));
+      int y1 = static_cast<int>(round((*results)[i].boxes[j][1]));
+      int x2 = static_cast<int>(round((*results)[i].boxes[j][2]));
+      int y2 = static_cast<int>(round((*results)[i].boxes[j][3]));
       int keep_mask_h = y2 - y1;
       int keep_mask_w = x2 - x1;
       int keep_mask_numel = keep_mask_h * keep_mask_w;
       (*results)[i].masks[j].Resize(keep_mask_numel);
       (*results)[i].masks[j].shape = {keep_mask_h, keep_mask_w};
-      const int32_t* current_ptr = data + index * out_mask_numel;
+      const uint8_t* current_ptr = data + index * out_mask_numel;
 
-      int32_t* keep_mask_ptr =
-          reinterpret_cast<int32_t*>((*results)[i].masks[j].Data());
+      uint8_t* keep_mask_ptr =
+          reinterpret_cast<uint8_t*>((*results)[i].masks[j].Data());
       for (int row = y1; row < y2; ++row) {
-        size_t keep_nbytes_in_col = keep_mask_w * sizeof(int32_t);
-        const int32_t* out_row_start_ptr = current_ptr + row * out_mask_w + x1;
-        int32_t* keep_row_start_ptr = keep_mask_ptr + (row - y1) * keep_mask_w;
+        size_t keep_nbytes_in_col = keep_mask_w * sizeof(uint8_t);
+        const uint8_t* out_row_start_ptr = current_ptr + row * out_mask_w + x1;
+        uint8_t* keep_row_start_ptr = keep_mask_ptr + (row - y1) * keep_mask_w;
         std::memcpy(keep_row_start_ptr, out_row_start_ptr, keep_nbytes_in_col);
       }
       index += 1;
