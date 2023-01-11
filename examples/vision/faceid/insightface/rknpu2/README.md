@@ -34,8 +34,8 @@
 ```bash
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r18.onnx
 
-python -m paddle2onnx.optimize --input_model ms1mv3_arcface_r18.onnx \
-                               --output_model ms1mv3_arcface_r18.onnx \
+python -m paddle2onnx.optimize --input_model ./ms1mv3_arcface_r18/ms1mv3_arcface_r18.onnx \
+                               --output_model ./ms1mv3_arcface_r18/ms1mv3_arcface_r18.onnx \
                                --input_shape_dict "{'data':[1,3,112,112]}"
 
 python  /Path/To/FastDeploy/tools/rknpu2/export.py \
