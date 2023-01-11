@@ -17,10 +17,10 @@
 #include "adaptive_pool2d_kernel.h"
 
 namespace fastdeploy {
-
-__global__ void CudaCastKernel(const float* in, float* out, int edge,
-                               int out_bc_offset, int in_bc_offset, int ih,
-                               int iw, int oh, int ow, bool is_avg) {
+template <typename T>
+__global__ void CudaCastKernel(const T* in, T* out, int edge, int out_bc_offset,
+                               int in_bc_offset, int ih, int iw, int oh, int ow,
+                               bool is_avg) {
   int position = blockDim.x * blockIdx.x + threadIdx.x;
   if (position >= edge) {
     return;
@@ -32,29 +32,34 @@ __global__ void CudaCastKernel(const float* in, float* out, int edge,
   int hend = ceilf(static_cast<float>((h + 1) * ih) / oh);
   int wstart = floorf(static_cast<float>(w * iw) / ow);
   int wend = ceilf(static_cast<float>((w + 1) * iw) / ow);
+  float ele_val = 0.0;
   if (is_avg) {
-    out[position] = 0.0;
+    ele_val = 0.0;
   } else {
-    out[position] = in[offset * in_bc_offset + hstart * iw + wstart];
+    ele_val =
+        static_cast<float>(in[offset * in_bc_offset + hstart * iw + wstart]);
   }
   for (int h = hstart; h < hend; ++h) {
     for (int w = wstart; w < wend; ++w) {
       int input_idx = h * iw + w;
       if (is_avg) {
-        out[position] = out[position] + in[offset * in_bc_offset + input_idx];
+        ele_val =
+            ele_val + static_cast<float>(in[offset * in_bc_offset + input_idx]);
       } else {
-        out[position] =
-            max(out[position], in[offset * in_bc_offset + input_idx]);
+        ele_val =
+            (ele_val > static_cast<float>(in[offset * in_bc_offset + input_idx])) ? ele_val : static_cast<float>(in[offset * in_bc_offset + input_idx]));
       }
     }
   }
-  out[position] = out[position] / ((hend - hstart) * (wend - wstart));
+  out[position] = static_cast<T>(
+      ele_val / static_cast<float>(((hend - hstart) * (wend - wstart))));
 }
 
 void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
-                      const std::vector<int64_t>& output_dims, float* output,
-                      const float* input, void* compute_stream,
-                      const std::string& pooling_type) {
+                      const std::vector<int64_t>& output_dims, void* output,
+                      const void* input, void* compute_stream,
+                      const std::string& pooling_type,
+                      const std::string& dtype) {
   auto casted_compute_stream = reinterpret_cast<cudaStream_t>(compute_stream);
   int out_bc_offset = output_dims[2] * output_dims[3];
   int in_bc_offset = input_dims[2] * input_dims[3];
@@ -65,9 +70,17 @@ void CudaAdaptivePool(const std::vector<int64_t>& input_dims,
   bool is_avg = pooling_type == "avg";
   int threads = 256;
   int blocks = ceil(jobs / static_cast<float>(threads));
-  CudaCastKernel<<<blocks, threads, 0, casted_compute_stream>>>(
-      input, output, jobs, out_bc_offset, in_bc_offset, int(input_dims[2]),
-      int(input_dims[3]), int(output_dims[2]), int(output_dims[3]), is_avg);
+  if (dtype == "float") {
+    CudaCastKernel<float><<<blocks, threads, 0, casted_compute_stream>>>(
+        static_cast<const float*>(input), static_cast<float*>(output), jobs,
+        out_bc_offset, in_bc_offset, int(input_dims[2]), int(input_dims[3]),
+        int(output_dims[2]), int(output_dims[3]), is_avg);
+  } else if (dtype == "half") {
+    CudaCastKernel<half><<<blocks, threads, 0, casted_compute_stream>>>(
+        static_cast<const half*>(input), static_cast<half*>(output), jobs,
+        out_bc_offset, in_bc_offset, int(input_dims[2]), int(input_dims[3]),
+        int(output_dims[2]), int(output_dims[3]), is_avg);
+  }
 }
 }  // namespace fastdeploy
 #endif
