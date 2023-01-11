@@ -90,9 +90,9 @@ class TritonPythonModel:
                         int(option['parameters']['cpu_threads']))
 
         model_path = os.path.abspath(os.path.dirname(
-            __file__)) + "/inference.pdmodel"
+            __file__)) + "/model.pdmodel"
         param_path = os.path.abspath(os.path.dirname(
-            __file__)) + "/inference.pdiparams"
+            __file__)) + "/model.pdiparams"
         vocab_path = os.path.abspath(os.path.dirname(__file__)) + "/vocab.txt"
         schema = []
         # init UIE model
