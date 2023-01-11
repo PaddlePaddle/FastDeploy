@@ -36,12 +36,12 @@ Vad::Vad(const std::string& model_file,
     const fastdeploy::RuntimeOption& custom_option = fastdeploy::RuntimeOption())
 ```
 
-**参数**
+**Parameter**
 
 > * **model_file**(str): Model file path
 > * **runtime_option**(RuntimeOption): Backend inference configuration. None by default. (use the default configuration)
 
-### setAudioCofig 函数
+### setAudioCofig function
 
 **Must be called before the `init` function**
 
@@ -49,7 +49,7 @@ Vad::Vad(const std::string& model_file,
 void Vad::setAudioCofig(int sr, int frame_ms, float threshold, int min_silence_duration_ms, int speech_pad_ms);
 ```
 
-**参数**
+**Parameter**
 
 > * **sr**(int): sampling rate
 > * **frame_ms**(int): The length of each detection frame, and it is used to calculate the detection window size
@@ -57,7 +57,7 @@ void Vad::setAudioCofig(int sr, int frame_ms, float threshold, int min_silence_d
 > * **min_silence_duration_ms**(int): The threshold used to calculate whether it is silence
 > * **speech_pad_ms**(int): Used to calculate the end time of the speech
 
-### init 函数
+### init function
 
 Used to initialize audio-related parameters.
 
@@ -65,7 +65,7 @@ Used to initialize audio-related parameters.
 void Vad::init();
 ```
 
-### loadAudio 函数
+### loadAudio function
 
 Load audio.
 
@@ -73,11 +73,11 @@ Load audio.
 void Vad::loadAudio(const std::string& wavPath)
 ```
 
-**参数**
+**Parameter**
 
 > * **wavPath**(str): Audio file path
 
-### Predict 函数
+### Predict function
 
 Used to start model reasoning.
 
@@ -85,7 +85,7 @@ Used to start model reasoning.
 bool Vad::Predict();
 ```
 
-### getResult 函数
+### getResult function
 
 **Used to obtain reasoning results**
 
@@ -95,7 +95,7 @@ std::vector<std::map<std::string, float>> Vad::getResult(
             float mergeThreshold = 0.3);
 ```
 
-**参数**
+**Parameter**
 
 > * **removeThreshold**(float): Discard result fragment threshold; If some recognition results are too short, they will be discarded according to this threshold
 > * **expandHeadThreshold**(float): Offset at the beginning of the segment; The recognized start time may be too close to the voice part, so move forward the start time accordingly
