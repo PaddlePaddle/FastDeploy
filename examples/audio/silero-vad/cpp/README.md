@@ -20,6 +20,9 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
+# Download the VAD model file and test audio. After decompression, place the model and test audio in the infer_onnx_silero_vad.cc peer directory
+wget https://github.com/PaddlePaddle/FastDeploy/files/10392318/model_and_example.zip
+
 # inference
 ./infer_onnx_silero_vad
 ```

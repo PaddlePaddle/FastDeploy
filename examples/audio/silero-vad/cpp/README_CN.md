@@ -19,6 +19,9 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
+# 下载 VAD 模型文件和测试音频，解压后将模型和测试音频放置在与 infer_onnx_silero_vad.cc 同级目录下
+wget https://github.com/PaddlePaddle/FastDeploy/files/10392318/model_and_example.zip
+
 # 推理
 ./infer_onnx_silero_vad
 ```
