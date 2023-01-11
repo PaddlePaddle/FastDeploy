@@ -37,17 +37,24 @@ if __name__ == "__main__":
     # Config
     mean_values = yaml_config["mean"]
     std_values = yaml_config["std"]
-    model.config(mean_values=mean_values, std_values=std_values, target_platform=config.target_platform)
+    model.config(
+        mean_values=mean_values,
+        std_values=std_values,
+        target_platform=config.target_platform)
 
     # Load ONNX model
     if yaml_config["outputs_nodes"] is None:
         ret = model.load_onnx(model=yaml_config["model_path"])
     else:
-        ret = model.load_onnx(model=yaml_config["model_path"], outputs=yaml_config["outputs_nodes"])
+        ret = model.load_onnx(
+            model=yaml_config["model_path"],
+            outputs=yaml_config["outputs_nodes"])
     assert ret == 0, "Load model failed!"
 
     # Build model
-    ret = model.build(do_quantization=yaml_config["do_quantization"], dataset=yaml_config["dataset"])
+    ret = model.build(
+        do_quantization=yaml_config["do_quantization"],
+        dataset=yaml_config["dataset"])
     assert ret == 0, "Build model failed!"
 
     # Init Runtime
@@ -60,7 +67,11 @@ if __name__ == "__main__":
 
     model_base_name = os.path.basename(yaml_config["model_path"]).split(".")[0]
     model_device_name = config.target_platform.lower()
-    model_save_name = model_base_name + "_" + model_device_name + ".rknn"
-    ret = model.export_rknn(os.path.join(yaml_config["output_folder"], model_save_name))
+    if yaml_config["do_quantization"]:
+        model_save_name = model_base_name + "_" + model_device_name + "_quantized" + ".rknn"
+    else:
+        model_save_name = model_base_name + "_" + model_device_name + "_unquantized" + ".rknn"
+    ret = model.export_rknn(
+        os.path.join(yaml_config["output_folder"], model_save_name))
     assert ret == 0, "Export rknn model failed!"
     print("Export OK!")

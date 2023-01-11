@@ -25,7 +25,7 @@
 #include "onnxruntime_cxx_api.h"  // NOLINT
 
 #ifdef WITH_GPU
-#include "fastdeploy/runtime/backends/op_cuda_kernels/adaptive_pool2d_kernel.h"
+#include "fastdeploy/runtime/backends/common/cuda/adaptive_pool2d_kernel.h"
 #endif
 
 namespace fastdeploy {
