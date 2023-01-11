@@ -61,10 +61,6 @@ def test_detection_mask_rcnn():
         ) < 1e-04, "There's diff in label_ids."
 
 
-#    result = model.predict(im1)
-#    with open("mask_rcnn_baseline.pkl", "wb") as f:
-#        pickle.dump([np.array(result.boxes), np.array(result.scores), np.array(result.label_ids)], f)
-
 def test_detection_mask_rcnn1():
     model_url = "https://bj.bcebos.com/paddlehub/fastdeploy/mask_rcnn_r50_1x_coco.tgz"
     input_url1 = "https://gitee.com/paddlepaddle/PaddleDetection/raw/release/2.4/demo/000000014439.jpg"
@@ -79,18 +75,22 @@ def test_detection_mask_rcnn1():
     config_file = os.path.join(model_path, "infer_cfg.yml")
     preprocessor = fd.vision.detection.PaddleDetPreprocessor(config_file)
     postprocessor = fd.vision.detection.PaddleDetPostprocessor()
-    
+
     option = rc.test_option
     option.set_model_path(model_file, params_file)
     option.use_paddle_infer_backend()
-    runtime = fd.Runtime(option);
+    runtime = fd.Runtime(option)
 
     # compare diff
     im1 = cv2.imread("./resources/000000014439.jpg")
     for i in range(2):
         im1 = cv2.imread("./resources/000000014439.jpg")
         input_tensors = preprocessor.run([im1])
-        output_tensors = runtime.infer({"image": input_tensors[0], "scale_factor": input_tensors[1], "im_shape": input_tensors[2]})
+        output_tensors = runtime.infer({
+            "image": input_tensors[0],
+            "scale_factor": input_tensors[1],
+            "im_shape": input_tensors[2]
+        })
         results = postprocessor.run(output_tensors)
         result = results[0]
 
@@ -113,6 +113,7 @@ def test_detection_mask_rcnn1():
         ) < 1e-02, "There's diff in scores."
         assert diff_label_ids[scores > score_threshold].max(
         ) < 1e-04, "There's diff in label_ids."
+
 
 if __name__ == "__main__":
     test_detection_mask_rcnn()
