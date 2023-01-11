@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifdef WITH_GPU
 #include "fastdeploy/vision/common/processors/normalize_and_permute.h"
 
 namespace fastdeploy {
@@ -42,6 +43,7 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   FDTensor src;
   std::string buf_name = Name() + "_src";
   std::vector<int64_t> shape = {im->rows, im->cols, im->channels()};
+
   if (mat->device == Device::GPU) {
     mat->ShareWithTensor(&src);
   } else if (mat->device == Device::CPU) {
@@ -70,8 +72,10 @@ bool NormalizeAndPermute::ImplByCuda(Mat* mat) {
   buf_name = Name() + "_beta";
   FDTensor* beta = UpdateAndGetReusedBuffer({(int64_t)beta_.size()}, CV_32FC1,
                                             buf_name, Device::GPU);
+
   FDASSERT(cudaMemcpyAsync(beta->Data(), beta_.data(), beta->Nbytes(),
                            cudaMemcpyHostToDevice, mat->Stream()) == 0,
+
            "Error occurs while copy memory from CPU to GPU.");
 
   int jobs = im->cols * im->rows;
@@ -96,3 +100,4 @@ bool NormalizeAndPermute::ImplByCvCuda(Mat* mat) {
 
 }  // namespace vision
 }  // namespace fastdeploy
+#endif

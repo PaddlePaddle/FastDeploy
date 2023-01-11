@@ -1,52 +1,53 @@
-# PP-TinyPose C++部署示例
+English | [简体中文](README_CN.md)
+# PP-TinyPose C++ Deployment Example
 
-本目录下提供`pptinypose_infer.cc`快速完成PP-TinyPose在CPU/GPU，以及GPU上通过TensorRT加速部署的`单图单人关键点检测`示例
->> **注意**: PP-Tinypose单模型目前只支持单图单人关键点检测，因此输入的图片应只包含一个人或者进行过裁剪的图像。多人关键点检测请参考[PP-TinyPose Pipeline](../../det_keypoint_unite/cpp/README.md)
+This directory provides the `Multi-person keypoint detection in a single image` example that `pptinypose_infer.cc` fast finishes the deployment of PP-TinyPose on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
+>> **Attention**: PP-Tinypose single model currently supports single-person keypoint detection in a single image. Therefore, the input image should contain one person only or should be cropped. For multi-person keypoint detection, refer to [PP-TinyPose Pipeline](../../det_keypoint_unite/cpp/README.md)
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)  
+- 2. Download the precompiled deployment library and samples code according to your development environment. Refer to [FastDeploy Precompiled Library](../../../../../docs/en/build_and_install/download_prebuilt_libraries.md)
 
 
-以Linux上推理为例，在本目录执行如下命令即可完成编译测试，支持此模型需保证FastDeploy版本0.7.0以上(x.x.x>=0.7.0)
+Taking the inference on Linux as an example, the compilation test can be completed by executing the following command in this directory. FastDeploy version 0.7.0 or above (x.x.x>=0.7.0)  is required to support this model.
 
 ```bash
 mkdir build
 cd build
-# 下载FastDeploy预编译库，用户可在上文提到的`FastDeploy预编译库`中自行选择合适的版本使用
+# Download the FastDeploy precompiled library. Users can choose your appropriate version in the `FastDeploy Precompiled Library` mentioned above 
 wget https://bj.bcebos.com/fastdeploy/release/cpp/fastdeploy-linux-x64-x.x.x.tgz
 tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-# 下载PP-TinyPose模型文件和测试图片
+# Download PP-TinyPose model files and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/PP_TinyPose_256x192_infer.tgz
 tar -xvf PP_TinyPose_256x192_infer.tgz
 wget https://bj.bcebos.com/paddlehub/fastdeploy/hrnet_demo.jpg
 
 
-# CPU推理
+# CPU inference
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 0
-# GPU推理
+# GPU inference
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 1
-# GPU上TensorRT推理
+# TensorRT inference on GPU
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 2
-# 昆仑芯XPU推理
+# KunlunXin XPU inference
 ./infer_tinypose_demo PP_TinyPose_256x192_infer hrnet_demo.jpg 3
 ```
 
-运行完成可视化结果如下图所示
+The visualized result after running is as follows
 <div  align="center">  
 <img src="https://user-images.githubusercontent.com/16222477/196386764-dd51ad56-c410-4c54-9580-643f282f5a83.jpeg", width=359px, height=423px />
 </div>
 
-以上命令只适用于Linux或MacOS, Windows下SDK的使用方式请参考:  
-- [如何在Windows中使用FastDeploy C++ SDK](../../../../../docs/cn/faq/use_sdk_on_windows.md)
+The above command works for Linux or MacOS. For SDK use-pattern in Windows, refer to:
+- [How to use FastDeploy C++ SDK in Windows](../../../../../docs/en/faq/use_sdk_on_windows.md)
 
-## PP-TinyPose C++接口
+## PP-TinyPose C++ Interface 
 
-### PP-TinyPose类
+### PP-TinyPose Class
 
 ```c++
 fastdeploy::vision::keypointdetection::PPTinyPose(
@@ -57,34 +58,34 @@ fastdeploy::vision::keypointdetection::PPTinyPose(
         const ModelFormat& model_format = ModelFormat::PADDLE)
 ```
 
-PPTinyPose模型加载和初始化，其中model_file为导出的Paddle模型格式。
+PPTinyPose  model loading and initialization, among which model_file is the exported Paddle model format.
 
-**参数**
+**Parameter**
 
-> * **model_file**(str): 模型文件路径
-> * **params_file**(str): 参数文件路径
-> * **config_file**(str): 推理部署配置文件
-> * **runtime_option**(RuntimeOption): 后端推理配置，默认为None，即采用默认配置
-> * **model_format**(ModelFormat): 模型格式，默认为Paddle格式
+> * **model_file**(str): Model file path 
+> * **params_file**(str): Parameter file path
+> * **config_file**(str): Inference deployment configuration file
+> * **runtime_option**(RuntimeOption): Backend inference configuration. None by default, which is the default configuration
+> * **model_format**(ModelFormat): Model format. Paddle format by default
 
-#### Predict函数
+#### Predict function
 
 > ```c++
 > PPTinyPose::Predict(cv::Mat* im, KeyPointDetectionResult* result)
 > ```
 >
-> 模型预测接口，输入图像直接输出关键点检测结果。
+> Model prediction interface. Input images and output keypoint detection results.
 >
-> **参数**
+> **Parameter**
 >
-> > * **im**: 输入图像，注意需为HWC，BGR格式
-> > * **result**: 关键点检测结果，包括关键点的坐标以及关键点对应的概率值, KeyPointDetectionResult说明参考[视觉模型预测结果](../../../../../docs/api/vision_results/)
+> > * **im**: Input images in HWC or BGR format
+> > * **result**: Keypoint detection results, including coordinates and the corresponding probability value. Refer to [Vision Model Prediction Results](../../../../../docs/api/vision_results/) for the description of KeyPointDetectionResult
 
-### 类成员属性
-#### 后处理参数
-> > * **use_dark**(bool): 是否使用DARK进行后处理[参考论文](https://arxiv.org/abs/1910.06278)
+### Class Member Property
+#### Post-processing Parameter
+> > * **use_dark**(bool): Whether to use DARK for post-processing. Refer to [Reference Paper](https://arxiv.org/abs/1910.06278)
 
-- [模型介绍](../../)
-- [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [Model Description](../../)
+- [Python Deployment](../python)
+- [Vision Model Prediction Results](../../../../../docs/api/vision_results/)
+- [How to switch the model inference backend engine](../../../../../docs/en/faq/how_to_change_backend.md)
