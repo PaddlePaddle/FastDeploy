@@ -1,14 +1,19 @@
 [English](README.md) | 简体中文
 # InsightFace C++部署示例
-本目录下提供infer_xxx.cc快速完成InsighFace模型包括ArcFace\CosFace\VPL\Partial_FC在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
-以ArcFace为例提供`infer_arcface.cc`快速完成ArcFace在CPU/GPU，以及GPU上通过TensorRT加速部署的示例。
 
-在部署前，需确认以下两个步骤
+FastDeploy支持在RKNPU上部署包括ArcFace\CosFace\VPL\Partial_FC在内的InsightFace系列模型。
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. 根据开发环境，下载预编译部署库和samples代码，参考[FastDeploy预编译库](../../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+本目录下提供`infer_arcface.cc`快速完成InsighFace模型包括ArcFace在CPU/RKNPU加速部署的示例。
 
-以Linux上CPU推理为例，在本目录执行如下命令即可完成编译测试
+
+在部署前，需确认以下两个步骤:
+
+1. 软硬件环境满足要求
+2. 根据开发环境，下载预编译部署库或者从头编译FastDeploy仓库
+
+以上步骤请参考[RK2代NPU部署库编译](../../../../../../docs/cn/build_and_install/rknpu2.md)实现
+
+在本目录执行如下命令即可完成编译测试
 
 ```bash
 mkdir build
@@ -18,17 +23,15 @@ tar xvf fastdeploy-linux-x64-x.x.x.tgz
 cmake .. -DFASTDEPLOY_INSTALL_DIR=${PWD}/fastdeploy-linux-x64-x.x.x
 make -j
 
-#下载官方转换好的ArcFace模型文件和测试图片
-wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r100.onnx
+# 下载官方转换好的ArcFace模型文件和测试图片
+wget https://bj.bcebos.com/paddlehub/fastdeploy/ms1mv3_arcface_r18.onnx
 wget https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/face_demo.zip
 unzip face_demo.zip
 
 # CPU推理
 ./infer_arcface_demo ms1mv3_arcface_r100.onnx face_0.jpg face_1.jpg face_2.jpg 0
-# GPU推理
+# RKNPU推理
 ./infer_arcface_demo ms1mv3_arcface_r100.onnx face_0.jpg face_1.jpg face_2.jpg 1
-# GPU上TensorRT推理
-./infer_arcface_demo ms1mv3_arcface_r100.onnx face_0.jpg face_1.jpg face_2.jpg 2
 ```
 
 运行完成可视化结果如下图所示
@@ -126,7 +129,7 @@ VPL模型加载和初始化，其中model_file为导出的ONNX模型格式。
 > > * **l2_normalize**(bool): 输出人脸向量之前是否执行l2归一化，默认false,
       InsightFaceRecognitionPostprocessor::SetL2Normalize(bool& l2_normalize)来进行修改
 
-- [模型介绍](../../)
+- [模型介绍](../../../)
 - [Python部署](../python)
-- [视觉模型预测结果](../../../../../docs/api/vision_results/)
-- [如何切换模型推理后端引擎](../../../../../docs/cn/faq/how_to_change_backend.md)
+- [视觉模型预测结果](../../../../../../docs/api/vision_results/README.md)
+- [如何切换模型推理后端引擎](../../../../../../docs/cn/faq/how_to_change_backend.md)

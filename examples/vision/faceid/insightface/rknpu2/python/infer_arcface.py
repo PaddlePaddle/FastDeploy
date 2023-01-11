@@ -34,31 +34,26 @@ def parse_arguments():
         type=str,
         default='cpu',
         help="Type of inference device, support 'cpu' or 'gpu'.")
-    parser.add_argument(
-        "--use_trt",
-        type=ast.literal_eval,
-        default=False,
-        help="Wether to use tensorrt.")
     return parser.parse_args()
 
 
 def build_option(args):
     option = fd.RuntimeOption()
 
-    if args.device.lower() == "gpu":
-        option.use_gpu()
-
-    if args.use_trt:
-        option.use_trt_backend()
-        option.set_trt_input_shape("data", [1, 3, 112, 112])
+    if args.device.lower() == "npu":
+        option.use_rknpu2()
     return option
 
 
 args = parse_arguments()
 
 # 配置runtime，加载模型
-runtime_option = build_option(args)
+runtime_option = fd.RuntimeOption()
 model = fd.vision.faceid.ArcFace(args.model, runtime_option=runtime_option)
+if args.device.lower() == "npu":
+    runtime_option.use_rknpu2()
+    model.preprocessor.disable_normalize()
+    model.preprocessor.disable_permute()
 
 # 加载图片
 face0 = cv2.imread(args.face)  # 0,1 同一个人

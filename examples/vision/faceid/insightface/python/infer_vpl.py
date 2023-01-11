@@ -65,9 +65,6 @@ face0 = cv2.imread(args.face)  # 0,1 同一个人
 face1 = cv2.imread(args.face_positive)
 face2 = cv2.imread(args.face_negative)  # 0,2 不同的人
 
-# 设置 l2 normalize
-model.postprocessor.l2_normalize = True
-
 # 预测图片检测结果
 result0 = model.predict(face0)
 result1 = model.predict(face1)

@@ -54,10 +54,16 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPreprocessor {
   /// Set beta.
   void SetBeta(std::vector<float>& beta) { beta_ = beta; }
 
-  bool GetPermute() { return permute_; }
+  bool GetPermute() { return disable_permute_; }
 
   /// Set permute.
-  void SetPermute(bool permute) { permute_ = permute; }
+  void SetPermute(bool permute) { disable_permute_ = !permute; }
+
+  /// This function will disable normalize and hwc2chw in preprocessing step.
+  void DisableNormalize() { disable_normalize_ = true; }
+
+  /// This function will disable hwc2chw in preprocessing step.
+  void DisablePermute() { disable_permute_ = true; }
 
  protected:
   bool Preprocess(FDMat* mat, FDTensor* output);
@@ -70,9 +76,11 @@ class FASTDEPLOY_DECL InsightFaceRecognitionPreprocessor {
   // Argument for image preprocessing step, beta values for normalization,
   // default beta = {-1.f, -1.f, -1.f}
   std::vector<float> beta_;
+  // for recording the switch of normalize
+  bool disable_normalize_ = false;
   // Argument for image preprocessing step, whether to swap the B and R channel,
   // such as BGR->RGB, default true.
-  bool permute_;
+  bool disable_permute_ = false;
 };
 
 }  // namespace faceid
