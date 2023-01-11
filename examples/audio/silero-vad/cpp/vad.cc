@@ -118,6 +118,8 @@ bool Vad::Preprocess(std::vector<float> audioWindowData) {
 
 bool Vad::Predict() {
   if (wavReader.sample_rate() != sample_rate) {
+    fastdeploy::FDINFO << "The sampling rate of the audio file is " << wavReader.sample_rate() << std::endl;
+    fastdeploy::FDINFO << "The set sample rate is " << sample_rate << std::endl;
     fastdeploy::FDERROR << "The sampling rate of the audio file is not equal "
                            "to the sampling rate set by the program. "
                         << "Please make it equal. "
@@ -224,15 +226,15 @@ std::vector<std::map<std::string, float>> Vad::getResult(
   // Expand to avoid to tight cut.
   startIter = speakStart.begin();
   endIter = speakEnd.begin();
-  *startIter = fmax(0.f, *startIter - expandHeadThreshold);
-  *endIter = fmin(*endIter + expandTailThreshold, *(startIter + 1));
+  *startIter = std::fmax(0.f, *startIter - expandHeadThreshold);
+  *endIter = std::fmin(*endIter + expandTailThreshold, *(startIter + 1));
   endIter = speakEnd.end() - 1;
   startIter = speakStart.end() - 1;
   *startIter = fmax(*startIter - expandHeadThreshold, *(endIter - 1));
-  *endIter = fmin(*endIter + expandTailThreshold, audioLength);
+  *endIter = std::fmin(*endIter + expandTailThreshold, audioLength);
   for (int i = 1; i < speakStart.size() - 1; ++i) {
-    speakStart[i] = fmax(speakStart[i] - expandHeadThreshold, speakEnd[i - 1]);
-    speakEnd[i] = fmin(speakEnd[i] + expandTailThreshold, speakStart[i + 1]);
+    speakStart[i] = std::fmax(speakStart[i] - expandHeadThreshold, speakEnd[i - 1]);
+    speakEnd[i] = std::fmin(speakEnd[i] + expandTailThreshold, speakStart[i + 1]);
   }
   // Merge very closed segments
   startIter = speakStart.begin() + 1;

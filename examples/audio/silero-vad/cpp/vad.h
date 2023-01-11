@@ -13,7 +13,6 @@
 // limitations under the License.
 #pragma once
 
-#include <cmath>
 #include <vector>
 
 #include "fastdeploy/runtime.h"
