@@ -10,7 +10,7 @@
 wget  https://bj.bcebos.com/paddlehub/fastdeploy/rknpu2/scrfd_500m_bnkps_shape640x640.zip
 unzip scrfd_500m_bnkps_shape640x640.zip
 python  /Path/To/FastDeploy/tools/rknpu2/export.py \
-        --config_path tools/rknpu2/config/scrfd.yaml \
+        --config_path tools/rknpu2/config/scrfd_quantized.yaml \
         --target_platform rk3588
 ```
 
