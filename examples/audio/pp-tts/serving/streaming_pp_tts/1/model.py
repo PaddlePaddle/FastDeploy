@@ -17,6 +17,7 @@ import math
 import sys
 import threading
 import time
+import os
 
 import fastdeploy as fd
 import numpy as np
@@ -193,8 +194,8 @@ class TritonPythonModel:
         # This model does not support batching, so 'request_count' should always
         # be 1.
         if len(requests) != 1:
-            raise pb_utils.TritonModelException("unsupported batch size " + len(
-                requests))
+            raise pb_utils.TritonModelException("unsupported batch size " +
+                                                len(requests))
 
         input_data = []
         for idx in range(len(self.input_names)):
@@ -235,8 +236,7 @@ class TritonPythonModel:
             voc_chunk_id = 0
 
             orig_hs = am_encoder_runtime.infer({
-                'text':
-                part_phone_ids.astype("int64")
+                'text': part_phone_ids.astype("int64")
             })
             orig_hs = orig_hs[0]
 
@@ -252,13 +252,11 @@ class TritonPythonModel:
             for i, hs in enumerate(hss):
 
                 am_decoder_output = am_decoder_runtime.infer({
-                    'xs':
-                    hs.astype("float32")
+                    'xs': hs.astype("float32")
                 })
 
                 am_postnet_output = am_postnet_runtime.infer({
-                    'xs':
-                    np.transpose(am_decoder_output[0], (0, 2, 1))
+                    'xs': np.transpose(am_decoder_output[0], (0, 2, 1))
                 })
                 am_output_data = am_decoder_output + np.transpose(
                     am_postnet_output[0], (0, 2, 1))
@@ -280,11 +278,11 @@ class TritonPythonModel:
                        voc_chunk_id < voc_chunk_num):
                     voc_chunk = mel_streaming[start:end, :]
                     sub_wav = voc_melgan_runtime.infer({
-                        'logmel':
-                        voc_chunk.astype("float32")
+                        'logmel': voc_chunk.astype("float32")
                     })
-                    sub_wav = depadding(sub_wav[0], voc_chunk_num, voc_chunk_id,
-                                        voc_block, voc_pad, voc_upsample)
+                    sub_wav = depadding(sub_wav[0], voc_chunk_num,
+                                        voc_chunk_id, voc_block, voc_pad,
+                                        voc_upsample)
 
                     output_np = np.array(sub_wav, dtype=self.output_dtype[0])
                     out_tensor1 = pb_utils.Tensor(self.output_names[0],
@@ -304,7 +302,8 @@ class TritonPythonModel:
 
                     voc_chunk_id += 1
                     start = max(0, voc_chunk_id * voc_block - voc_pad)
-                    end = min((voc_chunk_id + 1) * voc_block + voc_pad, mel_len)
+                    end = min((voc_chunk_id + 1) * voc_block + voc_pad,
+                              mel_len)
 
         # We must close the response sender to indicate to Triton that we are
         # done sending responses for the corresponding request. We can't use the
