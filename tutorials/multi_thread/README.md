@@ -1,41 +1,42 @@
-[English](README.md) | 中文
+English | [中文](README_CN.md)
 
-# FastDeploy模型多线程或多进程预测的使用
+# Usage of FastDeploy model multi-thread or multi-process prediction
 
-FastDeploy针对python和cpp开发者，提供了以下多线程或多进程的示例
+FastDeploy provides the following multi-thread or multi-process examples for python and cpp developers
 
-- [python多线程以及多进程预测的使用示例](python)
-- [cpp多线程预测的使用示例](cpp)
+- [Example of using python multi-thread and multi-process prediction](python)
+- [Example of using cpp multithreaded prediction](cpp)
 
-## 目前支持多线程以及多进程预测的模型
+## Models that currently support multi-thread and multi-process predictions
 
-| 任务类型           | 说明                                  | 模型下载链接                                                                          |
-|:-------------- |:----------------------------------- |:-------------------------------------------------------------------------------- |
-| Detection      | 支持PaddleDetection系列模型 | [PaddleDetection](../../examples/vision/detection/paddledetection)       |
-| Segmentation   | 支持PaddleSeg系列模型          | [PaddleSeg](../../examples/vision/segmentation/paddleseg) |
-| Classification | 支持PaddleClas系列模型             | [PaddleClas](../../examples/vision/classification/paddleclas)   |
-| OCR | 支持PaddleOCR系列模型             | [PaddleOCR](../../examples/vision/ocr/)   |
->> **注意**:
-- 点击上方模型下载链接，至`下载预训练模型`模块下载模型
-- OCR是多模型串联的模型，多线程示例请参考`pipeline`文件夹，其他单模型多线程示例在`single_model`文件夹中
+| task type           | illustrate      | model download link     |
+|:-------------- |:---------------- |:------------------- |
+| Detection      | support PaddleDetection series models | [PaddleDetection](../../examples/vision/detection/paddledetection)       |
+| Segmentation   | support PaddleSeg series models       | [PaddleSeg](../../examples/vision/segmentation/paddleseg) |
+| Classification | support PaddleClas series models      | [PaddleClas](../../examples/vision/classification/paddleclas)   |
+| OCR            | support PaddleOCR series models       | [PaddleOCR](../../examples/vision/ocr/)   |
 
-## 多线程预测时克隆模型
+>> **Notice**:
+- click the model download link above to download the model from the `Download pre-training model` module
+- OCR is a pipeline model. For multi-thread examples, please refer to the `pipeline` folder. Other single-model multi-thread examples are in the `single_model` folder.
 
-针对一个视觉模型的推理包含3个环节
-- 输入图像，图像经过预处理，最终得到要输入给模型Runtime的Tensor，即preprocess阶段
-- 模型Runtime接收Tensor，进行推理，得到Runtime的输出Tensor，即infer阶段
-- 对Runtime的输出Tensor做后处理，得到最后的结构化信息，如DetectionResult, SegmentationResult等等，即postprocess阶段
+## Clone model when using multi-thread prediction
 
-针对以上preprocess、infer、postprocess三个阶段，FastDeploy分别抽象出了三个对应的类，即Preprocessor、Runtime、PostProcessor
+the inference process of vision model is consist of three stages
+- load the image, then the image is preprocessed, finally get the Tensor to be input to the model Runtime, that is the preprocess stage
+- the model Runtime receives Tensor, do the inference, and obtains the output tensor of Runtime, that is the infer stage
+- process the output tensor of Runtime to get the final structured information, such as DetectionResult, SegmentationResult, etc., that is the postprocess stage
 
-在多线程调用FastDeploy中的模型进行并行推理的时候，要考虑几个问题
-- Preprocessor、Runtime、Postprocessor三个类能否分别支持并行处理
+For the above three stages: preprocess, inference, and postprocess, FastDeploy abstracted three corresponding classes, namely Preprocessor, Runtime, and PostProcessor
+
+When using FastDeploy for multi-thread inference, several issues should be considered
+- Can the Preprocessor, Runtime, and Postprocessor support parallel processing respectively?
 - 在支持多线程并发的前提下，能否最大限度的减少内存或显存占用
+- Under the premise of supporting multi-thread concurrency, can the memory or video memory usage be minimized?
 
-FastDeploy采用分别拷贝多个对象的方式，进行多线程推理，即每个线程都有一份独立的Preprocessor、Runtime、PostProcessor的实例化的对象。而为了减少内存的占用，对于Runtime的拷贝则采用共享模型权重的方式进行拷贝。因此，虽然复制了多个对象，但对于模型权重和参数在内存或显存中只有一份。
-以此减少拷贝多个对象带来的内存占用。
+FastDeploy adopts the method of copying multiple objects separately for multi-thread inference, so each thread has an independent instance of Preprocessor, Runtime, and PostProcessor. In order to reduce the memory usage, the Runtime adopt sharing the model weights copy method. In this way, the memory usage caused by copying multiple objects is reduced.
 
-FastDeploy提供如下接口，来进行模型的clone(以PaddleClas为例)
+FastDeploy provides the following interface to clone the model (take PaddleClas as an example)
 
 - Python: `PaddleClasModel.clone()`
 - C++: `PaddleClasModel::Clone()`
@@ -45,9 +46,9 @@ FastDeploy提供如下接口，来进行模型的clone(以PaddleClas为例)
 ```
 import fastdeploy as fd
 option = fd.RuntimeOption()
-model = fd.vision.classification.PaddleClasModel(model_file, 
-                                                 params_file, 
-                                                 config_file, 
+model = fd.vision.classification.PaddleClasModel(model_file,
+                                                 params_file,
+                                                 config_file,
                                                  runtime_option=option)
 model2 = model.clone()
 im = cv2.imread(image)
@@ -56,9 +57,9 @@ res = model.predict(im)
 
 ### C++
 ```
-auto model = fastdeploy::vision::classification::PaddleClasModel(model_file, 
-                                                                 params_file, 
-                                                                 config_file, 
+auto model = fastdeploy::vision::classification::PaddleClasModel(model_file,
+                                                                 params_file,
+                                                                 config_file,
                                                                  option);
 auto model2 = model.Clone();
 auto im = cv::imread(image_file);
@@ -66,43 +67,43 @@ fastdeploy::vision::ClassifyResult res;
 model->Predict(im, &res)
 ```
 
->> **注意**:其他模型类似API接口可查阅[官方C++文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/index.html)以及[官方Python文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/index.html)
+>> **Notice**:Other models API refer to[官方C++文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/cpp/html/index.html) and [官方Python文档](https://www.paddlepaddle.org.cn/fastdeploy-api-doc/python/html/index.html)
 
-## Python多线程以及多进程
+## Python multi-thread and multi-process
 
-Python由于语言的限制即GIL锁的存在，在计算密集型的场景下，多线程无法充分利用硬件的性能。因此，Python上提供多进程和多线程两种示例。其异同点如下：
+Due to language limitations, Python has the existence of GIL lock. In computing-intensive scenarios, multithreading cannot make full use of hardware resources. Therefore, two examples of multi-process and multi-thread are provided on Python. The similarities and differences are as follows:
 
-### FastDeploy模型多进程与多线程推理的比较
+### Comparison of multi-process and multi-thread inference in FastDeploy model
 
-|     | 资源占用 | 计算密集型 | I/O密集型 | 进程或线程间通信 |
+|     | resource usage | computationally intensive | I/O intensive | inter-process or inter-thread communication |
 |:-------|:------|:----------|:----------|:----------|
-| 多进程   | 大 | 快 | 快 | 慢|
-| 多线程   | 小 | 慢 | 较快 |快|
+| multi-process   | large | fast | fast | slow |
+| multi-thread   | little | slow | relatively fast |fast|
 
->> **注意**:以上分析相对理论，实际上Python针对不同的计算任务也做出了一定的优化，像是numpy类的计算已经可以做到并行计算，同时由于多进程间的result汇总涉及到进程间通信，而且往往有时候很难鉴别该任务是计算密集型还是I/O密集型，所以一切都需要根据任务进行测试而定。
+>> **注意**: The above analysis is a theoretical analysis. In fact, Python has also made certain optimizations for different computing tasks. For example, the calculation of numpy can already be computed by multi-thread parallelly. In addition, the result aggregation between multiple processes involves time-consuming operation(inter-process communication), Besides, it is difficult to identify whether the task is computationally intensive or I/O intensive, so everything needs to be tested according to the task.
 
 
-## C++多线程
 
-C++的多线程，兼具了占用资源少，速度快的特点。因此，是使用多线程推理的最佳选择
+## C++ multi-thread
 
-### C++ 多线程Clone与不Clone内存占用对比
+The C++ multi-thread has the characteristics of occupying less resources and high speed.Therefore, multi-threaded inference is the best choice in C++
+
+### C++ comparition between multi-thread Clone and not Clone memory occupation
 
 硬件：Intel(R) Xeon(R) Gold 6271C CPU @ 2.60GHz  
 模型：ResNet50_vd_infer  
-后端：CPU OPENVINO后端推理引擎
+后端：CPU OPENVINO Backend
 
-单进程内初始化多个模型，内存占用
-| 模型数 | model.Clone()后 | Clone后model->predict()后    | 不Clone模型初始化后| 不Clone后model->predict()后 |
+memory occupation of initializing multiple models in a single process
+| number of models | after model.Clone() | after model->predict() with model.Clone()    | initializing model without model.Clone()| after model->predict() without model.Clone() |
 |:--- |:----- |:----- |:----- |:----- |
 |1|322M |325M |322M|325M|
 |2|322M|325M|559M|560M|
 |3|322M|325M|771M|771M|
 
-模型多线程预测内存占用
-| 线程数 | model.Clone()后 | Clone后model->predict()后    | 不Clone模型初始化后| 不Clone后model->predict()后 |
+memory occupation of multi-thread
+| thread number | after model.Clone() | after model->predict() with model.Clone()    | initialize model without model.Clone() | after model->predict() without model.Clone() |
 |:--- |:----- |:----- |:----- |:----- |
 |1|322M |337M |322M|337M|
 |2|322M|343M|548M|566M|
 |3|322M|347M|752M|784M|
-

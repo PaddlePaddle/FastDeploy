@@ -1,47 +1,48 @@
-# PaddleClas模型 Python多线程/进程部署示例
+English | [简体中文](README_CN.md)
+# Example of PaddleClas models Python multi-thread/multi-process Deployment
 
-在部署前，需确认以下两个步骤
+Before deployment, two steps require confirmation
 
-- 1. 软硬件环境满足要求，参考[FastDeploy环境要求](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
-- 2. FastDeploy Python whl包安装，参考[FastDeploy Python安装](../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
+- 1. Software and hardware should meet the requirements. Please refer to [FastDeploy Environment Requirements](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)  
+- 2. Install the FastDeploy Python whl package. Please refer to [FastDeploy Python Installation](../../../../docs/cn/build_and_install/download_prebuilt_libraries.md)
 
-本目录下提供`multi_thread_process.py`快速完成ResNet50_vd在CPU/GPU，以及GPU上通过TensorRT加速部署的多线程/进程示例。执行如下脚本即可完成
+This directory provides example file `multi_thread_process.py` to fast deploy multi-thread/multi-process ResNet50_vd on CPU/GPU and GPU accelerated by TensorRT. The script is as follows
 
 
 ```bash
-#下载部署示例代码
+# Download deployment example code
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd  FastDeploy/tutorials/multi_thread/python
 
-# 下载ResNet50_vd模型文件和测试图片
+# Download the ResNet50_vd model file and test images
 wget https://bj.bcebos.com/paddlehub/fastdeploy/ResNet50_vd_infer.tgz
 tar -xvf ResNet50_vd_infer.tgz
 wget https://gitee.com/paddlepaddle/PaddleClas/raw/release/2.4/deploy/images/ImageNet/ILSVRC2012_val_00000010.jpeg
 
 
-# CPU多线程推理
+# CPU multi-thread inference
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --thread_num 1
-# CPU多进程推理
+# CPU multi-process inference
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device cpu --topk 1 --use_multi_process True --process_num 1
 
-# GPU多线程推理
+# GPU multi-thread inference
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --thread_num 1
-# GPU多进程推理
+# GPU multi-process inference
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --topk 1 --use_multi_process True --process_num 1
 
-# GPU上使用TensorRT多线程推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
+# Use TensorRT multi-thread inference on GPU （Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --thread_num 1
-# GPU上使用TensorRT多进程推理 （注意：TensorRT推理第一次运行，有序列化模型的操作，有一定耗时，需要耐心等待）
+# Use TensorRT multi-process inference on GPU （Attention: It is somewhat time-consuming for the operation of model serialization when running TensorRT inference for the first time. Please be patient.）
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device gpu --use_trt True --topk 1 --use_multi_process True --process_num 1
 
-# IPU多线程推理（注意：IPU推理首次运行会有序列化模型的操作，有一定耗时，需要耐心等待）
+# IPU multi-thread inference（Attention: It is somewhat time-consuming for the operation of model serialization when running IPU inference for the first time. Please be patient.）
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --thread_num 1
-# IPU多进程推理（注意：IPU推理首次运行会有序列化模型的操作，有一定耗时，需要耐心等待）
+# IPU multi-process inference（Attention: It is somewhat time-consuming for the operation of model serialization when running IPU inference for the first time. Please be patient.）
 python multi_thread_process.py --model ResNet50_vd_infer --image_path ILSVRC2012_val_00000010.jpeg --device ipu --topk 1 --use_multi_process True --process_num 1
 ```
->> **注意**: `--image_path` 可以输入图片文件夹的路径
+>> **Notice**: `--image_path` can be the path of the pictures folder
 
-运行完成后返回结果如下所示
+The result returned after running is as follows
 ```bash
 ClassifyResult(
 label_ids: 153,
