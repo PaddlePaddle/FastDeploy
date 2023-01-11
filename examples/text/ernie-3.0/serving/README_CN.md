@@ -187,5 +187,5 @@ entity: 华夏   label: LOC   pos: [14, 15]
 3. 启动服务：点击启动服务按钮，输入启动参数。
 ```
  <p align="center">
-  <img src="https://rte.weiyun.baidu.com/wiki/attach/image/api/imageDownloadAddress?attachId=a447094a2c6b4ac093ea02cac5b8a33f&docGuid=y1ijlRY2CD9M2D&sign=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiYXBwSWQiOjEsInVpZCI6InVWMXcwZ2pkb2giLCJkb2NJZCI6InkxaWpsUlkyQ0Q5TTJEIn0..kyefFAvuftW38aul.YX2z1fOpz_86Eo0uKsZPYelNy8vCp374pgKe0XjlaSDCaLnY8Urtes5p5mMcEmm5doMWQgXuGib5SSktYOr3qo-xvvRkqaYQtr3bZy9NupQF-JHjSin7JdLyeObV4dFfJPDc9jl0YjF2JqrcR7oB4lzhCow8eSDf-zTkdnikbLhjweBIn97wps_loJyNeznsHgn52EGrQ30AjHSZkX0tY1vngg.UyQbQaGYXIR7g80qc0Y4zw" width="100%"/>
+  <img src="https://user-images.githubusercontent.com/22424850/211708353-507d6038-b754-4520-884b-1156703a44c6.gif" width="100%"/>
 </p>

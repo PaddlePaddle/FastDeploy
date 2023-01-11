@@ -107,5 +107,5 @@ output_name: DET_RESULT
 4. 启动服务：点击启动服务按钮，输入启动参数。
 ```
  <p align="center">
-  <img src="https://rte.weiyun.baidu.com/wiki/attach/image/api/imageDownloadAddress?attachId=5c72b17b08f9435a99f606a296f04d14&docGuid=y1ijlRY2CD9M2D&sign=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiYXBwSWQiOjEsInVpZCI6InVWMXcwZ2pkb2giLCJkb2NJZCI6InkxaWpsUlkyQ0Q5TTJEIn0..kyefFAvuftW38aul.YX2z1fOpz_86Eo0uKsZPYelNy8vCp374pgKe0XjlaSDCaLnY8Urtes5p5mMcEmm5doMWQgXuGib5SSktYOr3qo-xvvRkqaYQtr3bZy9NupQF-JHjSin7JdLyeObV4dFfJPDc9jl0YjF2JqrcR7oB4lzhCow8eSDf-zTkdnikbLhjweBIn97wps_loJyNeznsHgn52EGrQ30AjHSZkX0tY1vngg.UyQbQaGYXIR7g80qc0Y4zw" width="100%"/>
+  <img src="https://bj.bcebos.com/v1/rte-file/595607340aac5cad32cc6534ce22571d?responseContentType=image%2Fgif&responseContentDisposition=attachment%3B%20filename%2A%3Dutf-8%27%27ppdet.gif%3B%20filename%3D%22ppdet.gif%22&authorization=bce-auth-v1%2Ffbe74140929444858491fbf2b6bc0935%2F2023-01-11T03%3A19%3A46Z%2F604800%2F%2F7e113d332a7d485021ccd01bc84aa1a5e15cfd8e2372f8feea9a2e7c2848d4e9" width="100%"/>
 </p>

@@ -78,5 +78,5 @@ output_name: detction_result
 3. 启动服务：点击启动服务按钮，输入启动参数。
 ```
  <p align="center">
-  <img src="https://rte.weiyun.baidu.com/wiki/attach/image/api/imageDownloadAddress?attachId=2f277647f92d4cd8a64958b06bdea438&docGuid=y1ijlRY2CD9M2D&sign=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiYXBwSWQiOjEsInVpZCI6InVWMXcwZ2pkb2giLCJkb2NJZCI6InkxaWpsUlkyQ0Q5TTJEIn0..kyefFAvuftW38aul.YX2z1fOpz_86Eo0uKsZPYelNy8vCp374pgKe0XjlaSDCaLnY8Urtes5p5mMcEmm5doMWQgXuGib5SSktYOr3qo-xvvRkqaYQtr3bZy9NupQF-JHjSin7JdLyeObV4dFfJPDc9jl0YjF2JqrcR7oB4lzhCow8eSDf-zTkdnikbLhjweBIn97wps_loJyNeznsHgn52EGrQ30AjHSZkX0tY1vngg.UyQbQaGYXIR7g80qc0Y4zw" width="100%"/>
+  <img src="https://user-images.githubusercontent.com/22424850/211709339-023fef22-3ffc-4b3d-bce5-ea4202bb9c61.gif" width="100%"/>
 </p>

@@ -89,5 +89,5 @@ output_name: CLAS_RESULT
 3. 启动服务：点击启动服务按钮，输入启动参数。
 ```
  <p align="center">
-  <img src="https://bj.bcebos.com/v1/rte-file/2af20efbe268cc501601c7f2c951df4b?responseContentType=image%2Fgif&responseContentDisposition=attachment%3B%20filename%2A%3Dutf-8%27%27%25E6%25B5%258B%25E8%25AF%2595ppclas.gif%3B%20filename%3D%22%E6%B5%8B%E8%AF%95ppclas.gif%22&authorization=bce-auth-v1%2Ffbe74140929444858491fbf2b6bc0935%2F2023-01-10T11%3A32%3A24Z%2F604800%2F%2F3576e36b8683e80126f435dd7e88f84e3ed05df6bd49c6394fa7b1e178543fbb" width="100%"/>
+  <img src="https://user-images.githubusercontent.com/22424850/211708702-828d8ad8-4e85-457f-9c62-12f53fc81853.gif" width="100%"/>
 </p>
