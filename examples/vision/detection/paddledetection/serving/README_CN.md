@@ -107,5 +107,5 @@ output_name: DET_RESULT
 4. 启动服务：点击启动服务按钮，输入启动参数。
 ```
  <p align="center">
-  <img src="https://bj.bcebos.com/v1/rte-file/595607340aac5cad32cc6534ce22571d?responseContentType=image%2Fgif&responseContentDisposition=attachment%3B%20filename%2A%3Dutf-8%27%27ppdet.gif%3B%20filename%3D%22ppdet.gif%22&authorization=bce-auth-v1%2Ffbe74140929444858491fbf2b6bc0935%2F2023-01-11T03%3A19%3A46Z%2F604800%2F%2F7e113d332a7d485021ccd01bc84aa1a5e15cfd8e2372f8feea9a2e7c2848d4e9" width="100%"/>
+  <img src="https://user-images.githubusercontent.com/22424850/211710983-2d1f1427-6738-409d-903b-2b4e4ab6cbfc.gif" width="100%"/>
 </p>
