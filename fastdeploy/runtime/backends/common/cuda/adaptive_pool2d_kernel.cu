@@ -47,7 +47,10 @@ __global__ void CudaCastKernel(const T* in, T* out, int edge, int out_bc_offset,
             ele_val + static_cast<float>(in[offset * in_bc_offset + input_idx]);
       } else {
         ele_val =
-            (ele_val > static_cast<float>(in[offset * in_bc_offset + input_idx])) ? ele_val : static_cast<float>(in[offset * in_bc_offset + input_idx]));
+            (ele_val >
+             static_cast<float>(in[offset * in_bc_offset + input_idx]))
+                ? ele_val
+                : static_cast<float>(in[offset * in_bc_offset + input_idx]);
       }
     }
   }
