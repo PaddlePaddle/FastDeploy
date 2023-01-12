@@ -35,6 +35,7 @@ struct FASTDEPLOY_DECL Mat {
     width = cpu_mat.cols;
     channels = cpu_mat.channels();
     mat_type = ProcLib::OPENCV;
+    ShareWithTensor(&fd_tensor);
   }
 
 #ifdef ENABLE_FLYCV
@@ -107,6 +108,15 @@ struct FASTDEPLOY_DECL Mat {
 
   void* Data();
 
+  FDTensor* Tensor() {
+    return &fd_tensor;
+  }
+
+  void SetTensor(FDTensor* tensor) {
+    fd_tensor.SetExternalData(tensor->Shape(), tensor->Dtype(), tensor->Data(),
+        tensor->device, tensor->device_id);
+  }
+
  private:
   int channels;
   int height;
@@ -118,6 +128,9 @@ struct FASTDEPLOY_DECL Mat {
 #ifdef WITH_GPU
   cudaStream_t stream = nullptr;
 #endif
+  // Currently, fd_tensor is only used by CUDA and CV-CUDA,
+  // OpenCV and FlyCV are not using it.
+  FDTensor fd_tensor;
 
  public:
   FDDataType Type();

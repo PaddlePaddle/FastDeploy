@@ -125,12 +125,8 @@ bool Resize::ImplByFlyCV(Mat* mat) {
 #ifdef ENABLE_CVCUDA
 bool Resize::ImplByCvCuda(Mat* mat) {
   std::cout << Name() << " cvcuda" << std::endl;
-  cv::Mat* im = mat->GetOpenCVMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  int origin_c = im->channels();
 
-  if (width_ == origin_w && height_ == origin_h) {
+  if (width_ == mat->Width() && height_ == mat->Height()) {
     return true;
   }
   if (fabs(scale_w_ - 1.0) < 1e-06 && fabs(scale_h_ - 1.0) < 1e-06) {
@@ -139,8 +135,8 @@ bool Resize::ImplByCvCuda(Mat* mat) {
 
   if (width_ > 0 && height_ > 0) {
   } else if (scale_w_ > 0 && scale_h_ > 0) {
-    width_ = std::round(scale_w_ * origin_w);
-    height_ = std::round(scale_h_ * origin_h);
+    width_ = std::round(scale_w_ * mat->Width());
+    height_ = std::round(scale_h_ * mat->Height());
   } else {
     FDERROR << "Resize: the parameters must satisfy (width > 0 && height > 0) "
                "or (scale_w > 0 && scale_h > 0)."
@@ -148,32 +144,24 @@ bool Resize::ImplByCvCuda(Mat* mat) {
     return false;
   }
 
-  int batchsize = 1;
-  cvcuda::Resize resize_op;
-
   // Prepare input tensor
-  std::string buf_name = Name() + "_cvcuda_src";
-  FDTensor* src = UpdateAndGetReusedBuffer({origin_h, origin_w, origin_c},
-                                           im->type(), buf_name, Device::GPU);
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
-  FDASSERT(cudaMemcpyAsync(GetCvCudaTensorDataPtr(src_tensor), im->ptr(),
-                           src->Nbytes(), cudaMemcpyHostToDevice,
-                           mat->Stream()) == 0,
-           "[ERROR] Error occurs while copy memory from CPU to GPU.");
 
   // Prepare output tensor
-  buf_name = Name() + "_cvcuda_dst";
-  FDTensor* dst = UpdateAndGetReusedBuffer({height_, width_, origin_c},
-                                           im->type(), buf_name, Device::GPU);
+  tensor_name = Name() + "_cvcuda_dst";
+  FDTensor* dst =
+      UpdateAndGetReusedTensor({height_, width_, mat->Channels()}, mat->Type(),
+                               tensor_name, Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
 
   // CV-CUDA Interp value is compatible with OpenCV
+  cvcuda::Resize resize_op;
   resize_op(mat->Stream(), src_tensor, dst_tensor,
             NVCVInterpolationType(interp_));
 
-  cv::Mat out(height_, width_, im->type(), GetCvCudaTensorDataPtr(dst_tensor));
-
-  mat->SetMat(out);
+  mat->SetTensor(dst);
   mat->SetWidth(width_);
   mat->SetHeight(height_);
   mat->device = Device::GPU;

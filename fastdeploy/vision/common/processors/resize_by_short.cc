@@ -89,41 +89,28 @@ bool ResizeByShort::ImplByFlyCV(Mat* mat) {
 #ifdef ENABLE_CVCUDA
 bool ResizeByShort::ImplByCvCuda(Mat* mat) {
   std::cout << Name() << " cvcuda" << std::endl;
-  cv::Mat* im = mat->GetOpenCVMat();
-  int origin_w = im->cols;
-  int origin_h = im->rows;
-  int origin_c = im->channels();
-  double scale = GenerateScale(origin_w, origin_h);
-  int width = static_cast<int>(round(scale * im->cols));
-  int height = static_cast<int>(round(scale * im->rows));
 
-  int batchsize = 1;
-  cvcuda::Resize resizeOp;
-
-  // Prepare input tensor of resizeOp
-  std::string buf_name = Name() + "_cvcuda_src";
-  std::vector<int64_t> shape = {origin_h, origin_w, origin_c};
-  FDTensor* src = UpdateAndGetReusedBuffer({origin_h, origin_w, origin_c},
-                                           im->type(), buf_name, Device::GPU);
+  // Prepare input tensor
+  std::string tensor_name = Name() + "_cvcuda_src";
+  FDTensor* src = CreateCachedGpuInputTensor(mat, tensor_name);
   auto src_tensor = CreateCvCudaTensorWrapData(*src);
-  FDASSERT(cudaMemcpyAsync(GetCvCudaTensorDataPtr(src_tensor), im->ptr(),
-                           src->Nbytes(), cudaMemcpyHostToDevice,
-                           mat->Stream()) == 0,
-           "[ERROR] Error occurs while copy memory from CPU to GPU.");
 
-  // Prepare output tensor of resizeOp
-  buf_name = Name() + "_cvcuda_dst";
-  FDTensor* dst = UpdateAndGetReusedBuffer({height, width, origin_c},
-                                           im->type(), buf_name, Device::GPU);
+  double scale = GenerateScale(mat->Width(), mat->Height());
+  int width = static_cast<int>(round(scale * mat->Width()));
+  int height = static_cast<int>(round(scale * mat->Height()));
+
+  // Prepare output tensor
+  tensor_name = Name() + "_cvcuda_dst";
+  FDTensor* dst = UpdateAndGetReusedTensor(
+      {height, width, mat->Channels()}, mat->Type(), tensor_name, Device::GPU);
   auto dst_tensor = CreateCvCudaTensorWrapData(*dst);
 
   // CV-CUDA Interp value is compatible with OpenCV
-  resizeOp(mat->Stream(), src_tensor, dst_tensor,
-           NVCVInterpolationType(interp_));
+  cvcuda::Resize resize_op;
+  resize_op(mat->Stream(), src_tensor, dst_tensor,
+            NVCVInterpolationType(interp_));
 
-  cv::Mat out(height, width, im->type(), GetCvCudaTensorDataPtr(dst_tensor));
-
-  mat->SetMat(out);
+  mat->SetTensor(dst);
   mat->SetWidth(width);
   mat->SetHeight(height);
   mat->device = Device::GPU;

@@ -28,6 +28,8 @@ void* Mat::Data() {
              "FastDeploy didn't compile with FlyCV, but met data type with "
              "fcv::Mat.");
 #endif
+  } else if (device == Device::GPU) {
+    return fd_tensor.Data();
   }
   return cpu_mat.ptr();
 }

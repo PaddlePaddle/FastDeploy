@@ -66,13 +66,16 @@ class FASTDEPLOY_DECL Processor {
   virtual bool operator()(Mat* mat, ProcLib lib = ProcLib::DEFAULT);
 
  protected:
-  FDTensor* UpdateAndGetReusedBuffer(
-      const std::vector<int64_t>& new_shape, const int& opencv_dtype,
-      const std::string& buffer_name, const Device& new_device = Device::CPU,
+  FDTensor* UpdateAndGetReusedTensor(
+      const std::vector<int64_t>& new_shape, const FDDataType& data_type,
+      const std::string& tensor_name, const Device& new_device = Device::CPU,
       const bool& use_pinned_memory = false);
 
+  FDTensor* CreateCachedGpuInputTensor(Mat* mat,
+                                       const std::string& tensor_name);
+
  private:
-  std::unordered_map<std::string, FDTensor> reused_buffers_;
+  std::unordered_map<std::string, FDTensor> reused_tensors_;
 };
 
 }  // namespace vision
