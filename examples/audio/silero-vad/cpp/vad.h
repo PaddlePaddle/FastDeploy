@@ -64,55 +64,55 @@ class Vad:public fastdeploy::FastDeployModel{
 
  private:
   // model
-  std::vector<fastdeploy::FDTensor> inputTensors;
-  std::vector<fastdeploy::FDTensor> outputTensors;
+  std::vector<fastdeploy::FDTensor> inputTensors_;
+  std::vector<fastdeploy::FDTensor> outputTensors_;
   // model states
-  bool triggerd = false;
-  unsigned int speech_start = 0;
-  unsigned int speech_end = 0;
-  unsigned int temp_end = 0;
-  unsigned int current_sample = 0;
+  bool triggerd_ = false;
+  unsigned int speech_start_ = 0;
+  unsigned int speech_end_ = 0;
+  unsigned int temp_end_ = 0;
+  unsigned int current_sample_ = 0;
   // MAX 4294967295 samples / 8sample per ms / 1000 / 60 = 8947 minutes
-  float outputProb;
+  float outputProb_;
 
   /* ======================================================================== */
 
   // input wav data
-  wav::WavReader wavReader;
-  std::vector<int16_t> data;
-  std::vector<float> inputWav;
+  wav::WavReader wavReader_;
+  std::vector<int16_t> data_;
+  std::vector<float> inputWav_;
 
   /* ======================================================================== */
 
   // audio config
-  int sample_rate = 16000;
-  int frame_ms = 64;
-  float threshold = 0.5f;
-  int min_silence_duration_ms = 0;
-  int speech_pad_ms = 0;
+  int sample_rate_ = 16000;
+  int frame_ms_ = 64;
+  float threshold_ = 0.5f;
+  int min_silence_duration_ms_ = 0;
+  int speech_pad_ms_ = 0;
 
-  int64_t window_size_samples;
+  int64_t window_size_samples_;
   // Assign when init, support 256 512 768 for 8k; 512 1024 1536 for 16k.
-  int sr_per_ms;  // Assign when init, support 8 or 16
-  int min_silence_samples;  // sr_per_ms * #ms
-  int speech_pad_samples;  // usually a
+  int sr_per_ms_;  // Assign when init, support 8 or 16
+  int min_silence_samples_;  // sr_per_ms_ * #ms
+  int speech_pad_samples_;  // usually a
 
   /* ======================================================================== */
 
-  std::vector<float> input;
-  std::vector<int64_t> sr;
-  unsigned int size_hc = 2 * 1 * 64;  // It's FIXED.
+  std::vector<float> input_;
+  std::vector<int64_t> sr_;
+  unsigned int size_hc_ = 2 * 1 * 64;  // It's FIXED.
   std::vector<float> _h;
   std::vector<float> _c;
 
-  std::vector<int64_t> input_node_dims;
-  const std::vector<int64_t> sr_node_dims = {1};
-  const std::vector<int64_t> hc_node_dims = {2, 1, 64};
+  std::vector<int64_t> input_node_dims_;
+  const std::vector<int64_t> sr_node_dims_ = {1};
+  const std::vector<int64_t> hc_node_dims_ = {2, 1, 64};
 
   /* ======================================================================== */
 
-  std::vector<float> speakStart;
-  std::vector<float> speakEnd;
+  std::vector<float> speakStart_;
+  std::vector<float> speakEnd_;
 
  public:
   int getSampleRate() const;
