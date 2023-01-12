@@ -60,16 +60,16 @@ class FASTDEPLOY_DECL PaddleDetPostprocessor {
   std::vector<float> im_shape_{416, 416};
   float score_threshold_ = 0.5;
   float nms_threshold_ = 0.5;
+  int reg_max_ = 7;
+  int num_class_ = 80;
   std::vector<float> GetScaleFactor();
   bool ReadPostprocessConfigFromYaml();
   bool ProcessUnDecodeResults(const std::vector<FDTensor>& tensors,
                               std::vector<DetectionResult>* results);
   void DisPred2Bbox(const float*& dfl_det, int label, float score, int x, int y,
-                    int stride, int reg_max,
-                    fastdeploy::vision::DetectionResult* results);
+                    int stride, fastdeploy::vision::DetectionResult* results);
   void PicoDetPostProcess(DetectionResult* results,
-                          const std::vector<FDTensor>& outs, int reg_max,
-                          int num_class);
+                          const std::vector<FDTensor>& outs);
 
   // Process mask tensor for MaskRCNN
   bool ProcessMask(const FDTensor& tensor,
